@@ -61,6 +61,14 @@ Four things, and none of them is the owner's to do.
    thing that tells you a repository layer over two databases is true rather
    than merely compiling, and this merge touches repositories on both sides.
 
+**Done, on `claude/pensive-bell-dr81a4`.** `production` was merged in at
+`dd1f9be`; the three conflicts — `Views.tsx`, `visual-qa.ts` and
+`routes/russell.ts` — were resolved by keeping every hunk from both sides rather
+than either wholesale; and the two migrations are renumbered to
+`051_software_from_conversation.sql` and `042_software_from_conversation.sql`
+with nothing inside them changed. The combined tree leaves `production` at
+SQLite **051** / Postgres **042** once it merges.
+
 `tests/deploymentOwnership.test.ts` is the mechanism rather than the reminder: it
 names a file each workstream owns and fails if a merge dropped one, and it walks
 both migration chains for a gap or a collision. **It will fail the merge that

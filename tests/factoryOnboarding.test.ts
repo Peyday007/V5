@@ -149,6 +149,7 @@ async function onboard() {
   const outcome = await onboardRepository({
     projectId: fixture.project.id,
     grantId: GRANT().id,
+    scope: { kind: 'WHOLE_REPOSITORY' },
     actor,
     origin: 'https://brain.example',
   });
@@ -207,6 +208,7 @@ describe('onboarding registers one worker for one repository', () => {
     const outcome = await onboardRepository({
       projectId: fixture.project.id,
       grantId: 'a-repository-nobody-authorized',
+      scope: { kind: 'WHOLE_REPOSITORY' },
       actor,
       origin: 'https://brain.example',
     });
@@ -610,6 +612,7 @@ describe('a re-arm wakes the work the change was about, and nothing else', () =>
     const again = await onboardRepository({
       projectId: fixture.project.id,
       grantId: GRANT().id,
+      scope: { kind: 'WHOLE_REPOSITORY' },
       actor,
       origin: 'https://brain.example',
     });

@@ -236,20 +236,35 @@ describe('the repository envelope', () => {
    * re-litigated. Spelling variants are refused too, because a normalisation the
    * envelope did not do is an authorization somebody spelled their way into.
    */
-  it('refuses the repository it lives in and the one that was retired', () => {
+  it('refuses the repository that was retired, in every spelling', () => {
+    for (const remote of [OAKWOOD, `${OAKWOOD}.git`, `${OAKWOOD}/`, OAKWOOD.toUpperCase()]) {
+      const refused = decideRepository(remote);
+      expect(refused.ok).toBe(false);
+      expect(refused.grant).toBeNull();
+    }
+  });
+
+  /**
+   * **`V5` was on that list and is not any more, and the reason is a decision
+   * rather than a discovery.** The refusal was the agent's own default — the
+   * envelope said so at the time — and the operator has since named Brain as an
+   * intended target, to be improved through isolated branches, independent
+   * review and the existing controlled integration process.
+   *
+   * The normalisation still has to hold, which is why every spelling is asked:
+   * a grant matched on one form and missed on another would be an authorization
+   * that depends on how somebody typed it.
+   */
+  it('authorizes the repository it lives in, in every spelling', () => {
     for (const remote of [
       'https://github.com/Peyday007/V5',
       'https://github.com/Peyday007/V5.git',
       'https://github.com/Peyday007/V5/',
       'https://github.com/peyday007/v5',
-      OAKWOOD,
-      `${OAKWOOD}.git`,
-      `${OAKWOOD}/`,
-      OAKWOOD.toUpperCase(),
     ]) {
-      const refused = decideRepository(remote);
-      expect(refused.ok).toBe(false);
-      expect(refused.grant).toBeNull();
+      const decision = decideRepository(remote);
+      expect(decision.ok, remote).toBe(true);
+      expect(decision.grant?.id).toBe('brain');
     }
   });
 
@@ -266,18 +281,20 @@ describe('the repository envelope', () => {
    * a person's decision, and a test that quietly wanted a second entry is how the
    * retired one came back.
    */
-  it('authorizes one checkout, and no target repository at all', async () => {
+  it('authorizes a checkout and one target, each identifiable to the router', async () => {
     const { repositoryIdOfRemote } = await import('../server/services/factory/onboard.ts');
     const grants = listRepositoryGrants();
-    expect(grants).toHaveLength(1);
+    expect(grants.map((grant) => grant.id).sort()).toEqual(['brain', 'brain-worker-bootstrap']);
 
-    const mount = grants[0]!;
-    expect(mount.id).toBe('brain-worker-bootstrap');
-    expect(decideRepository(mount.remote).ok).toBe(true);
-    expect(mount.remote.toLowerCase()).not.toMatch(/peyday007\/v5$/);
-    expect(mount.remote.toLowerCase()).not.toContain('oakwood');
-    expect(repositoryIdOfRemote(mount.remote)).toBeTruthy();
+    for (const grant of grants) {
+      expect(decideRepository(grant.remote).ok).toBe(true);
+      expect(grant.remote.toLowerCase(), 'the retired repository stays out').not.toContain('oakwood');
+      // A grant whose remote no routing row could ever match is a grant that
+      // authorizes nothing and says otherwise.
+      expect(repositoryIdOfRemote(grant.remote), grant.id).toBeTruthy();
+    }
 
+    const mount = grants.find((grant) => grant.id === 'brain-worker-bootstrap')!;
     // No unit may own the file that grants a fired worker its permissions, or one
     // diff takes out the fleet. It is on the universal floor as well as here.
     expect(mount.forbiddenPaths).toContain('.claude/**');
@@ -314,8 +331,44 @@ describe('the repository envelope', () => {
     }
   });
 
-  it('keeps the factory out of its own repository', () => {
-    expect(listRepositoryGrants().some((grant) => /\/V5$/i.test(grant.remote))).toBe(false);
+  /**
+   * The property that replaced "keep the factory out of its own repository".
+   *
+   * That one was an absence, and an absence stopped being available the moment
+   * the operator named Brain as a target. What bounds it now is that a campaign
+   * here cannot edit what authorizes it, what bounds it, or what deploys it — so
+   * the failure mode declining a pull request does not contain is one a campaign
+   * cannot reach in the first place.
+   *
+   * Asserted per path rather than as a count, because the useful failure is
+   * "somebody removed the envelope from its own forbidden list" and a count
+   * would pass while that happened.
+   */
+  it('keeps a campaign in Brain out of what authorizes, bounds and deploys it', () => {
+    const brain = listRepositoryGrants().find((grant) => /\/V5$/i.test(grant.remote));
+    expect(brain, 'Brain is an authorized target').toBeTruthy();
+    for (const path of [
+      // What authorizes it.
+      'server/services/identity/**',
+      'server/services/bins/routing.ts',
+      // What bounds it.
+      'server/services/factory/repositoryEnvelope.ts',
+      'server/services/factory/projectScope.ts',
+      'server/services/russell/probeEnvelope.ts',
+      'server/services/research/approvalEnvelope.ts',
+      // What deploys it. The whole workflows directory, because §28's lesson is
+      // that a *second* workflow running flyctl deploy is how the guard is
+      // bypassed, and a new file is not matched by a pattern naming the old one.
+      '.github/workflows/**',
+      '.github/CANONICAL_BRANCH',
+      'fly.toml',
+      'Dockerfile',
+    ]) {
+      expect(brain?.forbiddenPaths, `a campaign in Brain must never own ${path}`).toContain(path);
+    }
+    // And it still stops at a pull request a person merges, which is the
+    // boundary every other repository has.
+    expect(brain?.mayOpenPullRequest).toBe(true);
   });
 });
 
@@ -716,6 +769,164 @@ describe('a plan may not reach where the repository grant forbids', () => {
     const validation = validatePlan(plan, changeRequest);
     expect(validation.ok).toBe(false);
     expect(validation.errors.join(' ')).toContain('out of the factory');
+  });
+
+  /**
+   * Brain is a target now, and the declaration is not the control.
+   *
+   * `factoryExecutionPlane` already asserts the grant *lists* these paths, and a
+   * list nothing reads is exactly what this repository keeps finding. So each one
+   * is put through `validatePlan` as a unit that claims to own it, in the shape a
+   * planning worker would actually submit — which is the only place the list
+   * turns into a refusal.
+   */
+  describe('a campaign in Brain may not own what authorizes, bounds or deploys it', () => {
+    const BRAIN_REMOTE = 'https://github.com/Peyday007/V5';
+
+    async function planOwning(paths: string[]): Promise<ReturnType<typeof validatePlan>> {
+      const { changeRequest } = await ensureChangeRequest({
+        projectId: fixture.project.id,
+        submissionKey: `brain-${paths.join('|')}`,
+        objective: 'Improve a part of Brain.',
+        expectedOutcome: 'It is better.',
+        nonGoals: [],
+        acceptanceConditions: [
+          { id: 'A01', statement: 'it is better', verification: 'npm test', mandatory: true },
+        ],
+        repository: BRAIN_REMOTE,
+        repositoryRoot: '',
+        baseBranch: 'production',
+        baseSha: BASE,
+        environment: 'LOCAL',
+        riskClass: 'LOW',
+        mutationScope: ['**'],
+        deploymentPolicy: 'NONE',
+        rollbackRequirement: 'decline',
+        verificationCommands: ['npm test'],
+      });
+      return validatePlan(
+        {
+          units: [
+            {
+              key: 'a-unit',
+              kind: 'IMPLEMENTATION',
+              title: 'A change',
+              objective: 'Make one bounded change to Brain and prove it with a test.',
+              acceptance: ['it is better'],
+              ownedPaths: paths,
+              requiredContext: [],
+              verification: ['npm test'],
+              expectedArtifact: 'a diff',
+              risk: 'LOW',
+              criticalPath: true,
+              dependsOn: [],
+              serves: ['A01'],
+            },
+          ],
+        },
+        changeRequest,
+      );
+    }
+
+    for (const path of [
+      'server/services/identity/policy.ts',
+      'server/services/bins/routing.ts',
+      'server/services/factory/repositoryEnvelope.ts',
+      'server/services/factory/projectScope.ts',
+      'server/services/russell/probeEnvelope.ts',
+      'server/services/research/approvalEnvelope.ts',
+      '.github/workflows/deploy.yml',
+      // A *second* workflow, which is precisely the bypass §28 records: a
+      // pattern naming the old file would have let this one through.
+      '.github/workflows/ship-it-really-fast.yml',
+      '.github/CANONICAL_BRANCH',
+      'fly.toml',
+      'Dockerfile',
+      // Universal, and it must still apply inside a grant that adds its own.
+      '.claude/settings.json',
+    ]) {
+      it(`refuses a unit owning ${path}`, async () => {
+        const validation = await planOwning([path]);
+        expect(validation.ok).toBe(false);
+        expect(validation.errors.join(' ')).toContain('out of the factory');
+      });
+    }
+
+    it('refuses the whole plan when one of several paths is out of reach', async () => {
+      /*
+       * A diff that reached outside its surface is rejected whole rather than
+       * cherry-picked, and the same rule has to hold one step earlier: a unit
+       * that owns four ordinary files and one envelope is not four-fifths
+       * acceptable.
+       */
+      const validation = await planOwning([
+        'client/src/russell/Home.tsx',
+        'server/services/factory/repositoryEnvelope.ts',
+      ]);
+      expect(validation.ok).toBe(false);
+    });
+
+    it('allows ordinary product code, because a factory that could not change the product is not worth having', async () => {
+      const validation = await planOwning([
+        'client/src/russell/Home.tsx',
+        'server/services/russell/home.ts',
+        'tests/step12bProduct.test.ts',
+      ]);
+      expect(validation.errors, validation.errors.join(' ')).toEqual([]);
+      expect(validation.ok).toBe(true);
+    });
+
+    it('lets a unit read what it may not own', async () => {
+      /*
+       * `requiredContext` is how a unit says which files it needs to have read,
+       * and the forbidden list is about ownership rather than reading — a
+       * reviewer of a change to the authorization model must be able to open it.
+       */
+      const { changeRequest } = await ensureChangeRequest({
+        projectId: fixture.project.id,
+        submissionKey: 'brain-reads',
+        objective: 'Improve a part of Brain that has to agree with the policy module.',
+        expectedOutcome: 'It agrees.',
+        nonGoals: [],
+        acceptanceConditions: [
+          { id: 'A01', statement: 'it agrees', verification: 'npm test', mandatory: true },
+        ],
+        repository: BRAIN_REMOTE,
+        repositoryRoot: '',
+        baseBranch: 'production',
+        baseSha: BASE,
+        environment: 'LOCAL',
+        riskClass: 'LOW',
+        mutationScope: ['**'],
+        deploymentPolicy: 'NONE',
+        rollbackRequirement: 'decline',
+        verificationCommands: ['npm test'],
+      });
+      const validation = validatePlan(
+        {
+          units: [
+            {
+              key: 'reads-policy',
+              kind: 'IMPLEMENTATION',
+              title: 'Agree with the policy module',
+              objective: 'Make one bounded change that has to match what the policy module does.',
+              acceptance: ['it agrees'],
+              ownedPaths: ['server/routes/russell.ts'],
+              requiredContext: ['server/services/identity/policy.ts'],
+              verification: ['npm test'],
+              expectedArtifact: 'a diff',
+              risk: 'LOW',
+              criticalPath: true,
+              dependsOn: [],
+              serves: ['A01'],
+            },
+          ],
+        },
+        changeRequest,
+      );
+      expect(validation.errors, validation.errors.join(' ')).toEqual([]);
+      expect(validation.ok).toBe(true);
+    });
   });
 });
 

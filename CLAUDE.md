@@ -2592,6 +2592,275 @@ remote.
   perfect configured block over an empty observed one refuses rather than passing
   — `evidence_class` at an operator's command.
 
+- **The factory had no entrance from a conversation, and Build was not the
+  gap — a second pipeline would have been.** A person could describe a change to
+  a site in Russell and get a conversation back, because `PROPOSAL_ACTIONS` held
+  eight actions and none of them reached the factory. `REQUEST_SOFTWARE_CHANGE`
+  is the ninth, and everything about it is arranged so it adds a way in without
+  adding a way around: `services/factory/start.ts` is the one approve-and-start
+  both entrances call, the contract, the evidence gate, the independent review
+  and the two person-only decisions are untouched, and the whole effect a *turn*
+  can have is an unauthorized row. **Discussing a change is not asking for one**,
+  and that is drawn twice — deterministically on the person's own message, where
+  deliberation and past-tense reports lose to any number of execution verbs, and
+  structurally by the fact that a capture spends nothing and submits nothing. A
+  model never names the repository: an extra field refuses the whole proposal,
+  because which repository a project may change is an authorization in rows a
+  person wrote, and the reach travels down with the choice they make from the
+  list their project was actually given.
+
+- **An optional field defaulting to the widest value is not a boundary, and
+  narrowing afterwards cannot correct one.** `mutationScope` was optional and
+  defaulted to `['**']`, so the safe answer was the one somebody had to remember
+  and the unsafe one was free — and `amendContract` may only *narrow*, so an
+  over-broad initial scope is the widest reach that campaign will ever be judged
+  against, with the units already planned against it. The boundary is a fact
+  recorded before any objective exists, in the action that authorizes the
+  repository for that project at all, with **no default**: `scope_kind` records
+  whether a person chose the whole repository or named directories, because
+  `['**']` has to be a choice and *somebody said so* is a different fact from
+  *nobody said anything*. A person names directories and the server writes the
+  globs — a glob is a small language and a boundary written in one is a boundary
+  somebody widens by accident.
+
+  It is checked **at submission**, which is a strictly stronger question than
+  the one routing already asks and is asked when it is cheap. `bins/routing.ts`
+  refuses to hand a repository bin to a worker not registered for it, correctly
+  and *late* — after a change request, a campaign, a plan and bins exist. This
+  asks whether *this project* may change this repository and inside which paths,
+  before a row is written. On the remote path only, on the line `execution_mode`
+  is already derived from: a local pin is a person at a terminal with the
+  checkout in front of them, which is how the bootstrap campaign ran in the one
+  repository the envelope deliberately does not grant.
+
+  **Separate repositories and folders in a shared one both work, and choosing
+  is not a prerequisite for the first campaign.** Separate: one grant, one
+  worker, one surface each, separated by `worker_routing.repositories`. Shared:
+  one grant, one worker, one surface, one boundary row per project — and two
+  projects holding `sites/v4/**` and `sites/v2/**` cannot reach each other's
+  files. The properties are proved against a **fixture** repository the envelope
+  refuses, because a routing boundary needs a routing row and a manifest and no
+  grant at all, and a test's convenience is never a reason to widen a production
+  authorization.
+
+- **Brain is an authorized target now, and that is the operator's decision
+  rather than a softening of the argument against it.** An earlier bullet in this
+  section ends *"the envelope now holds one checkout and no target at all"*; that was true
+  when it was written and is not true now, and it is corrected here rather than
+  edited there. `V5`'s absence was mine: the envelope's own comment recorded it
+  as a default written by the agent that built this, not a standing operator
+  decision. The owner has since named Brain
+  as an intended target, improved *through isolated branches, independent review
+  and the existing controlled integration process*, with the running Brain's
+  authorization and deployment protections preserved.
+
+  The original worry stands and is not waved away — the factory lives in this
+  repository, so a campaign here can reach the machinery executing it, and that
+  is the one failure mode declining a pull request does not *by itself* contain.
+  What changed is that the risk is bounded by rows instead of by absence. **A
+  campaign may not edit what authorizes it, what bounds it, or what deploys
+  it**, and that is a `forbiddenPaths` list rather than a sentence: the envelope
+  and `projectScope.ts`, `services/identity/**` and `bins/routing.ts`, both
+  approval envelopes, the whole of `.github/workflows/**` — the directory rather
+  than `deploy*`, because §28's own lesson is that a *second* workflow is how the
+  guard gets bypassed — plus `CANONICAL_BRANCH`, `fly.toml` and `Dockerfile`.
+  They refuse *ownership*, never reading: a unit may read any of it and a
+  reviewer must. Around that, unchanged: the campaign stops at a pull request,
+  the review is independent by recorded lineage, the deployment branch policy
+  refuses every ref but the canonical one, and a person merges.
+  `oakwood-junk-removal` stays retired, which is a different decision.
+
+- **A list can have the rule right and the alphabet short, and this is the
+  fourth time.** §24 records three in `judgment.ts`. Here it was
+  `EXECUTION_MARKERS`: the owner's own three examples were *"Add this feature to
+  Brain"*, *"Fix this problem on V4"* and *"Improve this part of the site we're
+  discussing"*, and the third came back **"nothing here asks for a change to be
+  made"** because `improve` was not in the list. Widened by the verbs actually
+  missed and no further, and the failure mode is what the tests pin rather than
+  the successes — "we improved it last week" still matches nothing, because the
+  word boundary excludes the past tense and nobody is being asked. The sentence
+  that found the gap is never reworded to fit the list.
+
+- **A request is filed against a project, and the project decides which code may
+  change — so guessing which project is the Westbrook defect at a new
+  altitude.** §25 records the original: a compiler read a jurisdiction out of
+  prose, produced *"official Michigan public records … in Westbrook, OH"*, and
+  every row around it was healthy. Here the same shape is a change request filed
+  against the conversation's project while the message names a different one:
+  the card would carry a real scope sentence, a person would authorize it, and a
+  worker would change the wrong repository correctly.
+  `services/russell/softwareTarget.ts` refuses instead of choosing, and the
+  three rules are `jurisdiction.ts`'s. **A row outranks prose** — the
+  conversation's attachment has provenance and a sentence does not.
+  **Disagreement is refused, never resolved** — nothing is captured and the
+  answer names both projects, which is the one case where asking is cheaper than
+  being wrong. **Not knowing is an answer** — a thread with no project cannot
+  resolve a repository, and that is `ASK_WHICH_PROJECT`. It can refuse and it
+  can never *redirect*: naming another project never files the request there,
+  because that would let a sentence move work into a scope nobody attached it
+  to. It reads project rows rather than a list of site names, matches on word
+  boundaries so `rAPId` is not `API`, and is skipped entirely for a project the
+  asker cannot read — a check that only ever adds a refusal, so losing it loses
+  a clarification rather than a control.
+
+- **Fifteen misses in one pass is not a short alphabet; it is the wrong shape.**
+  The bullet above records the fourth widening of `EXECUTION_MARKERS`, and each
+  of the four added the one word a real message had just been declined for.
+  Driving fifty ordinary sentences through the gate found **fifteen more misses
+  and two inventions** at once — *"Move the phone number into the header"*,
+  *"Turn off the newsletter popup"*, *"Wire the booking button to the calendar
+  page"*, and, in the other direction, *"No need to fix the footer"* read as a
+  request to fix the footer. Adding fifteen words would have left the sixteenth
+  for production. So the structure changed and the vocabulary only came along
+  with it, in three ways:
+
+  **A verb is strong or weak, and a weak one counts only in imperative
+  position.** `fix` is an instruction wherever it appears; `set`, `move`,
+  `handle`, `point` and `link` are ordinary English until they open a sentence or
+  follow *please* / *could you* / *let's*. That is what lets the list hold the
+  words people actually use without reading *"the address on the contact page is
+  wrong"* or *"do you know how the form works"* as instructions.
+
+  **Negation is scoped to the occurrence, not to the message.** Every match is
+  examined for a negator in its own clause — back to the sentence boundary, then
+  forward past the last contrast marker — and the message asks for a change only
+  if **some** occurrence is un-negated. A message-level flag would have declined
+  *"Don't touch the pricing page, but do fix the footer"*, which is wrong in the
+  expensive direction: the person did ask, and Russell would have looked like it
+  ignored them.
+
+  **Anaphora is answered by a row, never by a word.** *"Do that for the contact
+  page too"* has no execution verb and cannot get one, because the verb is in the
+  sentence before it. It is admitted only when **this conversation already holds
+  a software request** — a referent Brain wrote down. The check runs *before* the
+  verbs and applies whichever verbs are present, because *"apply the same to the
+  quotes page"* holds a weak imperative and still names nothing: a capture there
+  would file an objective nobody could act on. A referent from another thread
+  does not count.
+
+  **A closed list can never be complete over ordinary English, and that is why
+  the failure mode is fixed at *missing*.** A miss costs one more sentence and
+  Russell says which one would work; an invention puts an authorization card in
+  front of somebody thinking aloud, which teaches them to stop reading the cards
+  — §29's damage from a status that contradicts the control beside it. **Build
+  never consults this gate**, so there is always an entrance no sentence can be
+  mis-read at. The corpus is `tests/softwareRequestPhrasing.test.ts`, declared in
+  families with its purpose written down, and the declines are the half that
+  matters.
+
+- **The question Brain would not guess past was composed, carried and read by
+  nothing.** `softwareTarget.ts` wrote the sentence, `turn.ts` put it on the
+  message row as `produced.clarify`, and no projection, route or component ever
+  looked at it. So a person whose message named two projects got an ordinary
+  reply and no card, with nothing anywhere saying Brain had stopped on purpose or
+  what would unstop it — §24's *waiting nobody can resolve* at a new surface, and
+  the fifth time this file has had to write that **a mechanism nothing calls is
+  not a mechanism**. `softwareClarificationFor` is the reader: a projection in
+  `pending.ts`'s shape that writes nothing, reports only the most recent refusal,
+  and stops reporting it the moment a request captured *after* it settles the
+  question — answered by doing rather than by saying.
+
+  **Only the answerable refusals reach it, and that is the design rather than an
+  omission.** *"It weighs a change rather than asking for one"* is a correct
+  refusal to a remark; printing a prompt under it would be Brain asking somebody
+  to decide something they never raised. What surfaces is the case where they
+  *did* ask and the only thing missing is a word only they have — which project,
+  or what *that* refers to. The client renders the server's sentence and composes
+  none of its own, for the reason the authorization card does.
+
+- **Brain as a target is enforced by the planner, not by the list.** The grant's
+  `forbiddenPaths` is a declaration, and `factoryExecutionPlane` asserting it
+  contains the right strings proves only that somebody typed them. Each one is
+  now put through `validatePlan` as a unit claiming to own it — including a
+  *second* deploy workflow under a new name, which is the bypass §28 records and
+  which a pattern naming `deploy.yml` would have allowed. Ordinary product code
+  still passes, and `requiredContext` may name a forbidden file: the list refuses
+  **ownership**, never reading, and a reviewer of a change that has to agree with
+  the policy module must be able to open it.
+
+- **A question Brain asks has to be answerable in the words a person answers
+  in.** The gate declines *"V4"* — two characters, no verb, nothing to do — and
+  it is right to: that is not a change request. But it is the correct answer to
+  the question Brain had just displayed, and nothing joined the two, so the only
+  way forward was to retype the whole instruction. **A remedy the person cannot
+  use is not a remedy**, which is §24's sentence arriving in a conversation.
+
+  The ask Brain refused is kept on the message row it refused it on —
+  `pendingAsk`, the three fields `validateProposal` had already accepted that
+  turn — with `clarifyChoices`, the projects an answer may name. A later reply
+  that names exactly one of them finishes the original request. It resolves
+  **before** anything a model proposed and returns, because a worker that has
+  read the thread will often restate the change in its own words and a reworded
+  objective is a different submission key: one answer would otherwise produce
+  two cards for one decision. Nothing else moves — same row, same `PROPOSED`
+  state, same card, same person approving it. A reply naming none, or two,
+  leaves the question standing, because choosing for somebody who has just said
+  they are choosing is the defect this whole path exists to avoid.
+
+- **Mentioning a project is not choosing it, and for a while it was.** In a
+  Brain-attached thread, *"Do not change Brain, but fix the broken form in V4"*
+  passed the gate correctly — the person did ask for a fix — and then resolved
+  to **Brain**, because `resolveSoftwareTarget` treated any mention of the
+  attached project as agreement. A card would have been produced for the one
+  project the person had ruled out in the same sentence, which is the Westbrook
+  defect with the exclusion in plain sight.
+
+  The rule that replaces it is one sentence: **a sentence can rule the row out;
+  it can never replace it.** An exclusion is read per mention, from the same
+  clause-scoped negation the gate uses, and it only ever *removes* a candidate.
+  With the row still standing, naming another project is a disagreement Brain
+  refuses rather than resolves — unchanged. With the row ruled out there is no
+  row to defer to, so the sentence's own destination decides: exactly one
+  readable project named after a preposition of place resolves, and anything
+  else is a question. The excluded project is absent from the answers that
+  question offers, so it cannot come back through the reply either.
+
+  The exclusion vocabulary is deliberately **wider** than the gate's — it adds
+  bare `not`, `except`, `other than`, `apart from` — and the asymmetry is the
+  argument: an exclusion can never choose a project, so a false one costs a
+  question, while a missed one files work against something somebody said not to
+  touch. `negation.ts` holds the half both readers share, in its own module,
+  because a rule kept inside one of its two callers is a cycle waiting to be
+  found by whichever file loads first.
+
+- **The answer was read for mentions, so "Not Brain" chose Brain.** The
+  correction above stopped a *mention* deciding the target in the request; one
+  message later the reply was still being read the old way, and the result is
+  the worst shape a clarification can fail in — the person was answering a
+  direct question and got the project they had just ruled out. A reply is now
+  read exactly as a request is: every mention carries whether a negator governs
+  it, and an exclusion only ever removes a candidate.
+
+  **Exclusions belong to the request, not to the sentence that carried them.**
+  They travel on the question as `clarifyExcluded` and are subtracted before the
+  offered list is consulted — *including when that list is empty*. An empty list
+  means the question named no candidates; it never means anything goes, and
+  treating it as the second is exactly how *"do not change Brain"* handed Brain
+  back to the next reply that mentioned it.
+
+  **One candidate left is an answer; two are not.** A reply naming exactly one
+  live project resolves it, and a reply that only rules something *out* resolves
+  only when one candidate remains — *"not Brain"* against *"Brain or V4?"* is
+  V4, while the same words against three candidates narrow rather than choose
+  and the question stays open. The bare-pool case is guarded on the reply having
+  actually excluded something, so *"whichever you think"* can never be an answer
+  just because the pool happens to hold one.
+
+- **Both of those were found by assembling the path, not by reading it.** Each
+  helper was correct on its own and the product was not, which is why
+  `tests/softwareConversationPath.test.ts` drives `beginTurn` → a scripted worker
+  answering the bin → the tick, and asserts on rows and on the displayed
+  question. The helper suites stayed; what they could not see is what a person
+  types *next*.
+
+- **Onboarding happens when a target needs it, and the ask survives the wait.**
+  A person asking for a change in a project with no repository gets it written
+  down, plus the sentence naming what is missing and where to do it; the *same*
+  row becomes authorizable the moment somebody onboards one, with the reach it
+  then has. Nothing is asked for again — the same promise
+  `rearmSurfaceDeferredIntents` makes one layer down — which is what keeps the
+  product usable before every site's repository arrangement has been settled.
+
 A worktree is the one factory path that is deliberately *not* authoritative
 state in either mode: it is execution scratch, the evidence is the commits, the
 rows and the artifacts, and retiring one destroys nothing that mattered. It

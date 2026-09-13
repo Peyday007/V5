@@ -67,9 +67,13 @@ import { listRoutines } from '../../repos/fleet.ts';
 import { listBins } from '../../repos/bins.ts';
 import { repositoryIdOf } from '../bins/routing.ts';
 import { createInvitation, revokeInvitationsForWorker } from '../../repos/invitations.ts';
+import { getProjectRepository, setProjectRepository } from '../../repos/factory.ts';
+import { ScopeError, describeBoundary, directoriesOf, scopeFromDeclaration } from './projectScope.ts';
+import type { ScopeDeclaration } from './projectScope.ts';
 import { generateInvitationToken } from '../identity/secrets.ts';
 import { FACTORY_WORKER_SCOPES } from '../../domain/types.ts';
 import type { User, WorkerScope } from '../../domain/types.ts';
+import type { FactoryScopeKind } from '../../domain/factory.ts';
 
 /**
  * The capabilities a factory surface must declare to be fired for this work.
@@ -138,6 +142,18 @@ export interface RepositoryOnboarding {
    * nobody has to come back and start any of it again.
    */
   waiting: number;
+  /**
+   * What this project may change in it, and whether anybody has said.
+   *
+   * `null` means the question has not been answered for this project, which is
+   * a different fact from "the whole repository" and is the one
+   * `submitObjective` refuses on. See `projectScope.ts`.
+   */
+  boundary: {
+    scopeKind: FactoryScopeKind;
+    directories: string[];
+    sentence: string;
+  } | null;
 }
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
@@ -236,13 +252,23 @@ async function describeGrant(
       .map((routine) => routine.name);
   }
 
+  const boundaryRow = await getProjectRepository(projectId, grant.id);
+
   const registered =
     worker !== null &&
     !worker.archived &&
     scopesCorrect &&
     routedFamilies.includes('FACTORY') &&
     repositoryId !== null &&
-    routedRepositories.includes(repositoryId);
+    routedRepositories.includes(repositoryId) &&
+    /*
+     * The boundary is part of being onboarded rather than a later step.
+     *
+     * Without it `submitObjective` refuses, so a card that read READY while no
+     * objective could be submitted would be the state §24 keeps having to
+     * correct: waiting on something nobody is being asked for.
+     */
+    boundaryRow !== null;
 
   const readiness: RepositoryReadiness = !registered
     ? 'NOT_ONBOARDED'
@@ -274,6 +300,13 @@ async function describeGrant(
     readiness,
     remaining,
     waiting: readiness === 'READY' ? 0 : await waitingFor(projectId, repositoryId),
+    boundary: boundaryRow
+      ? {
+          scopeKind: boundaryRow.scopeKind,
+          directories: directoriesOf(boundaryRow.pathScope),
+          sentence: describeBoundary(boundaryRow),
+        }
+      : null,
   };
 }
 
@@ -302,6 +335,15 @@ export type OnboardRefusal =
 export async function onboardRepository(input: {
   projectId: string;
   grantId: string;
+  /**
+   * What this project may change in it. **Required, with no default.**
+   *
+   * The whole repository is an ordinary answer and it has to be *given*: the
+   * defect this closes is that the widest scope used to be what you got by
+   * saying nothing. There is no overload of this function without it, for the
+   * same reason `validateProposal` has none without a principal.
+   */
+  scope: ScopeDeclaration;
   actor: User;
   origin: string;
 }): Promise<OnboardRefusal> {
@@ -329,6 +371,19 @@ export async function onboardRepository(input: {
       ok: false,
       reason: `The grant's remote (${grant.remote}) is not an owner/name this router can compare on.`,
     };
+  }
+
+  /*
+   * The boundary is checked before anything is created, because the cheapest
+   * place to refuse is before a row exists — and because a refusal here is
+   * about what a person typed rather than about the state of the fleet.
+   */
+  let pathScope: string[];
+  try {
+    pathScope = scopeFromDeclaration(input.scope);
+  } catch (error: unknown) {
+    if (error instanceof ScopeError) return { ok: false, reason: error.message };
+    throw error;
   }
 
   const workerName = factoryWorkerName(grant.id);
@@ -379,6 +434,24 @@ export async function onboardRepository(input: {
     setBy: `factory-onboarding:${input.actor.id}`,
   });
 
+  /*
+   * The boundary, written in the same action as the routing row and from the
+   * same grant. Two rows that must agree about the same repository, written
+   * together rather than by two people at two times.
+   */
+  const boundary = await setProjectRepository({
+    projectId: input.projectId,
+    grantId: grant.id,
+    repositoryId,
+    scopeKind: input.scope.kind as FactoryScopeKind,
+    pathScope,
+    reason:
+      input.scope.kind === 'WHOLE_REPOSITORY'
+        ? `This project owns the whole of ${repositoryId}.`
+        : `This project owns ${directoriesOf(pathScope).join(', ')} in ${repositoryId} and nothing else in it.`,
+    setBy: `factory-onboarding:${input.actor.id}`,
+  });
+
   const revokedInvitations = await revokeInvitationsForWorker(worker.id);
   const token = generateInvitationToken();
   const invitation = await createInvitation({
@@ -406,6 +479,8 @@ export async function onboardRepository(input: {
       scopes: [...FACTORY_WORKER_SCOPES],
       families: ['FACTORY'],
       capabilities: [...FACTORY_ROUTING_CAPABILITIES],
+      scopeKind: boundary.scopeKind,
+      pathScope: boundary.pathScope,
       invitationId: invitation.id,
       revokedInvitations,
       createdIdentity: existing === null,
