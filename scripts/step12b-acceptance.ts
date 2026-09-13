@@ -4017,6 +4017,39 @@ async function main(): Promise<void> {
    * three conditions are. A gate that asserts the state and not the content is
    * the shape of evidence this reporter's own header refuses.
    */
+  /*
+   * R5, asked of the rows rather than of the prose: an experiment must not be
+   * able to contaminate what the project believes. The lab has just run every
+   * mode it has against `technical`, so if any path in it could write a claim,
+   * a document or a knowledge row, one would be there now.
+   */
+  const contamination = {
+    knowledge: Number(
+      (
+        await getDb().get<{ total: number }>(
+          'SELECT COUNT(*) AS total FROM russell_knowledge WHERE project_id = ?',
+          [technical.id],
+        )
+      )?.total ?? 0,
+    ),
+    documents: Number(
+      (
+        await getDb().get<{ total: number }>(
+          'SELECT COUNT(*) AS total FROM documents WHERE project_id = ?',
+          [technical.id],
+        )
+      )?.total ?? 0,
+    ),
+    claims: Number(
+      (
+        await getDb().get<{ total: number }>(
+          'SELECT COUNT(*) AS total FROM existing_claims WHERE project_id = ?',
+          [technical.id],
+        )
+      )?.total ?? 0,
+    ),
+  };
+
   const resultOf = (mode: string): { highestTested?: { value: number | null; anythingFailed: boolean }; recommendedSetting?: { value: string; evidence: string }; bottleneck?: { value: string; evidence: string }; degradationBegan?: { value: string; evidence: string }; untested?: string[]; confidence?: { sampleSize: number; note: string } } | null =>
     (labResults.get(mode)?.result as never) ?? null;
   const pushResult = resultOf('PUSH_TO_FAILURE');
@@ -5245,14 +5278,142 @@ async function main(): Promise<void> {
   }
 
   /* -- P. Preserved integrations, migrations, and restart --------------------- */
+  /*
+   * This was `file('scripts/upgrade-populated.ts')` — the script exists —
+   * which is the weakest form of "the code looks like it would": a script that
+   * exists and fails reads identically to one that passes.
+   *
+   * Three of these four are things **this run has already done** and was not
+   * reading. The database it wrote every exercise into was migrated from empty
+   * a minute ago, it was closed and re-opened underneath the continuity check,
+   * and both of those leave rows. Asking them is not extra work; it is asking
+   * the question the gate is for.
+   *
+   * The fourth is genuinely somebody else's: the hosted verification runs
+   * inside the Deploy workflow, either side of a real restart of a real
+   * machine, and a reporter cannot attest a CI run it did not observe.
+   */
   const upgrade = file('scripts/upgrade-populated.ts');
-  record(
+  const sqliteChain = REPO_VISIBLE
+    ? fs.readdirSync(path.join(REPO, 'server', 'db', 'migrations')).filter((f) => f.endsWith('.sql'))
+    : [];
+  const pgChain = REPO_VISIBLE
+    ? fs
+        .readdirSync(path.join(REPO, 'server', 'db', 'pg-migrations'))
+        .filter((f) => f.endsWith('.sql'))
+    : [];
+  const versionsOf = (files: string[]): number[] =>
+    files.map((name) => Number(name.slice(0, 3))).sort((a, b) => a - b);
+  const chainIsSound = (files: string[]): { ok: boolean; saw: string } => {
+    const versions = versionsOf(files);
+    const duplicates = versions.filter((v, i) => i > 0 && v === versions[i - 1]);
+    const gaps = versions.filter((v, i) => i > 0 && v !== (versions[i - 1] ?? 0) + 1);
+    return {
+      ok: versions.length > 0 && duplicates.length === 0 && gaps.length === 0,
+      saw:
+        `${versions.length} file(s), 001…${String(versions.at(-1) ?? 0).padStart(3, '0')}` +
+        (duplicates.length > 0 ? `, COLLISION at ${duplicates.join(', ')}` : '') +
+        (gaps.length > 0 ? `, GAP before ${gaps.join(', ')}` : ''),
+    };
+  };
+  const sqliteSound = chainIsSound(sqliteChain);
+  const pgSound = chainIsSound(pgChain);
+
+  /*
+   * What this run's own database says about how it was built. The scratch
+   * database was created empty by `initDatabase` at the top of `main` and has
+   * been written to by every exercise since, so these rows are a record of a
+   * real migration from empty followed by a real re-open.
+   */
+  let applied: { version: number; checksum: string }[] = [];
+  try {
+    applied = await getDb().all<{ version: number; checksum: string }>(
+      'SELECT version, checksum FROM schema_migrations ORDER BY version',
+    );
+  } catch {
+    applied = [];
+  }
+
+  recordConditions(
     'P',
     'Migrations, restart and preserved integrations',
-    upgrade ? 'PARTIAL' : 'NOT_RUN',
-    'npm run upgrade:populated proves the upgrade over populated data on both chains with a ' +
-      'per-table sha-256 census, and a second restart applying nothing. NOT established by this ' +
-      'script: the hosted pre/post-restart checks, which the Deploy workflow runs.',
+    [
+      {
+        name: 'this run built its own database from empty, and every migration was applied',
+        held: applied.length > 0 && (!REPO_VISIBLE || applied.length === sqliteChain.length),
+        saw: REPO_VISIBLE
+          ? `${applied.length} applied of ${sqliteChain.length} on disk`
+          : `${applied.length} applied`,
+      },
+      {
+        name: 'every applied migration is checksum-locked, so editing one is a boot failure rather than a drift',
+        held: applied.length > 0 && applied.every((row) => (row.checksum ?? '').length > 0),
+        saw:
+          applied.length > 0
+            ? `${applied.filter((row) => (row.checksum ?? '').length > 0).length}/${applied.length} carry a checksum`
+            : 'no rows to read',
+      },
+      {
+        name: 'the database was closed and re-opened mid-run, and applied nothing the second time',
+        held: continuity.conditions.some(
+          (entry) => entry.name.startsWith('a waiting turn survives') && entry.held === true,
+        ),
+        saw: continuity.conditions.some((entry) => entry.name.startsWith('a waiting turn survives'))
+          ? 'the continuity exercise re-opened it and every row read back'
+          : 'the re-open did not happen in this run',
+      },
+      REPO_VISIBLE
+        ? {
+            name: 'the SQLite chain has no gap and no collision',
+            held: sqliteSound.ok,
+            saw: sqliteSound.saw,
+          }
+        : {
+            name: 'the SQLite chain has no gap and no collision',
+            held: null,
+            saw: 'the migration files are a repository fact',
+            needs: 'CHECKOUT',
+          },
+      REPO_VISIBLE
+        ? {
+            name: 'and so does the Postgres chain, which is numbered independently',
+            held: pgSound.ok,
+            saw: pgSound.saw,
+          }
+        : {
+            name: 'and so does the Postgres chain, which is numbered independently',
+            held: null,
+            saw: 'the migration files are a repository fact',
+            needs: 'CHECKOUT',
+          },
+      REPO_VISIBLE
+        ? {
+            name: 'the upgrade over populated data has its own proof, run separately',
+            held: upgrade !== null,
+            saw: upgrade
+              ? '`npm run upgrade:populated` — both chains, a per-table sha-256 census, and a ' +
+                'second restart applying nothing'
+              : 'scripts/upgrade-populated.ts is absent',
+          }
+        : {
+            name: 'the upgrade over populated data has its own proof, run separately',
+            held: null,
+            saw: 'the script is a repository fact',
+            needs: 'CHECKOUT',
+          },
+      {
+        name: 'the hosted verification passes either side of a real restart',
+        held: null,
+        saw:
+          'that runs inside the Deploy workflow, against a real machine being restarted. A ' +
+          'reporter cannot attest a CI run it did not observe, and reading the workflow file ' +
+          'would be checking that the steps are written down rather than that they passed.',
+        standing: true,
+      },
+    ],
+    'Three of these are facts about what this run itself did — it migrated an empty database, ' +
+      'wrote every exercise into it, and closed and re-opened it underneath a waiting turn — ' +
+      'and the two chains are read from the tree.',
   );
 
   /* -- Q. Shared-product access and safe experiments -------------------------- */
@@ -5435,47 +5596,69 @@ async function main(): Promise<void> {
   const sharedAccessFailed = sharedAccess.filter(([, held]) => !held).map(([name]) => name);
   const qFailed = [...canaryFailed, ...sharedAccessFailed];
 
-  record(
+  recordConditions(
     'Q',
     'Shared access and safe experiments',
-    qFailed.length > 0 ? 'FAIL' : !prefs.ok ? 'PARTIAL' : 'FAIL',
-    qFailed.length > 0
-      ? `The canary cycle and the invitation journey ran, and ${qFailed.length} of ` +
-        `${canaryConditions.length + sharedAccess.length} condition(s) did not hold: ` +
-        `${qFailed.join('; ')}. That is a defect rather than a missing run.`
-      : `A preference outside its declared set is refused (${prefs.ok ? 'ACCEPTED — defect' : 'refused'}); ` +
-        `an unauthenticated search is scoped to nothing (${searchScoped.scopedProjects} projects, ` +
-        `${searchScoped.hits.length} hits); ${Object.keys(PREFERENCES).length} preference keys are ` +
-        `presentational only and every one has a default (${Object.keys(defaults()).length}). ` +
-        `${SEARCH_KINDS.length} search kinds are scoped before the query rather than filtered after. ` +
-        'The canary cycle is driven end to end against real fleet_policy rows in an isolated ' +
-        `TECHNICAL scope, both ways round: ${canaryConditions.length}/${canaryConditions.length} ` +
-        'conditions held. Real work is refused as a first canary on a pressure test and allowed ' +
-        'for a ledger reading; applied over an empty history it records that it displaced ' +
-        'nothing and rolls back to the dispatcher default rather than to its own number; ' +
-        `applied over a person's target of ${operatorTarget} it records that ${operatorTarget} ` +
-        `before writing ${canaryOverPolicy}, retests under ` +
-        `the canary (${comparison}) and rolls back to ${operatorTarget} by name. Every version ` +
-        'stays in the ' +
-        'history, so the rollback is a write forward rather than a delete. Role change with two ' +
-        'real identities is exercised in I. Shared access is no longer assumed: an invitation ' +
-        `issued by an administrator and received by somebody else is driven end to end, and ` +
-        `${sharedAccess.length}/${sharedAccess.length} of its access conditions held — a ` +
-        'machine holding every scope refused by principal type, a MEMBER who does not ' +
-        'administer the project refused, a guessed invitation id refused with the same body a ' +
-        'real one belonging to another project gets, and the accepted membership carrying the ' +
-        'role the invitation named rather than one the acceptor asked for. Every identity in ' +
-        'that run is a test identity this reporter created at @example.invalid. NOT established ' +
-        'here: this same cycle against the deployed fleet rather than in an isolated ' +
-        'database — where the policy it displaced would be one a person is actually running on.',
+    [
+      {
+        name: 'a preference outside its declared set is refused',
+        held: !prefs.ok,
+        saw: prefs.ok ? 'it was accepted — defect' : 'refused',
+      },
+      {
+        name: 'every declared preference key is presentational and carries a default',
+        held: Object.keys(defaults()).length === Object.keys(PREFERENCES).length,
+        saw: `${Object.keys(defaults()).length}/${Object.keys(PREFERENCES).length} keys`,
+      },
+      {
+        name: 'an unauthenticated search is scoped to nothing before the query, not filtered after',
+        held: searchScoped.scopedProjects === 0 && searchScoped.hits.length === 0,
+        saw: `${searchScoped.scopedProjects} project(s), ${searchScoped.hits.length} hit(s), over ${SEARCH_KINDS.length} kinds`,
+      },
+      ...canaryConditions.map(([name, held]) => ({
+        name,
+        held,
+        saw: held ? 'held' : 'did not hold',
+      })),
+      {
+        name: 'an experiment cannot contaminate what a project believes',
+        held:
+          contamination.knowledge === 0 &&
+          contamination.documents === 0 &&
+          contamination.claims === 0,
+        saw:
+          `after every lab mode ran in it, the TECHNICAL scope holds ` +
+          `${contamination.knowledge} knowledge row(s), ${contamination.documents} document(s) ` +
+          `and ${contamination.claims} claim(s)`,
+      },
+      ...sharedAccess.map(([name, held]) => ({
+        name,
+        held,
+        saw: held ? 'held' : 'did not hold',
+      })),
+      {
+        name: 'the same canary cycle against the deployed fleet',
+        held: null,
+        saw:
+          'a canary displaces a policy version somebody is actually running on, so a reporter ' +
+          'that drove one against the live fleet would be the contamination R5 forbids, ' +
+          'committed by the thing checking for it. Applying a finding on the deployed fleet is ' +
+          "an operator's decision, through the same `applyFinding` this exercises.",
+        standing: true,
+      },
+    ],
+    'The canary cycle is driven end to end against real `fleet_policy` rows in an isolated ' +
+      'TECHNICAL scope, both ways round: real work refused as a first canary on a pressure test ' +
+      'and allowed for a ledger reading; applied over an empty history it records that it ' +
+      'displaced nothing and rolls back to the dispatcher default rather than to its own ' +
+      `number; applied over a person's target of ${operatorTarget} it records that ` +
+      `${operatorTarget} before writing ${canaryOverPolicy}, retests under the canary ` +
+      `(${comparison}) and rolls back to ${operatorTarget} by name. Every version stays in the ` +
+      'history, so a rollback is a write forward rather than a delete. Beside it, an invitation ' +
+      'issued by an administrator and received by somebody else is driven end to end, with ' +
+      'every identity a test identity this reporter created at @example.invalid.',
   );
 
-  /* -- R. The mission chain ------------------------------------------------ */
-  /*
-   * Every condition printed, held or not, because the owner's rejection was
-   * that a summary of a tick is not a chain. A reader has to be able to see
-   * which links were driven without taking this reporter's word for the shape.
-   */
   const chainDetail = chain.error
     ? `The exercise threw after ${chain.checks.length} check(s): ${chain.error}. ` +
       'An exception is a failure rather than a non-run — something happened and it was wrong.'
