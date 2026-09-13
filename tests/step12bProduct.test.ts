@@ -2560,8 +2560,15 @@ describe('the acceptance reporter, read where the image cannot see the repositor
       expect(start, `gate ${gate} is not where this test expects it`).toBeGreaterThan(-1);
       const end = rows.indexOf('/* --', start + 6);
       const body = end === -1 ? rows.slice(start) : rows.slice(start, end);
+      /*
+       * `fromCheckout(` counts, and is the better spelling: it consults
+       * `REPO_VISIBLE` *and* keeps the condition's name the same in both
+       * environments, which is what lets the combiner join the two runs. A
+       * test that insisted on the literal flag would push the gates back
+       * towards the pair-of-branches shape that let a name drift.
+       */
       expect(body, `gate ${gate} does not say when it could not look`).toMatch(
-        /REPO_VISIBLE|NOT_FROM_A_CHECKOUT|clientHasOperator === null/,
+        /REPO_VISIBLE|NOT_FROM_A_CHECKOUT|fromCheckout\(/,
       );
     }
   });
@@ -2920,5 +2927,67 @@ describe('a verdict is derived from conditions, by both readers, identically', (
     expect(helper).toContain("'server'");
     // Fails closed: an unknown revision is not a pass.
     expect(helper.slice(0, helper.indexOf('\n}'))).toContain('return false;');
+  });
+});
+
+/* ==========================================================================
+ * A condition's name is its identity across two runs.
+ *
+ * `step12b-combine.ts` unions conditions **by name**, which makes the name the
+ * join key — and a join key that changes with the environment joins nothing.
+ * Gate J had exactly that defect: ten named conditions from a checkout and one
+ * lumped "the phone journey was walked and written down" from a container, so
+ * the union would have carried eleven conditions, one of which nothing could
+ * ever answer, and J would have read PARTIAL for ever however green both runs
+ * were.
+ *
+ * The two helpers are the remedy — they hold the name fixed and move only the
+ * answer — so what is pinned here is that the reporter uses them rather than
+ * writing a pair of branches whose names can drift apart.
+ * ======================================================================== */
+describe('a condition keeps its name whichever environment answered it', () => {
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+
+  it('joins by name, which is what makes the name load-bearing', () => {
+    expect(combiner).toContain('const byName = new Map');
+    expect(combiner).toContain('byName.get(condition.name)');
+  });
+
+  it('has one helper per environment, each keeping the name and moving only the answer', () => {
+    for (const helper of ['function fromCheckout(', 'function fromProduction(']) {
+      const start = reporter.indexOf(helper);
+      expect(start, `${helper} is missing`).toBeGreaterThan(-1);
+      const body = reporter.slice(start, reporter.indexOf('\n}', start)).replace(/\s+/g, ' ');
+      /*
+       * The name is passed straight through in both arms; only `held` and
+       * `saw` differ. Whitespace is collapsed first because the two helpers
+       * are formatted differently — one fits on a line and one does not — and
+       * a test that depended on that would be pinning the formatter rather
+       * than the property.
+       */
+      expect(body).toContain('? { name, held, saw }');
+      expect(body).toMatch(/: \{ name, held: null,/);
+    }
+  });
+
+  it('writes no environment branch that could give one condition two names', () => {
+    /*
+     * The shape being refused is a ternary on REPO_VISIBLE (or the production
+     * flag) whose two arms each carry their own `name:` literal — which is how
+     * J's defect was written. Both helpers exist precisely so that shape is
+     * never needed.
+     */
+    const gates = codeOf(reporter.slice(reporter.indexOf('/* -- A.')));
+    const branches = [...gates.matchAll(/(?:REPO_VISIBLE|READING_PRODUCTION)\s*\n?\s*\?[\s\S]{0,900}?:/g)];
+    for (const [branch] of branches) {
+      const names = [...branch.matchAll(/name:\s*['"`]/g)];
+      expect(
+        names.length,
+        'an environment branch that names a condition in both arms can name it differently in ' +
+          'each — use fromCheckout or fromProduction, which keep the name fixed',
+      ).toBeLessThanOrEqual(1);
+    }
   });
 });

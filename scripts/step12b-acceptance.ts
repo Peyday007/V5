@@ -434,6 +434,25 @@ let READING_PRODUCTION = false;
  * with the environment that can exercise it named — which is what makes the
  * combiner able to join the two runs into one answer.
  */
+/**
+ * A condition whose evidence is the repository tree.
+ *
+ * The mirror of `fromProduction`, and it exists for a reason that is not
+ * symmetry: **`step12b-combine.ts` unions conditions by name.** An earlier
+ * version of gate J emitted ten named conditions from a checkout and one
+ * lumped "the phone journey was walked and written down" from a container, so
+ * the union would have carried eleven conditions — one of which nothing could
+ * ever answer — and J would have read PARTIAL for ever however green both runs
+ * were. A name that changes between environments is a condition that cannot be
+ * joined, which is why both helpers keep the name fixed and move only the
+ * answer.
+ */
+function fromCheckout(name: string, held: boolean, saw: string): GateCondition {
+  return REPO_VISIBLE
+    ? { name, held, saw }
+    : { name, held: null, saw: 'this run cannot see the repository', needs: 'CHECKOUT' };
+}
+
 function fromProduction(name: string, held: boolean, saw: string): GateCondition {
   return READING_PRODUCTION
     ? { name, held, saw }
@@ -4296,33 +4315,18 @@ async function main(): Promise<void> {
         held: money !== null && money.nodes === 0 && (money.empty ?? '').length > 0,
         saw: money ? `${money.nodes} nodes, reason present=${(money.empty ?? '') !== ''}` : 'absent',
       },
-      REPO_VISIBLE
-        ? {
-            name: 'every map was opened by pressing its own tab at phone width and photographed',
-            held: mapEvidence.images > 0,
-            saw: `${mapEvidence.images} committed image(s)`,
-          }
-        : {
-            name: 'every map was opened by pressing its own tab at phone width and photographed',
-            held: null,
-            saw: 'the committed image set is a repository fact',
-            needs: 'CHECKOUT',
-          },
-      REPO_VISIBLE
-        ? {
-            name: 'the constellation is measured at every width, and overlaps at none of them',
-            held: cleanAtEveryWidth,
-            saw:
-              widthRows.length > 0
-                ? widthRows.map((row) => `${row.width}: ${row.after}`).join(' | ')
-                : 'no measured readings are committed',
-          }
-        : {
-            name: 'the constellation is measured at every width, and overlaps at none of them',
-            held: null,
-            saw: 'the committed measurement is a repository fact',
-            needs: 'CHECKOUT',
-          },
+      fromCheckout(
+        'every map was opened by pressing its own tab at phone width and photographed',
+        mapEvidence.images > 0,
+        `${mapEvidence.images} committed image(s)`,
+      ),
+      fromCheckout(
+        'the constellation is measured at every width, and overlaps at none of them',
+        cleanAtEveryWidth,
+        widthRows.length > 0
+          ? widthRows.map((row) => `${row.width}: ${row.after}`).join(' | ')
+          : 'no measured readings are committed',
+      ),
       {
         name: 'whether the maps are any good',
         held: null,
@@ -4602,105 +4606,90 @@ async function main(): Promise<void> {
     }
   }
 
-  const mobileConditions: GateCondition[] = !REPO_VISIBLE
-    ? [
-        {
-          name: 'the phone journey was walked and written down',
-          held: null,
-          saw: 'the committed journey record and image set are repository facts',
-          needs: 'CHECKOUT',
-        },
-      ]
-    : [
-        {
-          name: 'one continuous signed-in journey was walked at phone width',
-          held: journey !== null && journey.stepsWalked >= 10,
-          saw: journey
-            ? `${journey.stepsWalked} steps at ${journey.phoneWidth}px, ${mobile.images} committed images`
-            : 'no journey record is committed — run scripts/visual-qa.ts',
-        },
-        {
-          name: 'every step arrived at the screen a press was supposed to reach',
-          held: journey !== null && journey.stepsThatArrived === journey.stepsWalked,
-          saw: journey ? `${journey.stepsThatArrived}/${journey.stepsWalked}` : 'not read',
-        },
-        {
-          name: 'the page body never scrolls sideways, at any step',
-          held: journey !== null && journey.stepsThatFit === journey.stepsWalked,
-          saw: journey ? `${journey.stepsThatFit}/${journey.stepsWalked} fit` : 'not read',
-        },
-        {
-          name: 'nothing is cut off inside a container that clips, at any step',
-          held: journey !== null && journey.stepsWithNothingClipped === journey.stepsWalked,
-          saw: journey
-            ? `${journey.stepsWithNothingClipped}/${journey.stepsWalked} clean`
-            : 'not read',
-        },
-        {
-          name: 'every chrome control answers elementFromPoint at its own centre',
-          held: journey !== null && journey.unreachableControls.length === 0,
-          saw: journey
-            ? journey.unreachableControls.length === 0
-              ? 'no control was painted over or absent'
-              : `unreachable: ${journey.unreachableControls.join(', ')}`
-            : 'not read',
-        },
-        {
-          name: 'the constellation is drawn without overlapping itself at phone width',
-          held:
-            journey !== null &&
-            journey.constellation.length > 0 &&
-            journey.constellation.every((reading) => reading.overlaps === 0),
-          saw: journey
-            ? journey.constellation
-                .map((r) => `${r.width}px ${r.layout} ${r.overlaps} pair(s)`)
-                .join('; ')
-            : 'not read',
-        },
-        {
-          /*
-           * One more node than row, not the same number: the diagram draws the
-           * nucleus and its children while the list beside it is the children.
-           * The first version of this condition compared them directly and
-           * would have reported a correct screen as a defect — which is the
-           * false finding that costs more than the defect it was looking for.
-           */
-          name: 'the diagram and its outline are the same graph — the nucleus, and one row per child',
-          held:
-            journey !== null &&
-            journey.constellation.length > 0 &&
-            journey.constellation.every((reading) => reading.nodes === reading.listed + 1),
-          saw: journey
-            ? journey.constellation
-                .map((r) => `${r.width}px ${r.nodes} drawn / ${r.listed} listed`)
-                .join('; ')
-            : 'not read',
-        },
-        {
-          name: 'the harness itself found nothing outstanding on that run',
-          held: journey !== null && journey.findings.length === 0,
-          saw: journey
-            ? journey.findings.length === 0
-              ? 'no findings'
-              : `${journey.findings.length}: ${journey.findings.slice(0, 3).join('; ')}`
-            : 'not read',
-        },
-        {
-          name: 'the reading still describes this tree — no product code has moved since',
-          held: journeyStillDescribesThisTree,
-          saw: journey
-            ? `taken at ${journey.revision?.slice(0, 8) ?? 'unknown'}; ` +
-              (journeyStillDescribesThisTree
-                ? 'client/ and server/ are byte-identical at HEAD'
-                : 'the product has changed since — re-run scripts/visual-qa.ts')
-            : 'not read',
-        },
-        {
-          name: 'the widths that were clipping are pinned by a suite',
-          held: responsiveSuite !== null,
-          saw: responsiveSuite ? 'tests/step12bResponsive.test.tsx' : 'the suite is absent',
-        },
-      ];
+  const mobileConditions: GateCondition[] = [
+    fromCheckout(
+      'one continuous signed-in journey was walked at phone width',
+      journey !== null && journey.stepsWalked >= 10,
+      journey
+        ? `${journey.stepsWalked} steps at ${journey.phoneWidth}px, ${mobile.images} committed images`
+        : 'no journey record is committed — run scripts/visual-qa.ts',
+    ),
+    fromCheckout(
+      'every step arrived at the screen a press was supposed to reach',
+      journey !== null && journey.stepsThatArrived === journey.stepsWalked,
+      journey ? `${journey.stepsThatArrived}/${journey.stepsWalked}` : 'not read',
+    ),
+    fromCheckout(
+      'the page body never scrolls sideways, at any step',
+      journey !== null && journey.stepsThatFit === journey.stepsWalked,
+      journey ? `${journey.stepsThatFit}/${journey.stepsWalked} fit` : 'not read',
+    ),
+    fromCheckout(
+      'nothing is cut off inside a container that clips, at any step',
+      journey !== null && journey.stepsWithNothingClipped === journey.stepsWalked,
+      journey ? `${journey.stepsWithNothingClipped}/${journey.stepsWalked} clean` : 'not read',
+    ),
+    fromCheckout(
+      'every chrome control answers elementFromPoint at its own centre',
+      journey !== null && journey.unreachableControls.length === 0,
+      journey
+        ? journey.unreachableControls.length === 0
+          ? 'no control was painted over or absent'
+          : `unreachable: ${journey.unreachableControls.join(', ')}`
+        : 'not read',
+    ),
+    fromCheckout(
+      'the constellation is drawn without overlapping itself at phone width',
+      journey !== null &&
+        journey.constellation.length > 0 &&
+        journey.constellation.every((reading) => reading.overlaps === 0),
+      journey
+        ? journey.constellation
+            .map((r) => `${r.width}px ${r.layout} ${r.overlaps} pair(s)`)
+            .join('; ')
+        : 'not read',
+    ),
+    fromCheckout(
+      /*
+       * One more node than row, not the same number: the diagram draws the
+       * nucleus and its children while the list beside it is the children. The
+       * first version compared them directly and would have reported a correct
+       * screen as a defect — the false finding that costs more than the defect
+       * it was looking for.
+       */
+      'the diagram and its outline are the same graph — the nucleus, and one row per child',
+      journey !== null &&
+        journey.constellation.length > 0 &&
+        journey.constellation.every((reading) => reading.nodes === reading.listed + 1),
+      journey
+        ? journey.constellation.map((r) => `${r.width}px ${r.nodes} drawn / ${r.listed} listed`).join('; ')
+        : 'not read',
+    ),
+    fromCheckout(
+      'the harness itself found nothing outstanding on that run',
+      journey !== null && journey.findings.length === 0,
+      journey
+        ? journey.findings.length === 0
+          ? 'no findings'
+          : `${journey.findings.length}: ${journey.findings.slice(0, 3).join('; ')}`
+        : 'not read',
+    ),
+    fromCheckout(
+      'the reading still describes this tree — no product code has moved since',
+      journeyStillDescribesThisTree,
+      journey
+        ? `taken at ${journey.revision?.slice(0, 8) ?? 'unknown'}; ` +
+          (journeyStillDescribesThisTree
+            ? 'client/ and server/ are byte-identical at HEAD'
+            : 'the product has changed since — re-run scripts/visual-qa.ts')
+        : 'not read',
+    ),
+    fromCheckout(
+      'the widths that were clipping are pinned by a suite',
+      responsiveSuite !== null,
+      responsiveSuite ? 'tests/step12bResponsive.test.tsx' : 'the suite is absent',
+    ),
+  ];
 
   recordConditions(
     'J',
@@ -4824,43 +4813,32 @@ async function main(): Promise<void> {
   recordConditions(
     'K',
     'Legacy removal',
-    !REPO_VISIBLE
-      ? [
-          {
-            name: 'the console-removal suite passes and the inventory matches the client',
-            held: null,
-            saw: 'the suite, the client sources and the inventory are repository facts',
-            needs: 'CHECKOUT',
-          },
-        ]
-      : [
-          {
-            name: 'the console-removal suite runs, and passes',
-            held: suiteRan,
-            saw: removalTest ? suiteOutput : 'the suite is not present at all',
-          },
-          {
-            name: 'the inventory declares the archive operations that survive',
-            held: declaredCalls.length >= 20,
-            saw: `${declaredCalls.length} call(s) named in docs/STEP-12B-LEGACY-MIGRATION.md`,
-          },
-          {
-            name: 'every declared call still exists, so the inventory is not describing a console that moved on',
-            held: declaredButGone.length === 0,
-            saw:
-              declaredButGone.length === 0
-                ? `${declaredAndPresent.length} of them resolve in the legacy client`
-                : `gone: ${declaredButGone.join(', ')}`,
-          },
-          {
-            name: 'and none of them reached the product surface, which is what P18 retires',
-            held: leakedToRussell.length === 0,
-            saw:
-              leakedToRussell.length === 0
-                ? 'no archive operation is called from client/src/russell'
-                : `on the product surface: ${leakedToRussell.join(', ')}`,
-          },
-        ],
+    [
+      fromCheckout(
+        'the console-removal suite runs, and passes',
+        suiteRan,
+        removalTest ? suiteOutput : 'the suite is not present at all',
+      ),
+      fromCheckout(
+        'the inventory declares the archive operations that survive',
+        declaredCalls.length >= 20,
+        `${declaredCalls.length} call(s) named in docs/STEP-12B-LEGACY-MIGRATION.md`,
+      ),
+      fromCheckout(
+        'every declared call still exists, so the inventory is not describing a console that moved on',
+        declaredButGone.length === 0,
+        declaredButGone.length === 0
+          ? `${declaredAndPresent.length} of them resolve in the legacy client`
+          : `gone: ${declaredButGone.join(', ')}`,
+      ),
+      fromCheckout(
+        'and none of them reached the product surface, which is what P18 retires',
+        leakedToRussell.length === 0,
+        leakedToRussell.length === 0
+          ? 'no archive operation is called from client/src/russell'
+          : `on the product surface: ${leakedToRussell.join(', ')}`,
+      ),
+    ],
     'The suite is executed rather than looked up: it refuses the route for every principal, ' +
       'fails on any link to it, and fails on any instruction to go there. Beside it, the ' +
       'surviving archive operations are held against the client both ways round — still there ' +
