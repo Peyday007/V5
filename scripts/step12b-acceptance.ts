@@ -2944,28 +2944,40 @@ async function runFleetUnderstandingExercise(): Promise<{
       `declared "20x", provisioned reads ${before.provisioned.value ?? 'null'}`,
     );
 
-    /* -- T8. The target is a row, changed without a deployment ------------- */
+    /*
+     * T8. The target is a row, changed without a deployment — written at
+     * `ACCOUNT` scope rather than `FLEET`.
+     *
+     * The first version wrote the global fleet target, and Q's canary cycle
+     * then reported three conditions failing: it exercises what happens when a
+     * canary is applied over **no prior policy**, and this had just written
+     * one. The product was right both times; the reporter had contaminated its
+     * own next scenario, which is the exact failure its header warns about —
+     * an exercise that sees another scenario's fixtures is measuring that one
+     * rather than itself. Scoped to this run's own account, the claim is
+     * unchanged and Q's starting state is untouched.
+     */
+    const beforePolicy = await currentPolicy('ACCOUNT', account.id);
     await setPolicy({
-      scope: 'FLEET',
-      scopeId: null,
+      scope: 'ACCOUNT',
+      scopeId: account.id,
       target: 7,
       actor: 'step12b-acceptance',
       reason: 'the acceptance reporter raising a target to prove it is a row',
     });
-    const after = await fleetView({ includeTechnical: true });
+    const afterPolicy = await currentPolicy('ACCOUNT', account.id);
+    const policyVersions = await policyHistory('ACCOUNT', account.id, 5);
     hold(
       'raising the target is a row: the reading moves, with no deployment and no code change',
-      after.policy.target === 7 && after.policy.version !== before.policy.version,
-      `${before.policy.target ?? 'none'} → ${after.policy.target ?? 'none'} ` +
-        `(version ${before.policy.version ?? 0} → ${after.policy.version ?? 0})`,
+      afterPolicy?.target === 7 && afterPolicy.version !== (beforePolicy?.version ?? 0),
+      `${beforePolicy?.target ?? 'none'} → ${afterPolicy?.target ?? 'none'} ` +
+        `(version ${beforePolicy?.version ?? 0} → ${afterPolicy?.version ?? 0})`,
     );
     hold(
-      'and the previous value is still there to revert to',
-      after.recentPolicyChanges.length >= 1 &&
-        after.recentPolicyChanges.every(
-          (change) => change.actor.length > 0 && change.reason.length > 0,
-        ),
-      `${after.recentPolicyChanges.length} recorded change(s), each with an actor and a reason`,
+      'and the previous value is still there to revert to, with who changed it and why',
+      policyVersions.length >= 1 &&
+        policyVersions.every((change) => change.actor.length > 0 && change.reason.length > 0),
+      `${policyVersions.length} recorded version(s), each with an actor and a reason`,
     );
 
     /* -- T7. A workload profile, over whatever bins exist ------------------ */
