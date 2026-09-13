@@ -107,7 +107,7 @@ import {
   rollbackFinding,
   runExperiment,
 } from '../server/services/fleet/lab.ts';
-import { MAP_TYPES } from '../server/services/russell/maps.ts';
+import { MAP_TYPES, mapFor } from '../server/services/russell/maps.ts';
 import { PREFERENCES, checkPreference, defaults } from '../server/services/russell/preferences.ts';
 import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
 import { explainSlowness, usability } from '../server/services/fleet/view.ts';
@@ -3627,6 +3627,9 @@ async function main(): Promise<void> {
     });
   }
   let complete = 0;
+  const labResults = new Map<string, Awaited<ReturnType<typeof runExperiment>>>();
+  let refusedWithoutAuthorization: string | null = null;
+  let refusedOutsideTechnical: string | null = null;
   for (const mode of LAB_MODES) {
     const declared = await declareExperiment({
       projectId: technical.id,
@@ -3645,46 +3648,279 @@ async function main(): Promise<void> {
     });
     const ran = await runExperiment({ id: declared.id, pressureAuthorized: true });
     if (ran.state === 'COMPLETE') complete += 1;
+    labResults.set(mode, ran);
   }
-  record(
+
+  /*
+   * The two refusals that make the pressure modes safe, driven rather than read.
+   *
+   * §15.2's control is not that the modes exist; it is that a pressure test
+   * cannot start without a person authorizing the pressure, and cannot start
+   * outside an isolated TECHNICAL scope. A lab that ran eight modes and refused
+   * neither would be eight modes with no envelope around them, and the gate
+   * would have reported PASS for it.
+   */
+  const unauthorized = await declareExperiment({
+    projectId: technical.id,
+    mode: 'PUSH_TO_FAILURE',
+    title: 'acceptance PUSH_TO_FAILURE without a person',
+    envelope: {
+      ceiling: 4,
+      durationMinutes: 1,
+      stopConditions: ['the ceiling is reached'],
+      cleanup: 'cancel what is left',
+      rollback: 'nothing applied',
+      workloadClass: 'SYNTHETIC',
+      workKind: 'SYNTHETIC',
+    },
+    actor: 'acceptance',
+  });
+  const withoutPerson = await runExperiment({ id: unauthorized.id, pressureAuthorized: false });
+  refusedWithoutAuthorization =
+    withoutPerson.state === 'REFUSED' ? withoutPerson.refusalReason : null;
+
+  const ordinary = await createProject({
+    name: 'Step 12B acceptance lab — ordinary scope',
+    slug: `s12b-lab-ord-${Date.now()}`,
+    purpose: 'PROJECT',
+  });
+  const outside = await declareExperiment({
+    projectId: ordinary.id,
+    mode: 'PUSH_TO_FAILURE',
+    title: 'acceptance PUSH_TO_FAILURE in a real project',
+    envelope: {
+      ceiling: 4,
+      durationMinutes: 1,
+      stopConditions: ['the ceiling is reached'],
+      cleanup: 'cancel what is left',
+      rollback: 'nothing applied',
+      workloadClass: 'SYNTHETIC',
+      workKind: 'SYNTHETIC',
+    },
+    actor: 'acceptance',
+  });
+  const outsideRun = await runExperiment({ id: outside.id, pressureAuthorized: true });
+  refusedOutsideTechnical = outsideRun.state === 'REFUSED' ? outsideRun.refusalReason : null;
+
+  /*
+   * What T3, T4 and T5 actually ask for, asked of the result rather than of the
+   * state. `complete === LAB_MODES.length` says eight experiments finished; it
+   * says nothing about whether any of them found a limit, recommended anything,
+   * or kept quality apart from throughput — which is the whole of what those
+   * three conditions are. A gate that asserts the state and not the content is
+   * the shape of evidence this reporter's own header refuses.
+   */
+  const resultOf = (mode: string): { highestTested?: { value: number | null; anythingFailed: boolean }; recommendedSetting?: { value: string; evidence: string }; bottleneck?: { value: string; evidence: string }; degradationBegan?: { value: string; evidence: string }; untested?: string[]; confidence?: { sampleSize: number; note: string } } | null =>
+    (labResults.get(mode)?.result as never) ?? null;
+  const pushResult = resultOf('PUSH_TO_FAILURE');
+  const layoutResult = resultOf('LAYOUT_TOURNAMENT');
+  const qualityResult = resultOf('QUALITY_UNDER_PRESSURE');
+  const boundedALimit =
+    pushResult !== null &&
+    pushResult.highestTested !== undefined &&
+    pushResult.highestTested.value !== null;
+  const defensible =
+    layoutResult !== null &&
+    (layoutResult.recommendedSetting?.value ?? '').length > 0 &&
+    (layoutResult.recommendedSetting?.evidence ?? '').length > 0;
+  const qualityApart =
+    qualityResult !== null &&
+    (qualityResult.degradationBegan?.value ?? '').length > 0 &&
+    (qualityResult.untested ?? []).length > 0 &&
+    qualityResult.highestTested !== undefined;
+  const everyResultNamesWhatItDidNotTest = LAB_MODES.every(
+    (mode) => (resultOf(mode)?.untested ?? []).length > 0,
+  );
+  recordConditions(
     'G',
     'Capability Lab',
-    complete === LAB_MODES.length ? 'PASS' : 'PARTIAL',
-    `${complete}/${LAB_MODES.length} modes ran to COMPLETE in an isolated TECHNICAL scope, ` +
-      'spending nothing. Every result names what it did not test: how much a real Cowork ' +
-      'surface holds. See `npm run step12b:lab` for the canary apply/retest/compare/rollback cycle.',
+    [
+      {
+        name: 'every declared mode runs to COMPLETE in an isolated TECHNICAL scope, spending nothing',
+        held: complete === LAB_MODES.length,
+        saw: `${complete}/${LAB_MODES.length} COMPLETE`,
+      },
+      {
+        name: 'T3 — push to failure finds a limit or says honestly how far it got',
+        held: boundedALimit,
+        saw: pushResult?.highestTested
+          ? `tested through ${pushResult.highestTested.value}, anything failed=` +
+            `${pushResult.highestTested.anythingFailed}`
+          : 'no highestTested reading',
+      },
+      {
+        name: 'T4 — the layout comparison recommends something, with the evidence class behind it',
+        held: defensible,
+        saw: layoutResult?.recommendedSetting
+          ? `"${layoutResult.recommendedSetting.value}" on ${layoutResult.recommendedSetting.evidence} evidence`
+          : 'no recommendation',
+      },
+      {
+        name: 'T5 — quality is reported apart from throughput, and says what it did not test',
+        held: qualityApart,
+        saw: qualityResult?.degradationBegan
+          ? `degradation "${qualityResult.degradationBegan.value}", ` +
+            `${(qualityResult.untested ?? []).length} untested thing(s) named`
+          : 'no degradation reading',
+      },
+      {
+        name: 'no result claims a ceiling it did not observe',
+        held: everyResultNamesWhatItDidNotTest,
+        saw: 'every mode names at least one thing it did not test',
+      },
+      {
+        name: 'a pressure test without a person authorizing the pressure is refused by name',
+        held: refusedWithoutAuthorization !== null,
+        saw: refusedWithoutAuthorization ?? 'it ran',
+      },
+      {
+        name: 'a pressure test outside an isolated TECHNICAL scope is refused by name',
+        held: refusedOutsideTechnical !== null,
+        saw: refusedOutsideTechnical ?? 'it ran',
+      },
+      {
+        name: 'how much a real Cowork surface holds',
+        held: null,
+        saw:
+          'every result carries PROVIDER_UNTESTED. Measuring it means putting real pressure ' +
+          'on a fleet serving real research, against a ceiling nobody set — and simulating it ' +
+          'would produce figures a reader could not tell from measurements. The mechanism is ' +
+          'complete and the measurement is not taken; an operator with an isolated scope can ' +
+          'take it with no code change.',
+        standing: true,
+      },
+    ],
+    `${LAB_MODES.length} modes declared, run and read back in an isolated TECHNICAL scope, ` +
+      'spending nothing — and the three conditions T3, T4 and T5 name are asked of what each ' +
+      'result says rather than of whether it finished. See `npm run step12b:lab` for the canary ' +
+      'apply / retest / compare / rollback cycle, which Q drives.',
   );
 
   /* -- H. Visual maps ------------------------------------------------------ */
-  const maps = file('server/services/russell/maps.ts');
   /*
-   * The named unmet condition used to be "interaction on a real project at
-   * phone width", and it no longer is: every map type was opened by pressing
-   * its own tab at 390px, and for each one the diagram's node count was
-   * compared to the outline's row count. That comparison is the load-bearing
-   * one, because §29's rule is that the picture and the list are the same
-   * graph — two numbers that agree is a reading, where "an outline exists" is
-   * only a shape.
+   * Built rather than regex-matched.
+   *
+   * This was `/emptyReason/.test(maps.ts)` — the code contains the word — beside
+   * a sentence quoting node counts as literal text. Both are the shape of
+   * evidence this reporter's header refuses, and the second is worse: a
+   * hardcoded "9/9, 0/0, 8/8" stays true in the prose after it stops being true
+   * of the product.
+   *
+   * So every map type is built over a project with real rows, and the
+   * load-bearing comparison is made per map: §29's rule is that the picture and
+   * the list are the same graph, and two counts that agree is a reading where
+   * "an outline exists" is only a shape.
    */
+  const mapProject = snapshot;
+  const builtMaps: { type: string; nodes: number; outline: number; empty: string | null }[] = [];
+  for (const type of MAP_TYPES) {
+    const view = await mapFor({
+      type,
+      projectId: mapProject.id,
+      projectName: mapProject.name,
+      includePrivate: true,
+    });
+    builtMaps.push({
+      type,
+      nodes: view.nodes.length,
+      outline: view.outline.length,
+      empty: view.emptyReason,
+    });
+  }
+  const synchronized = builtMaps.filter((view) => view.nodes === view.outline);
+  const populatedMaps = builtMaps.filter((view) => view.nodes > 0);
+  const emptyWithoutReason = builtMaps.filter(
+    (view) => view.nodes === 0 && (view.empty ?? '').length === 0,
+  );
+  const money = builtMaps.find((view) => view.type === 'MONEY_FLOW') ?? null;
   const mapEvidence = visualEvidence();
-  record(
+  const constellationReadme = file('docs/evidence/step12b-constellation/README.md');
+  /*
+   * The widths, read from the committed measurement rather than asserted.
+   *
+   * The rejection named an obstructed diagram, and the reading that answers it
+   * is a count of intersecting node pairs — taken at four viewports, in the
+   * product's own typefaces, because a label width is what an overlap is made
+   * of. A row that reads `0 pairs` at every width is the claim; anything else
+   * is the defect still being there.
+   */
+  const widthRows = constellationReadme
+    ? [...constellationReadme.matchAll(/^\| (\d{3,4}) \|[^|]*\|[^|]*\| ([^|]*) \|$/gm)].map(
+        (match) => ({ width: Number(match[1]), after: (match[2] ?? '').trim() }),
+      )
+    : [];
+  const cleanAtEveryWidth =
+    widthRows.length >= 4 && widthRows.every((row) => /0 pairs/.test(row.after));
+
+  recordConditions(
     'H',
     'Visual maps',
-    maps && /emptyReason/.test(maps) ? 'PARTIAL' : 'NOT_RUN',
-    `${MAP_TYPES.length} map types derived from the authoritative graph, each with a ` +
-      'synchronized outline, and the money-flow map returns a reason for being empty rather ' +
-      'than inventing edges. ' +
-      (!REPO_VISIBLE
-        ? `The rendered half of this row is a repository fact. ${NOT_FROM_A_CHECKOUT} `
-        : mapEvidence.images > 0
-        ? `All ${MAP_TYPES.length} were opened by pressing their own tabs at 390px and ` +
-          'photographed, and every one\u2019s diagram-node count equals its outline-row count ' +
-          '(9/9, 0/0, 8/8, 8/8, 1/1, 0/0); money flow draws nothing and says the figures belong ' +
-          'to the connected site. Show it as a list was pressed on a populated map, so the ' +
-          'outline is reachable rather than merely present. '
-        : 'The committed image set is absent, so nothing here was rendered. ') +
-      'NOT established here: map behaviour at desktop and intermediate widths beyond the page ' +
-      'fitting, and whether the maps are good \u2014 which is O.',
+    [
+      {
+        name: 'every declared map type builds from the authoritative graph',
+        held: builtMaps.length === MAP_TYPES.length,
+        saw: `${builtMaps.length}/${MAP_TYPES.length} built`,
+      },
+      {
+        name: 'the outline is the same graph as the diagram, per map',
+        held: synchronized.length === builtMaps.length,
+        saw: builtMaps.map((view) => `${view.type} ${view.nodes}/${view.outline}`).join(' '),
+      },
+      {
+        name: 'more than one map is actually populated, so the comparison is not vacuous',
+        held: populatedMaps.length >= 2,
+        saw: `${populatedMaps.length} populated: ${populatedMaps.map((v) => v.type).join(', ')}`,
+      },
+      {
+        name: 'an empty map says why, rather than drawing a plausible shape',
+        held: emptyWithoutReason.length === 0,
+        saw:
+          emptyWithoutReason.length === 0
+            ? `every empty map carries a reason (money flow: "${(money?.empty ?? '').slice(0, 48)}…")`
+            : `${emptyWithoutReason.map((v) => v.type).join(', ')} are blank and silent`,
+      },
+      {
+        name: 'money flow draws nothing, because those figures belong to the connected site',
+        held: money !== null && money.nodes === 0 && (money.empty ?? '').length > 0,
+        saw: money ? `${money.nodes} nodes, reason present=${(money.empty ?? '') !== ''}` : 'absent',
+      },
+      REPO_VISIBLE
+        ? {
+            name: 'every map was opened by pressing its own tab at phone width and photographed',
+            held: mapEvidence.images > 0,
+            saw: `${mapEvidence.images} committed image(s)`,
+          }
+        : {
+            name: 'every map was opened by pressing its own tab at phone width and photographed',
+            held: null,
+            saw: 'the committed image set is a repository fact',
+            needs: 'CHECKOUT',
+          },
+      REPO_VISIBLE
+        ? {
+            name: 'the constellation is measured at every width, and overlaps at none of them',
+            held: cleanAtEveryWidth,
+            saw:
+              widthRows.length > 0
+                ? widthRows.map((row) => `${row.width}: ${row.after}`).join(' | ')
+                : 'no measured readings are committed',
+          }
+        : {
+            name: 'the constellation is measured at every width, and overlaps at none of them',
+            held: null,
+            saw: 'the committed measurement is a repository fact',
+            needs: 'CHECKOUT',
+          },
+      {
+        name: 'whether the maps are any good',
+        held: null,
+        saw: "that is O's question, and it is a person's. Nothing here may answer it.",
+        standing: true,
+      },
+    ],
+    `${MAP_TYPES.length} map types built over a project with real rows, each compared against ` +
+      'its own outline in the same pass, plus the committed phone-width captures and the ' +
+      'constellation overlap measurement taken at four viewports in the product\u2019s own typefaces.',
   );
 
   /* -- I. Collaboration ---------------------------------------------------- */
