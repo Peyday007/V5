@@ -724,6 +724,17 @@ const JOURNEY_AFTER: JourneyStep[] = [
       if (!how) return 'the technical detail is not on the card';
       how.open = true;
       how.scrollIntoView({ block: 'center' });
+      /*
+       * Close the sheet, because a person who has chosen goes back to reading.
+       *
+       * Leaving it open is what a person would see if they walked away
+       * mid-gesture, and it made every step from here on report *"Send: covered
+       * by Sign out"* — five findings from one unclosed menu, none of them
+       * about the product. A sheet covering the composer is a sheet doing its
+       * job; measuring reachability underneath one is measuring nothing.
+       */
+      more.click();
+      await new Promise((r) => setTimeout(r, 300));
       return 'turned the depth up and opened the mission’s detail';
     })()`,
     until: "document.querySelector('.rs-mission-how[open]') !== null",
@@ -762,9 +773,13 @@ const JOURNEY_AFTER: JourneyStep[] = [
       });
       const cards = document.querySelectorAll('.rs-card .rs-item-title');
       if (cards.length === 0) {
-        const empty = document.querySelector('.rs-state, .rs-nothing, .rs-empty');
+        // One element, not three. Querying a list of selectors and taking the
+        // first match concatenated the panel's own empty state with the
+        // shell's, and read back "There is no There is nothing here yet. yet."
+        const panel = document.querySelector('.rs-panel .rs-state') ||
+          document.querySelector('.rs-state');
         return 'nothing concluded yet — ' +
-          (empty ? (empty.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 80) : 'no reason given');
+          (panel ? (panel.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 80) : 'no reason given');
       }
       return cards.length + ' conclusion(s): ' + groups.join(' | ') + ' — ' +
         [...cards].slice(0, 2).map((c) => (c.textContent || '').trim().slice(0, 40)).join(' · ');
@@ -1763,6 +1778,18 @@ interface JourneyStepRecord {
 const JOURNEY_RECORD: JourneyStepRecord[] = [];
 
 /**
+ * What each step read, kept by name.
+ *
+ * A check that needs a step's reading has to use *that step's*, taken while its
+ * screen was on the display. The first version of the technical-detail check
+ * re-read the DOM after the whole walk had finished — by which time the journey
+ * had moved on to Knows and Who, `.rs-mission-how[open]` no longer existed, and
+ * it reported the ids "NOT MATCHED" against an empty string. The screen was
+ * right and the reader was late.
+ */
+const JOURNEY_READS: Record<string, string> = {};
+
+/**
  * The persisted consequences of the journey, filled in as they are read back.
  *
  * Declared with every field null so an unwalked journey records "we did not
@@ -1897,6 +1924,7 @@ async function walk(
     });
     findings.push(...judge(step.name, reading));
     const read = step.read ? String(await evaluate(cdp, step.read)) : '';
+    JOURNEY_READS[step.name] = read;
     console.log(
       `  ${step.name.padEnd(18)} ${landed ? 'arrived' : 'NEVER ARRIVED'}  ` +
         `${reading.sideways ? 'SCROLLS SIDEWAYS' : 'fits'}  ` +
@@ -2831,18 +2859,7 @@ async function driveJourney(
      * checks is that the pairs a person can see name **this** mission and
      * **this** packet, rather than merely being present and plausible.
      */
-    const pairs = String(
-      await evaluate(
-        cdp,
-        `(() => {
-          const how = document.querySelector('.rs-mission-how[open]');
-          if (!how) return '';
-          const terms = [...how.querySelectorAll('dt')].map((t) => (t.textContent || '').trim());
-          const values = [...how.querySelectorAll('dd')].map((d) => (d.textContent || '').trim());
-          return terms.map((t, i) => t + '=' + (values[i] || '')).join(' ');
-        })()`,
-      ),
-    );
+    const pairs = JOURNEY_READS['21-what-the-work-actually-is'] ?? '';
     JOURNEY_EFFECTS.workIdsOnScreen = pairs || null;
     JOURNEY_EFFECTS.workIdentifiedOnScreen =
       parked.missionId !== null &&
