@@ -4638,6 +4638,33 @@ async function main(): Promise<void> {
     stepsWithNothingClipped: number;
     unreachableControls: string[];
     constellation: { width: number; layout: string; nodes: number; listed: number; overlaps: number }[];
+    /*
+     * What the journey *changed*, as distinct from what it walked past.
+     *
+     * The owner's objection to the first version of this gate was exact: the
+     * entries "mostly demonstrate navigation and layout". A step that arrived
+     * is a fact about routing. These are the rows the presses wrote, read back
+     * by the harness through the product's own routes inside the same journey,
+     * so the sequence a person is asked to believe — a decision was waiting, a
+     * thumb answered it, and the mission it was about carried on — resolves to
+     * ids rather than to screenshots.
+     *
+     * Every field is nullable, and null means *we did not find out* rather than
+     * *it did not happen*: a journey that never reached the decision must not
+     * read the same as one whose answer went nowhere.
+     */
+    effects?: {
+      standingAuthorityGranted: boolean | null;
+      ideaOverriddenByAPerson: boolean | null;
+      ideaPriority: string | null;
+      russellsJudgmentKept: boolean | null;
+      parkedMissionId: string | null;
+      parkedRequestId: string | null;
+      parkedOrchestrationId: string | null;
+      missionStateBefore: string | null;
+      missionStateAfter: string | null;
+      requestSettled: boolean | null;
+    };
     findings: string[];
   }
   let journey: JourneyRecord | null = null;
@@ -4650,6 +4677,14 @@ async function main(): Promise<void> {
       journey = null;
     }
   }
+
+  const effects = journey?.effects ?? null;
+  const resumed =
+    effects !== null &&
+    effects.parkedMissionId !== null &&
+    effects.missionStateBefore === 'NEEDS_HUMAN' &&
+    effects.missionStateAfter !== null &&
+    effects.missionStateAfter !== 'NEEDS_HUMAN';
 
   const mobileConditions: GateCondition[] = [
     fromCheckout(
@@ -4710,6 +4745,42 @@ async function main(): Promise<void> {
         ? journey.constellation.map((r) => `${r.width}px ${r.nodes} drawn / ${r.listed} listed`).join('; ')
         : 'not read',
     ),
+    /* -- and what it changed, which is the half navigation cannot show ------ */
+    fromCheckout(
+      'a person overruled Russell’s own priority from the phone, and Russell’s judgment was kept beside it',
+      effects !== null &&
+        effects.ideaOverriddenByAPerson === true &&
+        effects.ideaPriority === 'MUST_DO' &&
+        effects.russellsJudgmentKept === true,
+      effects
+        ? `override ${effects.ideaOverriddenByAPerson ? 'recorded' : 'absent'}, ` +
+          `priority ${effects.ideaPriority ?? 'none'}, ` +
+          `superseded judgment ${effects.russellsJudgmentKept ? 'kept' : 'gone'}`
+        : 'the record carries no effects at all',
+    ),
+    fromCheckout(
+      'a decision Brain derived from a packet’s own rows was waiting, and the journey answered it with a thumb',
+      effects !== null && effects.parkedRequestId !== null && effects.requestSettled === true,
+      effects
+        ? `request ${effects.parkedRequestId ?? 'none'} on mission ` +
+          `${effects.parkedMissionId ?? 'none'}, ${
+            effects.requestSettled === null
+              ? 'never read back'
+              : effects.requestSettled
+                ? 'settled'
+                : 'STILL OPEN'
+          }`
+        : 'the record carries no effects at all',
+    ),
+    fromCheckout(
+      'and the same mission carried on — parked before the answer, not parked after it',
+      resumed,
+      effects
+        ? `${effects.parkedMissionId ?? 'no mission'}: ` +
+          `${effects.missionStateBefore ?? 'unknown'} → ${effects.missionStateAfter ?? 'gone'} ` +
+          `(packet ${effects.parkedOrchestrationId ?? 'none'})`
+        : 'the record carries no effects at all',
+    ),
     fromCheckout(
       'the harness itself found nothing outstanding on that run',
       journey !== null && journey.findings.length === 0,
@@ -4741,11 +4812,15 @@ async function main(): Promise<void> {
     'Mobile',
     [
       ...mobileConditions,
-      fromProduction(
-        'a mission has run end to end for somebody using the product',
-        seen.missions > 0,
-        `${seen.missions} mission(s), ${seen.filedDocuments} with a filed document, in ${fleet.source}`,
-      ),
+      /*
+       * The production mission count used to be a condition here, and it was
+       * the owner who named why it could not be: "an unrelated production
+       * mission count cannot supply this evidence". It is true, it is worth
+       * knowing, and it is about a different claim — that missions run at all,
+       * which is L's. A gate about whether the product works with a thumb must
+       * be answered by a thumb, so it is answered by the journey above and this
+       * row is gone rather than kept as supporting colour.
+       */
       {
         name: 'portrait only, one device pixel ratio, Chromium only, no touch gestures or on-screen keyboard',
         held: null,
@@ -4757,7 +4832,12 @@ async function main(): Promise<void> {
     'One browser, one session and one scroll history: after the first address nothing ' +
       'navigates and every move is a press. It found two real defects, both fixed — the rail ' +
       'foot was display:none at bar width, which removed Sign out from a phone entirely, and ' +
-      'the composer placeholder was sliced by the thumb bar at 360px.',
+      'the composer placeholder was sliced by the thumb bar at 360px. ' +
+      'The journey also *does* something rather than only arriving somewhere: it approves the ' +
+      'standing authority, overrules Russell’s priority on one idea, waits while Russell ' +
+      'launches that idea and its packet stops outside what was preauthorized, answers the ' +
+      'resulting decision, and reads the same mission carrying on — every one of those read ' +
+      'back out of the rows through the product’s own routes, in that same journey.',
   );
 
   /* -- K. Legacy removal ---------------------------------------------------- */

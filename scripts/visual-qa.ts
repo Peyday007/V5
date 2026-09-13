@@ -35,8 +35,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { pickPort } from '../tests/helpers/ports.ts';
+
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6400 + Math.floor(Math.random() * 200);
+/*
+ * Through the same helper every suite uses, and for the same reason.
+ *
+ * `6400 + random(200)` reaches 6566, which is on the WHATWG bad-port list —
+ * Node's `fetch` refuses it before it opens a socket, so the server would boot,
+ * answer nothing this harness could see, and the run would report the product
+ * broken. That is the defect the test suites were just corrected for; a second
+ * copy of it in the harness that photographs the product would be the "a rule
+ * applied by one of two readers is worse than none" this file keeps recording.
+ */
+const PORT = pickPort(6400, 200);
 const BASE = `http://127.0.0.1:${PORT}`;
 const EMAIL = 'visual-qa@example.invalid';
 const BOOTSTRAP = 'bootstrap-password-01';
@@ -381,6 +393,15 @@ interface JourneyStep {
   act: string;
   /** Polled afterwards. False means the press landed on nothing. */
   until?: string;
+  /**
+   * How long to poll `until`, when the default is not enough.
+   *
+   * Fifteen seconds is right for a press that renders. It is wrong for a step
+   * whose answer is a re-read after a write, where the shell has to go back to
+   * the server — so the few steps that wait on a row rather than on a paint say
+   * so here rather than making every step slow.
+   */
+  patience?: number;
   /** Read back after, so the evidence is a change rather than a press. */
   read?: string;
 }
@@ -514,11 +535,21 @@ const JOURNEY_WORK: JourneyStep[] = [
   {
     name: '16-open-the-idea',
     what: 'The idea a site asked about, opened. Russell’s own judgment is on it — the priority, and the sentence behind it.',
+    /*
+     * The **list** entry, not the constellation node.
+     *
+     * `IdeaDecision` renders from `focused`, which `select(node.id)` sets from
+     * a `.rs-node` button in the list beneath the map. Pressing the matching
+     * `.lim-node` on the map opened nothing, and the step reported "pressed,
+     * and the screen never arrived" — accurate about the screen and wrong
+     * about which control produces it. The map is the front door; the list is
+     * where an idea is chosen.
+     */
     act: `(() => {
-      const target = ${JSON.stringify('DECISION_SUBJECT')};
-      const node = [...document.querySelectorAll('.lim-node, .rs-idea, .rs-candidate, button, a')]
+      const node = [...document.querySelectorAll('.rs-node')]
         .find((el) => (el.textContent || '').includes('recording takes'));
       if (!node) return false;
+      node.scrollIntoView({ block: 'center' });
       node.click();
       return 'opened ' + (node.textContent || '').trim().slice(0, 40);
     })()`,
@@ -538,9 +569,16 @@ const JOURNEY_WORK: JourneyStep[] = [
       const mustDo = choices.find((b) => /must do/i.test(b.textContent || ''));
       if (!mustDo) return false;
       mustDo.click();
-      const reason = document.querySelector('textarea');
+      // The reason field is an <input>, and it is the one the label points at.
+      // Querying for a textarea found nothing, so nothing was typed, so the
+      // save button stayed correctly disabled and the step reported "the save
+      // button never enabled" — accurate about the button and wrong about why.
+      const reason = document.querySelector('#rs-decision-reason');
       if (!reason) return false;
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      // React reads the value through its own descriptor, so assigning .value
+      // directly changes the DOM and not the component. The native setter plus
+      // a bubbling input event is what a keystroke actually looks like.
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
       setter.call(reason, 'The site is waiting on this one, so it goes first.');
       reason.dispatchEvent(new Event('input', { bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -552,20 +590,98 @@ const JOURNEY_WORK: JourneyStep[] = [
       save.click();
       return true;
     })()`,
-    until: `[...document.querySelectorAll('.rs-choices button[aria-pressed=true]')].some(
-      (b) => /must do/i.test(b.textContent || ''),
-    )`,
-    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 80)",
+    /*
+     * The *server's* answer, not the local one. `aria-pressed` is component
+     * state the click already set, so waiting on it would pass whether or not
+     * the save reached the server. `overriddenReason` comes back from the row.
+     */
+    until: "document.body.innerText.includes('You already overruled Russell here')",
+    read: `(() => {
+      const line = [...document.querySelectorAll('.rs-item-meta')]
+        .map((el) => (el.textContent || '').trim())
+        .find((text) => text.startsWith('You already overruled Russell here'));
+      return line || document.body.innerText.replace(/\\s+/g, ' ').slice(0, 80);
+    })()`,
+  },
+];
+
+/**
+ * The decision the journey exists to reach, and what answering it does.
+ *
+ * Separate from the work pass because there is a **wait** between them that is
+ * not a control: Russell's tick is thirty seconds, and launching the idea a
+ * person just promoted and then parking its packet takes more than one of them.
+ * A person checks back; the harness waits in Node and then presses once, which
+ * is the same thing without pretending a poll is a gesture.
+ *
+ * Nothing here is seeded. The request is written by `parkStoppedMissions` from
+ * the packet's own recorded status, the choices are the ones `choicesFor`
+ * decides this packet can actually take, and the answer goes through
+ * `answerHumanRequest` — the same transition the acceptance chain drives
+ * in-process. What this adds is that a person can reach all of it with a thumb.
+ */
+const JOURNEY_DECISION: JourneyStep[] = [
+  {
+    name: '18-the-parked-decision',
+    what:
+      'The decision Russell could not take: its packet stopped outside what was preauthorized, ' +
+      'and the card carries the packet’s own recorded reason and the answers that can act on it.',
+    act: railPress('Needs you'),
+    until: "document.querySelector('.rs-decision-what') !== null",
+    patience: 30_000,
+    read: `(() => {
+      const what = document.querySelector('.rs-decision-what');
+      const choices = [...document.querySelectorAll('.rs-choice strong')]
+        .map((el) => (el.textContent || '').trim());
+      return (what ? (what.textContent || '').trim().slice(0, 60) : 'no decision on the page') +
+        ' — offers: ' + (choices.join(' / ') || 'none');
+    })()`,
   },
   {
-    name: '18-knows',
+    name: '19-authorized-the-plan',
+    what:
+      'A person authorizing the plan, on a phone. §16’s other way a start gets authorized: the ' +
+      'same `approvePlan` the envelope calls, recorded as this person’s decision.',
+    act: `(() => {
+      const choice = [...document.querySelectorAll('.rs-choice')].find(
+        (el) => /authorize this plan/i.test(el.textContent || ''),
+      );
+      if (!choice) return false;
+      const button = choice.querySelector('button');
+      if (!button) return false;
+      choice.scrollIntoView({ block: 'center' });
+      button.click();
+      return 'chose ' + (choice.querySelector('strong').textContent || '').trim();
+    })()`,
+    // The card is gone because the list re-read from the server, not because
+    // anything here hid it — `NeedsYouView` takes no optimistic update.
+    until: "document.querySelector('.rs-decision-what') === null",
+    patience: 30_000,
+    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
+  },
+  {
+    name: '20-the-mission-resumed',
+    what:
+      'The same mission, carrying on. It was the one parked a moment ago; the answer moved it ' +
+      'rather than starting a replacement, and Work is where a person reads that.',
+    act: railPress('Work'),
+    until: "location.pathname === '/work'",
+    patience: 30_000,
+    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 110)",
+  },
+];
+
+/** Where a result is read, once the decision above has let the work carry on. */
+const JOURNEY_AFTER: JourneyStep[] = [
+  {
+    name: '21-knows',
     what: 'Knows, from the thumb bar: what the project believes and what each thing rests on. Where the result of work is read, once there is one.',
     act: railPress('Knows'),
     until: "location.pathname === '/knowledge'",
     read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
   },
   {
-    name: '19-who-and-fleet',
+    name: '22-who-and-fleet',
     what: 'Who, from the thumb bar: the people on the project and the fleet behind it — three capacity numbers that are not each other.',
     act: railPress('Who'),
     // `/fleet`, not `/who`. The rail's label and the address are different
@@ -1176,6 +1292,15 @@ function writeJourneyRecord(
     revision,
     phoneWidth: PHONE.width,
     steps: JOURNEY_RECORD,
+    /*
+     * What the journey *changed*, beside what it walked past.
+     *
+     * A list of steps that arrived is a claim about navigation. These are the
+     * rows the presses wrote, read back through the product's own routes by
+     * `persistedEffects` inside the same journey — so a reader can tell a
+     * sequence that happened from a sequence that rendered.
+     */
+    effects: JOURNEY_EFFECTS,
     stepsWalked: JOURNEY_RECORD.length,
     stepsThatArrived: JOURNEY_RECORD.filter((entry) => entry.arrived).length,
     stepsThatFit: JOURNEY_RECORD.filter((entry) => entry.fits).length,
@@ -1379,10 +1504,37 @@ async function seedSomethingToDecide(cookie: string): Promise<Seeded> {
         sourceRecordType: 'OPPORTUNITY',
         sourceVersion: new Date().toISOString(),
         title: 'Parcel 118 — how long recording takes in this county',
+        /*
+         * A question whose compiled plan the standing envelope will not
+         * auto-approve, and that is the point of the seed rather than a
+         * flourish.
+         *
+         * `RUSSELL_PUBLIC_RECORDS_V1` authorizes reading published Michigan
+         * records and nothing else, so its `forbiddenActions` matches
+         * "email the …". The compiler does not check that list — it checks the
+         * jurisdiction and the source classes — so this idea judges, compiles,
+         * launches, and is refused by `planFitsEnvelope` at the approval gate.
+         * That is §16's escalation, and it is the only way this journey can
+         * reach a **real** parked decision to answer: one Brain derived from a
+         * packet's own rows, with a request nobody wrote by hand.
+         *
+         * The jurisdiction is in the record's own column as well as its prose,
+         * so `jurisdictionFor` reads it from the row (§25) rather than falling
+         * back to the envelope's.
+         */
         summary:
-          'The site cannot settle how long a deed takes to become searchable after recording.',
+          'The site cannot settle how long a deed takes to become searchable after ' +
+          'recording, and wants somebody to email the register of deeds to confirm the figure.',
         sourceRef: `https://deal-dispatch.example.invalid/opportunities/${recordId}`,
-        attributes: { state: 'OPEN', county: 'Washtenaw' },
+        attributes: {
+          status: 'OPEN',
+          state: 'MI',
+          county: 'Washtenaw',
+          location: 'Washtenaw County, Michigan',
+          primaryBlocker:
+            'nobody can say how far the electronic index lags a recording, and the site ' +
+            'wants the register of deeds emailed to confirm it',
+        },
       },
     ],
   });
@@ -1521,6 +1673,37 @@ interface JourneyStepRecord {
 const JOURNEY_RECORD: JourneyStepRecord[] = [];
 
 /**
+ * The persisted consequences of the journey, filled in as they are read back.
+ *
+ * Declared with every field null so an unwalked journey records "we did not
+ * find out" rather than "it did not happen" — the distinction the whole
+ * reporter is built on, at the smallest scale it appears in.
+ */
+const JOURNEY_EFFECTS: {
+  standingAuthorityGranted: boolean | null;
+  ideaOverriddenByAPerson: boolean | null;
+  ideaPriority: string | null;
+  russellsJudgmentKept: boolean | null;
+  parkedMissionId: string | null;
+  parkedRequestId: string | null;
+  parkedOrchestrationId: string | null;
+  missionStateBefore: string | null;
+  missionStateAfter: string | null;
+  requestSettled: boolean | null;
+} = {
+  standingAuthorityGranted: null,
+  ideaOverriddenByAPerson: null,
+  ideaPriority: null,
+  russellsJudgmentKept: null,
+  parkedMissionId: null,
+  parkedRequestId: null,
+  parkedOrchestrationId: null,
+  missionStateBefore: null,
+  missionStateAfter: null,
+  requestSettled: null,
+};
+
+/**
  * One capture and the readings that go with it, at whatever the screen now is.
  *
  * Every step takes exactly the same set, so a regression at step nine is never
@@ -1583,7 +1766,7 @@ async function walk(
       console.log(`  ${step.name.padEnd(18)} NO CONTROL FOUND`);
       continue;
     }
-    const landed = step.until ? await waitFor(cdp, step.until) : true;
+    const landed = step.until ? await waitFor(cdp, step.until, step.patience ?? 15_000) : true;
     if (!landed) {
       findings.push(`${step.name}: pressed, and the screen never arrived — ${String(step.until)}`);
     }
@@ -2017,7 +2200,11 @@ async function narrowPhoneBar(cdp: Cdp, outputDir: string): Promise<string[]> {
  * Each miss is a finding in the harness's own list, so a step that looked like
  * it worked and did not fails the run rather than going unnoticed.
  */
-async function persistedEffects(cookie: string, seeded: Seeded): Promise<string[]> {
+async function persistedEffects(
+  cookie: string,
+  seeded: Seeded,
+  parked: Parked,
+): Promise<string[]> {
   const found: string[] = [];
   const read = async (path: string): Promise<Record<string, unknown> | null> => {
     try {
@@ -2042,6 +2229,7 @@ async function persistedEffects(cookie: string, seeded: Seeded): Promise<string[
       authority !== null &&
       typeof authority['grant'] === 'object' &&
       authority['grant'] !== null;
+    JOURNEY_EFFECTS.standingAuthorityGranted = granted;
     console.log(`  standing authority   ${granted ? 'granted, and still there' : 'NOT GRANTED'}`);
     if (!granted) {
       found.push('the standing authority was approved on screen and no grant is recorded');
@@ -2061,16 +2249,78 @@ async function persistedEffects(cookie: string, seeded: Seeded): Promise<string[
         `${overrideBy ? `, overridden by a person` : ', no override recorded'}` +
         `${superseded ? ', and Russell’s own judgment kept beside it' : ''}`,
     );
-    if (priority !== 'MUST_DO') {
+    /*
+     * One cause, one finding. The first version reported the priority, the
+     * missing author and the missing superseded judgment as three separate
+     * findings when the single fact was that the press never happened — three
+     * lines for one defect is how a list of findings stops being read.
+     */
+    JOURNEY_EFFECTS.ideaOverriddenByAPerson = overrideBy !== null;
+    JOURNEY_EFFECTS.ideaPriority = priority;
+    JOURNEY_EFFECTS.russellsJudgmentKept = superseded !== null;
+    if (overrideBy === null) {
       found.push(
-        `the priority was set to Must do on screen and the row says ${priority ?? 'nothing'}`,
+        `no override is recorded on the idea, so the press did not reach the server ` +
+          `(the row still says ${priority ?? 'nothing'})`,
+      );
+    } else {
+      if (priority !== 'MUST_DO') {
+        found.push(
+          `the priority was set to Must do on screen and the row says ${priority ?? 'nothing'}`,
+        );
+      }
+      if (superseded === null) {
+        found.push("the override destroyed Russell's own judgment rather than superseding it");
+      }
+    }
+  }
+
+  /*
+   * The decision the person answered, and the mission it was about.
+   *
+   * Three facts, and they have to be about **one** id or the sequence proves
+   * nothing: the request the card carried is settled; the mission that was
+   * parked is no longer parked; and it is the same mission, not a replacement
+   * the tick started beside it. A journey that answered a decision and then
+   * read a different mission's state would report a resumption that never
+   * happened.
+   */
+  if (seeded.projectId && parked.missionId) {
+    const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+    const missions = Array.isArray(work?.['missions'])
+      ? (work['missions'] as Record<string, unknown>[])
+      : [];
+    const mission = missions.find((row) => row['id'] === parked.missionId) ?? null;
+    const stateAfter = typeof mission?.['state'] === 'string' ? (mission['state'] as string) : null;
+    const needsYou = await read(`/api/russell/projects/${seeded.projectId}/needs-you`);
+    const stillOpen = Array.isArray(needsYou?.['requests'])
+      ? (needsYou['requests'] as Record<string, unknown>[]).some(
+          (request) => request['id'] === parked.requestId,
+        )
+      : false;
+    JOURNEY_EFFECTS.parkedMissionId = parked.missionId;
+    JOURNEY_EFFECTS.parkedRequestId = parked.requestId;
+    JOURNEY_EFFECTS.parkedOrchestrationId = parked.orchestrationId;
+    JOURNEY_EFFECTS.missionStateBefore = parked.stateBefore;
+    JOURNEY_EFFECTS.missionStateAfter = stateAfter;
+    JOURNEY_EFFECTS.requestSettled = !stillOpen;
+    console.log(
+      `  the parked mission   ${parked.missionId} ${parked.stateBefore ?? 'unknown'} → ` +
+        `${stateAfter ?? 'gone'}, its request ${stillOpen ? 'STILL OPEN' : 'settled'}`,
+    );
+    if (mission === null) {
+      found.push(
+        `the mission the journey answered a decision about (${parked.missionId}) is no longer ` +
+          'on the work surface at all',
+      );
+    } else if (stateAfter === 'NEEDS_HUMAN') {
+      found.push(
+        'the decision was answered on screen and the mission is still parked — the answer ' +
+          'reached no transition',
       );
     }
-    if (overrideBy === null) {
-      found.push('the override recorded no person, so the decision has no author');
-    }
-    if (superseded === null) {
-      found.push("the override destroyed Russell's own judgment rather than superseding it");
+    if (stillOpen) {
+      found.push('the answered request is still open, so the answer did not settle it');
     }
   }
 
@@ -2084,6 +2334,106 @@ async function persistedEffects(cookie: string, seeded: Seeded): Promise<string[
   return found;
 }
 
+/**
+ * What the journey found parked, so the effects check can prove it *moved*.
+ *
+ * Captured before the answer rather than derived after it, because "a mission
+ * is RUNNING" is not the claim — the claim is that **this** mission was parked,
+ * a person answered its request, and that same mission carried on. Two readings
+ * of one id, either side of one press.
+ */
+interface Parked {
+  missionId: string | null;
+  requestId: string | null;
+  orchestrationId: string | null;
+  stateBefore: string | null;
+  packetBefore: string | null;
+  note: string;
+}
+
+/**
+ * Wait for Russell to reach a decision it cannot take, without taking it for it.
+ *
+ * Every row this waits for is written by the product: the tick judges the idea
+ * a person has just promoted, compiles a specification, launches a mission,
+ * `planFitsEnvelope` refuses the plan because it describes emailing somebody,
+ * `advancePacket` stops the packet at NEEDS_HUMAN with that reason, and
+ * `parkStoppedMissions` writes the request. Nothing here creates any of it, and
+ * a run where none of it happens reports that rather than inventing a card.
+ *
+ * Bounded, because a wait with no end is indistinguishable from a hang — and
+ * the bound is generous on purpose: the chain above is four tick-driven steps
+ * at thirty seconds each.
+ */
+async function waitForParkedDecision(cookie: string, seeded: Seeded): Promise<Parked> {
+  const empty: Parked = {
+    missionId: null,
+    requestId: null,
+    orchestrationId: null,
+    stateBefore: null,
+    packetBefore: null,
+    note: 'nothing parked',
+  };
+  if (!seeded.projectId) return { ...empty, note: 'no project to watch' };
+
+  const read = async (path: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const response = await fetch(`${BASE}${path}`, {
+        headers: { origin: BASE, cookie },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) return null;
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const deadline = Date.now() + 240_000;
+  let lastSeen = 'no mission yet';
+  while (Date.now() < deadline) {
+    const needsYou = await read(`/api/russell/projects/${seeded.projectId}/needs-you`);
+    const requests = Array.isArray(needsYou?.['requests'])
+      ? (needsYou['requests'] as Record<string, unknown>[])
+      : [];
+    const missionRequest = requests.find((request) => typeof request['missionId'] === 'string');
+    if (missionRequest) {
+      const missionId = String(missionRequest['missionId']);
+      const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+      const missions = Array.isArray(work?.['missions'])
+        ? (work['missions'] as Record<string, unknown>[])
+        : [];
+      const mission = missions.find((row) => row['id'] === missionId) ?? null;
+      const orchestrationId =
+        typeof mission?.['orchestrationId'] === 'string'
+          ? (mission['orchestrationId'] as string)
+          : null;
+      return {
+        missionId,
+        requestId: String(missionRequest['id']),
+        orchestrationId,
+        stateBefore: typeof mission?.['state'] === 'string' ? (mission['state'] as string) : null,
+        packetBefore: 'NEEDS_HUMAN',
+        note:
+          `mission ${missionId} parked at ${String(mission?.['state'] ?? 'unknown')}, ` +
+          `request ${String(missionRequest['id'])}`,
+      };
+    }
+    const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+    const missions = Array.isArray(work?.['missions'])
+      ? (work['missions'] as Record<string, unknown>[])
+      : [];
+    lastSeen =
+      missions.length === 0
+        ? 'no mission has launched yet'
+        : `${missions.length} mission(s): ${missions
+            .map((row) => String(row['state']))
+            .join(', ')}`;
+    await sleep(5_000);
+  }
+  return { ...empty, note: `nothing parked within 240s — ${lastSeen}` };
+}
+
 /** One browser, one signed-in person, one path through the product. */
 async function driveJourney(
   cookie: string,
@@ -2094,6 +2444,14 @@ async function driveJourney(
   console.log('');
   console.log('Seeding something to decide, through the product’s own doors:');
   const seeded = await seedSomethingToDecide(cookie);
+  let parked: Parked = {
+    missionId: null,
+    requestId: null,
+    orchestrationId: null,
+    stateBefore: null,
+    packetBefore: null,
+    note: 'the journey did not get that far',
+  };
   console.log(`  ${seeded.note}`);
   if (seeded.candidateId === null) {
     findings.push(`the journey had nothing to act on: ${seeded.note}`);
@@ -2139,6 +2497,23 @@ async function driveJourney(
     }
     findings.push(...(await walk(cdp, outputDir, JOURNEY_WORK)));
     /*
+     * The wait between promoting an idea and being asked about it.
+     *
+     * Not a control, so not a step. Russell's tick is thirty seconds and the
+     * chain is four of them — judge, compile, launch, park — so this is the
+     * harness doing what a person does between opening the app twice.
+     */
+    console.log('  waiting for Russell to reach a decision it cannot take…');
+    parked = await waitForParkedDecision(cookie, seeded);
+    console.log(`  the parked decision  ${parked.note}`);
+    if (parked.requestId === null) {
+      findings.push(
+        `the journey never reached a parked decision to answer: ${parked.note}`,
+      );
+    }
+    findings.push(...(await walk(cdp, outputDir, JOURNEY_DECISION)));
+    findings.push(...(await walk(cdp, outputDir, JOURNEY_AFTER)));
+    /*
      * The effects, read out of the database rather than off the screen.
      *
      * A page that says a priority changed and a row that changed are different
@@ -2147,7 +2522,7 @@ async function driveJourney(
      * so a step that appeared to work and did not is a finding here rather than
      * something noticed weeks later.
      */
-    findings.push(...(await persistedEffects(cookie, seeded)));
+    findings.push(...(await persistedEffects(cookie, seeded, parked)));
     findings.push(...(await walk(cdp, outputDir, JOURNEY_OUT)));
     findings.push(
       ...(await reachabilityProbe(
