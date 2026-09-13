@@ -39,12 +39,33 @@ import path from 'node:path';
 
 type Verdict = 'PASS' | 'FAIL' | 'PARTIAL' | 'BLOCKED' | 'NOT_RUN' | 'CONFLICT';
 
+/**
+ * One condition a scenario is made of, as the reporter recorded it.
+ *
+ *   held === true    exercised, and it holds.
+ *   held === false   exercised, and it does not. That is a defect.
+ *   held === null    not exercisable from the environment that ran, and
+ *                    `needs` says which one can.
+ *   standing         out of reach on purpose — the owner's decision, a
+ *                    capability this version refuses, a measurement that would
+ *                    spend the subscription. Reported, never counted against.
+ */
+interface ConditionRecord {
+  name: string;
+  held: boolean | null;
+  saw: string;
+  needs?: 'CHECKOUT' | 'PRODUCTION' | 'ISOLATED';
+  standing?: true;
+}
+
 interface GateRecord {
   id: string;
   title: string;
   verdict: Exclude<Verdict, 'CONFLICT'>;
   evidenceFrom: 'CHECKOUT' | 'PRODUCTION' | 'ISOLATED';
   detail: string;
+  /** Absent in records written before the conditions existed. */
+  conditions?: ConditionRecord[];
 }
 
 interface Reading {
@@ -193,16 +214,28 @@ function main(): void {
   }
 
   /*
-   * One row per scenario, from the run whose environment can actually answer it.
+   * One row per scenario, joined at the **condition** level.
    *
-   * A record whose verdict is NOT_RUN is not an answer, so it never wins. Two
-   * real answers that agree are one answer, noted with both environments. Two
-   * that disagree are a CONFLICT — not a tie to be broken, because a scenario
-   * two environments describe differently is one nobody has established.
-   */
-  /*
+   * The obvious design is to pick whichever run's verdict is better, and it is
+   * wrong in a way that only shows up once the conditions exist. A checkout run
+   * reports PARTIAL on nine scenarios because one condition each needs the
+   * deployed Brain's rows; a production run reports PARTIAL on those same nine
+   * because it cannot see the repository. Joining the *verdicts* gives PARTIAL
+   * agreeing with PARTIAL — and the true answer is that between the two runs
+   * every condition was exercised and held.
+   *
+   * So conditions are unioned by name and the verdict is re-derived with the
+   * same rule the reporter uses. A condition one run could not exercise and the
+   * other could is **answered**; one neither could reach stays unexercised; one
+   * that broke anywhere breaks the scenario, because a defect seen in one
+   * environment is a defect.
+   *
+   * Two runs that exercised the same condition and disagree about it are a
+   * CONFLICT — not a tie to break. A condition measured twice with two answers
+   * is not established, and what needs fixing is the measurement.
+   *
    * Walked in contract order. Every reading has already been checked to carry
-   * exactly these, so this cannot silently shrink.
+   * exactly these seventeen, so this cannot silently shrink.
    */
   const ids: readonly string[] = SCENARIOS;
   const combined: {
@@ -212,6 +245,16 @@ function main(): void {
     from: string;
     detail: string;
   }[] = [];
+
+  const verdictOfConditions = (conditions: ConditionRecord[]): Verdict => {
+    if (conditions.length === 0) return 'NOT_RUN';
+    const judged = conditions.filter((c) => c.standing !== true);
+    if (judged.some((c) => c.held === false)) return 'FAIL';
+    if (judged.length === 0) return 'PASS';
+    if (judged.every((c) => c.held === null)) return 'NOT_RUN';
+    if (judged.some((c) => c.held === null)) return 'PARTIAL';
+    return 'PASS';
+  };
 
   for (const id of ids) {
     const candidates = readings
@@ -224,59 +267,152 @@ function main(): void {
 
     if (candidates.length === 0) continue;
     const title = candidates[0]!.gate.title;
-    const answered = candidates.filter((entry) => entry.gate.verdict !== 'NOT_RUN');
-
-    if (answered.length === 0) {
-      combined.push({
-        id,
-        title,
-        verdict: 'NOT_RUN',
-        from: candidates.map((entry) => entry.reading.ranIn).join(' + '),
-        detail: candidates.map((entry) => `${entry.reading.ranIn}: ${entry.gate.detail}`).join(' || '),
-      });
-      continue;
-    }
+    const withConditions = candidates.filter(
+      (entry) => Array.isArray(entry.gate.conditions) && entry.gate.conditions.length > 0,
+    );
 
     /*
-     * Prefer the run whose environment the gate declares as decisive. Where the
-     * declared environment did not answer, a run that did is still evidence —
-     * and which one it was is printed, so nobody has to assume.
+     * A record written before conditions existed still joins, at the verdict
+     * level, the way it always did. Refusing it would make the combiner unable
+     * to read the records it was built for — and saying which way a row was
+     * joined is what stops the weaker join being mistaken for the stronger one.
      */
-    const decisive = answered.find(
-      (entry) =>
-        entry.gate.evidenceFrom === entry.reading.ranIn ||
-        entry.gate.evidenceFrom === 'ISOLATED',
-    );
-    const verdicts = new Set(answered.map((entry) => entry.gate.verdict));
-
-    if (verdicts.size > 1) {
-      const both = answered
-        .map((entry) => `${entry.reading.ranIn}=${entry.gate.verdict}`)
-        .join(' vs ');
+    if (withConditions.length === 0) {
+      const answered = candidates.filter((entry) => entry.gate.verdict !== 'NOT_RUN');
+      if (answered.length === 0) {
+        combined.push({
+          id,
+          title,
+          verdict: 'NOT_RUN',
+          from: candidates.map((entry) => entry.reading.ranIn).join(' + '),
+          detail: candidates
+            .map((entry) => `${entry.reading.ranIn}: ${entry.gate.detail}`)
+            .join(' || '),
+        });
+        continue;
+      }
+      const verdicts = new Set(answered.map((entry) => entry.gate.verdict));
+      if (verdicts.size > 1) {
+        const both = answered
+          .map((entry) => `${entry.reading.ranIn}=${entry.gate.verdict}`)
+          .join(' vs ');
+        combined.push({
+          id,
+          title,
+          verdict: 'CONFLICT',
+          from: both,
+          detail:
+            `two environments disagree about this scenario at one revision (${both}). ` +
+            'That is not a tie to break: a scenario measured two ways with two answers is not ' +
+            'established, and what needs fixing is the measurement. ' +
+            answered.map((entry) => `${entry.reading.ranIn}: ${entry.gate.detail}`).join(' || '),
+        });
+        continue;
+      }
+      const decisive = answered.find(
+        (entry) =>
+          entry.gate.evidenceFrom === entry.reading.ranIn || entry.gate.evidenceFrom === 'ISOLATED',
+      );
+      const chosen = decisive ?? answered[0]!;
       combined.push({
         id,
         title,
-        verdict: 'CONFLICT',
-        from: both,
-        detail:
-          `two environments disagree about this scenario at one revision (${both}). ` +
-          'That is not a tie to break: a scenario measured two ways with two answers is not ' +
-          'established, and what needs fixing is the measurement. ' +
-          answered.map((entry) => `${entry.reading.ranIn}: ${entry.gate.detail}`).join(' || '),
+        verdict: chosen.gate.verdict,
+        from:
+          (answered.length > 1
+            ? `${answered.map((entry) => entry.reading.ranIn).join(' + ')} (agreed)`
+            : chosen.reading.ranIn) + ' — joined by verdict, no conditions recorded',
+        detail: chosen.gate.detail,
       });
       continue;
     }
 
-    const chosen = decisive ?? answered[0]!;
+    /* -- The condition-level join ---------------------------------------- */
+    const byName = new Map<string, { condition: ConditionRecord; from: string }[]>();
+    for (const entry of withConditions) {
+      for (const condition of entry.gate.conditions ?? []) {
+        const list = byName.get(condition.name) ?? [];
+        list.push({ condition, from: entry.reading.ranIn });
+        byName.set(condition.name, list);
+      }
+    }
+
+    const merged: ConditionRecord[] = [];
+    const conflicts: string[] = [];
+    const answeredElsewhere: string[] = [];
+    for (const [name, entries] of byName) {
+      const exercised = entries.filter((entry) => entry.condition.held !== null);
+      const outcomes = new Set(exercised.map((entry) => entry.condition.held));
+      if (outcomes.size > 1) {
+        conflicts.push(
+          `${name} — ` +
+            exercised.map((entry) => `${entry.from}=${entry.condition.held}`).join(' vs '),
+        );
+        merged.push({ name, held: false, saw: 'the two runs disagree about it' });
+        continue;
+      }
+      if (exercised.length > 0) {
+        const winner = exercised[0]!;
+        if (entries.some((entry) => entry.condition.held === null)) {
+          answeredElsewhere.push(`${name} (answered by ${winner.from})`);
+        }
+        merged.push({ ...winner.condition, saw: `${winner.condition.saw} [${winner.from}]` });
+        continue;
+      }
+      merged.push(entries[0]!.condition);
+    }
+
+    const verdict = conflicts.length > 0 ? 'CONFLICT' : verdictOfConditions(merged);
+    const broke = merged.filter((c) => c.held === false && c.standing !== true);
+    const unreachable = merged.filter((c) => c.held === null && c.standing !== true);
+    const standing = merged.filter((c) => c.standing === true);
+    const held = merged.filter((c) => c.held === true);
+    const judged = merged.filter((c) => c.standing !== true).length;
+
+    const parts: string[] = [
+      `${held.length}/${judged} condition(s) held across ` +
+        `${withConditions.map((entry) => entry.reading.ranIn).join(' + ')}.`,
+    ];
+    if (answeredElsewhere.length > 0) {
+      parts.push(
+        `${answeredElsewhere.length} of them one run could not reach and the other did: ` +
+          `${answeredElsewhere.join('; ')}.`,
+      );
+    }
+    if (conflicts.length > 0) {
+      parts.push(
+        `${conflicts.length} condition(s) were exercised in both runs with different answers: ` +
+          `${conflicts.join('; ')}. A condition measured twice with two answers is not ` +
+          'established, and what needs fixing is the measurement.',
+      );
+    }
+    if (broke.length > 0) {
+      parts.push(
+        `${broke.length} condition(s) were exercised and did NOT hold: ` +
+          broke.map((c) => `${c.name} (saw ${c.saw})`).join('; ') +
+          '.',
+      );
+    }
+    if (unreachable.length > 0) {
+      parts.push(
+        `${unreachable.length} condition(s) neither run could exercise: ` +
+          unreachable.map((c) => `${c.name} (needs ${c.needs ?? 'another environment'})`).join('; ') +
+          '.',
+      );
+    }
+    if (standing.length > 0) {
+      parts.push(
+        `${standing.length} standing and recorded as the answer: ` +
+          standing.map((c) => c.name).join('; ') +
+          '.',
+      );
+    }
     combined.push({
       id,
       title,
-      verdict: chosen.gate.verdict,
-      from:
-        answered.length > 1
-          ? `${answered.map((entry) => entry.reading.ranIn).join(' + ')} (agreed)`
-          : chosen.reading.ranIn,
-      detail: chosen.gate.detail,
+      verdict,
+      from: `${withConditions.map((entry) => entry.reading.ranIn).join(' + ')} — joined by condition`,
+      detail: parts.join(' '),
     });
   }
 

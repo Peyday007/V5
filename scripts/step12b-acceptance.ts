@@ -255,6 +255,20 @@ interface Gate {
   title: string;
   verdict: Verdict;
   detail: string;
+  /**
+   * What the verdict was computed from, carried into the emitted record.
+   *
+   * This is what makes two runs joinable **at the condition level** rather than
+   * at the verdict level, and that distinction turned out to be the whole
+   * design. A checkout run reports PARTIAL on nine scenarios because one
+   * condition each needs the deployed Brain's rows; a production run reports
+   * PARTIAL on the same nine because it cannot see the repository. Joining the
+   * *verdicts* gives PARTIAL agreeing with PARTIAL — and the correct answer is
+   * that between them every condition was exercised and held. So the record
+   * carries the conditions and the combiner unions them, using the same
+   * `verdictOf` rule this file uses.
+   */
+  conditions: GateCondition[];
 }
 
 /**
@@ -340,8 +354,14 @@ const evidence: EvidenceBlock[] = [];
 function recordEvidence(key: string, title: string, detail: string): void {
   evidence.push({ key, title, detail });
 }
-function record(id: string, title: string, verdict: Verdict, detail: string): void {
-  gates.push({ id, title, verdict, detail });
+function record(
+  id: string,
+  title: string,
+  verdict: Verdict,
+  detail: string,
+  conditions: GateCondition[] = [],
+): void {
+  gates.push({ id, title, verdict, detail, conditions });
 }
 
 /**
@@ -469,7 +489,7 @@ function recordConditions(
         '.',
     );
   }
-  record(id, title, verdict, parts.join(' '));
+  record(id, title, verdict, parts.join(' '), conditions);
 }
 
 /** Read a repository file, or null. Used where the evidence is the code itself. */
@@ -5817,6 +5837,7 @@ async function main(): Promise<void> {
           verdict: gate.verdict,
           evidenceFrom: GATE_EVIDENCE[gate.id] ?? 'ISOLATED',
           detail: gate.detail,
+          conditions: gate.conditions,
         })),
       };
       fs.mkdirSync(path.dirname(path.resolve(target)), { recursive: true });
