@@ -485,7 +485,94 @@ const JOURNEY_IN: JourneyStep[] = [
   },
 ];
 
-/** The rest of the journey, after the maps pass has run inside the project. */
+/**
+ * The half of the journey where a person changes something.
+ *
+ * Everything before this demonstrates that the product can be *reached* on a
+ * phone — every screen arrived at by pressing, nothing clipped, no control a
+ * thumb cannot land on. That is necessary and it is not J: a person does not
+ * use Brain to look at Brain. These steps do the work, and each one's effect is
+ * read back out of the database afterwards, because a screen that says
+ * something changed and a row that changed are different facts.
+ *
+ * The idea they act on was put there by a connected site asking for research
+ * through §25's own command — not written into a table, and not typed by the
+ * harness pretending to be a worker.
+ */
+const JOURNEY_WORK: JourneyStep[] = [
+  {
+    name: '15-ideas',
+    what: 'Ideas, reached from the thumb bar: the backlog with the site’s request in it, carrying the priority Russell formed and the reason it will be asked for.',
+    act: railPress('Ideas'),
+    until: "location.pathname === '/projects'",
+    read: `(() => {
+      const nodes = [...document.querySelectorAll('.rs-idea, .rs-candidate, .lim-node')];
+      return nodes.length + ' idea(s) on the page';
+    })()`,
+  },
+  {
+    name: '16-open-the-idea',
+    what: 'The idea a site asked about, opened. Russell’s own judgment is on it — the priority, and the sentence behind it.',
+    act: `(() => {
+      const target = ${JSON.stringify('DECISION_SUBJECT')};
+      const node = [...document.querySelectorAll('.lim-node, .rs-idea, .rs-candidate, button, a')]
+        .find((el) => (el.textContent || '').includes('recording takes'));
+      if (!node) return false;
+      node.click();
+      return 'opened ' + (node.textContent || '').trim().slice(0, 40);
+    })()`,
+    until: "document.querySelector('.rs-choices') !== null",
+    read: `(() => {
+      const pressed = [...document.querySelectorAll('.rs-choices button[aria-pressed=true]')];
+      return pressed.length > 0
+        ? 'Russell says ' + pressed.map((b) => (b.textContent || '').trim()).join(', ')
+        : 'no priority is shown';
+    })()`,
+  },
+  {
+    name: '17-changed-the-priority',
+    what: 'A person disagreeing with Russell: a different priority chosen, a reason typed, and the decision saved. §24’s override — the thing that makes Russell’s judgment a proposal rather than a verdict.',
+    act: `(async () => {
+      const choices = [...document.querySelectorAll('.rs-choices button')];
+      const mustDo = choices.find((b) => /must do/i.test(b.textContent || ''));
+      if (!mustDo) return false;
+      mustDo.click();
+      const reason = document.querySelector('textarea');
+      if (!reason) return false;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(reason, 'The site is waiting on this one, so it goes first.');
+      reason.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const save = [...document.querySelectorAll('button')].find(
+        (b) => /set this priority/i.test(b.textContent || ''),
+      );
+      if (!save) return false;
+      if (save.disabled) return 'the save button never enabled';
+      save.click();
+      return true;
+    })()`,
+    until: `[...document.querySelectorAll('.rs-choices button[aria-pressed=true]')].some(
+      (b) => /must do/i.test(b.textContent || ''),
+    )`,
+    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 80)",
+  },
+  {
+    name: '18-knows',
+    what: 'Knows, from the thumb bar: what the project believes and what each thing rests on. Where the result of work is read, once there is one.',
+    act: railPress('Knows'),
+    until: "location.pathname === '/knowledge'",
+    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
+  },
+  {
+    name: '19-who-and-fleet',
+    what: 'Who, from the thumb bar: the people on the project and the fleet behind it — three capacity numbers that are not each other.',
+    act: railPress('Who'),
+    until: "location.pathname === '/who'",
+    read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 110)",
+  },
+];
+
+/** The rest of the journey, after the work pass has run. */
 const JOURNEY_OUT: JourneyStep[] = [
   {
     name: '13-needs-you',
@@ -1196,6 +1283,135 @@ function reportConstellation(readings: ({ width: number } & ConstellationReading
 }
 
 /**
+ * What the journey needs to act on, put there through the product's own doors.
+ *
+ * The fourteen steps before this one demonstrated navigation and layout: every
+ * screen reached, nothing clipped, every control a thumb can land on. That is a
+ * necessary condition for J and it is not J — a person does not use Brain to
+ * look at Brain. The journey has to change something and the change has to
+ * still be there afterwards.
+ *
+ * So this seeds an idea, and it does it the way the product does rather than by
+ * writing rows: a connected site registers a record and asks for research, which
+ * is §25's `RESEARCH_FURTHER` — an idea, spending nothing, with a person in
+ * Russell the only one who may authorize the spending. Every call is a real
+ * route with a real credential, and the site's credential is issued by the same
+ * **Connected sites** action a person uses.
+ *
+ * Returns what the journey needs to press things: the project it seeded into,
+ * and the id of the idea, so the steps that follow can read the row back rather
+ * than trust the screen.
+ */
+interface Seeded {
+  projectId: string | null;
+  projectName: string | null;
+  candidateId: string | null;
+  note: string;
+}
+
+async function seedSomethingToDecide(cookie: string): Promise<Seeded> {
+  const json = async (path: string, body?: unknown): Promise<Record<string, unknown> | null> => {
+    const response = await fetch(`${BASE}${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: BASE,
+        cookie,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    if (!response.ok) return null;
+    try {
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const projects = (await json('/api/projects')) as { projects?: { id: string; name: string }[] } | null;
+  const project = projects?.projects?.[0] ?? null;
+  if (!project) return { projectId: null, projectName: null, candidateId: null, note: 'no project exists to seed into' };
+
+  /*
+   * A connected site, made through the action a person uses. `connectSite`
+   * writes the identity, the membership and the fixed scope set from constants
+   * and issues one secret, shown once — so this is the same rotation an
+   * operator performs, not a back door built for the harness.
+   */
+  const connected = await json(`/api/russell/projects/${project.id}/sites/DEAL_DISPATCH/connect`, {});
+  const secret = typeof connected?.['secret'] === 'string' ? (connected['secret'] as string) : null;
+  if (!secret) {
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      candidateId: null,
+      note: 'the site connector issued no credential, so nothing could be seeded',
+    };
+  }
+
+  const asSite = async (path: string, body: unknown): Promise<Record<string, unknown> | null> => {
+    const response = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: BASE,
+        authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) return null;
+    try {
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  const recordId = `opp-visual-${Date.now().toString(36)}`;
+  const delivered = await asSite(`/api/projects/${project.id}/connect/DEAL_DISPATCH/records`, {
+    records: [
+      {
+        sourceRecordId: recordId,
+        sourceRecordType: 'OPPORTUNITY',
+        sourceVersion: new Date().toISOString(),
+        title: 'Parcel 118 — how long recording takes in this county',
+        summary:
+          'The site cannot settle how long a deed takes to become searchable after recording.',
+        sourceRef: `https://deal-dispatch.example.invalid/opportunities/${recordId}`,
+        attributes: { state: 'OPEN', county: 'Washtenaw' },
+      },
+    ],
+  });
+  if (delivered === null) {
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      candidateId: null,
+      note: 'the site could not register a record',
+    };
+  }
+
+  const commanded = await asSite(
+    `/api/projects/${project.id}/connect/DEAL_DISPATCH/records/${recordId}/commands`,
+    {
+    command: 'RESEARCH_FURTHER',
+    actor: 'someone at the site',
+    },
+  );
+  const candidateId =
+    typeof commanded?.['candidateId'] === 'string' ? (commanded['candidateId'] as string) : null;
+
+  return {
+    projectId: project.id,
+    projectName: project.name,
+    candidateId,
+    note: candidateId
+      ? `a site asked for research and Brain captured idea ${candidateId}`
+      : 'the command was accepted and returned no idea',
+  };
+}
+
+/**
  * Approve the standing authority, by pressing the page's own Approve button.
  *
  * Not a POST to the route: the question this answers is whether the settled
@@ -1761,6 +1977,86 @@ async function narrowPhoneBar(cdp: Cdp, outputDir: string): Promise<string[]> {
   return judge(`16-thumb-bar-${NARROW_PHONE}`, reading);
 }
 
+/**
+ * What the journey actually changed, asked of the product's read routes.
+ *
+ * The screen saying a priority changed and the row having changed are two
+ * facts, and only the second one survives a reload. So every effect the working
+ * half of the journey was supposed to produce is read back here, as the same
+ * signed-in person, through the routes the product itself serves — inside the
+ * same journey rather than in a separate pass, because an assertion made later
+ * is an assertion about a different session.
+ *
+ * Each miss is a finding in the harness's own list, so a step that looked like
+ * it worked and did not fails the run rather than going unnoticed.
+ */
+async function persistedEffects(cookie: string, seeded: Seeded): Promise<string[]> {
+  const found: string[] = [];
+  const read = async (path: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const response = await fetch(`${BASE}${path}`, {
+        headers: { origin: BASE, cookie },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) return null;
+      return (await response.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
+
+  console.log('');
+  console.log('What the journey changed, read back from the rows:');
+
+  /* The standing authority, which the journey approved by pressing Approve. */
+  if (seeded.projectId) {
+    const authority = await read(`/api/russell/projects/${seeded.projectId}/authority`);
+    const granted =
+      authority !== null &&
+      typeof authority['goal'] === 'object' &&
+      authority['goal'] !== null;
+    console.log(`  standing authority   ${granted ? 'granted, and still there' : 'NOT GRANTED'}`);
+    if (!granted) {
+      found.push('the standing authority was approved on screen and no grant is recorded');
+    }
+  }
+
+  /* The priority a person set over Russell's, which is §24's override. */
+  if (seeded.candidateId) {
+    const idea = await read(`/api/russell/candidates/${seeded.candidateId}`);
+    const node = (idea?.['candidate'] ?? idea) as Record<string, unknown> | undefined;
+    const priority = typeof node?.['priority'] === 'string' ? (node['priority'] as string) : null;
+    const overrideBy =
+      typeof node?.['overrideUserId'] === 'string' ? (node['overrideUserId'] as string) : null;
+    const superseded = node?.['supersededDecision'] ?? null;
+    console.log(
+      `  the idea             priority ${priority ?? 'unknown'}` +
+        `${overrideBy ? `, overridden by a person` : ', no override recorded'}` +
+        `${superseded ? ', and Russell’s own judgment kept beside it' : ''}`,
+    );
+    if (priority !== 'MUST_DO') {
+      found.push(
+        `the priority was set to Must do on screen and the row says ${priority ?? 'nothing'}`,
+      );
+    }
+    if (overrideBy === null) {
+      found.push('the override recorded no person, so the decision has no author');
+    }
+    if (superseded === null) {
+      found.push("the override destroyed Russell's own judgment rather than superseding it");
+    }
+  }
+
+  /* And that the work surface now reflects it, rather than only the idea. */
+  if (seeded.projectId) {
+    const work = await read(`/api/russell/projects/${seeded.projectId}/work`);
+    const groups = Array.isArray(work?.['groups']) ? (work['groups'] as unknown[]) : [];
+    console.log(`  work                 ${groups.length} group(s) after the change`);
+  }
+
+  return found;
+}
+
 /** One browser, one signed-in person, one path through the product. */
 async function driveJourney(
   cookie: string,
@@ -1768,6 +2064,13 @@ async function driveJourney(
   constellation: ({ width: number } & ConstellationReading)[],
 ): Promise<string[]> {
   const findings: string[] = [];
+  console.log('');
+  console.log('Seeding something to decide, through the product’s own doors:');
+  const seeded = await seedSomethingToDecide(cookie);
+  console.log(`  ${seeded.note}`);
+  if (seeded.candidateId === null) {
+    findings.push(`the journey had nothing to act on: ${seeded.note}`);
+  }
   console.log('');
   console.log(
     `One journey on a ${PHONE.width}×${PHONE.height} phone, pressing real controls:`,
@@ -1788,6 +2091,17 @@ async function driveJourney(
       })),
     );
     findings.push(...(await mapsPass(cdp, outputDir)));
+    findings.push(...(await walk(cdp, outputDir, JOURNEY_WORK)));
+    /*
+     * The effects, read out of the database rather than off the screen.
+     *
+     * A page that says a priority changed and a row that changed are different
+     * facts, and only the second one survives a reload. This asks the product's
+     * own read routes, as the same signed-in person, inside the same journey —
+     * so a step that appeared to work and did not is a finding here rather than
+     * something noticed weeks later.
+     */
+    findings.push(...(await persistedEffects(cookie, seeded)));
     findings.push(...(await walk(cdp, outputDir, JOURNEY_OUT)));
     findings.push(
       ...(await reachabilityProbe(
