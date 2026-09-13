@@ -28,7 +28,7 @@
  * is the record of one run and not a baseline anything is compared against.
  * Nothing reads those files; deleting them breaks no test.
  */
-import { spawn, type ChildProcessByStdio } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -1028,6 +1028,7 @@ async function main(): Promise<void> {
     const findings = [...captureFindings, ...(await driveJourney(cookie, outputDir, constellation))];
 
     reportConstellation(constellation);
+    writeJourneyRecord(outputDir, constellation, findings);
 
     console.log(`\nImages in ${outputDir}`);
     if (findings.length > 0) {
@@ -1045,6 +1046,63 @@ async function main(): Promise<void> {
 /* -------------------------------------------------------------------------
  * The approval set: the images, and the declaration that says what they are.
  * ---------------------------------------------------------------------- */
+
+/**
+ * The journey, written down so something other than a person can read it.
+ *
+ * Stamped with the revision it was taken at, for the same reason the render
+ * manifest is: an image set that outlives the tree it was taken from is a
+ * picture of a different product, and a reading of it is a claim about a
+ * different product. The reporter refuses a record whose revision does not
+ * match the tree it is running in.
+ *
+ * It records what was *read*, not a verdict. `findings` is the harness's own
+ * list; whether a run with findings is acceptable is not the harness's to say.
+ */
+function writeJourneyRecord(
+  dir: string,
+  constellation: ({ width: number } & ConstellationReading)[],
+  findings: string[],
+): void {
+  let revision: string | null = null;
+  try {
+    revision = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    revision = null;
+  }
+  const controls = new Set<string>();
+  for (const entry of JOURNEY_RECORD) {
+    for (const name of entry.unreachable.split(',')) {
+      const trimmed = name.trim();
+      if (trimmed) controls.add(trimmed);
+    }
+  }
+  const record = {
+    takenAt: new Date().toISOString(),
+    revision,
+    phoneWidth: PHONE.width,
+    steps: JOURNEY_RECORD,
+    stepsWalked: JOURNEY_RECORD.length,
+    stepsThatArrived: JOURNEY_RECORD.filter((entry) => entry.arrived).length,
+    stepsThatFit: JOURNEY_RECORD.filter((entry) => entry.fits).length,
+    stepsWithNothingClipped: JOURNEY_RECORD.filter((entry) => !entry.clipped).length,
+    unreachableControls: [...controls],
+    constellation: constellation.map((reading) => ({
+      width: reading.width,
+      layout: reading.layout,
+      nodes: reading.nodes,
+      listed: reading.listed,
+      overlaps: reading.overlaps,
+      canvas: reading.canvas,
+    })),
+    findings,
+  };
+  fs.writeFileSync(path.join(dir, 'journey.json'), `${JSON.stringify(record, null, 2)}\n`);
+  console.log(`\nJourney record written to ${path.join(dir, 'journey.json')}`);
+}
 
 /** One render, written under the name the declaration will give it. */
 function writeRender(dir: string, screen: string, width: number, bytes: Buffer): Render {
@@ -1201,6 +1259,25 @@ interface Reading {
 }
 
 /**
+ * What the journey saw, per step, in a form something other than a person can
+ * read.
+ *
+ * The images are the evidence a person looks at; this is the evidence the
+ * acceptance reporter reads. Without it J's row had to quote its own findings
+ * as literal prose — "all 15 chrome controls answer elementFromPoint" — which
+ * stays true in the sentence after it stops being true of the product. A count
+ * that is re-read from a file the harness wrote cannot do that.
+ */
+interface JourneyStepRecord {
+  step: string;
+  arrived: boolean;
+  fits: boolean;
+  clipped: boolean;
+  unreachable: string;
+}
+const JOURNEY_RECORD: JourneyStepRecord[] = [];
+
+/**
  * One capture and the readings that go with it, at whatever the screen now is.
  *
  * Every step takes exactly the same set, so a regression at step nine is never
@@ -1272,6 +1349,13 @@ async function walk(
     await sleep(1200);
 
     const reading = await capture(cdp, outputDir, `journey-${step.name}.png`);
+    JOURNEY_RECORD.push({
+      step: step.name,
+      arrived: landed,
+      fits: !reading.sideways,
+      clipped: reading.cutOff.length > 0,
+      unreachable: reading.unreachable,
+    });
     findings.push(...judge(step.name, reading));
     const read = step.read ? String(await evaluate(cdp, step.read)) : '';
     console.log(

@@ -526,6 +526,34 @@ const RUN_ENVIRONMENT: 'CHECKOUT' | 'PRODUCTION' = REPO_VISIBLE ? 'CHECKOUT' : '
  * and still has the images its own index lists. Deleting the set drops H, J and
  * O back to what the code alone can say, which is the correct behaviour.
  */
+/**
+ * Whether the product is the same product a reading was taken from.
+ *
+ * An exact revision match is the wrong test and would be unsatisfiable: the
+ * evidence is committed *after* it is taken, so the moment a record naming HEAD
+ * is committed, HEAD has moved past it. What matters is not which commit the
+ * harness ran at but whether anything it was looking at has changed since — so
+ * the question asked is `git diff --quiet <taken-at> HEAD -- client server`.
+ * A docs commit, a test, this reporter itself: none of them change what a
+ * browser renders, and none of them invalidates a photograph of it. A line of
+ * `client/src` does.
+ *
+ * Fails closed. An unknown revision, a tree that has no such commit, a git that
+ * will not answer — all `false`, because *we could not tell* must never read
+ * the same as *we checked*.
+ */
+function productUnchangedSince(revision: string): boolean {
+  try {
+    execFileSync('git', ['diff', '--quiet', revision, 'HEAD', '--', 'client', 'server'], {
+      cwd: REPO,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function visualEvidence(): { index: string | null; images: number; journeySteps: number } {
   const index = file('docs/evidence/step12b-visual.md');
   const dir = path.join(REPO, 'docs', 'evidence', 'step12b-visual');
@@ -4154,39 +4182,158 @@ async function main(): Promise<void> {
 
   /* -- J. Mobile ----------------------------------------------------------- */
   /*
-   * This was NOT_RUN because the harness drove three isolated interactions:
-   * each opened its own address, did one thing and stopped, which proves three
-   * controls and nothing about the path between them. §29's J is the path.
+   * Read from what the harness wrote down, not from what this file remembers.
    *
-   * It is now one browser, one session and one scroll history, and after the
-   * first address nothing navigates — every move is a press. It is still
-   * PARTIAL rather than PASS, and the reason is in the head of this file: this
-   * is a real Brain in a throwaway data directory, not the deployed product,
-   * and no mission ran because no worker exists in that harness. A journey that
-   * fits is a necessary condition for J and is not J's verdict.
+   * The row used to quote its own findings as literal prose — "all 15 chrome
+   * controls answer elementFromPoint at 390px and 360px" — which is a sentence
+   * that stays true after it stops being true of the product. `visual-qa.ts`
+   * now writes `journey.json` beside the images: every step, whether it
+   * arrived, whether the page fitted, whether anything was clipped, which
+   * controls a thumb could not land on, and the constellation reading per
+   * width. The record is stamped with the revision it was taken at, and a
+   * record from a different tree is refused rather than read — an image set
+   * that outlives its tree is a picture of a different product, and so is a
+   * reading of it.
    */
   const mobile = visualEvidence();
   const responsiveSuite = file('tests/step12bResponsive.test.tsx');
-  record(
+  const journeyRaw = file('docs/evidence/step12b-visual/journey.json');
+  interface JourneyRecord {
+    revision: string | null;
+    phoneWidth: number;
+    stepsWalked: number;
+    stepsThatArrived: number;
+    stepsThatFit: number;
+    stepsWithNothingClipped: number;
+    unreachableControls: string[];
+    constellation: { width: number; layout: string; nodes: number; listed: number; overlaps: number }[];
+    findings: string[];
+  }
+  let journey: JourneyRecord | null = null;
+  let journeyStillDescribesThisTree = false;
+  if (journeyRaw) {
+    try {
+      journey = JSON.parse(journeyRaw) as JourneyRecord;
+      journeyStillDescribesThisTree = journey.revision !== null && productUnchangedSince(journey.revision);
+    } catch {
+      journey = null;
+    }
+  }
+
+  const mobileConditions: GateCondition[] = !REPO_VISIBLE
+    ? [
+        {
+          name: 'the phone journey was walked and written down',
+          held: null,
+          saw: 'the committed journey record and image set are repository facts',
+          needs: 'CHECKOUT',
+        },
+      ]
+    : [
+        {
+          name: 'one continuous signed-in journey was walked at phone width',
+          held: journey !== null && journey.stepsWalked >= 10,
+          saw: journey
+            ? `${journey.stepsWalked} steps at ${journey.phoneWidth}px, ${mobile.images} committed images`
+            : 'no journey record is committed — run scripts/visual-qa.ts',
+        },
+        {
+          name: 'every step arrived at the screen a press was supposed to reach',
+          held: journey !== null && journey.stepsThatArrived === journey.stepsWalked,
+          saw: journey ? `${journey.stepsThatArrived}/${journey.stepsWalked}` : 'not read',
+        },
+        {
+          name: 'the page body never scrolls sideways, at any step',
+          held: journey !== null && journey.stepsThatFit === journey.stepsWalked,
+          saw: journey ? `${journey.stepsThatFit}/${journey.stepsWalked} fit` : 'not read',
+        },
+        {
+          name: 'nothing is cut off inside a container that clips, at any step',
+          held: journey !== null && journey.stepsWithNothingClipped === journey.stepsWalked,
+          saw: journey
+            ? `${journey.stepsWithNothingClipped}/${journey.stepsWalked} clean`
+            : 'not read',
+        },
+        {
+          name: 'every chrome control answers elementFromPoint at its own centre',
+          held: journey !== null && journey.unreachableControls.length === 0,
+          saw: journey
+            ? journey.unreachableControls.length === 0
+              ? 'no control was painted over or absent'
+              : `unreachable: ${journey.unreachableControls.join(', ')}`
+            : 'not read',
+        },
+        {
+          name: 'the constellation is drawn without overlapping itself at phone width',
+          held:
+            journey !== null &&
+            journey.constellation.length > 0 &&
+            journey.constellation.every((reading) => reading.overlaps === 0),
+          saw: journey
+            ? journey.constellation
+                .map((r) => `${r.width}px ${r.layout} ${r.overlaps} pair(s)`)
+                .join('; ')
+            : 'not read',
+        },
+        {
+          name: 'the diagram and its outline are the same graph on the phone',
+          held:
+            journey !== null &&
+            journey.constellation.length > 0 &&
+            journey.constellation.every((reading) => reading.nodes === reading.listed),
+          saw: journey
+            ? journey.constellation.map((r) => `${r.width}px ${r.nodes}/${r.listed}`).join('; ')
+            : 'not read',
+        },
+        {
+          name: 'the harness itself found nothing outstanding on that run',
+          held: journey !== null && journey.findings.length === 0,
+          saw: journey
+            ? journey.findings.length === 0
+              ? 'no findings'
+              : `${journey.findings.length}: ${journey.findings.slice(0, 3).join('; ')}`
+            : 'not read',
+        },
+        {
+          name: 'the reading still describes this tree — no product code has moved since',
+          held: journeyStillDescribesThisTree,
+          saw: journey
+            ? `taken at ${journey.revision?.slice(0, 8) ?? 'unknown'}; ` +
+              (journeyStillDescribesThisTree
+                ? 'client/ and server/ are byte-identical at HEAD'
+                : 'the product has changed since — re-run scripts/visual-qa.ts')
+            : 'not read',
+        },
+        {
+          name: 'the widths that were clipping are pinned by a suite',
+          held: responsiveSuite !== null,
+          saw: responsiveSuite ? 'tests/step12bResponsive.test.tsx' : 'the suite is absent',
+        },
+      ];
+
+  recordConditions(
     'J',
     'Mobile',
-    mobile.images > 0 && mobile.journeySteps >= 10 && responsiveSuite ? 'PARTIAL' : 'NOT_RUN',
-    !REPO_VISIBLE
-      ? `J is a repository fact: the journey is a committed image set and a suite. ${NOT_FROM_A_CHECKOUT}`
-      : mobile.images > 0 && mobile.journeySteps >= 10 && responsiveSuite
-      ? `One continuous signed-in journey at 390px across ${mobile.journeySteps} recorded steps ` +
-        `(${mobile.images} committed images): home \u2192 open a conversation \u2192 send a message ` +
-        '\u2192 Work \u2192 the project map \u2192 all six maps \u2192 Needs you \u2192 home. At ' +
-        'every step the page body does not scroll sideways and nothing is cut off inside a ' +
-        'clipping container, and all 15 chrome controls answer elementFromPoint at 390px and ' +
-        '360px. It found two real defects, both fixed: the rail foot was display:none at bar ' +
-        'width, which removed Sign out from a phone entirely, and the composer placeholder was ' +
-        'sliced by the thumb bar at 360px. NOT established here: a mobile flow through an actual ' +
-        'mission, which needs a worker; portrait only, one device pixel ratio, Chromium only; no ' +
-        'touch-gesture or on-screen-keyboard behaviour; and the constellation, which is driven ' +
-        'and measured at 390px but overlaps its own nodes there and is not usable as drawn.'
-      : 'The committed 390px journey is absent or incomplete, so nothing establishes the path ' +
-        'between the controls. Run scripts/visual-qa.ts.',
+    [
+      ...mobileConditions,
+      fromProduction(
+        'a mission has run end to end for somebody using the product',
+        seen.missions > 0,
+        `${seen.missions} mission(s), ${seen.filedDocuments} with a filed document, in ${fleet.source}`,
+      ),
+      {
+        name: 'portrait only, one device pixel ratio, Chromium only, no touch gestures or on-screen keyboard',
+        held: null,
+        saw:
+          'the harness drives one engine at one ratio. Saying so is the honest bound on what ' +
+          'the journey establishes; widening it is a harness change rather than a product one.',
+        standing: true,
+      },
+    ],
+    'One browser, one session and one scroll history: after the first address nothing ' +
+      'navigates and every move is a press. It found two real defects, both fixed — the rail ' +
+      'foot was display:none at bar width, which removed Sign out from a phone entirely, and ' +
+      'the composer placeholder was sliced by the thumb bar at 360px.',
   );
 
   /* -- K. Legacy removal ---------------------------------------------------- */
