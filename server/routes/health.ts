@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { getDb, getMigrationReport, activeDatabaseConfig } from '../db/database.ts';
 import { getStorage, activeStorageConfig } from '../services/storage/index.ts';
 import { getSchemaVersion } from '../db/migrate.ts';
-import { DATA_ROOT, DB_PATH } from '../env.ts';
+import { BRAIN_REVISION, DATA_ROOT, DB_PATH } from '../env.ts';
 import { defaultProviderName, listProviderStatuses } from '../providers/index.ts';
 import { ocrStatus } from '../services/documents/ocr.ts';
 import { antigravityStatus, recheckAntigravity } from '../providers/antigravity/runtime.ts';
@@ -49,6 +49,17 @@ healthRouter.get(
     return {
       ok: true,
       schemaVersion: migrations?.schemaVersion ?? await getSchemaVersion(db),
+      /*
+       * Which commit is actually running here.
+       *
+       * An operator's fact, so it sits with the rest of them rather than on the
+       * unauthenticated `/healthz`, which deliberately says only that the
+       * process is up. `null` when nothing stamped the build — a local run has
+       * no revision and inventing one would be worse than saying so, because an
+       * acceptance reading that cannot name its revision must be refused rather
+       * than trusted.
+       */
+      revision: BRAIN_REVISION,
       driver: migrations?.driver ?? db.kind,
       databasePath: migrations?.databasePath ?? DB_PATH,
       dataRoot: DATA_ROOT,

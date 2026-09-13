@@ -24,6 +24,7 @@
  * has quietly grown a second way to reach production.
  */
 import { describe, expect, it } from 'vitest';
+import { FETCH_BLOCKED_PORTS } from './helpers/ports.ts';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -234,8 +235,12 @@ describe('every workstream is present in the canonical tree', () => {
    * `russellHttp` held the identical range, and four more pairs overlapped —
    * and it cost a full-suite run before the cause was legible.
    */
-  it('gives every HTTP suite a port range no other suite can reach', () => {
-    const pattern = /const PORT = (\d+) \+ Math\.floor\(Math\.random\(\) \* (\d+)\);/;
+  /**
+   * Every suite that starts a server declares a range, and two properties of
+   * that range are checked here because both have cost real runs.
+   */
+  const portRanges = (): { file: string; from: number; to: number }[] => {
+    const pattern = /const PORT = pickPort\((\d+), (\d+)\);/;
     const ranges: { file: string; from: number; to: number }[] = [];
     for (const file of tracked().filter((f) => f.startsWith('tests/') && f.endsWith('.ts'))) {
       const match = pattern.exec(read(file));
@@ -243,16 +248,58 @@ describe('every workstream is present in the canonical tree', () => {
       const from = Number(match[1]);
       ranges.push({ file, from, to: from + Number(match[2]) - 1 });
     }
+    return ranges.sort((a, b) => a.from - b.from);
+  };
+
+  it('gives every HTTP suite a port range no other suite can reach', () => {
+    const ranges = portRanges();
     expect(ranges.length, 'no suite declares a port at all').toBeGreaterThan(5);
 
-    ranges.sort((a, b) => a.from - b.from);
     for (let i = 1; i < ranges.length; i += 1) {
       const earlier = ranges[i - 1]!;
       const later = ranges[i]!;
       expect(
-        later.from,
+        later.file,
         `${later.file} (${later.from}-${later.to}) can collide with ${earlier.file} (${earlier.from}-${earlier.to})`,
-      ).toBeGreaterThan(earlier.to);
+      ).toSatisfy(() => later.from > earlier.to);
+    }
+  });
+
+  it('lets every suite pick its port through the helper that skips blocked ones', () => {
+    /*
+     * `fetch` refuses a **bad port** before it opens a socket, so a suite that
+     * picked one would poll a perfectly healthy server until its deadline and
+     * then report "server never became healthy" — which is false, and cost
+     * three full runs to find. `factoryPersistence` drew 6665, 6668 and 6666 on
+     * the three occasions it failed.
+     *
+     * So the shape is pinned rather than the behaviour: a raw
+     * `base + Math.random()` cannot be checked for this and must not come back.
+     */
+    for (const file of tracked().filter((f) => f.startsWith('tests/') && f.endsWith('.test.ts'))) {
+      const source = read(file);
+      expect(
+        source,
+        `${file} picks a port without asking whether fetch will dial it`,
+      ).not.toMatch(/const PORT = \d+ \+ Math\.floor\(Math\.random/);
+    }
+  });
+
+  it('refuses a range with no usable port in it at all', () => {
+    /*
+     * The helper throws on a fully blocked range, which is right — but a range
+     * that is *mostly* blocked is the dangerous one, because it works nine
+     * times in ten. This reads the list and says so at the range level.
+     */
+    for (const range of portRanges()) {
+      const blocked = [...FETCH_BLOCKED_PORTS].filter(
+        (port) => port >= range.from && port <= range.to,
+      );
+      const usable = range.to - range.from + 1 - blocked.length;
+      expect(
+        usable,
+        `${range.file} (${range.from}-${range.to}) has only ${usable} port(s) fetch will dial`,
+      ).toBeGreaterThan(50);
     }
   });
 });

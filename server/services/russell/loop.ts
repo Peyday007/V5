@@ -82,6 +82,7 @@ import { recordEvent } from '../../repos/events.ts';
 import {
   createCandidate,
   getCandidate,
+  overriddenWithoutSpec,
   recordJudgment,
 } from '../../repos/russellCandidates.ts';
 import { getDb } from '../../db/database.ts';
@@ -113,7 +114,7 @@ import {
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
-import { askArchive, judgeCandidate } from './planning.ts';
+import { askArchive, judgeCandidate, specifyOverriddenCandidate } from './planning.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
@@ -712,6 +713,26 @@ export async function tick(owner: string): Promise<TickReport> {
      * worker. Bounded per tick for the same reason the probe step is: a backlog
      * must not turn one tick into a crawl.
      */
+    /*
+     * 3a-i. An idea a *person* queued, which Brain never specified.
+     *
+     * `judgeCandidate` writes `missionSpec` only for a verdict that could
+     * launch one, and `nextLaunchable` reads that key alone — so an idea Brain
+     * parked (no standing authority yet, most often) and a person then promoted
+     * to Must do went into the queue and could never leave it. The override
+     * said "do this" and nothing could. Found by driving the product on a
+     * phone rather than by reading it.
+     *
+     * Here rather than at the override, because a hook fixes one entrance and
+     * rows reach every entrance plus the overrides already stranded. It
+     * re-decides nothing: state, priority and reason stay exactly as the person
+     * left them, and `attachMissionSpec` refuses anything that is not already
+     * `QUEUED` by a named person.
+     */
+    for (const waiting of await overriddenWithoutSpec(cycle.maxLaunchesPerCycle)) {
+      if (await specifyOverriddenCandidate(waiting.id)) report.planning.push(waiting.id);
+    }
+
     for (const candidate of await unjudged(cycle.maxLaunchesPerCycle)) {
       const outcome = await judgeCandidate(candidate.id);
       if (outcome.answeredByArchive) report.answeredByArchive.push(candidate.id);

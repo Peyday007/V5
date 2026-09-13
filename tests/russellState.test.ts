@@ -29,12 +29,14 @@ import {
   resolveMessage,
 } from '../server/repos/russellConversations.ts';
 import {
+  attachMissionSpec,
   createCandidate,
   fingerprintOf,
   findByFingerprint,
   getCandidate,
   listMergeHistory,
   mergeCandidate,
+  overriddenWithoutSpec,
   overrideJudgment,
   recordJudgment,
   splitCandidate,
@@ -305,6 +307,97 @@ describe('candidates carry Russell’s judgment as state', () => {
     // The original judgment is still readable, which is the only way anyone can
     // later tell whether Russell was right.
     expect(after!.supersededDecision).toMatch(/premature/);
+  });
+
+  /*
+   * The half of that override which did nothing, and the guard that decides
+   * who may have it.
+   *
+   * A person promoting a parked idea to Must do put it in `QUEUED`, which is
+   * the state `nextLaunchable` selects — and it selects on `judgment.missionSpec`
+   * as well, which `judgeCandidate` writes only for a verdict that could launch
+   * one. So the person's decision landed in a queue that could never act on it.
+   * These pin both directions: the specification reaches a candidate a person
+   * queued, and it is refused everywhere else.
+   */
+  it('gives a person’s queued idea the specification that makes it launchable, once', async () => {
+    const candidate = await createCandidate({
+      title: 'Recording delay',
+      statement: 'how long a deed takes to appear in the index',
+      projectId,
+    });
+    await recordJudgment({
+      candidateId: candidate.id,
+      state: 'PARKED',
+      priority: 'PARKED',
+      reason: 'no standing authority',
+      judgment: { decidedBy: 'COMPILER', proposedMission: { title: 'Recording delay' } },
+    });
+    await overrideJudgment({
+      candidateId: candidate.id,
+      actorUserId: userId,
+      priority: 'MUST_DO',
+      state: 'QUEUED',
+      reason: 'the site is waiting on it',
+    });
+
+    expect((await overriddenWithoutSpec(10)).map((row) => row.id)).toContain(candidate.id);
+    expect(
+      await attachMissionSpec({ candidateId: candidate.id, spec: { title: 'Recording delay' } }),
+    ).toBe(true);
+
+    const after = await getCandidate(candidate.id);
+    // What the person decided is untouched; only the missing half arrived.
+    expect(after!.state).toBe('QUEUED');
+    expect(after!.priority).toBe('MUST_DO');
+    expect(after!.reason).toBe('no standing authority');
+    expect(after!.judgment['missionSpec']).toEqual({ title: 'Recording delay' });
+    // The compiler's own proposal stays beside it, because it is the provenance.
+    expect(after!.judgment['proposedMission']).toBeDefined();
+
+    // Selected once: doing it again is refused rather than overwriting.
+    expect((await overriddenWithoutSpec(10)).map((row) => row.id)).not.toContain(candidate.id);
+    expect(
+      await attachMissionSpec({ candidateId: candidate.id, spec: { title: 'something else' } }),
+    ).toBe(false);
+    expect((await getCandidate(candidate.id))!.judgment['missionSpec']).toEqual({
+      title: 'Recording delay',
+    });
+  });
+
+  it('refuses to make a park launchable, however its state was reached', async () => {
+    // Parked, and nobody overruled it: exactly the case planning.ts withholds
+    // the key for. A state changed by anything other than a person's recorded
+    // override must not be able to acquire a specification.
+    const parked = await createCandidate({
+      title: 'Still parked',
+      statement: 'not now',
+      projectId,
+    });
+    await recordJudgment({
+      candidateId: parked.id,
+      state: 'PARKED',
+      priority: 'PARKED',
+      reason: 'premature',
+    });
+    expect(await attachMissionSpec({ candidateId: parked.id, spec: { title: 'no' } })).toBe(false);
+
+    // Queued by Russell rather than by a person: also refused, because the
+    // authorization this rests on is the recorded human decision.
+    const queued = await createCandidate({
+      title: 'Queued by Russell',
+      statement: 'russell queued this one',
+      projectId,
+    });
+    await recordJudgment({
+      candidateId: queued.id,
+      state: 'QUEUED',
+      priority: 'WORTH_DOING',
+      reason: 'worth doing',
+    });
+    expect(await attachMissionSpec({ candidateId: queued.id, spec: { title: 'no' } })).toBe(false);
+    expect((await overriddenWithoutSpec(10)).map((row) => row.id)).not.toContain(queued.id);
+    expect((await getCandidate(queued.id))!.judgment['missionSpec']).toBeUndefined();
   });
 
   it('merges by pointer and splits back, losing neither identity nor history', async () => {

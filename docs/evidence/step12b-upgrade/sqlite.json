@@ -1,0 +1,12 @@
+{
+  "dialect": "sqlite",
+  "preVersion": 40,
+  "postVersion": 50,
+  "settledVersion": 50,
+  "rowsBefore": 8,
+  "preservedTables": 14,
+  "addedTables": 6,
+  "layersAfter": 3,
+  "revision": "c04002ad0e55b914c065dbd3336f5fe814d14a97",
+  "ranAt": "2026-09-13T12:50:44.163Z"
+}

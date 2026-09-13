@@ -25,6 +25,15 @@ export type Route =
   | { name: 'NEEDS_YOU' }
   | { name: 'SITES' }
   | { name: 'SEARCH' }
+  /**
+   * Where an invitation link lands.
+   *
+   * The only address in this shell that a person with no Brain account may
+   * reach, so `Root` handles it *before* the sign-in gate. The token is never in
+   * the path — it is in the fragment, which is not sent to any server and not
+   * written to any access log — so this route carries no parameter at all.
+   */
+  | { name: 'INVITE' }
   | { name: 'LEGACY' }
   | { name: 'NOT_FOUND'; path: string };
 
@@ -56,6 +65,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'SITES' };
     case 'search':
       return { name: 'SEARCH' };
+    case 'invite':
+      return { name: 'INVITE' };
     case 'legacy':
       return { name: 'LEGACY' };
     default:
@@ -85,6 +96,8 @@ export function pathFor(route: Route): string {
       return '/sites';
     case 'SEARCH':
       return '/search';
+    case 'INVITE':
+      return '/invite';
     case 'LEGACY':
       return '/legacy';
     default:

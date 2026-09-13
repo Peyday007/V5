@@ -22,6 +22,12 @@
  */
 import { Router } from 'express';
 import {
+  DESIGN_DECISIONS,
+  decisionsForRevision,
+  recordDesignDecision,
+  type DesignDecision,
+} from '../repos/designApprovals.ts';
+import {
   answerHumanRequest,
   getHumanRequest,
   listCurrentKnowledge,
@@ -98,6 +104,13 @@ import { groupWork, workForProject } from '../services/russell/work.ts';
 import { ideaMapForProject } from '../services/russell/ideas.ts';
 import { whoForProject } from '../services/russell/who.ts';
 import {
+  DEFAULT_INVITED_ROLE,
+  INVITABLE_ROLES,
+  invitationsForProject,
+  inviteToProject,
+  withdrawInvitation,
+} from '../services/identity/invitations.ts';
+import {
   activeWorkProgress,
   buildProgress,
   projectProgress,
@@ -130,10 +143,11 @@ import {
   optionalString,
   pathId,
   queryOf,
-  requireLayerOfProject,
-  requireProject,
   requiredString,
   optionalStringArray,
+  requireLayerOfProject,
+  requirePerson,
+  requireProject,
   unprocessable,
 } from './helpers.ts';
 import { getProjectBySlug } from '../repos/projects.ts';
@@ -148,21 +162,6 @@ import { CANDIDATE_PRIORITIES, CANDIDATE_STATES, MISSION_STATES } from '../domai
 
 export const russellRouter = Router();
 
-/**
- * The signed-in person, or a refusal.
- *
- * A worker has no conversations and no Needs You list — those are a person's,
- * and a worker principal reaching them would be a machine reading somebody's
- * private thread. So the refusal is by principal *type* rather than by scope:
- * there is no membership configuration that makes a worker into a person.
- */
-function requirePerson(): Principal {
-  const principal = currentPrincipal();
-  if (!principal || principal.type !== 'HUMAN') {
-    throw notFound('No such route.');
-  }
-  return principal;
-}
 
 /** A conversation this caller may read, or the same 404 a missing one gives. */
 async function requireConversation(conversationId: string) {
@@ -1082,6 +1081,100 @@ russellRouter.get(
   }),
 );
 
+/* --------------------------------------------------------------------------
+ * Inviting a person
+ *
+ * Who is where project membership already is (§26), so this is where inviting
+ * somebody onto it lives: a decision a person makes about their own project,
+ * on the surface they already use.
+ *
+ * `requirePerson` and the policy table's ADMIN, both. The level is what
+ * `/api/projects/:id/members` already carries, because inviting *is* a
+ * membership grant; the type refusal is what no membership configuration can
+ * undo. A machine that could invite people would be creating principals
+ * nobody asked for — §22's rule about a worker creating its own work, applied
+ * to the other kind of principal.
+ *
+ * Every decision below is made in `services/identity/invitations.ts`. These
+ * three handlers resolve the project, hand over the principal, and turn a
+ * refusal into a status.
+ * ------------------------------------------------------------------------ */
+
+russellRouter.get(
+  '/projects/:projectId/invitations',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return {
+      invitations: await invitationsForProject(project.id),
+      // The contract travels down with the view rather than being restated in
+      // the client, so what a person is offered and what the server accepts are
+      // one object — §24's manifest lesson, applied to a form.
+      roles: INVITABLE_ROLES,
+      defaultRole: DEFAULT_INVITED_ROLE,
+    };
+  }),
+);
+
+/**
+ * Invite somebody.
+ *
+ * The link is in the response and in nothing else — no log line, no identity
+ * event, no second read. Whoever issued it either sends it now or issues
+ * another, which is the same property a site's secret has and for the same
+ * reason.
+ */
+russellRouter.post(
+  '/projects/:projectId/invitations',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const outcome = await inviteToProject({
+      principal,
+      projectId: project.id,
+      email: body['email'],
+      role: body['role'],
+      note: optionalString(body['note'], 'note') ?? null,
+      // Brain's own address, from the request's own host. Never a body field: a
+      // caller that could name the origin could point an invitation link at a
+      // site it controlled and collect the token.
+      origin: `${req.protocol}://${req.get('host') ?? 'localhost'}`,
+    });
+    if (!outcome.ok) {
+      // A refusal that is about authorization reads as a missing project, in the
+      // same words; one that is about the request reads as a bad request.
+      if (outcome.reason === 'No project with that id.') throw notFound(outcome.reason);
+      throw badRequest(outcome.reason);
+    }
+    res.status(201);
+    return outcome.issued;
+  }),
+);
+
+/**
+ * Withdraw one before it is used.
+ *
+ * The answering transition for an invitation sent to the wrong address, and the
+ * other half of what makes re-inviting safe. An id that is not this project's is
+ * the same 404, with the same body, a missing one gives.
+ */
+russellRouter.post(
+  '/projects/:projectId/invitations/:invitationId/withdraw',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const outcome = await withdrawInvitation({
+      principal,
+      projectId: project.id,
+      invitationId: pathId(req, 'invitationId'),
+      reason: optionalString(bodyOf(req)['reason'], 'reason') ?? null,
+    });
+    if (!outcome.ok) throw notFound(outcome.reason);
+    return { withdrawn: outcome.withdrawn, alreadyFinished: outcome.alreadyFinished };
+  }),
+);
+
 /**
  * How far along things are — the project, the work in flight, and the Brain.
  *
@@ -1790,6 +1883,85 @@ russellRouter.post(
       actor,
       reason: nullableString(body['reason'], 'reason') ?? null,
     });
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The design decision
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What a person has decided about how the product looks, and recording it.
+ *
+ * §24's design gate asks for a recorded visual, mobile and interaction
+ * approval. It has lived in a markdown table, which nothing can read and
+ * nothing binds to the code it describes. These two routes make it a row.
+ *
+ * Three things about the guard, and none of them is incidental:
+ *
+ *  - **`requirePerson`, refused by principal type.** A machine cannot approve
+ *    how the product looks, whatever its memberships say. §22's split, and the
+ *    same refusal Connected sites and the standing authority already carry.
+ *  - **The approver is the authenticated principal.** There is no field for it,
+ *    so nothing a caller sends can record a decision as somebody else's — the
+ *    property `oauth_tokens` relies on for exactly the same reason.
+ *  - **Brain administrator, not project ADMIN.** This is a decision about the
+ *    product rather than about one project's data, so it is not project-scoped;
+ *    scoping it to a project would let a member of any project approve the
+ *    interface for everybody.
+ *
+ * The read is deliberately available to any signed-in person: a person should be
+ * able to see whether the interface they are using was ever approved, and by
+ * whom, without being able to decide it.
+ */
+russellRouter.get(
+  '/design/decisions',
+  handler(async (req) => {
+    requirePerson();
+    const revision = typeof req.query['revision'] === 'string' ? req.query['revision'] : null;
+    if (!revision) throw badRequest('Name the revision to read decisions for.');
+    return { revision, decisions: await decisionsForRevision(revision) };
+  }),
+);
+
+russellRouter.post(
+  '/design/decisions',
+  handler(async (req) => {
+    const principal = requirePerson();
+    /*
+     * A Brain administrator, checked here rather than in a policy module,
+     * because `services/identity/policy.ts` decides *project* access and this
+     * is not a project-scoped resource. Deny by default: anything that is not
+     * demonstrably an administrator gets the 404 a missing route gives, so this
+     * endpoint is not an oracle for who is one.
+     */
+    if (!principal.isBrainAdmin) throw notFound('No such route.');
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const revision = requiredString(body['revision'], 'revision');
+    const renderSetDigest = requiredString(body['renderSetDigest'], 'renderSetDigest');
+    const manifestPath = requiredString(body['manifestPath'], 'manifestPath');
+    const decision = requiredString(body['decision'], 'decision').toUpperCase();
+    if (!(DESIGN_DECISIONS as readonly string[]).includes(decision)) {
+      throw badRequest(`decision must be one of ${DESIGN_DECISIONS.join(', ')}.`);
+    }
+    const renderCount = Number(body['renderCount']);
+    if (!Number.isInteger(renderCount) || renderCount <= 0) {
+      throw badRequest('renderCount must be the number of renders this decision covers.');
+    }
+
+    return {
+      decision: await recordDesignDecision({
+        revision,
+        renderSetDigest,
+        renderCount,
+        manifestPath,
+        decision: decision as DesignDecision,
+        // From the principal. There is no field for this and there must not be.
+        approvedByUserId: principal.id,
+        note: nullableString(body['note'], 'note') ?? null,
+      }),
+    };
   }),
 );
 

@@ -61,6 +61,50 @@ describe('a view state is decided in one place', () => {
     expect(forbidden.message).toMatch(/access/i);
   });
 
+  it('lets the server say the whole sentence, rather than folding it into one', () => {
+    /*
+     * Found by driving the phone journey, which read Knows back as:
+     *
+     *     There is no There is nothing here yet. yet.
+     *
+     * `noun` fills a slot — "There is no ${noun} yet." — and `KnowledgeView`
+     * passed the server's whole `knows.explanation` into it. The intent stated
+     * in that view's own comment was right; the parameter was wrong. A noun and
+     * a sentence are different things and must not share one.
+     */
+    const withSentence = listState({
+      loading: false,
+      error: null,
+      items: [],
+      noun: 'findings',
+      explanation: 'There is nothing here yet.',
+    });
+    expect(withSentence.phase).toBe('EMPTY');
+    expect(withSentence.message).toBe('There is nothing here yet.');
+    // The shape of the defect, named: no sentence inside a sentence.
+    expect(withSentence.message).not.toMatch(/There is no There is/);
+    expect(withSentence.message).not.toMatch(/yet\.\s*yet\./);
+
+    // Without one, the noun still fills the slot exactly as before.
+    const withoutSentence = listState({
+      loading: false,
+      error: null,
+      items: [],
+      noun: 'findings',
+    });
+    expect(withoutSentence.message).toBe('There is no findings yet.');
+
+    // An explanation that is only whitespace is not a sentence.
+    const blank = listState({
+      loading: false,
+      error: null,
+      items: [],
+      noun: 'findings',
+      explanation: '   ',
+    });
+    expect(blank.message).toBe('There is no findings yet.');
+  });
+
   it('distinguishes the six kinds of empty rather than collapsing them', () => {
     /*
      * The addendum's requirement, and the reason it is a requirement: the

@@ -20,6 +20,7 @@
  * endpoint, which is the claim Step 7 actually makes.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
@@ -31,7 +32,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { ModernMcpClient } from '../scripts/mcpModernClient.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6000 + Math.floor(Math.random() * 100);
+const PORT = pickPort(6000, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 const MCP_URL = `${BASE}/mcp`;
 

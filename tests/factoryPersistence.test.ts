@@ -20,6 +20,7 @@
  *     reported exactly like one that does not exist — body included.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
@@ -28,7 +29,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6600 + Math.floor(Math.random() * 100);
+const PORT = pickPort(6600, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 const ADMIN_EMAIL = 'root@example.invalid';
@@ -62,7 +63,15 @@ const OBJECTIVE = {
   submissionKey: 'factory-persistence',
 };
 
+/**
+ * Set when the child exits, so `waitForHealthy` can tell "not up yet" from
+ * "up, and then gone". Cleared at every start, because this file boots two
+ * servers in sequence and the first one's death is not the second one's.
+ */
+let exited: { code: number | null; signal: NodeJS.Signals | null } | null = null;
+
 function startServer(): ChildProcessByStdio<null, Readable, Readable> {
+  exited = null;
   const child = spawn(
     process.execPath,
     [
@@ -86,10 +95,54 @@ function startServer(): ChildProcessByStdio<null, Readable, Readable> {
   );
   child.stdout.on('data', (chunk: Buffer) => (log += chunk.toString()));
   child.stderr.on('data', (chunk: Buffer) => (log += chunk.toString()));
+  /*
+   * Watch it die, because otherwise the harness reports the wrong fact.
+   *
+   * `waitForHealthy` polls `/healthz` and swallows every connection refusal, so
+   * a child that boots, prints its banner and *then* exits is indistinguishable
+   * from one that is merely slow — and the message after ten minutes reads
+   * "server never became healthy", which is false. It became healthy and then
+   * stopped. That sends whoever reads it to look at boot time, which is the one
+   * place the answer is not.
+   *
+   * Measured rather than assumed: this file failed twice in full runs and the
+   * obvious explanation was CPU starvation, so that was tested — eight busy
+   * loops on four cores make this suite take 14.5s against 4.6s quiet. Three
+   * times slower, not a hundred and thirty times. Starvation is refuted, and
+   * what is actually happening is unknown, which is exactly why the harness
+   * has to report the difference instead of one sentence covering both.
+   */
+  child.once('exit', (code, signal) => {
+    exited = { code, signal };
+  });
   return child;
 }
 
+/**
+ * Why the last attempt failed, in the words the failure itself used.
+ *
+ * The loop used to `catch {}` every rejection, which is how a `fetch` that was
+ * refusing the port outright looked identical to a server that had not started
+ * yet — and cost three full runs. The cause is kept and reported, and the two
+ * inferences this file previously drew are deliberately *not* drawn:
+ *
+ *   - a TCP connection does not prove HTTP is responsive, so none is made and
+ *     nothing here claims "listening but not answering";
+ *   - `SIGKILL` does not establish out of memory, so the signal is reported as
+ *     the signal and the reader draws their own conclusion.
+ */
+function why(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const cause = error.cause;
+  if (cause instanceof Error) {
+    const code = (cause as NodeJS.ErrnoException).code;
+    return `${error.message} (cause: ${cause.message}${code ? `, ${code}` : ''})`;
+  }
+  return error.message;
+}
+
 async function waitForHealthy(): Promise<void> {
+  let lastFailure: string | null = null;
   /*
    * Absurdly generous, and deliberately so.
    *
@@ -109,11 +162,28 @@ async function waitForHealthy(): Promise<void> {
    */
   const deadline = Date.now() + 600_000;
   for (;;) {
-    if (Date.now() > deadline) throw new Error(`server never became healthy:\n${log}`);
+    if (exited !== null) {
+      throw new Error(
+        `the server process exited before answering — code ${exited.code ?? 'none'}, ` +
+          `signal ${exited.signal ?? 'none'}:\n${log}`,
+      );
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `the server on port ${PORT} did not answer ${BASE}/healthz within ten minutes. ` +
+          `The last attempt failed with: ${lastFailure ?? 'no attempt was recorded'}.\n${log}`,
+      );
+    }
     try {
-      if ((await fetch(`${BASE}/healthz`)).ok) return;
-    } catch {
-      /* not up yet */
+      /*
+       * Bounded, so one request that hangs cannot eat the whole window and
+       * leave the loop with nothing to report about why.
+       */
+      const response = await fetch(`${BASE}/healthz`, { signal: AbortSignal.timeout(5_000) });
+      if (response.ok) return;
+      lastFailure = `HTTP ${response.status}`;
+    } catch (error) {
+      lastFailure = why(error);
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }

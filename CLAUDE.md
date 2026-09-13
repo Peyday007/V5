@@ -1973,6 +1973,56 @@ deliberately *classifies* rather than bans — this file records its own
 corrections, and a sentence like "it was on the operator console, and that was
 wrong" is history worth keeping. What must not exist is somewhere to go.
 
+**"Who is on the project" said membership and had no way to *offer* one.** A
+person was **granted** access at `POST /api/projects/:id/members`, by somebody
+who already held their user id — so the only people who could ever be added were
+people a Brain administrator had already made an account for. Nobody was ever
+invited and nobody ever accepted. The one `invitations` table in this repository
+was `worker_invitations`, and a worker is not a person: it holds no threads,
+reads no project, and what it redeems is an OAuth consent screen. Two acceptance
+gates carried "an invitation anybody received" as their unmet condition, and it
+could not be closed by waiting, because the mechanism did not exist.
+
+`server/services/identity/invitations.ts` is that mechanism, and it reinvents
+none of the worker invitation's safety properties: the token is shown once and
+stored as a sha-256 digest, found by an indexed prefix and compared in constant
+time, and spent by **one guarded `UPDATE`** carrying every condition that makes
+it valid — so two requests holding one intercepted link cannot both come away
+with a membership. Issuing is `requirePerson` plus `decideProjectAccess` at
+`ADMIN`, the level `/api/projects/:id/members` already carries because inviting
+*is* a membership grant, and a worker principal is refused **by type**: a machine
+that could invite people would be creating principals nobody asked for.
+
+Three things about it are decisions rather than details.
+
+- **The acceptor chooses neither who they are nor what they get.** The email and
+  the role are read from the row; an acceptance carrying `role: OWNER` and
+  `isBrainAdmin: true` changes neither. A person who could pick their own role on
+  the way in would make the link a way to grant themselves access, which is the
+  whole of what the issuing administrator's decision is for.
+- **The token is in the URL *fragment*, never the path.** A fragment is not sent
+  to any server and is not written to any access log, which is what makes a link
+  safe to put in a message — §17's rule that a credential may not appear in a URL
+  that gets recorded, and a path segment is recorded by every proxy between here
+  and the recipient. The two routes that spend it are the third and fourth
+  entries on the guard's unauthenticated allowlist, for `/api/auth/login`'s exact
+  reason: an invited person may hold no credential but the one in their hand.
+- **Creating an account is `decideBrainAdmin`'s to authorize, and the authority
+  is re-read at the moment the effect happens** rather than stored on the
+  invitation — §17's rule that authority is read on every request rather than
+  baked into a token, applied to the one power this journey needs and does not
+  itself hold. An inviter who has since lost `ADMIN` lets nobody in through a
+  link they left behind. A refusal for want of that authority **does not spend
+  the invitation**, because the remedy is a Brain administrator making the
+  account and the link has to keep working afterwards: an escalation with no
+  answering transition is stuck rather than waiting, for the sixth time.
+
+Absent, malformed, expired, already accepted and withdrawn are **one body**, and
+it names the remedy rather than the reason — invariant 23 at a new door, where
+the thing being refused is a secret somebody may be holding legitimately. An
+invitation *id* is not an oracle either: to a caller who does not administer the
+project, a real id and an invented one are byte-identical.
+
 ## 27. The factory is an entrance to the same machinery, and its evidence is the repository.
 
 The Software Factory (`server/services/factory/`, `server/repos/factory.ts`,
@@ -3101,6 +3151,65 @@ O back to what the code alone can say, which is the correct behaviour rather
 than a failure. **The reporter never promotes O to `PASS` however good the
 images are** — a reporter that could would be approving its own work.
 
+
+**A ring cannot seat nine labels on a 316px canvas, and no value of the stagger
+makes it — so the narrow arrangement is a different one rather than the same one
+squeezed.** The pile-up had been fixed twice by looking: first by spreading eight
+nodes on one ellipse, then by staggering every other node onto `0.62` of the
+radius. Measured, the second is not imperfect, it is **arithmetically
+impossible**: at a 390px viewport the canvas is 316px wide, so the inner ring
+lands 59-75px from the centre while a node's half-width alone reaches 73px. An
+inner node cannot clear the nucleus at any label size. Below `RING_MIN_CANVAS`
+the same graph is drawn as a **spine** — the nucleus at the top, its children in
+two grid columns, one connector each running down the gutter between them — and
+the difference that matters is not how it looks but what it guarantees: **the
+ring is only known not to overlap for the labels this projection produces, while
+two nodes in two grid cells are disjoint whatever the label does.** Nothing is
+truncated, nothing is abbreviated, and the node count is untouched; the picture
+and the outline are still the same graph, and the harness now counts both rather
+than assuming it.
+
+**A reading taken at one width is a claim about that width.** The overlap was
+asked about once, at 390px, inside the phone journey — so nobody knew whether
+the ring seated its labels at 953px or only looked as though it did. It did not:
+the intermediate width carried a pair the whole time, at every reading taken.
+It is measured at every width now, and `RING_MIN_ARC` is set from what was
+measured rather than derived — 179px of arc per node at a desktop canvas holds,
+134px at the intermediate one does not — which is why the constant says
+"measured" in its own comment. A number chosen by looking is fine; one that
+*claims* to be derived is not.
+
+**A render in the wrong typefaces is a picture of a different product.**
+`client/index.html` links the Google Fonts stylesheet and the harness's Chromium
+has no proxy, so every capture ever taken rendered on the fallback stack — which
+the run reported honestly as an environment fact and then carried on. That is
+right for a layout check and wrong for the thing these captures are now for: type
+sets every label width, and a label width is what an overlap is made of. The two
+font hosts are answered from Node, which does have the proxy — the same URLs, the
+same bytes, and **no loosening of the browser's trust**, because a harness that
+disabled certificate checking to get a picture is a pattern somebody copies
+somewhere it matters. The superseded ring measures differently in the two font
+sets (9 pairs against 8 at 390px) and both readings are kept, because the claim
+is what they agree on rather than either number alone.
+
+**Answering the one decision on a page must change the page.** Driving the
+approval found it: pressing **Approve** wrote the grant, and `NeedsYouView` went
+on saying what it had said before, because it reads the authority through its own
+query and nothing told it to look again — the nav badge beside it counting the
+same fact from the same route was equally stale. It is the *under*-claiming
+direction, which is the way round §29 asks for, and it is still the defect this
+section already records twice: a status that does not agree with the control
+beside it teaches a person to stop reading it. The card says when it changed
+something and every reader goes back to the server.
+
+**And the harness's own check was wrong in the more expensive direction.** It
+waited for the settled sentence on the page around the card, so it reported that
+the standing authority *could not be approved* while three later captures showed
+it plainly granted. **A false finding costs more than the defect it was looking
+for**, because somebody spends an hour on it. It waits for the control the card
+itself swaps in now — which is deliberately not the thing the fix above
+changed, so it would have passed against the stale build and still fails if the
+grant does not land.
 
 ---
 

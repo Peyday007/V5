@@ -218,7 +218,8 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           set -o pipefail
-          if flyctl deploy --ha=false --remote-only 2>&1 | tee deploy.txt; then
+          if flyctl deploy --ha=false --remote-only \
+               --build-arg BRAIN_REVISION="$GITHUB_SHA" 2>&1 | tee deploy.txt; then
             exit 0
           fi
           if ! grep -qiE 'depot builder|failed to list workers|authentication handshake failed|error releasing builder' deploy.txt; then
@@ -230,7 +231,8 @@ jobs:
             exit 1
           fi
           echo "::warning::The Depot builder never answered. Building on Fly's own remote builder instead."
-          flyctl deploy --ha=false --remote-only --depot=false
+          flyctl deploy --ha=false --remote-only --depot=false \
+            --build-arg BRAIN_REVISION="$GITHUB_SHA"
 
       # When a deploy fails, say why here rather than sending somebody to a
       # dashboard.
@@ -507,3 +509,41 @@ jobs:
           fi
           echo "The live Brain refused everything it should have, twice, either side of a real restart,"
           echo "and the work left before it was still there afterwards."
+
+      # -------------------------------------------------------------------
+      # The record, so something other than a person can read this verdict
+      # -------------------------------------------------------------------
+      #
+      # Step 12B's gate P asks whether the hosted verification passed either
+      # side of a real restart — condition R13 — and a reporter running in a
+      # checkout cannot attest a CI run it did not observe. Reading this
+      # workflow file would check that the steps are *written down*, not that
+      # they passed, which is the class of evidence the acceptance reporter
+      # refuses everywhere else.
+      #
+      # So the run writes down what it proved, stamped with the revision it
+      # proved it at, and the reporter consumes that. Uploaded rather than
+      # committed: this job holds the deployment credential and must not be
+      # able to push to the branch it just deployed.
+      - name: Record what this run proved, for the acceptance reporter
+        if: always()
+        run: |
+          mkdir -p docs/evidence/step12b-hosted
+          cat > docs/evidence/step12b-hosted/verification.json <<JSON
+          {
+            "revision": "${GITHUB_SHA}",
+            "ranAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "beforeRestart": ${{ steps.hosted.outcome == 'success' }},
+            "afterRestart": ${{ steps.hosted_after.outcome == 'success' }},
+            "workflowRun": "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          }
+          JSON
+          cat docs/evidence/step12b-hosted/verification.json
+
+      - name: Keep it
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: step12b-hosted-verification
+          path: docs/evidence/step12b-hosted/verification.json
+          if-no-files-found: warn

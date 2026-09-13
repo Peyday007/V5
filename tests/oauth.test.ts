@@ -16,6 +16,7 @@
  * documents, the redirect and the form posts are transport behaviour.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import crypto from 'node:crypto';
@@ -27,7 +28,7 @@ import { CONNECTOR_SCOPES, WORKER_SCOPES } from '../server/domain/types.ts';
 import type { WorkerScope } from '../server/domain/types.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 6500 + Math.floor(Math.random() * 100);
+const PORT = pickPort(6500, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 const REDIRECT = 'https://claude.ai/api/mcp/auth_callback';
 

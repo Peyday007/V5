@@ -12,6 +12,7 @@
  * suite already answers; it is "does anybody else".
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import fs from 'node:fs';
@@ -23,7 +24,7 @@ import { createProject } from '../server/repos/projects.ts';
 import { createLayer } from '../server/repos/layers.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 5500 + Math.floor(Math.random() * 100);
+const PORT = pickPort(5500, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let server: ChildProcessByStdio<null, Readable, Readable>;

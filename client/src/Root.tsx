@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Api } from './lib/api.ts';
 import type { SessionUser } from './lib/api.ts';
 import { SignIn } from './components/SignIn.tsx';
+import { AcceptInvitation } from './components/AcceptInvitation.tsx';
 import { useRoute } from './lib/router.ts';
 import { RussellShell } from './russell/RussellShell.tsx';
 import App from './App.tsx';
@@ -34,6 +35,22 @@ export default function Root(): JSX.Element {
   }, []);
 
   useEffect(ask, [ask]);
+
+  /*
+   * An invitation is answered before the sign-in gate, deliberately.
+   *
+   * The person holding one may have no Brain account at all — that is the
+   * ordinary case rather than the edge — so a gate in front of this screen would
+   * make the invitation reachable only by people who are already in. Its
+   * authority is the token in the URL fragment and nothing about this browser,
+   * so there is nothing for a session to add here.
+   *
+   * It is checked before `user === undefined` as well, so an invited person does
+   * not watch a session probe they cannot benefit from.
+   */
+  if (navigation.route.name === 'INVITE') {
+    return <AcceptInvitation onAccepted={() => navigation.go({ name: 'HOME' })} />;
+  }
 
   if (user === undefined) {
     return <div className="rs-boot">Starting…</div>;
