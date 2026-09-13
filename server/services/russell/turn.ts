@@ -1113,10 +1113,33 @@ async function applyValidated(input: {
         title: proposal.software.title,
         objective: proposal.software.objective,
         expectedOutcome: proposal.software.expectedOutcome,
+        /*
+         * The conversation **owner**, never the worker.
+         *
+         * §24's rule at this seam: a turn is validated against the owner's
+         * authority, because the effects land in their scope. A worker that
+         * could widen which projects count as "named" would be reaching past
+         * the person whose thread it is.
+         */
+        principal: owner,
       });
       if (!outcome.request) {
         return {
-          produced: { softwareDeclined: true, gateReason: outcome.reason },
+          produced: {
+            softwareDeclined: true,
+            gateReason: outcome.reason,
+            /*
+             * A refusal Brain will not guess past is a question, not silence.
+             *
+             * The gate's ordinary refusals ("it weighs a change rather than
+             * asking for one") need no answer — the person said something that
+             * was not a request. An *ambiguous* one is different: they did ask,
+             * and the only thing missing is a word only they have. Carrying the
+             * sentence here is what stops that reading as Russell declining to
+             * do its job, which is the shape §24 keeps recording.
+             */
+            ...(outcome.clarify ? { clarify: outcome.clarify.answer } : {}),
+          },
           candidateId: null,
         };
       }

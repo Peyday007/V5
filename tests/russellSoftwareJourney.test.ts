@@ -176,6 +176,36 @@ describe('discussing a change is not asking for one', () => {
     }
   });
 
+  /**
+   * The owner's own three sentences, which is the only reason this test exists.
+   *
+   * Two of them passed and the third did not: `improve` was not in the verb
+   * list, so *"Improve this part of the site we're discussing"* came back
+   * "nothing here asks for a change to be made". That is the fourth time a list
+   * in this codebase has had the rule right and the alphabet short — §24 records
+   * the first three — and the rule each time is that the sentence which found
+   * the gap is never reworded to fit the list.
+   */
+  it('accepts the three ways a person actually asks', () => {
+    for (const message of [
+      'Add this feature to Brain: a way to see which campaigns are waiting.',
+      'Fix this problem on V4: the contact form drops the message.',
+      'Improve this part of the site we are discussing — the quote page is slow.',
+    ]) {
+      expect(asksForExecution(message).asks, message).toBe(true);
+    }
+  });
+
+  it('still declines the past tense of the verbs it just learned', () => {
+    // The widening must not cost the failure mode: a report is not a request.
+    for (const message of [
+      'We improved the quote page last week and it is much faster now.',
+      'I optimised the checkout query yesterday, so that is done.',
+    ]) {
+      expect(asksForExecution(message).asks, message).toBe(false);
+    }
+  });
+
   it('reads a past-tense report as neither', () => {
     expect(asksForExecution('I already fixed the header last week, by the way.').asks).toBe(false);
     expect(asksForExecution('We changed the pricing copy yesterday.').asks).toBe(false);
@@ -754,6 +784,49 @@ describe('the person authorizes, and the campaign reports back', () => {
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.reason).toMatch(/acceptance conditions/i);
     expect((await getSoftwareRequest(requestId))?.state).toBe('PROPOSED');
+  });
+
+  /**
+   * Onboarding happens when a target needs it, and the ask survives the wait.
+   *
+   * This is the property that keeps the product usable before every site's
+   * repository arrangement has been settled: a person asks for a change in a
+   * project that has no repository yet, Brain writes it down and says what is
+   * missing, and the *same* request becomes authorizable the moment somebody
+   * onboards one. Nothing has to be asked for again, which is the same promise
+   * `rearmSurfaceDeferredIntents` makes one layer down.
+   */
+  it('keeps the ask through onboarding, and it becomes authorizable afterwards', async () => {
+    const { requestId } = await askedFor();
+    expect(await repositoryChoicesFor(fixture.project.id)).toEqual([]);
+
+    // Before: captured, waiting, and nowhere to run.
+    const before = await softwareNeedingPerson(fixture.project.id);
+    expect(before).toHaveLength(1);
+    expect(before[0]?.request.state).toBe('PROPOSED');
+
+    await onboardRepository({
+      projectId: fixture.project.id,
+      grantId: MOUNT().id,
+      scope: { kind: 'DIRECTORIES', directories: ['docs'] },
+      actor,
+      origin: 'https://brain.example',
+    });
+
+    // After: the same row, now with somewhere to go and a reach to show.
+    const choices = await repositoryChoicesFor(fixture.project.id);
+    expect(choices).toHaveLength(1);
+    const outcome = await authorizeSoftwareRequest({
+      requestId,
+      grantId: MOUNT().id,
+      userId: actor.id,
+      acceptanceConditions: [
+        { statement: 'The boundary is described.', verification: 'Read the page.' },
+      ],
+    });
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.scope).toEqual(['docs/**']);
+    expect((await getSoftwareRequest(requestId))?.id).toBe(requestId);
   });
 
   it('reports the request back into its own conversation', async () => {

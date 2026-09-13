@@ -2593,6 +2593,71 @@ remote.
   grant at all, and a test's convenience is never a reason to widen a production
   authorization.
 
+- **Brain is an authorized target now, and that is the operator's decision
+  rather than a softening of the argument against it.** `V5`'s absence was mine:
+  the envelope's own comment recorded it as a default written by the agent that
+  built this, not a standing operator decision. The owner has since named Brain
+  as an intended target, improved *through isolated branches, independent review
+  and the existing controlled integration process*, with the running Brain's
+  authorization and deployment protections preserved.
+
+  The original worry stands and is not waved away — the factory lives in this
+  repository, so a campaign here can reach the machinery executing it, and that
+  is the one failure mode declining a pull request does not *by itself* contain.
+  What changed is that the risk is bounded by rows instead of by absence. **A
+  campaign may not edit what authorizes it, what bounds it, or what deploys
+  it**, and that is a `forbiddenPaths` list rather than a sentence: the envelope
+  and `projectScope.ts`, `services/identity/**` and `bins/routing.ts`, both
+  approval envelopes, the whole of `.github/workflows/**` — the directory rather
+  than `deploy*`, because §28's own lesson is that a *second* workflow is how the
+  guard gets bypassed — plus `CANONICAL_BRANCH`, `fly.toml` and `Dockerfile`.
+  They refuse *ownership*, never reading: a unit may read any of it and a
+  reviewer must. Around that, unchanged: the campaign stops at a pull request,
+  the review is independent by recorded lineage, the deployment branch policy
+  refuses every ref but the canonical one, and a person merges.
+  `oakwood-junk-removal` stays retired, which is a different decision.
+
+- **A list can have the rule right and the alphabet short, and this is the
+  fourth time.** §24 records three in `judgment.ts`. Here it was
+  `EXECUTION_MARKERS`: the owner's own three examples were *"Add this feature to
+  Brain"*, *"Fix this problem on V4"* and *"Improve this part of the site we're
+  discussing"*, and the third came back **"nothing here asks for a change to be
+  made"** because `improve` was not in the list. Widened by the verbs actually
+  missed and no further, and the failure mode is what the tests pin rather than
+  the successes — "we improved it last week" still matches nothing, because the
+  word boundary excludes the past tense and nobody is being asked. The sentence
+  that found the gap is never reworded to fit the list.
+
+- **A request is filed against a project, and the project decides which code may
+  change — so guessing which project is the Westbrook defect at a new
+  altitude.** §25 records the original: a compiler read a jurisdiction out of
+  prose, produced *"official Michigan public records … in Westbrook, OH"*, and
+  every row around it was healthy. Here the same shape is a change request filed
+  against the conversation's project while the message names a different one:
+  the card would carry a real scope sentence, a person would authorize it, and a
+  worker would change the wrong repository correctly.
+  `services/russell/softwareTarget.ts` refuses instead of choosing, and the
+  three rules are `jurisdiction.ts`'s. **A row outranks prose** — the
+  conversation's attachment has provenance and a sentence does not.
+  **Disagreement is refused, never resolved** — nothing is captured and the
+  answer names both projects, which is the one case where asking is cheaper than
+  being wrong. **Not knowing is an answer** — a thread with no project cannot
+  resolve a repository, and that is `ASK_WHICH_PROJECT`. It can refuse and it
+  can never *redirect*: naming another project never files the request there,
+  because that would let a sentence move work into a scope nobody attached it
+  to. It reads project rows rather than a list of site names, matches on word
+  boundaries so `rAPId` is not `API`, and is skipped entirely for a project the
+  asker cannot read — a check that only ever adds a refusal, so losing it loses
+  a clarification rather than a control.
+
+- **Onboarding happens when a target needs it, and the ask survives the wait.**
+  A person asking for a change in a project with no repository gets it written
+  down, plus the sentence naming what is missing and where to do it; the *same*
+  row becomes authorizable the moment somebody onboards one, with the reach it
+  then has. Nothing is asked for again — the same promise
+  `rearmSurfaceDeferredIntents` makes one layer down — which is what keeps the
+  product usable before every site's repository arrangement has been settled.
+
 A worktree is the one factory path that is deliberately *not* authoritative
 state in either mode: it is execution scratch, the evidence is the commits, the
 rows and the artifacts, and retiring one destroys nothing that mattered. It

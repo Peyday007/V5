@@ -61,7 +61,11 @@ import { proveSurface } from '../server/services/dispatch/surfaceProof.ts';
 import type { WorkerSession } from '../server/repos/fleet.ts';
 import type { RoutingRefusal } from '../server/services/dispatch/router.ts';
 import { binAdmission } from '../server/services/bins/service.ts';
-import { decideRepository, listRepositoryGrants } from '../server/services/factory/repositoryEnvelope.ts';
+import {
+  UNIVERSAL_FORBIDDEN_PATHS,
+  decideRepository,
+  listRepositoryGrants,
+} from '../server/services/factory/repositoryEnvelope.ts';
 import {
   FACTORY_ROUTING_CAPABILITIES,
   factoryWorkerName,
@@ -526,7 +530,6 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
   it('keeps every permanent refusal permanent', async () => {
     // The envelope: a campaign cannot be created against an unauthorized remote.
     for (const remote of [
-      'https://github.com/Peyday007/V5',
       'https://github.com/someone/else',
       'https://github.com/Peyday007/V4',
       // Retired, and retired is not authorized.
@@ -535,6 +538,35 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
     ]) {
       expect(decideRepository(remote).ok).toBe(false);
     }
+
+    /*
+     * **`V5` used to be on that list and is not any more**, because the operator
+     * named Brain as an intended target. The refusal was mine rather than
+     * theirs, which the envelope's own comment said at the time.
+     *
+     * What replaces it is not nothing, and this is where that is asserted: a
+     * campaign in Brain may not own the files that decide what it may own. If
+     * somebody widens this grant later, the assertion below is what tells them
+     * which entries were load-bearing rather than decorative.
+     */
+    const brain = decideRepository('https://github.com/Peyday007/V5');
+    expect(brain.ok).toBe(true);
+    expect(brain.grant?.defaultBranch).toBe('production');
+    for (const path of [
+      'server/services/factory/repositoryEnvelope.ts',
+      'server/services/factory/projectScope.ts',
+      'server/services/identity/**',
+      'server/services/bins/routing.ts',
+      'server/services/russell/probeEnvelope.ts',
+      'server/services/research/approvalEnvelope.ts',
+      '.github/workflows/**',
+      '.github/CANONICAL_BRANCH',
+    ]) {
+      expect(brain.grant?.forbiddenPaths, `Brain must never own ${path}`).toContain(path);
+    }
+    // And the universal floor still applies on top of the grant's own list.
+    expect(UNIVERSAL_FORBIDDEN_PATHS).toContain('.claude/**');
+    expect(UNIVERSAL_FORBIDDEN_PATHS).toContain('.github/workflows/deploy*');
     // Onboarding: a grant the envelope does not name cannot be onboarded, and
     // the refusal does not enumerate what it would have allowed.
     const refused = await onboardRepository({

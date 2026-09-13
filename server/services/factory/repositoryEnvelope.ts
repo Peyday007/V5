@@ -39,18 +39,39 @@ export interface RepositoryGrant {
 /**
  * The authorized set.
  *
- * `V5` is deliberately absent, and it is worth being exact about *whose* decision
- * that is. The reasoning is mine: the factory lives in this repository, and a
- * campaign that could rewrite the machinery executing it is the one failure mode
- * declining a pull request does not contain. It ran here once, for the bootstrap
- * campaign, locally with a person watching every tick, and that is not this.
+ * **`V5` was absent on my own judgment, and the operator has now named it as an
+ * intended target.** The previous note said exactly this: the absence was a
+ * default written by the agent that built this, not a standing operator decision
+ * and not a permanent property of the product. It is now a decision, and the
+ * decision went the other way — Brain is to be improved *"through isolated
+ * branches, independent review and the existing controlled integration
+ * process"*, with the running Brain's authorization and deployment protections
+ * preserved.
  *
- * That is a default written by the agent that built this, not a standing operator
- * decision and not a permanent property of the product — unlike
- * `oakwood-junk-removal`, whose retirement *is* the operator's and is recorded in
- * `docs/OAKWOOD-RETIREMENT.md`. Every repository is unauthorized until a reviewed
- * entry says otherwise, so `V5`'s absence needs no special rule; what it must not
- * be described as is permanently out of reach.
+ * The original worry was right and is not waved away: the factory lives in this
+ * repository, so a campaign here can reach the machinery executing it, and that
+ * is the one failure mode declining a pull request does not *by itself* contain.
+ * What changed is that the risk is now bounded by rows rather than by absence.
+ * Four things hold it, none of them a promise in a comment:
+ *
+ * 1. **A campaign never touches the running Brain.** It works on a branch and
+ *    stops: `assemble.ts` produces the branch, the patch and the body and goes
+ *    no further, the factory may never merge to a protected branch or deploy,
+ *    and §28's deployment branch policy on the `production` environment refuses
+ *    a deploy from any other ref — a setting the branch being deployed cannot
+ *    edit.
+ * 2. **It cannot widen its own authorization**, because the files deciding what
+ *    it may touch are themselves outside what it may touch. See `forbiddenPaths`
+ *    on the `brain` grant; that list is the whole of this argument.
+ * 3. **Independent review still applies**, from a session that implemented
+ *    nothing on the campaign — refused from recorded lineage rather than a role
+ *    label, and refused again before storage because a lease can expire.
+ * 4. **A person merges.** The same boundary every other repository has, and here
+ *    it is the one that actually contains a bad unit: a diff that reached the
+ *    machinery is a diff sitting in a pull request nobody has taken.
+ *
+ * `oakwood-junk-removal` stays retired, which is a different operator decision
+ * and is untouched by this one.
  */
 export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [
   /*
@@ -86,6 +107,73 @@ export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [
      * change this repository is short of.
      */
     forbiddenPaths: ['.claude/**'],
+    mayOpenPullRequest: true,
+  },
+  /*
+   * Brain itself.
+   *
+   * The one repository where "what the factory may change" and "what decides
+   * what the factory may change" are the same checkout — which is why its
+   * forbidden list is longer than anything else's, and why every entry on it is
+   * a file that would otherwise let a campaign answer its own question.
+   */
+  {
+    id: 'brain',
+    remote: 'https://github.com/Peyday007/V5',
+    description:
+      'Brain itself — the platform, its Russell surface, the Software Factory and their tests. ' +
+      'Work lands on a branch and stops at a pull request a person reads and merges.',
+    /*
+     * The canonical branch, because that is what §28 says one branch owning
+     * production means: a campaign pins against `production` and opens a request
+     * back into it, and every other ref is somewhere a deploy is refused from.
+     */
+    defaultBranch: 'production',
+    /*
+     * What a campaign in Brain may never own.
+     *
+     * The rule behind the list is one sentence: **a campaign may not edit what
+     * authorizes it, what bounds it, or what deploys it.** Everything else here
+     * is ordinary product code, and a factory that could not change the product
+     * would not be worth having.
+     *
+     * These refuse *ownership*, not reading. A unit may read any of it and a
+     * reviewer must; what is refused is a diff, which is the thing that could
+     * take effect.
+     */
+    forbiddenPaths: [
+      /*
+       * This file, and the boundary it is half of. A campaign that could add a
+       * grant could authorize itself into any repository; one that could edit
+       * `projectScope.ts` could widen the directories it is judged against.
+       * Both are "nobody supplies the limits their own work is judged against",
+       * applied to the two files that *are* those limits.
+       */
+      'server/services/factory/repositoryEnvelope.ts',
+      'server/services/factory/projectScope.ts',
+      /*
+       * The authorization model. `decideProjectAccess` is the single decision
+       * every route and every claim resolves through, and `bins/routing.ts` is
+       * what stops one workload being handed another's work. A diff here is a
+       * diff in the thing that would have refused it.
+       */
+      'server/services/identity/**',
+      'server/services/bins/routing.ts',
+      /* The envelopes Russell spends inside. Same rule, different spender. */
+      'server/services/russell/probeEnvelope.ts',
+      'server/services/research/approvalEnvelope.ts',
+      /*
+       * Everything that decides what reaches production. `.github/workflows/
+       * deploy*` is already universal; the whole directory is forbidden here
+       * because §28's own lesson is that a *second* workflow running `flyctl
+       * deploy` is how the guard gets bypassed — and a new file is not matched
+       * by a pattern naming the old one.
+       */
+      '.github/workflows/**',
+      '.github/CANONICAL_BRANCH',
+      'fly.toml',
+      'Dockerfile',
+    ],
     mayOpenPullRequest: true,
   },
 ];

@@ -9,9 +9,14 @@ Read once before starting:
 
 * **Step 2 must happen in the same browser as step 3, and before it.** That is
   the only ordering here that cannot be recovered from by trying again.
-* **This connects a surface. It does not start any work.** There is currently no
-  authorized target repository, so when the steps are finished the fleet is ready
-  and idle. Naming a target is a separate decision and it is yours.
+* **This connects a surface. It does not start any work.** When the steps are
+  finished the fleet is ready and idle; a campaign begins only when somebody
+  submits an objective and approves it.
+* **There is an authorized target you can use without choosing one:
+  Brain itself.** The envelope grants `brain` (`Peyday007/V5`), so if you would
+  rather not settle a site's repository arrangement yet, run these steps against
+  it and the first real campaign can be a change to Brain. The alternative,
+  a site, is the same seven steps with a different grant.
 
 ---
 
@@ -360,21 +365,31 @@ Fix it by editing the Routine's connector selection in Cowork and probing again.
 
 ## What the envelope does and does not settle
 
-`services/factory/repositoryEnvelope.ts` holds one entry. Two absences from it
-are absences for different reasons, and they are not the same kind of fact:
+`services/factory/repositoryEnvelope.ts` holds two entries, and one absence.
+They are three different kinds of fact:
 
+* **`brain-worker-bootstrap`** is the proving ground: a checkout with no
+  application code, no project data and no credentials in it.
+* **`brain` (`Peyday007/V5`) is authorized on your decision.** It was absent
+  before, on my engineering judgment rather than yours — commit `7e96b5f`, with
+  the reasoning that a campaign which could rewrite the machinery executing it is
+  the one failure mode declining a pull request does not contain. You have since
+  named Brain as an intended target, improved through isolated branches,
+  independent review and the existing controlled integration process. The
+  reasoning was not discarded: it became a `forbiddenPaths` list, so a campaign
+  in Brain may read but may never *own* the envelope, `projectScope.ts`,
+  `services/identity/**`, `bins/routing.ts`, either approval envelope,
+  `.github/workflows/**`, `CANONICAL_BRANCH`, `fly.toml` or `Dockerfile`. Work
+  still stops at a pull request, review is still independent, the deployment
+  branch policy still refuses every ref but `production`, and you still merge.
 * **`oakwood-junk-removal` is retired by your decision** — recorded in
   `docs/OAKWOOD-RETIREMENT.md` and in two Routines still carrying *"oakwood
   factory proof complete surface out of active dispatch"*. It stays out unless
-  you say otherwise.
-* **`V5` is absent on my engineering judgment, not yours.** It was written into
-  the envelope's comment in commit `7e96b5f` with the reasoning that a campaign
-  which could rewrite the machinery executing it is the one failure mode
-  declining a pull request does not contain. That reasoning is worth keeping and
-  is the default; it is **not** a permanent product restriction and no operator
-  decision stands behind it. Every repository is unauthorized until a reviewed
-  entry says otherwise, `V5` included, and I will not add one — but authorizing
-  it is a decision available to you, not a rule you would be breaking.
+  you say otherwise, and authorizing Brain did not reopen it.
+
+A site of yours — V4, V2 — is not in the envelope yet and needs one reviewed
+entry when you want it there. That entry is the only code change; everything
+after it is rows and account setup.
 
 ## What happens next
 
@@ -388,10 +403,12 @@ person. Nothing about the surface changes.
 If you did them against **the bootstrap checkout**, the fleet is ready and idle,
 and starting real work needs two decisions and a second setup:
 
-1. **Authorize the target** — one entry in
+1. **Authorize the target, if it is not `brain`** — one entry in
    `services/factory/repositoryEnvelope.ts`, a change somebody reviews and
    merges, because nobody supplies the limits their own work is judged against.
-2. **Say what should become true in it** — an objective, approved by a person.
+   `brain` is already there.
+2. **Say what should become true in it** — an objective, approved by a person,
+   in Build or in an ordinary Russell thread.
 
 Then onboard *that* repository in Build, and give it its own connector and
 Routine exactly as in steps 2 to 7 — a second connector, because a connector is

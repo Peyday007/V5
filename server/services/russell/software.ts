@@ -78,7 +78,9 @@ import {
 import { listProjectRepositories } from '../../repos/factory.ts';
 import { listRepositoryGrants } from '../factory/repositoryEnvelope.ts';
 import type { CampaignBriefing } from '../factory/projections.ts';
-import type { RussellSoftwareRequest } from '../../domain/types.ts';
+import { resolveSoftwareTarget } from './softwareTarget.ts';
+import type { TargetDecision } from './softwareTarget.ts';
+import type { Principal, RussellSoftwareRequest } from '../../domain/types.ts';
 
 /* -------------------------------------------------------------------------- */
 /* The gate                                                                    */
@@ -92,11 +94,34 @@ import type { RussellSoftwareRequest } from '../../domain/types.ts';
  * something, in a form addressed to Russell rather than reporting what already
  * happened. "We fixed the header last week" matches nothing, because the word
  * boundary excludes the past tense and nobody is being asked.
+ *
+ * **`improve` was missing, which is the fourth time a list in this codebase has
+ * had the rule right and the alphabet short.** §24 records the first three, all
+ * in `judgment.ts`: every hedged form and not the plain one; then `check` and
+ * `see` and not `establish`, the verb its own stated rule used. Here the owner's
+ * own example — *"Improve this part of the site we're discussing"* — was declined
+ * with "nothing here asks for a change to be made", while *"Add this feature"*
+ * and *"Fix this problem"* were both accepted. Same defect, same remedy: widen
+ * by the verbs that were actually missed and no further, and never reword the
+ * request to fit the list.
+ *
+ * `optimise`/`optimize` join for the reason `determine` joined `establish`: it
+ * is the same ask in the word somebody else would reach for. `faster` joins the
+ * make/get alternation, which already held `work`, `stop` and `load`. The
+ * failure mode is unchanged and is what the tests pin: "we improved it last
+ * week" matches neither, because the word boundary excludes the past tense and
+ * nobody is being asked.
  */
+const EXECUTION_VERBS =
+  'change|fix|add|remove|update|rename|refactor|implement|build|migrate|upgrade|delete|rewrite|replace|improve|optimise|optimize';
+
 const EXECUTION_MARKERS = [
-  /\b(?:please\s+)?(?:go\s+(?:ahead\s+)?(?:and\s+)?)?(?:change|fix|add|remove|update|rename|refactor|implement|build|migrate|upgrade|delete|rewrite|replace)\b/i,
-  /\b(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:change|fix|add|remove|update|rename|refactor|implement|build|migrate|upgrade|delete|rewrite|replace)\b/i,
-  /\b(?:make|get)\s+(?:it|the|this|that)\b.*\b(?:work|stop|start|show|hide|load|render|match)\b/i,
+  new RegExp(
+    `\\b(?:please\\s+)?(?:go\\s+(?:ahead\\s+)?(?:and\\s+)?)?(?:${EXECUTION_VERBS})\\b`,
+    'i',
+  ),
+  new RegExp(`\\b(?:can|could|would|will)\\s+you\\s+(?:please\\s+)?(?:${EXECUTION_VERBS})\\b`, 'i'),
+  /\b(?:make|get)\s+(?:it|the|this|that)\b.*\b(?:work|stop|start|show|hide|load|render|match|faster)\b/i,
   /\bship\s+(?:a|an|the)\b/i,
 ];
 
@@ -161,6 +186,15 @@ export interface CaptureSoftwareOutcome {
   created: boolean;
   /** Why nothing was captured, when nothing was. */
   reason: string;
+  /**
+   * The question to put to the person, when the reason is that Brain will not
+   * guess. Present only for an ambiguity a sentence from them settles.
+   *
+   * `RESOLVED` is excluded by the type rather than by a convention: a resolved
+   * target has nothing to ask, and a field that could hold one would let a
+   * reader print an empty question.
+   */
+  clarify?: Exclude<TargetDecision, { kind: 'RESOLVED' }>;
 }
 
 /**
@@ -181,6 +215,16 @@ export async function captureSoftwareChange(input: {
   title: string;
   objective: string;
   expectedOutcome: string;
+  /**
+   * Who is asking, so a project named in the message can be resolved against
+   * what they may actually read.
+   *
+   * Optional because the ambiguity check only ever *adds* a refusal: a caller
+   * that cannot supply a principal loses a clarification, never a control. The
+   * request is still filed against the conversation's own attachment, which is
+   * the row the authorization comes from.
+   */
+  principal?: Principal;
 }): Promise<CaptureSoftwareOutcome> {
   if (input.askedText === null) {
     /*
@@ -194,6 +238,28 @@ export async function captureSoftwareChange(input: {
   const decision = asksForExecution(input.askedText);
   if (!decision.asks) {
     return { request: null, created: false, reason: decision.reason };
+  }
+
+  /*
+   * Which project this is about, before anything is written.
+   *
+   * A request is filed against a project, and the project decides which
+   * repository and which directories the work may touch — so a request filed
+   * against the wrong one is a change authorized for the wrong code, and it
+   * looks healthy the whole way. When the message names a different project
+   * this person can read, nothing is captured and the answer says what is
+   * ambiguous. See `softwareTarget.ts`, and §25 for the same defect one
+   * altitude away.
+   */
+  if (input.principal) {
+    const target = await resolveSoftwareTarget({
+      principal: input.principal,
+      attachedProjectId: input.projectId,
+      askedText: input.askedText,
+    });
+    if (target.kind !== 'RESOLVED') {
+      return { request: null, created: false, reason: target.kind, clarify: target };
+    }
   }
 
   const objective = input.objective.trim();

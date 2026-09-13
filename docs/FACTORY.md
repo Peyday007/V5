@@ -1033,3 +1033,85 @@ surface, and one boundary row per project — two projects with `sites/v4/**` an
 `sites/v2/**` cannot reach each other's files, and neither needs the other to
 exist. Moving a site from one arrangement to the other is additive and changes no
 campaign, commit, review or row.
+
+### Brain itself, as a target
+
+The envelope grants `brain` — `Peyday007/V5`, this repository — and that is a
+decision the owner made, recorded here rather than presented as though it had
+always been so. The envelope's own header used to say the opposite, and it said
+why: the factory lives in this repository, so a campaign here can reach the
+machinery executing it, and declining a pull request does not *by itself*
+contain that.
+
+The worry has not been waved away; what changed is that it is bounded by rows
+instead of by absence. **A campaign in Brain may not own what authorizes it,
+what bounds it, or what deploys it.** That is `forbiddenPaths`:
+
+| Path | What it holds |
+| --- | --- |
+| `server/services/factory/repositoryEnvelope.ts` | which repositories may be targeted at all |
+| `server/services/factory/projectScope.ts` | which project may change which of them, inside which directories |
+| `server/services/identity/**` | who a principal is and what they may do |
+| `server/services/bins/routing.ts` | which worker may be handed which bin |
+| `server/services/russell/probeEnvelope.ts` | where a probe may look |
+| `server/services/research/approvalEnvelope.ts` | what may start without a person |
+| `.github/workflows/**` | every workflow, not `deploy*` — §28's lesson is that a *second* workflow is how a guard is bypassed |
+| `.github/CANONICAL_BRANCH` | which branch owns production |
+| `fly.toml`, `Dockerfile` | what production runs |
+
+They refuse **ownership**, never reading. A unit may read any of these files and
+a reviewer must; what no unit may do is declare one of them inside its mutation
+surface, and a diff that touched one is rejected whole rather than
+cherry-picked. `UNIVERSAL_FORBIDDEN_PATHS` still applies on top, so `.claude/**`
+is out in every repository rather than per grant.
+
+Everything around it is unchanged and is the actual containment: the campaign
+stops at a pull request and `assemble.ts` will not publish, the review is
+independent by recorded lineage, the deployment branch policy on the
+`production` environment refuses every other ref before a runner is allocated,
+and a person merges. `oakwood-junk-removal` stays retired — a different
+decision, on a standing operator instruction, and not reopened by this one.
+
+### Which project a change is about, when a sentence and a row disagree
+
+A change request is filed against the conversation's project, and that project
+is what resolves the repository and the directories. So filing one against the
+wrong project authorizes a change to the wrong code — and it looks healthy the
+whole way down: a card with a real scope sentence on it, a person authorizing
+it, a campaign running, a worker doing exactly what the contract said somewhere
+nobody meant.
+
+§25 has this defect written down one altitude away, where a compiler read a
+jurisdiction out of prose and produced *"…official Michigan public records … in
+Westbrook, OH"*. `services/russell/softwareTarget.ts` is the same three rules:
+
+- **A row outranks prose.** The conversation's attachment has its own
+  provenance; a name in a sentence does not.
+- **Disagreement is refused, never resolved.** A message naming V4 in a thread
+  attached to something else is genuinely ambiguous — the person may have
+  changed subject or may be mentioning it in passing — so nothing is captured
+  and the answer names both projects.
+- **Not knowing is an answer.** A thread with no project attached cannot resolve
+  a repository, so there is nowhere to file the request.
+
+It can refuse and it can never **redirect**. Naming another project never files
+the request there, however unambiguous the sentence reads, which is the same
+shape `capture`'s `duplicateOf` has: a claim that only ever narrows what
+happens. It reads project rows rather than a list of site names, so a project
+renamed tomorrow is matched tomorrow; it matches on word boundaries, so `rAPId`
+is not `API`; and it never matches a project the asker cannot read, because
+doing so would both disclose that it exists and block their capture on the
+strength of something they cannot act on. A failure to list projects at all
+resolves rather than refusing — this check only ever adds a refusal, so losing
+it loses a clarification rather than a control.
+
+### Onboarding when a target needs it
+
+Asking for a change in a project that has no repository is not an error and does
+not require the portfolio question to be settled first. The ask is written down
+as `PROPOSED` with the sentence naming what is missing and where to fix it, and
+the **same row** becomes authorizable the moment somebody onboards a repository
+— with the reach it has then, read from the boundary row rather than from
+anything stored at capture time. Nothing has to be asked for again. That is the
+promise `rearmSurfaceDeferredIntents` makes one layer down, at the surface a
+person uses.
