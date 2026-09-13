@@ -154,6 +154,26 @@ reset.
 - **Software Factory** — capability preserved, dormant, empty repository
   envelope. Not rebuilt, not restarted, no repository re-attached.
 
+## 5a. What the A–Q reporter establishes, as of 2026-09-13
+
+The status columns above move; the rows do not. This section records where the
+**evidence** for them stands, which is a different question and the one the
+owner rejected an earlier answer to.
+
+Every one of the seventeen scenarios now derives its verdict from conditions it
+declares, and each condition is exercised, refused, deferred to the environment
+that can exercise it, or recorded as waiting on somebody. There is no scenario
+left whose unmet condition is a paragraph. See
+`docs/STEP-12B-GATE-RECONCILIATION.md` for what each gate was missing and what
+it drives instead, and `tests/step12bProduct.test.ts` for the rule pinned in
+both readers.
+
+A checkout run reports **7 PASS · 0 FAIL · 9 PARTIAL · 1 BLOCKED · 0 NOT_RUN**.
+Each PARTIAL names a condition only the deployed Brain's rows can answer, and
+`scripts/step12b-combine.ts` joins two runs **at the condition level** — joining
+verdicts would make PARTIAL agree with PARTIAL and lose the answer. The BLOCKED
+one is the design gate below, and it is the owner's.
+
 ## 6. Design gate
 
 §0.1 and §24 require a recorded visual, mobile and interaction approval before
