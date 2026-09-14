@@ -13,22 +13,29 @@ flag that once let a condition excuse itself from scoring was removed.
 | --- | --- | --- |
 | **O** | the owner's approval of the complete design, bound to a revision and these bytes | the owner |
 | **H** | whether the maps are any good — covered by O | the owner |
-| **D** | an asked lens has been answered by a reader on real work | any reader |
+| **D** | a lens has been asked and answered on the **deployed** Brain's own work | a person there |
 
 **O and H are one decision.** The render set exists and digests consistently;
 the judgement is not a thing any code here may take. Nothing under `scripts/`
 can write that row and `tests/step12bProduct.test.ts` enforces it by refusing
 any import of the writer outside `admin.ts`.
 
-**D is smaller than it looks and is still not ours.** Five lenses are *asked*
-and five are *answered*: which assumptions have nothing supporting them, which
-findings contradict each other, which declared region has no work in it — those
-are rows, and Brain answers them. What adjacent possibility is absent, what
-lesson transfers from another project, what the current map makes impossible to
-see — those need a reader, and **a Brain that filled them in from a template
-would be manufacturing insight**, which is §8's rule at the one altitude where
-breaking it is most tempting. The mechanism is built (`openInquiry`,
-`validateLensReply`); one reply on real work closes the condition.
+**D no longer asks you to manufacture the discovery.** The path is driven end to
+end in every reporter run: a person opens an asked lens, it becomes a bin, a
+worker's reply arrives, `validateLensReply` keeps the finding whose references
+resolve and discards the one with nothing under it, and a person accepts the
+survivor — which is what turns it into a frontier item.
+
+    MISSING_MECHANISM opened by a person, carried by bin bin_88b9263b…
+    answered: 1 kept, 1 discarded
+    finding 0 ACCEPTED by a person → frontier item rfr_ccac926e…
+
+**Nothing there invents a discovery**, which was the reason the condition used
+to be unanswerable — and the reason was about Brain rather than about the path.
+A finding a model invented resolves to no row and is discarded; a surviving one
+is a *proposal* until a person accepts it. What is still open is only the
+production half: whether a lens has been asked and answered on the deployed
+Brain's own work.
 
 ## 2 · Waiting on a deploy of this revision
 
@@ -70,63 +77,112 @@ idea, grant a standing authority, wait. That is refused:
 
 So the mode that answers them **only reads**:
 
-    npx tsx scripts/visual-qa.ts --deployed=https://<brain> \
-      --emit-phone=/tmp/step12b-phone.json /tmp/phone-shots
+    # one of these two, and neither involves typing a password anywhere but the
+    # Brain's own form:
+    npx tsx scripts/visual-qa.ts --deployed=https://<brain> --sign-in \
+      --expect-revision=<sha> --emit-phone=/tmp/step12b-phone.json /tmp/phone-shots
+
+    BRAIN_PHONE_SESSION='<cookie from a browser already signed in>' \
+      npx tsx scripts/visual-qa.ts --deployed=https://<brain> \
+      --expect-revision=<sha> --emit-phone=/tmp/step12b-phone.json /tmp/phone-shots
 
     npm run step12b:acceptance -- --phone /tmp/step12b-phone.json
 
-It signs in, finds a question a person genuinely typed that a worker genuinely
-answered, finds a conclusion a real mission genuinely produced, and reads both
-**on screen at 390px**. It seeds nothing, grants nothing, launches nothing, and
-`visit` — the only way it talks to the Brain after signing in — takes a cookie
-and a route and has no method argument to pass `POST` to. If the Brain holds
-neither thing, it reports that it holds neither. A record written inside this
-repository is refused at both ends.
+It follows **one chain forwards**: a conversation with a `USER` turn and a
+`COMPLETE` reply, the missions whose `conversationId` is that conversation, and
+a conclusion whose `missionId` is one of those. Then it reads each end on screen
+at 390px, by that answer's own words and that conclusion's own statement.
+`SCREEN_STATE` names `SIGNED_OUT`, `LOADING`, `FORBIDDEN`, `ERROR`, `EMPTY` and
+`NOT_RUSSELL`, and **only `READY` may pass**.
+
+It seeds nothing, grants nothing, launches nothing, and makes **no write at
+all** — not even a sign-in. If the Brain holds no such chain, it reports that.
 
 ### The exact request
 
-**One person's sign-in on the deployed Brain**, as `BRAIN_PHONE_EMAIL` and
-`BRAIN_PHONE_PASSWORD`.
+**A person's session on the deployed Brain.** Two ways, and there is
+deliberately no third:
+
+| | |
+| --- | --- |
+| `--sign-in` | opens a **visible** browser at the origin and waits while you sign in to the Brain's own form. This process never sees the credential. |
+| `BRAIN_PHONE_SESSION` | a session cookie from a browser that is already signed in. |
 
 - **Why a person and not a worker.** Every route it reads is behind
   `requirePerson`, and a worker principal is refused at the conversation routes
-  **by principal type** (§24). There is no weaker credential that would do, and
-  the whole point of the two conditions is that *a person can read these answers
-  on their phone*.
-- **What it can do with it.** Read. The read-only guarantee is four tests, not a
-  convention: one write in the whole mode and it is the sign-in; no mutating
-  route named anywhere in it; one `JSON.stringify` body and it is the
-  credentials; and the record's own type carries no password and no cookie.
-- **What it cannot do with it.** Produce the approval render set — `--deployed`
+  **by principal type** (§24). The whole point of the two conditions is that *a
+  person can read these answers on their phone*.
+- **Why no password option.** A harness that took one would mean typing a Brain
+  password into a terminal, a CI secret or a chat window — to mint the same
+  session the two paths above already produce. `BRAIN_PHONE_PASSWORD` is gone,
+  and a test asserts it has not come back.
+- **What it can do with it.** Read. Proved by driving the real mode through a
+  real browser against a real Brain in
+  `tests/deployedPhoneInspection.test.ts` — including a row count identical
+  either side — rather than by reading its source, which is how six defects in
+  the first version went unnoticed.
+- **What it cannot do with it.** Produce the approval render set: `--deployed`
   refuses `--renders` outright, because those images are of *this tree* built
-  here and a deployed Brain is running whatever was last released.
+  here.
 - **If you would rather not.** Both conditions stay open and visible. That is a
   perfectly good outcome and is what this page is for.
 
-## 4 · Waiting on a measurement somebody must authorize
+## 4 · Waiting on a decision, not on a permission
 
 | | condition |
 | --- | --- |
 | **G** | how much a real Cowork surface holds |
 
-Every Capability Lab result carries `PROVIDER_UNTESTED`, honestly. Measuring it
-means putting real pressure on a fleet serving real research, against a ceiling
-nobody set, and §29 is explicit that the two tempting alternatives are both
-refused: simulating it produces figures a reader cannot tell from measurements,
-and running it unattended spends real capacity. **The mechanism is complete and
-the measurement is not taken**, which is the honest report.
+Every Capability Lab result carries `PROVIDER_UNTESTED`, honestly. The old text
+here said the ceiling was "one nobody set" — **true, and the thing to fix.** It
+is set now, in code, at `server/services/fleet/measurementEnvelope.ts`:
 
-## 5 · Refused by design, and correctly
+| | |
+| --- | --- |
+| capacity | **10 concurrent bins** — Step 10's own recommended operating ceiling, not a guess. Rungs 1–20 completed every bin; rung 30 had every dispatch refused. |
+| activations | **40**, four per bin at the ceiling. Reaching it is a stop condition, never a reason to raise it. |
+| duration | **30 minutes** — half a connector token's life, so a second session can appear; short enough that an unwatched run cannot still be going at end of day. |
+| paid API | **$0**, and not a number this file chooses: the deployed Brain has no `ANTHROPIC_API_KEY` and no `BRAIN_PROVIDER`, and the standing authority already forbids turning paid usage on. |
+| stop conditions | five, named |
+| cleanup | every bin cancelled and its fencing generation advanced; the isolated scope keeps its rows, because they *are* the measurement |
+| rollback | no fleet policy is applied at all, so there is nothing to undo |
+| work | **synthetic** — a capacity measurement needs real activations, not real questions |
+
+**The authorization was never missing, and checking first is why that is worth
+saying.** `POST /projects/:id/lab/:experimentId/run` already requires a person
+at `OPERATOR` depth sending `authorizePressure: true`, read from the route
+rather than from the experiment's own row. **No new approval is requested
+here.** What is absent is a person deciding to spend forty activations on it —
+a decision, not a permission.
+
+A run that widened its own ceiling is refused by name and is not that
+measurement:
+
+    ceiling 40 is above the declared 10; REAL_CANARY is not SYNTHETIC;
+    stop condition missing: …
+
+## 5 · A correction: controlled canaries are allowed
 
 | | condition |
 | --- | --- |
-| **Q** | the same canary cycle against the deployed fleet |
+| **Q** | a canary ran against the deployed fleet, in an isolated scope, and rolled back |
+| **Q** | and left the deployed fleet running on a policy that is not the canary |
+| **Q** | and nothing it did reached what the project believes |
 
-A canary displaces a policy version somebody is actually running on. A reporter
-that drove one against the live fleet would be **the contamination R5 forbids,
-committed by the thing checking for it.** The cycle is driven both ways round
-against real `fleet_policy` rows in an isolated scope, which is the strongest
-form of it that does not corrupt what it measures.
+This page used to say a canary against the live fleet "would be the
+contamination R5 forbids, committed by the thing checking for it". **That is
+wrong as stated and the correction is recorded rather than quietly applied.** A
+controlled canary inside an isolated scope, with a declared rollback and a
+recorded restore, is exactly what the Lab is for: the cycle applies, retests,
+compares and rolls back, and every version stays in the history so a rollback is
+a write forward rather than a delete.
+
+Contamination is a canary that **changes what ordinary work is eligible for**,
+or that **leaves its own number live**. Those are the two things the conditions
+now ask, of rows, plus a third — that the scope it ran in holds no knowledge.
+
+The reporter still only *reads* them. Choosing what the fleet runs on is a
+person's decision through `applyFinding`, however safe the cycle is.
 
 ## 6 · Closed this round, and what the evidence for each actually is
 
