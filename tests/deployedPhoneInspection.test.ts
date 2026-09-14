@@ -41,6 +41,20 @@ const PASSWORD = 'phone-inspection-pass-1';
 const ANSWER = 'The register of deeds confirmed the fee is nineteen dollars per instrument.';
 const CONCLUSION = 'Washtenaw County charges $19 for the first page of a recorded instrument.';
 
+/** The same chain, in a project that is not the first one this person can read. */
+const SECOND_ANSWER = 'Livingston County records a deed for fifteen dollars per instrument.';
+const SECOND_CONCLUSION = 'Livingston County charges $15 for the first page of a recorded instrument.';
+
+/**
+ * The same chain again, written the way stored prose actually arrives: a line
+ * break, a run of spaces, and a non-breaking space before a unit. None of it
+ * survives to the rendered page as typed.
+ */
+const MULTILINE_ANSWER =
+  'The clerk confirmed the schedule:\n\n  - first page  $19\n  - each additional page\u00a0$3';
+const MULTILINE_CONCLUSION =
+  'The recording schedule is $19 for the first page\nand $3\u00a0for each page after it.';
+
 let server: ChildProcessByStdio<null, Readable, Readable>;
 let dataDir = '';
 let log = '';
@@ -367,6 +381,108 @@ describe('the deployed phone inspection, driven for real', () => {
     expect(record['findings']).toEqual([]);
     expect(fs.existsSync(path.join(outDir, 'deployed-01-the-answer.png'))).toBe(true);
     expect(fs.existsSync(path.join(outDir, 'deployed-02-the-result.png'))).toBe(true);
+  }, 300_000);
+
+  /*
+   * The chain in a project that is not the first one.
+   *
+   * The shell used to render `projects[0]` on every screen while this
+   * inspection followed a conversation from *any* project — so a chain in a
+   * second project produced an answer read on screen and a conclusion that was
+   * not, because Knows was showing somebody else's project. The shell now takes
+   * the project from the open conversation's own attachment, and this arrives at
+   * Knows by pressing it from the thread rather than by reloading the address.
+   */
+  it('reads a chain that lives in a second project, not the first', async () => {
+    const created = await seed(`
+      const { createProject } = await import(${JSON.stringify(path.join(REPO_ROOT, 'server/repos/projects.ts'))});
+      const { listUsers, grantMembership } = await import(${JSON.stringify(path.join(REPO_ROOT, 'server/repos/identity.ts'))});
+      const { createConversation, addMessage } = await import(${JSON.stringify(path.join(REPO_ROOT, 'server/repos/russellConversations.ts'))});
+      const { launchMission, recordKnowledge } = await import(${JSON.stringify(path.join(REPO_ROOT, 'server/repos/russellMissions.ts'))});
+      const person = (await listUsers())[0];
+      const second = await createProject({ name: 'Second Project', slug: 'second-project' });
+      await grantMembership({
+        projectId: second.id, principalType: 'USER', principalId: person.id,
+        role: 'OWNER', grantedByType: 'SYSTEM', grantedById: 'test',
+      });
+      const thread = await createConversation({
+        ownerUserId: person.id, title: 'In the second project', visibility: 'SHARED', projectId: second.id,
+      });
+      await addMessage({ conversationId: thread.id, role: 'USER', content: 'What does the second county charge?', authorUserId: person.id });
+      await addMessage({ conversationId: thread.id, role: 'RUSSELL', content: ${JSON.stringify(SECOND_ANSWER)}, status: 'COMPLETE' });
+      const mission = await launchMission({
+        projectId: second.id, visibility: 'SHARED', objective: 'Establish the second fee',
+        whyNow: 'a person asked', idempotencyKey: 'phone-test-second', conversationId: thread.id,
+      });
+      await recordKnowledge({
+        projectId: second.id, visibility: 'SHARED', kind: 'CONCLUSION',
+        statement: ${JSON.stringify(SECOND_CONCLUSION)}, provenance: { documentId: 'doc_second', auditId: 'aud_second' },
+        authorType: 'RUSSELL', confidence: 'ESTABLISHED', missionId: mission.mission.id, conversationId: thread.id,
+      });
+      console.log(thread.id + ' ' + second.id);
+    `);
+    const [threadId, secondProjectId] = (created.split('\n').pop() ?? '').split(' ');
+    expect(secondProjectId).not.toBe(projectId);
+
+    const run = await inspect();
+    const record = run.record!;
+    const answered = record['answeredQuestion'] as Record<string, unknown>;
+    const result = record['missionLinkedResult'] as Record<string, unknown>;
+
+    expect(answered['conversationId']).toBe(threadId);
+    expect(answered['readOnScreen']).toBe(true);
+    // The half that used to fail: Knows showed the *first* project.
+    expect(result['found']).toBe(true);
+    expect(result['screenSaw']).toMatch(/^READY:/);
+    expect(result['readOnScreen']).toBe(true);
+    expect(record['findings']).toEqual([]);
+  }, 300_000);
+
+  /*
+   * An answer and a conclusion that do not survive a byte comparison.
+   *
+   * A stored statement and the paragraph rendering it are the same words and
+   * routinely not the same bytes. The page's text was collapsed and the needle
+   * was not, so anything carrying a newline, a double space or a non-breaking
+   * space could never be found however plainly it was displayed — and the
+   * record said "not on screen" about something on the screen, which is the
+   * expensive direction of wrong.
+   */
+  it('finds an answer and a conclusion whose whitespace the page does not preserve', async () => {
+    const created = await seed(`
+      const { listProjects } = await import(${JSON.stringify(path.join(REPO_ROOT, 'server/repos/projects.ts'))});
+      const { listUsers } = await import(${JSON.stringify(path.join(REPO_ROOT, 'server/repos/identity.ts'))});
+      const { createConversation, addMessage } = await import(${JSON.stringify(path.join(REPO_ROOT, 'server/repos/russellConversations.ts'))});
+      const { launchMission, recordKnowledge } = await import(${JSON.stringify(path.join(REPO_ROOT, 'server/repos/russellMissions.ts'))});
+      const project = (await listProjects())[0];
+      const person = (await listUsers())[0];
+      const thread = await createConversation({
+        ownerUserId: person.id, title: 'Across several lines', visibility: 'SHARED', projectId: project.id,
+      });
+      await addMessage({ conversationId: thread.id, role: 'USER', content: 'Break this over lines, please.', authorUserId: person.id });
+      await addMessage({ conversationId: thread.id, role: 'RUSSELL', content: ${JSON.stringify(MULTILINE_ANSWER)}, status: 'COMPLETE' });
+      const mission = await launchMission({
+        projectId: project.id, visibility: 'SHARED', objective: 'Establish it across lines',
+        whyNow: 'a person asked', idempotencyKey: 'phone-test-multiline', conversationId: thread.id,
+      });
+      await recordKnowledge({
+        projectId: project.id, visibility: 'SHARED', kind: 'CONCLUSION',
+        statement: ${JSON.stringify(MULTILINE_CONCLUSION)}, provenance: { documentId: 'doc_ml', auditId: 'aud_ml' },
+        authorType: 'RUSSELL', confidence: 'ESTABLISHED', missionId: mission.mission.id, conversationId: thread.id,
+      });
+      console.log(thread.id);
+    `);
+    const threadId = created.split('\n').pop();
+
+    const run = await inspect();
+    const record = run.record!;
+    const answered = record['answeredQuestion'] as Record<string, unknown>;
+    const result = record['missionLinkedResult'] as Record<string, unknown>;
+
+    expect(answered['conversationId']).toBe(threadId);
+    expect(answered['readOnScreen']).toBe(true);
+    expect(result['readOnScreen']).toBe(true);
+    expect(record['findings']).toEqual([]);
   }, 300_000);
 
   it('reports a login screen as a login screen rather than passing on it', async () => {

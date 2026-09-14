@@ -54,6 +54,7 @@ which compares it **exactly** to the revision the container reports for itself.
 
 | | condition |
 | --- | --- |
+| **J** | the attached phone reading is of this Brain, at this revision, and does not contradict itself |
 | **J** | the question a person typed was answered rather than left waiting |
 | **J** | and its result was inspected there — a conclusion under Knows citing that mission |
 
@@ -95,6 +96,33 @@ at 390px, by that answer's own words and that conclusion's own statement.
 `SCREEN_STATE` names `SIGNED_OUT`, `LOADING`, `FORBIDDEN`, `ERROR`, `EMPTY` and
 `NOT_RUSSELL`, and **only `READY` may pass**.
 
+Three things about *how* it reads were wrong and are corrected rather than
+quietly applied:
+
+- **Knows is reached by pressing it from the thread, not by loading the
+  address.** The shell renders the project the open conversation is attached
+  to — which, until this round, it did not: it rendered `projects[0]`, so a
+  person reading a thread about one project and tapping Knows was shown
+  another's, silently. A reading that reloaded `/knowledge` directly landed on
+  a fresh shell's project, and a conclusion missing from *that* project's list
+  was reported as a conclusion missing from the screen.
+- **Whitespace is normalized on both sides.** The page's own text was collapsed
+  and the needle was not, so a statement carrying a newline, a run of spaces or
+  a non-breaking space — which stored prose and rendered paragraphs both
+  routinely do — could never be found however plainly it was displayed. A
+  reading that says "not on screen" about something on the screen is the
+  expensive direction of wrong: somebody spends an hour on a defect that is not
+  there.
+- **The record the reporter reads is validated rather than cast.** It was
+  `JSON.parse(...) as DeployedPhoneRecord`, which is not a check: any JSON
+  object became a record, a reading of somebody else's deployment was read as
+  evidence about this one, a `revisionMatches: true` beside two revisions that
+  differ was believed, and findings the harness itself recorded were never
+  consulted. `scripts/phoneRecord.ts` is one definition and one validator,
+  imported by the harness that writes the record and by the reporter that reads
+  it, judged against the Brain this tree deploys (read from `fly.toml`, never
+  from the attachment) and the revision being judged.
+
 It seeds nothing, grants nothing, launches nothing, and makes **no write at
 all** — not even a sign-in. If the Brain holds no such chain, it reports that.
 
@@ -120,7 +148,10 @@ deliberately no third:
   real browser against a real Brain in
   `tests/deployedPhoneInspection.test.ts` — including a row count identical
   either side — rather than by reading its source, which is how six defects in
-  the first version went unnoticed.
+  the first version went unnoticed. It now also drives a chain in a **second
+  project** and one whose answer and conclusion carry line breaks and a
+  non-breaking space; both fail against the previous build, which is what makes
+  them evidence. `tests/phoneRecord.test.ts` covers the invalid records.
 - **What it cannot do with it.** Produce the approval render set: `--deployed`
   refuses `--renders` outright, because those images are of *this tree* built
   here.
@@ -148,25 +179,74 @@ is set now, in code, at `server/services/fleet/measurementEnvelope.ts`:
 | rollback | no fleet policy is applied at all, so there is nothing to undo |
 | work | **synthetic** — a capacity measurement needs real activations, not real questions |
 
-**The authorization was never missing, and checking first is why that is worth
-saying.** `POST /projects/:id/lab/:experimentId/run` already requires a person
-at `OPERATOR` depth sending `authorizePressure: true`, read from the route
-rather than from the experiment's own row. **No new approval is requested
-here.** What is absent is a person deciding to spend forty activations on it —
-a decision, not a permission.
-
 A run that widened its own ceiling is refused by name and is not that
 measurement:
 
     ceiling 40 is above the declared 10; REAL_CANARY is not SYNTHETIC;
     stop condition missing: …
 
+### The envelope was all there was, and this gate accepted it
+
+**The correction is recorded rather than quietly applied.** With only the
+envelope declared, G asked for an experiment that was `COMPLETE`, in a
+`TECHNICAL` scope, whose stored bounds matched the ones above — and **every one
+of those is satisfiable with zero worker execution.** A `HEALTH_CHECK` declared
+through the ordinary Lab routes with that manifest reads rows, finishes in
+milliseconds, fires nothing, and would have answered *"how much a real Cowork
+surface holds"*.
+
+An envelope is a bound on a measurement, never a measurement. What G reads now
+is evidence only a fire can produce, correlated to the experiment's own bins by
+a key on their manifest:
+
+    bins carrying this experiment's id
+      → `bin_dispatch` rows Brain marked SENT, each naming a provider session
+        Brain did not choose
+      → `worker_sessions` arrivals, attributed from those same dispatch rows
+        rather than from anything a worker said about itself
+      → bins that reached COMPLETE
+
+`server/services/fleet/capacityMeasurement.ts` is both halves: the runner that
+creates the bins, and the reading that correlates them back. The limits are
+enforced **while it runs** — `enforceCapacityLimits` is the first thing the
+dispatch tick does, before the re-arm and before any further intent is created,
+so a run that has reached forty activations cannot buy a forty-first. Stopping
+one cancels every outstanding bin, which advances its fencing generation, so a
+late completion from a worker still holding one matches nothing.
+
+`tests/capacityMeasurement.test.ts` drives both negative cases rather than
+asserting them: a health check with the identical manifest and envelope
+correlates to **0 bins, 0 activations, 0 arrivals, 0 completions**, and an
+in-process queue exercise — a real claim, a real lease, a real completion
+against the deployed queue code — produces no `bin_dispatch` row marked SENT,
+because nothing left the process.
+
+### And now the decision
+
+**This is the part that had to come last.** An earlier version of this page said
+*"the authorization was never missing"*, because
+`POST /projects/:id/lab/:experimentId/run` requires a person at `OPERATOR` depth
+sending `authorizePressure: true`. That over-claimed: a route that **can** carry
+an authorization is not an authorization. It says such a decision is possible
+and says nothing about whether this measurement was approved — and until the
+executable path existed there was nothing coherent to approve.
+
+There is now. The request is **one bounded run inside the envelope above** —
+ten bins, at most forty activations, thirty minutes, synthetic work, $0 paid,
+in the isolated `TECHNICAL` scope, with every outstanding bin cancelled when it
+stops. Nothing else changes: no fleet policy is applied, no research is started,
+no evidence bar moves, and the standing authority, the concurrency of 1 and the
+$0 paid-API ceiling are untouched.
+
+It is a **decision rather than a permission**, and it is not taken here.
+
 ## 5 · A correction: controlled canaries are allowed
 
 | | condition |
 | --- | --- |
 | **Q** | a canary ran against the deployed fleet, in an isolated scope, and rolled back |
-| **Q** | and left the deployed fleet running on a policy that is not the canary |
+| **Q** | and the fleet is running on the setting that canary displaced, not merely on a newer row |
+| **Q** | and the cycle it is part of retested under the canary and compared |
 | **Q** | and nothing it did reached what the project believes |
 
 This page used to say a canary against the live fleet "would be the
@@ -183,6 +263,37 @@ now ask, of rows, plus a third — that the scope it ran in holds no knowledge.
 
 The reporter still only *reads* them. Choosing what the fleet runs on is a
 person's decision through `applyFinding`, however safe the cycle is.
+
+### Restoration is a value, and this gate compared an id
+
+**A second correction, recorded rather than quietly applied.** The middle
+condition used to read *"a policy that is not the canary"*, and it was decided
+by comparing the live policy's **id** to the canary's. A rollback writes forward
+rather than deleting (§29), so the row after a canary *always* has a different
+id — including a row that kept the canary's own number. A different id is
+evidence that something was written and no evidence at all that anything was
+restored.
+
+`restorationOf` in `server/services/fleet/lab.ts` is the rule, and it sits
+beside `rollbackFinding` rather than in the reporter so the transition and the
+reading of it cannot disagree about what "restored" means. The live policy must
+be a **newer row than the canary** *and* carry the target the canary displaced —
+which `applyFinding` recorded before it replaced anything. Both cases are asked,
+because they have different right answers:
+
+| the canary ran over | a rollback must leave |
+| --- | --- |
+| a real policy | that policy's own target |
+| no policy at all | the dispatcher default (`DEFAULT_TARGET_WITH_NO_PRIOR_POLICY`), never the canary's number |
+
+A newer row carrying the canary's value is refused **by name**, so it cannot
+read as a near miss:
+
+    the live policy is newer but still carries the canary's own target 12,
+    not the displaced 4
+
+And an unrelated policy row that happens to hold the right number cannot stand
+in for the rollback either: it fails on the version, not on the value.
 
 ## 6 · Closed this round, and what the evidence for each actually is
 

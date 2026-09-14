@@ -36,6 +36,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { pickPort } from '../tests/helpers/ports.ts';
+import type { DeployedPhoneRecord } from './phoneRecord.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 /*
@@ -513,6 +514,29 @@ interface JourneyStep {
   patience?: number;
   /** Read back after, so the evidence is a change rather than a press. */
   read?: string;
+}
+
+/**
+ * One whitespace rule, applied to both sides of every on-screen comparison.
+ *
+ * A stored statement and the paragraph rendering it are the *same words* and
+ * routinely not the same bytes: a newline becomes a space, two spaces become
+ * one, and the browser's own `innerText` introduces non-breaking spaces and
+ * narrow no-break spaces around punctuation. The first version collapsed only
+ * the page and compared it against a raw needle, so any statement carrying a
+ * line break could never be found however plainly it was displayed — and the
+ * reading said "not on screen" about something on the screen, which sends
+ * somebody looking for a defect that is not there.
+ *
+ * Kept as one expression and one function so the two can never drift: the
+ * string below is what runs in the page, and `normalizeText` is the identical
+ * rule applied here to the needle.
+ */
+const NORMALIZED_PAGE_TEXT =
+  "document.body.innerText.replace(/[\\u00a0\\u202f\\u2007]/g, ' ').replace(/\\s+/g, ' ').trim()";
+
+function normalizeText(value: string): string {
+  return value.replace(/[\u00a0\u202f\u2007]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 /** Press a thumb-bar cell by the label a person reads on it. */
@@ -1113,47 +1137,13 @@ function validDeployedOrigin(value: string): boolean {
   return /^https:\/\/[^/]+$/.test(value) || /^http:\/\/127\.0\.0\.1:\d+$/.test(value);
 }
 
-interface DeployedPhoneRecord {
-  /** The origin inspected. Never a credential, and never a path. */
-  brain: string;
-  inspectedAt: string;
-  /**
-   * The revision the deployed Brain reports for **itself**, from the
-   * authenticated `/api/health`. `null` when this person is not a Brain
-   * administrator there, or when nothing stamped the build — and a null is
-   * reported as a null rather than filled in from anywhere else, because a
-   * reading that cannot name its revision must be refused rather than trusted.
-   */
-  deployedRevision: string | null;
-  /** What the caller said this reading is *for*, so a mismatch is visible. */
-  expectedRevision: string | null;
-  revisionMatches: boolean | null;
-  /** Did a question a person typed get a completed answer, readable on screen? */
-  answeredQuestion: {
-    found: boolean;
-    status: string | null;
-    conversationId: string | null;
-    /** The first words of the answer, which is what the screen check looks for. */
-    excerpt: string | null;
-    readOnScreen: boolean;
-    screenSaw: string | null;
-  };
-  /** Was the work *that conversation caused* readable as a conclusion? */
-  missionLinkedResult: {
-    found: boolean;
-    /** The mission, resolved from the conversation rather than found loose. */
-    missionId: string | null;
-    missionFromConversation: boolean;
-    knowledgeId: string | null;
-    statement: string | null;
-    citesDocument: boolean;
-    citesAudit: boolean;
-    readOnScreen: boolean;
-    screenSaw: string | null;
-  };
-  screenshots: string[];
-  findings: string[];
-}
+/*
+ * The record's shape lives in `phoneRecord.ts`, imported rather than restated.
+ *
+ * It was declared here and again in `step12b-acceptance.ts`, and the reader
+ * validated none of it — so the two could disagree about what a reading is and
+ * nothing would say so. One definition, one validator, both imported.
+ */
 
 /**
  * The only way this mode talks to the Brain, and it cannot be persuaded to
@@ -1487,18 +1477,40 @@ async function inspectDeployed(options: Options): Promise<void> {
       mobile: true,
     });
 
+    /*
+     * Read a screen, and say whether the words that should be on it are.
+     *
+     * `arrive` is how the screen is reached, because **how** matters here. A
+     * full page load is right for the first address and wrong for the second:
+     * the shell decides which project Knows is about from the thread it is
+     * currently in, so reloading `/knowledge` directly lands on whichever
+     * thread a fresh shell opens — which is not the one this reading followed
+     * to a mission. Pressing the rail is the same move a person makes, and it
+     * keeps the thread.
+     */
     const look = async (
-      route: string,
+      arrive: () => Promise<void>,
       needle: string,
       file: string,
     ): Promise<{ state: string; sawIt: boolean; saw: string }> => {
-      await cdp.send('Page.navigate', { url: `${BASE}${route}` });
+      await arrive();
       await waitFor(cdp, `${SCREEN_STATE} !== 'LOADING'`, 20_000);
       await sleep(1200);
       const state = (await evaluate(cdp, SCREEN_STATE)) as string;
+      /*
+       * Whitespace normalized on **both** sides.
+       *
+       * The page's own text was collapsed and the needle was not, so a
+       * statement carrying a newline, a double space or a non-breaking space —
+       * which a stored statement and a rendered paragraph both routinely do —
+       * could never be found however plainly it was on the screen. A reading
+       * that says "not on screen" about text that is on the screen is the
+       * expensive direction of wrong: somebody goes looking for a defect that
+       * is not there.
+       */
       const sawIt = (await evaluate(
         cdp,
-        `document.body.innerText.replace(/\\s+/g, ' ').includes(${JSON.stringify(needle)})`,
+        `${NORMALIZED_PAGE_TEXT}.includes(${JSON.stringify(normalizeText(needle))})`,
       )) as boolean;
       const shot = (await cdp.send('Page.captureScreenshot', {
         format: 'png',
@@ -1506,16 +1518,14 @@ async function inspectDeployed(options: Options): Promise<void> {
       })) as { data: string };
       fs.writeFileSync(path.join(options.outputDir, file), Buffer.from(shot.data, 'base64'));
       screenshots.push(file);
-      const saw = (await evaluate(
-        cdp,
-        "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 120)",
-      )) as string;
+      const saw = (await evaluate(cdp, `${NORMALIZED_PAGE_TEXT}.slice(0, 120)`)) as string;
       return { state, sawIt, saw };
     };
 
     if (answered.conversationId && answered.excerpt) {
+      const thread = answered.conversationId;
       const seen = await look(
-        `/conversation/${answered.conversationId}`,
+        () => cdp.send('Page.navigate', { url: `${BASE}/conversation/${thread}` }).then(() => undefined),
         answered.excerpt,
         'deployed-01-the-answer.png',
       );
@@ -1530,7 +1540,22 @@ async function inspectDeployed(options: Options): Promise<void> {
     }
 
     if (result.statement) {
-      const seen = await look('/knowledge', result.statement.slice(0, 60), 'deployed-02-the-result.png');
+      /*
+       * Reached by pressing Knows from the thread, not by loading /knowledge.
+       *
+       * The shell shows the project the open conversation is attached to, so
+       * arriving from this thread is what makes the conclusion the one this
+       * reading followed. A direct load would show a fresh shell's project,
+       * and a conclusion missing from *that* project's list would be reported
+       * as a conclusion missing from the screen.
+       */
+      const seen = await look(async () => {
+        const pressed = (await evaluate(cdp, railPress('Knows'))) as boolean;
+        if (!pressed) {
+          findings.push('the Knows control was not on the screen to press from the thread');
+          await cdp.send('Page.navigate', { url: `${BASE}/knowledge` });
+        }
+      }, result.statement.slice(0, 60), 'deployed-02-the-result.png');
       result.readOnScreen = seen.state === 'READY' && seen.sawIt;
       result.screenSaw = `${seen.state}: ${seen.saw}`;
       if (!result.readOnScreen) {

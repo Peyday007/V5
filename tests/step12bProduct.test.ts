@@ -61,6 +61,8 @@ import {
   applyFinding,
   checkEnvelope,
   declareExperiment,
+  getExperiment,
+  restorationOf,
   rollbackFinding,
   runExperiment,
   stalenessOf,
@@ -1301,7 +1303,146 @@ describe('the Capability Lab is bounded before it runs', () => {
     expect(history.length).toBeGreaterThanOrEqual(2);
     expect(history[0]?.reason).toMatch(/Rolled back/);
   });
+
+  /* ------------------------------------------------------------------ *
+   * Restoration is a value, not a newer id
+   * ------------------------------------------------------------------ */
+
+  /**
+   * The defect these are written from: the acceptance reading asked whether
+   * the live policy's **id** differed from the canary's. A rollback writes
+   * forward, so the row after a canary always has a different id — including a
+   * row that kept the canary's own number. `restorationOf` is the one reader
+   * both the transition and the reporter use, so the two cannot disagree about
+   * what "restored" means.
+   */
+  it('restores the displaced target when the canary ran over a real policy', async () => {
+    await setPolicy({ scope: 'FLEET', target: 6, actor: 'A person', reason: 'what the fleet runs on' });
+    const experiment = await completedCalibration('Over a real policy');
+
+    const applied = await applyFinding({
+      experimentId: experiment.id,
+      target: 9,
+      actor: 'A person',
+      reason: 'try more',
+    });
+    // Recorded before it was replaced, which is what makes the rollback
+    // answerable at all.
+    expect(applied.displacedTarget).toBe(6);
+
+    const canary = (await policyHistory('FLEET', null, 10))[0]!;
+    await rollbackFinding({ experimentId: experiment.id, actor: 'A person', reason: 'enough' });
+    const live = (await policyHistory('FLEET', null, 10))[0]!;
+
+    const verdict = restorationOf({
+      rolledBackAt: (await getExperiment(experiment.id))!.rolledBackAt,
+      displacedTarget: 6,
+      canary: { target: canary.target, version: canary.version },
+      live: { target: live.target, version: live.version },
+    });
+    expect(verdict).toEqual({ restored: true, expected: 6 });
+  });
+
+  it('restores the dispatcher default when the canary displaced no policy at all', async () => {
+    // No prior policy: "nothing" has to mean something concrete, and the
+    // canary's own number is the one thing it must not mean.
+    expect(await currentPolicy('FLEET', null)).toBeNull();
+    const experiment = await completedCalibration('Over an empty history');
+
+    const applied = await applyFinding({
+      experimentId: experiment.id,
+      target: 7,
+      actor: 'A person',
+      reason: 'first ever setting',
+    });
+    expect(applied.displacedTarget).toBeNull();
+
+    const canary = (await policyHistory('FLEET', null, 10))[0]!;
+    await rollbackFinding({ experimentId: experiment.id, actor: 'A person', reason: 'undo' });
+    const live = (await policyHistory('FLEET', null, 10))[0]!;
+    expect(live.target).toBe(DEFAULT_TARGET_WITH_NO_PRIOR_POLICY);
+
+    expect(
+      restorationOf({
+        rolledBackAt: (await getExperiment(experiment.id))!.rolledBackAt,
+        displacedTarget: null,
+        canary: { target: canary.target, version: canary.version },
+        live: { target: live.target, version: live.version },
+      }),
+    ).toEqual({ restored: true, expected: DEFAULT_TARGET_WITH_NO_PRIOR_POLICY });
+  });
+
+  it('refuses a newer row that kept the canary\'s own target, and names that exactly', () => {
+    const verdict = restorationOf({
+      rolledBackAt: '2026-09-14T00:00:00.000Z',
+      displacedTarget: 6,
+      canary: { target: 9, version: 4 },
+      // Newer — so an id comparison passes — and carrying the canary's number.
+      live: { target: 9, version: 5 },
+    });
+    expect(verdict.restored).toBe(false);
+    if (!verdict.restored) {
+      expect(verdict.reason).toMatch(/still carries the canary's own target 9, not the displaced 6/);
+    }
+  });
+
+  it('refuses a newer row that kept the canary value over an empty history too', () => {
+    const verdict = restorationOf({
+      rolledBackAt: '2026-09-14T00:00:00.000Z',
+      displacedTarget: null,
+      canary: { target: 7, version: 1 },
+      live: { target: 7, version: 2 },
+    });
+    expect(verdict.restored).toBe(false);
+    if (!verdict.restored) expect(verdict.expected).toBe(DEFAULT_TARGET_WITH_NO_PRIOR_POLICY);
+  });
+
+  it('refuses an unrelated policy row standing in for the rollback', () => {
+    // The right value, on a row that predates the canary: somebody else's
+    // setting from before, which is not this canary being undone.
+    const verdict = restorationOf({
+      rolledBackAt: '2026-09-14T00:00:00.000Z',
+      displacedTarget: 6,
+      canary: { target: 9, version: 7 },
+      live: { target: 6, version: 5 },
+    });
+    expect(verdict.restored).toBe(false);
+    if (!verdict.restored) expect(verdict.reason).toMatch(/not newer than the canary's 7/);
+  });
+
+  it('refuses an experiment that has not been rolled back, whatever the fleet is running on', () => {
+    const verdict = restorationOf({
+      rolledBackAt: null,
+      displacedTarget: 6,
+      canary: { target: 9, version: 4 },
+      live: { target: 6, version: 5 },
+    });
+    expect(verdict.restored).toBe(false);
+    if (!verdict.restored) expect(verdict.reason).toMatch(/has not been rolled back/);
+  });
 });
+
+/** A completed ledger reading, which is what a canary is applied from. */
+async function completedCalibration(title: string) {
+  const declared = await declareExperiment({
+    projectId: project.id,
+    mode: 'CALIBRATION',
+    title,
+    envelope: {
+      ceiling: 0,
+      durationMinutes: 0,
+      stopConditions: [],
+      cleanup: 'Nothing is created.',
+      rollback: 'Revert the policy version.',
+      workloadClass: 'RESEARCH',
+      workKind: 'SYNTHETIC',
+    },
+    actor: 'A person',
+  });
+  const ran = await runExperiment({ id: declared.id, pressureAuthorized: false });
+  expect(ran.state).toBe('COMPLETE');
+  return ran;
+}
 
 /* ==========================================================================
  * Maps
@@ -3317,13 +3458,42 @@ describe('the deployed phone inspection reads and never writes', () => {
   });
 
   it('binds a reading to the deployment it is evidence about', () => {
-    expect(reporter).toContain('function phoneReadingIsAboutThisRun');
-    expect(reporter).toContain("record.deployedRevision === revisionOf().revision");
+    /*
+     * This named a reporter-local `phoneReadingIsAboutThisRun`, which checked
+     * one thing — the revision — and only at the point the conditions were
+     * built, after the file had already been cast to a record. The validation
+     * is a module now (`scripts/phoneRecord.ts`), shared with the harness that
+     * writes the record so the two cannot disagree about what one is, and the
+     * reading is refused at read time rather than judged afterwards.
+     */
+    expect(reporter).toContain("from './phoneRecord.ts'");
+    expect(reporter).toContain('phoneRecordProblems(parsed, {');
+    expect(reporter).toContain('intendedHost: INTENDED_BRAIN_HOST');
+    expect(reporter).toContain('revision: revisionOf().revision');
+    // The intended Brain is a fact in the repository, never a value the
+    // attachment supplies about itself.
+    expect(reporter).toContain("file('fly.toml')");
     // COMPLETE, rather than "not PENDING" — a FAILED reply is an answer that
     // did not happen, and the first version counted one.
     expect(reporter).toContain("answeredQuestion.status === 'COMPLETE'");
     // And the mission must be the one that conversation produced.
     expect(reporter).toContain('missionLinkedResult.missionFromConversation');
+    // Findings the harness recorded are consulted rather than ignored.
+    expect(reporter).toContain('deployedPhone.findings.length === 0');
+  });
+
+  it('validates the record itself, in a suite that can fail', () => {
+    const suite = path.join(repo, 'tests', 'phoneRecord.test.ts');
+    expect(fs.existsSync(suite)).toBe(true);
+    const source = fs.readFileSync(suite, 'utf8');
+    for (const proved of [
+      'refuses a reading of another deployment',
+      'refuses a reading of a different revision of the same Brain',
+      'refuses a flag that says the revisions match when they do not',
+      'refuses everything when the run cannot say what it is judging',
+    ]) {
+      expect(source).toContain(proved);
+    }
   });
 
   it('is proved against the real product rather than against its own source', () => {
@@ -3342,6 +3512,10 @@ describe('the deployed phone inspection reads and never writes', () => {
       'reports a login screen as a login screen rather than passing on it',
       'binds the reading to a revision, and says when it cannot',
       'changes nothing it read',
+      // The project Knows shows is the one the chain selected, not the first
+      // one in the list — and the words are found however the page spaces them.
+      'reads a chain that lives in a second project, not the first',
+      'finds an answer and a conclusion whose whitespace the page does not preserve',
     ]) {
       expect(suite).toContain(proved);
     }
@@ -3440,7 +3614,16 @@ describe('no condition is unmeetable', () => {
      */
     expect(reporter).toContain('**That is wrong as stated, and the correction is recorded');
     expect(reporter).toContain('a canary ran against the deployed fleet, in an isolated scope, and rolled back');
-    expect(reporter).toContain('and left the deployed fleet running on a policy that is not the canary');
+    /*
+     * And the condition after it asks for the *value*, not a different id.
+     * This assertion used to name "a policy that is not the canary", which any
+     * newer row satisfies — including one that kept the canary's own target.
+     */
+    expect(reporter).toContain(
+      'and the fleet is running on the setting that canary displaced, not merely on a newer row',
+    );
+    // Decided by the one reader the rollback itself uses, never re-derived here.
+    expect(reporter).toContain('restorationOf({');
   });
 
   it('leaves no condition that neither an environment nor a person could answer', async () => {
