@@ -24,6 +24,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
+import { createInvitation } from '../server/repos/invitations.ts';
+import { generateInvitationToken } from '../server/services/identity/secrets.ts';
+import { MCP_PATHS } from '../server/mcp/endpoint.ts';
 import { CONNECTOR_SCOPES, WORKER_SCOPES } from '../server/domain/types.ts';
 import type { WorkerScope } from '../server/domain/types.ts';
 
@@ -371,6 +375,150 @@ describe('discovery', () => {
     // would make the flow undiscoverable.
     const reply = await api('GET', '/.well-known/oauth-protected-resource');
     expect(reply.status).toBe(200);
+  });
+});
+
+describe('an invitation in an administrator\u2019s browser', () => {
+  /*
+   * The correction this exists to pin, in one sentence: **a chooser is not
+   * evidence that the invitation link was opened wrongly.**
+   *
+   * `/oauth/authorize` looks for a signed-in administrator *before* it looks
+   * for an invitation, and deliberately so — an invitation stands in for an
+   * administrator's approval, and somebody who already is one has that
+   * authority in their own right. Folding the two together would be the thing
+   * `invitedApproval` warns against, and it would also stop an administrator
+   * connecting a worker their browser happens to hold a stale invitation for.
+   *
+   * The defect was the silence. Onboarding told people a list meant the link
+   * had not been opened in that browser, so the person who had just pressed
+   * Onboard — signed in, by definition — was sent round the flow again looking
+   * for a fault that was not there. The screen now names the held invitation
+   * and preselects its worker, and the instruction says so.
+   *
+   * Two things must stay true, and both are asserted: the invitation is
+   * **display only** on this path, and it is **not spent** by it.
+   */
+  async function inviteCookieFor(
+    worker: string,
+  ): Promise<{ cookie: string; id: string; token: string }> {
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      const admin = await getDb().get<{ id: string }>('SELECT id FROM users WHERE email = ?', [
+        ADMIN_EMAIL,
+      ]);
+      const token = generateInvitationToken();
+      const invitation = await createInvitation({
+        workerId: worker,
+        tokenPrefix: token.prefix,
+        tokenDigest: token.digest,
+        createdByUserId: admin!.id,
+      });
+      return {
+        cookie: `brain_invite=${encodeURIComponent(token.plaintext)}`,
+        id: invitation.id,
+        token: token.plaintext,
+      };
+    } finally {
+      await closeDatabase();
+    }
+  }
+
+  async function isLive(id: string): Promise<boolean> {
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      const row = await getDb().get<{ redeemed_at: string | null }>(
+        'SELECT redeemed_at FROM worker_invitations WHERE id = ?',
+        [id],
+      );
+      return row !== undefined && row.redeemed_at === null;
+    } finally {
+      await closeDatabase();
+    }
+  }
+
+  it('still shows the chooser, and says which worker the invitation names', async () => {
+    const held = await inviteCookieFor(orphanWorkerId);
+    const { challenge } = pkce();
+    const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`, {
+      headers: { cookie: `${adminCookie}; ${held.cookie}` },
+    });
+    const html = await response.text();
+
+    // The chooser, not the single-worker invited screen: the administrator's
+    // own authority is what this page runs on.
+    expect(html).toContain('Connect a worker');
+    expect(html).toContain('claude-max-worker-01');
+    // And the answer to "why am I being shown a list".
+    expect(html).toContain('This browser holds an invitation for');
+    expect(html).toContain('orphan-worker');
+    expect(html).toContain('the invitation is not used');
+    // Preselected, so the ordinary case is one click.
+    expect(html).toMatch(new RegExp(`value="${orphanWorkerId}" selected`));
+
+    // Reading the screen spends nothing.
+    expect(await isLive(held.id)).toBe(true);
+  });
+
+  it('does not let the held invitation decide who is connected', async () => {
+    /*
+     * Display only. The administrator posts a different worker and gets that
+     * worker — the invitation neither authorized it nor constrained it, and it
+     * is still unspent afterwards. On the *invited* path the posted id is
+     * checked against the invitation and a mismatch is refused outright; that
+     * rule is unchanged and is asserted elsewhere in this file.
+     */
+    const held = await inviteCookieFor(orphanWorkerId);
+    const { challenge, verifier } = pkce();
+    const approved = await approve(challenge, {
+      cookie: `${adminCookie}; ${held.cookie}`,
+      worker: workerId,
+    });
+    expect(approved.code).not.toBeNull();
+
+    const token = await exchange({
+      grant_type: 'authorization_code',
+      code: approved.code!,
+      redirect_uri: REDIRECT,
+      client_id: clientId,
+      code_verifier: verifier,
+    });
+    expect(token.status).toBe(200);
+    expect(await isLive(held.id)).toBe(true);
+  });
+
+  it('names every address the endpoint answers on, so the recipient is not sent to a refusal', async () => {
+    /*
+     * Claude keys its connector registry by URL, so a page that named exactly
+     * one address was an instruction the second connector could not follow.
+     * Read from `MCP_PATHS` rather than restated, because a mounted path this
+     * page did not mention is a person told to use a URL that is refused.
+     */
+    const held = await inviteCookieFor(orphanWorkerId);
+    const response = await fetch(`${BASE}/oauth/invite/${encodeURIComponent(held.token)}`);
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    for (const mcpPath of MCP_PATHS) {
+      expect(html, mcpPath).toContain(`<code>${BASE}${mcpPath}</code>`);
+    }
+    expect(html).toContain('the same endpoint under different names');
+    // Opening still spends nothing.
+    expect(await isLive(held.id)).toBe(true);
+  });
+
+  it('keeps the single-worker screen for somebody who is not signed in', async () => {
+    // The invited path is untouched by the change above: no chooser, no list,
+    // and the worker named rather than offered.
+    const held = await inviteCookieFor(orphanWorkerId);
+    const { challenge } = pkce();
+    const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`, {
+      headers: { cookie: held.cookie },
+    });
+    const html = await response.text();
+    expect(html).not.toContain('Connect a worker');
+    expect(html).toContain('connecting on an invitation');
+    expect(html).toContain('orphan-worker');
+    expect(html).not.toContain('claude-max-worker-01');
   });
 });
 
