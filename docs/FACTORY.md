@@ -718,6 +718,28 @@ invitation that on its own cannot read anything, call a tool or obtain a token.
 The invitation id is what reaches `identity_events`; the token reaches the reply
 once and nothing reads it back.
 
+**The connector it names is at `/mcp/factory`, and that path authorizes
+nothing.** Claude keys its connector registry by URL and refuses a second
+connector at one an existing connector already holds, so a Brain whose research
+connector sits at `/mcp` cannot be connected there twice — the second path is a
+second **name** for the same endpoint, mounted from the same router behind the
+same policy module, and nothing reads it. What makes a factory worker a factory
+worker is the worker approved on the consent screen, the fixed scope set and the
+exhaustive routing row; see `docs/MCP.md` §1a. An earlier version of the
+onboarding step gave both connectors `/mcp`, which no operator could carry out
+past Claude's own dialog.
+
+**And a chooser on the consent screen is not a fault.** The step used to say
+that being offered a list meant the invitation had not been opened in that
+browser. `/oauth/authorize` looks for a signed-in administrator *before* it
+looks for an invitation — deliberately, because an invitation stands in for an
+administrator's approval and somebody who already is one has that authority in
+their own right — so the person who just pressed **Onboard** sees the chooser
+every time. The screen reads the held invitation now purely to name it and
+preselect its worker; the invitation is not spent on that path, and the
+administrator's own authority is what the approval runs on. A remedy for a
+condition that was never true is the shape this file keeps having to correct.
+
 And it **cannot register the surface**, which is the honest boundary rather than
 an omission — §22's split says the surface owns whether a worker may act. So
 readiness is derived on every read, in three answers with different remedies:

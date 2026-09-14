@@ -113,9 +113,40 @@ required and is not what this buys.
 | | Research | Software Factory |
 |---|---|---|
 | Connector name in Claude | `Cloud Brain` | `Factory Brain` |
+| Remote MCP server URL | `https://northline-brain.fly.dev/mcp` | `https://northline-brain.fly.dev/mcp/factory` |
 | Tool prefix it produces | `mcp__cloud-brain__*` | `mcp__factory-brain__*` |
 | Brain worker it authenticates as | the existing research worker `wkr_1cdd82cf…` | `factory-brain` |
 | What it may be handed | research and general work | `FACTORY` work for one repository |
+
+### Why the URLs differ, and what that does not mean
+
+**Claude keys its connector registry by URL.** Adding a second custom connector
+at a URL an existing one already holds is refused outright — *"A connector with
+this URL already exists in your organization. Use the existing connector instead
+of adding it again."* — and there is no other field on that screen that could
+tell two connections apart. An earlier version of this runbook gave both
+connectors `…/mcp` and was simply impossible to follow past that dialog. The
+correction is recorded here rather than quietly applied.
+
+**`/mcp/factory` is a second name for one endpoint, and it grants nothing.** It
+is served by the same router, behind the same authentication, the same origin
+rule, the same limits, the same tool registry and the same
+`services/identity/policy.ts`. Nothing anywhere reads the path: not the tool
+executor, not the policy module, not `services/bins/routing.ts`. A research
+token presented at `/mcp/factory` gets exactly what it gets at `/mcp`, and a
+factory token presented at `/mcp` gets exactly what it gets here. **A URL is not
+an authority** — the authenticated credential is, and the credential is decided
+by which worker you approve on the consent screen.
+
+So do **not** read the second URL as the thing that makes the factory worker a
+factory worker. What does that is: the worker you approve, the fixed scope set
+onboarding wrote for it, and its exhaustive `worker_routing` row. The URL exists
+because Claude will not hold two connectors at one address.
+
+`tests/mcpConnectorPaths.test.ts` pins all of it against a real server — the
+identical tool surface at both doors, the same token resolving to the same
+worker with the same reach at both, byte-identical refusals, discovery for each,
+and an unregistered sibling path serving nothing.
 
 **Nothing about the research identity changes.** Its worker, its routing, its
 Routines `V1` and `V2`, its connector and its token are untouched by every step
@@ -169,14 +200,15 @@ worker**.
 
 Paste the link into the browser you are going to authorize the connector from,
 and open it. You should see *"You are ready to connect — this browser can now
-connect Factory · Peyday007/V5, and nothing else."*
+connect Factory · peyday007/v5, and nothing else."* Under **Next** it lists
+every address this endpoint answers on; the factory one is
+`https://northline-brain.fly.dev/mcp/factory`.
 
 Leave that tab open. Opening the link does **not** spend the invitation; it is
 spent when a connection is actually authorized.
 
-If you do step 3 first, the consent screen offers the full list of workers
-instead of that one, and choosing wrongly there is exactly the mistake this
-ordering prevents.
+Do this before step 3 anyway. **But a list is not proof that you did it
+wrong** — see step 3.
 
 ---
 
@@ -187,20 +219,45 @@ ordering prevents.
 | Field | Value |
 |---|---|
 | Name | `Factory Brain` |
-| Remote MCP server URL | `https://northline-brain.fly.dev/mcp` |
+| Remote MCP server URL | `https://northline-brain.fly.dev/mcp/factory` |
+
+**Not `…/mcp`.** That is the research connector's address, and Claude will
+refuse a second connector there — *"A connector with this URL already exists in
+your organization."* The two URLs are two names for one endpoint and the path
+authorizes nothing; see *Why the URLs differ* above.
 
 **Leave Advanced settings empty.** The OAuth client id and secret are optional
 and Brain registers Claude automatically; inventing values there breaks the
 connection.
 
-Click **Add**, then **Connect**. In the browser:
+Click **Add**, then **Connect**. In the browser, **approve as
+`Factory · peyday007/v5`** — that is the only thing on this screen that decides
+anything.
 
-1. sign in to Brain if you are not already;
-2. the consent screen names **one** worker — `Factory · Peyday007/V5`;
-3. **Approve.**
+You will see one of two screens, and **both are correct**:
 
-The name must be that one. If you are shown a list to choose from, the
-invitation cookie from step 2 is not in this browser — go back to step 2.
+- **Signed in to Brain as an administrator** — the chooser, with
+  `Factory · peyday007/v5` already selected and a line above it saying *"This
+  browser holds an invitation for `factory-brain`."* Press **Approve**. Your own
+  administrator authority is what this screen runs on, so the invitation is read
+  only to name and preselect the worker, and it is **not spent** here.
+- **Not signed in, invitation open in this browser** — one worker named, no
+  list. Press **Approve**. This spends the invitation.
+
+**A list is not a fault.** `/oauth/authorize` looks for a signed-in
+administrator *before* it looks for an invitation, deliberately: an invitation
+stands in for an administrator's approval, and somebody who already is one has
+that authority in their own right. So the person who just pressed **Onboard** —
+signed in, by definition — sees the chooser every time. An earlier version of
+this runbook, and of Build's own instructions, told you a list meant the link
+had been opened in the wrong browser. That was false, and it sent people back to
+re-open a link that was working. Corrected here rather than quietly.
+
+What *is* worth checking on the chooser: that the worker you approve is
+`Factory · peyday007/v5` — `factory-brain` — and not the research worker. (The
+display name is lower-cased because Brain derives it from the normalized
+repository id, not from how the remote is written.) That is the one mistake
+this screen can make, and step 7's probe catches it from rows afterwards.
 
 ---
 
