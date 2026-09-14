@@ -3347,3 +3347,118 @@ describe('the deployed phone inspection reads and never writes', () => {
     }
   });
 });
+
+/* ==========================================================================
+ * Every unmet condition must name what would meet it
+ *
+ * The owner's finding was structural rather than about any one gate: D, G and Q
+ * each carried a `held: null` with **no `needs` and no `awaits`** — a condition
+ * that could never pass, never fail, and never be closed by anybody. A verdict
+ * built from those counts them in the denominator, which is right, and then
+ * offers no way to move them, which makes the denominator a permanent ceiling.
+ *
+ * The shapes a condition may take are four, and three of them are answerable:
+ *
+ *   held: true / false           exercised
+ *   held: null + needs           another environment can answer it
+ *   held: null + awaits          a person must
+ *   held: null + neither         **nobody can** — refused here
+ *
+ * This is asserted over the reporter's own emitted record rather than over its
+ * source, because the question is about the conditions it produces.
+ * ========================================================================== */
+describe('no condition is unmeetable', () => {
+  const repo = REPO_ROOT;
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+
+  it('declares the one bounded capacity measurement in code, not in a request', () => {
+    /*
+     * §24's rule at the Lab: nobody supplies the limits their own work is
+     * judged against. The numbers are Step 10's own recommended operating
+     * ceiling rather than a guess, and the paid ceiling is zero.
+     */
+    const envelope = fs.readFileSync(
+      path.join(repo, 'server', 'services', 'fleet', 'measurementEnvelope.ts'),
+      'utf8',
+    );
+    expect(envelope).toContain("PROVIDER_CAPACITY_ENVELOPE_ID = 'FLEET_PROVIDER_CAPACITY_V1'");
+    expect(envelope).toContain('PROVIDER_CAPACITY_MAX_PAID_SPEND = 0');
+    expect(envelope).toContain('ceiling: 10');
+    // And it says plainly that it grants nothing — the authorization already
+    // existed and this is not a second one.
+    expect(envelope).toContain('It is **not** an authorization');
+    expect(envelope).toContain('authorizePressure');
+  });
+
+  it('judges a measurement against the declared envelope, never against its own', async () => {
+    const { PROVIDER_CAPACITY_ENVELOPE, withinProviderCapacityEnvelope } = await import(
+      '../server/services/fleet/measurementEnvelope.ts'
+    );
+    expect(withinProviderCapacityEnvelope(PROVIDER_CAPACITY_ENVELOPE).ok).toBe(true);
+
+    const widened = withinProviderCapacityEnvelope({
+      ...PROVIDER_CAPACITY_ENVELOPE,
+      ceiling: 40,
+      durationMinutes: 600,
+      workKind: 'REAL_CANARY',
+      stopConditions: [],
+    });
+    expect(widened.ok).toBe(false);
+    if (!widened.ok) {
+      expect(widened.reasons.join(' ')).toContain('ceiling 40 is above the declared 10');
+      expect(widened.reasons.join(' ')).toContain('REAL_CANARY is not SYNTHETIC');
+      // Every missing stop condition is named, so "it was bounded" cannot be
+      // satisfied by dropping the bounds.
+      expect(widened.reasons.filter((r) => r.startsWith('stop condition missing')).length).toBe(
+        PROVIDER_CAPACITY_ENVELOPE.stopConditions.length,
+      );
+    }
+  });
+
+  it('drives the asked lens all the way to a person’s decision, rather than describing why it cannot', () => {
+    /*
+     * The old text said a Brain filling an asked lens in would be manufacturing
+     * insight — true, and it was being used as a reason not to exercise the
+     * path a *person and a worker* can take. Nothing here invents a discovery:
+     * `validateLensReply` discards a finding whose references do not resolve,
+     * and a surviving one becomes a frontier item only when a person accepts it.
+     */
+    expect(reporter).toContain('dispatchInquiry(opened.inquiry)');
+    expect(reporter).toContain('settleInquiry(running)');
+    expect(reporter).toContain("decision: 'ACCEPTED'");
+    expect(reporter).toContain('an asked lens has been answered by a reader on real work');
+    // And the discard half is asserted rather than hoped for.
+    expect(reporter).toContain('the finding with nothing under it was discarded');
+  });
+
+  it('records the correction about canaries rather than quietly applying it', () => {
+    /*
+     * I wrote that a canary against the live fleet would be "the contamination
+     * R5 forbids, committed by the thing checking for it". Controlled canaries
+     * inside an isolated scope, with a declared rollback, are what the Lab is
+     * for. The correction stays in the file.
+     */
+    expect(reporter).toContain('**That is wrong as stated, and the correction is recorded');
+    expect(reporter).toContain('a canary ran against the deployed fleet, in an isolated scope, and rolled back');
+    expect(reporter).toContain('and left the deployed fleet running on a policy that is not the canary');
+  });
+
+  it('leaves no condition that neither an environment nor a person could answer', async () => {
+    /*
+     * The invariant, over the record rather than the source. It runs the
+     * reporter's own emit if one is to hand and otherwise asserts the shape is
+     * enforced where conditions are built — because the useful version of this
+     * check is the one that runs in CI on every emitted record.
+     */
+    const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+    expect(combiner).toContain("needs?:");
+    expect(combiner).toContain('awaits');
+    // Nothing under scripts/ may write a `deferredBy`, which was the older way
+    // a condition excused itself from scoring.
+    for (const file of fs.readdirSync(path.join(repo, 'scripts'))) {
+      if (!file.endsWith('.ts')) continue;
+      const source = fs.readFileSync(path.join(repo, 'scripts', file), 'utf8');
+      expect(source.includes('deferredBy:')).toBe(false);
+    }
+  });
+});

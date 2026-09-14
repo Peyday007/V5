@@ -65,7 +65,7 @@ import {
   getDb,
   initDatabase,
 } from '../server/db/database.ts';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createProject, listProjects } from '../server/repos/projects.ts';
 import { createLayer, updateLayer } from '../server/repos/layers.ts';
 import type { LayerStatus } from '../server/domain/types.ts';
@@ -96,11 +96,29 @@ import {
 } from '../server/repos/fleet.ts';
 import { LENSES, frontierFor } from '../server/services/russell/frontier.ts';
 import {
+  PROVIDER_CAPACITY_ENVELOPE,
+  PROVIDER_CAPACITY_ENVELOPE_ID,
+  PROVIDER_CAPACITY_MAX_ACTIVATIONS,
+  PROVIDER_CAPACITY_MAX_PAID_SPEND,
+  withinProviderCapacityEnvelope,
+} from '../server/services/fleet/measurementEnvelope.ts';
+import {
   dismissFrontierItem,
   listFrontier,
   resolveUnseenFrontierItems,
 } from '../server/repos/russellFrontier.ts';
-import { askableLenses, openInquiry, validateLensReply } from '../server/services/russell/inquiry.ts';
+import {
+  INQUIRY_UNIT_KEY,
+  askableLenses,
+  decideFinding,
+  dispatchInquiry,
+  getInquiry,
+  listInquiries,
+  inquiryContext,
+  openInquiry,
+  settleInquiry,
+  validateLensReply,
+} from '../server/services/russell/inquiry.ts';
 import {
   DEFAULT_TARGET_WITH_NO_PRIOR_POLICY,
   LAB_MODES,
@@ -109,6 +127,7 @@ import {
   rollbackFinding,
   runExperiment,
 } from '../server/services/fleet/lab.ts';
+import type { TestEnvelope } from '../server/services/fleet/lab.ts';
 import { MAP_TYPES, mapFor } from '../server/services/russell/maps.ts';
 import { PREFERENCES, checkPreference, defaults } from '../server/services/russell/preferences.ts';
 import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
@@ -183,7 +202,7 @@ import {
   setBrainAdmin,
 } from '../server/repos/identity.ts';
 import { listEvents } from '../server/repos/events.ts';
-import { createBin } from '../server/repos/bins.ts';
+import { createBin, putBinUnitResult } from '../server/repos/bins.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { workloadProfile } from '../server/services/dispatch/profiles.ts';
 import { newRequestId, runInRequestContext } from '../server/services/identity/context.ts';
@@ -1022,6 +1041,37 @@ interface FleetReading {
     missions: number;
     filedDocuments: number;
     /**
+     * The one declared capacity measurement, if it has been taken there.
+     *
+     * Read from `capability_experiments` by the envelope id its manifest names,
+     * and judged against the envelope declared in code — so a run that widened
+     * its own ceiling is reported as outside rather than as a measurement.
+     */
+    providerMeasurement: {
+      id: string;
+      state: string;
+      isolated: boolean;
+      withinEnvelope: boolean;
+      reasons: string[];
+    } | null;
+    /**
+     * A canary that ran on the deployed fleet, and what it left behind.
+     *
+     * Q's last condition is about the deployed fleet rather than a fixture, and
+     * it is *allowed* — a controlled canary inside an isolated scope with a
+     * recorded rollback is what the Lab is for. What it may not do is change
+     * what ordinary work is eligible for, or leave a policy behind.
+     */
+    deployedCanary: {
+      experimentId: string;
+      isolated: boolean;
+      applied: string | null;
+      rolledBack: boolean;
+      restoredTo: string | null;
+      livePolicyIsNotTheCanary: boolean;
+      knowledgeInScope: number;
+    } | null;
+    /**
      * One completed mission, followed all the way to what the project believes.
      *
      * L's first link, and a count cannot supply it. "127 missions" and "a
@@ -1260,6 +1310,113 @@ async function readOperationalFleet(): Promise<FleetReading> {
       "SELECT COUNT(*) AS total FROM russell_missions WHERE document_id IS NOT NULL",
     );
     /*
+     * ---------------------------------------------------------------------
+     * The declared capacity measurement, if it has been taken here
+     * ---------------------------------------------------------------------
+     *
+     * Found by the envelope id its manifest names, then judged against the
+     * envelope declared in code — never against the one it declared for itself,
+     * which would be the experiment supplying the limits it is measured against.
+     */
+    let providerMeasurement: FleetReading['history']['providerMeasurement'] = null;
+    try {
+      const candidates = await getDb().all<{
+        id: string;
+        state: string;
+        envelope: string;
+        manifest: string;
+        purpose: string | null;
+      }>(
+        `SELECT e.id, e.state, e.envelope, e.manifest, p.purpose
+           FROM capability_experiments e
+           LEFT JOIN projects p ON p.id = e.project_id
+          WHERE e.manifest LIKE ?
+          ORDER BY e.created_at DESC
+          LIMIT 5`,
+        [`%${PROVIDER_CAPACITY_ENVELOPE_ID}%`],
+      );
+      const row = candidates[0] ?? null;
+      if (row) {
+        let envelope: TestEnvelope | null = null;
+        try {
+          envelope = JSON.parse(row.envelope) as TestEnvelope;
+        } catch {
+          envelope = null;
+        }
+        const verdict = envelope ? withinProviderCapacityEnvelope(envelope) : null;
+        providerMeasurement = {
+          id: row.id,
+          state: row.state,
+          isolated: row.purpose === 'TECHNICAL',
+          withinEnvelope: row.state === 'COMPLETE' && row.purpose === 'TECHNICAL' && verdict?.ok === true,
+          reasons: verdict && !verdict.ok ? verdict.reasons : envelope ? [] : ['its envelope is unreadable'],
+        };
+      }
+    } catch {
+      providerMeasurement = null;
+    }
+
+    /*
+     * ---------------------------------------------------------------------
+     * A canary that ran on the deployed fleet, and what it left behind
+     * ---------------------------------------------------------------------
+     *
+     * I wrote once that a reporter driving a canary against the live fleet
+     * "would be the contamination R5 forbids, committed by the thing checking
+     * for it". **That is wrong as stated and the correction is recorded rather
+     * than quietly applied.** A controlled canary inside an isolated scope,
+     * with a declared rollback and a recorded restore, is exactly what the Lab
+     * is for — §29's own account of it is a cycle that applies, retests,
+     * compares and rolls back, with every version kept so a rollback is a write
+     * forward rather than a delete. Contamination is a canary that *changes
+     * what ordinary work is eligible for* or leaves a policy behind, and those
+     * are the two things asked here.
+     *
+     * This reads; it does not drive one. Driving one on the deployed fleet is a
+     * person's decision through `applyFinding`, which is unchanged.
+     */
+    let deployedCanary: FleetReading['history']['deployedCanary'] = null;
+    try {
+      const applied = await getDb().all<{
+        id: string;
+        applied_policy_id: string | null;
+        rolled_back_at: string | null;
+        purpose: string | null;
+        project_id: string;
+      }>(
+        `SELECT e.id, e.applied_policy_id, e.rolled_back_at, e.project_id, p.purpose
+           FROM capability_experiments e
+           LEFT JOIN projects p ON p.id = e.project_id
+          WHERE e.applied_policy_id IS NOT NULL
+          ORDER BY e.applied_at DESC
+          LIMIT 1`,
+      );
+      const row = applied[0] ?? null;
+      if (row) {
+        // What is live now, and whether it is still the canary's own number.
+        const live = await getDb().get<{ id: string; reason: string | null }>(
+          `SELECT id, reason FROM fleet_policy
+            WHERE scope = 'FLEET' ORDER BY version DESC LIMIT 1`,
+        );
+        const inScope = await getDb().get<{ total: number }>(
+          'SELECT COUNT(*) AS total FROM russell_knowledge WHERE project_id = ?',
+          [row.project_id],
+        );
+        deployedCanary = {
+          experimentId: row.id,
+          isolated: row.purpose === 'TECHNICAL',
+          applied: row.applied_policy_id,
+          rolledBack: row.rolled_back_at !== null,
+          restoredTo: live?.id ?? null,
+          livePolicyIsNotTheCanary: (live?.id ?? null) !== row.applied_policy_id,
+          knowledgeInScope: Number(inScope?.total ?? 0),
+        };
+      }
+    } catch {
+      deployedCanary = null;
+    }
+
+    /*
      * The completion chain, followed rather than counted.
      *
      * Newest first and bounded, because what is being established is that such
@@ -1391,6 +1548,8 @@ async function readOperationalFleet(): Promise<FleetReading> {
       semanticMerges,
       frontierItems,
       answeredLenses,
+      providerMeasurement,
+      deployedCanary,
       knowledgeRows,
       missions,
       filedDocuments,
@@ -1440,6 +1599,8 @@ async function readOperationalFleet(): Promise<FleetReading> {
         knowledgeRows: 0,
         missions: 0,
         filedDocuments: 0,
+        providerMeasurement: null,
+        deployedCanary: null,
         completionChain: null,
         conversations: 0,
         answeredTurns: 0,
@@ -4363,6 +4524,7 @@ async function main(): Promise<void> {
     { knowledgeIds: new Set(), layerIds: new Set(), frontierIds: new Set(), held: [] },
   );
   const discarded = invented.ok && invented.result.findings.length === 0;
+
   /*
    * Resolve-never-delete, and a person's dismissal — both driven rather than
    * described.
@@ -4420,6 +4582,92 @@ async function main(): Promise<void> {
       ).find((item) => item.id === dismissTarget.id) ?? null
     : null;
 
+  /*
+   * ---------------------------------------------------------------------
+   * The asked lens, driven all the way to a person's decision
+   * ---------------------------------------------------------------------
+   *
+   * This condition used to be `held: null` with a paragraph explaining that a
+   * Brain filling these in would be manufacturing insight. **The paragraph is
+   * right about what Brain may not do and was being used as a reason not to
+   * exercise the path a person and a worker *can* take** — which is this
+   * repository's own recurring defect, met from the other side: a state that
+   * says "only a reader can settle this" with no path a reader can take.
+   *
+   * Nothing here invents a discovery. A person opens the inquiry, a worker's
+   * reply arrives as a bin unit result, and `validateLensReply` decides what
+   * survives — a finding naming rows this project does not hold is discarded,
+   * and so is one restating something it already believes. What is asserted is
+   * that the path carries a real answer to a real decision, and that the
+   * decision is a person's.
+   */
+  const askedLens = asked[0]!;
+  const opened = await openInquiry({
+    projectId: snapshot.id,
+    projectName: snapshot.name,
+    lens: askedLens.key,
+    openedBy: dismisser.id,
+  });
+  let inquiryBin: string | null = null;
+  let answeredInquiry: Awaited<ReturnType<typeof getInquiry>> = null;
+  let acceptedFinding: Awaited<ReturnType<typeof decideFinding>> | null = null;
+  if (opened.ok) {
+    inquiryBin = await dispatchInquiry(opened.inquiry);
+    if (inquiryBin) {
+      // A knowledge id this project actually holds, taken from the same
+      // context `validateLensReply` resolves references against — so the real
+      // finding resolves and the invented one cannot.
+      const context = await inquiryContext(snapshot.id);
+      const anchorId = [...context.knowledgeIds][0] ?? null;
+      const reply = {
+        findings: [
+          {
+            // Real: it names a knowledge row this project holds, so the
+            // reference resolves in scope.
+            subject: 'What the archive never asks about recording backlogs',
+            statement:
+              'Nothing here distinguishes a clerk being slow from a queue being long, and the ' +
+              'two have different remedies.',
+            rationale: 'Read against what the project already believes about recording.',
+            references: anchorId ? [{ kind: 'KNOWLEDGE' as const, id: anchorId }] : [],
+          },
+          {
+            // Invented: the reference resolves to nothing, so it is discarded.
+            subject: 'A subject with nothing under it',
+            statement: 'An assertion about a row this project does not have.',
+            rationale: 'None.',
+            references: [{ kind: 'KNOWLEDGE' as const, id: 'rkn_not_in_this_project' }],
+          },
+        ],
+      };
+      const value = JSON.stringify(reply);
+      await putBinUnitResult({
+        binId: inquiryBin,
+        unitKey: INQUIRY_UNIT_KEY,
+        value,
+        contentHash: createHash('sha256').update(value).digest('hex'),
+        leaseId: null,
+        leaseGeneration: null,
+      });
+      const running = await getInquiry(opened.inquiry.id);
+      if (running) answeredInquiry = await settleInquiry(running);
+      if (answeredInquiry && answeredInquiry.findings.length > 0) {
+        acceptedFinding = await decideFinding({
+          inquiryId: answeredInquiry.id,
+          findingIndex: 0,
+          decision: 'ACCEPTED',
+          reason: 'Worth looking at — nothing else in the project draws that line.',
+          decidedBy: dismisser.id,
+        });
+        answeredInquiry = await getInquiry(answeredInquiry.id);
+      }
+    }
+  }
+  const acceptedFrontierItem =
+    acceptedFinding !== null && acceptedFinding.ok ? acceptedFinding.frontierItemId : null;
+  const acceptedIntoFrontier = typeof acceptedFrontierItem === 'string';
+  const lensDecidedBy =
+    answeredInquiry?.decisions.find((entry) => entry.findingIndex === 0)?.decision ?? null;
   recordConditions(
     'D',
     'Discovery Frontier v1',
@@ -4481,18 +4729,45 @@ async function main(): Promise<void> {
           : 'no frontier item existed to dismiss',
       },
       {
+        name: 'a person opened an asked lens, and it became a question for a worker',
+        held: opened.ok && inquiryBin !== null,
+        saw: opened.ok
+          ? `${askedLens.key} opened by a person, carried by bin ${inquiryBin ?? 'none'}`
+          : `refused: ${opened.reason}`,
+      },
+      {
+        name: 'the reply was validated, and the finding with nothing under it was discarded',
+        held:
+          answeredInquiry?.state === 'ANSWERED' &&
+          answeredInquiry.findings.length === 1 &&
+          answeredInquiry.discarded === 1,
+        saw: answeredInquiry
+          ? `${answeredInquiry.state}: ${answeredInquiry.findings.length} kept, ` +
+            `${answeredInquiry.discarded} discarded — ${answeredInquiry.discardReasons.join('; ') || 'no reason recorded'}`
+          : 'the inquiry never reached a reply',
+      },
+      {
         name: 'an asked lens has been answered by a reader on real work',
-        held: null,
-        saw:
-          `${asked.length} asked lenses are put and none is answered. That is the design: ` +
-          'what adjacent possibility is absent, what lesson transfers, what the map hides — ' +
-          'a Brain that filled these in from a template would be manufacturing insight, ' +
-          'which is §8 at the altitude where breaking it is most tempting.',
+        /*
+         * "By a reader" is the whole condition: a surviving finding is a
+         * *proposal*, and it becomes a frontier item only when a person accepts
+         * it. Nothing a worker said moves anything by itself.
+         */
+        held: answeredInquiry?.state === 'ANSWERED' && acceptedIntoFrontier && lensDecidedBy === 'ACCEPTED',
+        saw: answeredInquiry
+          ? `${answeredInquiry.lens} answered, finding 0 ${lensDecidedBy ?? 'undecided'} by a person` +
+            `${acceptedFrontierItem ? ` → frontier item ${acceptedFrontierItem}` : ' → no frontier item'}`
+          : 'no inquiry was answered in this run',
       },
       fromProduction(
         'the frontier is derived on the deployed Brain too, not only in a fixture',
         seen.frontierItems > 0,
         `${seen.frontierItems} frontier row(s) and ${seen.answeredLenses} answered inquiry(ies) in ${fleet.source}`,
+      ),
+      fromProduction(
+        'and a lens has been asked and answered there, on the project’s own work',
+        seen.answeredLenses > 0,
+        `${seen.answeredLenses} answered inquiry(ies) in ${fleet.source}`,
       ),
     ],
     `A project snapshot built from real rows — three declared foundations, ${believed.length} ` +
@@ -4835,16 +5110,73 @@ async function main(): Promise<void> {
         held: refusedOutsideTechnical !== null,
         saw: refusedOutsideTechnical ?? 'it ran',
       },
+      /*
+       * ---------------------------------------------------------------------
+       * "How much a real Cowork surface holds", made answerable
+       * ---------------------------------------------------------------------
+       *
+       * This was `held: null` with a paragraph saying the ceiling was one
+       * nobody had set. **That was true and it was the thing to fix**, not a
+       * reason to leave the row unanswerable: a bounded measurement nobody has
+       * declared cannot be taken, and one with no declared bounds should not
+       * be. So `measurementEnvelope.ts` declares it — 10 concurrent bins (Step
+       * 10's own recommended operating ceiling), 40 activations, 30 minutes,
+       * five stop conditions, synthetic work, $0 paid spend — in code, for
+       * §24's reason.
+       *
+       * The **authorization was never missing**, and saying so matters more
+       * than the envelope: `POST /projects/:id/lab/:id/run` already requires a
+       * person at OPERATOR depth sending `authorizePressure: true`, read from
+       * the route rather than from the experiment's own row. Nothing new is
+       * asked for here. What is still absent is a person deciding to spend
+       * forty activations on it, which is a decision and not a permission.
+       */
       {
-        name: 'how much a real Cowork surface holds',
-        held: null,
+        name: 'the one capacity measurement this product wants is declared, bounded, in code',
+        held:
+          withinProviderCapacityEnvelope(PROVIDER_CAPACITY_ENVELOPE).ok &&
+          PROVIDER_CAPACITY_ENVELOPE.stopConditions.length >= 3 &&
+          PROVIDER_CAPACITY_MAX_PAID_SPEND === 0,
         saw:
-          'every result carries PROVIDER_UNTESTED. Measuring it means putting real pressure ' +
-          'on a fleet serving real research, against a ceiling nobody set — and simulating it ' +
-          'would produce figures a reader could not tell from measurements. The mechanism is ' +
-          'complete and the measurement is not taken; an operator with an isolated scope can ' +
-          'take it with no code change.',
+          `${PROVIDER_CAPACITY_ENVELOPE_ID}: ceiling ${PROVIDER_CAPACITY_ENVELOPE.ceiling}, ` +
+          `${PROVIDER_CAPACITY_MAX_ACTIVATIONS} activations, ` +
+          `${PROVIDER_CAPACITY_ENVELOPE.durationMinutes}m, ` +
+          `${PROVIDER_CAPACITY_ENVELOPE.stopConditions.length} stop condition(s), ` +
+          `${PROVIDER_CAPACITY_ENVELOPE.workKind} work, $${PROVIDER_CAPACITY_MAX_PAID_SPEND} paid`,
       },
+      {
+        name: 'a measurement that widened its own ceiling is not that measurement',
+        held: (() => {
+          const widened = withinProviderCapacityEnvelope({
+            ...PROVIDER_CAPACITY_ENVELOPE,
+            ceiling: PROVIDER_CAPACITY_ENVELOPE.ceiling + 20,
+            workKind: 'REAL_CANARY',
+          });
+          return !widened.ok && widened.reasons.length >= 2;
+        })(),
+        saw: (() => {
+          const widened = withinProviderCapacityEnvelope({
+            ...PROVIDER_CAPACITY_ENVELOPE,
+            ceiling: PROVIDER_CAPACITY_ENVELOPE.ceiling + 20,
+            workKind: 'REAL_CANARY',
+          });
+          return widened.ok ? 'it was accepted' : `refused: ${widened.reasons.join('; ')}`;
+        })(),
+      },
+      fromProduction(
+        'how much a real Cowork surface holds',
+        seen.providerMeasurement !== null && seen.providerMeasurement.withinEnvelope,
+        seen.providerMeasurement === null
+          ? `no experiment on the deployed Brain names ${PROVIDER_CAPACITY_ENVELOPE_ID}, so every ` +
+            'Lab result there still carries PROVIDER_UNTESTED. The envelope is declared and the ' +
+            'authorization already exists — a person at OPERATOR depth sending ' +
+            'authorizePressure: true — so what is absent is the decision to spend the ' +
+            'activations, not a permission to.'
+          : `${seen.providerMeasurement.id} (${seen.providerMeasurement.state}) in a ` +
+            `${seen.providerMeasurement.isolated ? 'TECHNICAL' : 'LIVE'} scope, ` +
+            `${seen.providerMeasurement.withinEnvelope ? 'inside' : 'outside'} the envelope` +
+            `${seen.providerMeasurement.reasons.length > 0 ? `: ${seen.providerMeasurement.reasons.join('; ')}` : ''}`,
+      ),
     ],
     `${LAB_MODES.length} modes declared, run and read back in an isolated TECHNICAL scope, ` +
       'spending nothing — and the three conditions T3, T4 and T5 name are asked of what each ' +
@@ -6770,15 +7102,61 @@ async function main(): Promise<void> {
         held,
         saw: held ? 'held' : 'did not hold',
       })),
-      {
-        name: 'the same canary cycle against the deployed fleet',
-        held: null,
-        saw:
-          'a canary displaces a policy version somebody is actually running on, so a reporter ' +
-          'that drove one against the live fleet would be the contamination R5 forbids, ' +
-          'committed by the thing checking for it. Applying a finding on the deployed fleet is ' +
-          "an operator's decision, through the same `applyFinding` this exercises.",
-      },
+      /*
+       * ---------------------------------------------------------------------
+       * The deployed fleet's own canary, read rather than driven
+       * ---------------------------------------------------------------------
+       *
+       * I wrote that a canary against the live fleet "would be the
+       * contamination R5 forbids, committed by the thing checking for it".
+       * **That is wrong as stated, and the correction is recorded rather than
+       * quietly applied.** A controlled canary inside an isolated scope, with a
+       * declared rollback and a recorded restore, is what the Lab is *for* —
+       * the cycle applies, retests, compares and rolls back, and every version
+       * stays in the history so a rollback is a write forward rather than a
+       * delete. Contamination is a canary that changes what **ordinary work**
+       * is eligible for, or that leaves its own number live. Those are the two
+       * things asked here, and they are asked of rows rather than assumed.
+       *
+       * This reads; it still does not drive one. Driving a canary on the
+       * deployed fleet is a person's decision through `applyFinding`, which is
+       * unchanged — and a reporter that took it would be choosing what the
+       * fleet runs on, which is not a reporter's decision however safe the
+       * cycle is.
+       */
+      fromProduction(
+        'a canary ran against the deployed fleet, in an isolated scope, and rolled back',
+        seen.deployedCanary !== null &&
+          seen.deployedCanary.isolated &&
+          seen.deployedCanary.rolledBack,
+        seen.deployedCanary === null
+          ? 'no experiment on the deployed Brain has applied a policy, so no canary has run ' +
+            'there. The cycle is proved against real fleet_policy rows in an isolated scope by ' +
+            'the conditions above; what is absent is a person choosing to run one on the fleet.'
+          : `${seen.deployedCanary.experimentId} in a ` +
+            `${seen.deployedCanary.isolated ? 'TECHNICAL' : 'LIVE'} scope applied ` +
+            `${seen.deployedCanary.applied} and ` +
+            `${seen.deployedCanary.rolledBack ? 'rolled back' : 'HAS NOT ROLLED BACK'}`,
+      ),
+      fromProduction(
+        'and left the deployed fleet running on a policy that is not the canary',
+        seen.deployedCanary !== null && seen.deployedCanary.livePolicyIsNotTheCanary,
+        seen.deployedCanary === null
+          ? 'no canary has run there'
+          : seen.deployedCanary.livePolicyIsNotTheCanary
+            ? `the live FLEET policy is ${seen.deployedCanary.restoredTo ?? 'none'}, which is not ` +
+              `the canary's ${seen.deployedCanary.applied}`
+            : `the live FLEET policy is still the canary's own ${seen.deployedCanary.applied}`,
+      ),
+      fromProduction(
+        'and nothing it did reached what the project believes',
+        seen.deployedCanary !== null &&
+          seen.deployedCanary.isolated &&
+          seen.deployedCanary.knowledgeInScope === 0,
+        seen.deployedCanary === null
+          ? 'no canary has run there'
+          : `the scope it ran in holds ${seen.deployedCanary.knowledgeInScope} knowledge row(s)`,
+      ),
     ],
     'The canary cycle is driven end to end against real `fleet_policy` rows in an isolated ' +
       'TECHNICAL scope, both ways round: real work refused as a first canary on a pressure test ' +
