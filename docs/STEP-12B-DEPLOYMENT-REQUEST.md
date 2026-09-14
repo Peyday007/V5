@@ -51,7 +51,12 @@ removed:
 - **P** — the hosted pre/post-restart check, which is the `Deploy` workflow's
   own record and is keyed to an exact revision. A reporter cannot attest to a CI
   run it did not observe, so the condition is open until a deploy of *this*
-  revision writes `docs/evidence/step12b-hosted/verification.json`.
+  revision produces one. **The record is never committed**: Deploy uploads it as
+  the `step12b-hosted-verification` artifact and the acceptance workflow fetches
+  it from that run. An earlier version of this file said the deploy "writes
+  `docs/evidence/step12b-hosted/verification.json`" into the tree — it does not,
+  it never did, and a hand-transcribed copy of it was the defect; see
+  `docs/STEP-12B-REMAINING.md` §2.
 - **A, B, E, M, N, Q** — each carries at least one condition that only rows in a
   Brain that has actually run can answer. `scripts/step12b-combine.ts` joins the
   container reading with the checkout reading **at the condition level**, which
@@ -89,10 +94,12 @@ why `deploy.yml` is `workflow_dispatch` only:
 ## 4. What happens after, in order
 
 1. `Deploy` runs the suites, builds the image, deploys it, and runs the hosted
-   verification either side of a real restart — writing
-   `docs/evidence/step12b-hosted/verification.json` stamped with the deployed
-   revision. That closes **P**'s last condition.
-2. `Step 12B acceptance` runs the reporter inside the container and brings back
+   verification either side of a real restart — uploading
+   `step12b-hosted-verification` stamped with the deployed revision. That closes
+   **P**'s last condition, with no commit anywhere: step 2 fetches it.
+2. `Step 12B acceptance` finds that `Deploy` run through the API, checks it
+   succeeded and that its artifact names the run's own `head_sha`, ships the
+   record into the container, runs the reporter there and brings back
    `step12b-production.json`, carrying conditions rather than a verdict.
 3. `scripts/step12b-combine.ts` joins that with a checkout run **by condition
    name**, and prints the A–Q matrix with every condition resolved to the

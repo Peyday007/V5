@@ -1,0 +1,36 @@
+{
+  "what": "Two independent container readings of Brain's own russell_cycle cursor, at one revision, taken three minutes apart.",
+  "whyItExists": "L's condition 'its cursor moved between two readings' read FAIL inside each single container run, byte-identical both times. This is what distinguishes a stopped loop from a measurement window narrower than the tick it measures. It is a diagnosis, not a verdict: no code reads this file, and it awards no condition.",
+  "revision": "dd1f9be279efce3adc82ec4c27e9797e79814eea",
+  "tickMs": 30000,
+  "tickConstant": "RUSSELL_TICK_MS in server/services/russell/loop.ts",
+  "readings": [
+    {
+      "workflowRun": "https://github.com/Peyday007/V5/actions/runs/34773229729",
+      "runId": 34773229729,
+      "artifactDigest": "sha256:a731f45e77fda1f1272d596201c8277439e5fe63f6bc70bd2a9c942c8e56f0fb",
+      "reporterStepRanFor": "run started 2026-09-13T17:59:29Z, completed 2026-09-13T18:00:03Z",
+      "cursorFirstRead": "2026-09-13T17:59:40.794Z",
+      "cursorSecondRead": "2026-09-13T17:59:40.794Z",
+      "movedWithinThisRun": false
+    },
+    {
+      "workflowRun": "https://github.com/Peyday007/V5/actions/runs/34773399528",
+      "runId": 34773399528,
+      "artifactDigest": "sha256:2579a8c123f73e03fe3d1065862eaf967ea78250dd54c2f79ff64577fc52fadb",
+      "reporterStepRanFor": "run started 2026-09-13T18:02:36Z, completed 2026-09-13T18:03:04Z",
+      "cursorFirstRead": "2026-09-13T18:02:40.809Z",
+      "cursorSecondRead": "2026-09-13T18:02:40.809Z",
+      "movedWithinThisRun": false
+    }
+  ],
+  "acrossTheTwoRuns": {
+    "from": "2026-09-13T17:59:40.794Z",
+    "to": "2026-09-13T18:02:40.809Z",
+    "deltaMs": 180015,
+    "wholeTicks": 6,
+    "moved": true
+  },
+  "conclusion": "The deployed loop ticked six times between the two readings. Inside one container run it cannot be seen to move, because the image excludes tests/, docs/ and client/src, so the repository half of the report is skipped and the whole run takes about sixteen seconds against a thirty-second tick. Both readings therefore fall inside one tick. The fix is in the reporter, not the loop: reReadCycle polls for a window two ticks wide. It can still fail, and a loop that has genuinely stopped will still produce the same timestamp for seventy-five seconds.",
+  "notAVerdict": "L reads FAIL at this revision and stays FAIL. The reporter at dd1f9be evaluated the condition and it did not hold. Nothing here changes that, and no gate consumes this file."
+}

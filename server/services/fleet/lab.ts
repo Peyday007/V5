@@ -58,6 +58,10 @@ import {
   type DrainRound,
 } from './labRunners.ts';
 import { AUDIT_SEPARATION_MINIMUM } from '../research/auditEligibility.ts';
+import {
+  claimsCapacityEnvelope,
+  startCapacityMeasurement,
+} from './capacityMeasurement.ts';
 
 /**
  * What a rollback restores when the canary displaced nothing at all.
@@ -283,6 +287,33 @@ export function checkEnvelope(
 }
 
 /**
+ * Is this experiment the one bounded measurement that actually fires workers?
+ *
+ * `FLEET_PROVIDER` has two shapes and they are not the same act. Read from the
+ * ledger it is a report on fires that already happened, costs nothing and needs
+ * no authorization. Declared with `FLEET_PROVIDER_CAPACITY_V1` in its manifest
+ * and that envelope's own bounds, it is a **bounded dispatch experiment**: it
+ * creates bins, Brain fires them at real surfaces, and what comes back is the
+ * only evidence from which provider capacity can honestly be derived.
+ *
+ * Which one it is, is read from the rows rather than chosen by the caller: the
+ * manifest must name the envelope and the stored envelope must be inside the
+ * one in code. Both, because a manifest naming it with different bounds is not
+ * this measurement and bounds that match under another name are not either.
+ *
+ * `PRESSURE_MODES` deliberately does not contain `FLEET_PROVIDER` — the ledger
+ * read must stay free — so the authorization and isolation rules that set apply
+ * are applied to this shape here instead of by widening that constant.
+ */
+export function isBoundedCapacityMeasurement(
+  mode: LabMode,
+  manifest: Record<string, unknown>,
+  envelope: TestEnvelope,
+): boolean {
+  return mode === 'FLEET_PROVIDER' && claimsCapacityEnvelope(manifest, envelope).ok;
+}
+
+/**
  * Declare an experiment.
  *
  * Declaring is not running. A pressure mode with an incomplete envelope is
@@ -312,8 +343,17 @@ export async function declareExperiment(input: {
    */
   const isolated = project.purpose === 'TECHNICAL';
   const envelopeCheck = checkEnvelope(input.mode, input.envelope);
+  /*
+   * The bounded capacity measurement fires real surfaces, so the isolation rule
+   * reaches it too. It is not in `PRESSURE_MODES` because the *ledger read*
+   * under the same mode name must stay free, and widening that constant would
+   * have made reporting on past fires need a grant.
+   */
+  const firesRealSurfaces =
+    PRESSURE_MODES.includes(input.mode) ||
+    isBoundedCapacityMeasurement(input.mode, input.manifest ?? {}, input.envelope);
   const refusal =
-    !isolated && PRESSURE_MODES.includes(input.mode)
+    !isolated && firesRealSurfaces
       ? 'A pressure test must run in an isolated testing scope, not in a live project.'
       : envelopeCheck.ok
         ? null
@@ -514,14 +554,50 @@ export async function runExperiment(input: {
   if (experiment.state !== 'DECLARED') return experiment;
 
   const now = nowIso();
+  const bounded = isBoundedCapacityMeasurement(
+    experiment.mode,
+    experiment.manifest,
+    experiment.envelope,
+  );
 
-  if (PRESSURE_MODES.includes(experiment.mode) && !input.pressureAuthorized) {
+  if ((PRESSURE_MODES.includes(experiment.mode) || bounded) && !input.pressureAuthorized) {
     await settle(experiment.id, {
       state: 'REFUSED',
       refusalReason:
         'This test puts real pressure on real surfaces. It needs a person to authorize the ceiling, the duration and the stop conditions before anything runs.',
       at: now,
     });
+    return (await getExperiment(experiment.id))!;
+  }
+
+  /*
+   * The bounded capacity measurement, which is the only thing in this file that
+   * fires a real surface.
+   *
+   * It does not settle here, and that is the whole difference between it and
+   * every other mode. The others compute an answer in this call; this one
+   * **creates the bins and leaves**. Brain's dispatcher fires them, workers
+   * arrive and answer them, and `enforceCapacityLimits` on the dispatch tick is
+   * what stops the run and writes the result — so the envelope bounds the
+   * execution while it happens rather than describing it afterwards.
+   *
+   * That is also why gate G cannot be satisfied by a health check declared with
+   * the same manifest: the evidence it reads is dispatch, arrival and accepted
+   * completion rows correlated to this experiment's own bins, and a mode that
+   * returns in milliseconds without creating one correlates to nothing.
+   */
+  if (bounded) {
+    const started = await startCapacityMeasurement({
+      experimentId: experiment.id,
+      projectId: experiment.projectId,
+      manifest: experiment.manifest,
+      envelope: experiment.envelope,
+      pressureAuthorized: input.pressureAuthorized,
+      actor: experiment.actor,
+    });
+    if (!started.ok) {
+      await settle(experiment.id, { state: 'REFUSED', refusalReason: started.reason, at: nowIso() });
+    }
     return (await getExperiment(experiment.id))!;
   }
 
@@ -1134,6 +1210,81 @@ export async function rollbackFinding(input: {
     [now, now, input.experimentId],
   );
   return (await getExperiment(input.experimentId))!;
+}
+
+/**
+ * Whether the fleet is running on the setting a canary displaced.
+ *
+ * ---------------------------------------------------------------------------
+ * The defect this exists to close, which was mine and which passed
+ * ---------------------------------------------------------------------------
+ *
+ * The acceptance reading asked whether the live policy's **id** differed from
+ * the canary's. A rollback writes forward rather than deleting, so the row
+ * after a canary *always* has a different id — and so does a row that kept the
+ * canary's own target. A different id is therefore evidence that something was
+ * written, and no evidence at all that anything was restored.
+ *
+ * Restoration is a **value**: the live policy must be a newer row than the
+ * canary *and* carry the target the canary displaced, which `applyFinding`
+ * recorded before it replaced anything. The two cases have different right
+ * answers and both are asked — a canary over a real policy restores that
+ * policy's target, and one over no prior policy restores the dispatcher's own
+ * conservative default, because "nothing" has to mean something concrete.
+ *
+ * Pure, and here rather than in the reporter, because the rollback and the
+ * reading of it must not be able to disagree about what restoration means — the
+ * same reason `auditRound.ts` is one module with three readers.
+ */
+export type RestorationVerdict =
+  | { restored: true; expected: number }
+  | { restored: false; expected: number; reason: string };
+
+export function restorationOf(input: {
+  /** Null until the experiment has actually been rolled back. */
+  rolledBackAt: string | null;
+  /** What `applyFinding` recorded, before the canary replaced it. */
+  displacedTarget: number | null;
+  /** The policy row the canary itself wrote. */
+  canary: { target: number; version: number } | null;
+  /** The newest fleet policy row, which is what the fleet is running on. */
+  live: { target: number; version: number } | null;
+}): RestorationVerdict {
+  const expected = input.displacedTarget ?? DEFAULT_TARGET_WITH_NO_PRIOR_POLICY;
+  if (input.rolledBackAt === null) {
+    return { restored: false, expected, reason: 'the canary has not been rolled back' };
+  }
+  if (input.canary === null) {
+    return {
+      restored: false,
+      expected,
+      reason: 'the policy row the canary wrote is not readable, so nothing can be compared to it',
+    };
+  }
+  if (input.live === null) {
+    return { restored: false, expected, reason: 'no fleet policy row exists to read' };
+  }
+  if (input.live.version <= input.canary.version) {
+    return {
+      restored: false,
+      expected,
+      reason: `the live policy is version ${input.live.version}, which is not newer than the canary's ${input.canary.version}`,
+    };
+  }
+  if (input.live.target !== expected) {
+    return {
+      restored: false,
+      expected,
+      // Named exactly, because a newer row carrying the canary's own value is
+      // the case this function was written for and it must not read as a near
+      // miss.
+      reason:
+        input.live.target === input.canary.target
+          ? `the live policy is newer but still carries the canary's own target ${input.canary.target}, not the displaced ${expected}`
+          : `the live target is ${input.live.target}, not the displaced ${expected}`,
+    };
+  }
+  return { restored: true, expected };
 }
 
 /* ==========================================================================

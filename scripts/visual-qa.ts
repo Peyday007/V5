@@ -36,6 +36,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { pickPort } from '../tests/helpers/ports.ts';
+import type { DeployedPhoneRecord } from './phoneRecord.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 /*
@@ -49,7 +50,17 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
  * applied by one of two readers is worse than none" this file keeps recording.
  */
 const PORT = pickPort(6400, 200);
-const BASE = `http://127.0.0.1:${PORT}`;
+
+/**
+ * The Brain this harness is driving.
+ *
+ * A local one it spawned, almost always — and in `--deployed` mode, the one
+ * that is actually running. It is a `let` for exactly that one case and is
+ * assigned once, before anything opens a browser or a socket. Every helper
+ * below reads it rather than rebuilding a URL, so there is one answer to
+ * "which Brain is this" rather than two that can disagree.
+ */
+let BASE = `http://127.0.0.1:${PORT}`;
 const EMAIL = 'visual-qa@example.invalid';
 const BOOTSTRAP = 'bootstrap-password-01';
 const PASSWORD = 'visual-qa-password-01';
@@ -505,6 +516,29 @@ interface JourneyStep {
   read?: string;
 }
 
+/**
+ * One whitespace rule, applied to both sides of every on-screen comparison.
+ *
+ * A stored statement and the paragraph rendering it are the *same words* and
+ * routinely not the same bytes: a newline becomes a space, two spaces become
+ * one, and the browser's own `innerText` introduces non-breaking spaces and
+ * narrow no-break spaces around punctuation. The first version collapsed only
+ * the page and compared it against a raw needle, so any statement carrying a
+ * line break could never be found however plainly it was displayed — and the
+ * reading said "not on screen" about something on the screen, which sends
+ * somebody looking for a defect that is not there.
+ *
+ * Kept as one expression and one function so the two can never drift: the
+ * string below is what runs in the page, and `normalizeText` is the identical
+ * rule applied here to the needle.
+ */
+const NORMALIZED_PAGE_TEXT =
+  "document.body.innerText.replace(/[\\u00a0\\u202f\\u2007]/g, ' ').replace(/\\s+/g, ' ').trim()";
+
+function normalizeText(value: string): string {
+  return value.replace(/[\u00a0\u202f\u2007]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /** Press a thumb-bar cell by the label a person reads on it. */
 function railPress(label: string): string {
   return `(() => {
@@ -752,9 +786,23 @@ const JOURNEY_DECISION: JourneyStep[] = [
       button.click();
       return 'chose ' + (choice.querySelector('strong').textContent || '').trim();
     })()`,
-    // The card is gone because the list re-read from the server, not because
-    // anything here hid it — `NeedsYouView` takes no optimistic update.
-    until: "document.querySelector('.rs-decision-what') === null",
+    /*
+     * The *answered* offer is gone — not "no decision is on the page".
+     *
+     * The card goes because the list re-read from the server, not because
+     * anything here hid it: `NeedsYouView` takes no optimistic update. What
+     * changed is what else is allowed to be beside it. This used to wait for
+     * `.rs-decision-what === null`, which was true while this branch was the
+     * only thing seeding Needs You and became false the moment the Software
+     * Factory's conversational entrance merged and seeded a software decision
+     * of its own. **Neither branch was wrong; the merged tree was**, and a
+     * predicate about "no decision anywhere" is a predicate about what every
+     * other workstream happens to be doing. `deploymentOwnership` refuses a
+     * migration collision and a port collision and can never see this one.
+     */
+    until:
+      "![...document.querySelectorAll('.rs-choice')].some((el) => " +
+      "/authorize this plan/i.test(el.textContent || ''))",
     patience: 30_000,
     read: "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 90)",
   },
@@ -933,28 +981,627 @@ interface Options {
   outputDir: string;
   rendersDir: string | null;
   only: 'constellation' | null;
+  /** An https origin to inspect read-only instead of spawning a Brain. */
+  deployed: string | null;
+  /** Where the deployed inspection's record goes — outside the worktree. */
+  emitPhone: string | null;
+  /** Open a window and let a person sign in, instead of reading a session. */
+  signIn: boolean;
+  /** The deployment this reading is meant to be about, so a mismatch is visible. */
+  expectRevision: string | null;
 }
 
 function parseOptions(argv: string[]): Options {
   let positional: string | null = null;
   let rendersDir: string | null = null;
   let only: 'constellation' | null = null;
+  let deployed: string | null = null;
+  let emitPhone: string | null = null;
+  let signIn = false;
+  let expectRevision: string | null = null;
   for (const argument of argv) {
     if (argument.startsWith('--renders=')) rendersDir = argument.slice('--renders='.length);
     else if (argument === '--renders') rendersDir = RENDERS_DEFAULT;
     else if (argument === '--only=constellation') only = 'constellation';
+    else if (argument.startsWith('--deployed=')) deployed = argument.slice('--deployed='.length);
+    else if (argument.startsWith('--emit-phone='))
+      emitPhone = argument.slice('--emit-phone='.length);
+    else if (argument === '--sign-in') signIn = true;
+    else if (argument.startsWith('--expect-revision='))
+      expectRevision = argument.slice('--expect-revision='.length);
     else if (argument.startsWith('--')) throw new Error(`unknown option ${argument}`);
     else if (positional === null) positional = argument;
+  }
+  if (deployed !== null && !validDeployedOrigin(deployed)) {
+    throw new Error(
+      '--deployed must be an https origin with no path, e.g. https://brain.example (http is ' +
+        `allowed only on 127.0.0.1, which the integration test drives) — got ${deployed}`,
+    );
+  }
+  if (deployed !== null && rendersDir !== null) {
+    throw new Error(
+      '--deployed is a read-only inspection of somebody else\'s Brain and must not produce the ' +
+        'approval render set: those images are of this tree, built here, and a deployed Brain is ' +
+        'running whatever was last released.',
+    );
   }
   return {
     outputDir: path.resolve(positional ?? path.join(os.tmpdir(), 'brain-visual-qa')),
     rendersDir: rendersDir === null ? null : path.resolve(REPO_ROOT, rendersDir),
     only,
+    deployed,
+    emitPhone,
+    signIn,
+    expectRevision,
   };
+}
+
+/* ==========================================================================
+ * Reading the deployed Brain through the phone interface, and changing nothing
+ *
+ * ---------------------------------------------------------------------------
+ * What this is for, and the two conditions it exists to answer
+ * ---------------------------------------------------------------------------
+ *
+ * Gate J's sequence — a person overrules a priority, Russell launches, the
+ * packet parks, a thumb answers it, the same mission carries on — is walked in
+ * full against a Brain this harness spawns, and every step of it resolves to
+ * ids. Two of J's conditions cannot be answered there and never will be:
+ *
+ *     the question a person typed was answered rather than left waiting
+ *     and its result was inspected there — a conclusion under Knows citing
+ *     that mission
+ *
+ * Both need a **worker that reached the sources**, and a spawned Brain fires
+ * none: no inference is bought here (§24), so Russell's turn stays `PENDING`
+ * and no packet ever files a report.
+ *
+ * ---------------------------------------------------------------------------
+ * The first version of this was wrong in six ways, and every one of them would
+ * have passed
+ * ---------------------------------------------------------------------------
+ *
+ * It is recorded rather than quietly fixed, because the shape of the mistake is
+ * the point: **a checker written against a remembered product rather than a
+ * read one passes by not looking.**
+ *
+ *  1. It matched `role === 'PERSON'`. `RUSSELL_MESSAGE_ROLES` is
+ *     `['USER', 'RUSSELL', 'SYSTEM']`, so it would have found no human turn in
+ *     any conversation and reported the Brain holds none.
+ *  2. It set the browser cookie on `127.0.0.1` while navigating to the deployed
+ *     origin, so every page would have loaded **signed out** — and a signed-out
+ *     Russell renders, so the screen check would have passed on a login screen.
+ *  3. It navigated to `/c/:id` and `/knows`. The router knows `/conversation/:id`
+ *     and `/knowledge`; both of those are `NOT_FOUND`.
+ *  4. It accepted any reply that was not `PENDING`, so a **FAILED** answer
+ *     counted as an answered question.
+ *  5. It checked that *some* text was on the page rather than that **this
+ *     answer** was, so a loading state, an error banner or an empty list would
+ *     have satisfied it.
+ *  6. It found an answered question in one conversation and a mission-linked
+ *     conclusion anywhere else in the Brain and called that a chain. Those are
+ *     two unrelated facts; J asks whether **this** question's work produced
+ *     **that** result.
+ *
+ * So the chain is now followed through the rows Brain wrote: a conversation
+ * with a `USER` turn and a `COMPLETE` Russell reply → the missions whose
+ * `conversationId` is that conversation → a knowledge row whose `missionId` is
+ * one of those missions. Each end is then read **on screen at 390px**, by its
+ * own text, with every not-yet state refused by name.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it seeds nothing, grants nothing and writes nothing
+ * ---------------------------------------------------------------------------
+ *
+ * The obvious way to close J's two is to do on the deployed Brain what the
+ * local journey does on its own: capture an idea, grant a standing authority,
+ * wait for a worker. **That is refused**, and the refusal is the design rather
+ * than caution. The deployed Brain holds real research; a synthetic idea in it
+ * is a row somebody has to recognise as fake later, a new standing grant is a
+ * spending authorization created to make a report come out right, and waiting
+ * for a worker to answer a question nobody asked spends the subscription on a
+ * test. §29 already refuses the smaller version of this — a Capability Lab
+ * health check reads rows rather than firing a worker to learn whether workers
+ * fire.
+ *
+ * So this mode **only reads**. `visit` is the only way it talks to the Brain,
+ * and it refuses any method but GET — not as a convention but as a thrown
+ * error, because a convention is the thing that erodes. There is no sign-in
+ * request either: see below.
+ *
+ * ---------------------------------------------------------------------------
+ * How it is authenticated, and why it never sees a password
+ * ---------------------------------------------------------------------------
+ *
+ * Every route it reads is behind `requirePerson`, and a worker principal is
+ * refused at the conversation routes **by principal type** (§24). So it needs a
+ * person's session — and there are exactly two honest ways to have one:
+ *
+ *   `--sign-in`       opens a **visible** browser at the origin and waits while
+ *                     the person signs in themselves. The credential is typed
+ *                     into the Brain's own login form, in their browser. This
+ *                     process never sees it.
+ *   `BRAIN_PHONE_SESSION`  a session cookie value from a browser that is
+ *                     already signed in.
+ *
+ * There is deliberately **no password option**. A harness that took one would
+ * mean somebody typing their Brain password into a terminal, a CI secret or a
+ * chat window, and the session it would mint is the same session the two paths
+ * above already produce.
+ * ========================================================================== */
+
+/** Where `--deployed` may point. */
+function validDeployedOrigin(value: string): boolean {
+  // https anywhere, and http only on loopback — which is not a network hop and
+  // is what the integration test drives a real Brain over.
+  return /^https:\/\/[^/]+$/.test(value) || /^http:\/\/127\.0\.0\.1:\d+$/.test(value);
+}
+
+/*
+ * The record's shape lives in `phoneRecord.ts`, imported rather than restated.
+ *
+ * It was declared here and again in `step12b-acceptance.ts`, and the reader
+ * validated none of it — so the two could disagree about what a reading is and
+ * nothing would say so. One definition, one validator, both imported.
+ */
+
+/**
+ * The only way this mode talks to the Brain, and it cannot be persuaded to
+ * write. A `method` argument would be the thing somebody passes 'POST' to one
+ * day; there is no argument.
+ */
+async function visit(cookie: string, route: string): Promise<Record<string, unknown> | null> {
+  const response = await fetch(`${BASE}${route}`, { method: 'GET', headers: { cookie } });
+  if (!response.ok) return null;
+  try {
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A signed-in session for the deployed origin, obtained without this process
+ * ever handling a password.
+ *
+ * `--sign-in` launches a visible Chromium at the origin and polls the page's
+ * own `document.cookie`-bearing requests until `/api/projects` answers 200 from
+ * inside it. The person signs in to the Brain's own form; what comes back here
+ * is the cookie their browser now holds.
+ */
+async function sessionForDeployed(options: Options): Promise<string> {
+  const supplied = (process.env['BRAIN_PHONE_SESSION'] ?? '').trim();
+  if (supplied.length > 0) return supplied.includes('=') ? supplied : `brain_session=${supplied}`;
+  if (!options.signIn) {
+    throw new Error(
+      'No session. Either set BRAIN_PHONE_SESSION to a session cookie from a browser that is ' +
+        'already signed in to this Brain, or pass --sign-in to open a window and sign in there. ' +
+        'There is no password option: every route this reads is behind requirePerson, and a ' +
+        'harness that took a password would mean typing it into a terminal or a CI secret to ' +
+        'mint the same session these two already produce.',
+    );
+  }
+  return signInWithAPerson(options);
+}
+
+async function signInWithAPerson(options: Options): Promise<string> {
+  const origin = options.deployed as string;
+  const port = 9222 + Math.floor(Math.random() * 300);
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-signin-profile-'));
+  const chrome = spawn(
+    CHROME,
+    [
+      // Deliberately **not** headless: a person has to be able to see and use
+      // the sign-in form. This is the one place in this file that wants a
+      // window.
+      '--no-sandbox',
+      '--disable-gpu',
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${profile}`,
+      origin,
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'], detached: true },
+  );
+  console.log(`\nA browser is open at ${origin}. Sign in there; nothing is typed here.`);
+  try {
+    const deadline = Date.now() + SIGN_IN_WINDOW_MS;
+    for (;;) {
+      if (Date.now() > deadline) {
+        throw new Error(`nobody signed in at ${origin} within ${SIGN_IN_WINDOW_MS / 1000}s`);
+      }
+      await sleep(2000);
+      let cookies: { name: string; value: string; domain: string }[] = [];
+      try {
+        const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as {
+          type: string;
+          webSocketDebuggerUrl: string;
+        }[];
+        const page = targets.find((entry) => entry.type === 'page');
+        if (!page) continue;
+        cookies = await readCookies(page.webSocketDebuggerUrl);
+      } catch {
+        continue;
+      }
+      const host = new URL(origin).hostname;
+      const session = cookies.find(
+        (entry) => entry.name.startsWith('brain_') && entry.domain.replace(/^\./, '') === host,
+      );
+      if (!session) continue;
+      const candidate = `${session.name}=${session.value}`;
+      // A cookie is not a session until the Brain agrees. Asked before the
+      // window closes, so a half-finished sign-in says so here rather than
+      // three screens later.
+      const probe = await fetch(`${origin}/api/projects`, { headers: { cookie: candidate } });
+      if (probe.ok) {
+        console.log('  signed in. Closing the window.');
+        return candidate;
+      }
+    }
+  } finally {
+    try {
+      process.kill(-chrome.pid!, 'SIGKILL');
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/** How long `--sign-in` waits for a person. Long, because a person is involved. */
+const SIGN_IN_WINDOW_MS = 300_000;
+
+/** One CDP round trip, for the sign-in window only. */
+async function readCookies(
+  wsUrl: string,
+): Promise<{ name: string; value: string; domain: string }[]> {
+  const socket = new WebSocket(wsUrl);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.addEventListener('open', () => resolve(), { once: true });
+      socket.addEventListener('error', () => reject(new Error('no debugger')), { once: true });
+    });
+    const answer = await new Promise<Record<string, unknown>>((resolve) => {
+      socket.addEventListener('message', (event) => {
+        const message = JSON.parse(String(event.data)) as { id?: number; result?: unknown };
+        if (message.id === 1) resolve((message.result ?? {}) as Record<string, unknown>);
+      });
+      socket.send(JSON.stringify({ id: 1, method: 'Network.getAllCookies' }));
+    });
+    return (answer['cookies'] ?? []) as { name: string; value: string; domain: string }[];
+  } finally {
+    socket.close();
+  }
+}
+
+/**
+ * The cookie, on the host actually being inspected.
+ *
+ * The first version of this hard-coded `127.0.0.1` while navigating to a
+ * deployed origin, so every page loaded signed out — and a signed-out Russell
+ * renders perfectly well, which is why that would have passed rather than
+ * failed. `secure` follows the scheme for the same reason: a `secure` cookie is
+ * not sent over http, and an http loopback Brain would have seen nothing.
+ */
+async function signInBrowserAt(cdp: Cdp, cookie: string, origin: string): Promise<void> {
+  const [name, value] = cookie.split('=');
+  const url = new URL(origin);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.setCookie', {
+    name: name ?? '',
+    value: value ?? '',
+    domain: url.hostname,
+    path: '/',
+    httpOnly: true,
+    secure: url.protocol === 'https:',
+  });
+}
+
+/**
+ * Is this screen the thing it claims to be, or one of the four states that are
+ * not?
+ *
+ * Signed out, loading, refused and errored all render, and all of them render
+ * *something* — which is exactly how a check for "some text is present" passes
+ * on every one of them. Each is named here so the record says which.
+ */
+const SCREEN_STATE = `(() => {
+  const has = (selector) => document.querySelector(selector) !== null;
+  if (has('.rs-signin') || has('input[type="password"]')) return 'SIGNED_OUT';
+  if (has('.rs-state-loading')) return 'LOADING';
+  if (has('.rs-state-forbidden')) return 'FORBIDDEN';
+  if (has('.rs-state-error')) return 'ERROR';
+  if (has('.rs-state-empty')) return 'EMPTY';
+  if (!has('.rs-shell')) return 'NOT_RUSSELL';
+  return 'READY';
+})()`;
+
+async function inspectDeployed(options: Options): Promise<void> {
+  const origin = options.deployed as string;
+  if (options.emitPhone === null) {
+    throw new Error('--emit-phone=<path> is required: the reading has to go somewhere.');
+  }
+  const target = path.resolve(options.emitPhone);
+  const inside = path.relative(REPO_ROOT, target);
+  if (inside.length > 0 && !inside.startsWith('..') && !path.isAbsolute(inside)) {
+    throw new Error(
+      `--emit-phone must be outside the repository (got ${inside}). A reading of somebody else's ` +
+        'running Brain committed into this tree would need a commit per reading and would be ' +
+        'stale the moment it landed — the same defect the hosted verification record had.',
+    );
+  }
+
+  BASE = origin;
+  fs.mkdirSync(options.outputDir, { recursive: true });
+  const findings: string[] = [];
+  const screenshots: string[] = [];
+  const cookie = await sessionForDeployed(options);
+
+  /*
+   * Which revision is running there, from the authenticated endpoint.
+   *
+   * `/healthz` is liveness and says nothing else on purpose; `/api/health`
+   * carries `revision` and only for a Brain administrator, because it sits with
+   * the rest of the operator's facts. A person who is not one gets `null`, and
+   * `null` is reported rather than filled in — an acceptance reading that
+   * cannot name its revision must be refused rather than trusted.
+   */
+  const health = await visit(cookie, '/api/health');
+  const deployedRevision =
+    typeof health?.['revision'] === 'string' ? (health['revision'] as string) : null;
+  const expectedRevision = options.expectRevision;
+  const revisionMatches =
+    expectedRevision === null || deployedRevision === null
+      ? null
+      : deployedRevision === expectedRevision;
+  if (revisionMatches === false && deployedRevision !== null && expectedRevision !== null) {
+    findings.push(
+      `this reading is of ${deployedRevision.slice(0, 8)} and was asked for about ` +
+        `${expectedRevision.slice(0, 8)} — so it is evidence about a different deployment`,
+    );
+  }
+  if (expectedRevision !== null && deployedRevision === null) {
+    findings.push(
+      'the deployed Brain did not report a revision, so this reading cannot be bound to the ' +
+        'deployment being evaluated. /api/health returns it only to a Brain administrator.',
+    );
+  }
+
+  const answered: DeployedPhoneRecord['answeredQuestion'] = {
+    found: false,
+    status: null,
+    conversationId: null,
+    excerpt: null,
+    readOnScreen: false,
+    screenSaw: null,
+  };
+  const result: DeployedPhoneRecord['missionLinkedResult'] = {
+    found: false,
+    missionId: null,
+    missionFromConversation: false,
+    knowledgeId: null,
+    statement: null,
+    citesDocument: false,
+    citesAudit: false,
+    readOnScreen: false,
+    screenSaw: null,
+  };
+
+  /*
+   * One chain, followed forwards. A conversation is only a candidate if the
+   * work it caused produced a conclusion — otherwise this would report an
+   * answered question from one thread and a result from another and call the
+   * pair a sequence, which is the sixth defect above.
+   */
+  const conversations = await visit(cookie, '/api/russell/conversations');
+  const threads = Array.isArray(conversations?.['conversations'])
+    ? (conversations['conversations'] as Record<string, unknown>[])
+    : [];
+  for (const thread of threads) {
+    const id = thread['id'];
+    if (typeof id !== 'string') continue;
+    const detail = await visit(cookie, `/api/russell/conversations/${id}`);
+    const turns = Array.isArray(detail?.['turns'])
+      ? (detail['turns'] as Record<string, unknown>[])
+      : [];
+    const askedAt = turns.findIndex((turn) => turn['role'] === 'USER');
+    if (askedAt < 0) continue;
+    // COMPLETE and nothing else. PENDING is a question still waiting, which is
+    // the thing this condition exists to distinguish; FAILED is an answer that
+    // did not happen.
+    const reply = turns
+      .slice(askedAt + 1)
+      .find((turn) => turn['role'] === 'RUSSELL' && turn['status'] === 'COMPLETE');
+    if (!reply) continue;
+    const body = typeof reply['content'] === 'string' ? (reply['content'] as string) : '';
+    if (body.trim().length === 0) continue;
+
+    const projectId = typeof thread['projectId'] === 'string' ? (thread['projectId'] as string) : null;
+    if (projectId === null) continue;
+
+    // The missions this conversation produced, by Brain's own foreign key.
+    const work = await visit(cookie, `/api/russell/projects/${projectId}/work`);
+    const missions = Array.isArray(work?.['missions'])
+      ? (work['missions'] as Record<string, unknown>[])
+      : [];
+    const mine = new Set(
+      missions
+        .filter((mission) => mission['conversationId'] === id)
+        .map((mission) => mission['id'])
+        .filter((value): value is string => typeof value === 'string'),
+    );
+    if (mine.size === 0) continue;
+
+    const knowledge = await visit(cookie, `/api/russell/projects/${projectId}/knowledge`);
+    const conclusions = Array.isArray(knowledge?.['knowledge'])
+      ? (knowledge['knowledge'] as Record<string, unknown>[])
+      : [];
+    const cited = conclusions.find(
+      (row) => typeof row['missionId'] === 'string' && mine.has(row['missionId'] as string),
+    );
+    if (!cited) continue;
+
+    answered.found = true;
+    answered.status = 'COMPLETE';
+    answered.conversationId = id;
+    answered.excerpt = body.trim().slice(0, 80);
+
+    const provenance = (cited['provenance'] ?? {}) as Record<string, unknown>;
+    result.found = true;
+    result.missionId = cited['missionId'] as string;
+    result.missionFromConversation = true;
+    result.knowledgeId = typeof cited['id'] === 'string' ? (cited['id'] as string) : null;
+    result.statement = typeof cited['statement'] === 'string' ? (cited['statement'] as string) : null;
+    result.citesDocument = typeof provenance['documentId'] === 'string';
+    result.citesAudit = typeof provenance['auditId'] === 'string';
+    break;
+  }
+  if (!answered.found) {
+    findings.push(
+      'no conversation on this Brain holds a question a person typed, a COMPLETE reply to it, ' +
+        'and a conclusion citing a mission that conversation produced. That is a fact about the ' +
+        'Brain, not a defect in the product — and the three are required together on purpose: ' +
+        'an answer in one thread and a result from another are not a chain.',
+    );
+  }
+
+  /*
+   * And then read both ends on the phone, which is the half the API cannot
+   * establish. A row that exists and a row a person can read are different
+   * claims, and J is about the second.
+   */
+  await withChromium(async (cdp) => {
+    await signInBrowserAt(cdp, cookie, origin);
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: PHONE.width,
+      height: PHONE.height,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+
+    /*
+     * Read a screen, and say whether the words that should be on it are.
+     *
+     * `arrive` is how the screen is reached, because **how** matters here. A
+     * full page load is right for the first address and wrong for the second:
+     * the shell decides which project Knows is about from the thread it is
+     * currently in, so reloading `/knowledge` directly lands on whichever
+     * thread a fresh shell opens — which is not the one this reading followed
+     * to a mission. Pressing the rail is the same move a person makes, and it
+     * keeps the thread.
+     */
+    const look = async (
+      arrive: () => Promise<void>,
+      needle: string,
+      file: string,
+    ): Promise<{ state: string; sawIt: boolean; saw: string }> => {
+      await arrive();
+      await waitFor(cdp, `${SCREEN_STATE} !== 'LOADING'`, 20_000);
+      await sleep(1200);
+      const state = (await evaluate(cdp, SCREEN_STATE)) as string;
+      /*
+       * Whitespace normalized on **both** sides.
+       *
+       * The page's own text was collapsed and the needle was not, so a
+       * statement carrying a newline, a double space or a non-breaking space —
+       * which a stored statement and a rendered paragraph both routinely do —
+       * could never be found however plainly it was on the screen. A reading
+       * that says "not on screen" about text that is on the screen is the
+       * expensive direction of wrong: somebody goes looking for a defect that
+       * is not there.
+       */
+      const sawIt = (await evaluate(
+        cdp,
+        `${NORMALIZED_PAGE_TEXT}.includes(${JSON.stringify(normalizeText(needle))})`,
+      )) as boolean;
+      const shot = (await cdp.send('Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: true,
+      })) as { data: string };
+      fs.writeFileSync(path.join(options.outputDir, file), Buffer.from(shot.data, 'base64'));
+      screenshots.push(file);
+      const saw = (await evaluate(cdp, `${NORMALIZED_PAGE_TEXT}.slice(0, 120)`)) as string;
+      return { state, sawIt, saw };
+    };
+
+    if (answered.conversationId && answered.excerpt) {
+      const thread = answered.conversationId;
+      const seen = await look(
+        () => cdp.send('Page.navigate', { url: `${BASE}/conversation/${thread}` }).then(() => undefined),
+        answered.excerpt,
+        'deployed-01-the-answer.png',
+      );
+      answered.readOnScreen = seen.state === 'READY' && seen.sawIt;
+      answered.screenSaw = `${seen.state}: ${seen.saw}`;
+      if (!answered.readOnScreen) {
+        findings.push(
+          `the answer is in the rows and not on the screen at /conversation/${answered.conversationId}` +
+            ` — the page was ${seen.state} and ${seen.sawIt ? 'did' : 'did not'} carry the answer's own words`,
+        );
+      }
+    }
+
+    if (result.statement) {
+      /*
+       * Reached by pressing Knows from the thread, not by loading /knowledge.
+       *
+       * The shell shows the project the open conversation is attached to, so
+       * arriving from this thread is what makes the conclusion the one this
+       * reading followed. A direct load would show a fresh shell's project,
+       * and a conclusion missing from *that* project's list would be reported
+       * as a conclusion missing from the screen.
+       */
+      const seen = await look(async () => {
+        const pressed = (await evaluate(cdp, railPress('Knows'))) as boolean;
+        if (!pressed) {
+          findings.push('the Knows control was not on the screen to press from the thread');
+          await cdp.send('Page.navigate', { url: `${BASE}/knowledge` });
+        }
+      }, result.statement.slice(0, 60), 'deployed-02-the-result.png');
+      result.readOnScreen = seen.state === 'READY' && seen.sawIt;
+      result.screenSaw = `${seen.state}: ${seen.saw}`;
+      if (!result.readOnScreen) {
+        findings.push(
+          'the conclusion is in the rows and not on the screen at /knowledge — the page was ' +
+            `${seen.state} and ${seen.sawIt ? 'did' : 'did not'} carry the conclusion's own statement`,
+        );
+      }
+    }
+  });
+
+  const record: DeployedPhoneRecord = {
+    brain: origin,
+    inspectedAt: new Date().toISOString(),
+    deployedRevision,
+    expectedRevision,
+    revisionMatches,
+    answeredQuestion: answered,
+    missionLinkedResult: result,
+    screenshots,
+    findings,
+  };
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, `${JSON.stringify(record, null, 2)}\n`);
+  console.log(`\nDeployed phone reading written to ${target}`);
+  console.log(`  revision             ${deployedRevision ?? 'not reported to this person'}`);
+  console.log(
+    `  answered question    ${answered.found ? `${answered.status} in ${answered.conversationId}, on screen: ${answered.readOnScreen}` : 'no chain on this Brain'}`,
+  );
+  console.log(
+    `  mission result       ${result.found ? `${result.knowledgeId} citing ${result.missionId}, on screen: ${result.readOnScreen}` : 'no chain on this Brain'}`,
+  );
+  for (const finding of findings) console.log(`  - ${finding}`);
 }
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+  /*
+   * Before the build and before the spawn, because this mode does neither. A
+   * deployed Brain is running whatever was last released, and building a client
+   * or starting a second server to look at it would produce nothing but noise.
+   */
+  if (options.deployed !== null) {
+    await inspectDeployed(options);
+    return;
+  }
   const { outputDir } = options;
   fs.mkdirSync(outputDir, { recursive: true });
   /*
@@ -1953,6 +2600,27 @@ const JOURNEY_EFFECTS: {
   knowledgeRows: number | null;
   knowledgeCitingThisMission: number | null;
   askedTurnStatus: string | null;
+  /**
+   * Gate M's last condition, answered where a real one can be.
+   *
+   * M compares four readers of one progress projection — the briefing, the
+   * conversation hat, the progress route and the constellation — and it made
+   * that comparison **in process**, then said of the HTTP version: *"driven
+   * through the services the routes call, which is where the derivation
+   * lives."* True, and it is the substitution this repository refuses
+   * everywhere else: the route layer adds `requirePerson` and
+   * `decideProjectAccess`, a handler that resolved before it authorized would
+   * be invisible from a service call, and §29's own rule is that a mechanism
+   * nothing calls is not a mechanism.
+   *
+   * It is asked here rather than in the reporter because this harness already
+   * has the two things the question needs and the reporter has neither: a real
+   * server on a real socket, and a person signed into it. Adding a server spawn
+   * to a read-only reporter to ask one question would be the more expensive way
+   * to get a worse answer.
+   */
+  httpProgressMatchesBriefing: boolean | null;
+  httpProgressSaw: string | null;
 } = {
   standingAuthorityGranted: null,
   ideaOverriddenByAPerson: null,
@@ -1970,6 +2638,8 @@ const JOURNEY_EFFECTS: {
   knowledgeRows: null,
   knowledgeCitingThisMission: null,
   askedTurnStatus: null,
+  httpProgressMatchesBriefing: null,
+  httpProgressSaw: null,
 };
 
 /**
@@ -2685,6 +3355,76 @@ async function persistedEffects(
     console.log(`  work                 ${groups.length} group(s) after the change`);
   }
 
+  /*
+   * M's four readers of one projection, over HTTP, as the signed-in person.
+   *
+   * Two routes, two independent derivations of the same thing: `/progress`
+   * calls `projectProgress` and `/briefing` calls `briefing`, which carries its
+   * own `progress`. They must agree field for field — and the three readings
+   * the progress route returns must name three *different* denominators,
+   * because one number pretending to be universal is the defect §29 records
+   * ("0 of 8 settled" was accurate and read as failure). No headline may carry
+   * a percentage, and the ratio must be whole or absent.
+   *
+   * Failing to read either route is a missing measurement rather than a
+   * finding: `null`, with what happened written down.
+   */
+  if (seeded.projectId) {
+    const progress = await read(`/api/russell/projects/${seeded.projectId}/progress`);
+    const brief = await read(`/api/russell/projects/${seeded.projectId}/briefing`);
+    const viaRoute = (progress?.['project'] ?? null) as Record<string, unknown> | null;
+    const viaWork = (progress?.['work'] ?? null) as Record<string, unknown> | null;
+    const viaBuild = (progress?.['build'] ?? null) as Record<string, unknown> | null;
+    const viaBriefing = ((brief?.['briefing'] as Record<string, unknown> | undefined)?.[
+      'progress'
+    ] ?? null) as Record<string, unknown> | null;
+
+    if (viaRoute === null || viaBriefing === null) {
+      JOURNEY_EFFECTS.httpProgressSaw =
+        `progress route ${progress === null ? 'unreadable' : 'read'}, ` +
+        `briefing ${brief === null ? 'unreadable' : 'read'} — one of them carried no progress`;
+    } else {
+      const same = (['headline', 'stage', 'denominator'] as const).every(
+        (field) => viaRoute[field] === viaBriefing[field],
+      );
+      const ratiosAgree =
+        JSON.stringify(viaRoute['ratio']) === JSON.stringify(viaBriefing['ratio']);
+      const milestonesAgree =
+        JSON.stringify(viaRoute['milestones']) === JSON.stringify(viaBriefing['milestones']);
+      const denominators = [viaRoute, viaWork, viaBuild]
+        .map((reading) => String(reading?.['denominator'] ?? ''))
+        .filter((value) => value.length > 0);
+      const denominatorsDiffer = new Set(denominators).size === denominators.length;
+      const named = String(viaRoute['denominator'] ?? '').trim().length > 0;
+      const headlines = [viaRoute, viaWork, viaBuild, viaBriefing].map((reading) =>
+        String(reading?.['headline'] ?? ''),
+      );
+      const noPercentage = headlines.every((headline) => !/\d+\s*%/.test(headline));
+      const ratio = viaRoute['ratio'] as { done?: unknown; total?: unknown } | null;
+      const ratioWhole =
+        ratio === null ||
+        ratio === undefined ||
+        (Number.isInteger(ratio.done) && Number.isInteger(ratio.total));
+
+      JOURNEY_EFFECTS.httpProgressMatchesBriefing =
+        same && ratiosAgree && milestonesAgree && denominatorsDiffer && named && noPercentage && ratioWhole;
+      JOURNEY_EFFECTS.httpProgressSaw =
+        `two routes as a signed-in person: headline/stage/denominator ${same ? 'agree' : 'DIFFER'}` +
+        `, ratio ${ratiosAgree ? 'agrees' : 'DIFFERS'}, milestones ${milestonesAgree ? 'agree' : 'DIFFER'}` +
+        `; denominators [${denominators.join(' | ')}]${denominatorsDiffer ? '' : ' — NOT DISTINCT'}` +
+        `; ${noPercentage ? 'no percentage in any of 4 headlines' : 'A HEADLINE CARRIES A PERCENTAGE'}` +
+        `; ratio ${ratioWhole ? 'whole or absent' : 'IS A FRACTION OF A THING'}`;
+    }
+    console.log(
+      `  progress over HTTP   ${JOURNEY_EFFECTS.httpProgressSaw ?? 'not measured'}`,
+    );
+    if (JOURNEY_EFFECTS.httpProgressMatchesBriefing === false) {
+      found.push(
+        `two routes disagree about one project's progress: ${JOURNEY_EFFECTS.httpProgressSaw}`,
+      );
+    }
+  }
+
   return found;
 }
 
@@ -2815,6 +3555,16 @@ async function waitForParkedDecision(cookie: string, seeded: Seeded): Promise<Pa
  * `deviceScaleFactor: 2`; reusing its session would mean leaving the journey's
  * last screen in a state the next reader has to reason about.
  */
+/** The project this harness seeded everything into. */
+async function firstProjectId(cookie: string): Promise<string> {
+  const response = await fetch(`${BASE}/api/projects`, { headers: { cookie } });
+  if (!response.ok) return '';
+  const body = (await response.json()) as Record<string, unknown>;
+  const rows = Array.isArray(body['projects']) ? (body['projects'] as Record<string, unknown>[]) : [];
+  const first = rows[0]?.['id'];
+  return typeof first === 'string' ? first : '';
+}
+
 async function captureSettledNeedsYou(
   cookie: string,
   rendersDir: string,
@@ -2828,6 +3578,46 @@ async function captureSettledNeedsYou(
         'state of Needs You was never rendered',
     );
     return found;
+  }
+
+  /*
+   * Settle the *other* workstream's card before photographing "settled".
+   *
+   * `NeedsYouView` reaches `.rs-nothing` only when the request list is empty
+   * **and** `software.length === 0` **and** no grant is outstanding — which is
+   * right: §29 records that a page holding a software card must not announce
+   * "nothing needs your decision". `seedSoftwareDecision` puts one there so the
+   * Software Factory's entrance can be photographed earlier in this same pass,
+   * and it is still outstanding by the time this runs. So this address is
+   * genuinely not settled, and waiting for `.rs-nothing` was waiting for a
+   * state the merged tree cannot reach.
+   *
+   * It is **declined**, which is a real terminal answer that creates nothing —
+   * no campaign, no branch, no worker. Authorizing it would settle the card by
+   * starting work nobody asked for, which is the more expensive way to get the
+   * same picture. The card was already photographed with its Authorize button
+   * intact; what this removes is a decision that has been made.
+   */
+  const pending = await fetch(`${BASE}/api/russell/projects/${await firstProjectId(cookie)}/software`, {
+    headers: { cookie },
+  })
+    .then(async (response) => (response.ok ? ((await response.json()) as Record<string, unknown>) : null))
+    .catch(() => null);
+  const requests = Array.isArray(pending?.['software'])
+    ? (pending['software'] as Record<string, unknown>[])
+    : [];
+  for (const entry of requests) {
+    const request = entry['request'] as Record<string, unknown> | undefined;
+    const id = request?.['id'];
+    if (typeof id !== 'string') continue;
+    // The view's own derivation of "this is what a person has to answer next",
+    // rather than a state string guessed from outside the module that owns it.
+    if (entry['awaitingPerson'] !== true) continue;
+    await fetch(`${BASE}/api/russell/software/${id}/decline`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: BASE, cookie },
+      body: JSON.stringify({ reason: 'Not part of this run — the card has already been captured.' }),
+    }).catch(() => null);
   }
   console.log('');
   await withChromium(async (cdp) => {

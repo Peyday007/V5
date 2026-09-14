@@ -61,6 +61,8 @@ import {
   applyFinding,
   checkEnvelope,
   declareExperiment,
+  getExperiment,
+  restorationOf,
   rollbackFinding,
   runExperiment,
   stalenessOf,
@@ -1301,7 +1303,146 @@ describe('the Capability Lab is bounded before it runs', () => {
     expect(history.length).toBeGreaterThanOrEqual(2);
     expect(history[0]?.reason).toMatch(/Rolled back/);
   });
+
+  /* ------------------------------------------------------------------ *
+   * Restoration is a value, not a newer id
+   * ------------------------------------------------------------------ */
+
+  /**
+   * The defect these are written from: the acceptance reading asked whether
+   * the live policy's **id** differed from the canary's. A rollback writes
+   * forward, so the row after a canary always has a different id — including a
+   * row that kept the canary's own number. `restorationOf` is the one reader
+   * both the transition and the reporter use, so the two cannot disagree about
+   * what "restored" means.
+   */
+  it('restores the displaced target when the canary ran over a real policy', async () => {
+    await setPolicy({ scope: 'FLEET', target: 6, actor: 'A person', reason: 'what the fleet runs on' });
+    const experiment = await completedCalibration('Over a real policy');
+
+    const applied = await applyFinding({
+      experimentId: experiment.id,
+      target: 9,
+      actor: 'A person',
+      reason: 'try more',
+    });
+    // Recorded before it was replaced, which is what makes the rollback
+    // answerable at all.
+    expect(applied.displacedTarget).toBe(6);
+
+    const canary = (await policyHistory('FLEET', null, 10))[0]!;
+    await rollbackFinding({ experimentId: experiment.id, actor: 'A person', reason: 'enough' });
+    const live = (await policyHistory('FLEET', null, 10))[0]!;
+
+    const verdict = restorationOf({
+      rolledBackAt: (await getExperiment(experiment.id))!.rolledBackAt,
+      displacedTarget: 6,
+      canary: { target: canary.target, version: canary.version },
+      live: { target: live.target, version: live.version },
+    });
+    expect(verdict).toEqual({ restored: true, expected: 6 });
+  });
+
+  it('restores the dispatcher default when the canary displaced no policy at all', async () => {
+    // No prior policy: "nothing" has to mean something concrete, and the
+    // canary's own number is the one thing it must not mean.
+    expect(await currentPolicy('FLEET', null)).toBeNull();
+    const experiment = await completedCalibration('Over an empty history');
+
+    const applied = await applyFinding({
+      experimentId: experiment.id,
+      target: 7,
+      actor: 'A person',
+      reason: 'first ever setting',
+    });
+    expect(applied.displacedTarget).toBeNull();
+
+    const canary = (await policyHistory('FLEET', null, 10))[0]!;
+    await rollbackFinding({ experimentId: experiment.id, actor: 'A person', reason: 'undo' });
+    const live = (await policyHistory('FLEET', null, 10))[0]!;
+    expect(live.target).toBe(DEFAULT_TARGET_WITH_NO_PRIOR_POLICY);
+
+    expect(
+      restorationOf({
+        rolledBackAt: (await getExperiment(experiment.id))!.rolledBackAt,
+        displacedTarget: null,
+        canary: { target: canary.target, version: canary.version },
+        live: { target: live.target, version: live.version },
+      }),
+    ).toEqual({ restored: true, expected: DEFAULT_TARGET_WITH_NO_PRIOR_POLICY });
+  });
+
+  it('refuses a newer row that kept the canary\'s own target, and names that exactly', () => {
+    const verdict = restorationOf({
+      rolledBackAt: '2026-09-14T00:00:00.000Z',
+      displacedTarget: 6,
+      canary: { target: 9, version: 4 },
+      // Newer — so an id comparison passes — and carrying the canary's number.
+      live: { target: 9, version: 5 },
+    });
+    expect(verdict.restored).toBe(false);
+    if (!verdict.restored) {
+      expect(verdict.reason).toMatch(/still carries the canary's own target 9, not the displaced 6/);
+    }
+  });
+
+  it('refuses a newer row that kept the canary value over an empty history too', () => {
+    const verdict = restorationOf({
+      rolledBackAt: '2026-09-14T00:00:00.000Z',
+      displacedTarget: null,
+      canary: { target: 7, version: 1 },
+      live: { target: 7, version: 2 },
+    });
+    expect(verdict.restored).toBe(false);
+    if (!verdict.restored) expect(verdict.expected).toBe(DEFAULT_TARGET_WITH_NO_PRIOR_POLICY);
+  });
+
+  it('refuses an unrelated policy row standing in for the rollback', () => {
+    // The right value, on a row that predates the canary: somebody else's
+    // setting from before, which is not this canary being undone.
+    const verdict = restorationOf({
+      rolledBackAt: '2026-09-14T00:00:00.000Z',
+      displacedTarget: 6,
+      canary: { target: 9, version: 7 },
+      live: { target: 6, version: 5 },
+    });
+    expect(verdict.restored).toBe(false);
+    if (!verdict.restored) expect(verdict.reason).toMatch(/not newer than the canary's 7/);
+  });
+
+  it('refuses an experiment that has not been rolled back, whatever the fleet is running on', () => {
+    const verdict = restorationOf({
+      rolledBackAt: null,
+      displacedTarget: 6,
+      canary: { target: 9, version: 4 },
+      live: { target: 6, version: 5 },
+    });
+    expect(verdict.restored).toBe(false);
+    if (!verdict.restored) expect(verdict.reason).toMatch(/has not been rolled back/);
+  });
 });
+
+/** A completed ledger reading, which is what a canary is applied from. */
+async function completedCalibration(title: string) {
+  const declared = await declareExperiment({
+    projectId: project.id,
+    mode: 'CALIBRATION',
+    title,
+    envelope: {
+      ceiling: 0,
+      durationMinutes: 0,
+      stopConditions: [],
+      cleanup: 'Nothing is created.',
+      rollback: 'Revert the policy version.',
+      workloadClass: 'RESEARCH',
+      workKind: 'SYNTHETIC',
+    },
+    actor: 'A person',
+  });
+  const ran = await runExperiment({ id: declared.id, pressureAuthorized: false });
+  expect(ran.state).toBe('COMPLETE');
+  return ran;
+}
 
 /* ==========================================================================
  * Maps
@@ -2945,10 +3086,16 @@ describe('a verdict is derived from conditions, by both readers, identically', (
     expect(generic).toContain("'diff', '--quiet'");
     expect(generic.slice(0, generic.indexOf('\n}'))).toContain('return false;');
 
-    const product = reporter.slice(
-      reporter.indexOf('function productUnchangedSince('),
-      reporter.indexOf('function visualEvidence('),
-    );
+    /*
+     * Sliced to this function's own closing brace rather than to the next
+     * function's name. It used to end at `visualEvidence`, which was the next
+     * thing in the file when this was written and is now a hundred lines of
+     * hosted-attachment reading away — so the slice would have passed on text
+     * belonging to something else. Third time in this file, and the fix is the
+     * same each time: assert against the thing, not against its neighbourhood.
+     */
+    const productAt = reporter.indexOf('function productUnchangedSince(');
+    const product = reporter.slice(productAt, reporter.indexOf('\n}', productAt));
     expect(product).toContain('unchangedSince(revision, ');
     expect(product).toContain("'client'");
     expect(product).toContain("'server'");
@@ -3065,5 +3212,436 @@ describe('nothing removes a requirement from completion except a recorded decisi
      * defect as approving its own design.
      */
     expect(codeOf(reporter)).not.toMatch(/deferredBy:\s*\{/);
+  });
+});
+
+/* ==========================================================================
+ * P's restart evidence arrives as an attachment, never as a commit
+ *
+ * The Deploy workflow proves the live Brain refuses what it should either side
+ * of a real restart, and gate P's condition R13 is that fact. A reporter cannot
+ * attest a CI run it did not observe, so it consumes the record that run leaves
+ * behind — and *how* that record reaches it turned out to matter more than what
+ * is in it.
+ *
+ * Two defects are pinned here, both of them mine:
+ *
+ *  1. I transcribed the uploaded artifact into `docs/evidence/step12b-hosted/`
+ *     and taught P to read it from the tree. A committed record needs a commit
+ *     per deploy and lands one commit *after* the revision it attests, so an
+ *     exact revision match reads false for a record that is perfectly good.
+ *  2. My remedy was `deployedUnchangedSince`, which accepted a record while a
+ *     named list of paths had not moved. The list omitted real image inputs —
+ *     `scripts/` among them — and the commit introducing it was changing
+ *     `scripts/`. A tolerance that did not hold at the moment it was written.
+ *
+ * The replacement needs no tolerance because it removes what the tolerance was
+ * for: the artifact is *attached* from outside the worktree, so attaching a
+ * deploy's evidence costs no commit and no second deployment, and the revision
+ * comparison goes back to exact.
+ * ========================================================================== */
+describe("the hosted restart record is an input, not a file in this tree", () => {
+  const repo = REPO_ROOT;
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const deploy = fs.readFileSync(path.join(repo, '.github', 'workflows', 'deploy.yml'), 'utf8');
+  const acceptance = fs.readFileSync(
+    path.join(repo, '.github', 'workflows', 'step12b-acceptance.yml'),
+    'utf8',
+  );
+
+  it('keeps no hosted record in the repository, because a committed one is stale by construction', () => {
+    expect(fs.existsSync(path.join(repo, 'docs', 'evidence', 'step12b-hosted'))).toBe(false);
+    // And the reporter does not reach for one either, by any spelling.
+    expect(reporter).not.toContain("'step12b-hosted', 'verification.json'");
+    expect(reporter).not.toContain('docs/evidence/step12b-hosted');
+  });
+
+  it('has no path-list tolerance left to get wrong', () => {
+    /*
+     * `deployedUnchangedSince` is gone rather than corrected. A list of image
+     * inputs has to be maintained against a Dockerfile nobody will re-read, and
+     * getting it wrong is silent — which is exactly how it shipped omitting
+     * `scripts/`. The mention that survives is the paragraph explaining why it
+     * was deleted, which is history worth keeping; what must not exist is a
+     * function.
+     */
+    expect(reporter).not.toContain('function deployedUnchangedSince');
+    expect(reporter).toContain('remedy for that was `deployedUnchangedSince`');
+  });
+
+  it('compares the record to this run exactly, with no second chance', () => {
+    const gate = reporter.slice(
+      reporter.indexOf('const hostedAttachment = readHostedAttachment();'),
+    );
+    expect(gate).toContain('hosted.revision === thisRevision');
+    // One comparison, and no `||` offering an alternative to it.
+    const comparison = gate.slice(0, gate.indexOf('\n'));
+    expect(comparison).not.toContain('||');
+  });
+
+  it('refuses an attachment that is inside the repository', () => {
+    /*
+     * Sliced forwards from the function's own name to its last statement.
+     * `indexOf("kind: 'READ'")` looked right and matched the *type union*
+     * declared above the function, so the slice came back empty and the
+     * assertion failed against nothing. Same lesson as three tests up.
+     */
+    const readerAt = reporter.indexOf('function readHostedAttachment(');
+    const reader = reporter.slice(readerAt, reporter.indexOf('const runId = runMatch[1]', readerAt));
+    expect(reader).toContain('path.relative(REPO, resolved)');
+    expect(reader).toContain("kind: 'UNREADABLE'");
+    expect(reader).toContain('the committed record again');
+  });
+
+  it('fixes the repository whose runs may attest a deploy, in code', () => {
+    /*
+     * Any account can run a workflow that writes `beforeRestart: true`. The
+     * repository is therefore a constant nobody supplies — §24's rule, the same
+     * shape `repositoryEnvelope.ts` and `probeEnvelope.ts` already use.
+     */
+    expect(reporter).toContain("const ATTESTING_REPOSITORY = 'Peyday007/V5'");
+    expect(reporter).toContain('actions/runs/');
+  });
+
+  it('separates "nothing attached" from "we could not read it"', () => {
+    /*
+     * Four outcomes rather than two, because they have four different remedies
+     * — and because *we could not tell* must never read the same as *we
+     * checked*, which is this file's oldest rule.
+     */
+    const reader = reporter.slice(reporter.indexOf('type HostedAttachment ='));
+    expect(reader).toContain("kind: 'ABSENT'");
+    expect(reader).toContain("kind: 'UNREADABLE'");
+    const gate = reporter.slice(
+      reporter.indexOf('const hostedAttachment = readHostedAttachment();'),
+    );
+    expect(gate).toContain("hostedAttachment.kind === 'ABSENT'\n            ? null");
+    expect(gate).toContain("awaits: 'a Deploy run at this revision, attached to this report'");
+  });
+
+  it('joins the two ends: Deploy uploads the artifact and acceptance downloads it', () => {
+    /*
+     * This is the defect the owner named. Deploy had been uploading
+     * `step12b-hosted-verification` for every run since the record existed, and
+     * nothing ever fetched it — the reporter read a hand-transcribed copy
+     * instead. An artifact nobody downloads is not a pipeline.
+     */
+    expect(deploy).toContain('name: step12b-hosted-verification');
+    expect(acceptance).toContain('gh run download');
+    expect(acceptance).toContain('--name step12b-hosted-verification');
+    expect(acceptance).toContain('--hosted /tmp/step12b-hosted.json');
+  });
+
+  it('takes the artifact from a successful Deploy on the canonical branch, and checks it names that run', () => {
+    expect(acceptance).toContain('--workflow deploy.yml');
+    expect(acceptance).toContain('--status success');
+    expect(acceptance).toContain("CANONICAL_BRANCH");
+    // Provenance is where it came from: the record must be about the run it
+    // came out of, or the pipeline is broken rather than the pass being weaker.
+    expect(acceptance).toContain('"$recorded" != "$head_sha"');
+  });
+
+  it('lands the artifact outside the worktree and proves the checkout stayed clean', () => {
+    expect(acceptance).toContain('$RUNNER_TEMP/step12b-hosted');
+    expect(acceptance).toContain('The checkout is still clean');
+    expect(acceptance).toContain('git status --porcelain');
+  });
+});
+
+/* ==========================================================================
+ * J's two result conditions, and the way they may NOT be closed
+ *
+ * "The question a person typed was answered" and "its result was inspected
+ * there" both need a worker that reached the sources, which a spawned Brain
+ * never has. The obvious way to close them is to do on the deployed Brain what
+ * the local journey does on its own — seed an idea, grant a standing authority,
+ * wait. That is refused, and these tests are the refusal: a synthetic idea in a
+ * project of real research is a row somebody has to recognise as fake later,
+ * and a standing grant created to make a report come out right is a spending
+ * authorization created for a report.
+ * ========================================================================== */
+describe('the deployed phone inspection reads and never writes', () => {
+  /*
+   * ---------------------------------------------------------------------
+   * What this block may and may not assert, after it was wrong about all of it
+   * ---------------------------------------------------------------------
+   *
+   * An earlier version of this block read the mode's source and checked which
+   * strings were in it — and every assertion passed while the mode was wrong in
+   * six independent ways: a message role that does not exist (`PERSON`; the
+   * union is `USER | RUSSELL | SYSTEM`), a cookie set on `127.0.0.1` while
+   * navigating to a deployed origin, two client routes that are `NOT_FOUND`
+   * (`/c/:id` and `/knows`), `FAILED` accepted as answered, a screen check any
+   * text satisfied, and an "answered question" from one thread paired with a
+   * "result" from another.
+   *
+   * **A test that reads the code cannot find a mistake about the product.**
+   * Those seven facts are now proved by driving the real mode through a real
+   * browser against a real Brain in `tests/deployedPhoneInspection.test.ts`,
+   * including every failure state it must refuse.
+   *
+   * What survives here is the one property a source read is genuinely the right
+   * instrument for: **the absence of a way to write.** An integration test can
+   * show that a particular run wrote nothing; only reading the code can show
+   * there is no route in it that could.
+   */
+  const repo = REPO_ROOT;
+  const harness = fs.readFileSync(path.join(repo, 'scripts', 'visual-qa.ts'), 'utf8');
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+  const mode = harness.slice(
+    harness.indexOf('async function inspectDeployed('),
+    harness.indexOf('async function main('),
+  );
+
+  it('talks to the deployed Brain through one helper that cannot be given a method', () => {
+    const helper = harness.slice(
+      harness.indexOf('async function visit('),
+      harness.indexOf('async function sessionForDeployed('),
+    );
+    expect(helper).toContain("method: 'GET'");
+    expect(helper).not.toContain('method: method');
+    expect(helper).not.toContain('method?: string');
+  });
+
+  it('makes no write at all — not even a sign-in', () => {
+    /*
+     * The sign-in went too. A person signs in to the Brain's own form in their
+     * own browser, or supplies a session from one that already is; this process
+     * never holds a password and never posts one. So the whole mode contains no
+     * request with a method other than GET.
+     */
+    expect([...mode.matchAll(/method:\s*'(\w+)'/g)].map((m) => m[1])).toEqual([]);
+    expect(mode).not.toContain('/api/auth/login');
+    expect(mode).not.toContain('JSON.stringify({ email');
+  });
+
+  it('creates no idea, no authority and no mission on the Brain it is reading', () => {
+    for (const forbidden of [
+      '/authority',
+      '/candidates',
+      '/ideas',
+      '/needs-you',
+      '/russell/capture',
+      '/launch',
+      '/override',
+    ]) {
+      expect(mode).not.toContain(forbidden);
+    }
+  });
+
+  it('refuses to write its reading into this repository', () => {
+    expect(mode).toContain('--emit-phone must be outside the repository');
+    expect(reporter).toContain('the reading is inside this repository');
+  });
+
+  it('will not produce the approval render set from somebody else’s Brain', () => {
+    expect(harness).toContain('--deployed is a read-only inspection');
+    expect(harness).toContain('must not produce the');
+  });
+
+  it('never lets a credential reach the record', () => {
+    const record = harness.slice(
+      harness.indexOf('interface DeployedPhoneRecord {'),
+      harness.indexOf('async function visit('),
+    );
+    expect(record).not.toContain('password');
+    expect(record).not.toContain('cookie');
+    expect(record).not.toContain('session');
+  });
+
+  it('offers a person two ways to be signed in, and no way to hand over a password', () => {
+    expect(harness).toContain('BRAIN_PHONE_SESSION');
+    expect(harness).toContain('--sign-in');
+    expect(harness).toContain('There is no password option');
+    // The one that would be easiest to add back, named so adding it is visible.
+    expect(harness).not.toContain('BRAIN_PHONE_PASSWORD');
+  });
+
+  it('binds a reading to the deployment it is evidence about', () => {
+    /*
+     * This named a reporter-local `phoneReadingIsAboutThisRun`, which checked
+     * one thing — the revision — and only at the point the conditions were
+     * built, after the file had already been cast to a record. The validation
+     * is a module now (`scripts/phoneRecord.ts`), shared with the harness that
+     * writes the record so the two cannot disagree about what one is, and the
+     * reading is refused at read time rather than judged afterwards.
+     */
+    expect(reporter).toContain("from './phoneRecord.ts'");
+    expect(reporter).toContain('phoneRecordProblems(parsed, {');
+    expect(reporter).toContain('intendedHost: INTENDED_BRAIN_HOST');
+    expect(reporter).toContain('revision: revisionOf().revision');
+    // The intended Brain is a fact in the repository, never a value the
+    // attachment supplies about itself.
+    expect(reporter).toContain("file('fly.toml')");
+    // COMPLETE, rather than "not PENDING" — a FAILED reply is an answer that
+    // did not happen, and the first version counted one.
+    expect(reporter).toContain("answeredQuestion.status === 'COMPLETE'");
+    // And the mission must be the one that conversation produced.
+    expect(reporter).toContain('missionLinkedResult.missionFromConversation');
+    // Findings the harness recorded are consulted rather than ignored.
+    expect(reporter).toContain('deployedPhone.findings.length === 0');
+  });
+
+  it('validates the record itself, in a suite that can fail', () => {
+    const suite = path.join(repo, 'tests', 'phoneRecord.test.ts');
+    expect(fs.existsSync(suite)).toBe(true);
+    const source = fs.readFileSync(suite, 'utf8');
+    for (const proved of [
+      'refuses a reading of another deployment',
+      'refuses a reading of a different revision of the same Brain',
+      'refuses a flag that says the revisions match when they do not',
+      'refuses everything when the run cannot say what it is judging',
+    ]) {
+      expect(source).toContain(proved);
+    }
+  });
+
+  it('is proved against the real product rather than against its own source', () => {
+    /*
+     * The pointer is an assertion rather than a comment, so deleting the
+     * integration suite fails here instead of quietly leaving this block as the
+     * only coverage — which is the state that let six defects through.
+     */
+    const integration = path.join(repo, 'tests', 'deployedPhoneInspection.test.ts');
+    expect(fs.existsSync(integration)).toBe(true);
+    const suite = fs.readFileSync(integration, 'utf8');
+    for (const proved of [
+      'does not accept a question whose answer is still PENDING',
+      'does not accept an answer in one thread and a conclusion from another',
+      'reads the chain, on screen, when a conversation really produced a conclusion',
+      'reports a login screen as a login screen rather than passing on it',
+      'binds the reading to a revision, and says when it cannot',
+      'changes nothing it read',
+      // The project Knows shows is the one the chain selected, not the first
+      // one in the list — and the words are found however the page spaces them.
+      'reads a chain that lives in a second project, not the first',
+      'finds an answer and a conclusion whose whitespace the page does not preserve',
+    ]) {
+      expect(suite).toContain(proved);
+    }
+  });
+});
+
+/* ==========================================================================
+ * Every unmet condition must name what would meet it
+ *
+ * The owner's finding was structural rather than about any one gate: D, G and Q
+ * each carried a `held: null` with **no `needs` and no `awaits`** — a condition
+ * that could never pass, never fail, and never be closed by anybody. A verdict
+ * built from those counts them in the denominator, which is right, and then
+ * offers no way to move them, which makes the denominator a permanent ceiling.
+ *
+ * The shapes a condition may take are four, and three of them are answerable:
+ *
+ *   held: true / false           exercised
+ *   held: null + needs           another environment can answer it
+ *   held: null + awaits          a person must
+ *   held: null + neither         **nobody can** — refused here
+ *
+ * This is asserted over the reporter's own emitted record rather than over its
+ * source, because the question is about the conditions it produces.
+ * ========================================================================== */
+describe('no condition is unmeetable', () => {
+  const repo = REPO_ROOT;
+  const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
+
+  it('declares the one bounded capacity measurement in code, not in a request', () => {
+    /*
+     * §24's rule at the Lab: nobody supplies the limits their own work is
+     * judged against. The numbers are Step 10's own recommended operating
+     * ceiling rather than a guess, and the paid ceiling is zero.
+     */
+    const envelope = fs.readFileSync(
+      path.join(repo, 'server', 'services', 'fleet', 'measurementEnvelope.ts'),
+      'utf8',
+    );
+    expect(envelope).toContain("PROVIDER_CAPACITY_ENVELOPE_ID = 'FLEET_PROVIDER_CAPACITY_V1'");
+    expect(envelope).toContain('PROVIDER_CAPACITY_MAX_PAID_SPEND = 0');
+    expect(envelope).toContain('ceiling: 10');
+    // And it says plainly that it grants nothing — the authorization already
+    // existed and this is not a second one.
+    expect(envelope).toContain('It is **not** an authorization');
+    expect(envelope).toContain('authorizePressure');
+  });
+
+  it('judges a measurement against the declared envelope, never against its own', async () => {
+    const { PROVIDER_CAPACITY_ENVELOPE, withinProviderCapacityEnvelope } = await import(
+      '../server/services/fleet/measurementEnvelope.ts'
+    );
+    expect(withinProviderCapacityEnvelope(PROVIDER_CAPACITY_ENVELOPE).ok).toBe(true);
+
+    const widened = withinProviderCapacityEnvelope({
+      ...PROVIDER_CAPACITY_ENVELOPE,
+      ceiling: 40,
+      durationMinutes: 600,
+      workKind: 'REAL_CANARY',
+      stopConditions: [],
+    });
+    expect(widened.ok).toBe(false);
+    if (!widened.ok) {
+      expect(widened.reasons.join(' ')).toContain('ceiling 40 is above the declared 10');
+      expect(widened.reasons.join(' ')).toContain('REAL_CANARY is not SYNTHETIC');
+      // Every missing stop condition is named, so "it was bounded" cannot be
+      // satisfied by dropping the bounds.
+      expect(widened.reasons.filter((r) => r.startsWith('stop condition missing')).length).toBe(
+        PROVIDER_CAPACITY_ENVELOPE.stopConditions.length,
+      );
+    }
+  });
+
+  it('drives the asked lens all the way to a person’s decision, rather than describing why it cannot', () => {
+    /*
+     * The old text said a Brain filling an asked lens in would be manufacturing
+     * insight — true, and it was being used as a reason not to exercise the
+     * path a *person and a worker* can take. Nothing here invents a discovery:
+     * `validateLensReply` discards a finding whose references do not resolve,
+     * and a surviving one becomes a frontier item only when a person accepts it.
+     */
+    expect(reporter).toContain('dispatchInquiry(opened.inquiry)');
+    expect(reporter).toContain('settleInquiry(running)');
+    expect(reporter).toContain("decision: 'ACCEPTED'");
+    expect(reporter).toContain('an asked lens has been answered by a reader on real work');
+    // And the discard half is asserted rather than hoped for.
+    expect(reporter).toContain('the finding with nothing under it was discarded');
+  });
+
+  it('records the correction about canaries rather than quietly applying it', () => {
+    /*
+     * I wrote that a canary against the live fleet would be "the contamination
+     * R5 forbids, committed by the thing checking for it". Controlled canaries
+     * inside an isolated scope, with a declared rollback, are what the Lab is
+     * for. The correction stays in the file.
+     */
+    expect(reporter).toContain('**That is wrong as stated, and the correction is recorded');
+    expect(reporter).toContain('a canary ran against the deployed fleet, in an isolated scope, and rolled back');
+    /*
+     * And the condition after it asks for the *value*, not a different id.
+     * This assertion used to name "a policy that is not the canary", which any
+     * newer row satisfies — including one that kept the canary's own target.
+     */
+    expect(reporter).toContain(
+      'and the fleet is running on the setting that canary displaced, not merely on a newer row',
+    );
+    // Decided by the one reader the rollback itself uses, never re-derived here.
+    expect(reporter).toContain('restorationOf({');
+  });
+
+  it('leaves no condition that neither an environment nor a person could answer', async () => {
+    /*
+     * The invariant, over the record rather than the source. It runs the
+     * reporter's own emit if one is to hand and otherwise asserts the shape is
+     * enforced where conditions are built — because the useful version of this
+     * check is the one that runs in CI on every emitted record.
+     */
+    const combiner = fs.readFileSync(path.join(repo, 'scripts', 'step12b-combine.ts'), 'utf8');
+    expect(combiner).toContain("needs?:");
+    expect(combiner).toContain('awaits');
+    // Nothing under scripts/ may write a `deferredBy`, which was the older way
+    // a condition excused itself from scoring.
+    for (const file of fs.readdirSync(path.join(repo, 'scripts'))) {
+      if (!file.endsWith('.ts')) continue;
+      const source = fs.readFileSync(path.join(repo, 'scripts', file), 'utf8');
+      expect(source.includes('deferredBy:')).toBe(false);
+    }
   });
 });

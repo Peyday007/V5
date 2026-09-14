@@ -24,7 +24,7 @@
  * has quietly grown a second way to reach production.
  */
 import { describe, expect, it } from 'vitest';
-import { FETCH_BLOCKED_PORTS } from './helpers/ports.ts';
+import { FETCH_BLOCKED_PORTS, LOCALLY_OCCUPIED_PORTS, pickPort } from './helpers/ports.ts';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -292,7 +292,7 @@ describe('every workstream is present in the canonical tree', () => {
      * times in ten. This reads the list and says so at the range level.
      */
     for (const range of portRanges()) {
-      const blocked = [...FETCH_BLOCKED_PORTS].filter(
+      const blocked = [...FETCH_BLOCKED_PORTS, ...LOCALLY_OCCUPIED_PORTS].filter(
         (port) => port >= range.from && port <= range.to,
       );
       const usable = range.to - range.from + 1 - blocked.length;
@@ -301,5 +301,27 @@ describe('every workstream is present in the canonical tree', () => {
         `${range.file} (${range.from}-${range.to}) has only ${usable} port(s) fetch will dial`,
       ).toBeGreaterThan(50);
     }
+  });
+
+  it('never hands out a port this project already runs something on', () => {
+    /*
+     * The bad-port list is about the *client*: `fetch` refuses to dial. This is
+     * about the *server*: it cannot bind, prints "Port N is already in use",
+     * and the suite waits out its readiness deadline against a server that
+     * never started. Same symptom, opposite end of the connection.
+     *
+     * It is not hypothetical. `CLAUDE.md` says to run the suite against
+     * Postgres; `pg_ctlcluster 16 main start` puts a server on **5432**; and
+     * `tests/api.test.ts` draws from `[5400, 5500)`. So the SQLite run passed
+     * on a machine with no Postgres and failed deterministically on a machine
+     * set up the way this repository asks for — the worse of the two, because
+     * it fails for everybody who followed the instructions.
+     */
+    expect(LOCALLY_OCCUPIED_PORTS.has(5432)).toBe(true);
+    const drawn = new Set<number>();
+    for (let attempt = 0; attempt < 4000; attempt += 1) drawn.add(pickPort(5400, 100));
+    expect([...drawn].filter((port) => LOCALLY_OCCUPIED_PORTS.has(port))).toEqual([]);
+    // And the range is still wide enough to be worth drawing from.
+    expect(drawn.size).toBeGreaterThan(90);
   });
 });
