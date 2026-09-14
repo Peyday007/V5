@@ -794,22 +794,47 @@ interface DeployedPhoneRecord {
   brain: string;
   inspectedAt: string;
   deployedRevision: string | null;
+  expectedRevision: string | null;
+  revisionMatches: boolean | null;
   answeredQuestion: {
     found: boolean;
     status: string | null;
     conversationId: string | null;
+    excerpt: string | null;
     readOnScreen: boolean;
+    screenSaw: string | null;
   };
   missionLinkedResult: {
     found: boolean;
     missionId: string | null;
+    missionFromConversation: boolean;
     knowledgeId: string | null;
+    statement: string | null;
     citesDocument: boolean;
     citesAudit: boolean;
     readOnScreen: boolean;
+    screenSaw: string | null;
   };
   screenshots: string[];
   findings: string[];
+}
+
+/**
+ * Is this reading about the Brain being judged?
+ *
+ * A phone reading names the revision the deployed Brain reported for *itself*,
+ * from the authenticated `/api/health`. A reading of some other deployment is
+ * not weaker evidence about this one; it is evidence about something else, and
+ * the two must not be confused — which is the same rule the hosted record
+ * already carries, at the same boundary.
+ *
+ * `null` is refused rather than waved through. `/api/health` returns `revision`
+ * only to a Brain administrator, so a reading taken by somebody else cannot be
+ * bound to a deployment — and an acceptance reading that cannot name its
+ * revision must be refused rather than trusted.
+ */
+function phoneReadingIsAboutThisRun(record: DeployedPhoneRecord): boolean {
+  return record.deployedRevision !== null && record.deployedRevision === revisionOf().revision;
 }
 
 function readDeployedPhone(): { record: DeployedPhoneRecord | null; saw: string } {
@@ -5389,17 +5414,28 @@ async function main(): Promise<void> {
         ? {
             name: 'and its result was inspected there — a conclusion under Knows citing that mission',
             held:
+              phoneReadingIsAboutThisRun(deployedPhone.record) &&
               deployedPhone.record.missionLinkedResult.found &&
+              // The mission came from the conversation whose answer the
+              // condition above read — not from anywhere else in the Brain.
+              // An answer in one thread and a result in another are two facts,
+              // not a sequence.
+              deployedPhone.record.missionLinkedResult.missionFromConversation &&
               deployedPhone.record.missionLinkedResult.readOnScreen,
-            saw: deployedPhone.record.missionLinkedResult.found
-              ? `on ${deployedPhone.record.brain} at phone width: conclusion ` +
-                `${deployedPhone.record.missionLinkedResult.knowledgeId} cites mission ` +
-                `${deployedPhone.record.missionLinkedResult.missionId}` +
-                `${deployedPhone.record.missionLinkedResult.citesDocument ? ', its document' : ''}` +
-                `${deployedPhone.record.missionLinkedResult.citesAudit ? ' and the audit that judged it' : ''}` +
-                `; readable on screen: ${deployedPhone.record.missionLinkedResult.readOnScreen}`
-              : `on ${deployedPhone.record.brain}: no conclusion names the mission it came from, ` +
-                'so no mission has completed and written back there yet',
+            saw: !phoneReadingIsAboutThisRun(deployedPhone.record)
+              ? `the phone reading is of ${deployedPhone.record.deployedRevision?.slice(0, 8) ?? 'an unnamed revision'}` +
+                ` and this run is ${(revisionOf().revision ?? 'unknown').slice(0, 8)}`
+              : deployedPhone.record.missionLinkedResult.found
+                ? `on ${deployedPhone.record.brain} at phone width: conclusion ` +
+                  `${deployedPhone.record.missionLinkedResult.knowledgeId} cites mission ` +
+                  `${deployedPhone.record.missionLinkedResult.missionId}, which that same ` +
+                  'conversation produced' +
+                  `${deployedPhone.record.missionLinkedResult.citesDocument ? ', its document' : ''}` +
+                  `${deployedPhone.record.missionLinkedResult.citesAudit ? ' and the audit that judged it' : ''}` +
+                  `; on screen: ${deployedPhone.record.missionLinkedResult.screenSaw ?? 'not read'}`
+                : `on ${deployedPhone.record.brain}: no conversation there holds a person's ` +
+                  'question, a COMPLETE reply and a conclusion citing a mission that same ' +
+                  'conversation produced',
           }
         : {
           name: 'and its result was inspected there — a conclusion under Knows citing that mission',
@@ -5424,15 +5460,22 @@ async function main(): Promise<void> {
         ? {
             name: 'the question a person typed was answered rather than left waiting',
             held:
+              phoneReadingIsAboutThisRun(deployedPhone.record) &&
               deployedPhone.record.answeredQuestion.found &&
+              // COMPLETE, not merely "not PENDING". A FAILED reply is an answer
+              // that did not happen, and the first version of this counted one.
+              deployedPhone.record.answeredQuestion.status === 'COMPLETE' &&
               deployedPhone.record.answeredQuestion.readOnScreen,
-            saw: deployedPhone.record.answeredQuestion.found
-              ? `on ${deployedPhone.record.brain} at phone width: a person's question in ` +
-                `${deployedPhone.record.answeredQuestion.conversationId} has a reply that is ` +
-                `${deployedPhone.record.answeredQuestion.status}; readable on screen: ` +
-                `${deployedPhone.record.answeredQuestion.readOnScreen}`
-              : `on ${deployedPhone.record.brain}: no conversation holds a question a person typed ` +
-                'and a reply that is no longer PENDING',
+            saw: !phoneReadingIsAboutThisRun(deployedPhone.record)
+              ? `the phone reading is of ${deployedPhone.record.deployedRevision?.slice(0, 8) ?? 'an unnamed revision'}` +
+                ` and this run is ${(revisionOf().revision ?? 'unknown').slice(0, 8)}`
+              : deployedPhone.record.answeredQuestion.found
+                ? `on ${deployedPhone.record.brain} at phone width: a person's question in ` +
+                  `${deployedPhone.record.answeredQuestion.conversationId} has a ` +
+                  `${deployedPhone.record.answeredQuestion.status} reply, and the page carried its ` +
+                  `own words — ${deployedPhone.record.answeredQuestion.screenSaw ?? 'not read'}`
+                : `on ${deployedPhone.record.brain}: no conversation holds a question a person ` +
+                  'typed and a COMPLETE reply to it',
           }
         : {
           name: 'the question a person typed was answered rather than left waiting',

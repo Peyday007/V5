@@ -961,6 +961,10 @@ interface Options {
   deployed: string | null;
   /** Where the deployed inspection's record goes — outside the worktree. */
   emitPhone: string | null;
+  /** Open a window and let a person sign in, instead of reading a session. */
+  signIn: boolean;
+  /** The deployment this reading is meant to be about, so a mismatch is visible. */
+  expectRevision: string | null;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -969,6 +973,8 @@ function parseOptions(argv: string[]): Options {
   let only: 'constellation' | null = null;
   let deployed: string | null = null;
   let emitPhone: string | null = null;
+  let signIn = false;
+  let expectRevision: string | null = null;
   for (const argument of argv) {
     if (argument.startsWith('--renders=')) rendersDir = argument.slice('--renders='.length);
     else if (argument === '--renders') rendersDir = RENDERS_DEFAULT;
@@ -976,12 +982,16 @@ function parseOptions(argv: string[]): Options {
     else if (argument.startsWith('--deployed=')) deployed = argument.slice('--deployed='.length);
     else if (argument.startsWith('--emit-phone='))
       emitPhone = argument.slice('--emit-phone='.length);
+    else if (argument === '--sign-in') signIn = true;
+    else if (argument.startsWith('--expect-revision='))
+      expectRevision = argument.slice('--expect-revision='.length);
     else if (argument.startsWith('--')) throw new Error(`unknown option ${argument}`);
     else if (positional === null) positional = argument;
   }
-  if (deployed !== null && !/^https:\/\/[^/]+$/.test(deployed)) {
+  if (deployed !== null && !validDeployedOrigin(deployed)) {
     throw new Error(
-      `--deployed must be an https origin with no path, e.g. https://brain.example — got ${deployed}`,
+      '--deployed must be an https origin with no path, e.g. https://brain.example (http is ' +
+        `allowed only on 127.0.0.1, which the integration test drives) — got ${deployed}`,
     );
   }
   if (deployed !== null && rendersDir !== null) {
@@ -997,6 +1007,8 @@ function parseOptions(argv: string[]): Options {
     only,
     deployed,
     emitPhone,
+    signIn,
+    expectRevision,
   };
 }
 
@@ -1018,66 +1030,126 @@ function parseOptions(argv: string[]): Options {
  *
  * Both need a **worker that reached the sources**, and a spawned Brain fires
  * none: no inference is bought here (§24), so Russell's turn stays `PENDING`
- * and no packet ever files a report. The local journey records that truthfully
- * and leaves both open.
+ * and no packet ever files a report.
+ *
+ * ---------------------------------------------------------------------------
+ * The first version of this was wrong in six ways, and every one of them would
+ * have passed
+ * ---------------------------------------------------------------------------
+ *
+ * It is recorded rather than quietly fixed, because the shape of the mistake is
+ * the point: **a checker written against a remembered product rather than a
+ * read one passes by not looking.**
+ *
+ *  1. It matched `role === 'PERSON'`. `RUSSELL_MESSAGE_ROLES` is
+ *     `['USER', 'RUSSELL', 'SYSTEM']`, so it would have found no human turn in
+ *     any conversation and reported the Brain holds none.
+ *  2. It set the browser cookie on `127.0.0.1` while navigating to the deployed
+ *     origin, so every page would have loaded **signed out** — and a signed-out
+ *     Russell renders, so the screen check would have passed on a login screen.
+ *  3. It navigated to `/c/:id` and `/knows`. The router knows `/conversation/:id`
+ *     and `/knowledge`; both of those are `NOT_FOUND`.
+ *  4. It accepted any reply that was not `PENDING`, so a **FAILED** answer
+ *     counted as an answered question.
+ *  5. It checked that *some* text was on the page rather than that **this
+ *     answer** was, so a loading state, an error banner or an empty list would
+ *     have satisfied it.
+ *  6. It found an answered question in one conversation and a mission-linked
+ *     conclusion anywhere else in the Brain and called that a chain. Those are
+ *     two unrelated facts; J asks whether **this** question's work produced
+ *     **that** result.
+ *
+ * So the chain is now followed through the rows Brain wrote: a conversation
+ * with a `USER` turn and a `COMPLETE` Russell reply → the missions whose
+ * `conversationId` is that conversation → a knowledge row whose `missionId` is
+ * one of those missions. Each end is then read **on screen at 390px**, by its
+ * own text, with every not-yet state refused by name.
  *
  * ---------------------------------------------------------------------------
  * Why it seeds nothing, grants nothing and writes nothing
  * ---------------------------------------------------------------------------
  *
- * The obvious way to close them is to do on the deployed Brain what the local
- * journey does on its own: capture an idea, grant a standing authority, wait
- * for a worker. **That is refused here**, and the refusal is the design rather
- * than caution. The deployed Brain holds one project of real research; a
- * synthetic idea in it is a row somebody has to recognise as fake later, a new
- * standing grant is a spending authorization created to make a report come out
- * right, and waiting for a worker to answer a question nobody asked spends the
- * subscription on a test. §29 already refuses the smaller version of this — a
- * Capability Lab health check reads rows rather than firing a worker to learn
- * whether workers fire.
+ * The obvious way to close J's two is to do on the deployed Brain what the
+ * local journey does on its own: capture an idea, grant a standing authority,
+ * wait for a worker. **That is refused**, and the refusal is the design rather
+ * than caution. The deployed Brain holds real research; a synthetic idea in it
+ * is a row somebody has to recognise as fake later, a new standing grant is a
+ * spending authorization created to make a report come out right, and waiting
+ * for a worker to answer a question nobody asked spends the subscription on a
+ * test. §29 already refuses the smaller version of this — a Capability Lab
+ * health check reads rows rather than firing a worker to learn whether workers
+ * fire.
  *
- * So this mode **only reads**. `visit` is the only way it talks to the Brain
- * after signing in, and it refuses any method but GET — not as a convention but
- * as a thrown error, because a convention is the thing that erodes. The
- * conditions are answered from work that was already there: a question a person
- * genuinely typed and a worker genuinely answered, and a conclusion a real
- * mission genuinely produced. If the deployed Brain holds neither, this reports
- * that it holds neither. It never manufactures one.
+ * So this mode **only reads**. `visit` is the only way it talks to the Brain,
+ * and it refuses any method but GET — not as a convention but as a thrown
+ * error, because a convention is the thing that erodes. There is no sign-in
+ * request either: see below.
  *
  * ---------------------------------------------------------------------------
- * What it needs, which is the one thing it cannot supply itself
+ * How it is authenticated, and why it never sees a password
  * ---------------------------------------------------------------------------
  *
- * A person's credential on the deployed Brain, in `BRAIN_PHONE_EMAIL` and
- * `BRAIN_PHONE_PASSWORD`. There is no way around that and no weaker thing that
- * would do: every route this reads is behind `requirePerson`, a worker
- * credential is refused at the conversation routes **by principal type**, and
- * the whole point of the two conditions is that a person can read these answers
- * on their phone. The credential is used for one sign-in, is never printed, and
- * never reaches the record.
+ * Every route it reads is behind `requirePerson`, and a worker principal is
+ * refused at the conversation routes **by principal type** (§24). So it needs a
+ * person's session — and there are exactly two honest ways to have one:
+ *
+ *   `--sign-in`       opens a **visible** browser at the origin and waits while
+ *                     the person signs in themselves. The credential is typed
+ *                     into the Brain's own login form, in their browser. This
+ *                     process never sees it.
+ *   `BRAIN_PHONE_SESSION`  a session cookie value from a browser that is
+ *                     already signed in.
+ *
+ * There is deliberately **no password option**. A harness that took one would
+ * mean somebody typing their Brain password into a terminal, a CI secret or a
+ * chat window, and the session it would mint is the same session the two paths
+ * above already produce.
  * ========================================================================== */
+
+/** Where `--deployed` may point. */
+function validDeployedOrigin(value: string): boolean {
+  // https anywhere, and http only on loopback — which is not a network hop and
+  // is what the integration test drives a real Brain over.
+  return /^https:\/\/[^/]+$/.test(value) || /^http:\/\/127\.0\.0\.1:\d+$/.test(value);
+}
 
 interface DeployedPhoneRecord {
   /** The origin inspected. Never a credential, and never a path. */
   brain: string;
   inspectedAt: string;
-  /** The revision the deployed Brain reports for itself, if it reports one. */
+  /**
+   * The revision the deployed Brain reports for **itself**, from the
+   * authenticated `/api/health`. `null` when this person is not a Brain
+   * administrator there, or when nothing stamped the build — and a null is
+   * reported as a null rather than filled in from anywhere else, because a
+   * reading that cannot name its revision must be refused rather than trusted.
+   */
   deployedRevision: string | null;
-  /** Did a question a person typed get answered, rather than left waiting? */
+  /** What the caller said this reading is *for*, so a mismatch is visible. */
+  expectedRevision: string | null;
+  revisionMatches: boolean | null;
+  /** Did a question a person typed get a completed answer, readable on screen? */
   answeredQuestion: {
     found: boolean;
     status: string | null;
     conversationId: string | null;
+    /** The first words of the answer, which is what the screen check looks for. */
+    excerpt: string | null;
     readOnScreen: boolean;
+    screenSaw: string | null;
   };
-  /** Was a mission's result readable under Knows, citing that mission? */
+  /** Was the work *that conversation caused* readable as a conclusion? */
   missionLinkedResult: {
     found: boolean;
+    /** The mission, resolved from the conversation rather than found loose. */
     missionId: string | null;
+    missionFromConversation: boolean;
     knowledgeId: string | null;
+    statement: string | null;
     citesDocument: boolean;
     citesAudit: boolean;
     readOnScreen: boolean;
+    screenSaw: string | null;
   };
   screenshots: string[];
   findings: string[];
@@ -1098,17 +1170,162 @@ async function visit(cookie: string, route: string): Promise<Record<string, unkn
   }
 }
 
-async function inspectDeployed(options: Options): Promise<void> {
-  const origin = options.deployed as string;
-  const email = (process.env['BRAIN_PHONE_EMAIL'] ?? '').trim();
-  const password = process.env['BRAIN_PHONE_PASSWORD'] ?? '';
-  if (email.length === 0 || password.length === 0) {
+/**
+ * A signed-in session for the deployed origin, obtained without this process
+ * ever handling a password.
+ *
+ * `--sign-in` launches a visible Chromium at the origin and polls the page's
+ * own `document.cookie`-bearing requests until `/api/projects` answers 200 from
+ * inside it. The person signs in to the Brain's own form; what comes back here
+ * is the cookie their browser now holds.
+ */
+async function sessionForDeployed(options: Options): Promise<string> {
+  const supplied = (process.env['BRAIN_PHONE_SESSION'] ?? '').trim();
+  if (supplied.length > 0) return supplied.includes('=') ? supplied : `brain_session=${supplied}`;
+  if (!options.signIn) {
     throw new Error(
-      'BRAIN_PHONE_EMAIL and BRAIN_PHONE_PASSWORD must both be set. This mode reads a deployed ' +
-        "Brain as a person, because every route it needs is behind requirePerson and a worker " +
-        'credential is refused at the conversation routes by principal type.',
+      'No session. Either set BRAIN_PHONE_SESSION to a session cookie from a browser that is ' +
+        'already signed in to this Brain, or pass --sign-in to open a window and sign in there. ' +
+        'There is no password option: every route this reads is behind requirePerson, and a ' +
+        'harness that took a password would mean typing it into a terminal or a CI secret to ' +
+        'mint the same session these two already produce.',
     );
   }
+  return signInWithAPerson(options);
+}
+
+async function signInWithAPerson(options: Options): Promise<string> {
+  const origin = options.deployed as string;
+  const port = 9222 + Math.floor(Math.random() * 300);
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-signin-profile-'));
+  const chrome = spawn(
+    CHROME,
+    [
+      // Deliberately **not** headless: a person has to be able to see and use
+      // the sign-in form. This is the one place in this file that wants a
+      // window.
+      '--no-sandbox',
+      '--disable-gpu',
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${profile}`,
+      origin,
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'], detached: true },
+  );
+  console.log(`\nA browser is open at ${origin}. Sign in there; nothing is typed here.`);
+  try {
+    const deadline = Date.now() + SIGN_IN_WINDOW_MS;
+    for (;;) {
+      if (Date.now() > deadline) {
+        throw new Error(`nobody signed in at ${origin} within ${SIGN_IN_WINDOW_MS / 1000}s`);
+      }
+      await sleep(2000);
+      let cookies: { name: string; value: string; domain: string }[] = [];
+      try {
+        const targets = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()) as {
+          type: string;
+          webSocketDebuggerUrl: string;
+        }[];
+        const page = targets.find((entry) => entry.type === 'page');
+        if (!page) continue;
+        cookies = await readCookies(page.webSocketDebuggerUrl);
+      } catch {
+        continue;
+      }
+      const host = new URL(origin).hostname;
+      const session = cookies.find(
+        (entry) => entry.name.startsWith('brain_') && entry.domain.replace(/^\./, '') === host,
+      );
+      if (!session) continue;
+      const candidate = `${session.name}=${session.value}`;
+      // A cookie is not a session until the Brain agrees. Asked before the
+      // window closes, so a half-finished sign-in says so here rather than
+      // three screens later.
+      const probe = await fetch(`${origin}/api/projects`, { headers: { cookie: candidate } });
+      if (probe.ok) {
+        console.log('  signed in. Closing the window.');
+        return candidate;
+      }
+    }
+  } finally {
+    try {
+      process.kill(-chrome.pid!, 'SIGKILL');
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/** How long `--sign-in` waits for a person. Long, because a person is involved. */
+const SIGN_IN_WINDOW_MS = 300_000;
+
+/** One CDP round trip, for the sign-in window only. */
+async function readCookies(
+  wsUrl: string,
+): Promise<{ name: string; value: string; domain: string }[]> {
+  const socket = new WebSocket(wsUrl);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.addEventListener('open', () => resolve(), { once: true });
+      socket.addEventListener('error', () => reject(new Error('no debugger')), { once: true });
+    });
+    const answer = await new Promise<Record<string, unknown>>((resolve) => {
+      socket.addEventListener('message', (event) => {
+        const message = JSON.parse(String(event.data)) as { id?: number; result?: unknown };
+        if (message.id === 1) resolve((message.result ?? {}) as Record<string, unknown>);
+      });
+      socket.send(JSON.stringify({ id: 1, method: 'Network.getAllCookies' }));
+    });
+    return (answer['cookies'] ?? []) as { name: string; value: string; domain: string }[];
+  } finally {
+    socket.close();
+  }
+}
+
+/**
+ * The cookie, on the host actually being inspected.
+ *
+ * The first version of this hard-coded `127.0.0.1` while navigating to a
+ * deployed origin, so every page loaded signed out — and a signed-out Russell
+ * renders perfectly well, which is why that would have passed rather than
+ * failed. `secure` follows the scheme for the same reason: a `secure` cookie is
+ * not sent over http, and an http loopback Brain would have seen nothing.
+ */
+async function signInBrowserAt(cdp: Cdp, cookie: string, origin: string): Promise<void> {
+  const [name, value] = cookie.split('=');
+  const url = new URL(origin);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.setCookie', {
+    name: name ?? '',
+    value: value ?? '',
+    domain: url.hostname,
+    path: '/',
+    httpOnly: true,
+    secure: url.protocol === 'https:',
+  });
+}
+
+/**
+ * Is this screen the thing it claims to be, or one of the four states that are
+ * not?
+ *
+ * Signed out, loading, refused and errored all render, and all of them render
+ * *something* — which is exactly how a check for "some text is present" passes
+ * on every one of them. Each is named here so the record says which.
+ */
+const SCREEN_STATE = `(() => {
+  const has = (selector) => document.querySelector(selector) !== null;
+  if (has('.rs-signin') || has('input[type="password"]')) return 'SIGNED_OUT';
+  if (has('.rs-state-loading')) return 'LOADING';
+  if (has('.rs-state-forbidden')) return 'FORBIDDEN';
+  if (has('.rs-state-error')) return 'ERROR';
+  if (has('.rs-state-empty')) return 'EMPTY';
+  if (!has('.rs-shell')) return 'NOT_RUSSELL';
+  return 'READY';
+})()`;
+
+async function inspectDeployed(options: Options): Promise<void> {
+  const origin = options.deployed as string;
   if (options.emitPhone === null) {
     throw new Error('--emit-phone=<path> is required: the reading has to go somewhere.');
   }
@@ -1126,46 +1343,64 @@ async function inspectDeployed(options: Options): Promise<void> {
   fs.mkdirSync(options.outputDir, { recursive: true });
   const findings: string[] = [];
   const screenshots: string[] = [];
-
-  const login = await fetch(`${BASE}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', origin: BASE },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!login.ok) throw new Error(`sign-in to ${origin} failed: ${login.status}`);
-  const cookie = (login.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-
-  const health = await fetch(`${BASE}/healthz`);
-  const deployedRevision = health.headers.get('x-brain-revision');
+  const cookie = await sessionForDeployed(options);
 
   /*
-   * Which project, decided by what is in it rather than by a name.
+   * Which revision is running there, from the authenticated endpoint.
    *
-   * Every project this person may read is considered, and the first one holding
-   * both a settled answer and a mission-linked conclusion wins. A hard-coded
-   * project id would be this harness asserting something about a Brain it has
-   * not looked at.
+   * `/healthz` is liveness and says nothing else on purpose; `/api/health`
+   * carries `revision` and only for a Brain administrator, because it sits with
+   * the rest of the operator's facts. A person who is not one gets `null`, and
+   * `null` is reported rather than filled in — an acceptance reading that
+   * cannot name its revision must be refused rather than trusted.
    */
-  const projects = await visit(cookie, '/api/projects');
-  const rows = Array.isArray(projects?.['projects'])
-    ? (projects['projects'] as Record<string, unknown>[])
-    : [];
+  const health = await visit(cookie, '/api/health');
+  const deployedRevision =
+    typeof health?.['revision'] === 'string' ? (health['revision'] as string) : null;
+  const expectedRevision = options.expectRevision;
+  const revisionMatches =
+    expectedRevision === null || deployedRevision === null
+      ? null
+      : deployedRevision === expectedRevision;
+  if (revisionMatches === false && deployedRevision !== null && expectedRevision !== null) {
+    findings.push(
+      `this reading is of ${deployedRevision.slice(0, 8)} and was asked for about ` +
+        `${expectedRevision.slice(0, 8)} — so it is evidence about a different deployment`,
+    );
+  }
+  if (expectedRevision !== null && deployedRevision === null) {
+    findings.push(
+      'the deployed Brain did not report a revision, so this reading cannot be bound to the ' +
+        'deployment being evaluated. /api/health returns it only to a Brain administrator.',
+    );
+  }
 
   const answered: DeployedPhoneRecord['answeredQuestion'] = {
     found: false,
     status: null,
     conversationId: null,
+    excerpt: null,
     readOnScreen: false,
+    screenSaw: null,
   };
   const result: DeployedPhoneRecord['missionLinkedResult'] = {
     found: false,
     missionId: null,
+    missionFromConversation: false,
     knowledgeId: null,
+    statement: null,
     citesDocument: false,
     citesAudit: false,
     readOnScreen: false,
+    screenSaw: null,
   };
 
+  /*
+   * One chain, followed forwards. A conversation is only a candidate if the
+   * work it caused produced a conclusion — otherwise this would report an
+   * answered question from one thread and a result from another and call the
+   * pair a sequence, which is the sixth defect above.
+   */
   const conversations = await visit(cookie, '/api/russell/conversations');
   const threads = Array.isArray(conversations?.['conversations'])
     ? (conversations['conversations'] as Record<string, unknown>[])
@@ -1177,100 +1412,133 @@ async function inspectDeployed(options: Options): Promise<void> {
     const turns = Array.isArray(detail?.['turns'])
       ? (detail['turns'] as Record<string, unknown>[])
       : [];
-    // A question a *person* typed, and Russell's reply to it after it.
-    const askedAt = turns.findIndex((turn) => turn['role'] === 'PERSON');
+    const askedAt = turns.findIndex((turn) => turn['role'] === 'USER');
     if (askedAt < 0) continue;
+    // COMPLETE and nothing else. PENDING is a question still waiting, which is
+    // the thing this condition exists to distinguish; FAILED is an answer that
+    // did not happen.
     const reply = turns
       .slice(askedAt + 1)
-      .find((turn) => turn['role'] === 'RUSSELL' && typeof turn['status'] === 'string');
+      .find((turn) => turn['role'] === 'RUSSELL' && turn['status'] === 'COMPLETE');
     if (!reply) continue;
-    const status = reply['status'] as string;
-    if (status === 'PENDING') continue;
+    const body = typeof reply['content'] === 'string' ? (reply['content'] as string) : '';
+    if (body.trim().length === 0) continue;
+
+    const projectId = typeof thread['projectId'] === 'string' ? (thread['projectId'] as string) : null;
+    if (projectId === null) continue;
+
+    // The missions this conversation produced, by Brain's own foreign key.
+    const work = await visit(cookie, `/api/russell/projects/${projectId}/work`);
+    const missions = Array.isArray(work?.['missions'])
+      ? (work['missions'] as Record<string, unknown>[])
+      : [];
+    const mine = new Set(
+      missions
+        .filter((mission) => mission['conversationId'] === id)
+        .map((mission) => mission['id'])
+        .filter((value): value is string => typeof value === 'string'),
+    );
+    if (mine.size === 0) continue;
+
+    const knowledge = await visit(cookie, `/api/russell/projects/${projectId}/knowledge`);
+    const conclusions = Array.isArray(knowledge?.['knowledge'])
+      ? (knowledge['knowledge'] as Record<string, unknown>[])
+      : [];
+    const cited = conclusions.find(
+      (row) => typeof row['missionId'] === 'string' && mine.has(row['missionId'] as string),
+    );
+    if (!cited) continue;
+
     answered.found = true;
-    answered.status = status;
+    answered.status = 'COMPLETE';
     answered.conversationId = id;
+    answered.excerpt = body.trim().slice(0, 80);
+
+    const provenance = (cited['provenance'] ?? {}) as Record<string, unknown>;
+    result.found = true;
+    result.missionId = cited['missionId'] as string;
+    result.missionFromConversation = true;
+    result.knowledgeId = typeof cited['id'] === 'string' ? (cited['id'] as string) : null;
+    result.statement = typeof cited['statement'] === 'string' ? (cited['statement'] as string) : null;
+    result.citesDocument = typeof provenance['documentId'] === 'string';
+    result.citesAudit = typeof provenance['auditId'] === 'string';
     break;
   }
   if (!answered.found) {
     findings.push(
-      'no conversation on this Brain holds a question a person typed and a reply that is no ' +
-        'longer PENDING. That is a fact about the Brain, not a defect in the product: it means ' +
-        'no worker has answered a turn here yet.',
-    );
-  }
-
-  for (const project of rows) {
-    const id = project['id'];
-    if (typeof id !== 'string') continue;
-    const knowledge = await visit(cookie, `/api/russell/projects/${id}/knowledge`);
-    const conclusions = Array.isArray(knowledge?.['knowledge'])
-      ? (knowledge['knowledge'] as Record<string, unknown>[])
-      : [];
-    const cited = conclusions.find((row) => typeof row['missionId'] === 'string');
-    if (!cited) continue;
-    result.found = true;
-    result.missionId = cited['missionId'] as string;
-    result.knowledgeId = typeof cited['id'] === 'string' ? cited['id'] : null;
-    result.citesDocument = typeof cited['documentId'] === 'string';
-    result.citesAudit = typeof cited['auditId'] === 'string';
-    break;
-  }
-  if (!result.found) {
-    findings.push(
-      'no conclusion on this Brain names the mission it came from. Again a fact about the ' +
-        'Brain: no mission has completed and written back here yet.',
+      'no conversation on this Brain holds a question a person typed, a COMPLETE reply to it, ' +
+        'and a conclusion citing a mission that conversation produced. That is a fact about the ' +
+        'Brain, not a defect in the product — and the three are required together on purpose: ' +
+        'an answer in one thread and a result from another are not a chain.',
     );
   }
 
   /*
-   * And then read both of them on the phone, which is the half the API cannot
+   * And then read both ends on the phone, which is the half the API cannot
    * establish. A row that exists and a row a person can read are different
    * claims, and J is about the second.
    */
   await withChromium(async (cdp) => {
-    await signInBrowser(cdp, cookie);
+    await signInBrowserAt(cdp, cookie, origin);
     await cdp.send('Emulation.setDeviceMetricsOverride', {
       width: PHONE.width,
-      height: 844,
+      height: PHONE.height,
       deviceScaleFactor: 1,
       mobile: true,
     });
 
-    if (answered.conversationId) {
-      await cdp.send('Page.navigate', { url: `${BASE}/c/${answered.conversationId}` });
-      await sleep(2500);
-      answered.readOnScreen = (await evaluate(
+    const look = async (
+      route: string,
+      needle: string,
+      file: string,
+    ): Promise<{ state: string; sawIt: boolean; saw: string }> => {
+      await cdp.send('Page.navigate', { url: `${BASE}${route}` });
+      await waitFor(cdp, `${SCREEN_STATE} !== 'LOADING'`, 20_000);
+      await sleep(1200);
+      const state = (await evaluate(cdp, SCREEN_STATE)) as string;
+      const sawIt = (await evaluate(
         cdp,
-        "!document.body.innerText.includes('Russell is working on this')",
+        `document.body.innerText.replace(/\\s+/g, ' ').includes(${JSON.stringify(needle)})`,
       )) as boolean;
       const shot = (await cdp.send('Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: true,
       })) as { data: string };
-      fs.writeFileSync(
-        path.join(options.outputDir, 'deployed-01-the-answer.png'),
-        Buffer.from(shot.data, 'base64'),
+      fs.writeFileSync(path.join(options.outputDir, file), Buffer.from(shot.data, 'base64'));
+      screenshots.push(file);
+      const saw = (await evaluate(
+        cdp,
+        "document.body.innerText.replace(/\\s+/g, ' ').slice(0, 120)",
+      )) as string;
+      return { state, sawIt, saw };
+    };
+
+    if (answered.conversationId && answered.excerpt) {
+      const seen = await look(
+        `/conversation/${answered.conversationId}`,
+        answered.excerpt,
+        'deployed-01-the-answer.png',
       );
-      screenshots.push('deployed-01-the-answer.png');
+      answered.readOnScreen = seen.state === 'READY' && seen.sawIt;
+      answered.screenSaw = `${seen.state}: ${seen.saw}`;
+      if (!answered.readOnScreen) {
+        findings.push(
+          `the answer is in the rows and not on the screen at /conversation/${answered.conversationId}` +
+            ` — the page was ${seen.state} and ${seen.sawIt ? 'did' : 'did not'} carry the answer's own words`,
+        );
+      }
     }
 
-    if (result.missionId) {
-      await cdp.send('Page.navigate', { url: `${BASE}/knows` });
-      await sleep(2500);
-      result.readOnScreen = (await evaluate(
-        cdp,
-        "document.querySelectorAll('.rs-know, .rs-knowledge, article').length > 0 && " +
-          "!document.body.innerText.includes('There is nothing here yet')",
-      )) as boolean;
-      const shot = (await cdp.send('Page.captureScreenshot', {
-        format: 'png',
-        captureBeyondViewport: true,
-      })) as { data: string };
-      fs.writeFileSync(
-        path.join(options.outputDir, 'deployed-02-the-result.png'),
-        Buffer.from(shot.data, 'base64'),
-      );
-      screenshots.push('deployed-02-the-result.png');
+    if (result.statement) {
+      const seen = await look('/knowledge', result.statement.slice(0, 60), 'deployed-02-the-result.png');
+      result.readOnScreen = seen.state === 'READY' && seen.sawIt;
+      result.screenSaw = `${seen.state}: ${seen.saw}`;
+      if (!result.readOnScreen) {
+        findings.push(
+          'the conclusion is in the rows and not on the screen at /knowledge — the page was ' +
+            `${seen.state} and ${seen.sawIt ? 'did' : 'did not'} carry the conclusion's own statement`,
+        );
+      }
     }
   });
 
@@ -1278,6 +1546,8 @@ async function inspectDeployed(options: Options): Promise<void> {
     brain: origin,
     inspectedAt: new Date().toISOString(),
     deployedRevision,
+    expectedRevision,
+    revisionMatches,
     answeredQuestion: answered,
     missionLinkedResult: result,
     screenshots,
@@ -1286,11 +1556,12 @@ async function inspectDeployed(options: Options): Promise<void> {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, `${JSON.stringify(record, null, 2)}\n`);
   console.log(`\nDeployed phone reading written to ${target}`);
+  console.log(`  revision             ${deployedRevision ?? 'not reported to this person'}`);
   console.log(
-    `  answered question    ${answered.found ? `${answered.status}, read on screen: ${answered.readOnScreen}` : 'none on this Brain'}`,
+    `  answered question    ${answered.found ? `${answered.status} in ${answered.conversationId}, on screen: ${answered.readOnScreen}` : 'no chain on this Brain'}`,
   );
   console.log(
-    `  mission result       ${result.found ? `${result.knowledgeId} citing ${result.missionId}, read on screen: ${result.readOnScreen}` : 'none on this Brain'}`,
+    `  mission result       ${result.found ? `${result.knowledgeId} citing ${result.missionId}, on screen: ${result.readOnScreen}` : 'no chain on this Brain'}`,
   );
   for (const finding of findings) console.log(`  - ${finding}`);
 }

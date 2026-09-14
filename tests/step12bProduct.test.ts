@@ -3220,6 +3220,30 @@ describe("the hosted restart record is an input, not a file in this tree", () =>
  * authorization created for a report.
  * ========================================================================== */
 describe('the deployed phone inspection reads and never writes', () => {
+  /*
+   * ---------------------------------------------------------------------
+   * What this block may and may not assert, after it was wrong about all of it
+   * ---------------------------------------------------------------------
+   *
+   * An earlier version of this block read the mode's source and checked which
+   * strings were in it — and every assertion passed while the mode was wrong in
+   * six independent ways: a message role that does not exist (`PERSON`; the
+   * union is `USER | RUSSELL | SYSTEM`), a cookie set on `127.0.0.1` while
+   * navigating to a deployed origin, two client routes that are `NOT_FOUND`
+   * (`/c/:id` and `/knows`), `FAILED` accepted as answered, a screen check any
+   * text satisfied, and an "answered question" from one thread paired with a
+   * "result" from another.
+   *
+   * **A test that reads the code cannot find a mistake about the product.**
+   * Those seven facts are now proved by driving the real mode through a real
+   * browser against a real Brain in `tests/deployedPhoneInspection.test.ts`,
+   * including every failure state it must refuse.
+   *
+   * What survives here is the one property a source read is genuinely the right
+   * instrument for: **the absence of a way to write.** An integration test can
+   * show that a particular run wrote nothing; only reading the code can show
+   * there is no route in it that could.
+   */
   const repo = REPO_ROOT;
   const harness = fs.readFileSync(path.join(repo, 'scripts', 'visual-qa.ts'), 'utf8');
   const reporter = fs.readFileSync(path.join(repo, 'scripts', 'step12b-acceptance.ts'), 'utf8');
@@ -3229,34 +3253,28 @@ describe('the deployed phone inspection reads and never writes', () => {
   );
 
   it('talks to the deployed Brain through one helper that cannot be given a method', () => {
-    /*
-     * `visit` takes a cookie and a route. A `method` argument would be the
-     * thing somebody passes 'POST' to one day, so there is no argument —
-     * the same reasoning `probeEnvelope.ts` uses about a host.
-     */
     const helper = harness.slice(
       harness.indexOf('async function visit('),
-      harness.indexOf('async function inspectDeployed('),
+      harness.indexOf('async function sessionForDeployed('),
     );
     expect(helper).toContain("method: 'GET'");
     expect(helper).not.toContain('method: method');
     expect(helper).not.toContain('method?: string');
   });
 
-  it('makes exactly one write, and it is the sign-in', () => {
-    const writes = [...mode.matchAll(/method:\s*'(\w+)'/g)].map((m) => m[1]);
-    expect(writes.filter((verb) => verb !== 'GET')).toEqual(['POST']);
-    expect(mode).toContain('/api/auth/login');
+  it('makes no write at all — not even a sign-in', () => {
+    /*
+     * The sign-in went too. A person signs in to the Brain's own form in their
+     * own browser, or supplies a session from one that already is; this process
+     * never holds a password and never posts one. So the whole mode contains no
+     * request with a method other than GET.
+     */
+    expect([...mode.matchAll(/method:\s*'(\w+)'/g)].map((m) => m[1])).toEqual([]);
+    expect(mode).not.toContain('/api/auth/login');
+    expect(mode).not.toContain('JSON.stringify({ email');
   });
 
   it('creates no idea, no authority and no mission on the Brain it is reading', () => {
-    /*
-     * Stated as the absence of each route by name. An earlier version of this
-     * built a conditional out of two `includes` calls and asserted a value
-     * derived from the same string it was checking — it passed for the wrong
-     * reason and then failed for another wrong one. A list of things that must
-     * not appear is the whole assertion.
-     */
     for (const forbidden of [
       '/authority',
       '/candidates',
@@ -3268,8 +3286,6 @@ describe('the deployed phone inspection reads and never writes', () => {
     ]) {
       expect(mode).not.toContain(forbidden);
     }
-    // And nothing is sent anywhere as a body except the sign-in's credentials.
-    expect(mode.match(/body: JSON.stringify/g)?.length ?? 0).toBe(1);
   });
 
   it('refuses to write its reading into this repository', () => {
@@ -3278,30 +3294,56 @@ describe('the deployed phone inspection reads and never writes', () => {
   });
 
   it('will not produce the approval render set from somebody else’s Brain', () => {
-    /*
-     * The renders are of *this tree*, built here. A deployed Brain is running
-     * whatever was last released, so a render set taken from it would be an
-     * approval of a different product wearing this revision's name.
-     */
     expect(harness).toContain('--deployed is a read-only inspection');
     expect(harness).toContain('must not produce the');
   });
 
-  it('needs a person, and says so rather than reaching for a worker credential', () => {
-    expect(mode).toContain('BRAIN_PHONE_EMAIL');
-    expect(mode).toContain('behind requirePerson');
-    expect(mode).toContain('refused at the conversation routes by principal type');
-    // The credential never reaches the record.
+  it('never lets a credential reach the record', () => {
     const record = harness.slice(
       harness.indexOf('interface DeployedPhoneRecord {'),
       harness.indexOf('async function visit('),
     );
     expect(record).not.toContain('password');
     expect(record).not.toContain('cookie');
+    expect(record).not.toContain('session');
   });
 
-  it('reports an absent answer as a fact about that Brain, never as a finding against the product', () => {
-    expect(mode).toContain('That is a fact about the Brain, not a defect in the product');
-    expect(mode).toContain('no mission has completed and written back here yet');
+  it('offers a person two ways to be signed in, and no way to hand over a password', () => {
+    expect(harness).toContain('BRAIN_PHONE_SESSION');
+    expect(harness).toContain('--sign-in');
+    expect(harness).toContain('There is no password option');
+    // The one that would be easiest to add back, named so adding it is visible.
+    expect(harness).not.toContain('BRAIN_PHONE_PASSWORD');
+  });
+
+  it('binds a reading to the deployment it is evidence about', () => {
+    expect(reporter).toContain('function phoneReadingIsAboutThisRun');
+    expect(reporter).toContain("record.deployedRevision === revisionOf().revision");
+    // COMPLETE, rather than "not PENDING" — a FAILED reply is an answer that
+    // did not happen, and the first version counted one.
+    expect(reporter).toContain("answeredQuestion.status === 'COMPLETE'");
+    // And the mission must be the one that conversation produced.
+    expect(reporter).toContain('missionLinkedResult.missionFromConversation');
+  });
+
+  it('is proved against the real product rather than against its own source', () => {
+    /*
+     * The pointer is an assertion rather than a comment, so deleting the
+     * integration suite fails here instead of quietly leaving this block as the
+     * only coverage — which is the state that let six defects through.
+     */
+    const integration = path.join(repo, 'tests', 'deployedPhoneInspection.test.ts');
+    expect(fs.existsSync(integration)).toBe(true);
+    const suite = fs.readFileSync(integration, 'utf8');
+    for (const proved of [
+      'does not accept a question whose answer is still PENDING',
+      'does not accept an answer in one thread and a conclusion from another',
+      'reads the chain, on screen, when a conversation really produced a conclusion',
+      'reports a login screen as a login screen rather than passing on it',
+      'binds the reading to a revision, and says when it cannot',
+      'changes nothing it read',
+    ]) {
+      expect(suite).toContain(proved);
+    }
   });
 });
