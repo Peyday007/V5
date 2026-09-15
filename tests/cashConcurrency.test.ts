@@ -34,10 +34,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, postgresTestConnection, testDatabaseKind } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { commit, createAuthority, listCommitments } from '../server/repos/cashAuthority.ts';
+import {
+  commit,
+  createAuthority,
+  listCommitments,
+  releaseCommitment,
+  revokeAuthority,
+} from '../server/repos/cashAuthority.ts';
 import { cashLockTicket } from '../server/repos/cashLock.ts';
-import { recordMoney } from '../server/repos/cashLedger.ts';
+import { listMoneyEntries, recordMoney } from '../server/repos/cashLedger.ts';
 import { cashPosition } from '../server/services/cash/money.ts';
+import { settleSpend } from '../server/services/cash/opportunities.ts';
 import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   COMMERCIAL_ACTIONS,
@@ -199,6 +206,194 @@ describe('two commitments cannot both take the last of the money', () => {
     // It is a diagnostic rather than a control, which is why nothing reads it
     // to decide anything.
     expect(await cashLockTicket(projectId, 'USD')).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * What the lock costs, and what it buys, measured rather than argued.
+ *
+ * The per-operation serialization is a real tradeoff and it is kept
+ * deliberately: every cash decision on one project and currency takes one row,
+ * so they queue behind each other. The alternative — SERIALIZABLE — moves the
+ * cost to whole-transaction retry in **every caller**, and a path that forgot
+ * to retry would fail under load after telling somebody their money was
+ * committed. It is not replaced for style.
+ *
+ * So the bar it has to clear is correctness under concurrency, and then that
+ * everything around it still adds up: a settlement, a release, a replacement
+ * grant and a retried money event all leaving the ledger saying the same thing
+ * afterwards as it would have said if each had happened once, alone.
+ */
+describe('the lock serializes, and the ledger still adds up', () => {
+  it('lets exactly one of six simultaneous callers take the last of the money', async () => {
+    const before = await cashLockTicket(projectId, 'USD');
+
+    // Six at once against $100 of ceiling and $100 of money, each wanting $80.
+    const outcomes = await Promise.all(
+      [1, 2, 3, 4, 5, 6].map((n) => commit(eightyDollars(`crowd-${n}`))),
+    );
+
+    expect(outcomes.filter((one) => one.ok)).toHaveLength(1);
+    // Every refusal names a ceiling rather than an error: losing is ordinary.
+    for (const refused of outcomes.filter((one) => !one.ok)) {
+      expect(refused.refusedBy).toBeTruthy();
+      expect(refused.replayed).toBe(false);
+    }
+
+    const held = (await listCommitments(projectId))
+      .filter((one) => one.state === 'HELD')
+      .reduce((total, one) => total + one.amountCents, 0);
+    expect(held).toBe(8_000);
+
+    /*
+     * The measurement, and it is not the one I expected: the ticket advances
+     * by **one**, not by six.
+     *
+     * A refusal is raised from inside the transaction so that the provisional
+     * row rolls back with it — and the lock's own increment is in that same
+     * transaction, so it rolls back too. The ticket therefore counts decisions
+     * that *committed*, never attempts. That is the honest reading of it, and
+     * it is a better one: five callers took the row, found the money gone and
+     * left nothing behind them, which is what "a losing claim is an ordinary
+     * outcome" looks like in a counter.
+     *
+     * It stays a diagnostic. Nothing reads it to decide anything.
+     */
+    expect((await cashLockTicket(projectId, 'USD')) - before).toBe(1);
+  });
+
+  it('settles a hold into a cost once, however many times the settlement is retried', async () => {
+    const taken = await commit(eightyDollars('to-settle'));
+    expect(taken.ok).toBe(true);
+    const id = taken.commitment!.id;
+
+    const settled = await settleSpend({ commitmentId: id, spentCents: 3_000, actorRef: userId });
+    expect(settled.ok).toBe(true);
+
+    // $100 in, $30 out, nothing still held: the unspent $50 came back.
+    const after = await cashPosition({ projectId, currency: 'USD' });
+    expect(after.availableFundsCents).toBe(7_000);
+    expect(after.heldCommitmentsCents).toBe(0);
+    expect(after.deployableCents).toBe(7_000);
+
+    // And again. The key is derived from the commitment rather than supplied,
+    // so a retry after a lost response is the same cost once — §20 at the one
+    // table where being wrong spends real money twice.
+    const again = await settleSpend({ commitmentId: id, spentCents: 3_000, actorRef: userId });
+    expect(again.ok).toBe(false);
+    expect(
+      (await listMoneyEntries({ projectId })).filter((one) => one.kind === 'COST'),
+    ).toHaveLength(1);
+    expect((await cashPosition({ projectId, currency: 'USD' })).deployableCents).toBe(7_000);
+  });
+
+  it('frees a release without writing anything into the ledger', async () => {
+    const taken = await commit(eightyDollars('to-release'));
+    expect(taken.ok).toBe(true);
+    const beforeEntries = (await listMoneyEntries({ projectId })).length;
+
+    expect(
+      await releaseCommitment({
+        commitmentId: taken.commitment!.id,
+        reason: 'It is not going to be spent.',
+      }),
+    ).toBe(true);
+
+    // Nothing left the account, so nothing is written. The hold simply stops
+    // reducing what may be deployed.
+    expect((await listMoneyEntries({ projectId })).length).toBe(beforeEntries);
+    const after = await cashPosition({ projectId, currency: 'USD' });
+    expect(after.heldCommitmentsCents).toBe(0);
+    expect(after.availableFundsCents).toBe(10_000);
+    expect(after.deployableCents).toBe(10_000);
+
+    // Released once. A second release is refused rather than freeing it twice.
+    expect(
+      await releaseCommitment({
+        commitmentId: taken.commitment!.id,
+        reason: 'Again.',
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps the spend history when the grant is replaced', async () => {
+    const spent = await commit(eightyDollars('under-the-first-grant'));
+    expect(spent.ok).toBe(true);
+
+    expect(
+      await revokeAuthority({
+        authorityId,
+        actorUserId: userId,
+        reason: 'Changing the concurrency, which is what replacing a grant is for.',
+      }),
+    ).toBe(true);
+
+    const replacement = await createAuthority({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'The second grant',
+      allowedActions: [...COMMERCIAL_ACTIONS],
+      prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+      maxCommittedCents: 10_000,
+      maxPerActionCents: 10_000,
+      maxConcurrent: 2,
+      currency: 'USD',
+    });
+
+    // Withdrawing keeps everything: the commitment, its hold, its reason and
+    // the grant it was made under. §30 removed the stopping rule, not the
+    // evidence.
+    const rows = await listCommitments(projectId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.authorityId).toBe(authorityId);
+    expect(rows[0]!.state).toBe('HELD');
+    expect((await cashPosition({ projectId, currency: 'USD' })).heldCommitmentsCents).toBe(8_000);
+
+    /*
+     * And the ceiling does not reset with the grant, which is stronger than I
+     * assumed when writing this.
+     *
+     * `heldThroughMine` sums what is held **on the project**, not what is held
+     * under the grant being asked — so the $80 already out under the first one
+     * counts against the second one's limit. A replacement that started the
+     * committed total from zero would be a way to double what is at risk by
+     * filling in a form, and this refuses it by the same rule that refuses the
+     * second commitment under one grant.
+     */
+    const over = await commit({
+      ...eightyDollars('under-the-second-grant'),
+      authorityId: replacement.id,
+    });
+    expect(over.ok).toBe(false);
+    expect(over.refusedBy).toBe('IN_TOTAL');
+    expect(over.reason).toContain('10000 cents committed at once');
+    expect((await listCommitments(projectId)).filter((one) => one.state === 'HELD')).toHaveLength(1);
+  });
+
+  it('writes one money entry however many times the same event is retried', async () => {
+    const entry = {
+      projectId,
+      kind: 'CUSTOMER_PAYMENT' as const,
+      amountCents: 4_500,
+      currency: 'USD',
+      recordedBy: userId,
+      idempotencyKey: 'the-same-payment',
+    };
+    const first = await recordMoney(entry);
+    const second = await recordMoney(entry);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+
+    const payments = (await listMoneyEntries({ projectId })).filter(
+      (one) => one.kind === 'CUSTOMER_PAYMENT',
+    );
+    expect(payments).toHaveLength(1);
+    // A payment is not cash until it settles, so the ledger says pipeline
+    // rather than available — and says it once.
+    const position = await cashPosition({ projectId, currency: 'USD' });
+    expect(position.customerPaymentsCents).toBe(4_500);
+    expect(position.availableFundsCents).toBe(10_000);
   });
 });
 
