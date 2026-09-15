@@ -74,6 +74,7 @@ import {
   sharedPoolForReader,
 } from '../server/services/knowledge/shared.ts';
 import { findTool } from '../server/mcp/tools.ts';
+import { tick } from '../server/services/russell/loop.ts';
 import { addMessage, createConversation } from '../server/repos/russellConversations.ts';
 import { createCandidate } from '../server/repos/russellCandidates.ts';
 import type {
@@ -466,6 +467,27 @@ beforeEach(async () => {
 });
 
 describe('a validated finding becomes the whole Brain’s', () => {
+  it('is promoted by the durable tick, which is the caller production has', async () => {
+    /*
+     * The one thing a suite calling `promoteEligibleClaims` directly cannot
+     * see. Every other test here would pass against a promotion pass nothing
+     * ever ran — which is the defect this repository has recorded five times,
+     * and the reason the step is asserted through the loop rather than beside
+     * it.
+     */
+    await anaEstablishesTheFact();
+    const first = await tick('shared-knowledge');
+    expect(first.ran).toBe(true);
+    expect(first.sharedPromoted.length).toBe(2);
+    expect((await listFindings()).length).toBe(2);
+
+    // And the next pass promotes nothing, because it is idempotent by the
+    // claim rather than by a flag some tick could set and then die.
+    const second = await tick('shared-knowledge');
+    expect(second.sharedPromoted).toEqual([]);
+    expect((await listFindings()).length).toBe(2);
+  });
+
   it('promotes a gated claim, and records the rule that admitted it', async () => {
     const produced = await anaEstablishesTheFact();
     const claims = await listClaims(produced.orchestrationId);
