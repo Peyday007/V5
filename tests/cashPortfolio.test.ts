@@ -322,6 +322,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('names the one decision nothing can proceed without, first and unfolded', () => {
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: null,
       position,
       placements: [],
@@ -340,6 +341,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     const missingPayer = [1, 2, 3, 4, 5].map(() => opportunity({ payer: null }));
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -364,6 +366,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     const missingPrice = [1, 2, 3, 4, 5].map(() => opportunity({ priceCents: null }));
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -398,6 +401,11 @@ describe('the review groups by shared remedy and counts what it stands for', () 
       setupEffort: 'Minutes.',
       nextStep: 'Buy it.',
       completionCondition: 'The tool is bought and reachable from here.',
+      occurrence: 1,
+      verifiedBy: null,
+      continuationClaimedAt: null,
+      continuationAttempts: 0,
+      continuationNotBefore: null,
       blocksState: null,
       candidateId: null,
       requestKey: null,
@@ -412,6 +420,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     });
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: null,
       position,
       placements: [],
@@ -444,6 +453,11 @@ describe('the review groups by shared remedy and counts what it stands for', () 
       setupEffort: 'Minutes.',
       nextStep: 'Open it.',
       completionCondition: 'The account is open.',
+      occurrence: 1,
+      verifiedBy: null,
+      continuationClaimedAt: null,
+      continuationAttempts: 0,
+      continuationNotBefore: null,
       blocksState: null,
       candidateId: null,
       requestKey: null,
@@ -458,6 +472,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     });
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: null,
       position,
       placements: [],
@@ -483,6 +498,11 @@ describe('the review groups by shared remedy and counts what it stands for', () 
       setupEffort: 'One bounded look.',
       nextStep: 'Name the role that signs.',
       completionCondition: 'A payer is recorded.',
+      occurrence: 1,
+      verifiedBy: null,
+      continuationClaimedAt: null,
+      continuationAttempts: 0,
+      continuationNotBefore: null,
       blocksState: 'EXECUTING' as const,
       candidateId: 'rcn_1',
       requestKey: 'question:cop_1:payer',
@@ -497,6 +517,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     };
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: null,
       position,
       placements: [],
@@ -525,6 +546,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     // each of these, and the second one is always the one that forgets a guard.
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -555,6 +577,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     });
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: {
         id: 'cau_1',
         projectId: 'prj_1',
@@ -594,6 +617,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('says plainly when nothing needs a person', () => {
     const review = compressedReview({
       mode: null,
+      stalled: [],
       authority: null,
       position,
       placements: [],
@@ -607,6 +631,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('tells a person about a shortfall rather than only refusing later', () => {
     const review = compressedReview({
       mode,
+      stalled: [],
       authority: null,
       position: { ...position, deployableCents: -5_000, shortfall: true },
       placements: [],

@@ -3344,6 +3344,32 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   names no remedy is §24's "waiting nobody can resolve" at a seventh altitude.
   An open need stops no unrelated work: nothing reads that table to decide
   whether an opportunity may proceed.
+
+  **A need is answered because something is true, and three things about it
+  were promises the table could not keep.** `closeNeed` accepted any non-empty
+  sentence, so "done" resolved a need whose capability was still missing —
+  `completion_condition` was required at creation and read by nothing. It is
+  checked now, and `verified_by` says which happened: Brain read the rows and
+  the condition holds, or a person authorized a **manual substitute** and said
+  what they are doing instead. The second is a real and common answer and it is
+  not the same fact as the first, so the row says so and the capability still
+  reads MISSING.
+
+  `request_key` was unique per project and `needForKey` ignored state, so once a
+  need was resolved the key was spent: the same capability going missing a month
+  later found the old row, was told it had already been raised, and never
+  reached the review. `occurrence` makes each return its own row rather than
+  rewriting a resolution that was true when it was written.
+
+  And a continuation was **consumed before it succeeded**: `continued_at` was
+  written permanently before the attempt ran, so a temporary refusal — no grant
+  yet, no free slot, the piece not READY — burned the one chance the need had.
+  The ordinary path made that the common case rather than the rare one, because
+  a card answered by research leaves the piece at `EVIDENCE_CARD`. A claim is a
+  lease now, `continued_at` is written only on a terminal answer, a wait is
+  deferred with bounded backoff, and a claim whose tick died expires and is
+  retaken — Step 5's rule at a new table, where an expired lease is claimable
+  work so recovery never depends on one process staying alive.
 - **Which envelope discovery runs under is a person's recorded choice from a
   reviewed set.** The compiler's in-code slug map has no entry for a project an
   operator created, so every idea in all four operations would have been refused
@@ -3479,9 +3505,41 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   **A fact Brain could look up is not a person's decision.** `evidenceCard`
   marks the payer, the access channel and the buying evidence `discoverable`, so
   `reconcileDiscoverableGaps` raises a need and Brain researches them and they
-  never reach the review. What to offer, what to charge, what counts as accepted
-  and who does the work are the owner's own calls — a researched answer to *what
-  should we charge* would be invented judgment wearing a citation.
+  never reach the review.
+
+- **And a commercial judgment is not permanently a person's either. The
+  correction is recorded rather than quietly applied.** The paragraph above
+  used to end by reserving the offer, the price, the acceptance condition and
+  who fulfils the work to the owner, because *a researched answer to "what
+  should we charge" would be invented judgment wearing a citation*. That
+  sentence is true about a **citation** and wrong as a **prohibition**: this
+  section is meant to be an operator with high autonomy inside limits somebody
+  set, and reserving every commercial judgment to a human makes it a form to
+  fill in — which is exactly what §24 already had to correct once about a
+  standing authority that "still asked a person to configure machinery".
+
+  So `services/cash/answers.ts` prepares them, and `cash_card_facts.kind` is
+  what keeps it honest rather than a rule somebody has to remember:
+
+  * **EVIDENCE** is a gated research claim, so the field resolves to a source,
+    a publisher and a date exactly as a report's sentence does.
+  * **RECOMMENDATION** is Brain's own proposal and carries its basis, its
+    assumptions and what would change it. All three are required to write one,
+    so a recommendation with no stated uncertainty cannot exist — and the card
+    renders it as a proposal, because one shown the way a source is shown has
+    told somebody a guess was checked.
+  * **PERSON** is somebody's decision, and nothing automatic replaces one.
+    `mayReplace` is that order, and it is about authority rather than recency.
+
+  **It proposes nothing it has no basis for.** A price is proposed only where a
+  source states a figure; with none the field stays unknown and says what would
+  settle it. Deriving a number and explaining it afterwards is the invented
+  judgment the old rule was worried about, and the worry was right about that.
+
+  **It changes no boundary.** The standing commercial authority still decides
+  what may be spent, executing still needs a recorded `cash_actions` row, and
+  the evidence gate is untouched. What moved is who may form a view, not what
+  anyone may do with it.
 
   **Every item carries a typed answer, and each names an operation that already
   exists.** There is no apply endpoint of the review's own, because a second way
@@ -3553,6 +3611,9 @@ server/
     cashPortfolio.ts  the opportunities, and the needs they raise
     cashLedger.ts     money, as append-only rows; no balance column anywhere
     cashActions.ts    what was actually done, and under which grant
+    cashLock.ts       where two cash decisions stop being concurrent
+    cashDiscovery.ts  which questions discovery asked, and which idea asked each
+    cashCardFacts.ts  where each answer on a card came from, and what kind it is
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -3638,6 +3699,7 @@ server/
       review.ts         grouping by shared remedy; compression, measured
       opportunities.ts  the producer, and every transition an opportunity has
       capabilities.ts   what Brain can verifiably do, read rather than declared
+      answers.ts        research reaching the card, and the view Brain forms on it
       discovery.ts      where the portfolio comes from: buckets, and a lane
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
@@ -3760,6 +3822,8 @@ tests/                  Vitest suites
   cashPortfolio.test.ts      the unknowns, the dispositions, and the measured compression
   cashDiscovery.test.ts      the buckets, the lane, and the blank card they produce
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
+  cashConcurrency.test.ts    two commitments, forced to overlap, on both backends
+  cashCurrencyHttp.test.ts   a sprint that is not in dollars, driven as a person does
   cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashHttp.test.ts           Cash Mode's door, driven as an attack
   cashSection.test.tsx       the Cash section in a browser: four states, one control

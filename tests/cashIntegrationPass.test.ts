@@ -49,7 +49,12 @@ import {
   transitionMission,
 } from '../server/repos/russellMissions.ts';
 import { listCandidates } from '../server/repos/russellCandidates.ts';
-import { getNeed, listNeeds, listOpportunities } from '../server/repos/cashPortfolio.ts';
+import {
+  getNeed,
+  getOpportunity,
+  listNeeds,
+  listOpportunities,
+} from '../server/repos/cashPortfolio.ts';
 import { actionsFor } from '../server/repos/cashActions.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { tick } from '../server/services/russell/loop.ts';
@@ -375,7 +380,17 @@ describe('one sprint, from activation to money in and winding down', () => {
      * 6. Executing is refused until a person has decided what Brain may do,
      *    and then until something has actually happened.
      * ------------------------------------------------------------------ */
-    expect((await markReady({ opportunityId: piece!.id, actorRef: userId })).ok).toBe(true);
+    /*
+     * Ready already, or made ready here.
+     *
+     * The operating pass now carries a piece whose card it completed through
+     * `markReady` itself, because the transition a need was blocking is
+     * downstream of one the need's own answer unblocks. Asserting the call
+     * succeeds would be asserting that Brain had *not* done its job.
+     */
+    if ((await getOpportunity(piece!.id))!.state !== 'READY') {
+      expect((await markReady({ opportunityId: piece!.id, actorRef: userId })).ok).toBe(true);
+    }
 
     const beforeGrant = await beginExecution({ opportunityId: piece!.id, actorRef: userId });
     expect(beforeGrant.ok).toBe(false);
@@ -427,8 +442,12 @@ describe('one sprint, from activation to money in and winding down', () => {
         await closeNeed({
           needId: capabilityNeed.id,
           to: 'RESOLVED',
-          resolution: 'Invoicing is handled outside Brain for now, and the invoice is sent.',
+          resolution: 'The invoice is sent.',
           actorUserId: userId,
+          // The integration is still missing, so the honest answer is what is
+          // being done instead — recorded as a substitute rather than as the
+          // condition having been met.
+          substitute: 'Invoicing by hand from the accounts package for now.',
         })
       ).ok,
     ).toBe(true);

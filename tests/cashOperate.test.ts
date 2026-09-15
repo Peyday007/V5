@@ -23,10 +23,29 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
 import { actionsFor, countActions } from '../server/repos/cashActions.ts';
-import { getNeed, getOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
+import {
+  CONTINUATION_LEASE_MS,
+  claimNeedContinuation,
+  getNeed,
+  getOpportunity,
+  listNeeds,
+} from '../server/repos/cashPortfolio.ts';
 import { createAccount, createRoutine } from '../server/repos/fleet.ts';
 import { createWorker } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
+import { createRun } from '../server/repos/runs.ts';
+import {
+  createFragments,
+  createOrchestration,
+  currentFragments,
+  decideClaim,
+  insertClaims,
+  updateFragment,
+} from '../server/repos/research.ts';
+import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
+import { cardFact, recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { applyResearchAnswers } from '../server/services/cash/answers.ts';
+import type { Layer } from '../server/domain/types.ts';
 import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   COMMERCIAL_ACTIONS,
@@ -41,6 +60,7 @@ import {
 import { closeNeed, raiseNeed } from '../server/services/cash/needs.ts';
 import {
   operate,
+  proposeCommercialTerms,
   reconcileCapabilityNeeds,
   reconcileDiscoverableGaps,
   runNeedContinuations,
@@ -51,10 +71,12 @@ import { updateOpportunity } from '../server/repos/cashPortfolio.ts';
 
 let projectId = '';
 let userId = '';
+let layer: Layer;
 
 beforeEach(async () => {
   const fixture = await freshProject();
   projectId = fixture.project.id;
+  layer = await fixture.layerByName('Discovery Logic');
   const user = await createUser({
     email: `operate-${Math.random().toString(36).slice(2, 10)}@example.test`,
     displayName: 'Owner',
@@ -412,9 +434,84 @@ describe('answering a need resumes what was waiting, exactly once', () => {
     expect((await getOpportunity(id))!.state).toBe('EXECUTING');
   });
 
-  it('runs once however many ticks read the same answered need', async () => {
+  it('does not spend the continuation on a refusal that is only temporary', async () => {
+    /*
+     * The claim used to be terminal and was written *before* the attempt, so a
+     * refusal that was only ever going to be temporary — no commercial grant
+     * yet, no free execution slot, the piece still short of READY — burned the
+     * one chance the need had and nothing ever retried.
+     *
+     * The ordinary path made that the common case rather than the rare one: a
+     * card answered by research leaves the piece at EVIDENCE_CARD, so a need
+     * resolved then is resolved before READY exists at all.
+     */
+    const { id, needId } = await blockedPiece();
+    expect(
+      (await closeNeed({ needId, to: 'RESOLVED', resolution: 'Found it.', actorUserId: userId })).ok,
+    ).toBe(true);
+
+    const first = await runNeedContinuations(projectId);
+    expect(first).toHaveLength(1);
+    expect(first[0]!.resumed).toBe(false);
+    expect(first[0]!.retry).toBe(true);
+    expect(first[0]!.note).toContain('Nothing has happened on this yet');
+
+    // Still waiting, not finished: the need is retried rather than spent.
+    const waiting = (await getNeed(needId))!;
+    expect(waiting.continuedAt).toBeNull();
+    expect(waiting.continuationAttempts).toBe(1);
+    expect(waiting.continuationNotBefore).toBeTruthy();
+
+    // And once the condition it was waiting on stops holding, it resumes.
+    await beginExecution({
+      opportunityId: id,
+      actorRef: userId,
+      firstAction: {
+        action: 'CONTACT_BUYER',
+        performedBy: 'PERSON',
+        detail: 'Emailed the owner.',
+        requestKey: actionKey(id, 'CONTACT_BUYER', 'first'),
+      },
+    });
+    const { transitionOpportunity } = await import('../server/repos/cashPortfolio.ts');
+    await transitionOpportunity({ id, from: ['EXECUTING'], to: 'READY' });
+
+    const later = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const second = await runNeedContinuations(projectId, later);
+    expect(second[0]!.resumed).toBe(true);
+    expect((await getNeed(needId))!.continuedAt).toBeTruthy();
+  });
+
+  it('recovers a continuation whose tick died holding the claim', async () => {
+    /*
+     * Step 5's rule at a new table: an expired lease is claimable work, so
+     * recovery never depends on one process staying alive. A flag set by a tick
+     * that then dies is a need nothing will ever look at again.
+     */
     const { needId } = await blockedPiece();
     await closeNeed({ needId, to: 'RESOLVED', resolution: 'Found it.', actorUserId: userId });
+
+    // A tick claims it and never comes back.
+    expect(await claimNeedContinuation(needId)).toBe(true);
+    expect((await getNeed(needId))!.continuationClaimedAt).toBeTruthy();
+
+    // Another tick, immediately: the claim is live, so it is left alone.
+    expect(await runNeedContinuations(projectId)).toEqual([]);
+
+    // And once the lease goes stale, it is reclaimed.
+    const after = new Date(Date.now() + CONTINUATION_LEASE_MS + 60_000).toISOString();
+    const retaken = await runNeedContinuations(projectId, after);
+    expect(retaken).toHaveLength(1);
+  });
+
+  it('runs once however many ticks read the same settled need', async () => {
+    const { needId } = await blockedPiece();
+    await closeNeed({
+      needId,
+      to: 'WITHDRAWN',
+      resolution: 'Never mind.',
+      actorUserId: userId,
+    });
 
     expect(await runNeedContinuations(projectId)).toHaveLength(1);
     expect(await runNeedContinuations(projectId)).toEqual([]);
@@ -546,12 +643,394 @@ describe('a need that is a question becomes work', () => {
   });
 });
 
+describe('what the research established reaches the card', () => {
+  /** A finished mission for one need's question, carrying accepted claims. */
+  async function researchAnswers(input: {
+    needId: string;
+    claims: { claim: string; sourceUrl: string | null; observedOn?: string | null }[];
+    state?: 'DONE' | 'FAILED';
+  }): Promise<void> {
+    const need = (await getNeed(input.needId))!;
+    const run = await createRun({
+      projectId,
+      layerId: layer.id,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: need.blockedAction,
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId: layer.id,
+      runId: run.id,
+      title: need.blockedAction,
+      assignment: need.nextStep,
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    await createFragments([
+      {
+        orchestrationId: orchestration.id,
+        projectId,
+        layerId: layer.id,
+        geography: 'the market this piece is in',
+        requiredEvidence: [
+          { id: 'demand_signal', description: 'a published source', necessity: 'REQUIRED' },
+        ],
+        acceptableSourceTypes: ['an organisation’s own published pages'],
+        excludedSourceTypes: ['a forecast presented as a current fact'],
+        completionCriteria: ['a located passage'],
+        minIndependentSources: 1,
+        maxRepairs: 2,
+        fragmentIndex: 0,
+        fragmentKey: 'card-question',
+        question: need.nextStep,
+        dependsOn: [],
+        attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    const [fragment] = await currentFragments(orchestration.id);
+    await updateFragment(fragment!.id, {
+      status: 'ACCEPTED',
+      completedAt: new Date().toISOString(),
+      blockedReason: null,
+    });
+    const inserted = await insertClaims(
+      input.claims.map((one) => ({
+        orchestrationId: orchestration.id,
+        fragmentId: fragment!.id,
+        passId: null,
+        passKey: 'BROAD_SCAN' as const,
+        claim: one.claim,
+        sourceUrl: one.sourceUrl,
+        sourceTitle: 'A page',
+        sourcePublisher: 'The organisation',
+        sourceDate: one.observedOn === undefined ? '2026-09-11' : one.observedOn,
+        evidenceExcerpt: one.claim,
+        evidenceLocator: 'the page body',
+        evidenceLane: 'demand_signal',
+        retrievedAt: '2026-09-12',
+        confidence: 0.9,
+        validationState: 'SOURCED' as const,
+        validationDetail: null,
+        sourced: one.sourceUrl !== null,
+        claimType: 'SOURCED_FACT' as const,
+        contentHash: `${one.claim}|${one.sourceUrl ?? ''}`,
+      })),
+    );
+    for (const claim of inserted) await decideClaim(claim.id, { accepted: true });
+
+    const { mission } = await launchMission({
+      projectId,
+      layerId: layer.id,
+      visibility: 'SHARED',
+      objective: need.blockedAction,
+      whyNow: 'a card is blank',
+      idempotencyKey: `mission:${orchestration.id}`,
+      candidateId: need.candidateId,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+    await transitionMission({
+      missionId: mission.id,
+      from: 'RUNNING',
+      to: input.state ?? 'DONE',
+      ...(input.state === 'FAILED' ? { terminalReason: 'Nothing published settles it.' } : {}),
+    });
+  }
+
+  async function bareOpportunity(): Promise<string> {
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'A bare opening',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error(captured.reason);
+    await updateOpportunity(captured.value.id, {
+      buying_signal: 'A county published a request for eight parcel searches.',
+      signal_observed_at: '2026-09-10',
+    });
+    return captured.value.id;
+  }
+
+  it('puts a gated claim on the card, with the claim beside it', async () => {
+    /*
+     * `startDependentWork` wrote the candidate id onto the need and the only
+     * reader of that column hid the need from the review — for ever, and
+     * whether the research had completed, failed or never started. So the loop
+     * looked like it worked while the card stayed blank.
+     */
+    const id = await bareOpportunity();
+    await reconcileDiscoverableGaps(projectId);
+    await startDependentWork(projectId);
+
+    const payerNeed = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) =>
+      one.requestKey?.endsWith(':payer'),
+    )!;
+    expect(payerNeed.candidateId).toBeTruthy();
+
+    await researchAnswers({
+      needId: payerNeed.id,
+      claims: [
+        {
+          claim: 'The drainage authority’s procurement officer approves purchases under $25,000.',
+          sourceUrl: 'https://example.test/authority/procurement',
+        },
+      ],
+    });
+
+    const applied = await applyResearchAnswers(projectId);
+    expect(applied.applied).toHaveLength(1);
+    expect(applied.applied[0]!.field).toBe('payer');
+
+    // On the card, and resolvable to the passage it came from.
+    const opportunity = (await getOpportunity(id))!;
+    expect(opportunity.payer).toContain('procurement officer');
+    const fact = (await cardFact(id, 'payer'))!;
+    expect(fact.kind).toBe('EVIDENCE');
+    expect(fact.claimId).toBe(applied.applied[0]!.claimId);
+
+    // And the need it answered is closed because the condition holds, not
+    // because somebody wrote a sentence.
+    const settled = (await getNeed(payerNeed.id))!;
+    expect(settled.state).toBe('RESOLVED');
+    expect(settled.verifiedBy).toBe('BRAIN_READ_THE_ROW');
+  });
+
+  it('leaves the field unknown when nothing found supports one', async () => {
+    const id = await bareOpportunity();
+    await reconcileDiscoverableGaps(projectId);
+    await startDependentWork(projectId);
+    const need = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) =>
+      one.requestKey?.endsWith(':payer'),
+    )!;
+
+    await researchAnswers({ needId: need.id, claims: [] });
+    const applied = await applyResearchAnswers(projectId);
+    expect(applied.applied).toEqual([]);
+    expect(applied.unanswered.find((one) => one.needId === need.id)?.state).toBe('NO_SUPPORT');
+
+    // The honest outcome rather than a blank filled in to close a need.
+    expect((await getOpportunity(id))!.payer).toBeNull();
+    expect((await getNeed(need.id))!.state).toBe('OPEN');
+  });
+
+  it('says so when the research that would have answered it failed', async () => {
+    await bareOpportunity();
+    await reconcileDiscoverableGaps(projectId);
+    await startDependentWork(projectId);
+    const need = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) =>
+      one.requestKey?.endsWith(':payer'),
+    )!;
+
+    await researchAnswers({
+      needId: need.id,
+      state: 'FAILED',
+      claims: [{ claim: 'unused', sourceUrl: 'https://example.test/x' }],
+    });
+    const applied = await applyResearchAnswers(projectId);
+    const blocked = applied.unanswered.find((one) => one.needId === need.id)!;
+    expect(blocked.state).toBe('FAILED');
+    expect(blocked.detail).toContain('Nothing published settles it');
+  });
+});
+
+describe('Brain forms a commercial view, and never calls it a fact', () => {
+  it('proposes terms from the evidence, with assumptions and uncertainty', async () => {
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'A published request',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error(captured.reason);
+    await updateOpportunity(captured.value.id, {
+      buying_signal: 'A county published a request for eight parcel searches by 30 September.',
+      signal_observed_at: '2026-09-10',
+    });
+
+    const proposed = await proposeCommercialTerms(projectId);
+    expect(proposed).toHaveLength(1);
+    expect(proposed[0]!.fields).toEqual(
+      expect.arrayContaining(['offer', 'acceptance', 'delivery', 'fulfillment']),
+    );
+
+    const offer = (await cardFact(captured.value.id, 'offer'))!;
+    // A recommendation, and never renderable as a reading: all three of basis,
+    // assumptions and uncertainty are required to write one.
+    expect(offer.kind).toBe('RECOMMENDATION');
+    expect(offer.basis).toBeTruthy();
+    expect(offer.assumptions).toBeTruthy();
+    expect(offer.uncertainty).toBeTruthy();
+    expect((await getOpportunity(captured.value.id))!.offerScope).toContain('parcel searches');
+  });
+
+  it('withholds a price rather than inventing one, and says why', async () => {
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'A request with no figure in it',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error(captured.reason);
+    await updateOpportunity(captured.value.id, {
+      buying_signal: 'A county published a request for parcel searches.',
+      signal_observed_at: '2026-09-10',
+    });
+
+    const proposed = await proposeCommercialTerms(projectId);
+    expect(proposed[0]!.withheld).toContain('price');
+    // Deriving one from nothing is exactly the invented judgment the old rule
+    // worried about, and the worry was right about *that*.
+    expect((await getOpportunity(captured.value.id))!.priceCents).toBeNull();
+    expect(await cardFact(captured.value.id, 'price')).toBeNull();
+  });
+
+  it('never proposes over a person’s own answer', async () => {
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'A request somebody has already scoped',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error(captured.reason);
+    await updateOpportunity(captured.value.id, {
+      buying_signal: 'A county published a request for parcel searches.',
+      signal_observed_at: '2026-09-10',
+    });
+    await recordCardFact({
+      projectId,
+      opportunityId: captured.value.id,
+      field: 'offer',
+      kind: 'PERSON',
+      value: 'One packet, our own scope, nothing else.',
+      decidedBy: userId,
+    });
+    await updateOpportunity(captured.value.id, {
+      offer_scope: 'One packet, our own scope, nothing else.',
+    });
+
+    await proposeCommercialTerms(projectId);
+    const offer = (await cardFact(captured.value.id, 'offer'))!;
+    expect(offer.kind).toBe('PERSON');
+    expect((await getOpportunity(captured.value.id))!.offerScope).toBe(
+      'One packet, our own scope, nothing else.',
+    );
+  });
+});
+
+describe('a need is answered because something is true', () => {
+  it('refuses a resolution whose condition does not hold', async () => {
+    await readyPiece(['TAKE_A_PAYMENT']);
+    await reconcileCapabilityNeeds(projectId);
+    const need = (await listNeeds({ projectId, states: ['OPEN'] }))[0]!;
+
+    // A written explanation is not a working integration.
+    const pretended = await closeNeed({
+      needId: need.id,
+      to: 'RESOLVED',
+      resolution: 'Done.',
+      actorUserId: userId,
+    });
+    expect(pretended.ok).toBe(false);
+    if (pretended.ok) throw new Error('unreachable');
+    expect(pretended.reason).toContain('still reads MISSING');
+    expect((await getNeed(need.id))!.state).toBe('OPEN');
+  });
+
+  it('records an authorized manual substitute as exactly that', async () => {
+    await readyPiece(['TAKE_A_PAYMENT']);
+    await reconcileCapabilityNeeds(projectId);
+    const need = (await listNeeds({ projectId, states: ['OPEN'] }))[0]!;
+
+    const done = await closeNeed({
+      needId: need.id,
+      to: 'RESOLVED',
+      resolution: 'The buyer paid us directly.',
+      actorUserId: userId,
+      substitute: 'Taking payment by bank transfer outside Brain for now.',
+    });
+    expect(done.ok).toBe(true);
+
+    const settled = (await getNeed(need.id))!;
+    // The integration is still missing, and that is a different fact from the
+    // condition having been met. Brain says which.
+    expect(settled.verifiedBy).toBe('PERSON_SUBSTITUTE');
+    expect(settled.resolution).toContain('done another way');
+    expect((await readCapability('TAKE_A_PAYMENT')).state).toBe('MISSING');
+  });
+
+  it('raises a fresh occurrence when the blockage comes back', async () => {
+    /*
+     * `needForKey` answered with the newest row whatever its state, so once a
+     * capability need was resolved the key was spent: the capability going
+     * missing again found the resolved row, was told it had already been
+     * raised, and never reached the review.
+     */
+    await healthyFleet();
+    const id = await readyPiece(['RESEARCH_A_QUESTION']);
+    expect((await reconcileCapabilityNeeds(projectId)).raised).toEqual([]);
+
+    // It goes missing.
+    const { listRoutines, setRoutineState } = await import('../server/repos/fleet.ts');
+    for (const routine of await listRoutines()) {
+      await setRoutineState({
+        routineId: routine.id,
+        from: routine.state,
+        to: 'QUARANTINED',
+        reason: 'gone',
+      });
+    }
+    const first = await reconcileCapabilityNeeds(projectId);
+    expect(first.raised).toHaveLength(1);
+    const firstNeed = (await getNeed(first.raised[0]!))!;
+    expect(firstNeed.occurrence).toBe(1);
+
+    // It comes back, and the need settles itself.
+    for (const routine of await listRoutines()) {
+      await setRoutineState({
+        routineId: routine.id,
+        from: routine.state,
+        to: 'ENABLED',
+        reason: 'back',
+      });
+    }
+    expect((await reconcileCapabilityNeeds(projectId)).settled).toContain(firstNeed.id);
+
+    // And it goes missing a second time. This used to be invisible.
+    for (const routine of await listRoutines()) {
+      await setRoutineState({
+        routineId: routine.id,
+        from: routine.state,
+        to: 'QUARANTINED',
+        reason: 'gone again',
+      });
+    }
+    const second = await reconcileCapabilityNeeds(projectId);
+    expect(second.raised).toHaveLength(1);
+    expect(second.raised[0]).not.toBe(firstNeed.id);
+    expect((await getNeed(second.raised[0]!))!.occurrence).toBe(2);
+    expect(id).toBeTruthy();
+  });
+});
+
 describe('the operating pass as the tick calls it', () => {
   it('does nothing at all for a project with no sprint', async () => {
     const fixture = await freshProject();
     expect(await operate(fixture.project.id)).toEqual({
       capabilities: { raised: [], settled: [] },
       gaps: [],
+      research: { applied: [], unanswered: [] },
+      proposed: [],
       continuations: [],
       dependentWork: [],
     });

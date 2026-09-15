@@ -5798,6 +5798,11 @@ export interface CashNeedRow {
   setup_effort: string;
   next_step: string;
   completion_condition: string | null;
+  occurrence: number;
+  verified_by: string | null;
+  continuation_claimed_at: string | null;
+  continuation_attempts: number;
+  continuation_not_before: string | null;
   blocks_state: string | null;
   candidate_id: string | null;
   request_key: string | null;
@@ -5829,6 +5834,27 @@ export interface CashNeed {
    * is that it has none.
    */
   completionCondition: string | null;
+  /**
+   * Which return of this blockage this is.
+   *
+   * A capability that goes missing again is a new occurrence rather than the
+   * old row reopened, because the old row's resolution was true when it was
+   * written and rewriting it would make the history say something else.
+   */
+  occurrence: number;
+  /**
+   * How the completion condition was established, or null while it is open.
+   *
+   * `BRAIN_READ_THE_ROW` means Brain checked and the condition holds.
+   * `PERSON_SUBSTITUTE` means it does not and somebody authorized a manual way
+   * round it, which is a different fact and must not read as the first.
+   */
+  verifiedBy: 'BRAIN_READ_THE_ROW' | 'PERSON_SUBSTITUTE' | null;
+  /** When a continuation took its lease. Reclaimable once it goes stale. */
+  continuationClaimedAt: string | null;
+  continuationAttempts: number;
+  /** Not retried before this, after a temporary refusal. */
+  continuationNotBefore: string | null;
   /**
    * The opportunity transition waiting on it, when one is.
    *
@@ -5903,6 +5929,53 @@ export interface CashAction {
   confirmedBy: string;
   requestKey: string;
   createdAt: string;
+}
+
+export interface CashCardFactRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string;
+  field: string;
+  kind: string;
+  value: string;
+  claim_id: string | null;
+  need_id: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decided_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * One answer on an evidence card, and what kind of answer it is.
+ *
+ * The kind is the load-bearing part. A card that rendered Brain's proposal the
+ * same way it renders a published source would have told somebody a guess was
+ * checked, which is the one thing this whole section may not do.
+ */
+export interface CashCardFact {
+  id: string;
+  projectId: string;
+  opportunityId: string;
+  field: string;
+  /**
+   * `EVIDENCE` resolves to a claim and therefore to a source, a publisher and a
+   * date. `RECOMMENDATION` is Brain's own proposal and carries its basis, its
+   * assumptions and what would change it. `PERSON` is somebody's decision and
+   * nothing automatic replaces one.
+   */
+  kind: 'EVIDENCE' | 'RECOMMENDATION' | 'PERSON';
+  value: string;
+  claimId: string | null;
+  needId: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decidedBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CashDiscoveryRoundRow {

@@ -117,6 +117,16 @@ export interface CompressedReview {
 
 export interface ReviewInput {
   mode: CashMode | null;
+  /**
+   * The needs whose research is not going to answer them without help.
+   *
+   * Failed, finished without support, or never launched — from
+   * `applyResearchAnswers`, which is the pass that actually reads the missions.
+   * A need that is merely *running* is deliberately absent: it is work in
+   * progress rather than a decision, and putting it here would fill the review
+   * with things nobody can do anything about.
+   */
+  stalled: string[];
   authority: CashAuthority | null;
   position: CashPosition;
   placements: Placement[];
@@ -260,9 +270,17 @@ export function compressedReview(input: ReviewInput): CompressedReview {
   const byPath = new Map<string, CashNeed[]>();
   for (const need of input.needs) {
     if (need.state !== 'OPEN') continue;
-    // A question Brain is already researching is not a decision for a person.
-    // It is on the screen as work in progress, not as something to answer.
-    if (need.candidateId) continue;
+    /*
+     * A question Brain is *actually* researching is not a decision for a
+     * person, and one whose research is going nowhere is.
+     *
+     * This skipped every need with a candidate id, which hid it for ever —
+     * whether the research had completed, failed, or never launched at all. So
+     * the case that most needed a person's attention was the case guaranteed
+     * never to reach them. `input.stalled` is what the loop found when it
+     * looked; a need in it is shown, and one that is genuinely running is not.
+     */
+    if (need.candidateId && !input.stalled.includes(need.id)) continue;
     const bucket = byPath.get(need.recommendedPath) ?? [];
     bucket.push(need);
     byPath.set(need.recommendedPath, bucket);

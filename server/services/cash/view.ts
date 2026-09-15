@@ -21,11 +21,19 @@ import { listCommitments } from '../../repos/cashAuthority.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { describeAuthority } from './authority.ts';
 import { evidenceCard } from './card.ts';
+import { assessResearch } from './answers.ts';
+import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { cashPosition, explainEntries } from './money.ts';
 import { assemble } from './portfolio.ts';
 import { compressedReview } from './review.ts';
 import { authorityFor } from './opportunities.ts';
-import type { CashCommitment, CashEvent, CashMode, CashNeed } from '../../domain/types.ts';
+import type {
+  CashCardFact,
+  CashCommitment,
+  CashEvent,
+  CashMode,
+  CashNeed,
+} from '../../domain/types.ts';
 import type { AssembledPlan } from './portfolio.ts';
 import type { CashPosition } from './money.ts';
 import type { CompressedReview } from './review.ts';
@@ -67,6 +75,16 @@ export interface CashView {
   myCurrentWork: AssembledPlan & {
     /** The load-bearing blanks per opportunity, so a card renders without a second call. */
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;
+    /**
+     * Where each answered field came from, per opportunity.
+     *
+     * Sent so a screen can tell a published source from Brain's own proposal.
+     * A card that rendered the two alike would have told somebody a guess was
+     * checked, which is the one thing this section may not do — and the
+     * distinction has to travel rather than be re-derived, because a client
+     * deriving it would be a second opinion about one card.
+     */
+    provenance: Record<string, CashCardFact[]>;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: CashNeed[];
@@ -103,6 +121,22 @@ export async function cashView(input: {
   });
 
   const needs = await listNeeds({ projectId: input.projectId, states: ['OPEN'] });
+  /*
+   * Which needs the research is not going to answer on its own.
+   *
+   * A projection: it re-reads the missions and writes nothing, so the read path
+   * says what is true now rather than what the last tick happened to record. A
+   * need whose research is merely running stays out of the review, because that
+   * is work in progress rather than a decision.
+   */
+  const stalled = (await assessResearch(input.projectId))
+    .filter((one) => one.state !== 'ANSWERED' && one.state !== 'RUNNING')
+    .map((one) => one.need.id);
+
+  const provenance: CashView['myCurrentWork']['provenance'] = {};
+  for (const fact of await cardFactsForProject(input.projectId)) {
+    provenance[fact.opportunityId] = [...(provenance[fact.opportunityId] ?? []), fact];
+  }
 
   const cards: CashView['myCurrentWork']['cards'] = {};
   for (const opportunity of opportunities) {
@@ -150,11 +184,12 @@ export async function cashView(input: {
       ),
       commitments: await listCommitments(input.projectId),
     },
-    myCurrentWork: { ...plan, cards },
+    myCurrentWork: { ...plan, cards, provenance },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
     whatBrainNeeds: needs,
     decisionsForMe: compressedReview({
       mode,
+      stalled,
       authority,
       position,
       placements: plan.placements,

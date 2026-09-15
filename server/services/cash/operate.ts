@@ -52,19 +52,70 @@ import {
   listOpportunities,
   needsAwaitingContinuation,
   claimNeedContinuation,
-  recordNeedContinuation,
+  deferNeedContinuation,
+  finishNeedContinuation,
   setNeedCandidate,
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { readCapability, needForCapability } from './capabilities.ts';
 import { evidenceCard } from './card.ts';
-import { closeNeed, raiseNeed } from './needs.ts';
-import { beginExecution } from './opportunities.ts';
+import { closeNeed, raiseNeed, useConditionReader } from './needs.ts';
+import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
+import type { ResearchApplication } from './answers.ts';
+import { beginExecution, markReady } from './opportunities.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
 const BRAIN = 'BRAIN';
+
+/**
+ * What settles each kind of need, wired in once.
+ *
+ * `closeNeed` used to accept any non-empty sentence, so "done" resolved a need
+ * whose capability was still missing and the piece it blocked went back to
+ * waiting on something that had not happened. The condition is checkable for
+ * exactly the needs Brain raised — it wrote the key, so it knows what to read —
+ * and `null` for anything else, which is what makes an authorized manual
+ * substitute the honest route rather than a loophole.
+ *
+ * Registered rather than imported by `needs.ts`, because the readings live in
+ * modules that import it and a cycle between them is a load-order bug waiting
+ * to be found by whichever file happens to load first.
+ */
+useConditionReader(async (need) => {
+  if (!need.requestKey) return null;
+
+  if (need.requestKey.startsWith('capability:')) {
+    const capabilityId = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
+    const reading = await readCapability(capabilityId);
+    return {
+      holds: reading.state === 'PRESENT',
+      reading:
+        reading.state === 'PRESENT'
+          ? `${reading.id} reads PRESENT.`
+          : `${reading.id} still reads ${reading.state}.`,
+    };
+  }
+
+  if (need.requestKey.startsWith('question:') && need.opportunityId) {
+    const opportunity = await getOpportunity(need.opportunityId);
+    if (!opportunity) return null;
+    for (const field of evidenceCard(opportunity).fields) {
+      if (questionKey(need.opportunityId, field.key) !== need.requestKey) continue;
+      return {
+        holds: field.value !== null,
+        reading:
+          field.value !== null
+            ? `The ${field.label.toLowerCase()} is on the card.`
+            : `The ${field.label.toLowerCase()} is still blank.`,
+      };
+    }
+    return null;
+  }
+
+  return null;
+});
 
 /**
  * The states worth asking a capability question about.
@@ -273,44 +324,104 @@ export interface Continuation {
   /** What actually happened, which is not the same fact as that it ran. */
   note: string;
   resumed: boolean;
+  /** True when it will be tried again: a wait rather than an answer. */
+  retry: boolean;
 }
 
-export async function runNeedContinuations(projectId: string): Promise<Continuation[]> {
+export async function runNeedContinuations(
+  projectId: string,
+  now?: string,
+): Promise<Continuation[]> {
   const out: Continuation[] = [];
-  for (const need of await needsAwaitingContinuation(projectId)) {
+  const at = now ?? new Date().toISOString();
+  for (const need of await needsAwaitingContinuation(projectId, at)) {
     // Claim first. The effect belongs on the far side of the compare-and-swap,
     // because two ticks reading one resolved need must produce one resumption.
-    if (!(await claimNeedContinuation(need.id))) continue;
+    if (!(await claimNeedContinuation(need.id, at))) continue;
     const result = await continueOne(need);
-    await recordNeedContinuation(need.id, result.note);
-    out.push({ needId: need.id, ...result });
+    if (result.retry) {
+      /*
+       * Not yet, rather than never.
+       *
+       * The claim used to be terminal and written *before* the attempt, so a
+       * refusal that was only ever going to be temporary — no commercial grant
+       * yet, no free execution slot, the piece still at EVIDENCE_CARD — spent
+       * the one chance the need had. The ordinary path made that the common
+       * case, because a card filled by research leaves a piece short of READY.
+       */
+      await deferNeedContinuation({
+        id: need.id,
+        note: result.note,
+        attempts: need.continuationAttempts + 1,
+        now: at,
+      });
+    } else {
+      await finishNeedContinuation(need.id, result.note);
+    }
+    out.push({ needId: need.id, note: result.note, resumed: result.resumed, retry: result.retry });
   }
   return out;
 }
 
-async function continueOne(need: CashNeed): Promise<{ note: string; resumed: boolean }> {
+async function continueOne(
+  need: CashNeed,
+): Promise<{ note: string; resumed: boolean; retry: boolean }> {
   if (need.state === 'WITHDRAWN') {
-    return { note: 'Withdrawn, so there was nothing waiting to resume.', resumed: false };
+    return {
+      note: 'Withdrawn, so there was nothing waiting to resume.',
+      resumed: false,
+      retry: false,
+    };
   }
   if (!need.blocksState || !need.opportunityId) {
-    return { note: 'Nothing was recorded as waiting on this.', resumed: false };
+    return { note: 'Nothing was recorded as waiting on this.', resumed: false, retry: false };
   }
   const opportunity = await getOpportunity(need.opportunityId);
   if (!opportunity) {
-    return { note: 'The piece it was blocking no longer exists.', resumed: false };
+    return { note: 'The piece it was blocking no longer exists.', resumed: false, retry: false };
   }
   if (need.blocksState !== 'EXECUTING') {
     return {
       note: `Nothing here knows how to resume a ${need.blocksState} transition.`,
       resumed: false,
+      retry: false,
     };
   }
-  if (opportunity.state !== 'READY') {
+  if (TERMINAL_STATES.has(opportunity.state)) {
+    return {
+      note: `The piece is ${opportunity.state.toLowerCase()}, so nothing is waiting on this.`,
+      resumed: false,
+      retry: false,
+    };
+  }
+  if (opportunity.state !== 'READY' && opportunity.state !== 'DISCOVERED' &&
+      opportunity.state !== 'EVIDENCE_CARD') {
     return {
       note: `The piece is ${opportunity.state.toLowerCase()}, so the transition it was blocking ` +
-        'has already happened or no longer applies.',
+        'has already happened.',
       resumed: false,
+      retry: false,
     };
+  }
+
+  /*
+   * Resume from where the piece actually is.
+   *
+   * A card answered by research leaves it at `EVIDENCE_CARD`, so resuming has
+   * to carry it through `markReady` first — the transition the need was
+   * genuinely blocking is downstream of one the need's answer just unblocked.
+   * Retrying `beginExecution` alone against an EVIDENCE_CARD piece spent the
+   * continuation on a state that was never going to accept it.
+   */
+  if (opportunity.state !== 'READY') {
+    const ready = await markReady({ opportunityId: opportunity.id, actorRef: BRAIN });
+    if (!ready.ok) {
+      return {
+        note: `Not ready yet: ${ready.reason}`,
+        resumed: false,
+        retry: true,
+      };
+    }
   }
 
   /*
@@ -318,14 +429,50 @@ async function continueOne(need: CashNeed): Promise<{ note: string; resumed: boo
    *
    * No `firstAction`, so this advances the piece only if something is already
    * on the record. A resolved need can unblock work and can never manufacture
-   * the evidence that work began — which is the whole of what the `cash_actions`
-   * correction is for, and it would be undone by a continuation that supplied
-   * its own action to get the transition through.
+   * the evidence that work began — which is the whole of what the
+   * `cash_actions` correction is for, and it would be undone by a continuation
+   * that supplied its own action to get the transition through.
    */
   const resumed = await beginExecution({ opportunityId: opportunity.id, actorRef: BRAIN });
-  return resumed.ok
-    ? { note: `Resumed: ${resumed.message ?? 'executing'}.`, resumed: true }
-    : { note: `Tried to resume and could not: ${resumed.reason}`, resumed: false };
+  if (resumed.ok) {
+    return { note: `Resumed: ${resumed.message ?? 'executing'}.`, resumed: true, retry: false };
+  }
+
+  /*
+   * A refusal that names a condition somebody is about to fix is a wait.
+   *
+   * §27 settled the same distinction for dispatch refusals: a refusal meaning
+   * "setup is missing" is not a refusal meaning "this may not happen", and
+   * treating them alike destroys the work. Waiting on a grant, a slot or an
+   * action is the first kind; the piece having gone somewhere else is the
+   * second.
+   */
+  return {
+    note: `Tried to resume and could not: ${resumed.reason}`,
+    resumed: false,
+    retry: isTemporary(resumed.reason),
+  };
+}
+
+/** Opportunity states past which nothing is waiting on a need. */
+const TERMINAL_STATES = new Set(['COLLECTED', 'DECLINED', 'ARCHIVED']);
+
+/**
+ * Is this refusal a condition that is expected to stop being true?
+ *
+ * Matched on the refusal's own shape rather than on a string a model wrote —
+ * every one of these is composed by `beginExecution` from rows, and each names
+ * something an authorized action resolves: granting the authority, finishing
+ * something that occupies a slot, funding the account, or recording the first
+ * action a person performed.
+ */
+export function isTemporary(reason: string): boolean {
+  return (
+    reason.includes('commercial authority') ||
+    reason.includes('execution slots are taken') ||
+    reason.includes('deployable') ||
+    reason.includes('Nothing has happened on this yet')
+  );
 }
 
 export interface DependentWork {
@@ -363,9 +510,56 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
 }
 
 /** One project's operating step, for the tick. */
-export async function operate(projectId: string): Promise<{
+export interface Proposed {
+  opportunityId: string;
+  fields: string[];
+  withheld: string[];
+}
+
+/**
+ * Brain's commercial view of every piece whose card it can form one about.
+ *
+ * The rule this replaces said the offer, the price, the acceptance condition
+ * and who fulfils the work were permanently a person's — and it is right that a
+ * researched answer to "what should we charge" is invented judgment wearing a
+ * citation, and wrong that the conclusion is a prohibition. This is meant to be
+ * an operator with high autonomy inside limits somebody set, and reserving
+ * every commercial judgment to a human makes it a form to fill in.
+ *
+ * What keeps it honest is three things rather than a rule: every value lands as
+ * a `RECOMMENDATION` and is rendered as one, a term with no stated uncertainty
+ * cannot be written at all, and a field a person answered is never proposed
+ * over. Nothing here touches what may be *spent* — that is the standing
+ * commercial authority, and it is unchanged.
+ */
+export async function proposeCommercialTerms(projectId: string): Promise<Proposed[]> {
+  const out: Proposed[] = [];
+  for (const opportunity of await listOpportunities({
+    projectId,
+    states: ['DISCOVERED', 'EVIDENCE_CARD'],
+  })) {
+    const proposal = await proposeTerms(opportunity);
+    if (proposal.terms.length === 0 && proposal.withheld.length === 0) continue;
+    const fields = await applyProposal({ opportunity, proposal });
+    if (fields.length === 0 && proposal.withheld.length === 0) continue;
+    out.push({
+      opportunityId: opportunity.id,
+      fields,
+      withheld: proposal.withheld.map((one) => one.field),
+    });
+  }
+  return out;
+}
+
+/** One project's operating step, for the tick. */
+export async function operate(
+  projectId: string,
+  now?: string,
+): Promise<{
   capabilities: CapabilityReconciliation;
   gaps: DiscoverableGap[];
+  research: ResearchApplication;
+  proposed: Proposed[];
   continuations: Continuation[];
   dependentWork: DependentWork[];
 }> {
@@ -373,22 +567,26 @@ export async function operate(projectId: string): Promise<{
     return {
       capabilities: { raised: [], settled: [] },
       gaps: [],
+      research: { applied: [], unanswered: [] },
+      proposed: [],
       continuations: [],
       dependentWork: [],
     };
   }
   /*
    * The order is the order the effects depend on each other in: name what is
-   * missing, then answer what has become available, then start what research
-   * can settle. Each pass is idempotent on its own, so a crash between two of
-   * them resumes rather than repeating.
+   * missing, take back what the research established, form a view on top of
+   * it, answer what has become available, then start what research can settle.
+   * Each pass is idempotent on its own, so a crash between two of them resumes
+   * rather than repeating.
    */
-  return {
-    capabilities: await reconcileCapabilityNeeds(projectId),
-    gaps: await reconcileDiscoverableGaps(projectId),
-    continuations: await runNeedContinuations(projectId),
-    dependentWork: await startDependentWork(projectId),
-  };
+  const capabilities = await reconcileCapabilityNeeds(projectId);
+  const research = await applyResearchAnswers(projectId);
+  const proposed = await proposeCommercialTerms(projectId);
+  const gaps = await reconcileDiscoverableGaps(projectId);
+  const continuations = await runNeedContinuations(projectId, now);
+  const dependentWork = await startDependentWork(projectId);
+  return { capabilities, gaps, research, proposed, continuations, dependentWork };
 }
 
 export type { CashOpportunity };

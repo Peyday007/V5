@@ -101,6 +101,24 @@ export interface ReviewAnswer {
   completionCondition: string;
 }
 
+/**
+ * Where one answer on a card came from.
+ *
+ * `kind` is what a screen has to render differently. A card that showed Brain's
+ * proposal the way it shows a published source would have told somebody a guess
+ * was checked.
+ */
+export interface CashCardFact {
+  field: string;
+  kind: 'EVIDENCE' | 'RECOMMENDATION' | 'PERSON';
+  value: string;
+  claimId: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decidedBy: string;
+}
+
 export interface ReviewItem {
   key: string;
   title: string;
@@ -158,6 +176,7 @@ export interface CashView {
     combinedContributionCents: number;
     peakFundingCents: number;
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;
+    provenance: Record<string, CashCardFact[]>;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: CashNeed[];

@@ -380,6 +380,11 @@ function mapNeed(row: CashNeedRow): CashNeed {
     setupEffort: row.setup_effort,
     nextStep: row.next_step,
     completionCondition: row.completion_condition,
+    occurrence: row.occurrence,
+    verifiedBy: row.verified_by === null ? null : (row.verified_by as CashNeed['verifiedBy']),
+    continuationClaimedAt: row.continuation_claimed_at,
+    continuationAttempts: row.continuation_attempts,
+    continuationNotBefore: row.continuation_not_before,
     blocksState: row.blocks_state === null ? null : (row.blocks_state as CashOpportunityState),
     candidateId: row.candidate_id,
     requestKey: row.request_key,
@@ -407,16 +412,17 @@ export async function createNeed(input: {
   blocksState?: CashOpportunityState | null;
   candidateId?: string | null;
   requestKey?: string | null;
+  occurrence?: number;
 }): Promise<CashNeed> {
   const id = newId('cnd');
   const at = portfolioNow();
   await getDb().run(
     `INSERT INTO cash_needs
        (id, project_id, opportunity_id, blocked_action, why_it_matters, recommended_path,
-        expected_cost_cents, setup_effort, next_step, completion_condition, blocks_state,
-        candidate_id, request_key, continued_at, continuation_note, state,
+        expected_cost_cents, setup_effort, next_step, completion_condition, occurrence,
+        blocks_state, candidate_id, request_key, continued_at, continuation_note, state,
         resolution, resolved_by_user_id, resolved_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'OPEN', NULL, NULL, NULL, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'OPEN', NULL, NULL, NULL, ?, ?)`,
     [
       id,
       input.projectId,
@@ -428,6 +434,7 @@ export async function createNeed(input: {
       input.setupEffort,
       input.nextStep,
       input.completionCondition,
+      Math.max(1, Math.trunc(input.occurrence ?? 1)),
       input.blocksState ?? null,
       input.candidateId ?? null,
       input.requestKey ?? null,
@@ -452,28 +459,127 @@ export async function needForKey(
   requestKey: string,
 ): Promise<CashNeed | null> {
   const rows = await getDb().all<CashNeedRow>(
-    'SELECT * FROM cash_needs WHERE project_id = ? AND request_key = ?',
+    `SELECT * FROM cash_needs WHERE project_id = ? AND request_key = ?
+      ORDER BY occurrence DESC, created_at DESC, id DESC`,
     [projectId, requestKey],
   );
   return rows[0] ? mapNeed(rows[0]) : null;
 }
 
 /**
- * Claim one settled need's continuation.
+ * The still-*open* need for this condition.
  *
- * The guard is `continued_at IS NULL` in the statement that sets it, so two
- * ticks reading the same resolved need produce exactly one continuation — the
- * compare-and-swap this codebase reaches for everywhere else, on a value the
- * claimant does not supply. The effect belongs on the far side of it.
+ * `needForKey` returns the newest whatever its state, and that is what made a
+ * recurring blockage unraisable: a capability that went missing again found the
+ * resolved row, was told it had already been raised, and never reached the
+ * review. What a caller raising a need wants to know is whether one is
+ * outstanding — and with `occurrence` on the unique index, the answer to "no"
+ * is a new row rather than a collision.
  */
-export async function claimNeedContinuation(id: string): Promise<boolean> {
-  const at = portfolioNow();
+export async function openNeedForKey(
+  projectId: string,
+  requestKey: string,
+): Promise<CashNeed | null> {
+  const rows = await getDb().all<CashNeedRow>(
+    `SELECT * FROM cash_needs WHERE project_id = ? AND request_key = ? AND state = 'OPEN'
+      ORDER BY occurrence DESC, created_at DESC, id DESC`,
+    [projectId, requestKey],
+  );
+  return rows[0] ? mapNeed(rows[0]) : null;
+}
+
+/** How many times this blockage has been raised, so the next one is the next. */
+export async function occurrencesOf(projectId: string, requestKey: string): Promise<number> {
+  const rows = await getDb().all<{ highest: number | null }>(
+    'SELECT MAX(occurrence) AS highest FROM cash_needs WHERE project_id = ? AND request_key = ?',
+    [projectId, requestKey],
+  );
+  return Number(rows[0]?.highest ?? 0);
+}
+
+/**
+ * How long a continuation may hold its claim before another tick may retake it.
+ *
+ * A lease rather than a flag, for Step 5's reason: an expired lease is
+ * claimable work, so recovery never depends on one process staying alive. A
+ * tick that died between claiming and settling leaves a claim nothing else will
+ * settle, and without this it leaves it for ever.
+ */
+export const CONTINUATION_LEASE_MS = 5 * 60 * 1000;
+
+/**
+ * Claim one settled need's continuation, recoverably.
+ *
+ * This wrote `continued_at` — permanently, terminally — **before** the
+ * continuation ran, so a temporary refusal consumed the only attempt: no
+ * commercial authority yet, no free execution slot, the piece not READY. The
+ * ordinary path made that the common case rather than the rare one, because
+ * filling a card leaves a piece at `EVIDENCE_CARD` and a need resolved then is
+ * resolved before `READY` exists at all.
+ *
+ * So the claim is a lease, and `continued_at` is written by
+ * `finishNeedContinuation` once the answer is terminal. The guard still carries
+ * everything that makes the claim valid in the statement that takes it, so two
+ * ticks still produce one continuation.
+ */
+export async function claimNeedContinuation(id: string, now?: string): Promise<boolean> {
+  const at = now ?? portfolioNow();
+  const stale = new Date(Date.parse(at) - CONTINUATION_LEASE_MS).toISOString();
   const result = await getDb().run(
-    `UPDATE cash_needs SET continued_at = ?, updated_at = ?
-      WHERE id = ? AND continued_at IS NULL AND state IN ('RESOLVED', 'WITHDRAWN')`,
-    [at, at, id],
+    `UPDATE cash_needs
+        SET continuation_claimed_at = ?,
+            continuation_attempts = continuation_attempts + 1,
+            updated_at = ?
+      WHERE id = ?
+        AND continued_at IS NULL
+        AND state IN ('RESOLVED', 'WITHDRAWN')
+        AND (continuation_claimed_at IS NULL OR continuation_claimed_at < ?)
+        AND (continuation_not_before IS NULL OR continuation_not_before <= ?)`,
+    [at, at, id, stale, at],
   );
   return result.changes === 1;
+}
+
+/**
+ * The continuation reached a terminal answer: it resumed, or there was nothing
+ * to resume. `continued_at` is what makes it final, and it is written once.
+ */
+export async function finishNeedContinuation(id: string, note: string): Promise<void> {
+  const at = portfolioNow();
+  await getDb().run(
+    `UPDATE cash_needs
+        SET continued_at = ?, continuation_note = ?, continuation_claimed_at = NULL,
+            updated_at = ?
+      WHERE id = ? AND continued_at IS NULL`,
+    [at, note, at, id],
+  );
+}
+
+/**
+ * The continuation could not run *yet*, on a condition expected to stop being
+ * true. The claim is released and the next attempt deferred, so the need is
+ * retried rather than spent.
+ *
+ * Bounded backoff per attempt, because a condition nobody is going to fix
+ * should become visible rather than be retried for ever at the same rate.
+ */
+export async function deferNeedContinuation(input: {
+  id: string;
+  note: string;
+  attempts: number;
+  now?: string;
+}): Promise<void> {
+  const at = input.now ?? portfolioNow();
+  const rungs = [1, 2, 5, 15, 30, 60];
+  const minutes = rungs[Math.min(Math.max(0, input.attempts), rungs.length - 1)] ?? 60;
+  const next = new Date(Date.parse(at) + minutes * 60 * 1000).toISOString();
+  await getDb().run(
+    `UPDATE cash_needs
+        SET continuation_claimed_at = NULL, continuation_not_before = ?,
+            continuation_note = ?, updated_at = ?
+      WHERE id = ? AND continued_at IS NULL`,
+    [next, input.note, at, input.id],
+  );
 }
 
 /**
@@ -507,12 +613,17 @@ export async function recordNeedContinuation(id: string, note: string): Promise<
  * stranded and one that only reaches the next one — the third time this
  * repository has needed that distinction.
  */
-export async function needsAwaitingContinuation(projectId: string): Promise<CashNeed[]> {
+export async function needsAwaitingContinuation(
+  projectId: string,
+  now?: string,
+): Promise<CashNeed[]> {
+  const at = now ?? portfolioNow();
   const rows = await getDb().all<CashNeedRow>(
     `SELECT * FROM cash_needs
       WHERE project_id = ? AND continued_at IS NULL AND state IN ('RESOLVED', 'WITHDRAWN')
+        AND (continuation_not_before IS NULL OR continuation_not_before <= ?)
       ORDER BY resolved_at, id`,
-    [projectId],
+    [projectId, at],
   );
   return rows.map(mapNeed);
 }
@@ -547,13 +658,21 @@ export async function settleNeed(input: {
   to: 'RESOLVED' | 'WITHDRAWN';
   resolution: string;
   actorUserId: string;
+  /**
+   * How the condition was established.
+   *
+   * Null for a withdrawal, which settles nothing — it says the need stopped
+   * mattering rather than that it was met, and the two must not read alike.
+   */
+  verifiedBy?: CashNeed['verifiedBy'];
 }): Promise<boolean> {
   const at = portfolioNow();
   const result = await getDb().run(
     `UPDATE cash_needs
-        SET state = ?, resolution = ?, resolved_by_user_id = ?, resolved_at = ?, updated_at = ?
+        SET state = ?, resolution = ?, resolved_by_user_id = ?, resolved_at = ?,
+            verified_by = ?, updated_at = ?
       WHERE id = ? AND state = 'OPEN'`,
-    [input.to, input.resolution, input.actorUserId, at, at, input.id],
+    [input.to, input.resolution, input.actorUserId, at, input.verifiedBy ?? null, at, input.id],
   );
   return result.changes === 1;
 }

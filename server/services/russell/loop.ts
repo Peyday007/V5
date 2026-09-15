@@ -338,6 +338,10 @@ export interface TickReport {
     needsSettled: string[];
     resumed: string[];
     dependentWork: string[];
+    /** Needs whose research came back and reached the card it was raised for. */
+    cardsAnswered: string[];
+    /** Pieces Brain formed a commercial view about, as recommendations. */
+    termsProposed: string[];
   }[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
@@ -910,7 +914,9 @@ export async function tick(owner: string): Promise<TickReport> {
           raised.length > 0 ||
           operated.capabilities.settled.length > 0 ||
           operated.continuations.length > 0 ||
-          operated.dependentWork.length > 0
+          operated.dependentWork.length > 0 ||
+          operated.research.applied.length > 0 ||
+          operated.proposed.length > 0
         ) {
           report.cashOperations.push({
             projectId: project.id,
@@ -918,6 +924,8 @@ export async function tick(owner: string): Promise<TickReport> {
             needsSettled: operated.capabilities.settled,
             resumed: operated.continuations.filter((one) => one.resumed).map((one) => one.needId),
             dependentWork: operated.dependentWork.map((one) => one.candidateId),
+            cardsAnswered: operated.research.applied.map((one) => one.needId),
+            termsProposed: operated.proposed.map((one) => one.opportunityId),
           });
         }
       } catch {
