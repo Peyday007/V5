@@ -98,8 +98,18 @@ function principalFor(account: Account): Principal {
   } as Principal;
 }
 
-/** Whoever the next request is from. */
+/**
+ * Whoever the next request is from.
+ *
+ * A module-level variable the middleware reads, which is only sound while
+ * exactly one request is in flight — and in a suite about four people not
+ * seeing each other's records, a request silently attributed to the wrong one
+ * would make every assertion here meaningless while still passing. So two
+ * overlapping calls are a loud failure rather than a race: the tests below are
+ * strictly sequential and this is what keeps that a fact rather than a habit.
+ */
 let speaking: Account | null = null;
+let inFlight = false;
 
 async function as(
   account: Account,
@@ -107,7 +117,15 @@ async function as(
   route: string,
   body?: unknown,
 ): Promise<{ status: number; body: any; text: string }> {
+  if (inFlight) {
+    throw new Error(
+      'Two requests overlapped, so the principal this suite attributes them to is ambiguous. ' +
+        'Await each call before making the next one.',
+    );
+  }
+  inFlight = true;
   speaking = account;
+  try {
   const response = await fetch(`http://127.0.0.1:${port}/api${route}`, {
     method,
     headers: body === undefined ? {} : { 'content-type': 'application/json' },
@@ -121,6 +139,9 @@ async function as(
     /* left as text */
   }
   return { status: response.status, body: parsed as any, text };
+  } finally {
+    inFlight = false;
+  }
 }
 
 async function grantTo(account: Account, maxConcurrent = 3): Promise<void> {

@@ -26,6 +26,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
+import fs from 'node:fs';
+import path from 'node:path';
 import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
@@ -384,5 +386,96 @@ describe('the screen, the route and the row', () => {
       const settled = (await listNeeds({ projectId, states: ['RESOLVED'] }))[0];
       expect(settled?.verifiedBy).toBe('PERSON_SUBSTITUTE');
     });
+  });
+});
+
+/**
+ * And the reason it can refuse, pinned so it cannot quietly stop being true.
+ *
+ * The test above observes the refusal. What made the refusal impossible before
+ * was not the logic — it was *reachability*: the reader was registered by a
+ * side effect of importing a module the route path never loads, so whether a
+ * person's answer got checked depended on what else happened to be in the
+ * process. A behavioural test cannot see that, because a suite that imports
+ * the registering module passes either way.
+ *
+ * Two properties, and between them there is nothing left to forget:
+ *
+ *   * what settles a condition is **statically reachable** from the route a
+ *     browser calls, so loading the route loads the reader;
+ *   * there is **no registration seam at all**, so there is no module whose
+ *     absence could disable the check.
+ *
+ * Deliberately not pinned: that `operate.ts` is unreachable from the route.
+ * That is true today and is incidental — the durable property is that the
+ * check does not depend on it.
+ */
+describe('the check is reachable rather than registered', () => {
+  const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
+
+  /** Every module a static `import` from `entry` can reach. */
+  function reachableFrom(entry: string): Set<string> {
+    const seen = new Set<string>();
+    const walk = (file: string): void => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      let source: string;
+      try {
+        source = fs.readFileSync(file, 'utf8');
+      } catch {
+        return;
+      }
+      const relative = /(?:^|\n)\s*(?:import|export)[^'"\n]*?from\s*['"](\.[^'"]+)['"]/g;
+      for (const match of source.matchAll(relative)) {
+        const resolved = path.resolve(path.dirname(file), match[1]!);
+        if (fs.existsSync(resolved)) walk(resolved);
+      }
+    };
+    walk(entry);
+    return seen;
+  }
+
+  it('loads the condition reader by loading the route', () => {
+    const reachable = reachableFrom(path.join(ROOT, 'server/routes/cash.ts'));
+    expect(reachable.has(path.join(ROOT, 'server/services/cash/conditions.ts'))).toBe(true);
+  });
+
+  /*
+   * And by the edge that decides it, which is stricter than the one above.
+   *
+   * Reachability alone is satisfied by any module on the route path importing
+   * `conditions.ts` — `answers.ts` does, for `questionKey` — so the first
+   * assertion stayed green when `closeNeed` was changed to reach its reader
+   * through a dynamic import, which is the shape the original defect had. What
+   * has to be true is that the module *doing the checking* resolves its reader
+   * statically, so there is no moment at which `closeNeed` exists and the
+   * reader does not.
+   */
+  it('resolves it where the check happens, statically', () => {
+    const source = fs.readFileSync(path.join(ROOT, 'server/services/cash/needs.ts'), 'utf8');
+    expect(source).toMatch(/^import \{[^}]*\breadNeedCondition\b[^}]*\} from '\.\/conditions\.ts';$/m);
+    expect(source).not.toMatch(/await import\(\s*['"]\.\/conditions\.ts['"]/);
+  });
+
+  it('has no way to register a reader, so there is none to forget', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === 'node_modules' || entry.name === '.git') continue;
+          walk(full);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry.name)) continue;
+        if (full === path.join(ROOT, 'tests/cashBrowserToDatabase.test.ts')) continue;
+        if (/useConditionReader|ConditionReader/.test(fs.readFileSync(full, 'utf8'))) {
+          offenders.push(path.relative(ROOT, full));
+        }
+      }
+    };
+    walk(path.join(ROOT, 'server'));
+    walk(path.join(ROOT, 'tests'));
+    expect(offenders).toEqual([]);
   });
 });
