@@ -3822,9 +3822,9 @@ tests/                  Vitest suites
   cashPortfolio.test.ts      the unknowns, the dispositions, and the measured compression
   cashDiscovery.test.ts      the buckets, the lane, and the blank card they produce
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
+  cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashConcurrency.test.ts    two commitments, forced to overlap, on both backends
   cashCurrencyHttp.test.ts   a sprint that is not in dollars, driven as a person does
-  cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashHttp.test.ts           Cash Mode's door, driven as an attack
   cashSection.test.tsx       the Cash section in a browser: four states, one control
   connectorIsolation.test.ts one site, two private operations, two identities

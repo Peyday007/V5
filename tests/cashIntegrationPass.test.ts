@@ -1,34 +1,57 @@
 /**
  * One sprint, walked the whole way, through the entrances production uses.
  *
- * `cashMode`, `cashMoney`, `cashAuthority`, `cashPortfolio`, `cashDiscovery`
- * and `cashOperate` each prove one service. None of them walks the journey, and
- * walking it is what this file is for — because every defect an external review
- * found in the first pass was a transition that existed, was tested, and could
- * be reached by nothing:
+ * Each of `cashMode`, `cashMoney`, `cashAuthority`, `cashPortfolio`,
+ * `cashDiscovery` and `cashOperate` proves one service. None of them walks the
+ * journey, and walking it is what this file is for — because every defect two
+ * external reviews found was a transition that existed, was tested, and could
+ * be reached by nothing.
  *
- *   - activating wrote a mode row and no goal, candidate, mission or job, so a
- *     sprint sat empty beside a healthy fleet while the screen said discovery
- *     had started;
- *   - `required_capabilities` was written by the card and read by nothing;
- *   - `closeNeed` set a status and resumed nothing, because nothing recorded
- *     what had been waiting;
- *   - `beginExecution` wrote EXECUTING with no work enqueued and no action
- *     performed.
+ * ---------------------------------------------------------------------------
+ * What the first version of this file could not prove, and why
+ * ---------------------------------------------------------------------------
  *
- * Every one of them was invisible to a test that arranges its own starting
- * state, which is the fifth time this repository has had to write that a
- * mechanism nothing calls is not a mechanism.
+ * It filled the evidence card by calling `fillCard` as the user with the payer,
+ * the access channel, the offer, the price, the acceptance condition, the
+ * delivery path and the fulfilment owner already in hand. So the step it looked
+ * like it was demonstrating — research reaching a card — was the one step it
+ * supplied the answer to. The connection was missing the whole time and the
+ * journey passed.
  *
- * **Only the research worker is simulated, and its output is a declared
- * fixture.** `completesResearch` writes what a Cowork session's accepted claims
- * become — it is not live research and nothing here reaches the network.
- * Everything between is the real tick, the real compiler, the real gate on the
- * card, the real authority check and the real repositories. No step writes a
- * row it then asserts, and where a decision belongs to a person the test makes
- * it through the same service the product calls.
+ * It also rewound an EXECUTING opportunity to READY by hand, with an action
+ * already on its record, and called what followed a resumption. That proves a
+ * retry from a state nothing naturally reaches; it does not prove the first
+ * resumption works, which is the one that was broken.
+ *
+ * ---------------------------------------------------------------------------
+ * What is simulated, and where the line is
+ * ---------------------------------------------------------------------------
+ *
+ * **The worker, at its own boundary, and nothing else.** `workerResearches`
+ * calls `recordFragmentClaims` and `gateFragment` — the two functions the MCP
+ * submission path and the in-process orchestrator both call — so the claims go
+ * in unaccepted and *Brain's* gate decides what counts. What is fixture is the
+ * input: the sentences a worker found and the two judgements only a reader of a
+ * source can make.
+ *
+ * Everything else actually runs: the durable tick, the discovery producer, the
+ * harvest, the capability register, the needs, the continuations, the card, the
+ * commercial proposal, the authority check and the money. A person's answers go
+ * through the HTTP routes the Cash screen calls, mounted in process —
+ * `cashSection.test.tsx` is what proves the screen calls those routes, and this
+ * is what proves the routes do the thing.
+ *
+ * Two of the twelve acceptance points are demonstrated by their own suites and
+ * are named here rather than duplicated: the non-USD money journey is
+ * `cashCurrencyHttp`, driven against a booted server, and the deterministic
+ * two-connection concurrency test is `cashConcurrency`.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import express from 'express';
+import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import { freshProject } from './helpers.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
@@ -38,43 +61,45 @@ import {
   createFragments,
   createOrchestration,
   currentFragments,
-  decideClaim,
-  insertClaims,
-  updateFragment,
+  finishPass,
+  getOrchestration,
+  startPass,
 } from '../server/repos/research.ts';
+import { gateFragment, recordFragmentClaims } from '../server/services/research/submission.ts';
+import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
+import { createCandidate, getCandidate, listCandidates } from '../server/repos/russellCandidates.ts';
 import {
-  getMission,
-  linkMission,
-  listMissions,
-  transitionMission,
-} from '../server/repos/russellMissions.ts';
-import { listCandidates } from '../server/repos/russellCandidates.ts';
-import {
+  CONTINUATION_LEASE_MS,
+  claimNeedContinuation,
   getNeed,
   getOpportunity,
   listNeeds,
   listOpportunities,
+  updateOpportunity,
 } from '../server/repos/cashPortfolio.ts';
+import { cardFact } from '../server/repos/cashCardFacts.ts';
 import { actionsFor } from '../server/repos/cashActions.ts';
-import { getCashMode } from '../server/repos/cashMode.ts';
+import { getCashMode, listCashEvents, recordCashEvent } from '../server/repos/cashMode.ts';
+import { listRounds } from '../server/repos/cashDiscovery.ts';
 import { tick } from '../server/services/russell/loop.ts';
-import { activate, setLifecycle } from '../server/services/cash/lifecycle.ts';
+import {
+  activate,
+  launchableUnderCashMode,
+  setLifecycle,
+} from '../server/services/cash/lifecycle.ts';
 import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   COMMERCIAL_ACTIONS,
 } from '../server/services/cash/authority.ts';
-import {
-  actionKey,
-  advance,
-  beginExecution,
-  fillCard,
-  markReady,
-  recordMoneyEvent,
-} from '../server/services/cash/opportunities.ts';
-import { closeNeed } from '../server/services/cash/needs.ts';
+import { openDiscovery } from '../server/services/cash/discovery.ts';
+import { runNeedContinuations } from '../server/services/cash/operate.ts';
+import { readCapability } from '../server/services/cash/capabilities.ts';
 import { cashView } from '../server/services/cash/view.ts';
-import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
-import type { Layer } from '../server/domain/types.ts';
+import { cashRouter } from '../server/routes/cash.ts';
+import { attachContext, newRequestId } from '../server/services/identity/context.ts';
+import type { Layer, Principal, ProjectMembership } from '../server/domain/types.ts';
+
+const REPO = fileURLToPath(new URL('..', import.meta.url));
 
 let fixture: Awaited<ReturnType<typeof freshProject>>;
 let projectId = '';
@@ -137,31 +162,46 @@ async function authorizeCommerce(): Promise<void> {
 }
 
 /**
- * A declared fixture standing in for one Cowork session's accepted claims.
+ * One worker session's result for one fragment, through the real boundary.
  *
- * Not live research and not a shortcut past the gate: these rows are what a
- * fragment looks like *after* `gateFragment` accepted its claims, which is the
- * only shape `harvest` ever reads. What is under test is what Brain does with
- * them, and inventing the network instead would test the network.
+ * `recordFragmentClaims` and `gateFragment` are the two functions the MCP
+ * submission path and the in-process orchestrator both call, so everything from
+ * here down is the production decision path: the seven evidence conditions, the
+ * lane coverage, the independence grouping, the acceptance recorded once.
+ *
+ * What is simulated is the *input* — the claims a worker found and the two
+ * judgements only a reader of a source can make. That is the boundary the
+ * review allows to be simulated, and it is exactly where a real Cowork session
+ * would hand its answer over.
  */
-async function completesResearch(input: {
+async function workerResearches(input: {
   candidateId: string;
-  claims: { claim: string; sourceUrl: string; observedOn: string }[];
-}): Promise<void> {
+  question: string;
+  lanes: { id: string; description: string; necessity: 'REQUIRED' | 'CONDITIONAL' }[];
+  claims: {
+    claim: string;
+    lane: string;
+    sourceUrl: string;
+    claimType?: 'SOURCED_FACT' | 'NEGATIVE_EXISTENCE';
+    sourceDate?: string;
+    supports?: boolean;
+  }[];
+  sufficiency?: 'SUFFICIENT' | 'INSUFFICIENT';
+}): Promise<{ missionId: string; orchestrationId: string }> {
   const run = await createRun({
     projectId,
     layerId: layer.id,
     runType: 'FOUNDATION',
     status: 'PLANNED',
     provider: 'WORKER',
-    prompt: 'a discovery bucket',
+    prompt: input.question,
   });
   const orchestration = await createOrchestration({
     projectId,
     layerId: layer.id,
     runId: run.id,
-    title: 'a discovery bucket',
-    assignment: 'where to look',
+    title: input.question,
+    assignment: input.question,
     provider: 'WORKER',
     autoApprove: false,
   });
@@ -170,90 +210,203 @@ async function completesResearch(input: {
       orchestrationId: orchestration.id,
       projectId,
       layerId: layer.id,
-      geography: 'the markets the sprint may look at',
-      requiredEvidence: [
-        { id: 'demand_signal', description: 'a published request', necessity: 'REQUIRED' },
-      ],
-      acceptableSourceTypes: ['a marketplace or job board listing'],
+      geography: 'the markets this sprint may look at',
+      requiredEvidence: input.lanes,
+      acceptableSourceTypes: ['a published request, posting, listing or notice'],
       excludedSourceTypes: ['a forecast presented as a current fact'],
-      completionCriteria: ['at least one dated published request'],
+      completionCriteria: ['at least one dated published source'],
       minIndependentSources: 1,
       maxRepairs: 2,
       fragmentIndex: 0,
-      fragmentKey: 'cash-discovery',
-      question: 'Who is publicly asking to pay for work right now?',
+      fragmentKey: 'walk',
+      question: input.question,
       dependsOn: [],
       attempt: 1,
     },
   ] as unknown as Parameters<typeof createFragments>[0]);
 
   const [fragment] = await currentFragments(orchestration.id);
-  await updateFragment(fragment!.id, {
-    status: 'ACCEPTED',
-    completedAt: new Date().toISOString(),
-    blockedReason: null,
+  const pass = await startPass({
+    orchestrationId: orchestration.id,
+    fragmentId: fragment!.id,
+    passKey: 'BROAD_SCAN',
+    ordinal: 1,
+    provider: 'WORKER',
+    prompt: input.question,
+    promptSha256: 'x'.repeat(64),
   });
-  const inserted = await insertClaims(
-    input.claims.map((one) => ({
-      orchestrationId: orchestration.id,
-      fragmentId: fragment!.id,
-      passId: null,
-      passKey: 'BROAD_SCAN' as const,
-      claim: one.claim,
-      sourceUrl: one.sourceUrl,
-      sourceTitle: 'A listing',
-      sourcePublisher: 'A marketplace',
-      sourceDate: one.observedOn,
-      evidenceExcerpt: one.claim,
-      evidenceLocator: 'the listing body',
-      evidenceLane: 'demand_signal',
-      retrievedAt: one.observedOn,
-      confidence: 0.8,
-      validationState: 'SOURCED' as const,
-      validationDetail: null,
-      sourced: true,
-      claimType: 'SOURCED_FACT' as const,
-      contentHash: `${one.claim}|${one.sourceUrl}`,
-    })),
-  );
-  for (const claim of inserted) await decideClaim(claim.id, { accepted: true });
+  await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}', parsed: {} });
 
-  const { mission } = await (async () => {
-    const existing = (await listMissions({ projectId })).find(
-      (one) => one.candidateId === input.candidateId,
-    );
-    if (existing) return { mission: existing };
-    const { launchMission } = await import('../server/repos/russellMissions.ts');
-    return launchMission({
-      projectId,
-      layerId: layer.id,
-      visibility: 'SHARED',
-      objective: 'a discovery bucket',
-      whyNow: 'the sprint is active',
-      idempotencyKey: `mission:${orchestration.id}`,
-      candidateId: input.candidateId,
-    });
-  })();
+  // The worker's own submission: stored UNACCEPTED, every one of them.
+  const stored = await recordFragmentClaims({
+    orchestration: (await getOrchestration(orchestration.id))!,
+    fragment: fragment!,
+    passId: pass.id,
+    passKey: 'BROAD_SCAN',
+    claims: input.claims.map((one) => ({
+      claim: one.claim,
+      claimType: one.claimType ?? 'SOURCED_FACT',
+      sourceUrl: one.sourceUrl,
+      sourceTitle: 'A published page',
+      sourcePublisher: new URL(one.sourceUrl).hostname,
+      sourceDate: one.sourceDate ?? '2026-09-10',
+      evidenceExcerpt: one.claim,
+      evidenceLocator: 'the page body',
+      evidenceLane: one.lane,
+      retrievedAt: '2026-09-12',
+      confidence: 0.9,
+      primarySource: true,
+    })) as never,
+  });
+
+  // And Brain's gate decides what counts, which the worker never does.
+  const gate = await gateFragment({
+    fragment: fragment!,
+    verifications: stored.map((row, index) => ({
+      claimId: row.id,
+      supportsClaim: input.claims[index]!.supports ?? true,
+      scopeMatch: {
+        geography: 'MATCH',
+        timeframe: 'MATCH',
+        population: 'MATCH',
+        definitions: 'MATCH',
+      },
+      note: 'Read the page.',
+    })) as never,
+    sufficiency: input.sufficiency ?? 'SUFFICIENT',
+    missingLanes: [],
+    unresolvedGaps: [],
+  });
+  expect(gate.acceptedClaims).toBeGreaterThan(0);
+
+  const { mission } = await launchMission({
+    projectId,
+    layerId: layer.id,
+    visibility: 'SHARED',
+    objective: input.question,
+    whyNow: 'the sprint is active',
+    idempotencyKey: `mission:${orchestration.id}`,
+    candidateId: input.candidateId,
+  });
   await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
-  const now = (await getMission(mission.id))!;
-  if (now.state !== 'DONE') {
-    if (now.state === 'PLANNED') {
-      await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
-    }
-    await transitionMission({
-      missionId: (await getMission(mission.id))!.id,
-      from: (await getMission(mission.id))!.state,
-      to: 'DONE',
+  await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+  await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'DONE' });
+  return { missionId: mission.id, orchestrationId: orchestration.id };
+}
+
+/**
+ * The Cash routes, mounted in process behind a real request context.
+ *
+ * Not a convenience: the point of a walk is which transitions have a
+ * production caller, and for a person's own answers the production caller is
+ * the route the Cash screen calls. `cashSection.test.tsx` proves the screen
+ * calls these; this proves they do the thing.
+ */
+async function withCashRoutes<T>(
+  fn: (
+    call: (method: string, route: string, body?: unknown) => Promise<{ status: number; body: any }>,
+  ) => Promise<T>,
+): Promise<T> {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    attachContext(req, {
+      principal: principal(),
+      requestId: newRequestId(),
+      method: req.method,
+      path: `/api${req.path}`,
+      remoteAddr: null,
+      userAgent: null,
     });
+    next();
+  });
+  app.use('/api', cashRouter);
+  app.use((error: any, _req: any, res: any, _next: any) => {
+    res.status(typeof error?.status === 'number' ? error.status : 500).json({
+      error: String(error?.message ?? error),
+    });
+  });
+
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once('listening', resolve));
+  const port = (server.address() as AddressInfo).port;
+  try {
+    return await fn(async (method, route, body) => {
+      const response = await fetch(`http://127.0.0.1:${port}/api${route}`, {
+        method,
+        headers: body === undefined ? {} : { 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      let parsed: unknown = text;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        /* left as text */
+      }
+      return { status: response.status, body: parsed as any };
+    });
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 }
+
+function principal(): Principal {
+  return {
+    type: 'HUMAN',
+    id: userId,
+    handle: 'owner@example.test',
+    displayName: 'The owner',
+    isBrainAdmin: false,
+    mustChangePassword: false,
+    credentialId: 'ses_test',
+    authMethod: 'SESSION_COOKIE',
+    memberships: [
+      {
+        id: 'mem',
+        projectId,
+        principalType: 'HUMAN',
+        principalId: userId,
+        role: 'ADMIN',
+        scopes: ['project:read'],
+        grantedByType: 'SYSTEM',
+        grantedById: 'test',
+        grantedAt: '2026-01-01T00:00:00.000Z',
+        active: true,
+      } as ProjectMembership,
+    ],
+    requestId: 'req',
+  } as Principal;
+}
+
+/** The lanes a discovery bucket declares, so a negative finding has a home. */
+const DISCOVERY_LANES = [
+  { id: 'demand_signal', description: 'An opening that is open.', necessity: 'REQUIRED' as const },
+  {
+    id: 'demand_absence',
+    description: 'A documented absence.',
+    necessity: 'CONDITIONAL' as const,
+  },
+];
+
+/** The single lane a card question declares. */
+const CARD_LANES = [
+  {
+    id: 'demand_signal',
+    description: 'The published page that settles it.',
+    necessity: 'REQUIRED' as const,
+  },
+];
 
 describe('one sprint, from activation to money in and winding down', () => {
   it('walks the whole journey through the entrances production uses', async () => {
     /* ------------------------------------------------------------------ *
-     * 1. A person activates the sprint. It spends nothing and authorizes
-     *    nothing: the research grant and the commercial grant are two
-     *    separate decisions and this is neither of them.
+     * 1. A person activates the sprint, and the tick starts discovery.
+     *
+     * Activating spends nothing and authorizes nothing: the research grant
+     * and the commercial grant are two separate decisions and this is
+     * neither. Before this connection existed a sprint could sit here for
+     * ever while the screen said discovery had started.
      * ------------------------------------------------------------------ */
     const activated = await activate({
       projectId,
@@ -264,36 +417,42 @@ describe('one sprint, from activation to money in and winding down', () => {
     expect(activated.ok).toBe(true);
     expect(await listOpportunities({ projectId })).toEqual([]);
 
-    /* ------------------------------------------------------------------ *
-     * 2. The tick starts discovery. This is the connection that did not
-     *    exist: before it, a sprint could sit here for ever.
-     * ------------------------------------------------------------------ */
     await authorizeResearch();
     const opening = await tick('journey');
     const discovery = opening.cashDiscovery.find((one) => one.projectId === projectId);
     expect(discovery?.opened).toHaveLength(1);
-    expect(SEARCH_BUCKETS.map((one) => one.id)).toContain(discovery!.opened[0]!);
 
-    const candidates = await listCandidates({ projectId });
-    expect(candidates).toHaveLength(1);
-    // Captured, so the archive is asked first and the judgment decides. It is
-    // not queued past any of that, which is what would make this a second
-    // pipeline rather than a new entrance.
-    const bucketCandidate = candidates[0]!;
+    const bucket = (await listCandidates({ projectId }))[0]!;
+    // Captured, so the archive is asked first and the judgment decides — this
+    // is a new entrance to the existing path, not a second pipeline.
+    expect(bucket.state).toBe('CAPTURED');
+    // And the question a worker reads says what the sprint is for, which used
+    // to sit in an event detail nothing downstream opened.
+    expect(bucket.statement).toContain('Maximize additional usable cash');
 
     /* ------------------------------------------------------------------ *
-     * 3. The research finishes, and what it found becomes the portfolio.
-     *    A lane is a row, so no prose is read to decide what is an opening.
+     * 2. A sourced opening comes back through the worker-result boundary,
+     *    beside a documented absence that must not become one.
      * ------------------------------------------------------------------ */
-    await completesResearch({
-      candidateId: bucketCandidate.id,
+    await workerResearches({
+      candidateId: bucket.id,
+      question: bucket.statement,
+      lanes: DISCOVERY_LANES,
       claims: [
         {
           claim:
-            'A regional drainage authority published a paid request for parcel research, ' +
-            'closing on 30 September 2026.',
-          sourceUrl: 'https://example.test/rfp/2026-441',
-          observedOn: '2026-09-10',
+            'The Westfield drainage authority published a request for parcel research, ' +
+            'closing 30 September 2026.',
+          lane: 'demand_signal',
+          sourceUrl: 'https://example.test/notices/2026-441',
+        },
+        {
+          claim:
+            'A documented search of the three regional boards found no other open requests ' +
+            'for this work.',
+          lane: 'demand_absence',
+          sourceUrl: 'https://example.test/boards/search',
+          claimType: 'NEGATIVE_EXISTENCE',
         },
       ],
     });
@@ -301,253 +460,340 @@ describe('one sprint, from activation to money in and winding down', () => {
     const harvesting = await tick('journey');
     const filed = harvesting.cashDiscovery.find((one) => one.projectId === projectId);
     expect(filed?.harvested).toHaveLength(1);
-    // The same tick's operating pass is where the needs come from, so the
-    // report that says a piece was filed is the report that says what it is
-    // still missing. They are one pass over one project for a reason.
-    const operated = harvesting.cashOperations.find((one) => one.projectId === projectId);
-    expect(operated?.needsRaised.length).toBeGreaterThan(0);
-    expect(operated?.dependentWork.length).toBeGreaterThan(0);
 
-    const [piece] = await listOpportunities({ projectId });
-    expect(piece!.state).toBe('DISCOVERED');
-    expect(piece!.sourceClaimId).toBeTruthy();
-    expect(piece!.discoveredByCandidateId).toBe(bucketCandidate.id);
-    // The card is blank. A published request is evidence somebody asked and is
-    // not a payer, a price, an acceptance condition or a delivery path.
-    expect(piece!.payer).toBeNull();
-    expect(piece!.priceCents).toBeNull();
+    const pieces = await listOpportunities({ projectId });
+    // Point 10: the absence is evidence about where Brain looked, and it is
+    // not a piece of work. Filing it would put "nobody is asking" into the
+    // portfolio as something to go and sell.
+    expect(pieces).toHaveLength(1);
+    const piece = pieces[0]!;
+    expect(piece.buyingSignal).toContain('drainage authority');
+    expect(piece.state).toBe('DISCOVERED');
+    // The card is blank: a published request is evidence somebody asked, and
+    // is not a payer, a price, an acceptance condition or a delivery path.
+    expect(piece.payer).toBeNull();
+    expect(piece.priceCents).toBeNull();
+
+    const round = (await listRounds(projectId)).find((one) => one.candidateId === bucket.id)!;
+    expect(round.state).toBe('HARVESTED');
+    expect(round.found).toBe(1);
 
     /* ------------------------------------------------------------------ *
-     * 4. Brain names what it still does not know — and goes and finds the
-     *    parts that are facts rather than the owner's decisions.
+     * 3. Brain names what it does not know, and researches the parts that
+     *    are facts rather than the owner's decisions.
      * ------------------------------------------------------------------ */
-    /*
-     * Asserted on the rows rather than on one tick's report, deliberately.
-     *
-     * The operating pass runs in the same tick as the harvest, so the needs
-     * for a piece filed on tick 2 are raised on tick 2 — and a test that
-     * demanded them in tick 3's report would be pinning the order the passes
-     * happen to run in rather than the thing that matters, which is that they
-     * exist and say what they are waiting for.
-     */
-    const raised = await listNeeds({ projectId, states: ['OPEN'] });
-    expect(raised.length).toBeGreaterThan(0);
-    const fields = raised.map((one) => one.requestKey?.split(':').pop()).sort();
-    // Payer and access are facts about the world. The buying evidence arrived
-    // with the claim, so it is not asked about — and the price, the offer and
-    // the delivery path are never asked of a worker at all.
-    expect(fields).toEqual(['access', 'payer']);
-    for (const need of raised) {
+    const needs = await listNeeds({ projectId, states: ['OPEN'] });
+    expect(needs.map((one) => one.requestKey?.split(':').pop()).sort()).toEqual([
+      'access',
+      'payer',
+    ]);
+    for (const need of needs) {
       expect(need.completionCondition).toBeTruthy();
       expect(need.blocksState).toBe('EXECUTING');
-    }
-
-    // Each one becomes a real research idea rather than a note on a screen —
-    // which is what makes a need a dependent work reference rather than prose.
-    for (const need of await listNeeds({ projectId, states: ['OPEN'] })) {
+      // A dependent work reference rather than a note on a screen.
       expect(need.candidateId).toBeTruthy();
     }
-    const questionIdeas = new Set(
-      (await listNeeds({ projectId, states: ['OPEN'] })).map((one) => one.candidateId),
+
+    const payerNeed = needs.find((one) => one.requestKey?.endsWith(':payer'))!;
+    const accessNeed = needs.find((one) => one.requestKey?.endsWith(':access'))!;
+    await workerResearches({
+      candidateId: payerNeed.candidateId!,
+      question: payerNeed.nextStep,
+      lanes: CARD_LANES,
+      claims: [
+        {
+          claim:
+            'The authority’s published delegation schedule names the procurement officer as ' +
+            'the approver for purchases under $25,000.',
+          lane: 'demand_signal',
+          sourceUrl: 'https://example.test/authority/delegations',
+        },
+      ],
+    });
+    await workerResearches({
+      candidateId: accessNeed.candidateId!,
+      question: accessNeed.nextStep,
+      lanes: CARD_LANES,
+      claims: [
+        {
+          claim:
+            'The notice gives procurement@westfield-drainage.example as the address for ' +
+            'questions and submissions.',
+          lane: 'demand_signal',
+          sourceUrl: 'https://example.test/notices/2026-441',
+        },
+      ],
+    });
+
+    const applying = await tick('journey');
+    const operated = applying.cashOperations.find((one) => one.projectId === projectId)!;
+    expect(operated.cardsAnswered).toEqual(
+      expect.arrayContaining([payerNeed.id, accessNeed.id]),
     );
-    expect(questionIdeas.size).toBe(raised.length);
+
+    /*
+     * On the card, and resolvable to the passage it came from — the whole of
+     * what "research reaching the card" means, and the step the first version
+     * of this file supplied the answer to.
+     */
+    const answered = (await getOpportunity(piece.id))!;
+    expect(answered.payer).toContain('procurement officer');
+    expect(answered.reachableChannel).toContain('procurement@westfield-drainage.example');
+    const payerFact = (await cardFact(piece.id, 'payer'))!;
+    expect(payerFact.kind).toBe('EVIDENCE');
+    expect(payerFact.claimId).toBeTruthy();
+
+    // The need it answered is closed because the condition holds, not because
+    // somebody wrote a sentence.
+    const settledNeed = (await getNeed(payerNeed.id))!;
+    expect(settledNeed.state).toBe('RESOLVED');
+    expect(settledNeed.verifiedBy).toBe('BRAIN_READ_THE_ROW');
 
     /* ------------------------------------------------------------------ *
-     * 5. The answers arrive and the needs settle themselves, because the
-     *    condition Brain wrote is one Brain can read.
+     * 4. Brain prepares the commercial proposal — and never calls it a fact.
      * ------------------------------------------------------------------ */
-    const filledIn = await fillCard({
-      opportunityId: piece!.id,
-      actorRef: userId,
-      patch: {
-        payer: 'The authority’s procurement officer, who signs',
-        reachableChannel: 'The address on the published notice; they replied on Tuesday',
-        offerScope: 'One parcel research packet for the named sections',
-        acceptanceCondition: 'The packet lists every parcel with its current owner of record',
+    expect(operated.termsProposed).toContain(piece.id);
+    const offer = (await cardFact(piece.id, 'offer'))!;
+    expect(offer.kind).toBe('RECOMMENDATION');
+    // All three are required to write one, so a recommendation with no stated
+    // uncertainty cannot exist.
+    expect(offer.basis).toBeTruthy();
+    expect(offer.assumptions).toBeTruthy();
+    expect(offer.uncertainty).toBeTruthy();
+    for (const field of ['acceptance', 'delivery', 'fulfillment']) {
+      expect((await cardFact(piece.id, field))!.kind).toBe('RECOMMENDATION');
+    }
+    // And it withholds what it has no basis for: no source states a figure, so
+    // no price is invented and then explained.
+    expect((await getOpportunity(piece.id))!.priceCents).toBeNull();
+    expect(await cardFact(piece.id, 'price')).toBeNull();
+
+    /* ------------------------------------------------------------------ *
+     * 5. The one answer that is genuinely a person's, through the route the
+     *    Cash screen calls.
+     * ------------------------------------------------------------------ */
+    await withCashRoutes(async (call) => {
+      const priced = await call('PATCH', `/cash/opportunities/${piece.id}`, {
         priceCents: 120_000,
-        deliveryMethod: 'Two days of record searching and one afternoon of assembly',
-        fulfillmentOwner: 'Us',
+        // The remaining blank the card still refuses on.
         peakFundingCents: 0,
-      },
+      });
+      expect(priced.status).toBe(200);
     });
-    expect(filledIn.ok).toBe(true);
+
+    const pricedFact = (await cardFact(piece.id, 'price'))!;
+    // Theirs now, permanently: the point of being able to change a
+    // recommendation is that it stays changed.
+    expect(pricedFact.kind).toBe('PERSON');
+    expect(pricedFact.decidedBy).toBe(userId);
 
     await tick('journey');
-    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(0);
-    expect((await listNeeds({ projectId, states: ['RESOLVED'] })).length).toBe(2);
+    expect((await cardFact(piece.id, 'price'))!.kind).toBe('PERSON');
 
     /* ------------------------------------------------------------------ *
-     * 6. Executing is refused until a person has decided what Brain may do,
-     *    and then until something has actually happened.
+     * 6. A capability Brain does not have, and the substitute that is not
+     *    the same fact as having it.
      * ------------------------------------------------------------------ */
-    /*
-     * Ready already, or made ready here.
+    await withCashRoutes(async (call) => {
+      const asked = await call('PATCH', `/cash/opportunities/${piece.id}`, {
+        requiredCapabilities: ['TAKE_A_PAYMENT'],
+      });
+      expect(asked.status).toBe(200);
+    });
+    await tick('journey');
+
+    const capabilityNeed = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) =>
+      one.requestKey?.startsWith('capability:'),
+    )!;
+    expect(capabilityNeed.recommendedPath).toContain('payment processor');
+
+    await withCashRoutes(async (call) => {
+      // A written explanation is not a working integration.
+      const pretended = await call('POST', `/cash/needs/${capabilityNeed.id}/close`, {
+        to: 'RESOLVED',
+        resolution: 'Done.',
+      });
+      expect(pretended.status).toBe(422);
+
+      const substituted = await call('POST', `/cash/needs/${capabilityNeed.id}/close`, {
+        to: 'RESOLVED',
+        resolution: 'The buyer paid us directly.',
+        substitute: 'Taking payment by bank transfer outside Brain for now.',
+      });
+      expect(substituted.status).toBe(200);
+    });
+
+    const substituted = (await getNeed(capabilityNeed.id))!;
+    expect(substituted.verifiedBy).toBe('PERSON_SUBSTITUTE');
+    // The integration is still missing, and Brain says so.
+    expect((await readCapability('TAKE_A_PAYMENT')).state).toBe('MISSING');
+
+    /* ------------------------------------------------------------------ *
+     * 7. Resumption, from the state the journey actually reached.
      *
-     * The operating pass now carries a piece whose card it completed through
-     * `markReady` itself, because the transition a need was blocking is
-     * downstream of one the need's own answer unblocks. Asserting the call
-     * succeeds would be asserting that Brain had *not* done its job.
+     * Nothing is rewound here. The piece is at EVIDENCE_CARD because its
+     * card was answered by research, which is precisely the state the old
+     * continuation could not resume from — it retried `beginExecution`
+     * against a piece that was never going to accept it and spent the only
+     * attempt doing so.
+     * ------------------------------------------------------------------ */
+    expect((await getOpportunity(piece.id))!.state).toBe('EVIDENCE_CARD');
+
+    const firstTry = await runNeedContinuations(projectId);
+    const waiting = firstTry.find((one) => one.needId === capabilityNeed.id)!;
+    expect(waiting.resumed).toBe(false);
+    // A wait rather than an answer: no commercial authority yet.
+    expect(waiting.retry).toBe(true);
+    expect(waiting.note).toContain('commercial authority');
+    expect((await getNeed(capabilityNeed.id))!.continuedAt).toBeNull();
+
+    // Deferred with backoff rather than retried immediately, so a condition
+    // nobody is going to fix becomes visible instead of spinning.
+    const deferredUntil = (await getNeed(capabilityNeed.id))!.continuationNotBefore!;
+    const mine = (list: { needId: string }[]): { needId: string }[] =>
+      list.filter((one) => one.needId === capabilityNeed.id);
+    expect(mine(await runNeedContinuations(projectId))).toEqual([]);
+
+    /*
+     * And a tick that dies holding the claim does not strand it.
+     *
+     * Step 5's rule at a new table: an expired lease is claimable work, so
+     * recovery never depends on one process staying alive. The old flag was
+     * terminal and written before the attempt, so a crash here left the need
+     * marked continued with nothing having continued.
      */
-    if ((await getOpportunity(piece!.id))!.state !== 'READY') {
-      expect((await markReady({ opportunityId: piece!.id, actorRef: userId })).ok).toBe(true);
-    }
+    const due = new Date(Date.parse(deferredUntil) + 1_000).toISOString();
+    expect(await claimNeedContinuation(capabilityNeed.id, due)).toBe(true);
+    // Live claim: another tick leaves it alone rather than doubling it.
+    expect(mine(await runNeedContinuations(projectId, due))).toEqual([]);
 
-    const beforeGrant = await beginExecution({ opportunityId: piece!.id, actorRef: userId });
-    expect(beforeGrant.ok).toBe(false);
-    if (!beforeGrant.ok) expect(beforeGrant.reason).toContain('commercial authority');
+    const afterCrash = new Date(Date.parse(due) + CONTINUATION_LEASE_MS + 60_000).toISOString();
+    expect(mine(await runNeedContinuations(projectId, afterCrash))).toHaveLength(1);
+    // Still not spent: the condition it is waiting for has not changed.
+    expect((await getNeed(capabilityNeed.id))!.continuedAt).toBeNull();
 
+    /* ------------------------------------------------------------------ *
+     * 8. The person makes the one decision nothing can proceed without, and
+     *    the continuation carries the piece the rest of the way by itself.
+     * ------------------------------------------------------------------ */
     await authorizeCommerce();
-    const beforeAnything = await beginExecution({ opportunityId: piece!.id, actorRef: userId });
-    expect(beforeAnything.ok).toBe(false);
-    if (!beforeAnything.ok) {
-      expect(beforeAnything.reason).toContain('Nothing has happened on this yet');
-    }
-
-    const executing = await beginExecution({
-      opportunityId: piece!.id,
-      actorRef: userId,
-      firstAction: {
+    await withCashRoutes(async (call) => {
+      const executing = await call('POST', `/cash/opportunities/${piece.id}/execute`, {
         action: 'CONTACT_BUYER',
-        performedBy: 'PERSON',
         detail: 'Replied to the notice with a one-page scope and the price.',
         reference: 'notice-2026-441',
-        requestKey: actionKey(piece!.id, 'CONTACT_BUYER', 'first'),
-      },
+      });
+      expect(executing.status).toBe(200);
     });
-    expect(executing.ok).toBe(true);
-    expect((await actionsFor(piece!.id))).toHaveLength(1);
+
+    const executing = (await getOpportunity(piece.id))!;
+    expect(executing.state).toBe('EXECUTING');
+    // EXECUTING because something happened, and the record says what.
+    const actions = await actionsFor(piece.id);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!.performedBy).toBe('PERSON');
+
+    // The continuation now finds nothing left to resume and settles, once.
+    const later = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    await runNeedContinuations(projectId, later);
+    const finished = (await getNeed(capabilityNeed.id))!;
+    expect(finished.continuedAt).toBeTruthy();
+    expect(finished.continuationNote).toBeTruthy();
 
     /* ------------------------------------------------------------------ *
-     * 7. A capability Brain does not have becomes a need with a remedy, and
-     *    answering it resumes what was waiting — exactly once.
+     * 9. Delivery, then money. Only a settlement is cash.
      * ------------------------------------------------------------------ */
-    const { updateOpportunity, transitionOpportunity } = await import(
-      '../server/repos/cashPortfolio.ts'
-    );
-    await updateOpportunity(piece!.id, {
-      required_capabilities: JSON.stringify(['ISSUE_AN_INVOICE']),
+    await withCashRoutes(async (call) => {
+      expect((await call('POST', `/cash/opportunities/${piece.id}/deliver`, {})).status).toBe(200);
+      expect(
+        (
+          await call('POST', `/projects/${projectId}/cash/money`, {
+            kind: 'CUSTOMER_PAYMENT',
+            amountCents: 120_000,
+            currency: 'USD',
+            verifiedReference: 'stripe-pi-88412',
+            idempotencyKey: `payment:${piece.id}`,
+          })
+        ).status,
+      ).toBe(200);
     });
-    await tick('journey');
-    const capabilityNeed = (await listNeeds({ projectId, states: ['OPEN'] }))[0]!;
-    expect(capabilityNeed.requestKey).toContain('capability:');
-    expect(capabilityNeed.recommendedPath).toContain('invoicing integration');
-    // It stops nothing. The piece is executing and stays executing.
-    expect((await listOpportunities({ projectId }))[0]!.state).toBe('EXECUTING');
 
-    // Put it back to the shape a resumption starts from, answer the need, and
-    // the transition it was blocking is retried by itself.
-    await transitionOpportunity({ id: piece!.id, from: ['EXECUTING'], to: 'READY' });
-    expect(
-      (
-        await closeNeed({
-          needId: capabilityNeed.id,
-          to: 'RESOLVED',
-          resolution: 'The invoice is sent.',
-          actorUserId: userId,
-          // The integration is still missing, so the honest answer is what is
-          // being done instead — recorded as a substitute rather than as the
-          // condition having been met.
-          substitute: 'Invoicing by hand from the accounts package for now.',
-        })
-      ).ok,
-    ).toBe(true);
+    const earned = await cashView({ projectId });
+    // Earned, and not yet usable: two events about the same money and only the
+    // second one is cash.
+    expect(earned.myCash.position.customerPaymentsCents).toBe(120_000);
+    expect(earned.myCash.position.availableFundsCents).toBe(0);
 
-    const resuming = await tick('journey');
-    expect(
-      resuming.cashOperations.find((one) => one.projectId === projectId)?.resumed,
-    ).toContain(capabilityNeed.id);
-    expect((await listOpportunities({ projectId }))[0]!.state).toBe('EXECUTING');
-
-    // And once, however many ticks read it.
-    const again = await tick('journey');
-    expect(
-      again.cashOperations.find((one) => one.projectId === projectId)?.resumed ?? [],
-    ).not.toContain(capabilityNeed.id);
-    expect((await getNeed(capabilityNeed.id))!.continuedAt).toBeTruthy();
-
-    /* ------------------------------------------------------------------ *
-     * 8. Delivery, then money — and only a settlement is cash.
-     * ------------------------------------------------------------------ */
-    expect(
-      (await advance({ opportunityId: piece!.id, to: 'DELIVERING', actorRef: userId })).ok,
-    ).toBe(true);
-    // Agreed, which is pipeline: the customer has said yes and nothing has
-    // moved. It is deliberately not cash, and never becomes cash by itself.
-    expect(
-      (
-        await recordMoneyEvent({
-          projectId,
-          opportunityId: piece!.id,
-          kind: 'PIPELINE_AGREED',
-          amountCents: 120_000,
-          currency: 'USD',
-          actorRef: userId,
-          idempotencyKey: `agreed:${piece!.id}`,
-        })
-      ).ok,
-    ).toBe(true);
-
-    // A payment nobody can trace is not a payment. The reference is what makes
-    // the row verifiable, and it is refused without one.
-    const untraceable = await recordMoneyEvent({
-      projectId,
-      opportunityId: piece!.id,
-      kind: 'CUSTOMER_PAYMENT',
-      amountCents: 120_000,
-      currency: 'USD',
-      actorRef: userId,
-      idempotencyKey: `unverified:${piece!.id}`,
+    await withCashRoutes(async (call) => {
+      expect(
+        (
+          await call('POST', `/projects/${projectId}/cash/money`, {
+            kind: 'SETTLEMENT',
+            amountCents: 120_000,
+            currency: 'USD',
+            verifiedReference: 'bank-ref-88412',
+            idempotencyKey: `settlement:${piece.id}`,
+          })
+        ).status,
+      ).toBe(200);
+      expect((await call('POST', `/cash/opportunities/${piece.id}/collect`, {})).status).toBe(200);
     });
-    expect(untraceable.ok).toBe(false);
-
-    expect(
-      (
-        await recordMoneyEvent({
-          projectId,
-          opportunityId: piece!.id,
-          kind: 'CUSTOMER_PAYMENT',
-          amountCents: 120_000,
-          currency: 'USD',
-          verifiedReference: 'stripe-pi-88412',
-          actorRef: userId,
-          idempotencyKey: `payment:${piece!.id}`,
-        })
-      ).ok,
-    ).toBe(true);
-
-    const earnedOnly = await cashView({ projectId });
-    // Earned, and not yet usable: a payment and a settlement are two events
-    // about the same money and only the second one is cash.
-    expect(earnedOnly.myCash.position.customerPaymentsCents).toBe(120_000);
-    expect(earnedOnly.myCash.position.availableFundsCents).toBe(0);
-    expect(earnedOnly.myCash.position.pipelineCents).toBe(120_000);
-
-    expect(
-      (
-        await recordMoneyEvent({
-          projectId,
-          opportunityId: piece!.id,
-          kind: 'SETTLEMENT',
-          amountCents: 120_000,
-          currency: 'USD',
-          verifiedReference: 'bank-ref-88412',
-          actorRef: userId,
-          idempotencyKey: `settlement:${piece!.id}`,
-        })
-      ).ok,
-    ).toBe(true);
-    expect(
-      (await advance({ opportunityId: piece!.id, to: 'COLLECTED', actorRef: userId })).ok,
-    ).toBe(true);
 
     const collected = await cashView({ projectId });
     expect(collected.myCash.position.availableFundsCents).toBe(120_000);
-    expect(collected.myCash.position.deployableCents).toBe(120_000);
+    expect(collected.myCash.position.otherCurrencies).toEqual([]);
 
     /* ------------------------------------------------------------------ *
-     * 9. Winding down stops new discovery and nothing else.
+     * 10. Discovery keeps going: a second round of the same bucket once the
+     *     first is answered and the cool-off has passed.
      * ------------------------------------------------------------------ */
-    const openedBefore = (await listCandidates({ projectId })).length;
+    const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
+    const second = await openDiscovery({ projectId, limit: 9, now: tomorrow });
+    const reasked = second.find((one) => one.bucketId === round.bucketId)!;
+    expect(reasked.round).toBe(2);
+    // It says what the first round already covered, so a worker looks for what
+    // is new rather than re-reporting what Brain holds.
+    expect((await getCandidate(reasked.candidateId))!.statement).toContain('filed 1 opening');
+
+    /* ------------------------------------------------------------------ *
+     * 11. And its identity survives an ordinary month of activity.
+     *
+     * Both halves of discovery used to read the activity display window,
+     * hard-capped at 500 rows newest-first — so a busy sprint re-opened every
+     * bucket as a duplicate *and* stopped recognising its own missions.
+     * ------------------------------------------------------------------ */
+    for (let i = 0; i < 520; i += 1) {
+      await recordCashEvent({
+        projectId,
+        kind: 'CASH_NOTE',
+        actorRef: userId,
+        summary: `Ordinary activity ${i}`,
+      });
+    }
+    expect(
+      (await listCashEvents(projectId, 500)).some(
+        (event) => event.kind === 'CASH_DISCOVERY_OPENED',
+      ),
+    ).toBe(false);
+
+    const afterNoise = await openDiscovery({ projectId, limit: 9, now: tomorrow });
+    // No duplicate of a bucket whose round is still open.
+    expect(afterNoise.some((one) => one.bucketId === reasked.bucketId)).toBe(false);
+
+    /* ------------------------------------------------------------------ *
+     * 12. Winding down stops new discovery and nothing else.
+     *
+     * With queued discovery *and* an existing obligation both present, which
+     * is the only arrangement that can tell the two apart.
+     * ------------------------------------------------------------------ */
+    const support = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Which format does this buyer need the file in?',
+      statement: 'Establish the delivery format this customer’s system accepts.',
+    });
+    await updateOpportunity(piece.id, { candidate_id: support.id });
+
     expect(
       (
         await setLifecycle({
@@ -559,19 +805,51 @@ describe('one sprint, from activation to money in and winding down', () => {
       ).ok,
     ).toBe(true);
 
+    const wound = await getCashMode(projectId);
+    // The queued discovery stops — the case that used to sail through, because
+    // the guard read "no opportunity link" as "not a cash idea".
+    expect(
+      await launchableUnderCashMode({ candidateId: reasked.candidateId, mode: wound }),
+    ).toBe(false);
+    expect(await launchableUnderCashMode({ candidateId: bucket.id, mode: wound })).toBe(false);
+    // And support for something already owed keeps running.
+    expect(await launchableUnderCashMode({ candidateId: support.id, mode: wound })).toBe(true);
+    // As does unrelated Brain work.
+    const unrelated = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'An ordinary research question',
+      statement: 'Nothing to do with the sprint.',
+    });
+    expect(await launchableUnderCashMode({ candidateId: unrelated.id, mode: wound })).toBe(true);
+
     const windingDown = await tick('journey');
     expect(
       windingDown.cashDiscovery.find((one) => one.projectId === projectId)?.opened ?? [],
     ).toEqual([]);
-    expect((await listCandidates({ projectId })).length).toBe(openedBefore);
 
-    // Everything already in the portfolio is untouched, the money history
-    // stands, and the sprint itself is still readable.
+    // Delivery, collection and the money record are untouched.
     const after = await cashView({ projectId });
     expect(after.myCash.position.availableFundsCents).toBe(120_000);
     expect(after.myCurrentWork.placements).toHaveLength(1);
     expect(after.discovery.open).toBe(false);
     expect((await getCashMode(projectId))!.state).toBe('WINDING_DOWN');
-    expect(after.whatBrainHasDone.length).toBeGreaterThan(5);
+  });
+
+  it('names the two points its own suites demonstrate', () => {
+    /*
+     * Point 11 is `cashCurrencyHttp` — a sprint activated in euros, driven
+     * against a booted server through the routes a person uses, because
+     * project creation is deliberately not an HTTP route and this file's
+     * project is a dollar sprint by the time it could be asked.
+     *
+     * And the deterministic two-connection concurrency test is
+     * `cashConcurrency`, which needs a third raw connection to hold a row lock
+     * open. Both are named here rather than duplicated, so a reader of this
+     * file knows where the other two points are rather than assuming they are
+     * missing.
+     */
+    expect(fs.existsSync(path.join(REPO, 'tests/cashCurrencyHttp.test.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(REPO, 'tests/cashConcurrency.test.ts'))).toBe(true);
   });
 });

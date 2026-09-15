@@ -26,6 +26,9 @@ and the authority to spend it**.
 | `cash_opportunities` | The portfolio, and the evidence card on each piece. |
 | `cash_money_entries` | Append-only. Every figure is derived from these rows. |
 | `cash_needs` | A blocked action, its completion condition, and what waits on it. |
+| `cash_discovery_rounds` | Which question discovery asked, and which idea asked it. |
+| `cash_card_facts` | Where each card answer came from, and what kind of answer it is. |
+| `cash_locks` | Where two cash decisions stop being concurrent. |
 | `cash_actions` | Append-only. What was actually done, and under which grant. |
 | `cash_events` | Append-only history, no foreign keys. |
 
@@ -40,6 +43,7 @@ and the authority to spend it**.
 | `services/cash/capabilities.ts` | What Brain can verifiably do, read rather than declared. |
 | `services/cash/operate.ts` | Acting on a need: raise, settle, resume, start work. |
 | `services/cash/discovery.ts` | Where the portfolio actually comes from. |
+| `services/cash/answers.ts` | Research reaching the card, and the view Brain forms on it. |
 | `services/cash/review.ts` | Grouping by shared remedy; compression, measured. |
 | `services/cash/view.ts` | One projection, read by every surface. |
 | `routes/cash.ts` | The door. Thin; every decision is above. |
@@ -419,15 +423,32 @@ BRAIN_TEST_DATABASE_URL=postgresql://... npm test
 ```
 
 The suites: `cashMode`, `cashMoney`, `cashAuthority`, `cashPortfolio`,
-`cashDefects`, `cashDiscovery`, `cashOperate`, `cashHttp`, `cashSection`,
-`connectorIsolation`, and `cashIntegrationPass` — which walks one sprint from
+`cashDefects`, `cashDiscovery`, `cashOperate`, `cashConcurrency`,
+`cashCurrencyHttp`, `cashHttp`, `cashSection`, `connectorIsolation`, and
+`cashIntegrationPass` — which walks one sprint from
 activation through discovery, a harvested opening, the needs Brain raises and
 answers, the first recorded action, delivery, settlement and winding down, in
 one pass through the entrances production uses. It exists because every defect
 the review found was a transition that existed, was tested, and could be
 reached by nothing; each of them was invisible to a test that arranges its own
-starting state. Only the research worker is simulated, and its output is a
-declared fixture rather than live research.
+starting state.
+
+**Only the worker is simulated, and only at its own boundary.**
+`workerResearches` calls `recordFragmentClaims` and `gateFragment` — the two
+functions the MCP submission path and the in-process orchestrator both call —
+so claims go in unaccepted and *Brain's* gate decides what counts. What is
+fixture is the input: the sentences a worker found, and the two judgements only
+a reader of a source can make.
+
+The first version of that walk filled the card by calling `fillCard` as the
+user with every answer already in hand, so the step it looked like it was
+demonstrating was the one step it supplied the answer to — the research-to-card
+connection was missing the whole time and the journey passed. It also rewound
+an EXECUTING opportunity to READY by hand and called what followed a
+resumption, which proves a retry from a state nothing naturally reaches.
+Neither happens now: the card is answered through the worker boundary, and the
+resumption starts from `EVIDENCE_CARD`, which is where the journey actually
+arrives.
 
 Both boot paths were verified: migrations `052_cash_mode` through
 `055_cash_operation` apply from an empty database, and a restart against the
