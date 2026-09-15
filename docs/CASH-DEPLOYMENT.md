@@ -206,6 +206,69 @@ past a floor that is working correctly.
 
 ---
 
+## 5b. Adding a Claude account / Routine, exactly
+
+**Two separable things.** A *worker* is a Brain identity a connector
+authenticates as; a *Routine* is a fire surface Brain POSTs to. Neither implies
+the other, and conflating them is how a routing boundary ends up separating
+nothing.
+
+### The worker (what the connector becomes)
+
+1. `POST /api/admin/workers` — `{ name, displayName }`. There is no
+   `npm run admin -- workers create`.
+2. Grant it one project: `npm run admin -- access grant`, which writes
+   `CONNECTOR_SCOPES` from a constant rather than a picker. Research workers
+   need **no** `worker_routing` row — a worker without one serves what its
+   scopes imply and no repository work.
+3. In the Claude account, add a custom connector pointing at
+   `https://<app>/mcp`. **Each worker needs its own connector**: the MCP
+   credential is issued per connector, so selecting an existing one hands the
+   new Routine the *old* worker.
+4. Approve it, one of two ways:
+   - **Your own account, you are a Brain administrator:** click Connect; sign in
+     on the consent screen; it lists every enabled worker with what it reaches;
+     choose one; Approve.
+   - **Somebody else's account:**
+     `POST /api/admin/workers/:workerId/invitations` with `{ projectId }`
+     returns a link, shown once. They open it, add the connector, and Approve a
+     screen naming that one worker. They never sign in here and get no Brain
+     account.
+
+The invitation **grants nothing**. It carries a worker id and no scopes, no role
+and no project, so it cannot widen access, confer administrator authority or
+reach a second project — the most it can do is let a connector be approved as an
+identity whose reach was already decided. The project is named so the issuer can
+check the link, and is *verified* rather than applied: the worker must already
+hold an active membership on it. At most one invitation is live per worker, so
+issuing a new one kills a mislaid link.
+
+### The Routine (what Brain fires)
+
+```
+npm run fleet -- register-account  --name <account>
+# set the Routine's fire token as a deployment secret, under a name
+npm run fleet -- register-routine  --account <account> --ref trig_… --secret <ENV_VAR_NAME>
+```
+
+Brain stores the secret's **name** and a sha-256 digest, never the value. A
+Routine whose secret is absent is left out of routing and reported rather than
+spending a fire to discover it. The worker binding is *observed* from the
+dispatch row on first arrival, and `fleet repoint-routine-worker` repairs a
+wrong one.
+
+### What is shared, and what is not
+
+Shared is the **machinery**: one database, one queue, one fleet, one pool of
+workers. A second worker is throughput, not a second brain.
+
+Shared is **not** the claims. Every claim read is keyed by orchestration and an
+orchestration belongs to one project, so one operation does not reuse another's
+research. That is the privacy boundary working as designed. Cross-project
+knowledge reuse does not exist today and would be a new capability.
+
+---
+
 ## 6. How the four operations are isolated
 
 There is no new mechanism here, and that is the argument for it. Privacy is a
