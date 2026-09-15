@@ -115,6 +115,7 @@ import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
 import { askArchive, judgeCandidate, specifyOverriddenCandidate } from './planning.ts';
+import { promoteEligibleClaims } from '../../repos/sharedFindings.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
@@ -343,6 +344,8 @@ export interface TickReport {
     /** Pieces Brain formed a commercial view about, as recommendations. */
     termsProposed: string[];
   }[];
+  /** Claims this pass promoted into the Brain-wide shared pool. */
+  sharedPromoted: string[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -383,6 +386,7 @@ const EMPTY: TickReport = {
   lensInquiries: { dispatched: 0, settled: 0 },
   cashDiscovery: [],
   cashOperations: [],
+  sharedPromoted: [],
   bounded: false,
 };
 
@@ -435,9 +439,25 @@ export async function tick(owner: string): Promise<TickReport> {
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
     cashOperations: [],
+    sharedPromoted: [],
   };
 
   try {
+    /*
+     * 0. Make what the Brain has validated available to the rest of the Brain.
+     *
+     * A derivation over rows rather than a hook on the moment a fragment is
+     * accepted: that is what lets it reach everything already written, survive
+     * a tick that died halfway, and be run by two instances at once — the
+     * unique index on `claim_id` is the arbiter and a loser is an ordinary
+     * outcome. It is first because it is the cheapest thing in the pass and
+     * because a bound later in the tick must not be able to starve it.
+     *
+     * It creates no work, spends nothing, and moves no project state. It
+     * writes one pointer per already-gated claim.
+     */
+    report.sharedPromoted = await promoteEligibleClaims();
+
     // 1. Finish what ended — but only where the loop can say something true.
     for (const raw of await missionsAwaitingWriteback(cycle.maxEventsPerCycle)) {
       const outcome = await outcomeOf(raw);

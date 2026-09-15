@@ -248,6 +248,15 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/russell\/projects\/[^/]+\/coverage$/, method: 'POST', level: 'READ' },
   { pattern: /^\/api\/russell\/conversations$/, method: 'POST', level: 'READ' },
 
+  // Withdrawing a shared finding, or declaring how long it is good for.
+  //
+  // A finding belongs to the project that produced it, so the decision is
+  // stated at the level every other change to what a project owns already
+  // carries. A project consuming the finding disagrees by recording a
+  // contradiction, which is the path that already exists; it does not get to
+  // withdraw somebody else's evidence.
+  { pattern: /^\/api\/russell\/shared-findings\/[^/]+\/(revoke|horizon)$/, method: 'POST', level: 'ADMIN' },
+
   // Connecting a site is a membership grant, so it is stated at the level every
   // other membership change already carries rather than inherited from the
   // method. `/api/projects/:id/members` is ADMIN above for the identical

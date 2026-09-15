@@ -3688,6 +3688,104 @@ named, and none of them has a reader, because there is nothing to read. Nothing
 here forms a view about what settling a question is worth, for the same reason
 `judgment.ts` does not.
 
+
+## 31. A validated finding belongs to the Brain. Everything else belongs to its project.
+
+Four people run four private operations in one Brain, and a market fact one of
+them paid to establish is a fact about the world. §13's rule — that the default
+is *not* to research — is exactly as true one boundary out as it is inside a
+single project, and until now it held only inside one: every claim read in this
+codebase is keyed by orchestration, and an orchestration belongs to one project,
+so the second person paid again for what the first had already established.
+
+`server/repos/sharedFindings.ts` and `server/services/knowledge/shared.ts` are
+the whole of it, and the shape follows from one fact about the graph: **the
+evidence is already written down.** `research_claims` holds the statement, the
+canonical source, the publisher, the date, the passage, the locator and the
+scope fields; it resolves through `research_fragments` to the gate that accepted
+it, through `research_orchestrations` to the project that produced it, and
+through `research_passes` to the worker and session that executed it. Nothing
+about a finding needs re-stating to be reused.
+
+- **`shared_findings` stores no knowledge.** It is a promotion record — a
+  pointer to a claim, its origin, and the two facts a claim row cannot carry: a
+  person's revocation, and an absolute horizon somebody declared. `knows.ts`
+  already gives the reason in its opening paragraph, and this is that reason at
+  a new boundary: a copy is a second place for the truth to live, it is the one
+  nobody reconciles, and it is precisely what loses a claim's evidence chain. So
+  promoting into `russell_knowledge` was the obvious move and is the one thing
+  that would have made this a parallel knowledge system.
+- **The rule is six conditions over rows, and no model output appears in it.**
+  The claim cleared the gate; it resolves to a canonical source that validated
+  structurally; nothing contested it; it is not a calculation resting on inputs
+  that did not travel with it; its fragment reached `ACCEPTED`; and it resolves
+  to an orchestration, so its origin is never unknown. The boundary between
+  *unfinished* and *validated* is the fragment rather than the packet,
+  deliberately: `gateFragment` is the single place all seven gate conditions are
+  applied, and one blocked fragment must not withhold the Brain from questions
+  that are already settled.
+- **Promotion is a derivation on the tick, not a hook on the moment a fragment
+  is accepted.** That is what lets it reach everything already written, survive
+  a tick that died halfway, and run on two instances at once — the unique index
+  on `claim_id` is the arbiter and a loser is an ordinary outcome. It is the
+  fourth time this repository has needed that distinction, and the reason there
+  is no backfill: deleting every row returns the Brain exactly to what it did
+  before.
+- **Only two of the exclusions are rows here.** Revocation and an expired
+  horizon. Contradiction, lost acceptance and a fragment leaving `ACCEPTED` are
+  re-derived against the live claim on **every read**, so a claim that becomes
+  contested disappears from the pool with nothing written anywhere and no pass
+  having to notice. That is the whole reason not to snapshot, and
+  `ELIGIBLE_SQL` is one string read by both the derivation and the retrieval
+  because a rule applied by one of two readers is worse than none.
+- **Nothing new decides whether research is needed.** `assessRequirement` is
+  untouched: a finding is projected into the `ExistingClaim` shape that
+  classifier already reads, and injected at **both** entrances —
+  `coverBeforeWork` behind Russell's pre-mission check and `reconcile` behind
+  the packet reconciliation a worker's proposed fragments go through. So no bar
+  moves. `SATISFIED` is still the only status that stops research and still
+  needs two independent publishers, and one shared finding can suppress nothing
+  on its own.
+- **A projected claim's `documentId` is the finding id, never the document the
+  originating packet filed.** That document belongs to another project and its
+  id must not leave it — `documentIds` flows onto `requirement_coverage` and out
+  to readers. And `projectId` is the **asking** project, because that is what
+  the field means to every consumer of an `ExistingClaim`; the origin lives on
+  the finding row.
+- **The row always records the origin; what a reader is shown is decided against
+  their own access.** `decideProjectAccess` at `READ`, the same module every
+  route uses — there is no shared-knowledge policy module and there must never
+  be one. A reader who may not read the originating project still gets
+  everything that makes the finding checkable: the source, the publisher, the
+  date, the passage and the locator. **A shared finding is deliberately not a
+  project-scoped resource**, so it is not hidden as one; what is withheld is the
+  name of somebody else's project, which is invariant 23 pointed at the one part
+  of this that is still project-scoped.
+- **Withdrawing one belongs to the project that produced it**, at `ADMIN`, the
+  level every other change to what a project owns already carries. A consuming
+  project that disagrees records a contradiction through the path that already
+  exists — and that path already excludes the finding, derived, without anybody
+  withdrawing anything. Revocation destroys nothing and the claim underneath is
+  never touched: a finding being unsuitable for reuse elsewhere is not the same
+  fact as the evidence being wrong.
+- **A revoked or expired finding is shown with its reason rather than hidden.**
+  Somebody asking "why is this not being reused" must be able to find out, and a
+  row that vanished answers nothing. `eligibleFindings` decides what Brain may
+  reuse; the pool read widens nothing.
+- **Nothing derives a horizon.** Brain holds no row stating how long a fact
+  about the world is good for, and inventing one would be a freshness claim
+  wearing a citation. Staleness *relative to a question* is a different fact and
+  is already decided by the coverage classifier's own timeframe verdict, which
+  is why it is not duplicated here.
+
+`tests/sharedKnowledge.test.ts` produces the finding through the real path — a
+`WORKER` principal claims a `RESEARCH_FRAGMENT` off the durable queue, submits
+through `brain_submit_claims`, and the gate decides acceptance from
+`brain_submit_verification` — because the promotion rule reads rows the gate
+writes and a fixture that hand-wrote them would be testing the fixture. The
+provenance it asserts is therefore Brain's own record of who executed the pass.
+It is **not** a live Cowork session and it is the tool layer rather than the MCP
+transport, the same two sentences `cashIntegrationPass` already has to say.
 ---
 
 ---
@@ -3729,6 +3827,7 @@ server/
     cashLedger.ts     money, as append-only rows; no balance column anywhere
     cashActions.ts    what was actually done, and under which grant
     cashLock.ts       where two cash decisions stop being concurrent
+    sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
   services/
@@ -3803,6 +3902,8 @@ server/
       service.ts        registering a site's records, and its one typed command
       loop.ts           the tick that makes a state change visible to a poller
     storageHealth.ts    how much room is left, measured rather than guessed
+    knowledge/
+      shared.ts         what crosses between projects, and what may never
     fleet/
       view.ts           three capacity numbers that are not each other, and why it is slow
       lab.ts            the eight test modes, and the five this version refuses to run
@@ -3946,6 +4047,7 @@ tests/                  Vitest suites
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker
+  sharedKnowledge.test.ts    one finding, two operations, and the wall between them
   cashConcurrency.test.ts    two commitments, forced to overlap, on both backends
   cashCurrencyHttp.test.ts   a sprint that is not in dollars, driven as a person does
   cashHttp.test.ts           Cash Mode's door, driven as an attack

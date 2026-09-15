@@ -6040,3 +6040,54 @@ export interface CashEvent {
   detail: Record<string, unknown>;
   createdAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// SHARED FINDINGS
+//
+// One Brain, four private operations, and one pool of validated findings
+// between them. The row is a promotion record — pointers and state — and holds
+// no statement, no source and no passage, because `research_claims` already
+// holds all three and a copy is a second place for the truth to live.
+// ---------------------------------------------------------------------------
+
+export type SharedFindingState = 'ACTIVE' | 'REVOKED';
+
+export interface SharedFindingRow {
+  id: string;
+  claim_id: string;
+  origin_project_id: string;
+  origin_orchestration_id: string;
+  origin_fragment_id: string | null;
+  origin_layer_id: string | null;
+  origin_worker_id: string | null;
+  origin_session_ref: string | null;
+  rule_version: string;
+  state: string;
+  valid_until: string | null;
+  revoked_at: string | null;
+  revoked_by_user_id: string | null;
+  revoked_reason: string | null;
+  promoted_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SharedFinding {
+  id: string;
+  claimId: string;
+  originProjectId: string;
+  originOrchestrationId: string;
+  originFragmentId: string | null;
+  originLayerId: string | null;
+  originWorkerId: string | null;
+  originSessionRef: string | null;
+  ruleVersion: string;
+  state: SharedFindingState;
+  validUntil: string | null;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+  revokedReason: string | null;
+  promotedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}

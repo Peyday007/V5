@@ -21,6 +21,7 @@
  * below is that rule in one place, and inverting it is what the test does.
  */
 import { assessRequirement, projectClaims } from '../reconcile/coverage.ts';
+import { sharedClaimsForProject } from '../knowledge/shared.ts';
 import type {
   BoundaryContract,
   CoverageStatus,
@@ -92,7 +93,16 @@ export async function coverBeforeWork(input: {
   /** Supplied by a test or a caller that already read them; otherwise loaded. */
   claims?: ExistingClaim[];
 }): Promise<PreMissionCoverage> {
-  const claims = input.claims ?? (await projectClaims(input.projectId));
+  /*
+   * The project's own archive, plus what the rest of the Brain has validated.
+   *
+   * `input.claims` is the seam a caller with the project's claims already in
+   * hand uses, and the shared half is added on *either* path deliberately: a
+   * seam that could bypass the boundary is a boundary with a way round it, and
+   * a guard on one entrance is not a guard.
+   */
+  const own = input.claims ?? (await projectClaims(input.projectId));
+  const claims = [...own, ...(await sharedClaimsForProject(input.projectId))];
   const contract = input.contract ?? null;
 
   const verdicts = input.requirements.map((proposed, index) => {
