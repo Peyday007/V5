@@ -886,6 +886,16 @@ cashRouter.post(
         to,
         resolution: requiredString(body['resolution'], 'resolution'),
         actorUserId: principal.id,
+        /*
+         * What is being done instead, when the condition does not hold.
+         *
+         * Without one, a resolution whose completion condition fails is
+         * refused: a written explanation is not a working integration, and
+         * the piece it was blocking would go straight back to waiting on
+         * something that had not happened. With one, Brain records
+         * `PERSON_SUBSTITUTE` — a different fact, which reads as one.
+         */
+        substitute: optionalString(body['substitute'], 'substitute') ?? null,
       }),
     );
     return { need: value, message };

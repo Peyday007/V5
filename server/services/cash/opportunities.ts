@@ -38,6 +38,7 @@ import {
   settleCommitment,
 } from '../../repos/cashAuthority.ts';
 import { countActions, recordAction } from '../../repos/cashActions.ts';
+import { recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
 import { recordMoney } from '../../repos/cashLedger.ts';
@@ -251,6 +252,31 @@ export async function fillCard(input: {
   const after = await updateOpportunity(input.opportunityId, patch);
   if (!after) return refuse('No opportunity with that id.');
 
+  /*
+   * A person's own answer outranks everything, permanently.
+   *
+   * Recorded as a `PERSON` fact so nothing automatic proposes over it again —
+   * the whole point of being able to change a recommendation is that it stays
+   * changed. `BRAIN` writes here too, through `answers.ts`, and passes its own
+   * kind; anybody else is a person, which is the only kind this entrance has.
+   */
+  if (input.actorRef !== 'BRAIN') {
+    for (const field of evidenceCard(after).fields) {
+      const column = CARD_COLUMN[field.key];
+      if (!column || !(column in patch)) continue;
+      const value = patch[column];
+      if (value === null || value === undefined) continue;
+      await recordCardFact({
+        projectId: after.projectId,
+        opportunityId: after.id,
+        field: field.key,
+        kind: 'PERSON',
+        value: String(value),
+        decidedBy: input.actorRef,
+      });
+    }
+  }
+
   // The card becoming complete is itself a state change worth recording, and it
   // is the only automatic one: DISCOVERED to EVIDENCE_CARD costs nothing, says
   // nothing about the world, and is derived from the row rather than asserted.
@@ -315,6 +341,29 @@ export async function markReady(input: {
   const after = await getOpportunity(opportunity.id);
   return { ok: true, value: after!, message: card.readiness.summary };
 }
+
+/**
+ * Which column each card field is stored in.
+ *
+ * Kept here beside `fillCard` rather than imported from `answers.ts`, because
+ * that module reads this one and a cycle between them is a load-order bug
+ * waiting to be found by whichever file happens to load first. A test holds the
+ * two in agreement.
+ */
+export const CARD_COLUMN: Record<string, string> = {
+  payer: 'payer',
+  access: 'reachable_channel',
+  buyingEvidence: 'buying_signal',
+  offer: 'offer_scope',
+  acceptance: 'acceptance_condition',
+  price: 'price_cents',
+  delivery: 'delivery_method',
+  fulfillment: 'fulfillment_owner',
+  cashDates: 'deadline',
+  economics: 'economics_note',
+  exposure: 'peak_funding_cents',
+  nextAction: 'next_action',
+};
 
 /**
  * Start executing, which means doing something rather than saying so.

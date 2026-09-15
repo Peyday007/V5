@@ -368,7 +368,7 @@ function Decisions({
                     {item.underlying.length} {item.underlying.length === 1 ? 'item' : 'items'}.
                   </p>
                 ) : null}
-                <DecisionAnswer item={item} onDone={onChanged} />
+                <DecisionAnswer item={item} view={view} onDone={onChanged} />
               </li>
             ))}
         </ul>
@@ -393,39 +393,32 @@ function Decisions({
  */
 function DecisionAnswer({
   item,
+  view,
   onDone,
 }: {
   item: ReviewItem;
+  view: CashView;
   onDone(): void;
 }): JSX.Element | null {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [said, setSaid] = useState('');
+  const [substitute, setSubstitute] = useState('');
+  const [reference, setReference] = useState('');
+  const [done, setDone] = useState<string | null>(null);
 
-  if (item.answer.kind === 'NOTHING_TO_PRESS') {
-    return <p className="rs-item-meta">{item.answer.label}.</p>;
-  }
-  // The grant, the release and the funding all have their own controls
-  // elsewhere on this page. Repeating them here would be two ways to do one
-  // thing, and the second is always the one that forgets a guard.
-  if (item.answer.kind !== 'RESOLVE_NEED') {
-    return (
-      <p className="rs-item-meta">
-        {item.answer.label}. Brain checks it by reading: {item.answer.completionCondition}
-      </p>
-    );
-  }
+  const kind = item.answer.kind;
 
-  async function resolve(): Promise<void> {
+  async function run(work: () => Promise<string>): Promise<void> {
     setBusy(true);
     setProblem(null);
     try {
-      for (const needId of item.answer.targets) {
-        await CashApi.closeNeed(needId, 'RESOLVED', said);
-      }
+      setDone(await work());
       setAsking(false);
       setSaid('');
+      setSubstitute('');
+      setReference('');
       onDone();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
@@ -434,9 +427,64 @@ function DecisionAnswer({
     }
   }
 
+  /*
+   * What the answer would actually touch, named before it is given.
+   *
+   * §29's rule about counts, one surface along: a control that says it releases
+   * five and releases one teaches a person to stop believing the screen. The
+   * server already says which rows an item stands for; this says it back.
+   */
+  const affects =
+    item.answer.targets.length > 0 ? (
+      <p className="rs-item-meta">
+        This answer applies to {item.answer.targets.length}{' '}
+        {item.answer.targets.length === 1 ? 'record' : 'records'}. Brain then checks it by
+        reading: {item.answer.completionCondition}
+      </p>
+    ) : null;
+
+  const outcome = done ? <p className="rs-state rs-state-ok">{done}</p> : null;
+  const failure = problem ? <p className="rs-state rs-state-error">{problem}</p> : null;
+
+  if (kind === 'NOTHING_TO_PRESS') {
+    return (
+      <>
+        <p className="rs-item-meta">{item.answer.label}.</p>
+        {affects}
+      </>
+    );
+  }
+
+  /*
+   * The grant is answered by the card below, which is the control it *is*.
+   *
+   * The rest used to render as a sentence with the same excuse — that funding
+   * and release controls existed elsewhere on the page — and they did not: the
+   * money panel is a read-only table and the opportunity actions are
+   * ready/execute/deliver/collect/decline. So every answer but one was a
+   * paragraph telling somebody what to do somewhere that had no way to do it.
+   */
+  if (kind === 'GRANT_AUTHORITY') {
+    return (
+      <>
+        <p className="rs-item-meta">{item.answer.label} — the card below is where.</p>
+        {affects}
+      </>
+    );
+  }
+
+  const opportunityId = item.answer.targets[0] ?? null;
+
   return (
     <div className="rs-cash-actions">
-      {asking ? (
+      {affects}
+      {!asking ? (
+        <button type="button" className="rs-button-quiet" onClick={() => setAsking(true)}>
+          {item.answer.label}
+        </button>
+      ) : null}
+
+      {asking && kind === 'RESOLVE_NEED' ? (
         <>
           <label className="rs-field-label" htmlFor={`cash-answer-${item.key}`}>
             What did you do? Brain reads this back against: {item.answer.completionCondition}
@@ -446,27 +494,210 @@ function DecisionAnswer({
             value={said}
             onChange={(event) => setSaid(event.target.value)}
           />
+          <label className="rs-field-label" htmlFor={`cash-instead-${item.key}`}>
+            If the integration is still missing and you are doing this another way, say how.
+            Brain records that rather than pretending the condition was met.
+          </label>
+          <input
+            id={`cash-instead-${item.key}`}
+            value={substitute}
+            onChange={(event) => setSubstitute(event.target.value)}
+          />
           <button
             type="button"
             className="rs-button-quiet"
             disabled={busy || said.trim().length === 0}
-            onClick={() => void resolve()}
+            onClick={() =>
+              void run(async () => {
+                for (const needId of item.answer.targets) {
+                  await CashApi.closeNeed(
+                    needId,
+                    'RESOLVED',
+                    said,
+                    substitute.trim() || undefined,
+                  );
+                }
+                return `Recorded against ${item.answer.targets.length} need${
+                  item.answer.targets.length === 1 ? '' : 's'
+                }.`;
+              })
+            }
           >
-            {busy ? 'Recording\u2026' : 'Confirm'}
+            {busy ? 'Recording…' : 'Confirm'}
           </button>
           <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
             Cancel
           </button>
         </>
-      ) : (
-        <button type="button" className="rs-button-quiet" onClick={() => setAsking(true)}>
-          {item.answer.label}
-        </button>
-      )}
-      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      ) : null}
+
+      {asking && kind === 'FILL_CARD_FIELD' && opportunityId ? (
+        <>
+          <p className="rs-hint">
+            {item.answer.targets.length === 1
+              ? 'One card, one answer.'
+              : `These are ${item.answer.targets.length} separate answers of the same kind. ` +
+                'This answers the first; the rest are on their own cards.'}
+          </p>
+          <label className="rs-field-label" htmlFor={`cash-field-${item.key}`}>
+            {item.title}
+          </label>
+          <input
+            id={`cash-field-${item.key}`}
+            value={said}
+            onChange={(event) => setSaid(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || said.trim().length === 0}
+            onClick={() =>
+              void run(async () => {
+                const field = item.key.replace(/^MISSING_/, '').toLowerCase();
+                await CashApi.fillCard(opportunityId, { [CARD_PATCH_KEY[field] ?? field]: said });
+                return 'Answered. It is yours now, so Brain will not propose over it.';
+              })
+            }
+          >
+            {busy ? 'Saving…' : 'Confirm'}
+          </button>
+          <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </>
+      ) : null}
+
+      {asking && kind === 'RECORD_MONEY' ? (
+        <>
+          <p className="rs-hint">
+            Money that actually arrived. A settlement needs the bank or provider reference that
+            makes it verifiable — a payment nobody can trace is pipeline, not cash.
+          </p>
+          <label className="rs-field-label" htmlFor={`cash-amount-${item.key}`}>
+            How much, in {view.myCash.position.currency} cents
+          </label>
+          <input
+            id={`cash-amount-${item.key}`}
+            inputMode="numeric"
+            value={said}
+            onChange={(event) => setSaid(event.target.value)}
+          />
+          <label className="rs-field-label" htmlFor={`cash-ref-${item.key}`}>
+            The reference it can be traced by
+          </label>
+          <input
+            id={`cash-ref-${item.key}`}
+            value={reference}
+            onChange={(event) => setReference(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || !/^\d+$/.test(said.trim()) || reference.trim().length === 0}
+            onClick={() =>
+              void run(async () => {
+                await CashApi.recordMoney(view.mode!.projectId, {
+                  kind: 'CAPITAL_IN',
+                  amountCents: Number(said.trim()),
+                  currency: view.myCash.position.currency,
+                  verifiedReference: reference.trim(),
+                  // Built from what it records rather than from a clock, so a
+                  // retry after a lost response is the same entry once.
+                  idempotencyKey: `funding:${reference.trim()}`,
+                });
+                return 'Recorded. Deployable cash is recomputed from the ledger.';
+              })
+            }
+          >
+            {busy ? 'Recording…' : 'Confirm'}
+          </button>
+          <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </>
+      ) : null}
+
+      {asking && kind === 'RELEASE_COMMITMENT' ? (
+        <>
+          <p className="rs-hint">
+            Releasing frees the money for something else. It is never released by a clock, so
+            this is somebody saying it is not going to be spent.
+          </p>
+          {view.myCash.commitments.filter((one) => one.state === 'HELD').length === 0 ? (
+            <p className="rs-item-meta">Nothing is held, so there is nothing to release.</p>
+          ) : (
+            <>
+              <label className="rs-field-label" htmlFor={`cash-release-${item.key}`}>
+                Which commitment
+              </label>
+              <select
+                id={`cash-release-${item.key}`}
+                value={reference}
+                onChange={(event) => setReference(event.target.value)}
+              >
+                <option value="">Choose one</option>
+                {view.myCash.commitments
+                  .filter((one) => one.state === 'HELD')
+                  .map((one) => (
+                    <option key={one.id} value={one.id}>
+                      {money(one.amountCents, one.currency)} &mdash; {one.purpose}
+                    </option>
+                  ))}
+              </select>
+              <label className="rs-field-label" htmlFor={`cash-why-${item.key}`}>
+                Why it is not being spent
+              </label>
+              <input
+                id={`cash-why-${item.key}`}
+                value={said}
+                onChange={(event) => setSaid(event.target.value)}
+              />
+              <button
+                type="button"
+                className="rs-button-quiet"
+                disabled={busy || reference === '' || said.trim().length === 0}
+                onClick={() =>
+                  void run(async () => {
+                    await CashApi.releaseCommitment(reference, said.trim());
+                    return 'Released. Nothing was spent, and the record stays.';
+                  })
+                }
+              >
+                {busy ? 'Releasing…' : 'Confirm'}
+              </button>
+            </>
+          )}
+          <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </>
+      ) : null}
+
+      {outcome}
+      {failure}
     </div>
   );
 }
+
+/**
+ * The patch key each review group's field is written under.
+ *
+ * The review names a field by the card's own key and `fillCard` takes the view
+ * type's name for it; they differ for exactly the fields where the column and
+ * the concept are not the same word. Anything absent falls through as itself,
+ * so a new field reaches the card without a second place to remember.
+ */
+const CARD_PATCH_KEY: Record<string, string> = {
+  access: 'reachableChannel',
+  buyingevidence: 'buyingSignal',
+  offer: 'offerScope',
+  acceptance: 'acceptanceCondition',
+  delivery: 'deliveryMethod',
+  fulfillment: 'fulfillmentOwner',
+  economics: 'economicsNote',
+  cashdates: 'deadline',
+  nextaction: 'nextAction',
+};
 
 /**
  * What Brain may spend here.

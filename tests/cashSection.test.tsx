@@ -465,8 +465,11 @@ describe('the decision nothing can proceed without', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /mark all 2 done/i }));
     });
-    // Brain says what it will read back, rather than trusting the button.
-    expect(screen.getByText(/The tool is reachable from here/i)).toBeTruthy();
+    // Brain says what it will read back, rather than trusting the button. It
+    // appears before the control as well as on it, because what an answer
+    // *affects* is named before somebody gives it.
+    expect(screen.getAllByText(/The tool is reachable from here/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/This answer applies to 2 records/i)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText(/what did you do/i), {
       target: { value: 'Bought it on the team card.' },
@@ -482,6 +485,240 @@ describe('the decision nothing can proceed without', () => {
     expect(bodies['POST /api/cash/needs/cnd_2/close']).toMatchObject({ to: 'RESOLVED' });
     // Never optimistic: the page goes back to the server for what is true now.
     expect(calls.filter((call) => call === VIEW).length).toBe(2);
+  });
+
+  it('answers a card field, and says it is the person’s now', async () => {
+    /*
+     * Every answer but `RESOLVE_NEED` rendered as a paragraph, on the excuse
+     * that the funding and release controls existed elsewhere on the page. They
+     * did not: the money panel is a read-only table and the opportunity actions
+     * are ready/execute/deliver/collect/decline. So the screen was telling
+     * people to do things somewhere that had no way to do them.
+     */
+    const cardDecision = view({
+      decisionsForMe: {
+        items: [
+          {
+            key: 'MISSING_PRICE',
+            title: '1 card with no price',
+            why: 'An unknown is not a favourable assumption.',
+            recommendation: 'Quote one price.',
+            consequence: 'It becomes ready to test the moment its answer exists.',
+            urgency: 'WHENEVER',
+            underlying: ['cop_1'],
+            sharedRemedy: true,
+            costCents: null,
+            costNote: null,
+            answer: {
+              kind: 'FILL_CARD_FIELD',
+              targets: ['cop_1'],
+              label: 'Answer the price on this card',
+              completionCondition: 'Every one of these cards records a price.',
+            },
+          },
+        ],
+        underlyingCount: 1,
+        summary: '1 thing to decide, standing for 1 underlying item.',
+      },
+    });
+    base({
+      [VIEW]: { body: cardDecision },
+      'PATCH /api/cash/opportunities/cop_1': { body: { opportunity: opportunity() } },
+    });
+    await mount();
+
+    await waitFor(() => expect(screen.getByText(/This answer applies to 1 record/i)).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /answer the price on this card/i }));
+    });
+    fireEvent.change(screen.getByLabelText(/1 card with no price/i), {
+      target: { value: '120000' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    });
+
+    // The same guarded route the card editor uses, so an answer given here and
+    // one given on the card are one operation.
+    expect(bodies['PATCH /api/cash/opportunities/cop_1']).toMatchObject({ price: '120000' });
+    expect(screen.getByText(/Brain will not propose over it/i)).toBeTruthy();
+    expect(calls.filter((call) => call === VIEW).length).toBe(2);
+  });
+
+  it('records money that actually arrived, and refuses to without a reference', async () => {
+    const shortfall = view({
+      decisionsForMe: {
+        items: [
+          {
+            key: 'SHORTFALL',
+            title: 'Deployable cash is negative',
+            why: 'Available funds minus commitments is -20000 cents.',
+            recommendation: 'Fund the shortfall or release a commitment.',
+            consequence: 'Delivery on work already sold continues regardless.',
+            urgency: 'BLOCKING',
+            underlying: [],
+            sharedRemedy: true,
+            costCents: null,
+            costNote: null,
+            answer: {
+              kind: 'RECORD_MONEY',
+              targets: [],
+              label: 'Record the funding, or release a commitment',
+              completionCondition: 'Deployable cash is no longer negative.',
+            },
+          },
+        ],
+        underlyingCount: 0,
+        summary: '1 thing to decide.',
+      },
+    });
+    base({
+      [VIEW]: { body: shortfall },
+      [`POST /api/projects/${PROJECT}/cash/money`]: { body: { entry: { id: 'cme_1' } } },
+    });
+    await mount();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /record the funding/i }));
+    });
+    fireEvent.change(screen.getByLabelText(/how much, in USD cents/i), {
+      target: { value: '50000' },
+    });
+    // A payment nobody can trace is pipeline, not cash — so there is nothing to
+    // press until it can be traced.
+    expect(screen.getByRole('button', { name: 'Confirm' })).toHaveProperty('disabled', true);
+
+    fireEvent.change(screen.getByLabelText(/traced by/i), { target: { value: 'bank-9912' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    });
+    expect(bodies[`POST /api/projects/${PROJECT}/cash/money`]).toMatchObject({
+      amountCents: 50_000,
+      verifiedReference: 'bank-9912',
+      // Built from what it records rather than from a clock, so a retry after a
+      // lost response is the same entry once.
+      idempotencyKey: 'funding:bank-9912',
+    });
+  });
+
+  it('releases a commitment that is not going to be spent', async () => {
+    const held = view({
+      myCash: {
+        position: POSITION,
+        entries: [],
+        commitments: [
+          {
+            id: 'ccm_1',
+            amountCents: 20_000,
+            currency: 'USD',
+            purpose: 'A bounded paid test',
+            state: 'HELD',
+            stopCondition: 'No reply within a week',
+          },
+        ],
+      },
+      decisionsForMe: {
+        items: [
+          {
+            key: 'READY_BUT_HELD',
+            title: '1 ready opening is held by money or capacity',
+            why: 'It waits on deployable cash.',
+            recommendation: 'Settle or release a commitment.',
+            consequence: 'Answering this once releases all of them.',
+            urgency: 'BLOCKING',
+            underlying: ['cop_1'],
+            sharedRemedy: true,
+            costCents: null,
+            costNote: null,
+            answer: {
+              kind: 'RELEASE_COMMITMENT',
+              targets: [],
+              label: 'Release or settle a commitment',
+              completionCondition: 'Deployable cash covers one of these.',
+            },
+          },
+        ],
+        underlyingCount: 1,
+        summary: '1 thing to decide.',
+      },
+    });
+    base({
+      [VIEW]: { body: held },
+      'POST /api/cash/commitments/ccm_1/release': { body: { released: true } },
+    });
+    await mount();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /release or settle a commitment/i }));
+    });
+    fireEvent.change(screen.getByLabelText(/which commitment/i), { target: { value: 'ccm_1' } });
+    fireEvent.change(screen.getByLabelText(/why it is not being spent/i), {
+      target: { value: 'The buyer went elsewhere.' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    });
+
+    expect(bodies['POST /api/cash/commitments/ccm_1/release']).toMatchObject({
+      reason: 'The buyer went elsewhere.',
+    });
+    // Never released by a clock: this is somebody saying it is not being spent.
+    expect(screen.getByText(/Nothing was spent, and the record stays/i)).toBeTruthy();
+  });
+
+  it('offers a substitute rather than pretending a condition was met', async () => {
+    const needDecision = view({
+      decisionsForMe: {
+        items: [
+          {
+            key: 'NEED_cnd_1',
+            title: 'Brain needs: take a payment',
+            why: 'The buyer cannot pay without it.',
+            recommendation: 'Connect a payment processor.',
+            consequence: 'Resolving this unblocks 1 action.',
+            urgency: 'WHENEVER',
+            underlying: ['cnd_1'],
+            sharedRemedy: true,
+            costCents: null,
+            costNote: null,
+            answer: {
+              kind: 'RESOLVE_NEED',
+              targets: ['cnd_1'],
+              label: 'Mark this done, and say what you did',
+              completionCondition: 'TAKE_A_PAYMENT reads PRESENT.',
+            },
+          },
+        ],
+        underlyingCount: 1,
+        summary: '1 thing to decide.',
+      },
+    });
+    base({
+      [VIEW]: { body: needDecision },
+      'POST /api/cash/needs/cnd_1/close': { body: { need: { id: 'cnd_1', state: 'RESOLVED' } } },
+    });
+    await mount();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /mark this done/i }));
+    });
+    fireEvent.change(screen.getByLabelText(/what did you do/i), {
+      target: { value: 'The buyer paid us.' },
+    });
+    fireEvent.change(screen.getByLabelText(/doing this another way/i), {
+      target: { value: 'Bank transfer outside Brain for now.' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    });
+
+    // The integration is still missing, and Brain records that rather than the
+    // condition having been met.
+    expect(bodies['POST /api/cash/needs/cnd_1/close']).toMatchObject({
+      to: 'RESOLVED',
+      resolution: 'The buyer paid us.',
+      substitute: 'Bank transfer outside Brain for now.',
+    });
   });
 
   it('offers no button for a decision no control on this page answers', async () => {

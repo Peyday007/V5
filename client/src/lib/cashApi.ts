@@ -302,10 +302,64 @@ export const CashApi = {
     needId: string,
     to: 'RESOLVED' | 'WITHDRAWN',
     resolution: string,
+    /**
+     * What is being done instead, when the condition genuinely does not hold.
+     *
+     * The server refuses a resolution whose completion condition fails and has
+     * no substitute, because a written explanation is not a working
+     * integration. Supplying one records `PERSON_SUBSTITUTE`, which is a
+     * different fact and reads as one.
+     */
+    substitute?: string,
   ): Promise<{ need: { id: string; state: string }; message: string }> =>
     api(`/api/cash/needs/${p(needId)}/close`, {
       method: 'POST',
-      body: JSON.stringify({ to, resolution }),
+      body: JSON.stringify({ to, resolution, substitute }),
+    }),
+
+  /**
+   * Answer one card field as a person.
+   *
+   * The same guarded route the card editor uses, so an answer given from the
+   * decision list and one given on the card are one operation — a second way to
+   * do it would be one forgotten guard away from doing less. The server records
+   * it as a `PERSON` fact, which is what stops Brain proposing over it again.
+   */
+  fillCard: (
+    opportunityId: string,
+    patch: Record<string, unknown>,
+  ): Promise<{ opportunity: CashOpportunity; message: string }> =>
+    api(`/api/cash/opportunities/${p(opportunityId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  /** Record money that actually moved. Refused without a verifiable reference. */
+  recordMoney: (
+    projectId: string,
+    body: {
+      kind: string;
+      amountCents: number;
+      currency?: string;
+      verifiedReference?: string;
+      opportunityId?: string;
+      note?: string;
+      idempotencyKey: string;
+    },
+  ): Promise<{ entry: { id: string }; message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/money`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /** Release a commitment that is not going to be spent. */
+  releaseCommitment: (
+    commitmentId: string,
+    reason: string,
+  ): Promise<{ released: boolean; message: string }> =>
+    api(`/api/cash/commitments/${p(commitmentId)}/release`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
     }),
 
   act: (
