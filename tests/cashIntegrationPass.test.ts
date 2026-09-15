@@ -27,12 +27,15 @@
  * What is simulated, and where the line is
  * ---------------------------------------------------------------------------
  *
- * **The worker, at its own boundary, and nothing else.** `workerResearches`
- * calls `recordFragmentClaims` and `gateFragment` — the two functions the MCP
- * submission path and the in-process orchestrator both call — so the claims go
- * in unaccepted and *Brain's* gate decides what counts. What is fixture is the
- * input: the sentences a worker found and the two judgements only a reader of a
- * source can make.
+ * **The external edge, and nothing else.** `workerResearches` authenticates as
+ * a `WORKER` principal, claims a research item off the durable queue and
+ * submits through `brain_submit_claims` and `brain_submit_verification` — the
+ * same tools a Cowork session calls — so the scope check, the lease and
+ * generation proof, the lane validation, Step 6's idempotency and Brain's own
+ * evidence gate all run here. What is fixture is what a worker brings in from
+ * outside: the sentences it found, and the two judgements only somebody who
+ * read the source can make. No live buyer, live payment or live Cowork
+ * activation happens in this suite.
  *
  * Everything else actually runs: the durable tick, the discovery producer, the
  * harvest, the capability register, the needs, the continuations, the card, the
@@ -57,15 +60,11 @@ import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
 import { createRun } from '../server/repos/runs.ts';
-import {
-  createFragments,
-  createOrchestration,
-  currentFragments,
-  finishPass,
-  getOrchestration,
-  startPass,
-} from '../server/repos/research.ts';
-import { gateFragment, recordFragmentClaims } from '../server/services/research/submission.ts';
+import { createFragments, createOrchestration } from '../server/repos/research.ts';
+import { findTool } from '../server/mcp/tools.ts';
+import { claimWork } from '../server/repos/workQueue.ts';
+import { advancePacket, approvePlan } from '../server/services/research/packetRunner.ts';
+import { createWorker } from '../server/repos/identity.ts';
 import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
 import { createCandidate, getCandidate, listCandidates } from '../server/repos/russellCandidates.ts';
 import {
@@ -97,14 +96,44 @@ import { readCapability } from '../server/services/cash/capabilities.ts';
 import { cashView } from '../server/services/cash/view.ts';
 import { cashRouter } from '../server/routes/cash.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
-import type { Layer, Principal, ProjectMembership } from '../server/domain/types.ts';
+import type {
+  ClaimedWork,
+  Layer,
+  Principal,
+  ProjectMembership,
+  WorkerScope,
+} from '../server/domain/types.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
 let fixture: Awaited<ReturnType<typeof freshProject>>;
 let projectId = '';
 let userId = '';
+let workerId = '';
 let layer: Layer;
+
+/**
+ * Everything a research worker holds.
+ *
+ * Spelled out rather than taken from a constant, because the point of going
+ * through the tools is that a missing scope refuses — and a list built from
+ * whatever the tool asks for could never show that.
+ */
+const WORKER_SCOPES: WorkerScope[] = [
+  'project:read',
+  'documents:read',
+  'research:read',
+  'research:propose',
+  'research:write',
+  'claims:write',
+  'contradictions:write',
+  'checkpoints:write',
+  'blockers:report',
+  'queue:read',
+  'queue:claim',
+  'queue:heartbeat',
+  'queue:complete',
+];
 
 beforeEach(async () => {
   fixture = await freshProject();
@@ -122,6 +151,22 @@ beforeEach(async () => {
     principalId: userId,
     role: 'ADMIN',
     scopes: ['project:read'],
+    grantedByType: 'SYSTEM',
+    grantedById: 'test',
+  });
+  const worker = await createWorker({
+    name: `sprint-worker-${Math.random().toString(36).slice(2, 10)}`,
+    displayName: 'The research worker',
+    createdByType: 'SYSTEM',
+    createdById: 'test',
+  });
+  workerId = worker.id;
+  await grantMembership({
+    projectId,
+    principalType: 'WORKER',
+    principalId: workerId,
+    role: 'MEMBER',
+    scopes: WORKER_SCOPES,
     grantedByType: 'SYSTEM',
     grantedById: 'test',
   });
@@ -162,18 +207,92 @@ async function authorizeCommerce(): Promise<void> {
 }
 
 /**
- * One worker session's result for one fragment, through the real boundary.
+ * One worker session's result for one fragment, the way a real one arrives.
  *
- * `recordFragmentClaims` and `gateFragment` are the two functions the MCP
- * submission path and the in-process orchestrator both call, so everything from
- * here down is the production decision path: the seven evidence conditions, the
- * lane coverage, the independence grouping, the acceptance recorded once.
+ * Not the service functions: the **tools**. The worker authenticates as a
+ * `WORKER` principal, claims a `RESEARCH_FRAGMENT` item off the durable queue,
+ * reads its assignment, and submits through `brain_submit_claims` and
+ * `brain_submit_verification` carrying the fence its claim gave it. So
+ * everything a real Cowork session is held to actually runs here: the scope
+ * check, the lease and generation proof, the lane validation that refuses
+ * *before* anything is stored, Step 6's idempotency scope, the pass records,
+ * the one-ledger-per-fragment guard, and then Brain's own gate.
  *
- * What is simulated is the *input* — the claims a worker found and the two
- * judgements only a reader of a source can make. That is the boundary the
- * review allows to be simulated, and it is exactly where a real Cowork session
- * would hand its answer over.
+ * What is simulated is the one thing that has to be — the **external edge**:
+ * the sentences a worker found on the open web, and the two judgements only
+ * somebody who read the source can make. No live buyer, no live payment and no
+ * live Cowork activation happens in this suite, and nothing here claims one.
  */
+async function principalFor(scopes: WorkerScope[] = WORKER_SCOPES): Promise<Principal> {
+  return {
+    type: 'WORKER',
+    id: workerId,
+    handle: 'sprint-worker',
+    displayName: 'The research worker',
+    isBrainAdmin: false,
+    mustChangePassword: false,
+    credentialId: 'cred_sprint',
+    authMethod: 'WORKER_BEARER',
+    memberships: [
+      {
+        id: 'mem_sprint_worker',
+        projectId,
+        principalType: 'WORKER',
+        principalId: workerId,
+        role: 'MEMBER',
+        scopes,
+        active: true,
+        grantedByType: 'SYSTEM',
+        grantedById: 'test',
+        grantedAt: new Date().toISOString(),
+        revokedAt: null,
+      },
+    ],
+    requestId: 'req_sprint',
+  };
+}
+
+/** One MCP tool call, as the worker. */
+async function asWorker(
+  name: string,
+  args: Record<string, unknown>,
+  scopes: WorkerScope[] = WORKER_SCOPES,
+): Promise<Record<string, unknown>> {
+  const tool = findTool(name);
+  if (!tool) throw new Error(`no such tool: ${name}`);
+  const outcome = await tool.run(args, {
+    principal: await principalFor(scopes),
+    requestId: `req_${Math.random().toString(36).slice(2)}`,
+  });
+  return outcome.value;
+}
+
+/**
+ * Claim whatever Brain has queued of this type.
+ *
+ * It does not enqueue: `approvePlan` and `advancePacket` do that, which is the
+ * point. An item the test created would prove the tools accept a proof the test
+ * also wrote; this one was written by the runner, for a fragment the runner
+ * moved to QUEUED, and the worker finds it the same way a fired session does.
+ */
+async function claimQueued(type: string): Promise<ClaimedWork> {
+  const [claimed] = await claimWork({
+    workerId,
+    scopes: [{ projectId, scopes: WORKER_SCOPES }],
+    workTypes: [type],
+  });
+  if (!claimed) throw new Error(`Brain queued nothing of type ${type}`);
+  return claimed;
+}
+
+function proof(claimed: ClaimedWork): Record<string, unknown> {
+  return {
+    work_item_id: claimed.workItemId,
+    lease_id: claimed.leaseId,
+    lease_generation: claimed.leaseGeneration,
+  };
+}
+
 async function workerResearches(input: {
   candidateId: string;
   question: string;
@@ -225,59 +344,76 @@ async function workerResearches(input: {
     },
   ] as unknown as Parameters<typeof createFragments>[0]);
 
-  const [fragment] = await currentFragments(orchestration.id);
-  const pass = await startPass({
-    orchestrationId: orchestration.id,
-    fragmentId: fragment!.id,
-    passKey: 'BROAD_SCAN',
-    ordinal: 1,
-    provider: 'WORKER',
-    prompt: input.question,
-    promptSha256: 'x'.repeat(64),
-  });
-  await finishPass(pass.id, { status: 'COMPLETE', rawResponse: '{}', parsed: {} });
+  // A plan a person approved, which is the only thing that queues research
+  // (§16). The runner moves the fragment to QUEUED and writes the work item.
+  const approved = await approvePlan({ orchestrationId: orchestration.id, approvedByUserId: userId });
+  expect(approved.enqueued.length).toBeGreaterThan(0);
 
-  // The worker's own submission: stored UNACCEPTED, every one of them.
-  const stored = await recordFragmentClaims({
-    orchestration: (await getOrchestration(orchestration.id))!,
-    fragment: fragment!,
-    passId: pass.id,
-    passKey: 'BROAD_SCAN',
+  // The worker takes that item off the queue. Everything after this carries the
+  // fence that claim issued, and a call that could not prove it is refused.
+  const researching = await claimQueued('RESEARCH_FRAGMENT');
+
+  // It reads the declaration the gate will judge it against — the lane ids a
+  // claim must name come from here, never from the test.
+  const assignment = (await asWorker('brain_get_assignment', {
+    work_item_id: researching.workItemId,
+  }))['assignment'] as Record<string, unknown>;
+  const declared = assignment['fragment'] as Record<string, unknown>;
+  expect(declared['evidenceLaneIds']).toEqual(input.lanes.map((lane) => lane.id));
+
+  const submitted = await asWorker('brain_submit_claims', {
+    ...proof(researching),
     claims: input.claims.map((one) => ({
       claim: one.claim,
-      claimType: one.claimType ?? 'SOURCED_FACT',
-      sourceUrl: one.sourceUrl,
-      sourceTitle: 'A published page',
-      sourcePublisher: new URL(one.sourceUrl).hostname,
-      sourceDate: one.sourceDate ?? '2026-09-10',
-      evidenceExcerpt: one.claim,
-      evidenceLocator: 'the page body',
-      evidenceLane: one.lane,
-      retrievedAt: '2026-09-12',
+      claim_type: one.claimType ?? 'SOURCED_FACT',
+      source_url: one.sourceUrl,
+      source_title: 'A published page',
+      source_publisher: new URL(one.sourceUrl).hostname,
+      source_date: one.sourceDate ?? '2026-09-10',
+      evidence_excerpt: one.claim,
+      evidence_locator: 'the page body',
+      evidence_lane: one.lane,
+      retrieved_at: '2026-09-12',
       confidence: 0.9,
-      primarySource: true,
-    })) as never,
+      primary_source: true,
+    })),
+    search_queries: [input.question],
+  });
+  // Stored, and none of them accepted: the worker never decides that.
+  expect(submitted['accepted']).toBe(0);
+  const stored = submitted['claims'] as { claimId: string }[];
+  await asWorker('brain_complete_work', {
+    ...proof(researching),
+    result_ref: String(submitted['recorded']),
+    summary: 'claims submitted',
   });
 
-  // And Brain's gate decides what counts, which the worker never does.
-  const gate = await gateFragment({
-    fragment: fragment!,
-    verifications: stored.map((row, index) => ({
-      claimId: row.id,
-      supportsClaim: input.claims[index]!.supports ?? true,
-      scopeMatch: {
-        geography: 'MATCH',
-        timeframe: 'MATCH',
-        population: 'MATCH',
-        definitions: 'MATCH',
-      },
+  // Completing that item advances the packet, and the packet is what decides
+  // the verification is next. Reading the sources is its own job, and it is
+  // what lets the gate ask the two questions Brain cannot.
+  await advancePacket(orchestration.id);
+  const verifying = await claimQueued('RESEARCH_VERIFY');
+  const gate = await asWorker('brain_submit_verification', {
+    ...proof(verifying),
+    verdicts: stored.map((row, index) => ({
+      claim_id: row.claimId,
+      supports_claim: input.claims[index]!.supports ?? true,
+      geography: 'MATCH',
+      timeframe: 'MATCH',
+      population: 'MATCH',
+      definitions: 'MATCH',
       note: 'Read the page.',
-    })) as never,
+    })),
     sufficiency: input.sufficiency ?? 'SUFFICIENT',
-    missingLanes: [],
-    unresolvedGaps: [],
+    missing_lanes: [],
+    unresolved_gaps: [],
   });
-  expect(gate.acceptedClaims).toBeGreaterThan(0);
+  expect(gate['acceptedClaims']).toBeGreaterThan(0);
+  await asWorker('brain_complete_work', {
+    ...proof(verifying),
+    result_ref: String(gate['acceptedClaims']),
+    summary: 'verified and gated',
+  });
 
   const { mission } = await launchMission({
     projectId,
