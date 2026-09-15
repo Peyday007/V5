@@ -66,6 +66,7 @@ import { listNeeds } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import { cardFact, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { evidenceCard } from './card.ts';
+import { questionKey } from './conditions.ts';
 import { closeNeed } from './needs.ts';
 import { readCapability } from './capabilities.ts';
 import { formatMoney, readMoneyFigures } from './figures.ts';
@@ -98,11 +99,6 @@ const COLUMN: Record<string, string> = {
   economics: 'economics_note',
   nextAction: 'next_action',
 };
-
-/** Rebuilt rather than parsed: the key is a row Brain wrote. See `operate.ts`. */
-function questionKey(opportunityId: string, field: string): string {
-  return `question:${opportunityId}:${field}`;
-}
 
 export interface AppliedAnswer {
   needId: string;

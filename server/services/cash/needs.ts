@@ -32,6 +32,7 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
 import { readCapability } from './capabilities.ts';
+import { readNeedCondition } from './conditions.ts';
 import type { CashNeed, CashOpportunityState } from '../../domain/types.ts';
 import type { Outcome } from './opportunities.ts';
 
@@ -166,34 +167,6 @@ export async function raiseNeed(input: {
   };
 }
 
-export interface NeedVerification {
-  /** Whether the condition this need named actually holds now. */
-  holds: boolean;
-  /** What Brain read to decide, in the words a person is owed. */
-  reading: string;
-}
-
-/**
- * Does this need's completion condition actually hold?
- *
- * Injected rather than imported, because the things that settle a condition —
- * a capability reading, a card field — live in modules that read this one, and
- * a cycle between them is a load-order bug waiting to be found by whichever
- * file happens to be imported first. `operate.ts` supplies the real reader.
- *
- * `null` means Brain has no way to check this particular condition, which is a
- * third answer and not a pass: it is what makes an authorized manual substitute
- * the honest route rather than a loophole.
- */
-export type ConditionReader = (need: CashNeed) => Promise<NeedVerification | null>;
-
-let readCondition: ConditionReader = async () => null;
-
-/** Wired once at startup by the module that owns the readings. */
-export function useConditionReader(reader: ConditionReader): void {
-  readCondition = reader;
-}
-
 export async function closeNeed(input: {
   needId: string;
   to: 'RESOLVED' | 'WITHDRAWN';
@@ -243,7 +216,7 @@ export async function closeNeed(input: {
     if (input.verifiedBy === 'BRAIN_READ_THE_ROW') {
       verifiedBy = 'BRAIN_READ_THE_ROW';
     } else {
-      const reading = await readCondition(need);
+      const reading = await readNeedCondition(need);
       if (reading?.holds) {
         verifiedBy = 'BRAIN_READ_THE_ROW';
       } else if (substitute) {

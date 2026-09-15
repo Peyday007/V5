@@ -59,7 +59,8 @@ import {
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { readCapability, needForCapability } from './capabilities.ts';
 import { evidenceCard } from './card.ts';
-import { closeNeed, raiseNeed, useConditionReader } from './needs.ts';
+import { questionKey } from './conditions.ts';
+import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
@@ -80,54 +81,6 @@ const BRAIN = 'BRAIN';
  */
 const CONTACT_ACTION = 'CONTACT_BUYER';
 const CONTACT_CAPABILITY = 'SEND_A_MESSAGE';
-
-/**
- * What settles each kind of need, wired in once.
- *
- * `closeNeed` used to accept any non-empty sentence, so "done" resolved a need
- * whose capability was still missing and the piece it blocked went back to
- * waiting on something that had not happened. The condition is checkable for
- * exactly the needs Brain raised — it wrote the key, so it knows what to read —
- * and `null` for anything else, which is what makes an authorized manual
- * substitute the honest route rather than a loophole.
- *
- * Registered rather than imported by `needs.ts`, because the readings live in
- * modules that import it and a cycle between them is a load-order bug waiting
- * to be found by whichever file happens to load first.
- */
-useConditionReader(async (need) => {
-  if (!need.requestKey) return null;
-
-  if (need.requestKey.startsWith('capability:')) {
-    const capabilityId = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
-    const reading = await readCapability(capabilityId);
-    return {
-      holds: reading.state === 'PRESENT',
-      reading:
-        reading.state === 'PRESENT'
-          ? `${reading.id} reads PRESENT.`
-          : `${reading.id} still reads ${reading.state}.`,
-    };
-  }
-
-  if (need.requestKey.startsWith('question:') && need.opportunityId) {
-    const opportunity = await getOpportunity(need.opportunityId);
-    if (!opportunity) return null;
-    for (const field of evidenceCard(opportunity).fields) {
-      if (questionKey(need.opportunityId, field.key) !== need.requestKey) continue;
-      return {
-        holds: field.value !== null,
-        reading:
-          field.value !== null
-            ? `The ${field.label.toLowerCase()} is on the card.`
-            : `The ${field.label.toLowerCase()} is still blank.`,
-      };
-    }
-    return null;
-  }
-
-  return null;
-});
 
 /**
  * The states worth asking a capability question about.
@@ -226,19 +179,6 @@ export async function reconcileCapabilityNeeds(
   }
 
   return out;
-}
-
-/**
- * The key a discoverable blank is raised under.
- *
- * `question:` rather than `capability:` because the two are answered by
- * different things, and `startDependentWork` reads exactly that prefix to
- * decide what research can settle. A missing payer is a fact somebody could
- * look up; a missing payment processor is an integration, and captured ideas
- * about integrations are questions nobody can research.
- */
-function questionKey(opportunityId: string, field: string): string {
-  return `question:${opportunityId}:${field}`;
 }
 
 export interface DiscoverableGap {

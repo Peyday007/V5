@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Brain \u2014 local-first research operations platform (project state, dependencies, prompts, audits, synthesis, freeze).",
+  "description": "Brain — local-first research operations platform (project state, dependencies, prompts, audits, synthesis, freeze).",
   "engines": {
     "node": ">=22.5.0"
   },
@@ -54,6 +54,7 @@
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.1.0",
     "@types/express": "^4.17.21",
+    "@types/jsdom": "^30.0.0",
     "@types/multer": "^2.0.0",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.23.1",
