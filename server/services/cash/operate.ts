@@ -62,12 +62,24 @@ import { evidenceCard } from './card.ts';
 import { closeNeed, raiseNeed, useConditionReader } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
 import type { ResearchApplication } from './answers.ts';
-import { beginExecution, markReady } from './opportunities.ts';
+import { actionKey, beginExecution, markReady } from './opportunities.ts';
+import { checkCommercialAuthority } from './authority.ts';
+import { countActions } from '../../repos/cashActions.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
 /** Brain acting on its own account, never a person and never a worker. */
 const BRAIN = 'BRAIN';
+
+/**
+ * The first commercial act on a piece that is ready, and what it needs.
+ *
+ * Named here rather than chosen per opportunity, because "which action is this"
+ * is the thing the grant is asked about — deriving it from prose on the card
+ * would be a model judgement deciding what a person authorized.
+ */
+const CONTACT_ACTION = 'CONTACT_BUYER';
+const CONTACT_CAPABILITY = 'SEND_A_MESSAGE';
 
 /**
  * What settles each kind of need, wired in once.
@@ -509,6 +521,156 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
   return out;
 }
 
+export interface AutonomousStep {
+  opportunityId: string;
+  did: 'MARKED_READY' | 'BEGAN_EXECUTION';
+  detail: string;
+}
+
+export interface WithheldStep {
+  opportunityId: string;
+  /** What stopped it, in the words a person could act on. */
+  because: string;
+}
+
+export interface AuthorityAdvance {
+  took: AutonomousStep[];
+  withheld: WithheldStep[];
+}
+
+/**
+ * The commercial decisions Brain takes on its own, inside the limits a person
+ * set first.
+ *
+ * §30 used to reserve the offer, the price, the acceptance condition and who
+ * fulfils the work to the owner permanently. `proposeTerms` corrected the first
+ * half of that — Brain may now *form* a view. This is the second half: a view
+ * nobody ever acts on is a form somebody fills in with extra steps, and an
+ * operator with high autonomy is the agreed product.
+ *
+ * Two decisions, and both are bounded by something the person owns rather than
+ * by this function's own judgement.
+ *
+ *   * **Declaring a piece ready to test.** The bound is the card: `markReady`
+ *     refuses while a load-bearing field is unknown, and that gate is untouched
+ *     — every field it checks got there as evidence somebody sourced, a
+ *     recommendation carrying its basis and uncertainty, or a person's own
+ *     answer. Brain pressing the button changes who presses it, never what the
+ *     button checks.
+ *   * **Beginning execution.** The bound is the standing commercial grant, and
+ *     the check is the same `checkCommercialAuthority` an HTTP caller goes
+ *     through — the action from a closed set, the grant read live, the ceilings
+ *     spent by the same compare-and-swap. There is no path here that does not
+ *     go through it, which is what stops this being a second set of rules.
+ *
+ * **It never manufactures a capability it does not have.** Contacting a buyer
+ * needs `SEND_A_MESSAGE`, which reads MISSING on this Brain because no
+ * integration of that kind exists; so what actually happens today is that the
+ * pieces reach READY by themselves and stop there, with the need naming the
+ * missing integration already on the record. That is the honest state, and it
+ * is reported as withheld rather than as done — a run that said it had
+ * contacted somebody would be the one lie this section could tell that costs
+ * real money.
+ */
+export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
+  const out: AuthorityAdvance = { took: [], withheld: [] };
+  if (!(await getCashMode(projectId))) return out;
+
+  for (const opportunity of await listOpportunities({
+    projectId,
+    states: ['DISCOVERED', 'EVIDENCE_CARD'],
+  })) {
+    // Asked before it is attempted: an incomplete card is the ordinary state of
+    // a piece being worked on, and reporting every one of them as withheld
+    // every tick would bury the ones that are actually stuck.
+    if (!evidenceCard(opportunity).readiness.ready) continue;
+    const ready = await markReady({ opportunityId: opportunity.id, actorRef: BRAIN });
+    if (ready.ok) {
+      out.took.push({
+        opportunityId: opportunity.id,
+        did: 'MARKED_READY',
+        detail: 'Every load-bearing field is answered, so this is ready to test.',
+      });
+    } else {
+      out.withheld.push({ opportunityId: opportunity.id, because: ready.reason });
+    }
+  }
+
+  for (const opportunity of await listOpportunities({ projectId, states: ['READY'] })) {
+    // The person's decision first, because it is the authorization and the
+    // other is an operational fact: deny-by-default asks whether this may
+    // happen before it asks whether it could.
+    const decision = await checkCommercialAuthority({ projectId, action: CONTACT_ACTION });
+    if (!decision.ok) {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because:
+          `Not authorized to ${CONTACT_ACTION}: ${decision.reason}. That is the one decision ` +
+          'Brain cannot take for somebody, and nobody has been contacted.',
+      });
+      continue;
+    }
+
+    const reading = await readCapability(CONTACT_CAPABILITY);
+    if (reading.state !== 'PRESENT') {
+      out.withheld.push({
+        opportunityId: opportunity.id,
+        because:
+          `Reaching the buyer needs ${reading.id}, which reads ${reading.state}. Brain has no ` +
+          'integration of that kind, so nobody has been contacted and nothing here says one ' +
+          'has. The need naming it is on the record.',
+      });
+      continue;
+    }
+
+    /*
+     * And here is where Brain would act.
+     *
+     * Unreachable on this Brain and deliberately left standing: every
+     * capability but `RESEARCH_A_QUESTION` reads MISSING because no
+     * integration of that kind exists (§30 says so in code rather than only
+     * in prose), so the branch above is what actually happens today. It is
+     * not dead code — it is the half that runs the moment a messaging
+     * integration is registered, and the alternative to leaving it here is a
+     * Brain that has the authorization and still needs somebody to press a
+     * button. No run of this has contacted anybody, and nothing here says one
+     * has.
+     */
+
+    const began = await beginExecution({
+      opportunityId: opportunity.id,
+      actorRef: BRAIN,
+      firstAction: {
+        action: CONTACT_ACTION,
+        performedBy: 'BRAIN',
+        detail:
+          `Reached ${opportunity.payer ?? 'the payer'} through ${
+            opportunity.reachableChannel ?? 'the recorded channel'
+          } with the offer on this card.`,
+        // Server-built, from the opportunity and how many actions it already
+        // holds. Nothing the caller sent contributes, because nothing here has
+        // a caller.
+        requestKey: actionKey(
+          opportunity.id,
+          CONTACT_ACTION,
+          String((await countActions(opportunity.id)) + 1),
+        ),
+      },
+    });
+    if (began.ok) {
+      out.took.push({
+        opportunityId: opportunity.id,
+        did: 'BEGAN_EXECUTION',
+        detail: began.message ?? 'executing',
+      });
+    } else {
+      out.withheld.push({ opportunityId: opportunity.id, because: began.reason });
+    }
+  }
+
+  return out;
+}
+
 /** One project's operating step, for the tick. */
 export interface Proposed {
   opportunityId: string;
@@ -562,6 +724,7 @@ export async function operate(
   proposed: Proposed[];
   continuations: Continuation[];
   dependentWork: DependentWork[];
+  authority: AuthorityAdvance;
 }> {
   if (!(await getCashMode(projectId))) {
     return {
@@ -571,6 +734,7 @@ export async function operate(
       proposed: [],
       continuations: [],
       dependentWork: [],
+      authority: { took: [], withheld: [] },
     };
   }
   /*
@@ -586,7 +750,14 @@ export async function operate(
   const gaps = await reconcileDiscoverableGaps(projectId);
   const continuations = await runNeedContinuations(projectId, now);
   const dependentWork = await startDependentWork(projectId);
-  return { capabilities, gaps, research, proposed, continuations, dependentWork };
+  /*
+   * Last, and that order is the point: a piece only becomes ready because the
+   * research landed on its card and the proposal filled what the research could
+   * not, both of which happened above. Asking first would ask about last tick's
+   * card and defer every decision by one pass.
+   */
+  const authority = await advanceWithinAuthority(projectId);
+  return { capabilities, gaps, research, proposed, continuations, dependentWork, authority };
 }
 
 export type { CashOpportunity };

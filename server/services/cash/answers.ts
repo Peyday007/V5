@@ -68,16 +68,31 @@ import { cardFact, mayReplace, recordCardFact } from '../../repos/cashCardFacts.
 import { evidenceCard } from './card.ts';
 import { closeNeed } from './needs.ts';
 import { readCapability } from './capabilities.ts';
+import { formatMoney, readMoneyFigures } from './figures.ts';
 import type { CashCardFact, CashNeed, CashOpportunity, ResearchClaim } from '../../domain/types.ts';
 
 const BRAIN = 'BRAIN';
 
-/** The column each card field is stored in, so an answer reaches the card. */
+/**
+ * The column each card field is stored in, so an answer reaches the card.
+ *
+ * `price` is here because a recommendation that reads well and leaves the
+ * integer column blank is a card that still is not ready — the sentence and the
+ * figure are two halves of one proposal, which is what `ProposedTerm.cents` is
+ * for.
+ *
+ * `cashDates` is deliberately **absent**. The proposal about cash timing is
+ * derived *from* the deadline, so writing it back would replace a date with a
+ * paragraph about that date, and the next pass would derive from its own
+ * output. It is recorded as a card fact, where a person reads it, and changes
+ * no column.
+ */
 const COLUMN: Record<string, string> = {
   payer: 'payer',
   access: 'reachable_channel',
   offer: 'offer_scope',
   acceptance: 'acceptance_condition',
+  price: 'price_cents',
   delivery: 'delivery_method',
   fulfillment: 'fulfillment_owner',
   economics: 'economics_note',
@@ -344,6 +359,16 @@ export interface ProposedTerm {
   basis: string;
   assumptions: string;
   uncertainty: string;
+  /**
+   * The figure, where the field is stored as one.
+   *
+   * `price` is an integer column and `cashDates` is a date, so a sentence
+   * cannot be the only form a proposal takes: without this the recommendation
+   * would read well on the card and leave the column that decides readiness
+   * still blank. The sentence stays, because it carries the range and the
+   * reason the low end was taken.
+   */
+  cents?: number;
 }
 
 export interface Proposal {
@@ -360,8 +385,24 @@ export interface Proposal {
  * this Brain buys no inference (§24), so a proposal that needed a model would
  * be a bin and a wait. What it produces instead is the reading a careful person
  * would make from the same rows — and where the rows do not support one, it
- * says so and proposes nothing rather than inventing a number and explaining
- * it afterwards.
+ * says so and proposes nothing rather than inventing a number and explaining it
+ * afterwards.
+ *
+ * Seven things it settles, which is what a commercial decision actually needs:
+ * the offer's scope *and its edges*, the acceptance condition, the price or the
+ * range the sources state, the delivery method, who fulfils it, the expected
+ * margin, and when the cash would actually arrive. Every one of them carries
+ * its basis, its assumptions and its uncertainty, because a recommendation with
+ * none of those is a guess wearing a citation.
+ *
+ * The two arithmetic ones are the ones most easily got wrong, so both refuse
+ * rather than estimate. **A margin needs a price and a bounded exposure**, and
+ * with either missing it is withheld naming which — a margin computed against
+ * an unknown cost is the blank-as-favourable-assumption invariant 39 forbids,
+ * and it fails in the direction that makes a piece look worth doing. **Unpriced
+ * effort stays unpriced**: the hours are reported beside the margin rather than
+ * multiplied by a rate nobody set, because inventing the rate is the same
+ * defect one step along.
  */
 export async function proposeTerms(opportunity: CashOpportunity): Promise<Proposal> {
   const out: Proposal = { opportunityId: opportunity.id, terms: [], withheld: [] };
@@ -378,12 +419,28 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
     return out;
   }
 
+  // ---------------------------------------------------------------------
+  // The offer, and its edges
+  // ---------------------------------------------------------------------
+  //
+  // A scope with no stated exclusions is the one that gets argued about after
+  // the work is done, so the edges are part of the proposal rather than a
+  // refinement of it. They are stated as *what this offer does not cover*
+  // rather than as a guess at what the buyer also wants.
+  const excluded = [
+    'anything the request does not name',
+    'revisions after the deliverable is accepted',
+    ...(opportunity.humanHours === null ? [] : ['work beyond the hours this was scoped at']),
+  ];
   out.terms.push({
     field: 'offer',
-    value: `Deliver what the published request asks for: ${clamp(request, 300)}`,
+    value:
+      `Deliver exactly what the published request asks for: ${clamp(request, 240)}. ` +
+      `Not included: ${excluded.join('; ')}.`,
     basis: `The request itself${signal?.claimId ? ` (claim ${signal.claimId})` : ''}.`,
     assumptions:
-      'That the request means what it says and has not been amended since it was published.',
+      'That the request means what it says, has not been amended since it was published, and ' +
+      'that its published wording is the whole of the scope.',
     uncertainty:
       'Anything the request leaves implicit — format, volume, revisions — is unstated here and ' +
       'is what a first reply should settle.',
@@ -391,41 +448,87 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
 
   out.terms.push({
     field: 'acceptance',
-    value: `The buyer confirms the deliverable the request names has been provided in full.`,
-    basis: 'The request names its own deliverable.',
+    value:
+      'The buyer confirms in writing that the deliverable the request names has been provided ' +
+      'in full, against the scope above.',
+    basis: 'The request names its own deliverable, and the offer above names its edges.',
     assumptions: 'That the request states the whole of what the buyer will check.',
     uncertainty:
       'A buyer may hold an unpublished standard. Until one is agreed in writing, this is what ' +
       'Brain would work to rather than what the buyer has accepted.',
   });
 
-  /*
-   * A price is proposed only where a source stated a figure.
-   *
-   * Deriving one from nothing is exactly the invented judgment the old rule was
-   * worried about, and the worry was right about *that*. What it got wrong was
-   * concluding that Brain may therefore never propose a price at all: where the
-   * request published a budget, a rate or a fee schedule, quoting it back is
-   * reading rather than guessing.
-   */
+  // ---------------------------------------------------------------------
+  // The price, or the range the sources actually state
+  // ---------------------------------------------------------------------
+  //
+  // Deriving one from nothing is exactly the invented judgment the old rule was
+  // worried about, and the worry was right about *that*. What it got wrong was
+  // concluding Brain may therefore never propose a price at all: where the
+  // request published a budget, a rate or a fee schedule, quoting it back is
+  // reading rather than guessing. `readMoneyFigures` is what keeps the
+  // difference — it refuses a bare number, shorthand and a percentage, so its
+  // failure mode is missing a figure rather than producing one.
   const economics = await cardFact(opportunity.id, 'economics');
+  const sources: { text: string; claimId: string | null }[] = [];
   if (economics && economics.kind === 'EVIDENCE') {
+    sources.push({ text: economics.value, claimId: economics.claimId });
+  }
+  if (signal && signal.kind === 'EVIDENCE') {
+    sources.push({ text: signal.value, claimId: signal.claimId });
+  } else if (opportunity.buyingSignal) {
+    sources.push({ text: opportunity.buyingSignal, claimId: null });
+  }
+
+  const figures = sources.flatMap((source) =>
+    readMoneyFigures(source.text, opportunity.currency).map((figure) => ({
+      ...figure,
+      claimId: source.claimId,
+    })),
+  );
+  const cited = [...new Set(figures.map((one) => one.claimId).filter((one) => one !== null))];
+  const low = figures[0];
+  const high = figures[figures.length - 1];
+
+  if (low && high) {
+    const range = low.cents !== high.cents;
     out.terms.push({
-      field: 'economics',
-      value: economics.value,
-      basis: `A published figure${economics.claimId ? ` (claim ${economics.claimId})` : ''}.`,
+      field: 'price',
+      // The low end when the sources state a range, and the reason is not
+      // caution for its own sake: the range is what somebody published, so the
+      // top of it is the number Brain would least be able to defend, and an
+      // unknown may never be read as the favourable one.
+      cents: low.cents,
+      value: range
+        ? `${formatMoney(low.cents, opportunity.currency)} — the low end of a published range of ` +
+          `${formatMoney(low.cents, opportunity.currency)} to ` +
+          `${formatMoney(high.cents, opportunity.currency)}, because the top of a range is the ` +
+          'figure Brain could least defend if asked.'
+        : `${formatMoney(low.cents, opportunity.currency)}, as published.`,
+      basis: range
+        ? `${figures.length} figures stated in the sources on this card` +
+          `${cited.length > 0 ? ` (claim${cited.length === 1 ? '' : 's'} ${cited.join(', ')})` : ''}.`
+        : `The figure stated in the source on this card` +
+          `${cited.length > 0 ? ` (claim ${cited[0]})` : ''}: ${low.text}.`,
       assumptions: 'That the published figure is what this buyer will actually pay.',
-      uncertainty: 'A stated budget is a ceiling as often as it is a price.',
+      uncertainty: range
+        ? 'A published range says what the market has paid, not what this buyer will. Where it ' +
+          'sits inside the range is settled by a reply, not by this.'
+        : 'A stated budget is a ceiling as often as it is a price.',
     });
   } else {
     out.withheld.push({
       field: 'price',
       because:
-        'No source states what this pays, and a price derived from nothing is a number with an ' +
+        'No source on this card states a figure in ' +
+        `${opportunity.currency}, and a price derived from nothing is a number with an ` +
         'explanation attached rather than a reading. Quote one, or research the published rate.',
     });
   }
 
+  // ---------------------------------------------------------------------
+  // Delivery, and who does it
+  // ---------------------------------------------------------------------
   const canResearch = await readCapability('RESEARCH_A_QUESTION');
   out.terms.push({
     field: 'delivery',
@@ -445,8 +548,90 @@ export async function proposeTerms(opportunity: CashOpportunity): Promise<Propos
     value: canResearch.state === 'PRESENT' ? 'Brain, with a person reviewing' : 'A person',
     basis: 'Follows from the delivery path above.',
     assumptions: 'That somebody is available to review before anything is sent.',
-    uncertainty: 'Nothing here reserves that person’s time.',
+    uncertainty: 'Nothing here reserves that person\u2019s time.',
   });
+
+  // ---------------------------------------------------------------------
+  // The margin, which needs both halves
+  // ---------------------------------------------------------------------
+  const price = low?.cents ?? opportunity.priceCents;
+  const exposure = opportunity.peakFundingCents;
+  if (price !== null && price !== undefined && exposure !== null) {
+    const margin = price - exposure;
+    const hours = opportunity.humanHours;
+    out.terms.push({
+      field: 'economics',
+      value:
+        `${formatMoney(margin, opportunity.currency)} expected, being ` +
+        `${formatMoney(price, opportunity.currency)} less ` +
+        `${formatMoney(exposure, opportunity.currency)} of money out` +
+        (hours === null
+          ? '.'
+          : `, before ${hours} hour${hours === 1 ? '' : 's'} of effort this does not price.`),
+      basis:
+        'The price above and the exposure recorded on this card. Both are figures somebody ' +
+        'wrote down; nothing here estimates either.',
+      assumptions:
+        'That the recorded exposure is the whole of the money out, and that the price is ' +
+        'collected in full.',
+      uncertainty:
+        (margin <= 0
+          ? 'This is not positive at the price the sources state, which is a reason to decline ' +
+            'rather than a reason to raise the price. '
+          : '') +
+        (hours === null
+          ? 'No effort is recorded against this, so the margin is before whatever time it takes.'
+          : 'The hours are reported rather than costed, because nobody has set a rate and ' +
+            'inventing one would make this figure look decided.'),
+    });
+  } else {
+    out.withheld.push({
+      field: 'economics',
+      because:
+        price === null || price === undefined
+          ? 'A margin needs a price, and no source states one. Whatever it was computed against ' +
+            'would be an assumption reported as a figure.'
+          : 'A margin needs the money going out, and this card records no bounded exposure. A ' +
+            'margin against an unknown cost fails in the direction that makes a piece look ' +
+            'worth doing.',
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // When the cash actually arrives
+  // ---------------------------------------------------------------------
+  //
+  // Read from the rows, in order, and answered as *not known* rather than as a
+  // default. "Net 30 from an unstated date" is a sentence that sounds like a
+  // date and is not one.
+  if (opportunity.paymentTerms) {
+    out.terms.push({
+      field: 'cashDates',
+      value: `Cash arrives on the terms recorded: ${clamp(opportunity.paymentTerms, 160)}.`,
+      basis: 'The payment terms on this card.',
+      assumptions: 'That the buyer pays to the terms they agreed.',
+      uncertainty: 'Agreed terms are when payment is due, never when it lands.',
+    });
+  } else if (opportunity.deadline) {
+    out.terms.push({
+      field: 'cashDates',
+      value:
+        `Delivery is due ${opportunity.deadline}; payment terms are not agreed, so cash is not ` +
+        'expected before then and no later date can be stated.',
+      basis: 'The deadline on this card, and the absence of any payment terms.',
+      assumptions: 'That the deadline is the buyer\u2019s and not an internal one.',
+      uncertainty:
+        'The gap between delivering and being paid is the whole of the cash timing, and this ' +
+        'card does not say what it is.',
+    });
+  } else {
+    out.withheld.push({
+      field: 'cashDates',
+      because:
+        'Neither payment terms nor a deadline is recorded, so nothing here says when the money ' +
+        'would arrive. A sprint that cannot say that cannot plan around it.',
+    });
+  }
 
   return out;
 }
@@ -465,17 +650,17 @@ export async function applyProposal(input: {
 }): Promise<string[]> {
   const written: string[] = [];
   for (const term of input.proposal.terms) {
-    const column = COLUMN[term.field];
-    if (!column) continue;
     const existing = await cardFact(input.opportunity.id, term.field);
     if (!mayReplace(existing, 'RECOMMENDATION')) continue;
 
-    if (term.field === 'economics') {
-      // Already on the card as evidence; the proposal repeats it rather than
-      // replacing it, so there is nothing to write.
-      continue;
+    const column = COLUMN[term.field];
+    if (column) {
+      // The figure where the column holds one, the sentence where it holds
+      // prose. A term that declared `cents` and landed in a text column would
+      // put "USD 1,200.00 — the low end of…" where an integer belongs.
+      const value = term.cents === undefined ? term.value : term.cents;
+      await updateOpportunity(input.opportunity.id, { [column]: value } as never);
     }
-    await updateOpportunity(input.opportunity.id, { [column]: term.value } as never);
     await recordCardFact({
       projectId: input.opportunity.projectId,
       opportunityId: input.opportunity.id,

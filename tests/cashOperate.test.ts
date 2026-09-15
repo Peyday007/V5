@@ -1033,6 +1033,7 @@ describe('the operating pass as the tick calls it', () => {
       proposed: [],
       continuations: [],
       dependentWork: [],
+      authority: { took: [], withheld: [] },
     });
   });
 });

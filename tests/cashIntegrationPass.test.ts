@@ -91,7 +91,7 @@ import {
   COMMERCIAL_ACTIONS,
 } from '../server/services/cash/authority.ts';
 import { openDiscovery } from '../server/services/cash/discovery.ts';
-import { runNeedContinuations } from '../server/services/cash/operate.ts';
+import { advanceWithinAuthority, runNeedContinuations } from '../server/services/cash/operate.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import { cashView } from '../server/services/cash/view.ts';
 import { cashRouter } from '../server/routes/cash.ts';
@@ -765,15 +765,34 @@ describe('one sprint, from activation to money in and winding down', () => {
     expect((await readCapability('TAKE_A_PAYMENT')).state).toBe('MISSING');
 
     /* ------------------------------------------------------------------ *
-     * 7. Resumption, from the state the journey actually reached.
+     * 7. Brain takes the decision it is allowed to take, and stops at the
+     *    one it is not.
      *
-     * Nothing is rewound here. The piece is at EVIDENCE_CARD because its
-     * card was answered by research, which is precisely the state the old
-     * continuation could not resume from — it retried `beginExecution`
-     * against a piece that was never going to accept it and spent the only
-     * attempt doing so.
+     * The card is complete — research answered what was discoverable and
+     * the proposal filled the rest — so Brain declares the piece ready to
+     * test rather than putting that on somebody's review. `markReady`'s own
+     * gate is untouched: what changed is who presses the button, never what
+     * the button checks.
+     *
+     * And then it stops, out loud. Nobody has granted a standing commercial
+     * authority yet, which is the one decision Brain cannot take for
+     * somebody — so nothing is contacted and the refusal says which decision
+     * is missing rather than reporting the nearest available reason.
      * ------------------------------------------------------------------ */
-    expect((await getOpportunity(piece.id))!.state).toBe('EVIDENCE_CARD');
+    const decided = (await getOpportunity(piece.id))!;
+    expect(decided.state).toBe('READY');
+    const readied = (await listCashEvents(projectId, 200)).find(
+      (one) => one.kind === 'CASH_OPPORTUNITY_READY' && one.opportunityId === piece.id,
+    )!;
+    expect(readied.actorRef).toBe('BRAIN');
+
+    const withheld = (await advanceWithinAuthority(projectId)).withheld.find(
+      (one) => one.opportunityId === piece.id,
+    )!;
+    expect(withheld.because).toContain('no standing commercial authority');
+    expect(withheld.because).toContain('nobody has been contacted');
+    // And it is still READY: withholding is not a state change.
+    expect((await getOpportunity(piece.id))!.state).toBe('READY');
 
     const firstTry = await runNeedContinuations(projectId);
     const waiting = firstTry.find((one) => one.needId === capabilityNeed.id)!;
@@ -813,6 +832,23 @@ describe('one sprint, from activation to money in and winding down', () => {
      *    the continuation carries the piece the rest of the way by itself.
      * ------------------------------------------------------------------ */
     await authorizeCommerce();
+
+    /*
+     * Authorized, and still unable — which is the honest state of this Brain
+     * rather than a gap in the walk.
+     *
+     * With the grant in place the refusal moves to the operational fact
+     * underneath it: reaching a buyer needs `SEND_A_MESSAGE`, no integration
+     * of that kind exists, so Brain does not contact anybody and does not say
+     * it did. That is why the action below is performed by a **person**.
+     */
+    const authorized = (await advanceWithinAuthority(projectId)).withheld.find(
+      (one) => one.opportunityId === piece.id,
+    )!;
+    expect(authorized.because).toContain('SEND_A_MESSAGE');
+    expect(authorized.because).toContain('nobody has been contacted');
+    expect(await actionsFor(piece.id)).toEqual([]);
+
     await withCashRoutes(async (call) => {
       const executing = await call('POST', `/cash/opportunities/${piece.id}/execute`, {
         action: 'CONTACT_BUYER',
