@@ -5592,6 +5592,8 @@ export interface CashOpportunityRow {
   source: string | null;
   candidate_id: string | null;
   external_record_id: string | null;
+  source_claim_id: string | null;
+  discovered_by_candidate_id: string | null;
   payer: string | null;
   reachable_channel: string | null;
   buying_signal: string | null;
@@ -5641,6 +5643,25 @@ export interface CashOpportunity {
   source: string | null;
   candidateId: string | null;
   externalRecordId: string | null;
+  /**
+   * The accepted research claim this opportunity was harvested from.
+   *
+   * Present only for one Brain found rather than one a person entered, and it
+   * is the provenance: the claim carries the source URL, the publisher and the
+   * date, so "why does Brain think there is an opening here" resolves to a
+   * passage rather than to a summary.
+   */
+  sourceClaimId: string | null;
+  /**
+   * The discovery bucket whose mission found it, which is a different fact from
+   * `candidateId`.
+   *
+   * `candidateId` is the idea this opportunity *is* — what a person captured,
+   * or what Brain is researching on this opportunity's own behalf. A bucket is
+   * a broad question that found dozens of unrelated openings, and it is never
+   * research about any one of them. The wind-down guard reads the difference.
+   */
+  discoveredByCandidateId: string | null;
   payer: string | null;
   reachableChannel: string | null;
   buyingSignal: string | null;

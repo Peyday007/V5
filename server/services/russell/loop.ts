@@ -127,6 +127,7 @@ import {
 import { parseJson } from '../../repos/util.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
+import { runDiscovery } from '../cash/discovery.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
@@ -315,6 +316,13 @@ export interface TickReport {
    * something `listInquiries` already answers per project.
    */
   lensInquiries: { dispatched: number; settled: number };
+  /**
+   * Each active sprint's discovery step: buckets opened, openings filed.
+   *
+   * Reported by id rather than counted, because "which bucket" is the thing a
+   * person asks when a sprint looks quiet, and a count cannot answer it.
+   */
+  cashDiscovery: { projectId: string; opened: string[]; harvested: string[] }[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -353,6 +361,7 @@ const EMPTY: TickReport = {
   renewedReservations: [],
   frontier: [],
   lensInquiries: { dispatched: 0, settled: 0 },
+  cashDiscovery: [],
   bounded: false,
 };
 
@@ -403,6 +412,7 @@ export async function tick(owner: string): Promise<TickReport> {
   renewedReservations: [],
     frontier: [],
     lensInquiries: { dispatched: 0, settled: 0 },
+    cashDiscovery: [],
   };
 
   try {
@@ -809,6 +819,46 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a project whose frontier could not be read is left as it was */
+      }
+    }
+
+    /*
+     * 1e-iii-b. Start each active sprint's discovery, and file what it found.
+     *
+     * Activating a sprint used to write a mode row and nothing else: no goal,
+     * no candidate, no mission, no queued job. A freshly activated sprint could
+     * therefore sit empty beside a perfectly healthy fleet while the screen said
+     * discovery had started — §24's "waiting nobody can resolve" arriving at a
+     * section rather than at a state machine.
+     *
+     * Both halves are idempotent by rows rather than by a flag, so a restart
+     * mid-tick resumes rather than repeating: a bucket is opened once because
+     * its `CASH_DISCOVERY_OPENED` event says so, and a claim becomes an
+     * opportunity once because of the unique index on `(project, claim)`.
+     *
+     * `openDiscovery` is gated by the sprint's own lifecycle and `harvest` is
+     * deliberately not: winding down stops new discovery and never stops the
+     * answers to what already ran arriving. Opening is bounded to one bucket
+     * per project per tick, because five simultaneous missions on activation is
+     * five simultaneous activations — the same bound the lens dispatch takes.
+     *
+     * Nothing here bypasses anything: what it creates is a candidate, which
+     * still goes through the archive check, the judgment pass, the mission
+     * compiler, the approval envelope, the evidence gate and all three audit
+     * roles before a single claim can be harvested from it.
+     */
+    for (const project of await listProjects()) {
+      try {
+        const run = await runDiscovery(project.id);
+        if (run.opened.length > 0 || run.harvested.length > 0) {
+          report.cashDiscovery.push({
+            projectId: project.id,
+            opened: run.opened.map((one) => one.bucketId),
+            harvested: run.harvested.map((one) => one.opportunity.id),
+          });
+        }
+      } catch {
+        /* a sprint whose discovery could not run is left as it was */
       }
     }
 

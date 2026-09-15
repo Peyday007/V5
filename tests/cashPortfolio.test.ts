@@ -36,6 +36,8 @@ function opportunity(overrides: Partial<CashOpportunity> = {}): CashOpportunity 
     source: null,
     candidateId: null,
     externalRecordId: null,
+    sourceClaimId: null,
+    discoveredByCandidateId: null,
     payer: null,
     reachableChannel: null,
     buyingSignal: null,

@@ -42,6 +42,8 @@ function mapOpportunity(row: CashOpportunityRow): CashOpportunity {
     source: row.source,
     candidateId: row.candidate_id,
     externalRecordId: row.external_record_id,
+    sourceClaimId: row.source_claim_id,
+    discoveredByCandidateId: row.discovered_by_candidate_id,
     payer: row.payer,
     reachableChannel: row.reachable_channel,
     buyingSignal: row.buying_signal,
@@ -92,6 +94,8 @@ export interface NewOpportunity {
   source?: string | null;
   candidateId?: string | null;
   externalRecordId?: string | null;
+  sourceClaimId?: string | null;
+  discoveredByCandidateId?: string | null;
   expiresAt?: string | null;
   expiryReason?: string | null;
   dependsOnId?: string | null;
@@ -111,7 +115,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
   await getDb().run(
     `INSERT INTO cash_opportunities
        (id, project_id, cash_mode_id, owner_user_id, title, mechanism, industry, source,
-        candidate_id, external_record_id,
+        candidate_id, external_record_id, source_claim_id, discovered_by_candidate_id,
         payer, reachable_channel, buying_signal, signal_observed_at,
         offer_scope, acceptance_condition, price_cents, currency, payment_terms,
         fulfillment_owner, delivery_method, required_inputs, deadline, economics_note,
@@ -121,7 +125,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
         exhausted_at, exhausted_reason, next_action, next_action_due, outcome, stop_rule,
         declined_by_user_id, declined_reason, reoffered_from_id, archived_reason,
         created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
              NULL, NULL, NULL, NULL,
              NULL, NULL, NULL, ?, NULL,
              NULL, NULL, NULL, NULL, NULL,
@@ -142,6 +146,8 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
       input.source ?? null,
       input.candidateId ?? null,
       input.externalRecordId ?? null,
+      input.sourceClaimId ?? null,
+      input.discoveredByCandidateId ?? null,
       input.currency,
       input.expiresAt ?? null,
       input.expiryReason ?? null,
@@ -199,15 +205,39 @@ export async function listOpportunities(input: {
   return rows.map(mapOpportunity);
 }
 
-/** The opportunity a Russell idea belongs to, when it belongs to one. */
-export async function opportunityForCandidate(
-  candidateId: string,
+/** The opportunity harvested from one claim, if that claim produced one. */
+export async function opportunityForClaim(
+  projectId: string,
+  claimId: string,
 ): Promise<CashOpportunity | null> {
   const rows = await getDb().all<CashOpportunityRow>(
-    'SELECT * FROM cash_opportunities WHERE candidate_id = ? ORDER BY created_at DESC, id DESC',
-    [candidateId],
+    'SELECT * FROM cash_opportunities WHERE project_id = ? AND source_claim_id = ?',
+    [projectId, claimId],
   );
   return rows[0] ? mapOpportunity(rows[0]) : null;
+}
+
+/**
+ * The opportunities a Russell idea belongs to.
+ *
+ * Reads `candidate_id` only. `discovered_by_candidate_id` names the broad
+ * bucket whose mission found an opening and is research about none of the
+ * openings it found, so a reader asking "what is this idea about" must not see
+ * it — see the comment on that column in migration 054.
+ *
+ * Returns every match rather than the newest, because the one caller asks
+ * whether *any* of them is an obligation, and a newest-first `SELECT` with no
+ * tiebreak on that question is the `binForOrchestration` defect again.
+ */
+export async function opportunitiesForCandidate(
+  candidateId: string,
+): Promise<CashOpportunity[]> {
+  const rows = await getDb().all<CashOpportunityRow>(
+    `SELECT * FROM cash_opportunities WHERE candidate_id = ?
+      ORDER BY created_at DESC, id DESC`,
+    [candidateId],
+  );
+  return rows.map(mapOpportunity);
 }
 
 /**
@@ -253,6 +283,7 @@ export async function updateOpportunity(
     stop_rule: string | null;
     candidate_id: string | null;
     external_record_id: string | null;
+    discovered_by_candidate_id: string | null;
   }>,
 ): Promise<CashOpportunity | null> {
   const { clause, values } = buildUpdate(patch);

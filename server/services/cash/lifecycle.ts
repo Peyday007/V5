@@ -40,8 +40,12 @@ import {
   transitionCashMode,
 } from '../../repos/cashMode.ts';
 import { getApprovalEnvelope } from '../research/approvalEnvelope.ts';
-import { opportunityForCandidate } from '../../repos/cashPortfolio.ts';
-import type { CashMode, CashModeState } from '../../domain/types.ts';
+import { opportunitiesForCandidate } from '../../repos/cashPortfolio.ts';
+import type {
+  CashMode,
+  CashModeState,
+  CashOpportunityState,
+} from '../../domain/types.ts';
 
 /**
  * The envelopes a cash project's compiled discovery may run under.
@@ -265,6 +269,24 @@ const CONSEQUENCE: Record<CashModeState, string> = {
 };
 
 /**
+ * The states in which somebody is owed something.
+ *
+ * An opportunity here has a customer, a delivery in progress or money still to
+ * collect. Everything before `EXECUTING` is a piece Brain is still deciding
+ * about: `READY` means ready to *test*, which is the last moment at which
+ * nobody has been promised anything.
+ *
+ * Declined and archived are deliberately absent. They are pieces the sprint
+ * stopped pursuing, and research for one of those is neither support nor an
+ * obligation.
+ */
+const OBLIGATION_STATES: readonly CashOpportunityState[] = Object.freeze([
+  'EXECUTING',
+  'DELIVERING',
+  'COLLECTED',
+]);
+
+/**
  * May this queued idea be launched, given its project's sprint?
  *
  * The same question `discoveryAllowed` answers, asked about one candidate that
@@ -273,12 +295,26 @@ const CONSEQUENCE: Record<CashModeState, string> = {
  * applied by one of two readers is worse than none, because the two eventually
  * disagree about the same idea.
  *
- * Three properties, and each of them is deliberate.
+ * Four properties, and each of them is deliberate.
  *
  * **Only a cash idea is affected.** An ordinary research candidate in a project
  * that happens to run a sprint is launchable whatever the sprint's state, which
  * is §30's rule that Cash Mode is a section rather than the definition of what
  * Brain may pursue.
+ *
+ * **Winding down ends new discovery and never an obligation.** The first
+ * version of this read every linked candidate as discovery, so a wind-down
+ * stopped Brain researching a question it needed in order to *deliver* what a
+ * customer had already been promised — which is the off switch reaching past
+ * the thing it owns, one altitude below the `russell_cycle` mistake this module
+ * was written to refuse. An idea about an opportunity in
+ * `OBLIGATION_STATES` is support work, and support work is not discovery.
+ *
+ * **What the link means is read from the column, not inferred.**
+ * `candidate_id` is the idea an opportunity *is*; `discovered_by_candidate_id`
+ * is the bucket whose mission found it. A bucket is research about none of the
+ * openings it found, so a bucket stays discovery however far any one of those
+ * openings has progressed.
  *
  * **It is a skip, not a refusal.** The caller is expected to pass over the
  * candidate: no state moves, no attempt is charged, and nothing is written on
@@ -295,7 +331,9 @@ export async function launchableUnderCashMode(input: {
   mode: CashMode | null;
 }): Promise<boolean> {
   if (!input.mode || input.mode.state === 'ACTIVE') return true;
-  return (await opportunityForCandidate(input.candidateId)) === null;
+  const linked = await opportunitiesForCandidate(input.candidateId);
+  if (linked.length === 0) return true;
+  return linked.some((one) => OBLIGATION_STATES.includes(one.state));
 }
 
 export interface DiscoveryDecision {

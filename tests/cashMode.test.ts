@@ -21,7 +21,11 @@ import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { getCashMode, listCashEvents } from '../server/repos/cashMode.ts';
-import { getOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
+import {
+  getOpportunity,
+  transitionOpportunity,
+  updateOpportunity,
+} from '../server/repos/cashPortfolio.ts';
 import { createCandidate, getCandidate } from '../server/repos/russellCandidates.ts';
 import {
   activate,
@@ -30,7 +34,18 @@ import {
   launchableUnderCashMode,
   setLifecycle,
 } from '../server/services/cash/lifecycle.ts';
-import { advance, capture, fillCard, markReady } from '../server/services/cash/opportunities.ts';
+import {
+  advance,
+  beginExecution,
+  capture,
+  fillCard,
+  markReady,
+} from '../server/services/cash/opportunities.ts';
+import { createAuthority } from '../server/repos/cashAuthority.ts';
+import {
+  ALWAYS_PROHIBITED_COMMERCIAL,
+  COMMERCIAL_ACTIONS,
+} from '../server/services/cash/authority.ts';
 import { raiseNeed } from '../server/services/cash/needs.ts';
 import { recordMoneyEvent } from '../server/services/cash/opportunities.ts';
 
@@ -318,6 +333,116 @@ describe('winding down stops new discovery and nothing else', () => {
     });
     expect(
       await launchableUnderCashMode({ candidateId: candidate.id, mode: await getCashMode(projectId) }),
+    ).toBe(true);
+  });
+
+  it('keeps researching for a customer already owed something', async () => {
+    /*
+     * The first version of this guard read every linked candidate as discovery,
+     * so winding a sprint down stopped Brain researching a question it needed
+     * in order to *deliver* what a customer had already been promised. That is
+     * the off switch reaching past the thing it owns — the `russell_cycle`
+     * mistake this module exists to refuse, one altitude down.
+     */
+    await activated();
+    await createAuthority({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'Cash Mode commercial authority',
+      allowedActions: [...COMMERCIAL_ACTIONS],
+      prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+      maxCommittedCents: 100_000,
+      maxPerActionCents: 40_000,
+      maxConcurrent: 3,
+      currency: 'USD',
+    });
+
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'A piece somebody is now owed',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error('capture failed');
+    await completeCard(captured.value.id);
+    expect((await markReady({ opportunityId: captured.value.id, actorRef: userId })).ok).toBe(true);
+    expect((await beginExecution({ opportunityId: captured.value.id, actorRef: userId })).ok).toBe(
+      true,
+    );
+
+    const support = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Which format does this buyer need the file in?',
+      statement: 'Establish the delivery format this customer’s system accepts.',
+    });
+    await updateOpportunity(captured.value.id, { candidate_id: support.id });
+
+    await setLifecycle({
+      projectId,
+      to: 'WINDING_DOWN',
+      actorUserId: userId,
+      reason: 'No new pieces.',
+    });
+    const wound = await getCashMode(projectId);
+    expect(await launchableUnderCashMode({ candidateId: support.id, mode: wound })).toBe(true);
+
+    // And it stays true once the money is in but the record is still open.
+    await advance({ opportunityId: captured.value.id, to: 'DELIVERING', actorRef: userId });
+    await advance({ opportunityId: captured.value.id, to: 'COLLECTED', actorRef: userId });
+    expect(
+      await launchableUnderCashMode({ candidateId: support.id, mode: await getCashMode(projectId) }),
+    ).toBe(true);
+  });
+
+  it('keeps a discovery bucket stopped however far its openings have got', async () => {
+    /*
+     * The bucket and the opening are two different relationships, and one
+     * column for both would have been the loophole. A broad bucket question
+     * finds dozens of unrelated openings and is research about none of them —
+     * so reading `discovered_by_candidate_id` as support work would re-open
+     * new discovery the moment any single opening started executing, which is
+     * exactly what the wind-down had just stopped.
+     */
+    await activated();
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'An opening a bucket found',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error('capture failed');
+
+    const bucket = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Who is publicly asking to pay for work right now',
+      statement: 'The broad bucket question, which is about no one opening.',
+    });
+    await updateOpportunity(captured.value.id, {
+      discovered_by_candidate_id: bucket.id,
+      // Far enough along that reading the wrong column would let it through.
+      payer: 'The owner, who signs',
+    });
+    await transitionOpportunity({
+      id: captured.value.id,
+      from: ['DISCOVERED'],
+      to: 'EXECUTING',
+    });
+
+    await setLifecycle({
+      projectId,
+      to: 'WINDING_DOWN',
+      actorUserId: userId,
+      reason: 'No new pieces.',
+    });
+    expect(
+      await launchableUnderCashMode({ candidateId: bucket.id, mode: await getCashMode(projectId) }),
     ).toBe(true);
   });
 
