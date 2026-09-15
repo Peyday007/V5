@@ -215,6 +215,9 @@ describe('a caller with no credentials', () => {
       ['GET', `/api/russell/projects/${projectId}/needs-you`],
       ['POST', `/api/russell/projects/${projectId}/coverage`],
       ['GET', '/api/russell/deal-dispatch'],
+      ['GET', '/api/russell/shared-findings'],
+      ['POST', '/api/russell/shared-findings/shf_0123456789abcdef0123/revoke'],
+      ['POST', '/api/russell/shared-findings/shf_0123456789abcdef0123/horizon'],
     ] as const) {
       const result = await call(method, route, { body: method === 'POST' ? {} : undefined });
       expect(result.status, `${method} ${route}`).toBe(401);

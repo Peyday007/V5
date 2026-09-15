@@ -35,6 +35,10 @@
  * somebody who read the source can make.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import express from 'express';
+import type { AddressInfo } from 'node:net';
+import { attachContext, newRequestId } from '../server/services/identity/context.ts';
+import { russellRouter } from '../server/routes/russell.ts';
 import { freshProject } from './helpers.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
@@ -148,8 +152,11 @@ function principalFor(operation: Operation): Principal {
 }
 
 /** A person, with exactly the memberships they were granted and no more. */
-function personFor(operation: Operation, ...also: Operation[]): Principal {
-  const on = [operation, ...also];
+function personFor(
+  operation: Operation,
+  options: { role?: 'ADMIN' | 'MEMBER'; also?: Operation[] } = {},
+): Principal {
+  const on = [operation, ...(options.also ?? [])];
   return {
     type: 'HUMAN',
     id: operation.userId,
@@ -167,7 +174,7 @@ function personFor(operation: Operation, ...also: Operation[]): Principal {
       projectId: target.projectId,
       principalType: 'HUMAN',
       principalId: operation.userId,
-      role: 'ADMIN',
+      role: options.role ?? 'ADMIN',
       scopes: ['project:read'],
       active: true,
       grantedByType: 'SYSTEM',
@@ -863,5 +870,157 @@ describe('two operations over one pool', () => {
     const forAna = await sharedClaimsForProject(ana.projectId);
     expect(forAna.length).toBe(2);
     expect(forAna.every((claim) => claim.claim.includes('neighbouring'))).toBe(true);
+  });
+});
+
+/* --------------------------------------------------------------------------
+ * The routes, mounted in process behind a real request context.
+ *
+ * The guards on these are the whole of what stops the pool becoming a way into
+ * somebody else's project, and they are the kind that a unit test of the policy
+ * cannot see: the level comes from `requirementFor(method, path)`, so a route
+ * whose path does not match its own override silently downgrades to the method
+ * default. That is a real failure mode and it is invisible from the handler.
+ * ------------------------------------------------------------------------ */
+
+async function withRussellRoutes<T>(
+  principal: Principal | null,
+  fn: (
+    call: (method: string, route: string, body?: unknown) => Promise<{ status: number; body: any }>,
+  ) => Promise<T>,
+): Promise<T> {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    attachContext(req, {
+      // The path the policy matches on is the one the request actually has.
+      principal,
+      requestId: newRequestId(),
+      method: req.method,
+      path: req.path,
+      remoteAddr: null,
+      userAgent: null,
+    } as never);
+    next();
+  });
+  app.use('/api/russell', russellRouter);
+  app.use((error: any, _req: any, res: any, _next: any) => {
+    res.status(typeof error?.status === 'number' ? error.status : 500).json({
+      error: String(error?.message ?? error),
+    });
+  });
+
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once('listening', resolve));
+  const port = (server.address() as AddressInfo).port;
+  try {
+    return await fn(async (method, route, body) => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/russell${route}`, {
+        method,
+        headers: body === undefined ? {} : { 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      let parsed: unknown = text;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        /* left as text */
+      }
+      return { status: response.status, body: parsed as any };
+    });
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+describe('the pool over HTTP', () => {
+  it('refuses a machine by type, at every one of its doors', async () => {
+    await anaEstablishesTheFact();
+    await promoteEligibleClaims();
+    const [finding] = await listFindings();
+
+    await withRussellRoutes(principalFor(ana), async (call) => {
+      for (const [method, route] of [
+        ['GET', '/shared-findings'],
+        ['POST', `/shared-findings/${finding!.findingId}/revoke`],
+        ['POST', `/shared-findings/${finding!.findingId}/horizon`],
+      ] as const) {
+        const result = await call(method, route, method === 'POST' ? { reason: 'no' } : undefined);
+        expect(result.status, `${method} ${route}`).toBe(404);
+        // Invariant 23 at the door a machine is most likely to knock on.
+        expect(result.body.error).toBe('No such route.');
+      }
+    });
+
+    // And nothing it was refused actually happened.
+    expect((await getFinding(finding!.findingId))!.state).toBe('ACTIVE');
+  });
+
+  it('withdraws a finding for the project that produced it, and for nobody else', async () => {
+    await anaEstablishesTheFact();
+    await promoteEligibleClaims();
+    const [finding] = await listFindings();
+    const invented = 'shf_0123456789abcdef0123';
+
+    // Ben administers his own project and nothing of Ana's. A real finding id
+    // and an invented one must be byte-identical to him, body included.
+    await withRussellRoutes(personFor(ben), async (call) => {
+      const real = await call('POST', `/shared-findings/${finding!.findingId}/revoke`, {
+        reason: 'I would rather this were not used.',
+      });
+      const missing = await call('POST', `/shared-findings/${invented}/revoke`, {
+        reason: 'I would rather this were not used.',
+      });
+      expect(real.status).toBe(404);
+      expect(missing.status).toBe(404);
+      expect(JSON.stringify(real.body)).toBe(JSON.stringify(missing.body));
+
+      // He can still read the pool, and still cannot see whose it is.
+      const pool = await call('GET', '/shared-findings');
+      expect(pool.status).toBe(200);
+      expect(pool.body.findings.length).toBe(2);
+      expect(pool.body.reusable).toBe(2);
+      expect(pool.body.findings[0].provenance.originVisible).toBe(false);
+      expect(JSON.stringify(pool.body)).not.toContain(ana.projectId);
+    });
+    expect((await getFinding(finding!.findingId))!.state).toBe('ACTIVE');
+
+    /*
+     * And somebody who *is* on Ana's project but is not an administrator of it
+     * is refused in the same words. Withdrawing a finding is a change to what a
+     * project owns, so it carries the level every other one does — and the
+     * level comes from `requirementFor(method, path)`, which is exactly the
+     * thing a handler cannot see it has lost.
+     */
+    await withRussellRoutes(personFor(ana, { role: 'MEMBER' }), async (call) => {
+      const refused = await call('POST', `/shared-findings/${finding!.findingId}/revoke`, {
+        reason: 'I am on this project but do not run it.',
+      });
+      const missing = await call('POST', `/shared-findings/${invented}/revoke`, {
+        reason: 'I am on this project but do not run it.',
+      });
+      expect(refused.status).toBe(404);
+      expect(JSON.stringify(refused.body)).toBe(JSON.stringify(missing.body));
+    });
+    expect((await getFinding(finding!.findingId))!.state).toBe('ACTIVE');
+
+    // Ana administers the project that produced it.
+    await withRussellRoutes(personFor(ana), async (call) => {
+      const revoked = await call('POST', `/shared-findings/${finding!.findingId}/revoke`, {
+        reason: 'The statute was amended.',
+      });
+      expect(revoked.status).toBe(200);
+      expect(revoked.body.finding.state).toBe('REVOKED');
+
+      // Guarded on the state it is leaving, so the second press is refused
+      // rather than writing a second revocation saying the same thing.
+      const again = await call('POST', `/shared-findings/${finding!.findingId}/revoke`, {
+        reason: 'The statute was amended.',
+      });
+      expect(again.status).toBe(409);
+    });
+
+    expect(await sharedClaimsForProject(ben.projectId)).toHaveLength(1);
   });
 });
