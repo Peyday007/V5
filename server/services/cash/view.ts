@@ -71,10 +71,16 @@ export async function cashView(input: {
   const { mode, authority } = await authorityFor(input.projectId);
 
   const opportunities = await listOpportunities({ projectId: input.projectId });
-  const position = await cashPosition({
-    projectId: input.projectId,
-    currency: authority?.currency ?? 'USD',
-  });
+  /*
+   * The **sprint's** currency, not the grant's.
+   *
+   * A grant can be withdrawn and replaced while the money history stays, so
+   * taking the label from the grant would make the figures change currency when
+   * a person changed their mind about a ceiling. The sprint is what the money
+   * belongs to, and it is pinned at activation.
+   */
+  const currency = mode?.currency ?? 'USD';
+  const position = await cashPosition({ projectId: input.projectId, currency });
 
   const plan = assemble({
     opportunities,
@@ -128,7 +134,9 @@ export async function cashView(input: {
     },
     myCash: {
       position,
-      entries: explainEntries(await listMoneyEntries({ projectId: input.projectId, limit: 50 })),
+      entries: explainEntries(
+        await listMoneyEntries({ projectId: input.projectId, currency, limit: 50 }),
+      ),
       commitments: await listCommitments(input.projectId),
     },
     myCurrentWork: { ...plan, cards },

@@ -33,9 +33,11 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import {
   commit as commitCents,
-  getCommitmentByKey,
+  getCommitment,
   liveAuthority,
+  settleCommitment,
 } from '../../repos/cashAuthority.ts';
+import { getDb } from '../../db/database.ts';
 import { recordMoney } from '../../repos/cashLedger.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { checkCommercialAuthority } from './authority.ts';
@@ -624,30 +626,24 @@ export async function commitSpend(input: {
   }
 
   /*
-   * The shortfall rule, and the one caller it must not apply to.
+   * Does this fit the money?
    *
-   * §5: an account whose deployable cash is negative exposes the shortfall and
-   * blocks **new** discretionary commitments. A retry of a commitment that
-   * already exists is not a new one — and refusing it is worse than pointless,
-   * because the first attempt is usually *what made the account short*, so the
-   * caller that lost its response could never learn what happened to it. §20's
-   * rule, at a new table: a retry is not a second effect, and the replay path
-   * has to stay reachable.
+   * The gate used to ask whether deployable cash was *already* negative, which
+   * fires one commitment after the one that did the damage: an account with
+   * $100 could commit $400 under a $1,000 grant and be told about it next time.
    *
-   * The authority check above still runs on the replay, because that is the
-   * half a revocation can change.
+   * `deployableAfter` is evaluated **inside** `commit`'s transaction, after the
+   * row is inserted, so what it reports already counts this commitment — a
+   * negative answer is precisely "this does not fit", and no window exists in
+   * which two callers both read the same room. It is a function rather than a
+   * number for the same reason: a figure read out here would be read before the
+   * insert and stale by the time it decided anything.
+   *
+   * A **replay** never reaches it. `commit` returns at the conflict, before any
+   * ceiling is consulted, which is what keeps a retry reachable after the
+   * original attempt is what made the account short — §20's rule that a retry
+   * is not a second effect.
    */
-  const replaying = await getCommitmentByKey(input.idempotencyKey);
-  if (!replaying) {
-    const position = await cashPosition({ projectId: input.projectId });
-    if (position.shortfall) {
-      return refuse(
-        `Deployable cash is ${position.deployableCents} cents, so this account is already short. ` +
-          'New commitments stop until the shortfall is funded or something is released.',
-      );
-    }
-  }
-
   const outcome = await commitCents({
     authorityId: decision.authority.id,
     projectId: input.projectId,
@@ -659,6 +655,13 @@ export async function commitSpend(input: {
     stopCondition: input.stopCondition.trim(),
     idempotencyKey: input.idempotencyKey,
     createdBy: input.actorRef,
+    deployableAfter: async () =>
+      (
+        await cashPosition({
+          projectId: input.projectId,
+          currency: decision.authority!.currency,
+        })
+      ).deployableCents,
   });
   if (!outcome.ok || !outcome.commitment) return refuse(outcome.reason);
 
@@ -684,10 +687,18 @@ export async function commitSpend(input: {
   };
 }
 
-/** Write one money event. Append-only: a correction is another entry. */
+/**
+ * Write one money event. Append-only, once per key, in the sprint's currency.
+ *
+ * Three things are checked before anything is written, and each exists because
+ * its absence produced a wrong figure: the entry's own shape, the sprint's
+ * currency, and — for a customer payment — the authority to accept one. The key
+ * is what makes a retry a retry rather than a second $750.
+ */
 export async function recordMoneyEvent(input: {
   projectId: string;
   opportunityId?: string | null;
+  commitmentId?: string | null;
   kind: CashMoneyKind;
   amountCents: number;
   currency: string;
@@ -695,6 +706,7 @@ export async function recordMoneyEvent(input: {
   fundsAvailableAt?: string | null;
   occurredAt?: string;
   note?: string | null;
+  idempotencyKey: string;
   actorRef: string;
 }): Promise<Outcome<CashMoneyEntry>> {
   const check = checkMoneyEntry({
@@ -703,6 +715,21 @@ export async function recordMoneyEvent(input: {
     verifiedReference: input.verifiedReference,
   });
   if (!check.ok) return refuse(check.reason);
+  if (!input.idempotencyKey.trim()) {
+    return refuse(
+      'A money entry needs a key naming the operation, so that a retry is not a second one.',
+    );
+  }
+
+  const mode = await getCashMode(input.projectId);
+  if (!mode) return refuse('Cash Mode has not been activated for this project.');
+  if (mode.currency !== input.currency) {
+    return refuse(
+      `This sprint keeps its money in ${mode.currency} and this entry is in ${input.currency}. ` +
+        'Brain does not choose an exchange rate, and a figure that added the two would be a ' +
+        'number nobody can use wearing a label that says it was checked.',
+    );
+  }
 
   if (input.kind === 'CUSTOMER_PAYMENT') {
     const decision = await checkCommercialAuthority({
@@ -719,9 +746,10 @@ export async function recordMoneyEvent(input: {
     }
   }
 
-  const entry = await recordMoney({
+  const written = await recordMoney({
     projectId: input.projectId,
     opportunityId: input.opportunityId ?? null,
+    commitmentId: input.commitmentId ?? null,
     kind: input.kind,
     amountCents: input.amountCents,
     currency: input.currency,
@@ -730,18 +758,110 @@ export async function recordMoneyEvent(input: {
     occurredAt: input.occurredAt,
     note: input.note ?? null,
     recordedBy: input.actorRef,
+    idempotencyKey: input.idempotencyKey,
   });
+  if (!written.ok || !written.entry) return refuse(written.reason);
+
+  if (!written.replayed) {
+    await recordCashEvent({
+      projectId: input.projectId,
+      opportunityId: input.opportunityId ?? null,
+      kind: 'CASH_MONEY_RECORDED',
+      actorRef: input.actorRef,
+      summary: `${input.kind} of ${input.amountCents} cents.`,
+      detail: { kind: input.kind, amountCents: input.amountCents, entryId: written.entry.id },
+    });
+  }
+
+  return {
+    ok: true,
+    value: written.entry,
+    message: written.replayed ? 'This entry was already recorded.' : 'Recorded.',
+  };
+}
+
+/**
+ * The spend happened: the hold becomes history **and** the cost is recorded.
+ *
+ * These are one operation and were two, which is the defect this exists to
+ * close. `settleCommitment` alone moved a row out of `HELD` and wrote nothing
+ * else, so a $400 hold against $1,000 of capital took deployable cash from $600
+ * back to $1,000 — the account was told it had the money it had just spent.
+ *
+ * Both writes are in one transaction, so there is no state in which the hold is
+ * gone and the cost is missing. The cost's key is derived from the commitment
+ * rather than supplied, so a retried settlement writes one cost.
+ *
+ * A partial spend is expressible rather than rounded: `spentCents` is what
+ * actually left, the remainder stops being held, and settling for more than was
+ * held is refused — more than was held is a new commitment, not this one.
+ */
+export async function settleSpend(input: {
+  commitmentId: string;
+  spentCents: number;
+  actorRef: string;
+  note?: string | null;
+}): Promise<Outcome<CashCommitment>> {
+  const commitment = await getCommitment(input.commitmentId);
+  if (!commitment) return refuse('No commitment with that id.');
+  if (commitment.state !== 'HELD') {
+    return refuse(`That commitment is already ${commitment.state.toLowerCase()}.`);
+  }
+  const spent = Math.trunc(input.spentCents);
+  if (!Number.isFinite(spent) || spent < 0) {
+    return refuse('What was spent is a whole number of cents, and not negative.');
+  }
+  if (spent > commitment.amountCents) {
+    return refuse(
+      `This commitment held ${commitment.amountCents} cents and you are settling ${spent}. ` +
+        'A settlement spends what was held or less; more than that is a new commitment.',
+    );
+  }
+
+  const settled = await getDb().transaction(async () => {
+    if (!(await settleCommitment(commitment.id, spent))) return false;
+    if (spent > 0) {
+      const written = await recordMoney({
+        projectId: commitment.projectId,
+        opportunityId: commitment.opportunityId,
+        commitmentId: commitment.id,
+        kind: 'COST',
+        amountCents: spent,
+        currency: commitment.currency,
+        note: input.note ?? commitment.purpose,
+        recordedBy: input.actorRef,
+        // Derived from the commitment rather than supplied, so a retried
+        // settlement can never write a second cost.
+        idempotencyKey: `settle:${commitment.id}`,
+      });
+      if (!written.ok) {
+        // The cost could not be written, so the hold must not be released
+        // either. Abandoning the transaction is what keeps the two together.
+        throw new Error(`the settlement cost could not be recorded: ${written.reason}`);
+      }
+    }
+    return true;
+  });
+  if (!settled) return refuse(`That commitment is already ${commitment.state.toLowerCase()}.`);
 
   await recordCashEvent({
-    projectId: input.projectId,
-    opportunityId: input.opportunityId ?? null,
-    kind: 'CASH_MONEY_RECORDED',
+    projectId: commitment.projectId,
+    opportunityId: commitment.opportunityId,
+    kind: 'CASH_COMMITMENT_SETTLED',
     actorRef: input.actorRef,
-    summary: `${input.kind} of ${input.amountCents} cents.`,
-    detail: { kind: input.kind, amountCents: input.amountCents, entryId: entry.id },
+    summary: `${spent} of ${commitment.amountCents} cents committed were spent.`,
+    detail: { commitmentId: commitment.id, spentCents: spent, heldCents: commitment.amountCents },
   });
 
-  return { ok: true, value: entry, message: 'Recorded.' };
+  const after = await getCommitment(commitment.id);
+  return {
+    ok: true,
+    value: after!,
+    message:
+      spent === commitment.amountCents
+        ? 'Settled. The money is out and the hold is history.'
+        : `Settled at ${spent} cents. The unspent ${commitment.amountCents - spent} is deployable again.`,
+  };
 }
 
 /** The grant in force, for a caller that needs its ceilings. */

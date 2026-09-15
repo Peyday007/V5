@@ -35,9 +35,21 @@ beforeEach(async () => {
     password: 'correct horse battery staple',
   });
   userId = user.id;
+  sequence = 0;
 });
 
+let sequence = 0;
+
+/**
+ * One entry, with a key it will never reuse.
+ *
+ * Every write needs one now, so a retry after a lost response is a retry rather
+ * than a second $750. These tests are about the arithmetic, so the key is
+ * simply unique per call; `cashDefects.test.ts` is where reusing one is the
+ * subject.
+ */
 function entry(kind: Parameters<typeof recordMoney>[0]['kind'], cents: number, reference?: string) {
+  sequence += 1;
   return recordMoney({
     projectId,
     kind,
@@ -45,6 +57,7 @@ function entry(kind: Parameters<typeof recordMoney>[0]['kind'], cents: number, r
     currency: 'USD',
     verifiedReference: reference ?? null,
     recordedBy: userId,
+    idempotencyKey: `entry-${sequence}`,
   });
 }
 
@@ -199,6 +212,7 @@ describe('an opportunity’s own position', () => {
       currency: 'USD',
       verifiedReference: 'pi_one',
       recordedBy: userId,
+      idempotencyKey: 'one',
     });
     await recordMoney({
       projectId,
@@ -208,6 +222,7 @@ describe('an opportunity’s own position', () => {
       currency: 'USD',
       verifiedReference: 'pi_two',
       recordedBy: userId,
+      idempotencyKey: 'two',
     });
 
     const one = await cashPosition({ projectId, opportunityId: 'cop_one' });

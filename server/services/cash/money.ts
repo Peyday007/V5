@@ -74,11 +74,19 @@ function sum(totals: Partial<Record<CashMoneyKind, number>>, kind: CashMoneyKind
 export async function cashPosition(input: {
   projectId: string;
   opportunityId?: string;
+  /**
+   * The sprint's own currency, from `cash_modes`.
+   *
+   * It bounds the aggregation as well as labelling it. Labelling a sum that
+   * mixed currencies would be the worst of both: a figure nobody can use,
+   * wearing a label that says it was checked.
+   */
   currency?: string;
 }): Promise<CashPosition> {
   const totals = await totalsByKind({
     projectId: input.projectId,
     opportunityId: input.opportunityId,
+    currency: input.currency,
   });
 
   const capitalIn = sum(totals, 'CAPITAL_IN');
@@ -205,6 +213,10 @@ const EFFECTS: Record<CashMoneyKind, string> = {
 };
 
 /** The project's own entries, newest first. A thin pass-through for the view. */
-export async function recentMoney(projectId: string, limit = 50): Promise<CashMoneyEntry[]> {
-  return listMoneyEntries({ projectId, limit });
+export async function recentMoney(
+  projectId: string,
+  currency?: string,
+  limit = 50,
+): Promise<CashMoneyEntry[]> {
+  return listMoneyEntries({ projectId, currency, limit });
 }

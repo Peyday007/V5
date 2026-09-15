@@ -305,6 +305,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     objective: 'Cash',
     horizonDays: 7,
     envelopeId: 'RUSSELL_CASH_DISCOVERY_V1',
+    currency: 'USD',
     state: 'ACTIVE' as const,
     activatedAt: NOW,
     woundDownAt: null,

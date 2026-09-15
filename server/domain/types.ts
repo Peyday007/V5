@@ -5499,6 +5499,7 @@ export interface CashModeRow {
   objective: string;
   horizon_days: number;
   envelope_id: string;
+  currency: string;
   state: string;
   activated_at: string;
   wound_down_at: string | null;
@@ -5516,6 +5517,14 @@ export interface CashMode {
   objective: string;
   horizonDays: number;
   envelopeId: string;
+  /**
+   * The one currency this sprint is denominated in.
+   *
+   * Every money entry, every commitment and every derived figure is in it, and
+   * an entry in another currency is refused rather than converted — Brain does
+   * not choose an exchange rate. A second currency is a second sprint.
+   */
+  currency: string;
   state: CashModeState;
   activatedAt: string;
   woundDownAt: string | null;
@@ -5682,6 +5691,7 @@ export interface CashCommitmentRow {
   stop_condition: string;
   idempotency_key: string;
   state: string;
+  spent_cents: number | null;
   settled_at: string | null;
   released_at: string | null;
   release_reason: string | null;
@@ -5702,6 +5712,14 @@ export interface CashCommitment {
   stopCondition: string;
   idempotencyKey: string;
   state: CashCommitmentState;
+  /**
+   * How much of the hold was actually spent, once it settled.
+   *
+   * Null while held. A settlement writes the matching cost for exactly this
+   * amount and lets the remainder stop being held, so a partial spend is
+   * neither rounded up to the whole commitment nor silently lost.
+   */
+  spentCents: number | null;
   settledAt: string | null;
   releasedAt: string | null;
   releaseReason: string | null;
@@ -5714,6 +5732,9 @@ export interface CashMoneyEntryRow {
   id: string;
   project_id: string;
   opportunity_id: string | null;
+  commitment_id: string | null;
+  idempotency_key: string | null;
+  payload_fingerprint: string | null;
   kind: string;
   amount_cents: number;
   currency: string;
@@ -5729,6 +5750,10 @@ export interface CashMoneyEntry {
   id: string;
   projectId: string;
   opportunityId: string | null;
+  /** The commitment this entry settles, when Brain derived it from one. */
+  commitmentId: string | null;
+  idempotencyKey: string | null;
+  payloadFingerprint: string | null;
   kind: CashMoneyKind;
   amountCents: number;
   currency: string;

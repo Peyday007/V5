@@ -38,6 +38,7 @@ function mapMode(row: CashModeRow): CashMode {
     objective: row.objective,
     horizonDays: row.horizon_days,
     envelopeId: row.envelope_id,
+    currency: row.currency,
     state: row.state as CashModeState,
     activatedAt: row.activated_at,
     woundDownAt: row.wound_down_at,
@@ -54,6 +55,26 @@ export async function getCashMode(projectId: string): Promise<CashMode | null> {
     projectId,
   ]);
   return rows[0] ? mapMode(rows[0]) : null;
+}
+
+/**
+ * The sprints inside a given set of projects.
+ *
+ * The set is the caller's readable projects, decided by `decideProjectAccess`
+ * before this is called — so the query is bounded rather than filtered
+ * afterwards, which is §29's rule about search: a listing that fetched broadly
+ * and filtered later is one forgotten predicate away from showing somebody
+ * another person's operation, and the *count* alone is already information.
+ */
+export async function listCashModes(projectIds: string[]): Promise<CashMode[]> {
+  if (projectIds.length === 0) return [];
+  const rows = await getDb().all<CashModeRow>(
+    `SELECT * FROM cash_modes
+      WHERE project_id IN (${projectIds.map(() => '?').join(', ')})
+      ORDER BY activated_at DESC, id DESC`,
+    projectIds,
+  );
+  return rows.map(mapMode);
 }
 
 export async function getCashModeById(id: string): Promise<CashMode | null> {
@@ -77,6 +98,7 @@ export async function activateCashMode(input: {
   objective: string;
   horizonDays: number;
   envelopeId: string;
+  currency: string;
 }): Promise<{ mode: CashMode; created: boolean }> {
   const existing = await getCashMode(input.projectId);
   if (existing) return { mode: existing, created: false };

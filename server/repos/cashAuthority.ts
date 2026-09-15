@@ -76,6 +76,7 @@ function mapCommitment(row: CashCommitmentRow): CashCommitment {
     stopCondition: row.stop_condition,
     idempotencyKey: row.idempotency_key,
     state: row.state as CashCommitmentState,
+    spentCents: row.spent_cents,
     settledAt: row.settled_at,
     releasedAt: row.released_at,
     releaseReason: row.release_reason,
@@ -198,25 +199,61 @@ export interface CommitOutcome {
   reason: string;
   /** True when this call collided with an equivalent one that already held it. */
   replayed: boolean;
-  refusedBy?: 'PER_ACTION' | 'IN_TOTAL';
+  refusedBy?: 'PER_ACTION' | 'IN_TOTAL' | 'OVER_CAPITAL';
 }
 
 /**
- * Hold part of the ceiling, atomically.
+ * A refusal raised from inside the transaction, so the provisional row rolls
+ * back with it.
  *
- * The order is the whole mechanism, and it is `reserve`'s:
+ * It is thrown rather than returned because the row has already been inserted
+ * by the time the ceilings can be checked against it, and the only way to make
+ * that row never have existed — to any other reader, on either backend — is to
+ * abandon the transaction that created it.
+ */
+class CommitRefused extends Error {
+  constructor(
+    readonly refusalReason: string,
+    readonly refusedBy: NonNullable<CommitOutcome['refusedBy']>,
+  ) {
+    super(refusalReason);
+    this.name = 'CommitRefused';
+  }
+}
+
+/**
+ * Hold part of the ceiling, atomically, and never provisionally.
  *
- *   1. insert on the idempotency key, ignoring a conflict;
- *   2. read back the row that now exists;
- *   3. if this call did not insert it, report a replay and stop;
- *   4. sum what is held **through this row's own rank**, and if that exceeds
- *      the ceiling, release the row we just took and refuse.
+ * The original was insert-then-rank-then-release and had two defects a review
+ * reproduced, both recorded here rather than quietly fixed.
  *
- * Step 4 rather than a `SELECT SUM(...)` before step 1: checking first leaves a
- * window in which two callers both see room for the last hundred dollars. The
- * rank clause is what makes the race deterministic — two concurrent callers get
- * two different ranks, so their running sums differ and exactly one of them is
- * over. The mechanism can under-commit and cannot over-commit.
+ * **A provisional row was visible.** It was inserted `HELD`, the ceilings were
+ * checked afterwards, and a concurrent retry that read it back in between was
+ * told "an equivalent commitment already exists" — about money that was
+ * released microseconds later. The caller was told yes about a refusal.
+ *
+ * **The rank was scoped to one grant.** Withdrawing a grant with $400
+ * outstanding and making a replacement with the same $500 ceiling permitted
+ * another $400: $800 held against a limit of $500, with every row correct on
+ * its own. A hold outlives the grant that authorized it, so the thing a ceiling
+ * must be compared against is **what this project is holding**, not what this
+ * grant issued.
+ *
+ * So the whole of it runs in one transaction, and the insert stays first:
+ *
+ *   1. insert on `(project_id, idempotency_key)`, ignoring a conflict;
+ *   2. read back; if this call did not insert it, replay a **finished** row —
+ *      finished because no other transaction can see an unfinished one;
+ *   3. sum every `HELD` commitment **in this project** through this row's own
+ *      rank, and check the per-action ceiling, the committed ceiling and the
+ *      cash actually available;
+ *   4. on any refusal, throw — which rolls the row away entirely.
+ *
+ * The rank is what makes the race deterministic: two callers get two ranks, so
+ * their running sums differ and exactly one is over. The transaction is what
+ * makes the intermediate state private. It can under-commit and cannot
+ * over-commit, and a refusal leaves nothing behind for a later retry to
+ * misread.
  */
 export async function commit(input: {
   authorityId: string;
@@ -229,6 +266,15 @@ export async function commit(input: {
   stopCondition: string;
   idempotencyKey: string;
   createdBy: string;
+  /**
+   * What may be committed before this one, in cents.
+   *
+   * Supplied by the caller because it is derived from the money ledger, which
+   * this module does not read — and re-derived *inside* the transaction by the
+   * caller's own hook when one is given, so the figure the check uses is the
+   * figure that is true at the moment of the insert.
+   */
+  deployableAfter?: () => Promise<number>;
   at?: string;
 }): Promise<CommitOutcome> {
   const authority = await getAuthority(input.authorityId);
@@ -270,119 +316,150 @@ export async function commit(input: {
 
   const amount = Math.max(0, Math.trunc(input.amountCents));
   const id = newId('ccm');
-  await getDb().run(
-    `INSERT INTO cash_commitments
-       (id, authority_id, project_id, opportunity_id, amount_cents, currency,
-        purpose, expected_result, stop_condition, idempotency_key, state,
-        settled_at, released_at, release_reason, created_by, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HELD', NULL, NULL, NULL, ?, ?, ?)
-     ON CONFLICT (idempotency_key) DO NOTHING`,
-    [
-      id,
-      input.authorityId,
-      input.projectId,
-      input.opportunityId ?? null,
-      amount,
-      input.currency,
-      input.purpose,
-      input.expectedResult,
-      input.stopCondition,
-      input.idempotencyKey,
-      input.createdBy,
-      now,
-      now,
-    ],
-  );
 
-  const existing = (
-    await getDb().all<CashCommitmentRow>(
-      'SELECT * FROM cash_commitments WHERE idempotency_key = ?',
-      [input.idempotencyKey],
-    )
-  )[0];
-  if (!existing) {
-    return { ok: false, commitment: null, reason: 'the commitment could not be taken', replayed: false };
-  }
-  if (existing.id !== id) {
-    /*
-     * Somebody equivalent got there first, and that is success for an
-     * idempotent caller: the money was committed once and this is the same
-     * attempt reaching the same row.
-     *
-     * A `RELEASED` row is *not* revived here, and that is the deliberate
-     * difference from `reserve`. A released research reservation is a
-     * stand-down on a slot that later frees up. A released commitment is a
-     * person saying this money is not being spent — reviving it on the next
-     * retry would re-commit funds somebody had deliberately freed, and the
-     * retry would look like the original.
-     */
-    return {
-      ok: existing.state === 'HELD' || existing.state === 'SETTLED',
-      commitment: mapCommitment(existing),
-      reason:
-        existing.state === 'RELEASED'
-          ? 'an equivalent commitment was released; committing again is a new decision'
-          : 'an equivalent commitment already exists',
-      replayed: true,
-    };
-  }
+  try {
+    return await getDb().transaction(async (): Promise<CommitOutcome> => {
+      await getDb().run(
+        `INSERT INTO cash_commitments
+           (id, authority_id, project_id, opportunity_id, amount_cents, currency,
+            purpose, expected_result, stop_condition, idempotency_key, state, spent_cents,
+            settled_at, released_at, release_reason, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HELD', NULL, NULL, NULL, NULL, ?, ?, ?)
+         ON CONFLICT (project_id, idempotency_key) DO NOTHING`,
+        [
+          id,
+          input.authorityId,
+          input.projectId,
+          input.opportunityId ?? null,
+          amount,
+          input.currency,
+          input.purpose,
+          input.expectedResult,
+          input.stopCondition,
+          input.idempotencyKey,
+          input.createdBy,
+          now,
+          now,
+        ],
+      );
 
-  if (amount > authority.maxPerActionCents) {
-    await releaseCommitment({ commitmentId: id, reason: 'over the per-action ceiling' });
-    return {
-      ok: false,
-      commitment: null,
-      reason: `the commercial authority allows at most ${authority.maxPerActionCents} cents in one commitment`,
-      replayed: false,
-      refusedBy: 'PER_ACTION',
-    };
-  }
+      const existing = (
+        await getDb().all<CashCommitmentRow>(
+          'SELECT * FROM cash_commitments WHERE project_id = ? AND idempotency_key = ?',
+          [input.projectId, input.idempotencyKey],
+        )
+      )[0];
+      if (!existing) {
+        return { ok: false, commitment: null, reason: 'the commitment could not be taken', replayed: false };
+      }
+      if (existing.id !== id) {
+        /*
+         * Somebody equivalent got there first, and that is success for an
+         * idempotent caller: the money was committed once and this is the same
+         * attempt reaching the same row. The row is finished rather than
+         * provisional, because a refusal never commits one.
+         *
+         * A `RELEASED` row is *not* revived, and that is the deliberate
+         * difference from a research reservation. A released research hold is a
+         * stand-down on a slot that frees up later; a released commitment is a
+         * person saying this money is not being spent, and reviving it on the
+         * next retry would re-commit funds somebody had deliberately freed —
+         * with the retry looking exactly like the original.
+         */
+        return {
+          ok: existing.state === 'HELD' || existing.state === 'SETTLED',
+          commitment: mapCommitment(existing),
+          reason:
+            existing.state === 'RELEASED'
+              ? 'an equivalent commitment was released; committing again is a new decision'
+              : 'an equivalent commitment already exists',
+          replayed: true,
+        };
+      }
 
-  const held = await heldThroughMine(input.authorityId, id);
-  if (held > authority.maxCommittedCents) {
-    await releaseCommitment({ commitmentId: id, reason: 'over the committed ceiling' });
-    return {
-      ok: false,
-      commitment: null,
-      reason:
-        `the commercial authority allows ${authority.maxCommittedCents} cents committed at once, ` +
-        `and this would make ${held}`,
-      replayed: false,
-      refusedBy: 'IN_TOTAL',
-    };
-  }
+      if (amount > authority.maxPerActionCents) {
+        throw new CommitRefused(
+          `the commercial authority allows at most ${authority.maxPerActionCents} cents in one commitment`,
+          'PER_ACTION',
+        );
+      }
 
-  const mine = await getCommitment(id);
-  return { ok: true, commitment: mine, reason: 'committed', replayed: false };
+      const held = await heldThroughMine(input.projectId, id);
+      if (held > authority.maxCommittedCents) {
+        throw new CommitRefused(
+          `the commercial authority allows ${authority.maxCommittedCents} cents committed at once, ` +
+            `and this would make ${held}`,
+          'IN_TOTAL',
+        );
+      }
+
+      /*
+       * And the money itself.
+       *
+       * The gate used to ask whether deployable cash was *already* negative,
+       * which fires one commitment after the one that did the damage: an
+       * account with $100 could commit $400 under a $1,000 grant and be told
+       * about it next time. The hook is evaluated here, inside the transaction
+       * and after the insert, so what it reports already counts this
+       * commitment — a negative answer is precisely "this does not fit".
+       */
+      if (input.deployableAfter) {
+        const deployable = await input.deployableAfter();
+        if (deployable < 0) {
+          throw new CommitRefused(
+            `this would leave ${deployable} cents deployable. A commitment has to fit the money ` +
+              'that is actually there, not only avoid a balance that is already negative.',
+            'OVER_CAPITAL',
+          );
+        }
+      }
+
+      const mine = (
+        await getDb().all<CashCommitmentRow>('SELECT * FROM cash_commitments WHERE id = ?', [id])
+      )[0];
+      return {
+        ok: true,
+        commitment: mine ? mapCommitment(mine) : null,
+        reason: 'committed',
+        replayed: false,
+      };
+    });
+  } catch (error) {
+    if (error instanceof CommitRefused) {
+      return {
+        ok: false,
+        commitment: null,
+        reason: error.refusalReason,
+        replayed: false,
+        refusedBy: error.refusedBy,
+      };
+    }
+    throw error;
+  }
 }
 
 /**
- * Everything held on this grant up to and including one row's own rank.
+ * Everything this **project** holds up to and including one row's own rank.
+ *
+ * By project rather than by grant, because a hold outlives the grant that
+ * authorized it: withdrawing a grant with money outstanding and making a
+ * replacement must not hand the replacement a fresh empty ceiling.
  *
  * `rowid` is rewritten to `seq` by `dialect.ts`, and `cash_commitments` carries
  * `seq BIGSERIAL` on Postgres for exactly this — a rank that exists in one
  * dialect only is the defect this repository has now written down four times.
  */
-async function heldThroughMine(authorityId: string, mineId: string): Promise<number> {
+async function heldThroughMine(projectId: string, mineId: string): Promise<number> {
   const rows = await getDb().all<{ total: number }>(
     `SELECT COALESCE(SUM(CASE WHEN state = 'HELD' THEN amount_cents ELSE 0 END), 0) AS total
        FROM cash_commitments
-      WHERE authority_id = ?
+      WHERE project_id = ?
         AND rowid <= (SELECT rowid FROM cash_commitments WHERE id = ?)`,
-    [authorityId, mineId],
+    [projectId, mineId],
   );
   return Number(rows[0]?.total ?? 0);
 }
 
-/**
- * The commitment a key already names, if any.
- *
- * Exposed so a caller can tell a *new* decision from a *replay* before applying
- * a rule that only makes sense for a new one. `commit` itself does not need it —
- * its insert already collides — but the shortfall gate above it does: refusing
- * a retry because the original made the account short is refusing somebody the
- * ability to recover from a lost response.
- */
 export async function getCommitmentByKey(key: string): Promise<CashCommitment | null> {
   const rows = await getDb().all<CashCommitmentRow>(
     'SELECT * FROM cash_commitments WHERE idempotency_key = ?',
@@ -406,7 +483,12 @@ export async function listCommitments(projectId: string): Promise<CashCommitment
   return rows.map(mapCommitment);
 }
 
-/** How much of the ceiling is currently spoken for. */
+/**
+ * How much one grant issued and still holds.
+ *
+ * Reported rather than enforced: the ceiling is compared against what the
+ * **project** holds, because a hold outlives the grant that authorized it.
+ */
 export async function heldCents(authorityId: string): Promise<number> {
   const rows = await getDb().all<{ total: number }>(
     `SELECT COALESCE(SUM(amount_cents), 0) AS total
@@ -432,13 +514,29 @@ export async function heldCentsForProject(projectId: string): Promise<number> {
  * Guarded on `HELD`: settling a released commitment would account for money
  * twice, and settling a settled one is a retry that must change nothing.
  */
-export async function settleCommitment(commitmentId: string): Promise<boolean> {
+/**
+ * The spend happened. The hold becomes history, and what it cost is recorded.
+ *
+ * Guarded on `HELD`, so settling a released commitment cannot account for money
+ * twice and settling a settled one is a retry that changes nothing. `spentCents`
+ * is what actually left; the remainder simply stops being held, which is what
+ * makes a partial spend expressible without a second row.
+ *
+ * Writing the matching cost is the **caller's** job and is not optional: this
+ * function moving a row out of `HELD` without one is the defect that made
+ * deployable cash rise when money was spent. `services/cash/opportunities.ts`
+ * does both in one transaction, and nothing else calls this.
+ */
+export async function settleCommitment(
+  commitmentId: string,
+  spentCents: number,
+): Promise<boolean> {
   const at = cashAuthorityNow();
   const result = await getDb().run(
     `UPDATE cash_commitments
-        SET state = 'SETTLED', settled_at = ?, updated_at = ?
+        SET state = 'SETTLED', spent_cents = ?, settled_at = ?, updated_at = ?
       WHERE id = ? AND state = 'HELD'`,
-    [at, at, commitmentId],
+    [Math.max(0, Math.trunc(spentCents)), at, at, commitmentId],
   );
   return result.changes === 1;
 }

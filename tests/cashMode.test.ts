@@ -244,6 +244,7 @@ describe('winding down stops new discovery and nothing else', () => {
       kind: 'PIPELINE_AGREED',
       amountCents: 75_000,
       currency: 'USD',
+      idempotencyKey: 'agreed-1',
       actorRef: userId,
     });
     expect(paid.ok).toBe(true);

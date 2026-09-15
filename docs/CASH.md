@@ -295,6 +295,35 @@ stop reading it.
 
 ---
 
+## 11a. The money defects an external review found, and what closed them
+
+Every one was reproduced before it was fixed (`tests/cashDefects.test.ts`), and
+they share one property: each produced a **wrong number or a disclosure** while
+every surface read as healthy. 2,812 passing tests established none of it,
+because every one of them exercised a single caller on a single account taking a
+single unrepeated action.
+
+| What it was | What closed it |
+|---|---|
+| `UNIQUE (idempotency_key)` was table-wide, so two accounts picking the same string collided and the second was handed **the first's commitment** — its amount, purpose and stop condition — as its own success, reserving nothing. | The key is scoped to the project. A caller's string is never the whole of an identity. |
+| A `HELD` row was visible before its ceilings were checked, so a concurrent retry was told "an equivalent commitment already exists" about money released microseconds later. | The whole commit runs in one transaction and a refusal **rolls the row away**. No provisional row is ever visible, so a replay always observes a finished outcome. |
+| The ceiling summed per **grant**, so withdrawing one with $400 outstanding and making a replacement with the same $500 ceiling permitted another $400. | The rank sums what the **project** holds. A hold outlives the grant that authorized it. |
+| The gate asked whether deployable cash was *already* negative, so $100 of capital could take a $400 commitment and be told next time. | `deployableAfter` is evaluated inside the transaction after the insert, so a negative answer is precisely "this does not fit". A replay never reaches it. |
+| Settling removed the hold and wrote no cost, so marking $400 spent took deployable cash from $600 back to $1,000. | `settleSpend` writes the matching `COST` in the same transaction, keyed from the commitment. `spentCents` makes a partial spend expressible; more than was held is refused. |
+| Every money write minted a fresh id, so a retried $750 settlement reported $1,500. | `(project_id, idempotency_key)`, plus a payload fingerprint: a key reused for a different amount is **refused** rather than replayed as the first. |
+| Aggregation summed every entry and labelled the result with one currency. | A sprint is pinned to one currency at activation. An entry in another is refused, and the aggregation filters as well as labels. |
+| A missing id and one belonging to somebody else returned **different 404 bodies**, which is an oracle for existence. | One resolver, one body. The HTTP suite compares the whole response rather than the status. |
+
+Two product corrections went with them. The authority card had no business
+arriving prefilled — $1,000 committed, $250 per action, three opportunities,
+every action ticked, with Approve visible and the terms folded away: nobody
+chose those numbers and the person approving could not see what they were
+approving. There are no defaults, the server states the terms, and only then is
+there anything to approve. And the section took whichever project the shell had
+selected, so somebody with a broad Brain project and a private cash project
+could be shown the wrong one; the operation is chosen now, from the ones that
+exist.
+
 ## 12. Checks
 
 ```

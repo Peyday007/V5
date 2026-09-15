@@ -439,6 +439,15 @@ describe('one account’s whole journey', () => {
     expect(execute.body.opportunity.state).toBe('EXECUTING');
   });
 
+  it('refuses a money entry with no key naming the operation', async () => {
+    // Without one, a retry after a lost response records the money twice.
+    const result = await call<{ error: string }>('POST', `${CASH()}/money`, {
+      cookie: adminCookie,
+      body: { kind: 'CAPITAL_IN', amountCents: 1_000 },
+    });
+    expect(result.status).toBe(400);
+  });
+
   it('refuses a payment with no verifiable reference', async () => {
     const result = await call<{ error: string }>('POST', `${CASH()}/money`, {
       cookie: adminCookie,
@@ -446,6 +455,7 @@ describe('one account’s whole journey', () => {
         opportunityId,
         kind: 'CUSTOMER_PAYMENT',
         amountCents: 75_000,
+        idempotencyKey: 'unverified-payment',
       },
     });
     expect(result.status).toBe(422);
@@ -453,17 +463,24 @@ describe('one account’s whole journey', () => {
   });
 
   it('records the payment, and keeps it out of available funds until it settles', async () => {
-    const paid = await call('POST', `${CASH()}/money`, {
-      cookie: adminCookie,
-      body: {
-        opportunityId,
-        kind: 'CUSTOMER_PAYMENT',
-        amountCents: 75_000,
-        verifiedReference: 'pi_test_journey',
-        fundsAvailableAt: '2026-09-29T00:00:00.000Z',
-      },
-    });
+    const body = {
+      opportunityId,
+      kind: 'CUSTOMER_PAYMENT',
+      amountCents: 75_000,
+      verifiedReference: 'pi_test_journey',
+      fundsAvailableAt: '2026-09-29T00:00:00.000Z',
+      idempotencyKey: 'journey-payment',
+    };
+    const paid = await call('POST', `${CASH()}/money`, { cookie: adminCookie, body });
     expect(paid.status).toBe(200);
+
+    // And the retry after a lost response is the same entry, not a second $750.
+    const retry = await call<{ message: string }>('POST', `${CASH()}/money`, {
+      cookie: adminCookie,
+      body,
+    });
+    expect(retry.status).toBe(200);
+    expect(retry.body.message).toContain('already recorded');
 
     const view = await call<{
       myCash: { position: { customerPaymentsCents: number; availableFundsCents: number } };
@@ -472,7 +489,37 @@ describe('one account’s whole journey', () => {
     expect(view.body.myCash.position.availableFundsCents).toBe(0);
   });
 
-  it('holds part of the ceiling, and is idempotent about it', async () => {
+  it('refuses a commitment the account cannot cover', async () => {
+    /*
+     * The payment is earned and has not settled, so there is nothing deployable
+     * behind it. A commitment has to fit the money that is actually there.
+     */
+    const result = await call<{ error: string }>('POST', `${CASH()}/commitments`, {
+      cookie: adminCookie,
+      body: {
+        action: 'RUN_PAID_TEST',
+        amountCents: 20_000,
+        purpose: 'Remove the missing supplier price',
+        expectedResult: 'A quotable cost for the parts',
+        stopCondition: 'Stop after one quote',
+        idempotencyKey: 'before-there-is-money',
+      },
+    });
+    expect(result.status).toBe(422);
+    expect(result.body.error).toContain('deployable');
+  });
+
+  it('holds part of the ceiling once there is money, and is idempotent about it', async () => {
+    const funded = await call('POST', `${CASH()}/money`, {
+      cookie: adminCookie,
+      body: {
+        kind: 'CAPITAL_IN',
+        amountCents: 50_000,
+        idempotencyKey: 'journey-capital',
+      },
+    });
+    expect(funded.status).toBe(200);
+
     const body = {
       opportunityId,
       action: 'RUN_PAID_TEST',
@@ -562,15 +609,41 @@ describe('one account’s whole journey', () => {
   });
 
   it('refuses an opportunity id somebody guessed, in the same words as a missing one', async () => {
+    /*
+     * The status and the **body**, both. The first version got the status right
+     * and answered `No opportunity with that id.` for a missing one and `No
+     * project with that id.` for one belonging to somebody else — two different
+     * sentences on one status, which is an oracle for existence and is
+     * invariant 23 broken by the half nobody looks at. Asserting the status
+     * alone is exactly what did not catch it.
+     */
     const guessed = await call('GET', '/api/cash/opportunities/cop_invented', {
-      cookie: adminCookie,
-    });
-    expect(guessed.status).toBe(404);
-
-    const outsider = await call('GET', `/api/cash/opportunities/${opportunityId}`, {
       cookie: outsiderCookie,
     });
-    expect(outsider.status).toBe(404);
+    const real = await call('GET', `/api/cash/opportunities/${opportunityId}`, {
+      cookie: outsiderCookie,
+    });
+    expect(guessed.status).toBe(404);
+    expect(real.status).toBe(404);
+    expect(real.text).toBe(guessed.text);
+  });
+
+  it('gives a commitment and a need the same parity', async () => {
+    const view = await call<{
+      myCash: { commitments: { id: string }[] };
+      whatBrainNeeds: { id: string }[];
+    }>('GET', CASH(), { cookie: adminCookie });
+
+    for (const [real, invented] of [
+      [`/api/cash/commitments/${view.body.myCash.commitments[0]!.id}/release`, '/api/cash/commitments/ccm_invented/release'],
+      [`/api/cash/needs/${view.body.whatBrainNeeds[0]!.id}/close`, '/api/cash/needs/cnd_invented/close'],
+    ]) {
+      const mine = await call('POST', real!, { cookie: outsiderCookie, body: { reason: 'x', resolution: 'x' } });
+      const missing = await call('POST', invented!, { cookie: outsiderCookie, body: { reason: 'x', resolution: 'x' } });
+      expect(mine.status).toBe(404);
+      expect(missing.status).toBe(404);
+      expect(mine.text).toBe(missing.text);
+    }
   });
 
   it('refuses an action that is not one of the transitions this has', async () => {
@@ -610,6 +683,7 @@ describe('one account’s whole journey', () => {
         kind: 'SETTLEMENT',
         amountCents: 75_000,
         verifiedReference: 'po_test_journey',
+        idempotencyKey: 'journey-settlement',
       },
     });
     expect(settled.status).toBe(200);
@@ -619,7 +693,39 @@ describe('one account’s whole journey', () => {
       CASH(),
       { cookie: adminCookie },
     );
-    expect(view.body.myCash.position.availableFundsCents).toBe(75_000);
+    // The capital plus the settled payment.
+    expect(view.body.myCash.position.availableFundsCents).toBe(125_000);
+  });
+
+  it('spends the hold rather than handing the money back', async () => {
+    const before = await call<{
+      myCash: { position: { availableFundsCents: number }; commitments: { id: string }[] };
+    }>('GET', CASH(), { cookie: adminCookie });
+    const commitmentId = before.body.myCash.commitments[0]!.id;
+    const available = before.body.myCash.position.availableFundsCents;
+
+    // Settling with no amount is refused: it is what made deployable cash rise
+    // when money was spent.
+    const bare = await call('POST', `/api/cash/commitments/${commitmentId}/settle`, {
+      cookie: adminCookie,
+      body: {},
+    });
+    expect(bare.status).toBe(400);
+
+    const settled = await call<{ message: string }>(
+      'POST',
+      `/api/cash/commitments/${commitmentId}/settle`,
+      { cookie: adminCookie, body: { spentCents: 12_000 } },
+    );
+    expect(settled.status).toBe(200);
+
+    const after = await call<{
+      myCash: { position: { availableFundsCents: number; heldCommitmentsCents: number } };
+    }>('GET', CASH(), { cookie: adminCookie });
+    // Twelve thousand left the account; the unspent remainder stopped being
+    // held rather than being spent or lost.
+    expect(after.body.myCash.position.availableFundsCents).toBe(available - 12_000);
+    expect(after.body.myCash.position.heldCommitmentsCents).toBe(0);
   });
 
   it('withdraws the grant without destroying a single record', async () => {
@@ -641,7 +747,7 @@ describe('one account’s whole journey', () => {
     }>('GET', CASH(), { cookie: adminCookie });
     expect(after.body.authority.exists).toBe(false);
     expect(after.body.myCash.commitments.length).toBe(1);
-    expect(after.body.myCash.position.availableFundsCents).toBe(75_000);
+    expect(after.body.myCash.position.availableFundsCents).toBe(113_000);
     expect(after.body.myCurrentWork.placements.length).toBe(1);
   });
 

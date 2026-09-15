@@ -148,17 +148,42 @@ export interface CashView {
     envelopes: string[];
     defaultEnvelope: string;
     defaultHorizonDays: number;
+    currencies: string[];
   };
+}
+
+export interface CashOperation {
+  projectId: string;
+  projectName: string | null;
+  objective: string;
+  state: CashModeState;
+  currency: string;
+  activatedAt: string;
+}
+
+export interface CashOperations {
+  operations: CashOperation[];
+  candidates: { projectId: string; projectName: string | null }[];
 }
 
 const p = (value: string): string => encodeURIComponent(value);
 
 export const CashApi = {
+  /**
+   * Which operations this person actually has.
+   *
+   * The section used to take whichever project the shell had selected, so
+   * somebody with a broad Brain project and a private cash project could be
+   * shown — and could activate — the wrong one. The operation is chosen rather
+   * than inherited.
+   */
+  operations: (): Promise<CashOperations> => api('/api/cash/operations'),
+
   view: (projectId: string): Promise<CashView> => api(`/api/projects/${p(projectId)}/cash`),
 
   activate: (
     projectId: string,
-    body: { objective: string; horizonDays?: number },
+    body: { objective: string; horizonDays?: number; currency?: string },
   ): Promise<{ mode: CashMode; changed: boolean; message: string }> =>
     api(`/api/projects/${p(projectId)}/cash/mode`, {
       method: 'POST',
@@ -175,13 +200,35 @@ export const CashApi = {
       body: JSON.stringify({ state, reason }),
     }),
 
+  /**
+   * What a proposed grant would authorize, in the server's own words.
+   *
+   * Writes nothing: reading what a permission would mean must never be a way to
+   * grant it. It exists so the terms can be shown *before* Approve rather than
+   * folded away behind "Change details" under a prefilled number nobody chose.
+   */
+  previewAuthority: (
+    projectId: string,
+    body: {
+      allowedActions: string[];
+      maxCommittedCents: number;
+      maxPerActionCents: number;
+      maxConcurrent: number;
+      expiresAt?: string | null;
+    },
+  ): Promise<{ lines: string[] }> =>
+    api(`/api/projects/${p(projectId)}/cash/authority/preview`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   grantAuthority: (
     projectId: string,
     body: {
       allowedActions: string[];
       maxCommittedCents: number;
       maxPerActionCents: number;
-      maxConcurrent?: number;
+      maxConcurrent: number;
       expiresAt?: string | null;
     },
   ): Promise<{ authority: { id: string }; lines: string[] }> =>

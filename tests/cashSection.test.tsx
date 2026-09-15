@@ -41,9 +41,26 @@ let calls: string[] = [];
 let bodies: Record<string, unknown> = {};
 
 const PROJECT = 'prj_1';
+const OPERATIONS = 'GET /api/cash/operations';
 const VIEW = `GET /api/projects/${PROJECT}/cash`;
 const MODE = `POST /api/projects/${PROJECT}/cash/mode`;
 const AUTHORITY = `POST /api/projects/${PROJECT}/cash/authority`;
+const PREVIEW = `POST /api/projects/${PROJECT}/cash/authority/preview`;
+
+/** One operation this person has, which is what the section runs over. */
+const MINE = {
+  operations: [
+    {
+      projectId: PROJECT,
+      projectName: 'The private operation',
+      objective: 'Maximize additional usable cash over the next few weeks.',
+      state: 'ACTIVE',
+      currency: 'USD',
+      activatedAt: '2026-09-15T00:00:00.000Z',
+    },
+  ],
+  candidates: [],
+};
 
 const POSITION = {
   currency: 'USD',
@@ -67,6 +84,7 @@ const VOCABULARY = {
   envelopes: ['RUSSELL_CASH_DISCOVERY_V1'],
   defaultEnvelope: 'RUSSELL_CASH_DISCOVERY_V1',
   defaultHorizonDays: 7,
+  currencies: ['USD', 'GBP'],
 };
 
 function opportunity(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -160,7 +178,7 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 function base(over: Record<string, Reply | (() => Reply)> = {}): void {
-  routes = { [VIEW]: { body: view() }, ...over };
+  routes = { [OPERATIONS]: { body: MINE }, [VIEW]: { body: view() }, ...over };
 }
 
 beforeEach(() => {
@@ -214,28 +232,60 @@ describe('the four states of a read are four screens', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy());
   });
 
-  it('says a sprint belongs to one project when none is chosen', async () => {
+  it('chooses the operation rather than inheriting the shell’s project', async () => {
+    /*
+     * The shell hands out the first project a person can see, so taking it as
+     * the answer meant somebody with a broad Brain project and a private cash
+     * project could be shown — and could activate — the wrong one. A `null`
+     * selection is no longer a dead end: the operation is looked up.
+     */
     base();
     await mount(null);
-    expect(screen.getByText(/privacy boundary/i)).toBeTruthy();
-    // And it asks the server nothing.
-    expect(calls).toEqual([]);
+    await waitFor(() => expect(screen.getByText('Pipeline')).toBeTruthy());
+    expect(calls).toContain(OPERATIONS);
+    expect(calls).toContain(VIEW);
+  });
+
+  it('offers to start one where a person has none', async () => {
+    base({
+      [OPERATIONS]: {
+        body: {
+          operations: [],
+          candidates: [{ projectId: 'prj_other', projectName: 'Somewhere else' }],
+        },
+      },
+    });
+    await mount(null);
+    await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
+    expect(screen.getByLabelText(/which operation/i)).toBeTruthy();
+    // And it does not read a project it was not told about.
+    expect(calls).not.toContain(VIEW);
   });
 });
 
 describe('a project with no sprint', () => {
+  function none(): void {
+    base({
+      [OPERATIONS]: {
+        body: { operations: [], candidates: [{ projectId: PROJECT, projectName: 'Mine' }] },
+      },
+    });
+  }
+
   it('offers the one thing that starts it, and says starting it spends nothing', async () => {
-    base({ [VIEW]: { body: view({ mode: null }) } });
+    none();
     await mount();
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
     expect(screen.getByText(/separate decision, and it is yours/i)).toBeTruthy();
   });
 
   it('will not start one on an objective nobody wrote', async () => {
-    base({ [VIEW]: { body: view({ mode: null }) } });
+    none();
     await mount();
-    const button = screen.getByRole('button', { name: /start cash mode/i }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
+    expect(
+      (screen.getByRole('button', { name: /start cash mode/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
 
     fireEvent.change(screen.getByLabelText(/what is this account trying to produce/i), {
       target: { value: 'money' },
@@ -245,24 +295,32 @@ describe('a project with no sprint', () => {
     );
   });
 
-  it('starts one when there is an objective, and re-reads rather than assuming', async () => {
-    base({
-      [VIEW]: { body: view({ mode: null }) },
-      [MODE]: { body: { mode: {}, changed: true, message: 'Cash Mode is active.' } },
-    });
+  it('pins the sprint to one currency, because Brain does not convert', async () => {
+    none();
     await mount();
+    await waitFor(() => expect(screen.getByLabelText(/one currency/i)).toBeTruthy());
+    expect(screen.getByText(/a second currency is a second sprint/i)).toBeTruthy();
+  });
+
+  it('starts one when there is an objective, and re-reads rather than assuming', async () => {
+    none();
+    routes[MODE] = { body: { mode: {}, changed: true, message: 'Cash Mode is active.' } };
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
     fireEvent.change(screen.getByLabelText(/what is this account trying to produce/i), {
       target: { value: 'Maximize additional usable cash over the next few weeks.' },
     });
+    fireEvent.change(screen.getByLabelText(/one currency/i), { target: { value: 'GBP' } });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /start cash mode/i }));
     });
     expect(bodies[MODE]).toMatchObject({
       objective: 'Maximize additional usable cash over the next few weeks.',
+      currency: 'GBP',
     });
-    // Two reads: the first, and the one after the change. Nothing is drawn
-    // optimistically from what the POST returned.
-    expect(calls.filter((call) => call === VIEW).length).toBe(2);
+    // The operations are re-read, rather than the screen assuming what the POST
+    // produced.
+    expect(calls.filter((call) => call === OPERATIONS).length).toBe(2);
   });
 });
 
@@ -276,21 +334,14 @@ describe('the decision nothing can proceed without', () => {
   });
 
   it('shows the outstanding approval once, as the control rather than twice', async () => {
-    /*
-     * The server names it first because nothing can proceed without it, and the
-     * card below is what answers it. Printing both put the same sentence on the
-     * screen twice, one of them with no button — which teaches a person to skim
-     * the list, for the same reason §29's contradicting status does.
-     */
     base();
     await mount();
     await waitFor(() => expect(screen.getByText('Decide what Brain may spend here')).toBeTruthy());
     expect(screen.getAllByText('Decide what Brain may spend here').length).toBe(1);
-    // And the one that survives is the one with the control on it.
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
-    // The other decisions are still listed.
     expect(screen.getByText('3 cards with no payer')).toBeTruthy();
   });
+
+
 
   it('reports the compression rather than claiming it', async () => {
     base();
@@ -309,27 +360,104 @@ describe('the decision nothing can proceed without', () => {
     expect(screen.getByText(/can never be authorized, by any grant/i)).toBeTruthy();
   });
 
-  it('keeps the detailed controls hidden until somebody asks for them', async () => {
+  it('offers no Approve until somebody has said what the limits are', async () => {
+    /*
+     * The card used to arrive prefilled — $1,000 committed, $250 per action,
+     * three opportunities — with Approve visible and the terms folded away
+     * behind "Change details". Nobody chose those numbers, and the person
+     * approving could not see what they were approving.
+     */
     base();
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy());
-    expect(screen.queryByLabelText(/most that may be committed at once/i)).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: /change details/i }));
-    expect(screen.getByLabelText(/most that may be committed at once/i)).toBeTruthy();
+    await waitFor(() => expect(screen.getByLabelText(/most that may be committed at once/i)).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(
+      (screen.getByLabelText(/most that may be committed at once/i) as HTMLInputElement).value,
+    ).toBe('');
+    expect(
+      (screen.getByLabelText(/how many opportunities may be executing/i) as HTMLInputElement).value,
+    ).toBe('');
+    expect(
+      (screen.getByRole('button', { name: /show me what this authorizes/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 
-  it('approves with the prefilled limits, and goes back to the server', async () => {
-    base({ [AUTHORITY]: { body: { authority: { id: 'cau_1' }, lines: [] } } });
+  it('says the concurrency bounds execution rather than the portfolio', async () => {
+    base();
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/bounds what may be/i)).toBeTruthy());
+    expect(screen.getByText(/not a limit on how many pieces the portfolio may hold/i)).toBeTruthy();
+  });
+
+  it('shows the server’s own terms before there is anything to approve', async () => {
+    base({
+      [PREVIEW]: {
+        body: { lines: ['Brain may commit up to USD 500.00 of your money at any one time.'] },
+      },
+      [AUTHORITY]: { body: { authority: { id: 'cau_1' }, lines: [] } },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByLabelText(/most that may be committed at once/i)).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText(/most that may be committed at once/i), {
+      target: { value: '50000' },
+    });
+    fireEvent.change(screen.getByLabelText(/most in one commitment/i), {
+      target: { value: '10000' },
+    });
+    fireEvent.change(screen.getByLabelText(/how many opportunities may be executing/i), {
+      target: { value: '2' },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /show me what this authorizes/i }));
+    });
+    expect(bodies[PREVIEW]).toMatchObject({
+      maxCommittedCents: 50_000,
+      maxPerActionCents: 10_000,
+      maxConcurrent: 2,
+    });
+    // The preview creates nothing.
+    expect(calls).not.toContain(AUTHORITY);
+    expect(
+      screen.getByText('Brain may commit up to USD 500.00 of your money at any one time.'),
+    ).toBeTruthy();
+
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
     });
     expect(bodies[AUTHORITY]).toMatchObject({
       allowedActions: VOCABULARY.commercialActions,
+      maxCommittedCents: 50_000,
+      maxPerActionCents: 10_000,
+      maxConcurrent: 2,
     });
     expect(calls.filter((call) => call === VIEW).length).toBe(2);
+  });
+
+  it('withdraws the preview when a limit changes, so stale terms cannot be approved', async () => {
+    base({
+      [PREVIEW]: { body: { lines: ['Brain may commit up to USD 500.00.'] } },
+    });
+    await mount();
+    await waitFor(() => expect(screen.getByLabelText(/most that may be committed at once/i)).toBeTruthy());
+    for (const [label, value] of [
+      [/most that may be committed at once/i, '50000'],
+      [/most in one commitment/i, '10000'],
+      [/how many opportunities may be executing/i, '2'],
+    ] as const) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    }
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /show me what this authorizes/i }));
+    });
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText(/most that may be committed at once/i), {
+      target: { value: '900000' },
+    });
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
   });
 
   it('shows a live grant in the server’s own words, and composes none of its own', async () => {

@@ -58,6 +58,22 @@ export const DEFAULT_CASH_ENVELOPE: SelectableCashEnvelope = 'RUSSELL_CASH_DISCO
 /** The default rolling outlook. A planning view, never an eligibility gate. */
 export const DEFAULT_HORIZON_DAYS = 7;
 
+/**
+ * The currencies a sprint may be denominated in.
+ *
+ * A sprint is pinned to exactly one, and every entry, commitment and derived
+ * figure is in it. That is deliberately the small answer: deriving a separate
+ * position per currency is the general one and is not what one person's bounded
+ * run needs, and adding two currencies into a total that carries a single label
+ * is the defect this replaces. A second currency is a second sprint.
+ */
+export const SPRINT_CURRENCIES = ['USD', 'GBP', 'EUR', 'CAD', 'AUD'] as const;
+export type SprintCurrency = (typeof SPRINT_CURRENCIES)[number];
+
+export function isSprintCurrency(value: unknown): value is SprintCurrency {
+  return typeof value === 'string' && (SPRINT_CURRENCIES as readonly string[]).includes(value);
+}
+
 export function isSelectableCashEnvelope(value: unknown): value is SelectableCashEnvelope {
   return (
     typeof value === 'string' && (SELECTABLE_CASH_ENVELOPES as readonly string[]).includes(value)
@@ -82,6 +98,7 @@ export async function activate(input: {
   objective: string;
   horizonDays?: number;
   envelopeId?: string;
+  currency?: string;
 }): Promise<LifecycleOutcome> {
   const objective = input.objective.trim();
   if (objective.length < 12) {
@@ -107,6 +124,15 @@ export async function activate(input: {
       reason: `The envelope "${envelopeId}" is not defined in this build, so nothing could compile under it.`,
     };
   }
+  const currency = input.currency ?? 'USD';
+  if (!isSprintCurrency(currency)) {
+    return {
+      ok: false,
+      reason:
+        `"${currency}" is not a currency a sprint can be kept in. A sprint holds exactly one, ` +
+        `and the set is: ${SPRINT_CURRENCIES.join(', ')}.`,
+    };
+  }
   const project = await getProject(input.projectId);
   if (!project) return { ok: false, reason: 'No project with that id.' };
 
@@ -118,6 +144,7 @@ export async function activate(input: {
     objective,
     horizonDays: horizon,
     envelopeId,
+    currency,
   });
 
   if (created) {
@@ -126,7 +153,13 @@ export async function activate(input: {
       kind: 'CASH_MODE_ACTIVATED',
       actorRef: input.actorUserId,
       summary: 'Cash Mode was activated for this project.',
-      detail: { objective, horizonDays: horizon, envelopeId, ownerUserId: input.ownerUserId },
+      detail: {
+        objective,
+        horizonDays: horizon,
+        envelopeId,
+        currency,
+        ownerUserId: input.ownerUserId,
+      },
     });
     return {
       ok: true,

@@ -205,7 +205,7 @@ describe('the ceiling is spent by insert, not by count', () => {
       createdBy: userId,
     });
     expect(first.ok).toBe(true);
-    await settleCommitment(first.commitment!.id);
+    await settleCommitment(first.commitment!.id, 30_000);
     expect(await heldCents(authority.id)).toBe(0);
 
     const second = await commit({
@@ -332,7 +332,13 @@ describe('the commitment sentence §6 asks for', () => {
     }
   });
 
-  it('refuses a new commitment while the account is already short', async () => {
+  it('refuses a commitment the account cannot cover', async () => {
+    /*
+     * The gate used to ask whether deployable cash was *already* negative,
+     * which fires one commitment after the one that did the damage. It asks
+     * whether **this** commitment fits now, so the account that cannot cover it
+     * is told before the money is committed rather than afterwards.
+     */
     await grant();
     await activate({
       projectId,
@@ -345,6 +351,7 @@ describe('the commitment sentence §6 asks for', () => {
       kind: 'UNPAID_COMMITMENT',
       amountCents: 50_000,
       currency: 'USD',
+      idempotencyKey: 'a-bill',
       actorRef: userId,
     });
 
@@ -359,7 +366,7 @@ describe('the commitment sentence §6 asks for', () => {
       actorRef: userId,
     });
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.reason).toContain('already short');
+    if (!outcome.ok) expect(outcome.reason).toContain('deployable');
   });
 
   it('lets a retry through the shortfall gate its own first attempt created', async () => {
@@ -377,6 +384,16 @@ describe('the commitment sentence §6 asks for', () => {
       actorUserId: userId,
       objective: 'Maximize additional usable cash over the next few weeks.',
     });
+    // Exactly enough for one commitment and nothing after it, so the first
+    // attempt is what makes the account short.
+    await recordMoneyEvent({
+      projectId,
+      kind: 'CAPITAL_IN',
+      amountCents: 20_000,
+      currency: 'USD',
+      idempotencyKey: 'seed-capital',
+      actorRef: userId,
+    });
     const body = {
       projectId,
       action: 'RUN_PAID_TEST' as const,
@@ -390,8 +407,8 @@ describe('the commitment sentence §6 asks for', () => {
 
     const first = await commitSpend(body);
     expect(first.ok).toBe(true);
-    // Nothing has settled, so the held commitment alone puts the account under.
-    expect((await cashPosition({ projectId })).shortfall).toBe(true);
+    // Every cent is spoken for, so nothing new fits.
+    expect((await cashPosition({ projectId })).deployableCents).toBe(0);
 
     const retry = await commitSpend(body);
     expect(retry.ok).toBe(true);
@@ -400,6 +417,7 @@ describe('the commitment sentence §6 asks for', () => {
     // A genuinely new one is still refused, which is what the gate is for.
     const different = await commitSpend({ ...body, idempotencyKey: 'a-second-decision' });
     expect(different.ok).toBe(false);
+    expect((await cashPosition({ projectId })).deployableCents).toBe(0);
   });
 
   it('refuses a replay whose grant has since been withdrawn', async () => {
@@ -411,6 +429,14 @@ describe('the commitment sentence §6 asks for', () => {
       ownerUserId: userId,
       actorUserId: userId,
       objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    await recordMoneyEvent({
+      projectId,
+      kind: 'CAPITAL_IN',
+      amountCents: 10_000,
+      currency: 'USD',
+      idempotencyKey: 'seed-capital',
+      actorRef: userId,
     });
     const body = {
       projectId,

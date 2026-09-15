@@ -45,20 +45,55 @@ function money(cents: number, currency: string): string {
   })}`;
 }
 
+/**
+ * The section, over one chosen operation.
+ *
+ * `projectId` is the shell's current selection and is a **candidate**, not the
+ * answer. It used to be the answer, which meant somebody with a broad Brain
+ * project and a private cash project could be shown — and could activate — the
+ * wrong one, because the shell hands out the first project a person can see. An
+ * operation is what a sprint belongs to, so it is chosen here.
+ */
 export function CashView_({ projectId }: { projectId: string | null }): JSX.Element {
+  const operations = useAsync(() => CashApi.operations(), []);
+  const [chosen, setChosen] = useState<string | null>(null);
+
+  const known = operations.data;
+  /*
+   * The shell's project wins only when it is genuinely one of this person's
+   * operations. Otherwise the first operation they have, and otherwise nothing
+   * — at which point the screen offers to start one rather than guessing.
+   */
+  const selected =
+    chosen ??
+    (known?.operations.some((o) => o.projectId === projectId) ? projectId : null) ??
+    known?.operations[0]?.projectId ??
+    null;
+
   const view = useAsync(
-    () => (projectId ? CashApi.view(projectId) : Promise.resolve(null as CashView | null)),
-    [projectId],
+    () => (selected ? CashApi.view(selected) : Promise.resolve(null as CashView | null)),
+    [selected],
   );
 
-  if (!projectId) {
+  if (known && known.operations.length === 0) {
+    return (
+      <Activate
+        candidates={known.candidates}
+        preferred={projectId}
+        currencies={['USD', 'GBP', 'EUR', 'CAD', 'AUD']}
+        onActivated={() => {
+          operations.reload();
+          view.reload();
+        }}
+      />
+    );
+  }
+
+  if (!selected) {
     return (
       <section className="rs-view rs-view-cash">
         <h2>Cash</h2>
-        <p className="rs-state rs-state-empty">
-          Cash Mode belongs to one project, because a project is the privacy boundary. Pick one and
-          this is that account&rsquo;s own sprint — nobody else&rsquo;s appears here.
-        </p>
+        <p className="rs-state rs-state-loading">Finding your operations&hellip;</p>
       </section>
     );
   }
@@ -100,22 +135,48 @@ export function CashView_({ projectId }: { projectId: string | null }): JSX.Elem
   }
 
   if (!data.mode) {
-    return <Activate projectId={projectId} onActivated={view.reload} />;
+    return (
+      <Activate
+        candidates={[{ projectId: selected, projectName: null }]}
+        preferred={selected}
+        currencies={data.vocabulary.currencies}
+        onActivated={() => {
+          operations.reload();
+          view.reload();
+        }}
+      />
+    );
   }
 
   return (
     <section className="rs-view rs-view-cash">
       <h2>Cash</h2>
+      {known && known.operations.length > 1 ? (
+        <label className="rs-field-label">
+          Which operation
+          <select
+            value={selected}
+            onChange={(event) => setChosen(event.target.value)}
+          >
+            {known.operations.map((operation) => (
+              <option key={operation.projectId} value={operation.projectId}>
+                {operation.projectName ?? operation.projectId} &middot;{' '}
+                {operation.state.toLowerCase().replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <p className="rs-lede">{data.objective}</p>
       <p className="rs-hint">{data.discovery.reason}</p>
 
-      <Decisions view={data} projectId={projectId} onChanged={view.reload} />
+      <Decisions view={data} projectId={selected} onChanged={view.reload} />
       <MyCash view={data} />
       <CurrentWork view={data} onChanged={view.reload} />
       <Needs view={data} />
       <Done view={data} />
       <Lifecycle
-        projectId={projectId}
+        projectId={selected}
         state={data.mode.state}
         onChanged={view.reload}
       />
@@ -124,28 +185,41 @@ export function CashView_({ projectId }: { projectId: string | null }): JSX.Elem
 }
 
 /**
- * The section has never been turned on here.
+ * No sprint here yet.
  *
- * Turning it on spends nothing and authorizes nothing: it creates a sprint for
+ * Turning one on spends nothing and authorizes nothing: it creates a sprint for
  * opportunities to belong to, and the separate decision about money is the one
- * below it.
+ * below it. What it *does* fix is the two things that cannot be changed
+ * afterwards — which operation this is, and the one currency the money is kept
+ * in.
  */
 function Activate({
-  projectId,
+  candidates,
+  preferred,
+  currencies,
   onActivated,
 }: {
-  projectId: string;
+  candidates: { projectId: string; projectName: string | null }[];
+  preferred: string | null;
+  currencies: string[];
   onActivated(): void;
 }): JSX.Element {
   const [objective, setObjective] = useState('');
+  const [currency, setCurrency] = useState(currencies[0] ?? 'USD');
+  const [where, setWhere] = useState<string>(
+    candidates.some((c) => c.projectId === preferred)
+      ? preferred!
+      : (candidates[0]?.projectId ?? ''),
+  );
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   async function submit(): Promise<void> {
+    if (!where) return;
     setBusy(true);
     setProblem(null);
     try {
-      await CashApi.activate(projectId, { objective });
+      await CashApi.activate(where, { objective, currency });
       onActivated();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
@@ -163,29 +237,70 @@ function Activate({
         Brain exactly as it is.
       </p>
       <div className="rs-card rs-cash-activate">
-        <label className="rs-field-label" htmlFor="cash-objective">
-          What is this account trying to produce?
-        </label>
-        <textarea
-          id="cash-objective"
-          rows={3}
-          value={objective}
-          onChange={(event) => setObjective(event.target.value)}
-          placeholder="Maximize additional usable cash over the next few weeks while building toward established cash flow."
-        />
-        <p className="rs-hint">
-          Turning this on creates nothing that can be spent. What Brain may do with money is a
-          separate decision, and it is yours.
-        </p>
-        {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
-        <button
-          type="button"
-          className="rs-button"
-          disabled={busy || objective.trim().length < 12}
-          onClick={submit}
-        >
-          {busy ? 'Starting…' : 'Start Cash Mode'}
-        </button>
+        {candidates.length === 0 ? (
+          <p className="rs-state rs-state-empty">
+            You are not on a project that could hold a sprint. A sprint belongs to one project,
+            because a project is the privacy boundary — nobody else&rsquo;s appears here.
+          </p>
+        ) : (
+          <>
+            <label className="rs-field-label" htmlFor="cash-where">
+              Which operation
+            </label>
+            <select id="cash-where" value={where} onChange={(e) => setWhere(e.target.value)}>
+              {candidates.map((candidate) => (
+                <option key={candidate.projectId} value={candidate.projectId}>
+                  {candidate.projectName ?? candidate.projectId}
+                </option>
+              ))}
+            </select>
+
+            <label className="rs-field-label" htmlFor="cash-objective">
+              What is this account trying to produce?
+            </label>
+            <textarea
+              id="cash-objective"
+              rows={3}
+              value={objective}
+              onChange={(event) => setObjective(event.target.value)}
+              placeholder="Maximize additional usable cash over the next few weeks while building toward established cash flow."
+            />
+
+            <label className="rs-field-label" htmlFor="cash-currency">
+              The one currency this sprint keeps its money in
+            </label>
+            <select
+              id="cash-currency"
+              value={currency}
+              onChange={(event) => setCurrency(event.target.value)}
+            >
+              {currencies.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+            <p className="rs-hint">
+              A sprint holds exactly one. Brain does not choose an exchange rate, so an entry in
+              another currency is refused rather than converted — a second currency is a second
+              sprint.
+            </p>
+
+            <p className="rs-hint">
+              Turning this on creates nothing that can be spent. What Brain may do with money is a
+              separate decision, and it is yours.
+            </p>
+            {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+            <button
+              type="button"
+              className="rs-button"
+              disabled={busy || !where || objective.trim().length < 12}
+              onClick={submit}
+            >
+              {busy ? 'Starting\u2026' : 'Start Cash Mode'}
+            </button>
+          </>
+        )}
       </div>
     </section>
   );
@@ -251,10 +366,18 @@ function Decisions({
 /**
  * What Brain may spend here.
  *
- * The card arrives prefilled and offers one Approve; the detailed controls are
- * behind *Change details* and start hidden. The limits and the prohibitions are
- * the server's words, so the contract shown and the contract enforced are one
- * object.
+ * **The defaults are gone, and their absence is the point.** The card used to
+ * arrive prefilled — $1,000 committed, $250 per action, three opportunities,
+ * every commercial action ticked — with **Approve** visible and the actual
+ * terms folded away under *Change details*. Three things were wrong with that
+ * and they compound: nobody chose the numbers, the person approving could not
+ * see what they were approving, and the three-opportunity cap quietly
+ * contradicted the whole point of assembling several pieces at once.
+ *
+ * It is §27's `mutationScope` defect one subject along: the safe answer was the
+ * one somebody had to remember and the unsafe one was free. So the ceilings are
+ * typed, the server says what they would mean, and only then is there anything
+ * to approve. Reading the preview creates nothing.
  */
 function Authority({
   view,
@@ -265,13 +388,13 @@ function Authority({
   projectId: string;
   onChanged(): void;
 }): JSX.Element {
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [committed, setCommitted] = useState('100000');
-  const [perAction, setPerAction] = useState('25000');
-  const [concurrent, setConcurrent] = useState('3');
+  const [committed, setCommitted] = useState('');
+  const [perAction, setPerAction] = useState('');
+  const [concurrent, setConcurrent] = useState('');
   const [actions, setActions] = useState<string[]>(view.vocabulary.commercialActions);
+  const [preview, setPreview] = useState<string[] | null>(null);
   const [withdrawReason, setWithdrawReason] = useState('');
 
   if (view.authority.exists) {
@@ -301,7 +424,8 @@ function Authority({
           />
           <p className="rs-hint">
             Withdrawing keeps every commitment, every money record and every opportunity. What
-            stops is new commercial action.
+            stops is new commercial action, and money still held stays held against whatever you
+            grant next.
           </p>
           <button
             type="button"
@@ -328,19 +452,32 @@ function Authority({
     );
   }
 
-  async function approve(): Promise<void> {
+  const numbers = {
+    maxCommittedCents: Number(committed),
+    maxPerActionCents: Number(perAction),
+    maxConcurrent: Number(concurrent),
+  };
+  const complete =
+    [committed, perAction, concurrent].every((value) => value.trim().length > 0) &&
+    Number.isInteger(numbers.maxCommittedCents) &&
+    Number.isInteger(numbers.maxPerActionCents) &&
+    Number.isInteger(numbers.maxConcurrent) &&
+    numbers.maxConcurrent >= 1 &&
+    actions.length > 0;
+
+  async function run(what: 'preview' | 'approve'): Promise<void> {
     setBusy(true);
     setProblem(null);
     try {
-      await CashApi.grantAuthority(projectId, {
-        allowedActions: actions,
-        maxCommittedCents: Number(committed),
-        maxPerActionCents: Number(perAction),
-        maxConcurrent: Number(concurrent),
-      });
-      onChanged();
+      if (what === 'preview') {
+        setPreview((await CashApi.previewAuthority(projectId, { allowedActions: actions, ...numbers })).lines);
+      } else {
+        await CashApi.grantAuthority(projectId, { allowedActions: actions, ...numbers });
+        onChanged();
+      }
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
+      setPreview(null);
     } finally {
       setBusy(false);
     }
@@ -353,6 +490,70 @@ function Authority({
         Nothing can be committed, quoted or collected until this exists, however good an opening
         is. Discovery keeps running meanwhile, and reading this card creates nothing.
       </p>
+
+      <div className="rs-cash-authority-details">
+        <label className="rs-field-label" htmlFor="cash-committed">
+          Most that may be committed at once, in cents
+        </label>
+        <input
+          id="cash-committed"
+          inputMode="numeric"
+          value={committed}
+          onChange={(event) => {
+            setCommitted(event.target.value);
+            setPreview(null);
+          }}
+        />
+        <label className="rs-field-label" htmlFor="cash-per-action">
+          Most in one commitment, in cents
+        </label>
+        <input
+          id="cash-per-action"
+          inputMode="numeric"
+          value={perAction}
+          onChange={(event) => {
+            setPerAction(event.target.value);
+            setPreview(null);
+          }}
+        />
+        <label className="rs-field-label" htmlFor="cash-concurrent">
+          How many opportunities may be executing at once
+        </label>
+        <input
+          id="cash-concurrent"
+          inputMode="numeric"
+          value={concurrent}
+          onChange={(event) => {
+            setConcurrent(event.target.value);
+            setPreview(null);
+          }}
+        />
+        <p className="rs-hint">
+          This bounds what may be <em>executing</em>, which is real fulfilment capacity. It is not
+          a limit on how many pieces the portfolio may hold.
+        </p>
+        <fieldset>
+          <legend className="rs-field-label">What it authorizes</legend>
+          {view.vocabulary.commercialActions.map((action) => (
+            <label key={action} className="rs-choice">
+              <input
+                type="checkbox"
+                checked={actions.includes(action)}
+                onChange={(event) => {
+                  setActions((current) =>
+                    event.target.checked
+                      ? [...current, action]
+                      : current.filter((entry) => entry !== action),
+                  );
+                  setPreview(null);
+                }}
+              />
+              <span className="rs-choice-text">{action}</span>
+            </label>
+          ))}
+        </fieldset>
+      </div>
+
       <ul className="rs-authority-never">
         {view.vocabulary.neverAuthorizable.map((entry) => (
           <li key={entry}>{entry}</li>
@@ -360,63 +561,30 @@ function Authority({
       </ul>
       <p className="rs-item-meta">Those can never be authorized, by any grant, at any ceiling.</p>
 
-      <button type="button" className="rs-button" disabled={busy} onClick={approve}>
-        {busy ? 'Approving…' : 'Approve'}
-      </button>
-      <button type="button" className="rs-linklike" onClick={() => setOpen((value) => !value)}>
-        {open ? 'Hide details' : 'Change details'}
-      </button>
-
-      {open ? (
-        <div className="rs-cash-authority-details">
-          <label className="rs-field-label" htmlFor="cash-committed">
-            Most that may be committed at once, in cents
-          </label>
-          <input
-            id="cash-committed"
-            inputMode="numeric"
-            value={committed}
-            onChange={(event) => setCommitted(event.target.value)}
-          />
-          <label className="rs-field-label" htmlFor="cash-per-action">
-            Most in one commitment, in cents
-          </label>
-          <input
-            id="cash-per-action"
-            inputMode="numeric"
-            value={perAction}
-            onChange={(event) => setPerAction(event.target.value)}
-          />
-          <label className="rs-field-label" htmlFor="cash-concurrent">
-            How many opportunities may be executing at once
-          </label>
-          <input
-            id="cash-concurrent"
-            inputMode="numeric"
-            value={concurrent}
-            onChange={(event) => setConcurrent(event.target.value)}
-          />
-          <fieldset>
-            <legend className="rs-field-label">What it authorizes</legend>
-            {view.vocabulary.commercialActions.map((action) => (
-              <label key={action} className="rs-choice">
-                <input
-                  type="checkbox"
-                  checked={actions.includes(action)}
-                  onChange={(event) =>
-                    setActions((current) =>
-                      event.target.checked
-                        ? [...current, action]
-                        : current.filter((entry) => entry !== action),
-                    )
-                  }
-                />
-                <span className="rs-choice-text">{action}</span>
-              </label>
+      {preview ? (
+        <>
+          <p className="rs-authority-headline">This is what you would be approving</p>
+          <ul className="rs-authority-list">
+            {preview.map((line) => (
+              <li key={line} className="rs-authority-limit">
+                {line}
+              </li>
             ))}
-          </fieldset>
-        </div>
-      ) : null}
+          </ul>
+          <button type="button" className="rs-button" disabled={busy} onClick={() => void run('approve')}>
+            {busy ? 'Approving\u2026' : 'Approve'}
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="rs-button"
+          disabled={busy || !complete}
+          onClick={() => void run('preview')}
+        >
+          Show me what this authorizes
+        </button>
+      )}
       {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
     </div>
   );

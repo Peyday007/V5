@@ -40,14 +40,16 @@ import {
   requiredString,
   unprocessable,
 } from './helpers.ts';
-import { getCashMode, listCashEventsFor } from '../repos/cashMode.ts';
+import { getCashMode, listCashEventsFor, listCashModes } from '../repos/cashMode.ts';
+import { listProjects } from '../repos/projects.ts';
+import { currentPrincipal } from '../services/identity/context.ts';
+import { visibleProjectIds } from '../services/identity/policy.ts';
 import {
   createAuthority,
   getCommitment,
   liveAuthority,
   releaseCommitment,
   revokeAuthority,
-  settleCommitment,
 } from '../repos/cashAuthority.ts';
 import { getNeed, getOpportunity } from '../repos/cashPortfolio.ts';
 import {
@@ -61,6 +63,7 @@ import {
   DEFAULT_CASH_ENVELOPE,
   DEFAULT_HORIZON_DAYS,
   SELECTABLE_CASH_ENVELOPES,
+  SPRINT_CURRENCIES,
   activate,
   setLifecycle,
 } from '../services/cash/lifecycle.ts';
@@ -76,6 +79,7 @@ import {
   markReady,
   recordMoneyEvent,
   reoffer,
+  settleSpend,
 } from '../services/cash/opportunities.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
@@ -90,6 +94,51 @@ import type { Outcome } from '../services/cash/opportunities.ts';
 
 export const cashRouter: Router = Router();
 
+/**
+ * The three ceilings, required and never defaulted.
+ *
+ * Every one of them was a prefilled number the person did not choose, which is
+ * the same shape as an optional `mutationScope` defaulting to the whole
+ * repository: the safe answer is the one somebody has to remember and the
+ * unsafe one is free. `maxConcurrent` in particular had a default of three,
+ * which quietly contradicted the whole point of assembling several pieces at
+ * once — it bounds what may be *executing*, and a number nobody chose is not a
+ * statement about fulfilment capacity.
+ */
+function proposedTerms(body: Record<string, unknown>): {
+  maxCommittedCents: number;
+  maxPerActionCents: number;
+  maxConcurrent: number;
+} {
+  const maxCommittedCents = optionalInteger(body['maxCommittedCents'], 'maxCommittedCents', {
+    min: 0,
+  });
+  const maxPerActionCents = optionalInteger(body['maxPerActionCents'], 'maxPerActionCents', {
+    min: 0,
+  });
+  const maxConcurrent = optionalInteger(body['maxConcurrent'], 'maxConcurrent', {
+    min: 1,
+    max: 100,
+  });
+  if (
+    maxCommittedCents === undefined ||
+    maxPerActionCents === undefined ||
+    maxConcurrent === undefined
+  ) {
+    throw badRequest(
+      '"maxCommittedCents", "maxPerActionCents" and "maxConcurrent" are all required. Money is ' +
+        'the one thing in this Brain that is genuinely scarce and fulfilment capacity is real, ' +
+        'so none of them has a default: a limit nobody chose is not a limit somebody set.',
+    );
+  }
+  if (maxPerActionCents > maxCommittedCents) {
+    throw badRequest(
+      'A single commitment cannot be larger than everything that may be committed at once.',
+    );
+  }
+  return { maxCommittedCents, maxPerActionCents, maxConcurrent };
+}
+
 /** A service refusal becomes a 422: the request was understood and refused. */
 function taken<T>(outcome: Outcome<T>): { value: T; message: string } {
   if (!outcome.ok) throw unprocessable(outcome.reason);
@@ -97,19 +146,82 @@ function taken<T>(outcome: Outcome<T>): { value: T; message: string } {
 }
 
 /**
- * An opportunity, resolved through its own project's guard.
+ * Resolve a Cash resource through its own project's guard, with **one** body
+ * for absent and forbidden.
  *
- * The project comes from the row rather than from the path, so an id a caller
- * guessed is refused with the same 404 a missing one gives — a route that took
- * both would let somebody confirm an opportunity exists by pairing it with a
- * project they can read.
+ * The first version got the status right and the body wrong: a missing id
+ * answered `No opportunity with that id.` and one belonging to somebody else
+ * answered `No project with that id.`, because the refusal came from a
+ * different resolver. Two different bodies on the same status is invariant 23
+ * broken by the half nobody looks at — *"including the body of the refusal, not
+ * only its status"* — and it is an oracle for existence: ask for an id you
+ * guessed and the wording tells you whether it is real.
+ *
+ * The project guard still runs, so `authorizeProject` still writes its denial
+ * row; only the sentence that comes back is normalized. A test asserting the
+ * status alone cannot see this, which is why the HTTP suite now compares the
+ * whole response.
  */
-async function requireOpportunity(id: string) {
-  const opportunity = await getOpportunity(id);
-  if (!opportunity) throw notFound('No opportunity with that id.');
-  await requireProject(opportunity.projectId);
-  return opportunity;
+async function resolveInProject<T extends { projectId: string }>(
+  found: T | null,
+  missing: string,
+): Promise<T> {
+  if (!found) throw notFound(missing);
+  try {
+    await requireProject(found.projectId);
+  } catch {
+    throw notFound(missing);
+  }
+  return found;
 }
+
+async function requireOpportunity(id: string) {
+  return resolveInProject(await getOpportunity(id), 'No opportunity with that id.');
+}
+
+/* --------------------------------------------------------------------------
+ * Which operation
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The cash operations this person can actually reach.
+ *
+ * The section used to take whichever project the shell happened to have
+ * selected — normally the first visible one — so somebody with a broad Brain
+ * project *and* a private cash project could be shown, and could activate, the
+ * wrong one. A sprint belongs to an operation; the operation is the thing to
+ * choose, and it is chosen here rather than inherited.
+ *
+ * Bounded in the query by `visibleProjectIds` rather than filtered afterwards,
+ * so an operation this person cannot read is not counted, let alone named.
+ */
+cashRouter.get(
+  '/cash/operations',
+  handler(async () => {
+    requirePerson();
+    const projects = await listProjects();
+    const visible = new Set(visibleProjectIds(currentPrincipal(), projects.map((p) => p.id)));
+    const modes = await listCashModes(projects.filter((p) => visible.has(p.id)).map((p) => p.id));
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    return {
+      operations: modes.map((mode) => ({
+        projectId: mode.projectId,
+        projectName: byId.get(mode.projectId)?.name ?? null,
+        objective: mode.objective,
+        state: mode.state,
+        currency: mode.currency,
+        activatedAt: mode.activatedAt,
+      })),
+      /**
+       * Projects this person could start one in. Offered so that "there is no
+       * sprint here" has somewhere to go rather than being a dead end.
+       */
+      candidates: projects
+        .filter((p) => visible.has(p.id) && !modes.some((m) => m.projectId === p.id))
+        .map((p) => ({ projectId: p.id, projectName: p.name })),
+    };
+  }),
+);
 
 /* --------------------------------------------------------------------------
  * The section itself
@@ -141,6 +253,7 @@ cashRouter.get(
         envelopes: SELECTABLE_CASH_ENVELOPES,
         defaultEnvelope: DEFAULT_CASH_ENVELOPE,
         defaultHorizonDays: DEFAULT_HORIZON_DAYS,
+        currencies: SPRINT_CURRENCIES,
       },
     };
   }),
@@ -184,6 +297,7 @@ cashRouter.post(
       objective: requiredString(body['objective'], 'objective'),
       horizonDays: optionalInteger(body['horizonDays'], 'horizonDays', { min: 1, max: 365 }),
       envelopeId: optionalString(body['envelopeId'], 'envelopeId'),
+      currency: optionalString(body['currency'], 'currency'),
     });
     if (!outcome.ok) throw unprocessable(outcome.reason);
     return { mode: outcome.mode, changed: outcome.changed, message: outcome.message };
@@ -241,24 +355,7 @@ cashRouter.post(
       );
     }
 
-    const maxCommittedCents = optionalInteger(body['maxCommittedCents'], 'maxCommittedCents', {
-      min: 0,
-    });
-    const maxPerActionCents = optionalInteger(body['maxPerActionCents'], 'maxPerActionCents', {
-      min: 0,
-    });
-    if (maxCommittedCents === undefined || maxPerActionCents === undefined) {
-      throw badRequest(
-        '"maxCommittedCents" and "maxPerActionCents" are both required. Money is the one thing ' +
-          'in this Brain that is genuinely scarce, so its ceilings are not optional and have no ' +
-          'default.',
-      );
-    }
-    if (maxPerActionCents > maxCommittedCents) {
-      throw badRequest(
-        'A single commitment cannot be larger than everything that may be committed at once.',
-      );
-    }
+    const terms = proposedTerms(body);
 
     const authority = await createAuthority({
       projectId: project.id,
@@ -269,10 +366,12 @@ cashRouter.post(
       // Unioned in rather than trusted to the caller, so a grant written by a
       // script or a future screen cannot omit one by forgetting.
       prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
-      maxCommittedCents,
-      maxPerActionCents,
-      maxConcurrent: optionalInteger(body['maxConcurrent'], 'maxConcurrent', { min: 0, max: 100 }) ?? 3,
-      currency: optionalString(body['currency'], 'currency') ?? 'USD',
+      maxCommittedCents: terms.maxCommittedCents,
+      maxPerActionCents: terms.maxPerActionCents,
+      maxConcurrent: terms.maxConcurrent,
+      // The sprint's, never the caller's: a grant in another currency could
+      // never authorize anything this sprint spends.
+      currency: mode.currency,
       expiresAt: optionalString(body['expiresAt'], 'expiresAt') ?? null,
     });
 
@@ -283,14 +382,75 @@ cashRouter.post(
       summary: 'A standing commercial authority was granted.',
       detail: {
         allowedActions: actions,
-        maxCommittedCents,
-        maxPerActionCents,
+        maxCommittedCents: authority.maxCommittedCents,
+        maxPerActionCents: authority.maxPerActionCents,
         maxConcurrent: authority.maxConcurrent,
+        currency: authority.currency,
         expiresAt: authority.expiresAt,
       },
     });
 
     return { authority, lines: describeAuthority(authority) };
+  }),
+);
+
+/**
+ * What this grant would authorize, in the server's own words, before anybody
+ * approves it.
+ *
+ * The card used to arrive prefilled — $1,000 committed, $250 per action, three
+ * opportunities, every commercial action ticked — with **Approve** visible and
+ * the actual terms folded away under *Change details*. That is the defect §27
+ * records about `mutationScope`, one subject along: the widest reach was the
+ * one somebody had to remember to narrow, and the terms a person was agreeing
+ * to were the ones they had not been shown.
+ *
+ * So there are no defaults, and this is what makes that workable: the numbers
+ * are typed, this returns the exact sentences that would govern them, and
+ * Approve posts the same numbers. It **writes nothing** — reading what a
+ * permission would mean must never be a way to grant it.
+ */
+cashRouter.post(
+  '/projects/:projectId/cash/authority/preview',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const mode = await getCashMode(project.id);
+    if (!mode) throw unprocessable('Cash Mode has not been activated for this project.');
+
+    const body = bodyOf(req);
+    const actions = optionalStringArray(body['allowedActions'], 'allowedActions') ?? [];
+    for (const action of actions) {
+      if (isCommercialAction(action)) continue;
+      throw badRequest(`"${action}" is not a commercial action this Brain knows how to authorize.`);
+    }
+    const terms = proposedTerms(body);
+
+    const at = new Date().toISOString();
+    return {
+      lines: describeAuthority({
+        id: 'preview',
+        projectId: project.id,
+        ownerUserId: mode.ownerUserId,
+        name: 'preview',
+        policyVersion: 1,
+        allowedActions: actions,
+        prohibitions: [...ALWAYS_PROHIBITED_COMMERCIAL],
+        maxCommittedCents: terms.maxCommittedCents,
+        maxPerActionCents: terms.maxPerActionCents,
+        maxConcurrent: terms.maxConcurrent,
+        currency: mode.currency,
+        startsAt: at,
+        expiresAt: optionalString(body['expiresAt'], 'expiresAt') ?? null,
+        state: 'ACTIVE',
+        revokedAt: null,
+        revokedByUserId: null,
+        revokedReason: null,
+        createdByUserId: mode.ownerUserId,
+        createdAt: at,
+        updatedAt: at,
+      }),
+    };
   }),
 );
 
@@ -508,17 +668,23 @@ cashRouter.post(
     const amountCents = optionalInteger(body['amountCents'], 'amountCents', { min: 1 });
     if (amountCents === undefined) throw badRequest('"amountCents" is required.');
 
+    const mode = await getCashMode(project.id);
+    if (!mode) throw unprocessable('Cash Mode has not been activated for this project.');
+
     const { value, message } = taken(
       await recordMoneyEvent({
         projectId: project.id,
         opportunityId: optionalString(body['opportunityId'], 'opportunityId') ?? null,
         kind: kind as CashMoneyKind,
         amountCents,
-        currency: optionalString(body['currency'], 'currency') ?? 'USD',
+        // The sprint's, never the caller's: a request that could choose the
+        // currency could put a figure into a total that is labelled in another.
+        currency: mode.currency,
         verifiedReference: optionalString(body['verifiedReference'], 'verifiedReference') ?? null,
         fundsAvailableAt: optionalString(body['fundsAvailableAt'], 'fundsAvailableAt') ?? null,
         occurredAt: optionalString(body['occurredAt'], 'occurredAt'),
         note: optionalString(body['note'], 'note') ?? null,
+        idempotencyKey: requiredString(body['idempotencyKey'], 'idempotencyKey'),
         actorRef: principal.id,
       }),
     );
@@ -567,24 +733,36 @@ cashRouter.post(
   '/cash/commitments/:commitmentId/:action',
   handler(async (req) => {
     const principal = requirePerson();
-    const commitment = await getCommitment(pathId(req, 'commitmentId'));
-    if (!commitment) throw notFound('No commitment with that id.');
-    await requireProject(commitment.projectId);
+    const commitment = await resolveInProject(
+      await getCommitment(pathId(req, 'commitmentId')),
+      'No commitment with that id.',
+    );
     const action = pathId(req, 'action');
 
     if (action === 'settle') {
-      if (!(await settleCommitment(commitment.id))) {
-        throw conflict(`That commitment is already ${commitment.state.toLowerCase()}.`);
+      /*
+       * What was actually spent, required rather than assumed.
+       *
+       * Settling used to take no amount and write no cost, which made
+       * deployable cash *rise* when money left the account. The spend is the
+       * fact; the hold was only ever a reservation against it.
+       */
+      const spentCents = optionalInteger(bodyOf(req)['spentCents'], 'spentCents', { min: 0 });
+      if (spentCents === undefined) {
+        throw badRequest(
+          '"spentCents" is required: settling a hold records what the money actually bought. ' +
+            'Pass 0 and the hold is released instead, which "release" says more plainly.',
+        );
       }
-      await recordCashEvent({
-        projectId: commitment.projectId,
-        opportunityId: commitment.opportunityId,
-        kind: 'CASH_COMMITMENT_SETTLED',
-        actorRef: principal.id,
-        summary: `The ${commitment.amountCents}-cent commitment was spent.`,
-        detail: { commitmentId: commitment.id },
-      });
-      return { settled: true, message: 'Settled. The ceiling has that much room again.' };
+      const { value, message } = taken(
+        await settleSpend({
+          commitmentId: commitment.id,
+          spentCents,
+          actorRef: principal.id,
+          note: optionalString(bodyOf(req)['note'], 'note') ?? null,
+        }),
+      );
+      return { commitment: value, settled: true, message };
     }
     if (action === 'release') {
       const reason = requiredString(bodyOf(req)['reason'], 'reason');
@@ -642,11 +820,12 @@ cashRouter.post(
     if (to !== 'RESOLVED' && to !== 'WITHDRAWN') {
       throw badRequest('"to" is RESOLVED or WITHDRAWN.');
     }
-    // Resolved through the need's own project, so a guessed id is refused with
-    // the same 404 a missing one gives.
-    const need = await getNeed(pathId(req, 'needId'));
-    if (!need) throw notFound('No need with that id.');
-    await requireProject(need.projectId);
+    // Resolved through the need's own project, so a guessed id and one
+    // belonging to somebody else are refused with the same body.
+    const need = await resolveInProject(
+      await getNeed(pathId(req, 'needId')),
+      'No need with that id.',
+    );
 
     const { value, message } = taken(
       await closeNeed({
