@@ -55,6 +55,7 @@ let workerId = '';
 let bearer = '';
 let claimed: any = null;
 let opportunity: any = null;
+let other = '';
 
 async function call<T = any>(
   method: string,
@@ -456,18 +457,195 @@ describe('the deployable artifact', () => {
     );
 
     /*
-     * And then the tick turns an accepted demand-signal claim into an opening,
-     * with the claim beside it as provenance and a blank card — because a
-     * published request is evidence somebody asked, and not a payer, a price
-     * or a delivery path.
+     * The packet moved on, which is what "accepted" means here: the fragment
+     * is done and is not offered again.
      */
-    opportunity = await until('the tick to harvest an opening', async () => {
-      const view = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });
-      const placements = (view.body.myCurrentWork?.placements ?? []) as any[];
-      const found = placements.find((one) => one.opportunity.sourceClaimId);
-      return found ? found.opportunity : null;
-    });
-    expect(opportunity.sourceClaimId).toBeTruthy();
-    expect(opportunity.payer).toBeNull();
+    const again = await tool(
+      'brain_claim_work',
+      { project_id: project, work_types: ['RESEARCH_FRAGMENT'], limit: 1 },
+      bearer,
+    );
+    expect(((again['claimed'] ?? []) as any[]).length).toBe(0);
+
+    /*
+     * And here is where a one-credential smoke test stops, on purpose.
+     *
+     * An opening reaches the portfolio only from a mission that is DONE, and a
+     * mission is DONE only after the packet is synthesized and audited by
+     * **three distinct authenticated sessions** — the session dimension being
+     * the credential a request authenticated with. This file holds one
+     * credential, so the roles after the first would be refused by the
+     * independence floor doing exactly its job.
+     *
+     * Manufacturing four model-shaped payloads to get past it would be putting
+     * fixtures where the thing under test is, so it is not done. The filed-and
+     * -audited path is covered by `cashIntegrationPass` on both backends, and
+     * the deployment requirement it implies — a fleet that can supply three
+     * sessions, which one healthy Routine activated three times does — is in
+     * `docs/CASH-DEPLOYMENT.md`.
+     */
   }, 420_000);
+
+  it('5. takes a decision through the route the screen calls, and it lands in a row', async () => {
+    const captured = await call('POST', `/api/projects/${project}/cash/opportunities`, {
+      cookie: admin,
+      body: {
+        title: 'An opening a person entered',
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        currency: 'USD',
+      },
+    });
+    expect(captured.status).toBe(200);
+    opportunity = captured.body.opportunity;
+
+    // What the Cash screen's card control posts. A person's own answer, which
+    // nothing automatic may later write over.
+    const answered = await call('PATCH', `/api/cash/opportunities/${opportunity.id}`, {
+      cookie: admin,
+      body: { payer: 'The operations manager, who signs' },
+    });
+    expect(answered.status).toBe(200);
+
+    const view = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });
+    const mine = (view.body.myCurrentWork.placements as any[]).find(
+      (one) => one.opportunity.id === opportunity.id,
+    );
+    expect(mine.opportunity.payer).toBe('The operations manager, who signs');
+    const provenance = view.body.myCurrentWork.provenance[opportunity.id] as any[];
+    expect(provenance.find((one) => one.field === 'payer').kind).toBe('PERSON');
+  }, 120_000);
+
+  it('6. pauses only the action the missing capability blocks, and 7. the rest carry on', async () => {
+    // A second opening, captured by hand, so there is something to compare
+    // against — two pieces in one sprint, one of which will be held.
+    const second = await call('POST', `/api/projects/${project}/cash/opportunities`, {
+      cookie: admin,
+      body: {
+        title: 'A second opening, captured by hand',
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        currency: 'USD',
+      },
+    });
+    expect(second.status).toBe(200);
+    other = second.body.opportunity.id;
+
+    // The standing commercial grant — the second of the two decisions that
+    // belong to a person.
+    const granted = await call('POST', `/api/projects/${project}/cash/authority`, {
+      cookie: admin,
+      body: {
+        name: 'Smoke commercial authority',
+        allowedActions: ['CONTACT_BUYER', 'QUOTE_AND_INVOICE', 'ACCEPT_PAYMENT', 'RUN_PAID_TEST'],
+        maxCommittedCents: 100_000,
+        maxPerActionCents: 40_000,
+        maxConcurrent: 3,
+      },
+    });
+    expect(granted.status).toBe(200);
+
+    // Complete both cards so readiness is not what is being tested.
+    for (const id of [opportunity.id, other]) {
+      const filled = await call('PATCH', `/api/cash/opportunities/${id}`, {
+        cookie: admin,
+        body: {
+          payer: 'The operations manager, who signs',
+          reachableChannel: 'The address on the notice',
+          buyingSignal: 'Asked for a fixed quote',
+          signalObservedAt: '2026-09-15T09:00:00.000Z',
+          offerScope: 'One fixed-scope repair',
+          acceptanceCondition: 'It works and a test enquiry arrives',
+          priceCents: 60_000,
+          deliveryMethod: 'One afternoon',
+          fulfillmentOwner: 'Us',
+          peakFundingCents: 0,
+        },
+      });
+      expect(filled.status).toBe(200);
+    }
+
+    /*
+     * Brain then declares both ready by itself, on the tick — the card's own
+     * gate is what bounds that, and every field it checks is answered.
+     */
+    await until('the tick to declare both ready', async () => {
+      const view = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });
+      const states = (view.body.myCurrentWork.placements as any[])
+        .filter((one) => one.opportunity.id === opportunity.id || one.opportunity.id === other)
+        .map((one) => one.opportunity.state);
+      return states.length === 2 && states.every((one) => one === 'READY') ? states : null;
+    });
+
+    /*
+     * And stops. Reaching a buyer needs SEND_A_MESSAGE, which this Brain does
+     * not have — so neither piece is executed by Brain, both stay READY, and
+     * the need naming the integration is on the record rather than a failure.
+     *
+     * The point of the pair is that the block is per *action*, not per sprint:
+     * nothing about the first piece being held stops the second from being
+     * worked, and a person can still execute either by hand.
+     */
+    const executed = await call('POST', `/api/cash/opportunities/${other}/execute`, {
+      cookie: admin,
+      body: {
+        action: 'CONTACT_BUYER',
+        detail: 'A person replied to the notice by hand.',
+        reference: 'smoke-notice-1',
+      },
+    });
+    expect(executed.status).toBe(200);
+    expect(executed.body.opportunity.state).toBe('EXECUTING');
+
+    const after = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });
+    const byId = new Map(
+      (after.body.myCurrentWork.placements as any[]).map((one) => [one.opportunity.id, one.opportunity]),
+    );
+    // The held one is untouched rather than failed, and the other moved.
+    expect(byId.get(opportunity.id).state).toBe('READY');
+    expect(byId.get(other).state).toBe('EXECUTING');
+  }, 240_000);
+
+  it('8. winds down: new discovery stops, and what is owed stays alive', async () => {
+    const wound = await call('POST', `/api/projects/${project}/cash/mode`, {
+      cookie: admin,
+      body: { state: 'WINDING_DOWN', reason: 'Enough for this month.' },
+    });
+    expect(wound.status).toBe(200);
+
+    const view = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });
+    expect(view.body.mode.state).toBe('WINDING_DOWN');
+    // New discovery is closed, and the screen says so in the server's words.
+    expect(view.body.discovery.open).toBe(false);
+
+    /*
+     * And the obligation already taken on carries the whole way: a sprint
+     * ending is not a customer's obligation ending. Delivery, collection and
+     * the money all still work.
+     */
+    const delivering = await call('POST', `/api/cash/opportunities/${other}/deliver`, {
+      cookie: admin,
+      body: {},
+    });
+    expect(delivering.status).toBe(200);
+
+    const collected = await call('POST', `/api/cash/opportunities/${other}/collect`, {
+      cookie: admin,
+      body: { outcome: 'Paid in full by bank transfer.' },
+    });
+    expect(collected.status).toBe(200);
+
+    const settled = await call('POST', `/api/projects/${project}/cash/money`, {
+      cookie: admin,
+      body: {
+        kind: 'SETTLEMENT',
+        amountCents: 60_000,
+        currency: 'USD',
+        verifiedReference: 'smoke-bank-0001',
+        idempotencyKey: 'settlement:smoke-bank-0001',
+      },
+    });
+    expect(settled.status).toBe(200);
+
+    const final = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });
+    expect(final.body.myCash.position.availableFundsCents).toBe(60_000);
+  }, 180_000);
 });

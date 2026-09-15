@@ -178,6 +178,34 @@ visible from one that does.
 
 ---
 
+## 5a. A fleet is not optional, and three sessions is the number
+
+A sprint with no registered Routine can open discovery, capture ideas and
+compile missions, and can finish **nothing**: an opening reaches the portfolio
+only from a mission that is `DONE`, and a mission is `DONE` only after its
+packet has been synthesized and audited by **three distinct authenticated
+sessions** — one each for the primary, adversarial and judge roles, with the
+author of the report separated from all three.
+
+The session dimension is the credential a request authenticated with. What
+satisfies it is therefore not three accounts and not three Routines: **one
+healthy Routine activated three times** does, because the Cowork connector
+presents one access token per hour and each activation is a distinct session
+inside its own window. Cross-account separation is a stronger tier that is
+reported when the fleet supplies it and never rounded up.
+
+So the minimum viable fleet for a working sprint is one account, one Routine,
+one bound worker, and the deployment secret that Routine names. Check it with
+`npm run fleet -- show`, and confirm a fire arrives and finishes something
+rather than assuming it will.
+
+This is also the reason the deployment smoke test stops where it does: it holds
+one credential, so it proves the gate accepts a worker's result and stops
+before the audit rather than manufacturing three role-shaped payloads to get
+past a floor that is working correctly.
+
+---
+
 ## 6. How the four operations are isolated
 
 There is no new mechanism here, and that is the argument for it. Privacy is a
