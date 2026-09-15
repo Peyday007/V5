@@ -125,6 +125,8 @@ import {
   resumeAnsweredRequest,
 } from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
+import { getCashMode } from '../../repos/cashMode.ts';
+import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
@@ -1133,10 +1135,40 @@ async function nextLaunchable(limit: number): Promise<
     followOnOfMissionId: string | null;
     spec: Omit<LaunchInput, 'candidateId'>;
   }[] = [];
+  /*
+   * One mode lookup per project rather than per candidate. The cache lives for
+   * this call only: a mode a person reactivates mid-tick is read on the next
+   * one, which is ten seconds away.
+   */
+  const modeByProject = new Map<string, Awaited<ReturnType<typeof getCashMode>>>();
   for (const row of rows) {
     const judgment = parseJson<Record<string, unknown>>(row.judgment, {});
     const spec = judgment['missionSpec'];
     if (!spec || typeof spec !== 'object') continue;
+
+    /*
+     * A wound-down sprint launches no new cash discovery.
+     *
+     * Asked here as well as at the producer, because a guard on one entrance is
+     * not a guard: an idea captured while the sprint was active can still be
+     * sitting queued when it winds down, and launching it then would be exactly
+     * the "new short-cash discovery" the wind-down exists to stop.
+     *
+     * It is a **skip**, not a refusal: no state moves, no attempt is charged, no
+     * reason is written on the candidate. The idea keeps its place and launches
+     * by itself the moment the sprint is active again, which is what makes
+     * reactivating a decision rather than a recovery. Only a candidate that
+     * belongs to a cash opportunity is affected; ordinary research in a project
+     * that happens to run a sprint is untouched.
+     */
+    if (row.project_id) {
+      if (!modeByProject.has(row.project_id)) {
+        modeByProject.set(row.project_id, await getCashMode(row.project_id));
+      }
+      const mode = modeByProject.get(row.project_id) ?? null;
+      if (!(await launchableUnderCashMode({ candidateId: row.id, mode }))) continue;
+    }
+
     out.push({
       candidateId: row.id,
       followOnOfMissionId: row.follow_on_of_mission_id,

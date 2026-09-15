@@ -144,6 +144,7 @@ interface SiteStatus {
   stateReason: string;
   workerName: string;
   workerId: string | null;
+  sharedIdentity: boolean;
   scopes: string[] | null;
   scopesCorrect: boolean;
   liveCredentials: number;
@@ -187,10 +188,22 @@ beforeAll(async () => {
     body: { currentPassword: 'temporary-password-01', newPassword: MEMBER_PASSWORD },
   });
   memberCookie = await signIn('member@example.invalid', MEMBER_PASSWORD);
-  await call('POST', `/api/admin/projects/${project}/members`, {
+  /*
+   * `HUMAN`, not `USER`.
+   *
+   * The route takes HUMAN or WORKER and refuses anything else with a 400, which
+   * this call ignored — so this person was never a member of the project at
+   * all, and the refusal below passed for the wrong reason: it proved a
+   * *non-member* is refused, which was never in doubt, rather than that a member
+   * without ADMIN is. Corrected here and asserted rather than assumed.
+   */
+  const granted = await call('POST', `/api/admin/projects/${project}/members`, {
     cookie: adminCookie,
-    body: { principalId: created.body.user.id, principalType: 'USER', role: 'MEMBER' },
+    body: { principalId: created.body.user.id, principalType: 'HUMAN', role: 'MEMBER' },
   });
+  if (granted.status !== 200) {
+    throw new Error(`the member was never granted the project: ${granted.status} ${granted.text}`);
+  }
 
   const worker = await call<{ worker: { id: string } }>('POST', '/api/admin/workers', {
     cookie: adminCookie,
@@ -295,7 +308,10 @@ describe('connecting a site', () => {
     const result = await call<ConnectResult>('POST', CONNECT(), { cookie: adminCookie });
     expect(result.status).toBe(200);
     expect(result.body.createdIdentity).toBe(true);
-    expect(result.body.status.workerName).toBe('deal-dispatch');
+    // Per project, not per site: `deal-dispatch` alone was one identity every
+    // project shared, and one credential that authenticated against all of them.
+    expect(result.body.status.workerName).toBe(`deal-dispatch-${project.replace(/_/g, '-')}`);
+    expect(result.body.status.sharedIdentity).toBe(false);
     // The scope set is the constant, not a choice anybody made.
     expect(result.body.status.scopes!.slice().sort()).toEqual(['external:sync', 'project:read']);
     expect(result.body.status.scopesCorrect).toBe(true);

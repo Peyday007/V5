@@ -21,6 +21,7 @@ import { runsRouter } from './runs.ts';
 import { russellRouter } from './russell.ts';
 import { factoryRouter } from './factory.ts';
 import { connectRouter } from './connect.ts';
+import { cashRouter } from './cash.ts';
 import { invitationsRouter } from './invitations.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
@@ -71,6 +72,11 @@ export function createApiRouter(): Router {
   // the projects router so its own `/:projectId/...` routes do not swallow
   // them.
   router.use(connectRouter);
+  // Cash Mode (§30). Mounted at the root because its routes carry their own
+  // prefixes: some are project-scoped (/projects/:id/cash/...) and some address
+  // an opportunity, a commitment or a need directly. Before the projects router
+  // so its own `/:projectId/...` routes do not swallow them.
+  router.use(cashRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

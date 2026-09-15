@@ -305,6 +305,52 @@ or a purchased record; anything requiring contact with a person or an office; pu
 filing or submitting anything anywhere. This is read-only research into what is already
 published.`;
 
+/**
+ * The standing Cash Mode discovery assignment.
+ *
+ * Two fills, exactly as the public-records template has: the question somebody
+ * asked, and the market it is about. Everything else is fixed here and is what
+ * the operator authorized.
+ *
+ * It authorizes **reading** and nothing else. Discovering that a buyer exists,
+ * that a supplier has capacity, that a deadline is real or that a spread is
+ * open is research into what is already published. Acting on any of it —
+ * contacting the buyer, quoting, committing money — is a commercial grant,
+ * which is a separate decision with its own ceilings in
+ * `services/cash/authority.ts`. Nothing in this envelope authorizes an effect
+ * on the world, and no fragment running under it may perform one.
+ */
+export const CASH_DISCOVERY_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Market: {JURISDICTION}. Say which market each finding is about; a finding about a
+different market answers a different question and must be recorded as such rather than
+generalized.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+and each carrying the date it was published or last observed. A demand signal is a
+specific published request, listing, posting, notice, filing, schedule or announcement,
+attributed to whoever made it. An organisation's own site is conclusive about what that
+organisation says and is worth nothing as independent confirmation of anything else.
+Sources that are really one source — two pages of one site, one release carried by three
+outlets, three publishers restating one upstream estimate — are counted once and the
+duplication is reported.
+
+Completion standard: each part of the question either answered from a quoted source, or
+explicitly recorded as unresolved naming what was searched and what was not found. A
+forecast is never a fact whatever supports it. A claim that something does not exist is
+established by a documented search of the places it would be, or not at all. Where sources
+disagree, classify the disagreement — different definition, timeframe, geography or
+population — before calling it a contradiction, and never average incompatible figures
+into an answer.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or
+submitting anything anywhere; making any commitment on anybody's behalf. This is
+read-only research into what is already published, and every action beyond reading needs
+a separate commercial authorization from a person.`;
+
 export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Object.freeze({
   /**
    * The standing authorization Russell's compiled missions run under.
@@ -372,6 +418,80 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
      */
     forbiddenActions:
       /\b(purchase|paid api|api key|subscription fee|subscribe to|pay for access|paywall bypass|telephone call|phone call|call the|email the|write to the|contact the|submit a request to|file a (?:complaint|request|petition)|register with|apply for a|post to|press release|publish (?:a|our|the report|this report))\b/i,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * The standing authorization a Cash Mode project's compiled discovery runs
+   * under (§30).
+   *
+   * Three things about it are different from every other envelope here, and all
+   * three are deliberate rather than relaxed.
+   *
+   * **It is not scoped to a project slug.** The four private operations a cash
+   * sprint runs in are projects an operator creates; this repository cannot know
+   * their names, and freezing a guessed one would mean the envelope authorized
+   * nothing. The scoping is a row instead: `cash_modes.envelope_id`, written by
+   * a person with ADMIN on that project when they activated the section, and
+   * validated against `SELECTABLE_CASH_ENVELOPES` so a mode can only ever name
+   * an envelope somebody reviewed. That keeps §16's actual property — nobody
+   * supplies the limits their own plan is judged against — while moving *which*
+   * reviewed limits apply from a constant to a recorded decision.
+   *
+   * **It does not bound geography, and that is stated rather than hidden.**
+   * `geography` accepts any declared market and `forbiddenScope` matches
+   * nothing, because the authorized mandate is broad discovery across
+   * industries, business models and markets, and an envelope that refused an
+   * opening for being in the wrong state would refuse precisely the work it
+   * exists to permit. What bounds this envelope is not where it may look but
+   * **what it may do**: `forbiddenActions` and `allowedSourceTypes` below, plus
+   * the fact that research authority in this Brain has never been able to spend
+   * anything. A blank cheque would be an envelope that authorized an effect; this
+   * one authorizes reading.
+   *
+   * **Every effect is somebody else's decision.** Contacting a buyer, quoting,
+   * committing money and accepting payment are `COMMERCIAL_ACTIONS`, granted by
+   * a person in `cash_authorities` with a ceiling on each. A fragment running
+   * under this envelope that described doing any of them is refused by
+   * `forbiddenActions`, exactly as it would be in the public-records envelope.
+   */
+  RUSSELL_CASH_DISCOVERY_V1: Object.freeze({
+    id: 'RUSSELL_CASH_DISCOVERY_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project: published sources only, across any industry, business model or market, with no ' +
+      'spending, no paid API or purchased data, no contact with any person or organisation, no ' +
+      'advertising, no publishing and no external effect of any kind. Acting on what is ' +
+      'discovered is authorized separately by a commercial grant a person makes, and never by ' +
+      'this envelope.',
+    assignmentTemplate: CASH_DISCOVERY_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    // As many bounded questions as the gaps require: every condition below
+    // applies to each of them, so a broader decomposition is more to refuse
+    // rather than more room to hide in.
+    maxFragments: null,
+    // Any declared market, and nothing forbidden by geography. See the note
+    // above: this envelope bounds actions, not places. `(?!)` is a pattern that
+    // matches no input at all, written explicitly rather than by leaving the
+    // field out, so a reader can see that the absence is a decision.
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    // Published sources of every kind a market question is answered from. A
+    // source type still has to be *declared* by the fragment and still has to
+    // match, so a fragment that accepted "whatever we find" is refused for
+    // declaring nothing — `planFitsEnvelope` refuses an empty list outright.
+    allowedSourceTypes:
+      /(official|government|\.gov|statut|regulat|public record|filing|registry|register|court|permit|licen[cs]e|tender|procurement|bid|rfp|rfq|solicitation|marketplace|job board|listing|classified|posting|auction|exchange|price list|rate card|fee schedule|catalog|inventory|directory|trade (?:association|body|publication)|industry (?:report|survey|body)|census|statistic|bureau|standards body|company (?:site|website|page|blog)|press release|annual report|filing|prospectus|news|publication|journal|review site|forum|community|social)/i,
+    /*
+     * Language that would mean acting on the world rather than reading about
+     * it. The same construction the public-records envelope settled on and for
+     * the same reason: these are phrases describing Brain *doing* something,
+     * never words that happen to appear in a commercial subject. A bare
+     * `\bpay\b` would refuse "establish how long after invoicing a buyer pays",
+     * which is the ordinary question this envelope exists to allow.
+     */
+    forbiddenActions:
+      /\b(purchase|paid api|api key|subscription fee|subscribe to|pay for access|paywall bypass|buy (?:the |a |an )?(?:list|data|access|leads)|telephone call|phone call|call the|cold call|email the|write to the|contact the|reach out to|message the|dm the|submit a (?:request|bid|proposal|application) to|file a (?:complaint|request|petition)|register with|apply for a|sign up (?:for|with)|place an? (?:ad|advert|order|bid)|run an? (?:ad|advert|campaign)|post to|publish (?:a|our|the report|this report|a listing)|list (?:it |the item )?for sale|negotiate with|agree terms with|commit (?:funds|money)|make a payment|send payment|hire|engage a contractor)\b/i,
     minIndependentSourcesFloor: 1,
   } satisfies ApprovalEnvelope),
 

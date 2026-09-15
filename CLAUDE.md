@@ -160,6 +160,17 @@ There must be no workflow where the user has to remember "now go update the data
     shell is the authentication.
 36. No production deployment from a branch that is not the canonical one named
     in `.github/CANONICAL_BRANCH`, and none from a checkout behind it.
+37. No money figure that is not derived from an append-only entry, and no cost
+    subtracted twice — what has already left the account is gone from the
+    balance, and only what has not left reduces what may be deployed.
+38. No money committed outside a ceiling a person set first, no commitment
+    released by a clock, and no retry counted as a second commitment.
+39. No unknown read as a favourable assumption: an unanswered fact is a task,
+    and it may never make something ready, and never rank it higher.
+40. No temporary section's off switch that stops work it does not own — winding
+    a sprint down ends new discovery and never a customer's obligation.
+41. No identity shared between two private operations, and no credential that
+    resolves a project its holder was not connected to.
 
 ## 8. Model prose never mutates project state.
 
@@ -3234,6 +3245,155 @@ itself swaps in now — which is deliberately not the thing the fix above
 changed, so it would have passed against the stale build and still fails if the
 grant does not land.
 
+## 30. Cash Mode is a section, not the definition of Brain.
+
+Cash Mode (`server/services/cash/`, `server/repos/cash*.ts`,
+`client/src/russell/Cash.tsx`, `docs/CASH.md`) is a temporary operating section
+inside the broader Brain: it searches broadly, assembles a private portfolio of
+cash-producing opportunities for one account, and is meant to be wound down
+after a month or two while the income, the customers, the records and the
+reusable methods stay. Everything it adds is a new *entrance* to machinery
+Steps 4 to 12C already built, and none of it is a second set of rules.
+
+- **It holds the one thing Brain never has: money, and the authority to spend
+  it.** There is no second identity model, no second work queue, no second
+  policy module and no second orchestration universe here. Privacy is a
+  `project_memberships` row read through `decideProjectAccess`; discovery is the
+  Russell candidate → judgment → mission path; execution is the fleet. Four
+  people means four *projects*.
+- **The ceilings here are real, and §24's were not.** That section removed
+  `russell_goals`' lifetime quotas because nothing they rationed was scarce —
+  the subscription behind a research mission is already paid for, so a count of
+  missions measured a starting point and then became a permanent wall. Cash is
+  the opposite fact: a dollar committed to one opportunity cannot fund another.
+  So `cash_authorities` is genuinely capped, and the cap is spent by
+  `INSERT ... ON CONFLICT DO NOTHING` and a running sum through the row's own
+  rank — **the sixth time this codebase has needed a compare-and-swap on a value
+  the claimant does not supply.** It can under-commit and cannot over-commit.
+- **A commitment is never released by time.** No TTL, no sweeper. §20's rule
+  that a timeout is not evidence is at its sharpest where being wrong hands back
+  spending room for money that may already have gone. A commitment is settled
+  when the spend happened or released by a person who knows it did not.
+  **A replay is not a new commitment**: the shortfall gate blocks *new*
+  discretionary ones, and skipping it on a retry is what lets a caller who lost
+  a response find out what happened to their money — the authority check still
+  runs, because that is the half a revocation can change.
+- **A commercial grant is not a research grant, and merging them would widen
+  every mission already running.** A 12A standing authority carries
+  `ALWAYS_PROHIBITED` — `NEW_SPENDING`, `PURCHASE`, `CONTACT_PERSON` — and
+  `max_external_spend` of zero, because those grants authorize reading published
+  sources. So `services/cash/authority.ts` is a separate grant with its own
+  actor, its own closed set of `COMMERCIAL_ACTIONS` and its own
+  `ALWAYS_PROHIBITED_COMMERCIAL` unioned in at creation. Neither reads the
+  other.
+- **Every money figure is derived, and a cost is subtracted once.** §5's six
+  numbers come from `cash_money_entries` and are stored nowhere; a balance
+  column would be a second master and the one nobody reads is the one that
+  drifts. A cost leaves the account in *available funds*, so *deployable*
+  subtracts only what has not left yet — unpaid bills, held commitments,
+  reserves. Subtracting it again understates deployable cash by everything the
+  sprint ever spent and **gets worse the better the sprint goes**, which is the
+  shape of error nobody notices because it looks like caution. A
+  `CUSTOMER_PAYMENT` and a `SETTLEMENT` are two events about the same money and
+  only the second is cash; a payment with no verifiable reference is pipeline.
+- **An unknown is never a favourable assumption.** The evidence card reports,
+  per field, the answer or *the task that would produce it* — a missing phone
+  number is an access task, a missing supplier price is a quoting task — and
+  nine load-bearing fields must be answered before anything is ready to test. A
+  buying signal with **no observation date is not evidence**, because an undated
+  signal cannot be told apart from one somebody remembers from March.
+
+  **The ranking had the same rule and broke it, and the correction is recorded
+  rather than quietly applied.** `conservativeContribution` treated an unknown
+  exposure as zero, so a piece nobody had costed came out at its whole price and
+  ranked *above* an identically priced one somebody had costed. The card refused
+  the blank and the ranking rewarded it. A blank may never be the reason
+  something rises, wherever it is read.
+- **No probability is invented.** The order is lexicographic over observable
+  facts, in the plan's own sequence, rather than a weighted score: a score needs
+  weights, weights are a judgement nobody made, and the number reads like a
+  measurement. The disposition of each piece — execute now, run in parallel,
+  wait for a named dependency, test a decisive unknown, archived — is derived on
+  the read path and stored nowhere, because a row is not a decision and a stored
+  label is stale the moment the dependency it waited on settles. **Every wait
+  names what it waits on**: another opportunity, the cash, or the capacity.
+- **Winding down stops new discovery and nothing else.** `russell_cycle` is a
+  singleton whose pause stops the entire Russell tick — writeback, request
+  resumption, every other project — so a sprint's off switch wired to it would
+  stop the Brain to end one person's sprint, and it would look like it had
+  worked. Nothing in Cash Mode references it, and that is **asserted by a test
+  that reads the source**, because a Brain whose whole tick was paused would
+  pass every behavioural test in that file with nothing else running either. The
+  gate is asked at the producer *and* at `nextLaunchable`, because a guard on one
+  entrance is not a guard — and there it is a **skip** rather than a refusal, so
+  no state moves, no attempt is charged, and the idea launches by itself when
+  the sprint is active again. Delivery, collection, settlement, needs and money
+  work in all three states, because a sprint ending is not a customer's
+  obligation ending, and `ARCHIVED → ACTIVE` exists because archiving destroyed
+  nothing.
+- **Two decisions are a person's and there is no path around either.**
+  Activating the section, and saying what Brain may spend. Both are
+  `requirePerson` plus `decideProjectAccess` at `ADMIN`, the level a membership
+  change already carries. **No cash route names a worker scope**, so a machine
+  is refused at every write by `MISSING_SCOPE`, at the two ADMIN routes by level,
+  and at every route including the reads by principal *type* — §22's rule that a
+  worker cannot create its own work, at the surface where the work costs
+  somebody money.
+- **A missing capability is a need with somewhere to go.** `recommended_path`
+  and `next_step` are NOT NULL and an empty one is refused, because a need that
+  names no remedy is §24's "waiting nobody can resolve" at a seventh altitude.
+  An open need stops no unrelated work: nothing reads that table to decide
+  whether an opportunity may proceed.
+- **Which envelope discovery runs under is a person's recorded choice from a
+  reviewed set.** The compiler's in-code slug map has no entry for a project an
+  operator created, so every idea in all four operations would have been refused
+  for ever. `cash_modes.envelope_id` is the second source, validated against
+  `SELECTABLE_CASH_ENVELOPES`: a mode may *choose* limits somebody else wrote and
+  may never write any, which is §16's property unchanged. The in-code map still
+  wins where it has an entry, so activating a sprint on an existing project
+  cannot change that project's authorization.
+
+  **`RUSSELL_CASH_DISCOVERY_V1` does not bound geography, and that is stated
+  rather than hidden.** Broad discovery across industries and markets is the
+  authorized mandate, and an envelope that refused an opening for being in the
+  wrong state would refuse precisely the work it exists to permit. What bounds
+  it is what it may *do*: published sources only, and a `forbiddenActions` list
+  that refuses buying, contacting, advertising, publishing and committing. Every
+  effect on the world is a `COMMERCIAL_ACTION` a person grants separately.
+- **One identity per site per project, and the correction is recorded rather
+  than quietly applied.** `connectSite` derived its worker from a single global
+  name, so connecting the same site to a second project reused one identity: the
+  second site's credential authenticated against **both** projects, connecting
+  the second revoked the first's live credential, and the refusal that would have
+  caught a caller reaching across is invariant 23's 404 — which by design tells
+  nobody anything. One Brain with one site and one project never sees any of it;
+  four private operations each connected to their own site is exactly the
+  arrangement that does. A connection made before the fix still reads as
+  connected, is resolved **only** where it holds a live membership, says
+  `sharedIdentity`, and is retired on the next reconnect by revoking that
+  membership — never its credentials, which are worker-wide and would disconnect
+  every other project on them as a side effect.
+- **The review compresses by shared remedy, and the compression is measured.**
+  The same missing field, the same recommended path, the same blocker: answering
+  one group releases every underlying item in it, and the count it stands for is
+  reported rather than implied. An item with no group is its own group rather
+  than dropped off the end of a top-ten list, and the decision nothing can
+  proceed without is named first and never folded — §29's rule that a status
+  contradicting the control beside it teaches a person to stop reading it.
+- **A Brain administrator reaches every project by design, so the four daily
+  accounts must not be Brain administrators.** That is a deployment fact rather
+  than a code one, and it is written down here because the privacy boundary
+  between the four operations depends on it.
+
+**What this version does not do, and says so.** It records the authorization and
+the money; it does not itself contact a buyer, issue an invoice or move funds. A
+missing integration is a `cash_needs` row with a recommended way forward, which
+the plan calls a valid execution state — not a silent block. Nothing here forms
+a view about what settling a question is worth, for the same reason
+`judgment.ts` does not.
+
+---
+
 ---
 
 ## Repository map
@@ -3267,6 +3427,10 @@ server/
     factory.ts          the contract, the campaign, and units that own a surface
     factoryFleet.ts     factory workers, sessions, reviews, findings, the ledger
     externalRecords.ts  a site's record, its version guard, and its refusals
+    cashMode.ts       the sprint's row, and the append-only history beside it
+    cashAuthority.ts  the commercial grant, and the ceiling spent by insert
+    cashPortfolio.ts  the opportunities, and the needs they raise
+    cashLedger.ts     money, as append-only rows; no balance column anywhere
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -3342,6 +3506,16 @@ server/
     fleet/
       view.ts           three capacity numbers that are not each other, and why it is slow
       lab.ts            the eight test modes, and the five this version refuses to run
+    cash/
+      lifecycle.ts      activating a sprint, winding it down, and what that stops
+      authority.ts      the closed set of commercial actions, and the check
+      money.ts          the six figures, and the arithmetic that keeps them apart
+      card.ts           what is unknown, and the task that would answer each
+      portfolio.ts      the disposition of every piece, and the assembled plan
+      needs.ts          a missing capability, with somewhere to go
+      review.ts         grouping by shared remedy; compression, measured
+      opportunities.ts  the producer, and every transition an opportunity has
+      view.ts           one private section, derived in one place
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning
@@ -3421,6 +3595,7 @@ server/
   routes/               HTTP API
     factory.ts          the Software Factory: objective, stage, evidence, release
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
+    cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     pages.ts            shared chrome for the server-rendered pages
@@ -3433,6 +3608,7 @@ client/                 React UI
   src/Root.tsx          which shell this address wants, and who is signed in
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
+  src/russell/Cash.tsx  one person's private sprint, and nobody else's
   src/russell/Home.tsx  the command center: state, focus, maturity strip, collections
   src/russell/Fleet.tsx capacity, surfaces, policy as rows, and the lab beside it
   src/russell/Frontier.tsx  the five regions, each item naming what it came from
@@ -3453,6 +3629,13 @@ scripts/
 tests/                  Vitest suites
   step12bProduct.test.ts     the product decisions, where they are decided
   step12bResponsive.test.ts  the widths that were clipping, and why they no longer do
+  cashMode.test.ts           the lifecycle, and the off switch that is not the Brain's
+  cashMoney.test.ts          the six figures, and the cost that must not be subtracted twice
+  cashAuthority.test.ts      the closed vocabulary, and the race for the last dollar
+  cashPortfolio.test.ts      the unknowns, the dispositions, and the measured compression
+  cashHttp.test.ts           Cash Mode's door, driven as an attack
+  cashSection.test.tsx       the Cash section in a browser: four states, one control
+  connectorIsolation.test.ts one site, two private operations, two identities
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

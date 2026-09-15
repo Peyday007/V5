@@ -125,6 +125,73 @@ export class UnknownSite extends Error {
 }
 
 /* ------------------------------------------------------------------------ *
+ * One identity per site *per project*
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The worker a site uses on one project.
+ *
+ * **This is a correction, and it is recorded rather than quietly applied.**
+ *
+ * `site.workerName` is a single global name, so connecting Deal Dispatch to a
+ * second project reused one worker identity for both. Three things followed,
+ * and the third is the one that matters:
+ *
+ *   - `grantMembership` added the *second* project to that one worker, and a
+ *     worker credential resolves the worker's memberships, so the credential
+ *     the second site holds authenticated against **both** projects;
+ *   - `revokeCredentialsForWorker` is worker-wide, so connecting the second
+ *     site revoked the first site's live credential and silently broke it;
+ *   - and the refusal that would have caught a caller reaching across is
+ *     invariant 23's 404, which tells nobody anything — so neither of the two
+ *     sites, nor anybody reading a status screen, would have found out.
+ *
+ * One Brain with one site and one project never sees any of it. Four private
+ * operations each connected to their own site is precisely the arrangement that
+ * does, and it is the arrangement Cash Mode asks for.
+ *
+ * So the identity is keyed by site **and project**. Nothing else about the
+ * connector moved: the scope set is still the constant, the credential is still
+ * shown once and stored as a digest, connecting is still a repair and a
+ * rotation, and disconnecting still destroys nothing.
+ *
+ * The project id is used verbatim apart from having its separators normalised,
+ * because a hash would make the name unreadable in a log and a counter would
+ * make it ambiguous between Brains. `normalizeWorkerName` lowercases, and this
+ * matches: the name is stable for the life of the project.
+ */
+export function scopedWorkerName(site: SiteDefinition, projectId: string): string {
+  return `${site.workerName}-${projectId.toLowerCase().replace(/[^a-z0-9-]+/g, '-')}`;
+}
+
+/**
+ * The identity this site is actually using on this project, and whether it is
+ * the scoped one.
+ *
+ * A Brain that connected a site before the correction above holds a membership
+ * for the *shared* worker, and that site is genuinely working. Reporting it as
+ * NOT_CONNECTED because the scoped identity does not exist yet would be a lie
+ * about a live connection, so the shared identity is still resolved — but only
+ * when it holds a live membership on **this** project, so it can never be found
+ * by a project it was never connected to.
+ *
+ * Reconnecting moves the site onto its own identity and retires the shared
+ * one's reach into this project. Until somebody does, `sharedIdentity` says so.
+ */
+async function resolveWorker(
+  projectId: string,
+  site: SiteDefinition,
+): Promise<{ worker: Awaited<ReturnType<typeof getWorkerByName>>; shared: boolean }> {
+  const scoped = await getWorkerByName(scopedWorkerName(site, projectId));
+  if (scoped) return { worker: scoped, shared: false };
+  const legacy = await getWorkerByName(site.workerName);
+  if (!legacy) return { worker: null, shared: false };
+  const membership = await getMembership(projectId, 'WORKER', legacy.id);
+  if (!membership || membership.revokedAt) return { worker: null, shared: false };
+  return { worker: legacy, shared: true };
+}
+
+/* ------------------------------------------------------------------------ *
  * Status
  * ------------------------------------------------------------------------ */
 
@@ -155,6 +222,13 @@ export interface SiteStatus {
   /** The identity, by name and id. Never a credential. */
   workerName: string;
   workerId: string | null;
+  /**
+   * Whether this project is still on the old shared identity.
+   *
+   * True means the site works and its credential resolves a worker that other
+   * projects may also be connected through. Reconnecting moves it onto its own.
+   */
+  sharedIdentity: boolean;
   /** Whether the membership carries exactly the site scope set. */
   scopes: WorkerScope[] | null;
   scopesCorrect: boolean;
@@ -173,7 +247,8 @@ function wanted(): string {
 }
 
 async function statusOf(projectId: string, site: SiteDefinition): Promise<SiteStatus> {
-  const worker = await getWorkerByName(site.workerName);
+  const resolved = await resolveWorker(projectId, site);
+  const worker = resolved.worker;
   const membership = worker ? await getMembership(projectId, 'WORKER', worker.id) : null;
   const live = membership && !membership.revokedAt ? membership : null;
   const scopes = live ? [...live.scopes] : null;
@@ -228,7 +303,13 @@ async function statusOf(projectId: string, site: SiteDefinition): Promise<SiteSt
       case 'AWAITING_FIRST_CALL':
         return `Brain is ready and ${site.name} has not called yet. It will once ${site.variables.token} reaches it.`;
       case 'CONNECTED':
-        return `${site.name} last authenticated at ${lastUsedAt}. Brain holds ${records} of its records.`;
+        return (
+          `${site.name} last authenticated at ${lastUsedAt}. Brain holds ${records} of its records.` +
+          (resolved.shared
+            ? ' It is still on the identity this Brain shared between projects; reconnecting ' +
+              'gives it one of its own and takes that shared access away from this project.'
+            : '')
+        );
       case 'NEEDS_REPAIR':
         return `${site.name}'s access does not carry the right permissions, so every call it makes is refused. Reconnecting repairs it.`;
       case 'DISCONNECTED':
@@ -244,8 +325,9 @@ async function statusOf(projectId: string, site: SiteDefinition): Promise<SiteSt
     variables: site.variables,
     state,
     stateReason,
-    workerName: site.workerName,
+    workerName: worker?.name ?? scopedWorkerName(site, projectId),
     workerId: worker?.id ?? null,
+    sharedIdentity: resolved.shared,
     scopes,
     scopesCorrect,
     liveCredentials: liveCredentials.length,
@@ -286,6 +368,12 @@ export interface ConnectResult {
   createdIdentity: boolean;
   repairedScopes: boolean;
   revokedCredentials: number;
+  /**
+   * Whether this connect took the project off an identity shared with other
+   * projects. Reported rather than silent: other projects on that identity keep
+   * working and should be reconnected onto their own.
+   */
+  retiredSharedIdentity: boolean;
   /** The exact instruction for the one step Brain cannot take itself. */
   instruction: {
     reason: string;
@@ -316,12 +404,13 @@ export async function connectSite(input: {
   const site = SITE_DEFINITIONS[input.system];
   const before = await statusOf(input.projectId, site);
 
-  const existing = await getWorkerByName(site.workerName);
+  const name = scopedWorkerName(site, input.projectId);
+  const existing = await getWorkerByName(name);
   const worker =
     existing ??
     (await createWorker({
-      name: site.workerName,
-      displayName: site.name,
+      name,
+      displayName: `${site.name} (this project)`,
       workerType: 'MCP',
       description: null,
       createdByType: 'HUMAN',
@@ -345,11 +434,34 @@ export async function connectSite(input: {
     grantedById: input.actor.id,
   });
 
-  const live = (await listCredentials(worker.id)).filter((c) => !c.revokedAt);
   const revoked = await revokeCredentialsForWorker(
     worker.id,
     'Replaced when the site was connected again.',
   );
+
+  /*
+   * Retire the shared identity's reach into this project.
+   *
+   * A Brain connected before the per-project identity existed holds a
+   * membership for the global worker. Leaving it is leaving exactly the hole
+   * this change closes: that worker's one credential would still authenticate
+   * against this project alongside whatever else it is connected to.
+   *
+   * Its **credentials are deliberately not revoked**, because they are
+   * worker-wide and other projects may still be on them. Revoking the
+   * membership takes this project away from it and breaks nothing else; those
+   * projects move onto their own identity when somebody reconnects them, which
+   * is the same one action.
+   */
+  const shared = await getWorkerByName(site.workerName);
+  let retiredSharedIdentity = false;
+  if (shared && shared.id !== worker.id) {
+    const membership = await getMembership(input.projectId, 'WORKER', shared.id);
+    if (membership && !membership.revokedAt) {
+      await revokeMembership(input.projectId, 'WORKER', shared.id);
+      retiredSharedIdentity = true;
+    }
+  }
 
   const issued = await issueWorkerCredential({
     workerId: worker.id,
@@ -374,6 +486,8 @@ export async function connectSite(input: {
       credentialId: issued.credential.id,
       revoked,
       createdIdentity: existing === null,
+      workerName: name,
+      retiredSharedIdentity,
     },
   });
 
@@ -384,11 +498,17 @@ export async function connectSite(input: {
     createdIdentity: existing === null,
     repairedScopes: before.workerId !== null && !before.scopesCorrect,
     revokedCredentials: revoked,
+    retiredSharedIdentity,
     instruction: {
       reason:
         `Brain holds no authorization to ${site.name}'s deployment, so it cannot install this ` +
         'itself. Paste the value into the site and save it nowhere else — it is shown once and ' +
-        'is not recoverable afterwards by anyone, including an administrator.',
+        'is not recoverable afterwards by anyone, including an administrator.' +
+        (retiredSharedIdentity
+          ? ` This project was on an identity shared with other projects and now has its own. ` +
+            'Any other project connected through the shared one still works and should be ' +
+            'reconnected so it gets its own too.'
+          : ''),
       variables: [
         { name: site.variables.url, value: input.brainUrl, secret: false },
         { name: site.variables.token, value: null, secret: true },
@@ -414,13 +534,20 @@ export async function disconnectSite(input: {
   reason: string | null;
 }): Promise<SiteStatus> {
   const site = SITE_DEFINITIONS[input.system];
-  const worker = await getWorkerByName(site.workerName);
+  const resolved = await resolveWorker(input.projectId, site);
+  const worker = resolved.worker;
   if (!worker) return await statusOf(input.projectId, site);
 
-  const revoked = await revokeCredentialsForWorker(
-    worker.id,
-    input.reason ?? 'The site was disconnected.',
-  );
+  /*
+   * A shared identity keeps its credentials, for the reason `connectSite`
+   * leaves them alone: they are worker-wide, and revoking them here would
+   * disconnect every other project on that identity as a side effect of this
+   * one being taken away. Revoking the membership is what this project asked
+   * for, and it is the whole of what this project is entitled to change.
+   */
+  const revoked = resolved.shared
+    ? 0
+    : await revokeCredentialsForWorker(worker.id, input.reason ?? 'The site was disconnected.');
   await revokeMembership(input.projectId, 'WORKER', worker.id);
 
   await recordIdentityEvent({

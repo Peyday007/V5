@@ -309,6 +309,29 @@ const OVERRIDES: Override[] = [
     level: 'WRITE',
     scope: 'external:sync',
   },
+
+  // ---------------------------------------------------------------------
+  // Cash Mode (§30)
+  // ---------------------------------------------------------------------
+  //
+  // Two decisions are ADMIN and everything else takes the default, and the
+  // split is the same one membership already draws: turning the section on and
+  // saying what Brain may spend are decisions *about* the operation, while
+  // filling in a card or recording a payment is work *inside* it.
+  //
+  // **No entry here names a worker scope, and that is the design.** An ADMIN
+  // route refuses a worker by level; an unnamed write refuses one by
+  // `MISSING_SCOPE`. So no machine credential reaches any cash route however
+  // its membership is configured — §22's rule that a worker cannot create its
+  // own work, applied where the work would cost somebody money. Every handler
+  // additionally calls `requirePerson`, which refuses by principal *type*: two
+  // independent guards, because a guard on one entrance is not a guard.
+  //
+  // The reads are deliberately absent, so they take the default READ. A worker
+  // is still refused there by `requirePerson`; leaving them out is one fewer
+  // entry that could drift.
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/mode$/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/authority/, level: 'ADMIN' },
 ];
 
 export interface Requirement {

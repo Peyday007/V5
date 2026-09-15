@@ -70,6 +70,8 @@ import {
   type ApprovalEnvelope,
 } from '../research/approvalEnvelope.ts';
 import { properName, statesNamedIn } from '../../domain/jurisdiction.ts';
+import { getCashMode } from '../../repos/cashMode.ts';
+import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
   EvidenceLane,
@@ -105,6 +107,37 @@ export const MISSION_COMPILER_VERSION = '2026-09-09.1';
 const ENVELOPE_BY_PROJECT: Readonly<Record<string, string>> = Object.freeze({
   'deal-dispatch': 'RUSSELL_PUBLIC_RECORDS_V1',
 });
+
+/**
+ * Which envelope a project compiles under, after the map above says nothing.
+ *
+ * The map is a slug frozen in this repository, which works exactly while the
+ * projects that do research are ones this repository knows about. Cash Mode's
+ * private operations are projects an operator creates — four of them, named by
+ * whoever set them up — so a constant here could never have an entry for them,
+ * and the compiler's deny-by-default would refuse every idea in every one of
+ * them for ever. Appendix C of the Cash Mode plan records exactly that: four
+ * new project names plus a prompt activate nothing.
+ *
+ * So a second source is read, and the safety property is kept rather than
+ * traded away. `cash_modes.envelope_id` is written when a person with ADMIN on
+ * that project activates the section, and `services/cash/lifecycle.ts` refuses
+ * anything outside `SELECTABLE_CASH_ENVELOPES`. A project may therefore
+ * *choose* which reviewed limits apply to it and may not write any: §16's
+ * sentence — nobody supplies the limits their own plan is judged against —
+ * holds unchanged, because the envelope is still code somebody reviewed and the
+ * row only names one.
+ *
+ * The in-code map wins where it has an entry, so nothing about an existing
+ * project's authorization can be changed by activating a cash mode on it.
+ */
+async function envelopeIdFor(project: Project): Promise<string | null> {
+  const declared = ENVELOPE_BY_PROJECT[project.slug];
+  if (declared) return declared;
+  const mode = await getCashMode(project.id);
+  if (!mode) return null;
+  return isSelectableCashEnvelope(mode.envelopeId) ? mode.envelopeId : null;
+}
 
 
 /** One fragment, fully specified, ready for `createFragments` to place. */
@@ -310,7 +343,7 @@ export async function compileMission(input: {
 }): Promise<CompileResult> {
   const { candidate, project } = input;
 
-  const envelopeId = ENVELOPE_BY_PROJECT[project.slug];
+  const envelopeId = await envelopeIdFor(project);
   if (!envelopeId) {
     return refuse(
       `no standing research authorization is defined for the project "${project.slug}", so ` +

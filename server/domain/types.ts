@@ -5400,3 +5400,400 @@ export interface RussellSoftwareRequestRow {
   created_at: string;
   updated_at: string;
 }
+
+/* ==========================================================================
+ * Cash Mode (§30)
+ *
+ * The temporary operating section. Every enum here is a closed set matched
+ * exactly — there is no substring matching, no "closest state" and no inferred
+ * label anywhere downstream — and every money figure is integer cents.
+ * ======================================================================== */
+
+/**
+ * Where a cash sprint is in its life.
+ *
+ * `WINDING_DOWN` and `ARCHIVED` stop exactly one thing: **new discovery**.
+ * Delivery, collection, settlement, needs and every existing opportunity keep
+ * their ordinary execution in all three, because a sprint ending is not a
+ * customer's obligation ending.
+ */
+export const CASH_MODE_STATES = ['ACTIVE', 'WINDING_DOWN', 'ARCHIVED'] as const;
+export type CashModeState = (typeof CASH_MODE_STATES)[number];
+
+/**
+ * The search buckets, from the plan's own table.
+ *
+ * Closed so a mechanism is a fact rather than free text, and deliberately
+ * non-exhaustive in spirit: `OTHER` exists because the mandate is broad
+ * discovery and a bucket list that refused an unlisted opening would be the
+ * invented preference the plan explicitly forbids.
+ */
+export const CASH_MECHANISMS = [
+  'EXISTING_BUYING_SIGNAL',
+  'DIAGNOSTIC_OPPORTUNITY',
+  'EXPLICIT_PAID_REQUEST',
+  'TEMPORARY_EXPLOIT',
+  'SUPPLY_DEMAND_MISMATCH',
+  'PAIN_TRIGGERED_IMPLEMENTATION',
+  'RESALE_OR_ASSET',
+  'OTHER',
+] as const;
+export type CashMechanism = (typeof CASH_MECHANISMS)[number];
+
+export const CASH_OPPORTUNITY_STATES = [
+  'DISCOVERED',
+  'EVIDENCE_CARD',
+  'READY',
+  'EXECUTING',
+  'DELIVERING',
+  'COLLECTED',
+  'DECLINED',
+  'ARCHIVED',
+] as const;
+export type CashOpportunityState = (typeof CASH_OPPORTUNITY_STATES)[number];
+
+/**
+ * What a person should do with this piece, derived on the read path.
+ *
+ * Never stored. A row is not a decision: a stored label is stale the moment the
+ * dependency it was waiting on settles, and two readers deriving it separately
+ * is how one screen comes to disagree with another.
+ */
+export const CASH_DISPOSITIONS = [
+  'EXECUTE_NOW',
+  'RUN_IN_PARALLEL',
+  'WAIT_FOR_DEPENDENCY',
+  'TEST_A_DECISIVE_UNKNOWN',
+  'ARCHIVED',
+] as const;
+export type CashDisposition = (typeof CASH_DISPOSITIONS)[number];
+
+export const CASH_COMMITMENT_STATES = ['HELD', 'SETTLED', 'RELEASED'] as const;
+export type CashCommitmentState = (typeof CASH_COMMITMENT_STATES)[number];
+
+export const CASH_MONEY_KINDS = [
+  'CAPITAL_IN',
+  'CAPITAL_OUT',
+  'PIPELINE_AGREED',
+  'CUSTOMER_PAYMENT',
+  'SETTLEMENT',
+  'REFUND',
+  'COST',
+  'UNPAID_COMMITMENT',
+  'COMMITMENT_PAID',
+  'RESERVE',
+  'RESERVE_RELEASE',
+] as const;
+export type CashMoneyKind = (typeof CASH_MONEY_KINDS)[number];
+
+export const CASH_NEED_STATES = ['OPEN', 'RESOLVED', 'WITHDRAWN'] as const;
+export type CashNeedState = (typeof CASH_NEED_STATES)[number];
+
+export const CASH_AUTHORITY_STATES = ['ACTIVE', 'REVOKED', 'EXPIRED'] as const;
+export type CashAuthorityState = (typeof CASH_AUTHORITY_STATES)[number];
+
+export interface CashModeRow {
+  id: string;
+  project_id: string;
+  owner_user_id: string;
+  objective: string;
+  horizon_days: number;
+  envelope_id: string;
+  state: string;
+  activated_at: string;
+  wound_down_at: string | null;
+  archived_at: string | null;
+  state_reason: string | null;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashMode {
+  id: string;
+  projectId: string;
+  ownerUserId: string;
+  objective: string;
+  horizonDays: number;
+  envelopeId: string;
+  state: CashModeState;
+  activatedAt: string;
+  woundDownAt: string | null;
+  archivedAt: string | null;
+  stateReason: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashAuthorityRow {
+  id: string;
+  project_id: string;
+  owner_user_id: string;
+  name: string;
+  policy_version: number;
+  allowed_actions: string;
+  prohibitions: string;
+  max_committed_cents: number;
+  max_per_action_cents: number;
+  max_concurrent: number;
+  currency: string;
+  starts_at: string;
+  expires_at: string | null;
+  state: string;
+  revoked_at: string | null;
+  revoked_by_user_id: string | null;
+  revoked_reason: string | null;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashAuthority {
+  id: string;
+  projectId: string;
+  ownerUserId: string;
+  name: string;
+  policyVersion: number;
+  allowedActions: string[];
+  prohibitions: string[];
+  maxCommittedCents: number;
+  maxPerActionCents: number;
+  maxConcurrent: number;
+  currency: string;
+  startsAt: string;
+  expiresAt: string | null;
+  state: CashAuthorityState;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+  revokedReason: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashOpportunityRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  owner_user_id: string;
+  title: string;
+  mechanism: string;
+  industry: string | null;
+  source: string | null;
+  candidate_id: string | null;
+  external_record_id: string | null;
+  payer: string | null;
+  reachable_channel: string | null;
+  buying_signal: string | null;
+  signal_observed_at: string | null;
+  offer_scope: string | null;
+  acceptance_condition: string | null;
+  price_cents: number | null;
+  currency: string;
+  payment_terms: string | null;
+  fulfillment_owner: string | null;
+  delivery_method: string | null;
+  required_inputs: string | null;
+  deadline: string | null;
+  economics_note: string | null;
+  peak_funding_cents: number | null;
+  human_hours: number | null;
+  expires_at: string | null;
+  expiry_reason: string | null;
+  depends_on_id: string | null;
+  duplicate_of_id: string | null;
+  required_capabilities: string;
+  execution_asset: string | null;
+  asset_revision: string | null;
+  state: string;
+  exhausted_at: string | null;
+  exhausted_reason: string | null;
+  next_action: string | null;
+  next_action_due: string | null;
+  outcome: string | null;
+  stop_rule: string | null;
+  declined_by_user_id: string | null;
+  declined_reason: string | null;
+  reoffered_from_id: string | null;
+  archived_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashOpportunity {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  ownerUserId: string;
+  title: string;
+  mechanism: CashMechanism;
+  industry: string | null;
+  source: string | null;
+  candidateId: string | null;
+  externalRecordId: string | null;
+  payer: string | null;
+  reachableChannel: string | null;
+  buyingSignal: string | null;
+  signalObservedAt: string | null;
+  offerScope: string | null;
+  acceptanceCondition: string | null;
+  priceCents: number | null;
+  currency: string;
+  paymentTerms: string | null;
+  fulfillmentOwner: string | null;
+  deliveryMethod: string | null;
+  requiredInputs: string | null;
+  deadline: string | null;
+  economicsNote: string | null;
+  peakFundingCents: number | null;
+  humanHours: number | null;
+  expiresAt: string | null;
+  expiryReason: string | null;
+  dependsOnId: string | null;
+  duplicateOfId: string | null;
+  requiredCapabilities: string[];
+  executionAsset: string | null;
+  assetRevision: string | null;
+  state: CashOpportunityState;
+  exhaustedAt: string | null;
+  exhaustedReason: string | null;
+  nextAction: string | null;
+  nextActionDue: string | null;
+  outcome: string | null;
+  stopRule: string | null;
+  declinedByUserId: string | null;
+  declinedReason: string | null;
+  reofferedFromId: string | null;
+  archivedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashCommitmentRow {
+  id: string;
+  authority_id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  amount_cents: number;
+  currency: string;
+  purpose: string;
+  expected_result: string;
+  stop_condition: string;
+  idempotency_key: string;
+  state: string;
+  settled_at: string | null;
+  released_at: string | null;
+  release_reason: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashCommitment {
+  id: string;
+  authorityId: string;
+  projectId: string;
+  opportunityId: string | null;
+  amountCents: number;
+  currency: string;
+  purpose: string;
+  expectedResult: string;
+  stopCondition: string;
+  idempotencyKey: string;
+  state: CashCommitmentState;
+  settledAt: string | null;
+  releasedAt: string | null;
+  releaseReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashMoneyEntryRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  kind: string;
+  amount_cents: number;
+  currency: string;
+  verified_reference: string | null;
+  funds_available_at: string | null;
+  occurred_at: string;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+
+export interface CashMoneyEntry {
+  id: string;
+  projectId: string;
+  opportunityId: string | null;
+  kind: CashMoneyKind;
+  amountCents: number;
+  currency: string;
+  verifiedReference: string | null;
+  fundsAvailableAt: string | null;
+  occurredAt: string;
+  note: string | null;
+  recordedBy: string;
+  createdAt: string;
+}
+
+export interface CashNeedRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  blocked_action: string;
+  why_it_matters: string;
+  recommended_path: string;
+  expected_cost_cents: number | null;
+  setup_effort: string;
+  next_step: string;
+  state: string;
+  resolution: string | null;
+  resolved_by_user_id: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashNeed {
+  id: string;
+  projectId: string;
+  opportunityId: string | null;
+  blockedAction: string;
+  whyItMatters: string;
+  recommendedPath: string;
+  expectedCostCents: number | null;
+  setupEffort: string;
+  nextStep: string;
+  state: CashNeedState;
+  resolution: string | null;
+  resolvedByUserId: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashEventRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  kind: string;
+  actor_ref: string;
+  summary: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface CashEvent {
+  id: string;
+  projectId: string;
+  opportunityId: string | null;
+  kind: string;
+  actorRef: string;
+  summary: string;
+  detail: Record<string, unknown>;
+  createdAt: string;
+}

@@ -2414,3 +2414,115 @@ button.rs-card:hover {
   list-style: none;
   font-size: var(--step--1);
 }
+
+/* ------------------------------------------------------------------ cash -- */
+/*
+ * Cash Mode's own surface.
+ *
+ * Almost nothing new: the section reuses `rs-card`, `rs-list`, `rs-row`,
+ * `rs-decision`, `rs-authority` and `rs-state` because those already encode the
+ * decisions this screen has to get right, and a second set of rules for the
+ * same shapes is how two surfaces come to look like two products.
+ *
+ * Every colour is a token. No rule here declares a `min-width`, and the one
+ * table is inside `rs-table-wrap`, which is the only thing on this screen
+ * allowed to scroll sideways.
+ */
+.rs-view-cash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-4);
+}
+
+.rs-view-cash > .rs-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+}
+
+.rs-view-cash h3 {
+  margin: 0;
+  font: 600 var(--step-1) / 1.3 var(--display);
+}
+
+.rs-cash-activate textarea,
+.rs-cash-authority-details input,
+.rs-cash-lifecycle input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+/*
+ * The one table on this screen, and its own scroller.
+ *
+ * Eight figures with an explanation each is genuinely tabular, and §29 allows a
+ * table, a map and a code block to exceed the measure — each inside its own
+ * container, so the page body never scrolls horizontally.
+ */
+.rs-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rs-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--step--1);
+}
+
+.rs-table-wrap th,
+.rs-table-wrap td {
+  padding: var(--gap-2);
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+.rs-table-wrap th[scope='row'] {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rs-cash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+}
+
+.rs-cash-actions button {
+  min-height: 44px;
+}
+
+.rs-cash-portfolio .rs-group,
+.rs-cash-needs .rs-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+  padding: var(--gap-3) 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.rs-cash-portfolio .rs-group:last-child,
+.rs-cash-needs .rs-group:last-child {
+  border-bottom: 0;
+}
+
+.rs-cash-authority-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  margin-top: var(--gap-3);
+}
+
+.rs-cash-authority-details fieldset {
+  margin: 0;
+  padding: var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+}
