@@ -37,15 +37,21 @@ import {
   liveAuthority,
   settleCommitment,
 } from '../../repos/cashAuthority.ts';
+import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { getDb } from '../../db/database.ts';
 import { recordMoney } from '../../repos/cashLedger.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
-import { checkCommercialAuthority } from './authority.ts';
+import {
+  COMMERCIAL_ACTIONS,
+  checkCommercialAuthority,
+  isCommercialAction,
+} from './authority.ts';
 import { evidenceCard } from './card.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition, checkMoneyEntry } from './money.ts';
 import { toJson } from '../../repos/util.ts';
 import type {
+  CashActionPerformer,
   CashCommitment,
   CashMechanism,
   CashMoneyEntry,
@@ -310,16 +316,49 @@ export async function markReady(input: {
 }
 
 /**
- * Start executing.
+ * Start executing, which means doing something rather than saying so.
  *
- * Four questions, in this order, and the order matters: the card first because
+ * Five questions, in this order, and the order matters: the card first because
  * it costs nothing to ask, the authority second because it is the decision, the
- * capacity third, and the money last because it is the only one that depends on
- * every entry in the ledger.
+ * capacity third, the money fourth because it is the only one that depends on
+ * every entry in the ledger — and last, **has anything actually happened.**
+ *
+ * That last one was missing, and its absence was the defect. `EXECUTING` means
+ * "the transaction is being pursued", and this function used to write it on the
+ * strength of a button press: no work enqueued, no action performed, nothing
+ * anywhere that a later reader could point at. A piece could sit in that state
+ * for a week with the plan counting it as in flight.
+ *
+ * So the transition is now downstream of a `cash_actions` row. `firstAction`
+ * names what the caller actually did — a person confirming they contacted the
+ * buyer, or Brain recording something a verified capability performed — and
+ * without one the piece stays `READY` and is told what is missing. That is not
+ * a new ceiling: nothing is refused for want of capacity or allowance, and the
+ * remedy is always something somebody can do now.
+ *
+ * §30's own sentence is why this cannot be softened: this version records the
+ * authorization and the money and does not itself contact a buyer, issue an
+ * invoice or move funds. A state machine that advanced anyway would be claiming
+ * the part that is not built.
  */
 export async function beginExecution(input: {
   opportunityId: string;
   actorRef: string;
+  /**
+   * What actually happened, when this call is the one that makes it true.
+   *
+   * Omitted, the opportunity advances only if an action is **already** on the
+   * record — which is what lets a continuation retry a transition without
+   * inventing a second action to justify it.
+   */
+  firstAction?: {
+    action: string;
+    performedBy: CashActionPerformer;
+    detail: string;
+    reference?: string | null;
+    /** Server-built. See `actionKey` below: nothing the caller sent contributes. */
+    requestKey: string;
+  };
 }): Promise<Outcome<CashOpportunity>> {
   const opportunity = await getOpportunity(input.opportunityId);
   if (!opportunity) return refuse('No opportunity with that id.');
@@ -327,14 +366,32 @@ export async function beginExecution(input: {
   const card = evidenceCard(opportunity);
   if (!card.readiness.ready) return refuse(card.readiness.summary);
 
+  /*
+   * The action recorded is the action authorized, and it is a closed set.
+   *
+   * Checking `CONTACT_BUYER` and then storing whatever the caller called the
+   * action would leave the record saying one thing and the grant having
+   * permitted another. `isCommercialAction` refuses anything outside the
+   * vocabulary, and the authority is asked about the action that actually
+   * happened — so a person whose grant covers contacting a buyer and not
+   * publishing an offer cannot record a publication under it.
+   */
+  const performed = input.firstAction?.action ?? 'CONTACT_BUYER';
+  if (!isCommercialAction(performed)) {
+    return refuse(
+      `"${performed}" is not an action this Brain knows how to authorize. A commercial action is ` +
+        `one of: ${COMMERCIAL_ACTIONS.join(', ')}.`,
+    );
+  }
+
   const decision = await checkCommercialAuthority({
     projectId: opportunity.projectId,
-    action: 'CONTACT_BUYER',
+    action: performed,
   });
   if (!decision.ok || !decision.authority) {
     return refuse(
-      `Executing means reaching the buyer, and ${decision.reason}. That is a decision for the ` +
-        'person whose account this is; nothing else is blocked by it.',
+      `Executing means acting on this opening, and ${decision.reason}. That is a decision for ` +
+        'the person whose account this is; nothing else is blocked by it.',
     );
   }
 
@@ -357,12 +414,61 @@ export async function beginExecution(input: {
     );
   }
 
+  /*
+   * Something has to have happened.
+   *
+   * Recorded before the transition, so a crash between the two leaves an action
+   * on the record and a piece still READY — visible and retryable. The other
+   * order leaves a piece EXECUTING with nothing behind it, which is exactly the
+   * state this correction exists to make impossible.
+   */
+  if (input.firstAction) {
+    const performed = await recordAction({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      authorityId: decision.authority.id,
+      action: input.firstAction.action,
+      performedBy: input.firstAction.performedBy,
+      reference: input.firstAction.reference ?? null,
+      detail: input.firstAction.detail,
+      confirmedBy: input.actorRef,
+      requestKey: input.firstAction.requestKey,
+    });
+    if (performed.created) {
+      await recordCashEvent({
+        projectId: opportunity.projectId,
+        opportunityId: opportunity.id,
+        kind: 'CASH_ACTION_RECORDED',
+        actorRef: input.actorRef,
+        summary: `${input.firstAction.action} was performed by ${input.firstAction.performedBy.toLowerCase()}.`,
+        detail: {
+          actionId: performed.action.id,
+          reference: performed.action.reference,
+          authorityId: decision.authority.id,
+        },
+      });
+    }
+  } else if ((await countActions(opportunity.id)) === 0) {
+    return refuse(
+      'Nothing has happened on this yet, so it is not executing. Record the first action — who ' +
+        'was contacted and how, or what Brain did — and this advances with it. Executing means ' +
+        'the transaction is being pursued, and a state that says so with nothing behind it is ' +
+        'the piece that sits in the plan for a week looking like it is in flight.',
+    );
+  }
+
   const moved = await transitionOpportunity({
     id: opportunity.id,
     from: ['READY'],
     to: 'EXECUTING',
   });
   if (!moved) {
+    // The action stands whatever the state does. It happened; a transition
+    // that could not be made does not un-happen it, and §5 keeps history.
+    const now = await getOpportunity(opportunity.id);
+    if (now?.state === 'EXECUTING') {
+      return { ok: true, value: now, message: 'Already executing. The action is on the record.' };
+    }
     return refuse(`This is ${opportunity.state.toLowerCase()} rather than ready to execute.`);
   }
   await recordCashEvent({
@@ -375,6 +481,17 @@ export async function beginExecution(input: {
   });
   const after = await getOpportunity(opportunity.id);
   return { ok: true, value: after!, message: 'Executing.' };
+}
+
+/**
+ * The key one action is recorded under, built from server facts only.
+ *
+ * §20's rule at a smaller scale: nothing the caller sent contributes, so a key
+ * is never a way to reach another project's row, and the same logical action
+ * retried produces the same key rather than a second record of it happening.
+ */
+export function actionKey(opportunityId: string, action: string, occurrence: string): string {
+  return `action:${opportunityId}:${action}:${occurrence}`;
 }
 
 /** Delivery has begun, or the money is in. Neither costs anything to record. */

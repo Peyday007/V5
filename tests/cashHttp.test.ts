@@ -429,14 +429,73 @@ describe('one account’s whole journey', () => {
     expect(second.body.error).toContain('ambiguous');
   });
 
-  it('executes once the grant exists', async () => {
-    const execute = await call<{ opportunity: { state: string } }>(
+  it('still refuses to execute when nothing has actually happened', async () => {
+    // The grant exists now. EXECUTING means "the transaction is being pursued",
+    // and writing it on a button press is how a piece sits in the plan for a
+    // week looking like it is in flight.
+    const execute = await call<{ error: string }>(
       'POST',
       `/api/cash/opportunities/${opportunityId}/execute`,
       { cookie: adminCookie, body: {} },
     );
+    expect(execute.status).toBe(422);
+    expect(execute.body.error).toContain('Nothing has happened on this yet');
+  });
+
+  it('refuses an action outside the closed commercial vocabulary', async () => {
+    const execute = await call<{ error: string }>(
+      'POST',
+      `/api/cash/opportunities/${opportunityId}/execute`,
+      {
+        cookie: adminCookie,
+        body: { action: 'DO_WHATEVER_IT_TAKES', detail: 'Rang round.' },
+      },
+    );
+    expect(execute.status).toBe(422);
+    expect(execute.body.error).toContain('not an action this Brain knows how to authorize');
+  });
+
+  it('executes once a person says what they actually did', async () => {
+    const execute = await call<{ opportunity: { state: string } }>(
+      'POST',
+      `/api/cash/opportunities/${opportunityId}/execute`,
+      {
+        cookie: adminCookie,
+        body: {
+          action: 'CONTACT_BUYER',
+          detail: 'Emailed the owner with a one-line scope and a price.',
+          reference: 'msg-8841',
+        },
+      },
+    );
     expect(execute.status).toBe(200);
     expect(execute.body.opportunity.state).toBe('EXECUTING');
+  });
+
+  it('records one action however many times the same call arrives', async () => {
+    // The key is built from the opportunity and the action, so a retry after a
+    // lost response is the same thing rather than a second thing happening.
+    const again = await call<{ opportunity: { state: string } }>(
+      'POST',
+      `/api/cash/opportunities/${opportunityId}/execute`,
+      {
+        cookie: adminCookie,
+        body: {
+          action: 'CONTACT_BUYER',
+          detail: 'Emailed the owner with a one-line scope and a price.',
+          reference: 'msg-8841',
+        },
+      },
+    );
+    expect(again.status).toBe(200);
+    expect(again.body.opportunity.state).toBe('EXECUTING');
+
+    const view = await call<{ whatBrainHasDone: { kind: string }[] }>('GET', CASH(), {
+      cookie: adminCookie,
+    });
+    expect(
+      view.body.whatBrainHasDone.filter((event) => event.kind === 'CASH_ACTION_RECORDED'),
+    ).toHaveLength(1);
   });
 
   it('refuses a money entry with no key naming the operation', async () => {
@@ -577,10 +636,25 @@ describe('one account’s whole journey', () => {
         recommendedPath: 'Use a hosted payment link from the existing provider account.',
         setupEffort: 'Minutes, no code.',
         nextStep: 'Create the link and send it.',
+        completionCondition: 'A payable link exists and the buyer has it.',
         expectedCostCents: 0,
       },
     });
     expect(good.status).toBe(200);
+
+    // A need with no checkable condition is a status rather than a remedy.
+    const conditionless = await call<{ error: string }>('POST', `${CASH()}/needs`, {
+      cookie: adminCookie,
+      body: {
+        blockedAction: 'Send a hosted invoice',
+        whyItMatters: 'The buyer cannot pay without one.',
+        recommendedPath: 'Use a hosted payment link.',
+        setupEffort: 'Minutes, no code.',
+        nextStep: 'Create the link and send it.',
+      },
+    });
+    expect(conditionless.status).toBe(400);
+    expect(conditionless.body.error).toContain('completionCondition');
 
     const bare = await call('POST', `${CASH()}/needs`, {
       cookie: adminCookie,

@@ -26,7 +26,13 @@
  */
 import { useState } from 'react';
 import { useAsync } from './useAsync.ts';
-import { CashApi, type CashModeState, type CashView, type Placement } from '../lib/cashApi.ts';
+import {
+  CashApi,
+  type CashModeState,
+  type CashView,
+  type Placement,
+  type ReviewItem,
+} from '../lib/cashApi.ts';
 
 const DISPOSITION_LABEL: Record<Placement['disposition'], string> = {
   EXECUTE_NOW: 'Execute now',
@@ -348,18 +354,117 @@ function Decisions({
                 <p className="rs-decision-why">{item.why}</p>
                 <p className="rs-decision-what">{item.recommendation}</p>
                 <p className="rs-choice-consequence">{item.consequence}</p>
+                {item.costNote ? <p className="rs-item-meta">{item.costNote}</p> : null}
                 {item.underlying.length > 0 ? (
                   <p className="rs-item-meta">
-                    Stands for {item.underlying.length}{' '}
-                    {item.underlying.length === 1 ? 'item' : 'items'}.
+                    {/*
+                      * "Stands for" and "covers" are different claims, and the
+                      * server decides which. A group whose members share one
+                      * remedy is answered once; one that merely shares a kind
+                      * of work is a batch, and saying otherwise teaches a
+                      * person to stop believing the counts.
+                      */}
+                    {item.sharedRemedy ? 'One answer covers' : 'The same kind of work on'}{' '}
+                    {item.underlying.length} {item.underlying.length === 1 ? 'item' : 'items'}.
                   </p>
                 ) : null}
+                <DecisionAnswer item={item} onDone={onChanged} />
               </li>
             ))}
         </ul>
       )}
       <Authority view={view} projectId={projectId} onChanged={onChanged} />
     </section>
+  );
+}
+
+/**
+ * The control that answers one decision, and the honest absence of one.
+ *
+ * Every answer names an operation that already exists — the grant, closing a
+ * need, releasing a commitment, filling a card. This renders the one the server
+ * chose and composes none of its own; a screen that decided what answering
+ * something meant would be a second opinion about one sprint.
+ *
+ * `NOTHING_TO_PRESS` renders as a sentence rather than a disabled button. An
+ * expiring opening is worth putting in front of somebody and is answered by
+ * taking it, and a button that only marked it read would be a control that
+ * pretends to do something.
+ */
+function DecisionAnswer({
+  item,
+  onDone,
+}: {
+  item: ReviewItem;
+  onDone(): void;
+}): JSX.Element | null {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [said, setSaid] = useState('');
+
+  if (item.answer.kind === 'NOTHING_TO_PRESS') {
+    return <p className="rs-item-meta">{item.answer.label}.</p>;
+  }
+  // The grant, the release and the funding all have their own controls
+  // elsewhere on this page. Repeating them here would be two ways to do one
+  // thing, and the second is always the one that forgets a guard.
+  if (item.answer.kind !== 'RESOLVE_NEED') {
+    return (
+      <p className="rs-item-meta">
+        {item.answer.label}. Brain checks it by reading: {item.answer.completionCondition}
+      </p>
+    );
+  }
+
+  async function resolve(): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      for (const needId of item.answer.targets) {
+        await CashApi.closeNeed(needId, 'RESOLVED', said);
+      }
+      setAsking(false);
+      setSaid('');
+      onDone();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rs-cash-actions">
+      {asking ? (
+        <>
+          <label className="rs-field-label" htmlFor={`cash-answer-${item.key}`}>
+            What did you do? Brain reads this back against: {item.answer.completionCondition}
+          </label>
+          <input
+            id={`cash-answer-${item.key}`}
+            value={said}
+            onChange={(event) => setSaid(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || said.trim().length === 0}
+            onClick={() => void resolve()}
+          >
+            {busy ? 'Recording\u2026' : 'Confirm'}
+          </button>
+          <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        <button type="button" className="rs-button-quiet" onClick={() => setAsking(true)}>
+          {item.answer.label}
+        </button>
+      )}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </div>
   );
 }
 
@@ -721,7 +826,11 @@ function CurrentWork({
                     earned still counts.
                   </p>
                 ) : null}
-                <Actions placement={placement} onChanged={onChanged} />
+                <Actions
+                  placement={placement}
+                  allowedActions={view.authority.allowedActions}
+                  onChanged={onChanged}
+                />
               </li>
             ))}
           </ul>
@@ -741,34 +850,49 @@ function CurrentWork({
  */
 function Actions({
   placement,
+  allowedActions,
   onChanged,
 }: {
   placement: Placement;
+  allowedActions: string[];
   onChanged(): void;
 }): JSX.Element | null {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  const [performed, setPerformed] = useState(allowedActions[0] ?? 'CONTACT_BUYER');
   const state = placement.opportunity.state;
 
-  const available: { action: string; label: string; needsReason?: boolean }[] = [];
+  /*
+   * `asks` says what the server needs before this transition is true.
+   *
+   * `REASON` is a sentence kept on the record. `ACTION` is the correction §3
+   * asked for: executing means the transaction is being pursued, so the call
+   * has to say what was actually done, and the control asks rather than
+   * pressing a button that writes the state anyway.
+   */
+  const available: { action: string; label: string; asks?: 'REASON' | 'ACTION' }[] = [];
   if (state === 'DISCOVERED' || state === 'EVIDENCE_CARD') {
     available.push({ action: 'ready', label: 'Mark ready to test' });
-    available.push({ action: 'decline', label: 'Pass on this', needsReason: true });
+    available.push({ action: 'decline', label: 'Pass on this', asks: 'REASON' });
   }
-  if (state === 'READY') available.push({ action: 'execute', label: 'Start executing' });
+  if (state === 'READY') {
+    available.push({ action: 'execute', label: 'Record the first move', asks: 'ACTION' });
+  }
   if (state === 'EXECUTING') available.push({ action: 'deliver', label: 'Delivering' });
   if (state === 'EXECUTING' || state === 'DELIVERING') {
     available.push({ action: 'collect', label: 'Money is in' });
   }
   if (available.length === 0) return null;
 
-  async function run(action: string, withReason?: string): Promise<void> {
+  const asks = available.find((entry) => entry.action === asking)?.asks ?? null;
+
+  async function run(action: string, body: Record<string, unknown> = {}): Promise<void> {
     setBusy(true);
     setProblem(null);
     try {
-      await CashApi.act(placement.opportunity.id, action, withReason ? { reason: withReason } : {});
+      await CashApi.act(placement.opportunity.id, action, body);
       setAsking(null);
       setReason('');
       onChanged();
@@ -787,12 +911,12 @@ function Actions({
           type="button"
           className="rs-button-quiet"
           disabled={busy}
-          onClick={() => (entry.needsReason ? setAsking(entry.action) : void run(entry.action))}
+          onClick={() => (entry.asks ? setAsking(entry.action) : void run(entry.action))}
         >
           {entry.label}
         </button>
       ))}
-      {asking ? (
+      {asks === 'REASON' && asking ? (
         <>
           <label className="rs-field-label" htmlFor={`cash-reason-${placement.opportunity.id}`}>
             Why? It is kept on the record, and it is what an offer to somebody else says.
@@ -806,7 +930,48 @@ function Actions({
             type="button"
             className="rs-button-quiet"
             disabled={busy || reason.trim().length === 0}
-            onClick={() => void run(asking, reason)}
+            onClick={() => void run(asking, { reason })}
+          >
+            Confirm
+          </button>
+          <button type="button" className="rs-linklike" onClick={() => setAsking(null)}>
+            Cancel
+          </button>
+        </>
+      ) : null}
+      {asks === 'ACTION' && asking ? (
+        <>
+          <p className="rs-hint">
+            Executing means the transaction is being pursued, so say what actually happened. The
+            list is what your standing authority permits.
+          </p>
+          <label className="rs-field-label" htmlFor={`cash-did-${placement.opportunity.id}`}>
+            What did you do?
+          </label>
+          <select
+            id={`cash-did-${placement.opportunity.id}`}
+            value={performed}
+            onChange={(event) => setPerformed(event.target.value)}
+          >
+            {(allowedActions.length > 0 ? allowedActions : ['CONTACT_BUYER']).map((one) => (
+              <option key={one} value={one}>
+                {one.toLowerCase().replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+          <label className="rs-field-label" htmlFor={`cash-detail-${placement.opportunity.id}`}>
+            In your own words, and any reference it has outside Brain.
+          </label>
+          <input
+            id={`cash-detail-${placement.opportunity.id}`}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+          <button
+            type="button"
+            className="rs-button-quiet"
+            disabled={busy || reason.trim().length === 0}
+            onClick={() => void run(asking, { action: performed, detail: reason })}
           >
             Confirm
           </button>

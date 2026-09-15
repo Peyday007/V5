@@ -3385,11 +3385,119 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   than a code one, and it is written down here because the privacy boundary
   between the four operations depends on it.
 
+- **A sprint had nowhere to get opportunities from, and said discovery had
+  started.** Activating wrote a mode row and an event and nothing else — no
+  goal, no candidate, no mission, no queued job — and `capture` had exactly two
+  production callers, a person pressing a button and the reoffer service. So a
+  freshly activated sprint could sit empty indefinitely beside a perfectly
+  healthy fleet while the screen said otherwise, which is §24's *waiting nobody
+  can resolve* arriving at a section rather than a state machine.
+
+  `services/cash/discovery.ts` is the two halves that were missing and the whole
+  of it rests on one rule: **Brain decomposes; it never invents a finding.** The
+  plan's own search-bucket table is a closed set of declared places to look, so
+  each bucket becomes one captured idea and everything after that is the path
+  Steps 4 to 12A already built. No grant is manufactured: a project with no
+  standing research authority compiles no specification and the idea parks.
+  Turning a finished mission back into openings needs no reader either, because
+  **a lane is a row** — `harvest` reads `evidence_lane`, not prose, and what it
+  files carries a **blank card**, since a published request is evidence somebody
+  asked and is not a payer, a price, an acceptance condition or a delivery path.
+
+  It reads the *citable* set rather than the accepted-fragment one. A bucket
+  question is broad by construction, so its fragment will often fall short on
+  coverage while every claim passed the gate on its own; discarding them for
+  that is the defect `citableClaims` was written for one altitude up.
+
+- **Winding down stopped work nobody had asked it to stop, and the correction
+  needed a second column.** The guard read every linked candidate as discovery,
+  so it also stopped Brain researching a question needed to *deliver* what a
+  customer had already been promised — the off switch reaching past the thing it
+  owns, which is the `russell_cycle` mistake one altitude down. An idea about an
+  opportunity that is EXECUTING, DELIVERING or COLLECTED is support work.
+  `candidate_id` is the idea an opportunity *is*; a bucket is a broad question
+  about none of the openings it found, so it goes in
+  `discovered_by_candidate_id`. One column for both would have re-opened new
+  discovery the moment any single opening started executing.
+
+- **`EXECUTING` meant "the transaction is being pursued" and was written on a
+  button press.** No work enqueued, no action performed, nothing anywhere a
+  later reader could point at — so a piece could sit there for a week with the
+  plan counting it as in flight. The transition is downstream of a
+  `cash_actions` row now: append-only, `performed_by` is `BRAIN` or `PERSON` and
+  there is no third value because *we think it happened* is not a record, the
+  action is one of `COMMERCIAL_ACTIONS`, and the grant is asked about **that**
+  action rather than about `CONTACT_BUYER` regardless. The action is written
+  before the transition, so a crash between them leaves a piece READY with the
+  action on the record — visible and retryable — rather than EXECUTING with
+  nothing behind it.
+
+- **A capability is read, never declared, and two answers stay apart.**
+  `required_capabilities` was written by the card and consulted by nothing, so a
+  piece could declare it needs a payment processor, reach READY against a Brain
+  that has none, and never be asked. `readCapability` answers from rows —
+  `RESEARCH_A_QUESTION` is `PRESENT` only when the fleet has a healthy execution
+  surface, the same reading `auditAdmission` uses — and never from a cache.
+  `MISSING` means Brain understands the capability and does not have it;
+  `UNKNOWN` means nobody has told Brain what it is. Collapsing them would make an
+  unrecognised word read as a settled absence, which is invariant 39 in the
+  expensive direction: **we could not tell must never read the same as we
+  checked.**
+
+- **A need had no completion condition, no dependent work reference and no
+  continuation, so answering one resumed nothing.** A person could answer the
+  same need repeatedly and never learn their answer was recorded and ignored.
+  `completion_condition` is required, `blocks_state` names the transition
+  waiting on it — a *state*, because a continuation that had to read prose to
+  know what to resume would be model output deciding a transition — and
+  `continued_at` is a compare-and-swap, so two ticks reading one answered need
+  produce one resumption. The resumption retries `beginExecution` **without a
+  `firstAction`**: a resolved need can unblock work and can never manufacture
+  the evidence that work began, which is exactly what the `cash_actions`
+  correction is for and what a continuation supplying its own action would undo.
+
+  All of it is derived from rows on the tick rather than hooked to the moment a
+  card changed, which is what reaches the needs already stranded — the fourth
+  time this repository has needed that distinction. And **none of it gates
+  anything**: no pass refuses an opportunity, charges an attempt or stops
+  unrelated work.
+
+- **The review claimed answering a group released the work under it, and for
+  most groups that was false.** Five cards with no price are five prices — the
+  same sitting, not one answer — so `sharedRemedy` says which it is and the
+  screen reads *one answer covers* or *the same kind of work on* accordingly. A
+  screen that promises five and delivers one teaches a person to stop believing
+  the counts, which is §29's defect at a new surface.
+
+  **A shared remedy costs what the remedy costs, once.** Two needs blocked on
+  the same small tool were reported at twice its price, because the group summed
+  the expected costs of the things it unblocks. The direction matters: an
+  over-stated cost makes a cheap unblock look expensive enough to defer. Where
+  the members name one figure it is that figure; where they differ Brain says
+  the largest and why rather than inventing a total.
+
+  **A fact Brain could look up is not a person's decision.** `evidenceCard`
+  marks the payer, the access channel and the buying evidence `discoverable`, so
+  `reconcileDiscoverableGaps` raises a need and Brain researches them and they
+  never reach the review. What to offer, what to charge, what counts as accepted
+  and who does the work are the owner's own calls — a researched answer to *what
+  should we charge* would be invented judgment wearing a citation.
+
+  **Every item carries a typed answer, and each names an operation that already
+  exists.** There is no apply endpoint of the review's own, because a second way
+  to do each of those is one forgotten guard away from doing less.
+  `NOTHING_TO_PRESS` is a real value rather than an omission: an expiring
+  opening is answered by taking it, and a button that marked it read would be a
+  control that pretends.
+
 **What this version does not do, and says so.** It records the authorization and
 the money; it does not itself contact a buyer, issue an invoice or move funds. A
 missing integration is a `cash_needs` row with a recommended way forward, which
-the plan calls a valid execution state — not a silent block. Nothing here forms
-a view about what settling a question is worth, for the same reason
+the plan calls a valid execution state — not a silent block. `capabilities.ts`
+says so in code rather than only here: every capability but
+`RESEARCH_A_QUESTION` reports `MISSING` with the integration it would need
+named, and none of them has a reader, because there is nothing to read. Nothing
+here forms a view about what settling a question is worth, for the same reason
 `judgment.ts` does not.
 
 ---
@@ -3431,6 +3539,7 @@ server/
     cashAuthority.ts  the commercial grant, and the ceiling spent by insert
     cashPortfolio.ts  the opportunities, and the needs they raise
     cashLedger.ts     money, as append-only rows; no balance column anywhere
+    cashActions.ts    what was actually done, and under which grant
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -3515,6 +3624,9 @@ server/
       needs.ts          a missing capability, with somewhere to go
       review.ts         grouping by shared remedy; compression, measured
       opportunities.ts  the producer, and every transition an opportunity has
+      capabilities.ts   what Brain can verifiably do, read rather than declared
+      discovery.ts      where the portfolio comes from: buckets, and a lane
+      operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
@@ -3633,6 +3745,8 @@ tests/                  Vitest suites
   cashMoney.test.ts          the six figures, and the cost that must not be subtracted twice
   cashAuthority.test.ts      the closed vocabulary, and the race for the last dollar
   cashPortfolio.test.ts      the unknowns, the dispositions, and the measured compression
+  cashDiscovery.test.ts      the buckets, the lane, and the blank card they produce
+  cashOperate.test.ts        a capability read, a need resumed, an action recorded
   cashHttp.test.ts           Cash Mode's door, driven as an attack
   cashSection.test.tsx       the Cash section in a browser: four states, one control
   connectorIsolation.test.ts one site, two private operations, two identities

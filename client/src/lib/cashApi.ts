@@ -85,6 +85,21 @@ export interface CashNeed {
   state: string;
 }
 
+export type ReviewAnswerKind =
+  | 'GRANT_AUTHORITY'
+  | 'RESOLVE_NEED'
+  | 'RELEASE_COMMITMENT'
+  | 'RECORD_MONEY'
+  | 'FILL_CARD_FIELD'
+  | 'NOTHING_TO_PRESS';
+
+export interface ReviewAnswer {
+  kind: ReviewAnswerKind;
+  targets: string[];
+  label: string;
+  completionCondition: string;
+}
+
 export interface ReviewItem {
   key: string;
   title: string;
@@ -93,6 +108,11 @@ export interface ReviewItem {
   consequence: string;
   urgency: 'URGENT' | 'BLOCKING' | 'WHENEVER';
   underlying: string[];
+  /** Whether one act answers every row under it, or they merely look alike. */
+  sharedRemedy: boolean;
+  costCents: number | null;
+  costNote: string | null;
+  answer: ReviewAnswer;
 }
 
 export interface CashView {
@@ -105,6 +125,8 @@ export interface CashView {
     lines: string[];
     maxConcurrent: number;
     heldCents: number;
+    /** What this grant permits, so the screen offers those and not the vocabulary. */
+    allowedActions: string[];
   };
   myCash: {
     position: CashPosition;
@@ -254,6 +276,16 @@ export const CashApi = {
     api(`/api/projects/${p(projectId)}/cash/opportunities`, {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+
+  closeNeed: (
+    needId: string,
+    to: 'RESOLVED' | 'WITHDRAWN',
+    resolution: string,
+  ): Promise<{ need: { id: string; state: string }; message: string }> =>
+    api(`/api/cash/needs/${p(needId)}/close`, {
+      method: 'POST',
+      body: JSON.stringify({ to, resolution }),
     }),
 
   act: (

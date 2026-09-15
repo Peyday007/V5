@@ -17,10 +17,20 @@
  * need is open, which is what the plan means by "an explicit missing need is a
  * valid execution state".
  */
-import { createNeed, getNeed, listNeeds, settleNeed } from '../../repos/cashPortfolio.ts';
-import { getOpportunity } from '../../repos/cashPortfolio.ts';
+import {
+  claimNeedContinuation,
+  createNeed,
+  getNeed,
+  getOpportunity,
+  listNeeds,
+  needForKey,
+  needsAwaitingContinuation,
+  recordNeedContinuation,
+  settleNeed,
+} from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
-import type { CashNeed } from '../../domain/types.ts';
+import { readCapability } from './capabilities.ts';
+import type { CashNeed, CashOpportunityState } from '../../domain/types.ts';
 import type { Outcome } from './opportunities.ts';
 
 function refuse(reason: string): { ok: false; reason: string } {
@@ -37,6 +47,28 @@ export async function raiseNeed(input: {
   expectedCostCents?: number | null;
   setupEffort: string;
   nextStep: string;
+  /**
+   * What settles it, in a form somebody can check.
+   *
+   * Required, for the reason `recommendedPath` and `nextStep` already are: a
+   * need whose answer nobody can verify is a status rather than a remedy, and
+   * `runContinuations` below reads exactly this to decide whether an answer
+   * actually happened.
+   */
+  completionCondition: string;
+  /** The opportunity transition waiting on it, when one is. */
+  blocksState?: CashOpportunityState | null;
+  /** The idea Brain started because of it, when it could start one. */
+  candidateId?: string | null;
+  /**
+   * What makes this need the same need.
+   *
+   * With one, raising it twice returns the row that already exists rather than
+   * filling the review with one entry per tick. Without one, every call is a
+   * new need — which is right for something a person typed and wrong for
+   * anything a loop derives.
+   */
+  requestKey?: string | null;
 }): Promise<Outcome<CashNeed>> {
   const fields = {
     blockedAction: input.blockedAction.trim(),
@@ -44,13 +76,14 @@ export async function raiseNeed(input: {
     recommendedPath: input.recommendedPath.trim(),
     setupEffort: input.setupEffort.trim(),
     nextStep: input.nextStep.trim(),
+    completionCondition: input.completionCondition.trim(),
   };
   for (const [name, value] of Object.entries(fields)) {
     if (value) continue;
     return refuse(
       `A need has to name the blocked action, why it matters, the recommended way forward, the ` +
-        `setup effort and the exact next step. "${name}" is empty, and a need with a blank there ` +
-        'is a blocked label rather than something somebody can act on.',
+        `setup effort, the exact next step and what would settle it. "${name}" is empty, and a ` +
+        'need with a blank there is a blocked label rather than something somebody can act on.',
     );
   }
   if (
@@ -70,11 +103,30 @@ export async function raiseNeed(input: {
     }
   }
 
+  const key = input.requestKey?.trim() || null;
+  if (key) {
+    const existing = await needForKey(input.projectId, key);
+    if (existing) {
+      // The same condition, read back rather than raised again. A loop that
+      // derives a need every tick must add one entry to the review, not one
+      // per tick — and the caller wants the row either way, because it is what
+      // the continuation is waiting on.
+      return {
+        ok: true,
+        value: existing,
+        message: 'This need was already raised. Nothing was added.',
+      };
+    }
+  }
+
   const need = await createNeed({
     projectId: input.projectId,
     opportunityId: input.opportunityId ?? null,
     ...fields,
     expectedCostCents: input.expectedCostCents ?? null,
+    blocksState: input.blocksState ?? null,
+    candidateId: input.candidateId ?? null,
+    requestKey: key,
   });
 
   await recordCashEvent({
@@ -83,7 +135,12 @@ export async function raiseNeed(input: {
     kind: 'CASH_NEED_RAISED',
     actorRef: input.actorRef,
     summary: `Blocked: ${fields.blockedAction}. Recommended: ${fields.recommendedPath}.`,
-    detail: { nextStep: fields.nextStep, expectedCostCents: input.expectedCostCents ?? null },
+    detail: {
+      nextStep: fields.nextStep,
+      completionCondition: fields.completionCondition,
+      blocksState: input.blocksState ?? null,
+      expectedCostCents: input.expectedCostCents ?? null,
+    },
   });
 
   return {

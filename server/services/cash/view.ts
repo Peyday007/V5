@@ -48,6 +48,16 @@ export interface CashView {
     maxConcurrent: number;
     /** Held and spent so far, with no denominator where there is no ceiling. */
     heldCents: number;
+    /**
+     * The actions this grant actually permits.
+     *
+     * Sent so the screen that asks "what did you do" offers the things this
+     * person authorized rather than the whole vocabulary — a control offering
+     * an action the grant refuses is one that teaches somebody the refusal is
+     * arbitrary. It decides nothing: `checkCommercialAuthority` is still asked
+     * server-side about whatever arrives.
+     */
+    allowedActions: string[];
   };
   myCash: {
     position: CashPosition;
@@ -131,6 +141,7 @@ export async function cashView(input: {
       lines: authority ? describeAuthority(authority) : [],
       maxConcurrent: authority?.maxConcurrent ?? 0,
       heldCents: position.heldCommitmentsCents,
+      allowedActions: authority?.allowedActions ?? [],
     },
     myCash: {
       position,

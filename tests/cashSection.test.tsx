@@ -121,7 +121,14 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
     },
     objective: 'Maximize additional usable cash over the next few weeks.',
     discovery: { open: true, reason: 'Cash Mode is active.' },
-    authority: { exists: false, id: null, lines: [], maxConcurrent: 0, heldCents: 20_000 },
+    authority: {
+      exists: false,
+      id: null,
+      lines: [],
+      maxConcurrent: 0,
+      heldCents: 20_000,
+      allowedActions: [],
+    },
     myCash: { position: POSITION, entries: [], commitments: [] },
     myCurrentWork: {
       placements: [
@@ -158,6 +165,15 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
           consequence: 'Until it exists, every execution step is refused.',
           urgency: 'BLOCKING',
           underlying: [],
+          sharedRemedy: true,
+          costCents: null,
+          costNote: 'Approving a grant spends nothing. It sets a ceiling.',
+          answer: {
+            kind: 'GRANT_AUTHORITY',
+            targets: [],
+            label: 'Approve a standing commercial authority',
+            completionCondition: 'A live commercial grant exists on this project.',
+          },
         },
         {
           key: 'MISSING_PAYER',
@@ -167,6 +183,15 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
           consequence: 'Each becomes ready to test the moment its answer exists.',
           urgency: 'WHENEVER',
           underlying: ['cop_2', 'cop_3', 'cop_4'],
+          sharedRemedy: false,
+          costCents: null,
+          costNote: null,
+          answer: {
+            kind: 'FILL_CARD_FIELD',
+            targets: ['cop_2', 'cop_3', 'cop_4'],
+            label: 'Answer the payer on each card',
+            completionCondition: 'Every one of these cards records a payer.',
+          },
         },
       ],
       underlyingCount: 3,
@@ -349,7 +374,13 @@ describe('the decision nothing can proceed without', () => {
     await waitFor(() =>
       expect(screen.getByText(/standing for 3 underlying items/i)).toBeTruthy(),
     );
-    expect(screen.getByText(/Stands for 3 items\./)).toBeTruthy();
+    /*
+     * "One answer covers" and "the same kind of work on" are different claims,
+     * and this group is the second: three cards with no payer are three
+     * different buyers. The screen used to say answering it released all three.
+     */
+    expect(screen.getByText(/The same kind of work on 3 items\./)).toBeTruthy();
+    expect(screen.queryByText(/One answer covers 3 items\./)).toBeNull();
   });
 
   it('shows what can never be authorized, before anybody approves', async () => {
@@ -381,6 +412,114 @@ describe('the decision nothing can proceed without', () => {
       (screen.getByRole('button', { name: /show me what this authorizes/i }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);
+  });
+
+  it('answers a grouped need through the operation that already exists', async () => {
+    /*
+     * The review rendered items and needs as paragraphs with no answer
+     * controls, while its own summary claimed answering a group released the
+     * underlying work. This is the control, and it calls `closeNeed` — the
+     * operation that already exists — rather than a second apply endpoint that
+     * would be one forgotten guard away from doing less.
+     */
+    const answerable = view({
+      decisionsForMe: {
+        items: [
+          {
+            key: 'NEED_cnd_1',
+            title: '2 blocked actions, one remedy',
+            why: 'Both wait on the same small tool.',
+            recommendation: 'Buy the same small tool once. (about 5000 cents)',
+            consequence: 'Resolving this unblocks 2 actions.',
+            urgency: 'WHENEVER',
+            underlying: ['cnd_1', 'cnd_2'],
+            sharedRemedy: true,
+            costCents: 5_000,
+            costNote: 'One remedy at 5000 cents, paid once — not 2 times.',
+            answer: {
+              kind: 'RESOLVE_NEED',
+              targets: ['cnd_1', 'cnd_2'],
+              label: 'Mark all 2 done, and say what you did',
+              completionCondition: 'The tool is reachable from here.',
+            },
+          },
+        ],
+        underlyingCount: 2,
+        summary: '1 thing to decide, standing for 2 underlying items.',
+      },
+    });
+    base({
+      [VIEW]: { body: answerable },
+      'POST /api/cash/needs/cnd_1/close': { body: { need: { id: 'cnd_1', state: 'RESOLVED' } } },
+      'POST /api/cash/needs/cnd_2/close': { body: { need: { id: 'cnd_2', state: 'RESOLVED' } } },
+    });
+    await mount();
+
+    // The cost is the remedy's, once — not the sum over what it unblocks.
+    await waitFor(() =>
+      expect(screen.getByText(/One remedy at 5000 cents, paid once/i)).toBeTruthy(),
+    );
+    expect(screen.getByText(/One answer covers 2 items\./)).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /mark all 2 done/i }));
+    });
+    // Brain says what it will read back, rather than trusting the button.
+    expect(screen.getByText(/The tool is reachable from here/i)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText(/what did you do/i), {
+      target: { value: 'Bought it on the team card.' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    });
+
+    expect(bodies['POST /api/cash/needs/cnd_1/close']).toMatchObject({
+      to: 'RESOLVED',
+      resolution: 'Bought it on the team card.',
+    });
+    expect(bodies['POST /api/cash/needs/cnd_2/close']).toMatchObject({ to: 'RESOLVED' });
+    // Never optimistic: the page goes back to the server for what is true now.
+    expect(calls.filter((call) => call === VIEW).length).toBe(2);
+  });
+
+  it('offers no button for a decision no control on this page answers', async () => {
+    const expiring = view({
+      decisionsForMe: {
+        items: [
+          {
+            key: 'EXPIRING',
+            title: '1 opening closes within three days',
+            why: 'It closes on Thursday.',
+            recommendation: 'Take it before the slower pieces.',
+            consequence: 'Nothing else gets worse by waiting a day; this does.',
+            urgency: 'URGENT',
+            underlying: ['cop_1'],
+            sharedRemedy: false,
+            costCents: null,
+            costNote: null,
+            answer: {
+              kind: 'NOTHING_TO_PRESS',
+              targets: ['cop_1'],
+              label: 'Answered by taking them, not by a control here',
+              completionCondition: 'Each of these is executing, declined, or has closed.',
+            },
+          },
+        ],
+        underlyingCount: 1,
+        summary: '1 thing to decide, standing for 1 underlying item.',
+      },
+    });
+    base({ [VIEW]: { body: expiring } });
+    await mount();
+
+    // A disabled button would be a control that pretends to do something.
+    await waitFor(() =>
+      expect(screen.getByText(/Answered by taking them, not by a control here\./)).toBeTruthy(),
+    );
+    expect(
+      screen.queryByRole('button', { name: /Answered by taking them/i }),
+    ).toBeNull();
   });
 
   it('says the concurrency bounds execution rather than the portfolio', async () => {
@@ -470,6 +609,7 @@ describe('the decision nothing can proceed without', () => {
             lines: ['Brain may commit up to USD 1,000.00 of your money at any one time.'],
             maxConcurrent: 2,
             heldCents: 20_000,
+            allowedActions: ['CONTACT_BUYER'],
           },
         }),
       },

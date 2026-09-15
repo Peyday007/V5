@@ -35,6 +35,43 @@ import type {
 import type { Placement } from './portfolio.ts';
 import type { CashPosition } from './money.ts';
 
+/**
+ * What answering one of these actually does.
+ *
+ * A closed set naming an operation that **already exists** — the grant, closing
+ * a need, releasing a commitment, filling a card. A review that grew its own
+ * apply endpoint would be a second way to do each of those, and the second one
+ * is always the one that forgets a guard.
+ *
+ * `NOTHING_TO_PRESS` is a real value rather than an omission: an expiring
+ * opening is worth putting in front of somebody and is answered by doing the
+ * work, not by a control on this screen. Saying so is better than a button that
+ * marks it read.
+ */
+export type ReviewAnswerKind =
+  | 'GRANT_AUTHORITY'
+  | 'RESOLVE_NEED'
+  | 'RELEASE_COMMITMENT'
+  | 'RECORD_MONEY'
+  | 'FILL_CARD_FIELD'
+  | 'NOTHING_TO_PRESS';
+
+export interface ReviewAnswer {
+  kind: ReviewAnswerKind;
+  /** The rows the answer applies to. Empty for an answer with no target. */
+  targets: string[];
+  /** The control's words, composed by the server. */
+  label: string;
+  /**
+   * What Brain will read to decide it actually happened.
+   *
+   * Not a promise that pressing the control worked: the tick re-derives every
+   * one of these from rows, so an answer that did not settle its condition
+   * leaves the item on the screen rather than disappearing.
+   */
+  completionCondition: string;
+}
+
 export interface ReviewItem {
   key: string;
   title: string;
@@ -44,8 +81,30 @@ export interface ReviewItem {
   recommendation: string;
   consequence: string;
   urgency: 'URGENT' | 'BLOCKING' | 'WHENEVER';
-  /** The rows this stands for. Answering the group releases all of them. */
+  /** The rows this stands for. */
   underlying: string[];
+  /**
+   * Whether one act answers every underlying row, or they merely look alike.
+   *
+   * The review used to claim the first about every group it made, and it was
+   * false for most of them: three cards with no payer are three different
+   * buyers and three different lookups, however identical the sentence
+   * describing them. A screen that says "answering this releases three" and
+   * then releases one teaches a person to stop believing the counts.
+   */
+  sharedRemedy: boolean;
+  /**
+   * What the remedy costs, when it is one remedy with a stated cost.
+   *
+   * Never a sum across a group. Two opportunities blocked on the same tool are
+   * one purchase, and adding their expected costs reports twice the price of
+   * buying it once — which is the direction that matters, because it makes a
+   * cheap unblock look expensive enough to defer.
+   */
+  costCents: number | null;
+  /** Why the cost reads the way it does, when it is not a single figure. */
+  costNote: string | null;
+  answer: ReviewAnswer;
 }
 
 export interface CompressedReview {
@@ -91,6 +150,15 @@ export function compressedReview(input: ReviewInput): CompressedReview {
         'of a decision only you can make.',
       urgency: 'BLOCKING',
       underlying: [],
+      sharedRemedy: true,
+      costCents: null,
+      costNote: 'Approving a grant spends nothing. It sets a ceiling.',
+      answer: {
+        kind: 'GRANT_AUTHORITY',
+        targets: [],
+        label: 'Approve a standing commercial authority',
+        completionCondition: 'A live commercial grant exists on this project.',
+      },
     });
   }
 
@@ -119,20 +187,40 @@ export function compressedReview(input: ReviewInput): CompressedReview {
       consequence: 'Answering this once releases all of them.',
       urgency: 'BLOCKING',
       underlying: stalled.map((p) => p.opportunity.id),
+      // Genuinely one remedy: they are all waiting on the same pool of cash
+      // and the same set of execution slots, so freeing either releases them.
+      sharedRemedy: true,
+      costCents: null,
+      costNote: null,
+      answer: {
+        kind: 'RELEASE_COMMITMENT',
+        targets: [],
+        label: 'Release or settle a commitment',
+        completionCondition:
+          'Deployable cash covers one of these, or an execution slot comes free.',
+      },
     });
   }
 
   /*
    * 3. Cards with the same load-bearing blank.
    *
-   * Grouped by the missing field rather than by opportunity, because that is
-   * the shared remedy: one afternoon establishing payers answers every card
-   * missing a payer. This is where most of the compression actually comes from.
+   * Grouped by the missing field, and **not** claimed to be one decision. The
+   * first version of this said answering the group released every card in it,
+   * and that is false wherever the group is three different buyers: one
+   * afternoon of the same kind of work is a batch, not one answer. The item
+   * now says which it is, so the count on the screen means what it says.
+   *
+   * The discoverable fields are absent from here entirely — Brain raises a
+   * need and researches them (see `reconcileDiscoverableGaps`), because a
+   * review filling up with homework Brain could have done is the opposite of
+   * compression.
    */
   const byMissing = new Map<string, string[]>();
   for (const placement of input.placements) {
     if (placement.disposition !== 'TEST_A_DECISIVE_UNKNOWN') continue;
     for (const field of placement.missing) {
+      if (DISCOVERABLE_FIELDS.has(field)) continue;
       const bucket = byMissing.get(field) ?? [];
       bucket.push(placement.opportunity.id);
       byMissing.set(field, bucket);
@@ -144,9 +232,22 @@ export function compressedReview(input: ReviewInput): CompressedReview {
       title: `${ids.length} card${ids.length === 1 ? '' : 's'} with no ${humanField(field)}`,
       why: `An unknown is not a favourable assumption, so none of these can be tested until the ${humanField(field)} is established.`,
       recommendation: REMEDY[field] ?? `Establish the ${humanField(field)} for each of these.`,
-      consequence: 'Each one becomes ready to test the moment its answer exists.',
+      consequence:
+        ids.length === 1
+          ? 'It becomes ready to test the moment its answer exists.'
+          : `These are ${ids.length} separate answers of the same kind — one sitting, not one ` +
+            'decision. Each becomes ready to test the moment its own answer exists.',
       urgency: 'WHENEVER',
       underlying: ids,
+      sharedRemedy: ids.length === 1,
+      costCents: null,
+      costNote: null,
+      answer: {
+        kind: 'FILL_CARD_FIELD',
+        targets: ids,
+        label: `Answer the ${humanField(field)} on ${ids.length === 1 ? 'this card' : 'each card'}`,
+        completionCondition: `Every one of these cards records a ${humanField(field)}.`,
+      },
     });
   }
 
@@ -159,12 +260,15 @@ export function compressedReview(input: ReviewInput): CompressedReview {
   const byPath = new Map<string, CashNeed[]>();
   for (const need of input.needs) {
     if (need.state !== 'OPEN') continue;
+    // A question Brain is already researching is not a decision for a person.
+    // It is on the screen as work in progress, not as something to answer.
+    if (need.candidateId) continue;
     const bucket = byPath.get(need.recommendedPath) ?? [];
     bucket.push(need);
     byPath.set(need.recommendedPath, bucket);
   }
   for (const [path, needs] of byPath) {
-    const cost = needs.reduce((total, n) => total + (n.expectedCostCents ?? 0), 0);
+    const { cents, note } = remedyCost(needs);
     items.push({
       key: `NEED_${needs[0]!.id}`,
       title:
@@ -172,10 +276,29 @@ export function compressedReview(input: ReviewInput): CompressedReview {
           ? `Brain needs: ${needs[0]!.blockedAction}`
           : `${needs.length} blocked actions, one remedy`,
       why: needs.map((n) => n.whyItMatters).join(' '),
-      recommendation: `${path}${cost > 0 ? ` (about ${cost} cents)` : ''}. Next step: ${needs[0]!.nextStep}`,
+      recommendation: `${path}${cents === null ? '' : ` (about ${cents} cents)`}. Next step: ${needs[0]!.nextStep}`,
       consequence: `Resolving this unblocks ${needs.length} action${needs.length === 1 ? '' : 's'}. Independent work is running meanwhile.`,
       urgency: 'WHENEVER',
       underlying: needs.map((n) => n.id),
+      // These *are* one remedy: they were grouped because they recommend the
+      // identical path, which is one tool bought once or one account opened
+      // once. That is the case the field exists to distinguish from the one
+      // above it.
+      sharedRemedy: true,
+      costCents: cents,
+      costNote: note,
+      answer: {
+        kind: 'RESOLVE_NEED',
+        targets: needs.map((n) => n.id),
+        label:
+          needs.length === 1
+            ? 'Mark this done, and say what you did'
+            : `Mark all ${needs.length} done, and say what you did`,
+        completionCondition: needs
+          .map((n) => n.completionCondition)
+          .filter((one): one is string => !!one)
+          .join(' ') || 'The recommended path was taken.',
+      },
     });
   }
 
@@ -205,6 +328,15 @@ export function compressedReview(input: ReviewInput): CompressedReview {
       consequence: 'Nothing else in the portfolio gets worse by waiting a day; these do.',
       urgency: 'URGENT',
       underlying: expiring.map((p) => p.opportunity.id),
+      sharedRemedy: false,
+      costCents: null,
+      costNote: null,
+      answer: {
+        kind: 'NOTHING_TO_PRESS',
+        targets: expiring.map((p) => p.opportunity.id),
+        label: 'Answered by taking them, not by a control here',
+        completionCondition: 'Each of these is executing, declined, or has closed.',
+      },
     });
   }
 
@@ -228,6 +360,15 @@ export function compressedReview(input: ReviewInput): CompressedReview {
       consequence: 'Delivery on work already sold continues regardless.',
       urgency: 'BLOCKING',
       underlying: [],
+      sharedRemedy: true,
+      costCents: null,
+      costNote: null,
+      answer: {
+        kind: 'RECORD_MONEY',
+        targets: [],
+        label: 'Record the funding, or release a commitment',
+        completionCondition: 'Deployable cash is no longer negative.',
+      },
     });
   }
 
@@ -246,6 +387,54 @@ export function compressedReview(input: ReviewInput): CompressedReview {
 }
 
 const URGENCY: Record<ReviewItem['urgency'], number> = { URGENT: 0, BLOCKING: 1, WHENEVER: 2 };
+
+/**
+ * The card blanks Brain looks up rather than asking about.
+ *
+ * Kept as a set here rather than read from `evidenceCard`, because this module
+ * is a pure projection over rows and taking an opportunity apart to ask about
+ * one field would make it depend on the card's shape. Exported so a test holds
+ * the two in agreement: two readers of one fact that could drift is how the one
+ * nobody reads comes to be wrong, and here the drift would put a question Brain
+ * researches back on a person's review, or take one off it that Brain never
+ * looks up.
+ */
+export const DISCOVERABLE_FIELDS = new Set(['payer', 'access', 'buyingEvidence']);
+
+/**
+ * What a shared remedy costs, which is not the sum of what it unblocks.
+ *
+ * Two opportunities blocked on the same small tool are one purchase. Adding
+ * their expected costs reported twice the price of buying it once — and the
+ * direction matters, because an over-stated cost makes a cheap unblock look
+ * expensive enough to defer. Where the group's members declare the same figure
+ * it is that figure, once. Where they differ Brain cannot tell whether that is
+ * one remedy priced inconsistently or several, so it says the range rather than
+ * inventing a total.
+ */
+function remedyCost(needs: CashNeed[]): { cents: number | null; note: string | null } {
+  const stated = needs
+    .map((one) => one.expectedCostCents)
+    .filter((one): one is number => one !== null && one > 0);
+  if (stated.length === 0) return { cents: null, note: null };
+  const distinct = [...new Set(stated)].sort((a, b) => a - b);
+  if (distinct.length === 1) {
+    return {
+      cents: distinct[0]!,
+      note:
+        needs.length === 1
+          ? null
+          : `One remedy at ${distinct[0]} cents, paid once — not ${needs.length} times.`,
+    };
+  }
+  return {
+    cents: distinct[distinct.length - 1]!,
+    note:
+      `These name different costs — ${distinct.join(' and ')} cents — so this is the largest of ` +
+      'them rather than a total. Adding them would assume they are separate purchases, and ' +
+      'nothing here knows that.',
+  };
+}
 
 const REMEDY: Record<string, string> = {
   payer: 'Establish who can approve payment. This is an access question, not a pricing one.',

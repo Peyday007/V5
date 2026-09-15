@@ -25,7 +25,8 @@ and the authority to spend it**.
 | `cash_commitments` | The ceiling, spent by insert. One per logical decision. |
 | `cash_opportunities` | The portfolio, and the evidence card on each piece. |
 | `cash_money_entries` | Append-only. Every figure is derived from these rows. |
-| `cash_needs` | A blocked action, with a recommended way forward. |
+| `cash_needs` | A blocked action, its completion condition, and what waits on it. |
+| `cash_actions` | Append-only. What was actually done, and under which grant. |
 | `cash_events` | Append-only history, no foreign keys. |
 
 | Module | What it decides |
@@ -36,6 +37,9 @@ and the authority to spend it**.
 | `services/cash/card.ts` | Which facts are unknown, and the task that answers each. |
 | `services/cash/portfolio.ts` | The disposition of each piece, and the assembled plan. |
 | `services/cash/needs.ts` | A need that names a remedy, or no need at all. |
+| `services/cash/capabilities.ts` | What Brain can verifiably do, read rather than declared. |
+| `services/cash/operate.ts` | Acting on a need: raise, settle, resume, start work. |
+| `services/cash/discovery.ts` | Where the portfolio actually comes from. |
 | `services/cash/review.ts` | Grouping by shared remedy; compression, measured. |
 | `services/cash/view.ts` | One projection, read by every surface. |
 | `routes/cash.ts` | The door. Thin; every decision is above. |
@@ -262,16 +266,95 @@ The plan's interaction goal is roughly a hundred underlying decisions becoming
 about ten review items, and it is explicit that ten is an example rather than a
 quota or permission to hide an urgent decision.
 
-Grouping is by **shared remedy** — the same missing card field, the same
-recommended path, the same blocker — so answering one group releases every
-underlying item in it. The count each group stands for is reported, so the
-compression is measured rather than claimed. An item with no group of its own is
-its own group rather than being dropped off the end of a top-ten list.
+Grouping is by **shared remedy** — the same recommended path, the same blocker.
+The count each group stands for is reported, so the compression is measured
+rather than claimed. An item with no group of its own is its own group rather
+than being dropped off the end of a top-ten list.
 
 **The decision nothing can proceed without is never folded.** A project with no
 live commercial grant has exactly one thing outstanding and it is named first —
 §29's rule that a status contradicting the control beside it teaches a person to
 stop reading it.
+
+Three corrections came out of a review of the first pass, and each of them is
+the same shape: a sentence on the screen that was not true of the rows.
+
+**A group of the same kind of work is not one decision.** Five cards with no
+price are five prices — the same sitting, not one answer — and the review said
+answering the group released all five. `sharedRemedy` says which it is, and the
+screen reads *"one answer covers"* or *"the same kind of work on"* accordingly.
+A screen that promises five and delivers one teaches a person to stop believing
+the counts.
+
+**A shared remedy costs what the remedy costs, once.** Two needs blocked on the
+same small tool were reported at twice its price, because the group summed the
+expected costs of the things it unblocks. That is the direction that matters: an
+over-stated cost makes a cheap unblock look expensive enough to defer. Where the
+members name one figure it is that figure; where they differ Brain says the
+largest and why, rather than inventing a total.
+
+**A fact Brain could look up is not a person's decision.** `evidenceCard` marks
+the payer, the access channel and the buying evidence `discoverable`: they are
+facts about the world, so `reconcileDiscoverableGaps` raises a need and Brain
+researches them, and they never appear on the review at all. What to offer, what
+to charge, what counts as accepted and who does the work are the owner's own
+calls — and a researched answer to "what should we charge" would be invented
+judgment wearing a citation.
+
+**Every item carries a typed answer**, and each one names an operation that
+already exists: the grant, closing a need, releasing a commitment, filling a
+card. There is no apply endpoint of the review's own, because a second way to do
+each of those is one forgotten guard away from doing less. `NOTHING_TO_PRESS` is
+a real value rather than an omission: an expiring opening is answered by taking
+it, and a button that marked it read would be a control that pretends.
+
+---
+
+## 10a. Where the portfolio comes from, and what Brain does about a need
+
+Activating a sprint used to write a mode row and an event and nothing else. No
+goal, no candidate, no mission, no queued job — so a freshly activated sprint
+could sit empty indefinitely beside a perfectly healthy research fleet while the
+screen said discovery had started.
+
+**Brain decomposes; it never invents a finding.** `SEARCH_BUCKETS` is the plan's
+own search-bucket table in code: a closed set of declared places to look, each
+one captured as an idea. Everything after that is the path Steps 4 to 12A
+already built — the archive check first (§13), the judgment pass, the mission
+compiler, the approval envelope, the seven evidence conditions, all three audit
+roles. No grant is manufactured: a project with no standing research authority
+compiles no specification and the idea parks.
+
+**A lane is a row, so a signal is not a judgement.** `harvest` reads
+`evidence_lane`, not prose. What it files is an opportunity with a **blank
+card**, because a published request is evidence somebody asked and is not a
+payer, a price, an acceptance condition or a delivery path.
+
+**Executing means something happened.** `beginExecution` used to move an
+opportunity to `EXECUTING` and emit an event with no work enqueued and no action
+performed — "the transaction is being pursued", written on a button press. The
+transition is now downstream of a `cash_actions` row, the action is one of
+`COMMERCIAL_ACTIONS`, and the grant is asked about *that* action rather than
+about `CONTACT_BUYER` regardless.
+
+**A capability is read, never declared.** `required_capabilities` was stored and
+consulted by nothing. `readCapability` answers from rows —
+`RESEARCH_A_QUESTION` is `PRESENT` only when the fleet has a healthy execution
+surface — and keeps two answers apart that must not be one: `MISSING` means
+Brain understands it and does not have it, `UNKNOWN` means nobody has told Brain
+what it is. "We could not tell" must never read the same as "we checked".
+
+**A need has a completion condition and a continuation that runs once.**
+`closeNeed` set a status and resumed nothing, so a person could answer the same
+need repeatedly and never learn their answer was recorded and ignored.
+`blocks_state` records the transition waiting on it, `continued_at` is a
+compare-and-swap, and the resumption retries that transition **without a
+`firstAction`** — so a resolved need can unblock work and can never manufacture
+the evidence that work began.
+
+**None of it gates anything.** No pass refuses an opportunity, charges an
+attempt or stops unrelated work. An open need is a valid execution state and
+Brain carries on around it.
 
 ---
 
@@ -283,7 +366,10 @@ stop reading it.
   `COMMERCIAL_ACTIONS` a person authorizes, and this version records the
   authorization and the money rather than performing the effect. A missing
   integration is a `cash_needs` row with a recommended way forward, which is a
-  valid execution state.
+  valid execution state. `capabilities.ts` says so in the code rather than only
+  here: every capability but `RESEARCH_A_QUESTION` reports `MISSING` with the
+  integration it would need named, and none of them has a reader because there
+  is nothing to read.
 - **It does not narrow the search.** No mechanism is preferred, no business
   model is assumed, durability and repeatability are recorded and never
   required, and `OTHER` exists so an unlisted opening is grouped rather than
@@ -333,10 +419,12 @@ BRAIN_TEST_DATABASE_URL=postgresql://... npm test
 ```
 
 The suites: `cashMode`, `cashMoney`, `cashAuthority`, `cashPortfolio`,
-`cashHttp`, `cashSection`, `connectorIsolation`.
+`cashDefects`, `cashDiscovery`, `cashOperate`, `cashHttp`, `cashSection`,
+`connectorIsolation`.
 
-Both boot paths were verified: migration `052_cash_mode` applies from an empty
-database, and a restart against the existing one is a no-op. The full suite
+Both boot paths were verified: migrations `052_cash_mode` through
+`055_cash_operation` apply from an empty database, and a restart against the
+existing one is a no-op. The full suite
 passes against SQLite **and** against Postgres — which is the only thing that
 proves one repository layer over two backends is true rather than merely
 compiling, and which has caught a missing `seq` column twice before.

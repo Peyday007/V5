@@ -68,6 +68,7 @@ import {
   setLifecycle,
 } from '../services/cash/lifecycle.ts';
 import {
+  actionKey,
   advance,
   archiveOpportunity,
   beginExecution,
@@ -578,8 +579,38 @@ cashRouter.post(
         return { opportunity: value, message };
       }
       case 'execute': {
+        /*
+         * Executing means something happened, so the call says what.
+         *
+         * `action` and `detail` are what a person did — contacted the buyer,
+         * sent the quote — and the key is built from the opportunity and that
+         * action rather than from anything the caller sent, so a retry after a
+         * lost response records the same thing once. Omitting them is allowed
+         * and advances the piece only when an action is already on the record,
+         * which is how a resumed transition works without inventing evidence.
+         */
+        const performed = optionalString(body['action'], 'action');
+        const detail = optionalString(body['detail'], 'detail');
         const { value, message } = taken(
-          await beginExecution({ opportunityId: opportunity.id, actorRef: principal.id }),
+          await beginExecution({
+            opportunityId: opportunity.id,
+            actorRef: principal.id,
+            ...(performed && detail
+              ? {
+                  firstAction: {
+                    action: performed,
+                    performedBy: 'PERSON' as const,
+                    detail,
+                    reference: optionalString(body['reference'], 'reference') ?? null,
+                    requestKey: actionKey(
+                      opportunity.id,
+                      performed,
+                      optionalString(body['occurrence'], 'occurrence') ?? 'first',
+                    ),
+                  },
+                }
+              : {}),
+          }),
         );
         return { opportunity: value, message };
       }
@@ -805,6 +836,7 @@ cashRouter.post(
           optionalNumber(body['expectedCostCents'], 'expectedCostCents', { min: 0 }) ?? null,
         setupEffort: requiredString(body['setupEffort'], 'setupEffort'),
         nextStep: requiredString(body['nextStep'], 'nextStep'),
+        completionCondition: requiredString(body['completionCondition'], 'completionCondition'),
       }),
     );
     return { need: value, message };

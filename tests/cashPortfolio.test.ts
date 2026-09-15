@@ -19,7 +19,7 @@
 import { describe, expect, it } from 'vitest';
 import { evidenceCard, readyToTest } from '../server/services/cash/card.ts';
 import { assemble, placements, rank } from '../server/services/cash/portfolio.ts';
-import { compressedReview } from '../server/services/cash/review.ts';
+import { DISCOVERABLE_FIELDS, compressedReview } from '../server/services/cash/review.ts';
 import type { CashOpportunity } from '../server/domain/types.ts';
 
 const NOW = '2026-09-15T12:00:00.000Z';
@@ -331,7 +331,11 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     expect(review.items[0]!.urgency).toBe('BLOCKING');
   });
 
-  it('turns many cards missing the same field into one item', () => {
+  it('never asks a person for a fact Brain could look up', () => {
+    // A missing payer is a fact about the world. Brain raises a need and
+    // researches it (`reconcileDiscoverableGaps`); putting it on a person's
+    // review would be Brain asking for homework it could have done, which is
+    // the opposite of compression.
     const missingPayer = [1, 2, 3, 4, 5].map(() => opportunity({ payer: null }));
     const review = compressedReview({
       mode,
@@ -346,8 +350,36 @@ describe('the review groups by shared remedy and counts what it stands for', () 
       needs: [],
       now: NOW,
     });
-    const payerItem = review.items.find((item) => item.key === 'MISSING_PAYER')!;
-    expect(payerItem.underlying.length).toBe(5);
+    expect(review.items.find((item) => item.key === 'MISSING_PAYER')).toBeUndefined();
+  });
+
+  it('groups the owner’s own decisions, and does not call them one decision', () => {
+    /*
+     * Five cards with no price are five prices. They are the same *kind* of
+     * work and not one answer, and the review used to claim otherwise for
+     * every group it made — a screen that says "answering this releases five"
+     * and then releases one teaches a person to stop believing the counts.
+     */
+    const missingPrice = [1, 2, 3, 4, 5].map(() => opportunity({ priceCents: null }));
+    const review = compressedReview({
+      mode,
+      authority: null,
+      position,
+      placements: placements({
+        opportunities: missingPrice,
+        deployableCents: 100_000,
+        maxConcurrent: 3,
+        discoveryOpen: true,
+      }),
+      needs: [],
+      now: NOW,
+    });
+    const priceItem = review.items.find((item) => item.key === 'MISSING_PRICE')!;
+    expect(priceItem.underlying.length).toBe(5);
+    expect(priceItem.sharedRemedy).toBe(false);
+    expect(priceItem.consequence).toContain('separate answers of the same kind');
+    expect(priceItem.answer.kind).toBe('FILL_CARD_FIELD');
+    expect(priceItem.answer.targets).toHaveLength(5);
     expect(review.underlyingCount).toBeGreaterThanOrEqual(5);
     // The compression itself is measured rather than claimed.
     expect(review.summary).toContain('underlying');
@@ -364,6 +396,12 @@ describe('the review groups by shared remedy and counts what it stands for', () 
       expectedCostCents: 5_000,
       setupEffort: 'Minutes.',
       nextStep: 'Buy it.',
+      completionCondition: 'The tool is bought and reachable from here.',
+      blocksState: null,
+      candidateId: null,
+      requestKey: null,
+      continuedAt: null,
+      continuationNote: null,
       state: 'OPEN' as const,
       resolution: null,
       resolvedByUserId: null,
@@ -381,7 +419,132 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     });
     const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
     expect(grouped.underlying).toEqual(['cnd_1', 'cnd_2']);
-    expect(grouped.recommendation).toContain('10000 cents');
+    // One tool bought once. Adding the two expected costs reported twice the
+    // price of buying it — the direction that makes a cheap unblock look
+    // expensive enough to defer.
+    expect(grouped.costCents).toBe(5_000);
+    expect(grouped.recommendation).toContain('5000 cents');
+    expect(grouped.costNote).toContain('paid once');
+    expect(grouped.sharedRemedy).toBe(true);
+    expect(grouped.answer.kind).toBe('RESOLVE_NEED');
+    expect(grouped.answer.targets).toEqual(['cnd_1', 'cnd_2']);
+    expect(grouped.answer.completionCondition).toContain('tool');
+  });
+
+  it('says the largest rather than a total when a shared remedy names two costs', () => {
+    const need = (id: string, cost: number) => ({
+      id,
+      projectId: 'prj_1',
+      opportunityId: null,
+      blockedAction: `Do ${id}`,
+      whyItMatters: 'It blocks a sale.',
+      recommendedPath: 'Open the same account once.',
+      expectedCostCents: cost,
+      setupEffort: 'Minutes.',
+      nextStep: 'Open it.',
+      completionCondition: 'The account is open.',
+      blocksState: null,
+      candidateId: null,
+      requestKey: null,
+      continuedAt: null,
+      continuationNote: null,
+      state: 'OPEN' as const,
+      resolution: null,
+      resolvedByUserId: null,
+      resolvedAt: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    const review = compressedReview({
+      mode,
+      authority: null,
+      position,
+      placements: [],
+      needs: [need('cnd_1', 5_000), need('cnd_2', 9_000)],
+      now: NOW,
+    });
+    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
+    expect(grouped.costCents).toBe(9_000);
+    expect(grouped.costNote).toContain('rather than a total');
+  });
+
+  it('leaves a question Brain is already researching off the decision list', () => {
+    // It is work in progress, not something to answer. A review that asked
+    // about it would be asking somebody to do what Brain had already started.
+    const researching = {
+      id: 'cnd_9',
+      projectId: 'prj_1',
+      opportunityId: 'cop_1',
+      blockedAction: 'Payer for "A paid intake repair"',
+      whyItMatters: 'It is a fact about the world.',
+      recommendedPath: 'Read the organisation’s own pages.',
+      expectedCostCents: null,
+      setupEffort: 'One bounded look.',
+      nextStep: 'Name the role that signs.',
+      completionCondition: 'A payer is recorded.',
+      blocksState: 'EXECUTING' as const,
+      candidateId: 'rcn_1',
+      requestKey: 'question:cop_1:payer',
+      continuedAt: null,
+      continuationNote: null,
+      state: 'OPEN' as const,
+      resolution: null,
+      resolvedByUserId: null,
+      resolvedAt: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+    const review = compressedReview({
+      mode,
+      authority: null,
+      position,
+      placements: [],
+      needs: [researching],
+      now: NOW,
+    });
+    expect(review.items.some((item) => item.key.startsWith('NEED_'))).toBe(false);
+  });
+
+  it('agrees with the card about which blanks Brain looks up', () => {
+    // Two readers of one fact. Drift here would put a question Brain already
+    // researches back on a person's review, or take one off it that Brain
+    // never looks up — and the second is the silent half.
+    const card = evidenceCard(opportunity());
+    const marked = card.fields.filter((field) => field.discoverable).map((field) => field.key);
+    expect([...DISCOVERABLE_FIELDS].sort()).toEqual(marked.sort());
+    // And every one of them is load-bearing, or excluding it from the review
+    // would hide something the readiness check still refuses on.
+    for (const field of card.fields) {
+      if (field.discoverable) expect(field.loadBearing).toBe(true);
+    }
+  });
+
+  it('gives every item an answer naming an operation that already exists', () => {
+    // A review that grew its own apply endpoint would be a second way to do
+    // each of these, and the second one is always the one that forgets a guard.
+    const review = compressedReview({
+      mode,
+      authority: null,
+      position,
+      placements: placements({
+        opportunities: [opportunity({ priceCents: null }), complete()],
+        deployableCents: 100_000,
+        maxConcurrent: 3,
+        discoveryOpen: true,
+      }),
+      needs: [],
+      now: NOW,
+    });
+    expect(review.items.length).toBeGreaterThan(0);
+    for (const item of review.items) {
+      expect(item.answer.label.length).toBeGreaterThan(5);
+      expect(item.answer.completionCondition.length).toBeGreaterThan(5);
+      // Every group that claims one answer releases everything under it must
+      // actually be one act. `sharedRemedy: false` is the honest alternative.
+      if (item.sharedRemedy && item.underlying.length > 1) {
+        expect(item.answer.kind).not.toBe('FILL_CARD_FIELD');
+      }
+    }
   });
 
   it('puts an expiring opening above everything else', () => {

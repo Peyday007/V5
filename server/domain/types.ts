@@ -5796,6 +5796,12 @@ export interface CashNeedRow {
   expected_cost_cents: number | null;
   setup_effort: string;
   next_step: string;
+  completion_condition: string | null;
+  blocks_state: string | null;
+  candidate_id: string | null;
+  request_key: string | null;
+  continued_at: string | null;
+  continuation_note: string | null;
   state: string;
   resolution: string | null;
   resolved_by_user_id: string | null;
@@ -5814,12 +5820,88 @@ export interface CashNeed {
   expectedCostCents: number | null;
   setupEffort: string;
   nextStep: string;
+  /**
+   * What settles it, in a form somebody can check.
+   *
+   * Null only on a need raised before Brain asked for one. Backfilling it from
+   * `nextStep` would assert a condition nobody wrote, so what an old row says
+   * is that it has none.
+   */
+  completionCondition: string | null;
+  /**
+   * The opportunity transition waiting on it, when one is.
+   *
+   * A state rather than a free reference, because that is what a continuation
+   * can actually retry — one that had to read prose to know what to resume
+   * would be model output deciding a transition.
+   */
+  blocksState: CashOpportunityState | null;
+  /** The idea Brain started because of this need, when it could start one. */
+  candidateId: string | null;
+  /** What made it unique, so the same condition raises one need. */
+  requestKey: string | null;
+  /** When its continuation ran. Set once, by a guarded write. */
+  continuedAt: string | null;
+  /** What the continuation actually did, which is not the same as that it ran. */
+  continuationNote: string | null;
   state: CashNeedState;
   resolution: string | null;
   resolvedByUserId: string | null;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Who actually did it. There is no third value — see migration 055. */
+export const CASH_ACTION_PERFORMERS = ['BRAIN', 'PERSON'] as const;
+export type CashActionPerformer = (typeof CASH_ACTION_PERFORMERS)[number];
+
+export interface CashActionRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string;
+  authority_id: string;
+  action: string;
+  performed_by: string;
+  reference: string | null;
+  detail: string;
+  confirmed_by: string;
+  request_key: string;
+  created_at: string;
+}
+
+/**
+ * One commercial action that actually happened.
+ *
+ * An opportunity is EXECUTING because one of these exists, never because a
+ * transition was requested. Append-only: what happened is history.
+ */
+export interface CashAction {
+  id: string;
+  projectId: string;
+  opportunityId: string;
+  /** The grant it ran under, read when it was recorded rather than assumed. */
+  authorityId: string;
+  /**
+   * One of `COMMERCIAL_ACTIONS`, checked by `services/cash/authority.ts`.
+   *
+   * A string here for the same reason `allowedActions` is: the vocabulary is
+   * the service's, and a domain type that imported it would invert the
+   * dependency to make one field narrower.
+   */
+  action: string;
+  performedBy: CashActionPerformer;
+  /**
+   * Whatever identifies it outside Brain.
+   *
+   * Free text because Brain cannot verify any of them, and a structured column
+   * would imply it had.
+   */
+  reference: string | null;
+  detail: string;
+  confirmedBy: string;
+  requestKey: string;
+  createdAt: string;
 }
 
 export interface CashEventRow {

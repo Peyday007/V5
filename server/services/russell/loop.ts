@@ -128,6 +128,7 @@ import { parseJson } from '../../repos/util.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
+import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
@@ -323,6 +324,21 @@ export interface TickReport {
    * person asks when a sprint looks quiet, and a count cannot answer it.
    */
   cashDiscovery: { projectId: string; opened: string[]; harvested: string[] }[];
+  /**
+   * What each sprint's operating pass did about what its pieces need.
+   *
+   * `resumed` counts only the continuations that actually moved something. A
+   * continuation that ran and found nothing to resume is recorded on the need
+   * itself, where the note says which it was — the distinction is the point,
+   * so it must not be flattened into "it ran".
+   */
+  cashOperations: {
+    projectId: string;
+    needsRaised: string[];
+    needsSettled: string[];
+    resumed: string[];
+    dependentWork: string[];
+  }[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -362,6 +378,7 @@ const EMPTY: TickReport = {
   frontier: [],
   lensInquiries: { dispatched: 0, settled: 0 },
   cashDiscovery: [],
+  cashOperations: [],
   bounded: false,
 };
 
@@ -413,6 +430,7 @@ export async function tick(owner: string): Promise<TickReport> {
     frontier: [],
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
+    cashOperations: [],
   };
 
   try {
@@ -859,6 +877,51 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a sprint whose discovery could not run is left as it was */
+      }
+
+      try {
+        /*
+         * And the part where Brain acts on what a piece says it needs.
+         *
+         * Its own `try`, because the two are separate answers with separate
+         * remedies: a harvest that threw must not also stop Brain settling a
+         * need whose capability has arrived, and the pass that raises needs
+         * runs whether or not anything new was discovered this tick.
+         *
+         * `required_capabilities` was written by the card and read by nothing,
+         * so a piece could declare that collecting its money needs a payment
+         * processor and reach READY against a Brain that has none and had
+         * never been asked. `closeNeed` set a status and resumed nothing,
+         * because nothing recorded what had been waiting — a person could
+         * answer the same need repeatedly and never learn their answer was
+         * recorded and ignored.
+         *
+         * Derived from rows on every tick rather than hooked to the moment a
+         * card changed, which is what reaches the pieces already stranded. It
+         * gates nothing: an open need is a valid execution state and Brain
+         * carries on around it.
+         */
+        const operated = await operate(project.id);
+        const raised = [
+          ...operated.capabilities.raised,
+          ...operated.gaps.map((one) => one.needId),
+        ];
+        if (
+          raised.length > 0 ||
+          operated.capabilities.settled.length > 0 ||
+          operated.continuations.length > 0 ||
+          operated.dependentWork.length > 0
+        ) {
+          report.cashOperations.push({
+            projectId: project.id,
+            needsRaised: raised,
+            needsSettled: operated.capabilities.settled,
+            resumed: operated.continuations.filter((one) => one.resumed).map((one) => one.needId),
+            dependentWork: operated.dependentWork.map((one) => one.candidateId),
+          });
+        }
+      } catch {
+        /* a sprint whose operating pass could not run is left as it was */
       }
     }
 

@@ -379,6 +379,12 @@ function mapNeed(row: CashNeedRow): CashNeed {
     expectedCostCents: row.expected_cost_cents,
     setupEffort: row.setup_effort,
     nextStep: row.next_step,
+    completionCondition: row.completion_condition,
+    blocksState: row.blocks_state === null ? null : (row.blocks_state as CashOpportunityState),
+    candidateId: row.candidate_id,
+    requestKey: row.request_key,
+    continuedAt: row.continued_at,
+    continuationNote: row.continuation_note,
     state: row.state as CashNeedState,
     resolution: row.resolution,
     resolvedByUserId: row.resolved_by_user_id,
@@ -397,15 +403,20 @@ export async function createNeed(input: {
   expectedCostCents?: number | null;
   setupEffort: string;
   nextStep: string;
+  completionCondition: string;
+  blocksState?: CashOpportunityState | null;
+  candidateId?: string | null;
+  requestKey?: string | null;
 }): Promise<CashNeed> {
   const id = newId('cnd');
   const at = portfolioNow();
   await getDb().run(
     `INSERT INTO cash_needs
        (id, project_id, opportunity_id, blocked_action, why_it_matters, recommended_path,
-        expected_cost_cents, setup_effort, next_step, state,
+        expected_cost_cents, setup_effort, next_step, completion_condition, blocks_state,
+        candidate_id, request_key, continued_at, continuation_note, state,
         resolution, resolved_by_user_id, resolved_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', NULL, NULL, NULL, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'OPEN', NULL, NULL, NULL, ?, ?)`,
     [
       id,
       input.projectId,
@@ -416,6 +427,10 @@ export async function createNeed(input: {
       input.expectedCostCents ?? null,
       input.setupEffort,
       input.nextStep,
+      input.completionCondition,
+      input.blocksState ?? null,
+      input.candidateId ?? null,
+      input.requestKey ?? null,
       at,
       at,
     ],
@@ -423,6 +438,83 @@ export async function createNeed(input: {
   const created = await getNeed(id);
   if (!created) throw new Error('The need disappeared immediately after being written.');
   return created;
+}
+
+/**
+ * The need already raised for this condition, if one was.
+ *
+ * Read back rather than inserted-or-ignored, because the caller wants the row
+ * either way: a capability need raised on a previous tick is the thing whose
+ * continuation is waiting, not a duplicate to discard.
+ */
+export async function needForKey(
+  projectId: string,
+  requestKey: string,
+): Promise<CashNeed | null> {
+  const rows = await getDb().all<CashNeedRow>(
+    'SELECT * FROM cash_needs WHERE project_id = ? AND request_key = ?',
+    [projectId, requestKey],
+  );
+  return rows[0] ? mapNeed(rows[0]) : null;
+}
+
+/**
+ * Claim one settled need's continuation.
+ *
+ * The guard is `continued_at IS NULL` in the statement that sets it, so two
+ * ticks reading the same resolved need produce exactly one continuation — the
+ * compare-and-swap this codebase reaches for everywhere else, on a value the
+ * claimant does not supply. The effect belongs on the far side of it.
+ */
+export async function claimNeedContinuation(id: string): Promise<boolean> {
+  const at = portfolioNow();
+  const result = await getDb().run(
+    `UPDATE cash_needs SET continued_at = ?, updated_at = ?
+      WHERE id = ? AND continued_at IS NULL AND state IN ('RESOLVED', 'WITHDRAWN')`,
+    [at, at, id],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * The idea Brain started because of this need.
+ *
+ * Guarded on the column still being null, so a second pass can never re-point
+ * a need at a different candidate — an observation that silently overwrote one
+ * would hide which question was actually asked.
+ */
+export async function setNeedCandidate(id: string, candidateId: string): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE cash_needs SET candidate_id = ?, updated_at = ? WHERE id = ? AND candidate_id IS NULL',
+    [candidateId, portfolioNow(), id],
+  );
+  return result.changes === 1;
+}
+
+/** What the continuation did. Written once, by whoever claimed it. */
+export async function recordNeedContinuation(id: string, note: string): Promise<void> {
+  await getDb().run(
+    'UPDATE cash_needs SET continuation_note = ?, updated_at = ? WHERE id = ?',
+    [note, portfolioNow(), id],
+  );
+}
+
+/**
+ * The needs whose continuation has not run.
+ *
+ * Derived from the rows rather than hooked to the moment a need was answered,
+ * which is the difference between a remedy that reaches the needs already
+ * stranded and one that only reaches the next one — the third time this
+ * repository has needed that distinction.
+ */
+export async function needsAwaitingContinuation(projectId: string): Promise<CashNeed[]> {
+  const rows = await getDb().all<CashNeedRow>(
+    `SELECT * FROM cash_needs
+      WHERE project_id = ? AND continued_at IS NULL AND state IN ('RESOLVED', 'WITHDRAWN')
+      ORDER BY resolved_at, id`,
+    [projectId],
+  );
+  return rows.map(mapNeed);
 }
 
 export async function getNeed(id: string): Promise<CashNeed | null> {

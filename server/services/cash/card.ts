@@ -47,6 +47,19 @@ export interface CardField {
    * is not what the decision turns on.
    */
   loadBearing: boolean;
+  /**
+   * Whether the answer is a fact about the world or a decision of the owner's.
+   *
+   * Who can approve payment, how to reach them and what they published are
+   * facts somebody could look up — so Brain should go and find them rather
+   * than putting them on a person's review. What to offer, what to charge, what
+   * counts as accepted and who does the work are the owner's calls, and Brain
+   * asking for them is the right thing to ask for.
+   *
+   * The distinction is the review's, and it is what stops a compressed screen
+   * filling with questions that were never a person's to answer.
+   */
+  discoverable: boolean;
 }
 
 export interface CardReadiness {
@@ -90,6 +103,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: text(opportunity.payer),
       task: 'Name the person or role who can approve payment.',
       loadBearing: true,
+      discoverable: true,
     },
     {
       key: 'access',
@@ -97,6 +111,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: text(opportunity.reachableChannel),
       task: 'Establish a channel that actually reaches them. This is an access task, not a price.',
       loadBearing: true,
+      discoverable: true,
     },
     {
       key: 'buyingEvidence',
@@ -119,6 +134,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
         'Record the current request, deadline, prior conversation or confirmed pain, with its ' +
         'source and the date it was observed. A signal with no date is not evidence about now.',
       loadBearing: true,
+      discoverable: true,
     },
     {
       key: 'offer',
@@ -126,6 +142,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: text(opportunity.offerScope),
       task: 'State one outcome, one scope.',
       loadBearing: true,
+      discoverable: false,
     },
     {
       key: 'acceptance',
@@ -133,6 +150,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: text(opportunity.acceptanceCondition),
       task: 'State what the buyer has to see for this to be accepted.',
       loadBearing: true,
+      discoverable: false,
     },
     {
       key: 'price',
@@ -140,6 +158,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: money(opportunity.priceCents, opportunity.currency),
       task: 'Quote one price. A missing supplier price is a quoting task, not a discount.',
       loadBearing: true,
+      discoverable: false,
     },
     {
       key: 'delivery',
@@ -147,6 +166,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: text(opportunity.deliveryMethod),
       task: 'Say how the work is actually done, and what access and customer inputs it needs.',
       loadBearing: true,
+      discoverable: false,
     },
     {
       key: 'fulfillment',
@@ -154,6 +174,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: text(opportunity.fulfillmentOwner),
       task: 'Name the operator, contractor or tool that fulfils this.',
       loadBearing: true,
+      discoverable: false,
     },
     {
       key: 'cashDates',
@@ -163,6 +184,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
         'Say when the customer might decide, pay and accept delivery, and when the funds become ' +
         'usable. Check the provider payout schedule rather than assuming a sale clears.',
       loadBearing: false,
+      discoverable: false,
     },
     {
       key: 'economics',
@@ -172,6 +194,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
         'Payment minus acquisition, delivery, tools, processing and foreseeable rework — ' +
         'including unsuccessful test spend.',
       loadBearing: false,
+      discoverable: false,
     },
     {
       key: 'exposure',
@@ -179,6 +202,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: money(opportunity.peakFundingCents, opportunity.currency),
       task: 'State the maximum cash out before the money is usable.',
       loadBearing: true,
+      discoverable: false,
     },
     {
       key: 'nextAction',
@@ -186,6 +210,7 @@ export function evidenceCard(opportunity: CashOpportunity): EvidenceCard {
       value: text(opportunity.nextAction),
       task: 'The cheapest step that produces a buying signal or settles a decisive unknown.',
       loadBearing: false,
+      discoverable: false,
     },
   ];
 

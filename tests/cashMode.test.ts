@@ -35,6 +35,7 @@ import {
   setLifecycle,
 } from '../server/services/cash/lifecycle.ts';
 import {
+  actionKey,
   advance,
   beginExecution,
   capture,
@@ -274,6 +275,7 @@ describe('winding down stops new discovery and nothing else', () => {
       recommendedPath: 'Use a hosted payment link from the existing provider account.',
       setupEffort: 'Minutes, no code.',
       nextStep: 'Create the link and send it.',
+      completionCondition: 'A payable link exists and the buyer has it.',
     });
     expect(need.ok).toBe(true);
   });
@@ -369,9 +371,20 @@ describe('winding down stops new discovery and nothing else', () => {
     if (!captured.ok) throw new Error('capture failed');
     await completeCard(captured.value.id);
     expect((await markReady({ opportunityId: captured.value.id, actorRef: userId })).ok).toBe(true);
-    expect((await beginExecution({ opportunityId: captured.value.id, actorRef: userId })).ok).toBe(
-      true,
-    );
+    expect(
+      (
+        await beginExecution({
+          opportunityId: captured.value.id,
+          actorRef: userId,
+          firstAction: {
+            action: 'CONTACT_BUYER',
+            performedBy: 'PERSON',
+            detail: 'Emailed the owner and they replied.',
+            requestKey: actionKey(captured.value.id, 'CONTACT_BUYER', 'first'),
+          },
+        })
+      ).ok,
+    ).toBe(true);
 
     const support = await createCandidate({
       projectId,
