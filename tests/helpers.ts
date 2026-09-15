@@ -38,6 +38,22 @@ const POSTGRES_URL = (process.env.BRAIN_TEST_DATABASE_URL ?? '').trim() || null;
 
 export const testDatabaseKind: 'sqlite' | 'postgres' = POSTGRES_URL ? 'postgres' : 'sqlite';
 
+/**
+ * A second, independent connection to the database this file is using.
+ *
+ * Only for a test that has to prove something *about* concurrency, where going
+ * through the app's pool cannot settle it: two pooled clients overlap or do not
+ * depending on timing, and a race test that passes because the race did not
+ * happen is worse than no test. Holding a real row lock from outside makes the
+ * overlap a fact rather than a hope.
+ *
+ * Null on SQLite, which has one writer by construction — the finding this
+ * exists for is reachable only under Postgres's READ COMMITTED.
+ */
+export function postgresTestConnection(): { connectionString: string; schema: string } | null {
+  return POSTGRES_URL ? { connectionString: POSTGRES_URL, schema: schemaForThisFile() } : null;
+}
+
 /** One schema per test file, derived from the per-file data root vitest hands out. */
 function schemaForThisFile(): string {
   const stem = path.basename(DATA_ROOT).replace(/[^a-z0-9]+/gi, '_').toLowerCase();

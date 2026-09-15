@@ -29,7 +29,7 @@
  * would put money in a plan a fortnight before it exists.
  */
 import { heldCentsForProject } from '../../repos/cashAuthority.ts';
-import { listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
+import { currenciesInLedger, listMoneyEntries, totalsByKind } from '../../repos/cashLedger.ts';
 import type { CashMoneyEntry, CashMoneyKind } from '../../domain/types.ts';
 
 export interface CashPosition {
@@ -58,6 +58,16 @@ export interface CashPosition {
    * shortfall rather than carry on.
    */
   shortfall: boolean;
+  /**
+   * Currencies in this project's ledger that these figures do **not** include.
+   *
+   * Empty in the ordinary case. Non-empty means entries exist that the filter
+   * excluded, which is a fact somebody has to resolve rather than one Brain may
+   * convert away at a rate nobody chose — and it is reachable, because
+   * `activateCashMode` dropped the currency column for a while and stored USD
+   * for sprints activated in something else.
+   */
+  otherCurrencies: string[];
 }
 
 function sum(totals: Partial<Record<CashMoneyKind, number>>, kind: CashMoneyKind): number {
@@ -133,6 +143,9 @@ export async function cashPosition(input: {
     deployableCents: deployable,
     completedContributionCents: completedContribution,
     shortfall: deployable < 0,
+    otherCurrencies: (await currenciesInLedger(input.projectId)).filter(
+      (one) => one !== (input.currency ?? 'USD'),
+    ),
   };
 }
 

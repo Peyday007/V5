@@ -211,6 +211,29 @@ export async function listMoneyEntries(input: {
 }
 
 /**
+ * Every currency this project's ledger actually holds.
+ *
+ * The position filters by the sprint's currency, which is right — adding a
+ * dollar to a euro produces a figure whose label makes it look checked. What
+ * the filter cannot do is *say* that it excluded something, and a sprint whose
+ * stored currency was wrong (see `activateCashMode`, which dropped the column
+ * for a while) has a ledger the reader would simply not be shown.
+ *
+ * So the reading exists beside the filter. One currency is the ordinary case
+ * and says nothing; more than one is a fact somebody has to resolve, and Brain
+ * names it rather than converting at a rate nobody chose.
+ */
+export async function currenciesInLedger(projectId: string): Promise<string[]> {
+  const rows = await getDb().all<{ currency: string }>(
+    `SELECT DISTINCT currency FROM cash_money_entries
+      WHERE project_id = ?
+      ORDER BY currency`,
+    [projectId],
+  );
+  return rows.map((row) => row.currency);
+}
+
+/**
  * The totals per kind, summed in the database.
  *
  * One grouped query rather than a fetch-and-reduce, so a project with years of

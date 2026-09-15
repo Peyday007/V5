@@ -702,6 +702,27 @@ cashRouter.post(
     const mode = await getCashMode(project.id);
     if (!mode) throw unprocessable('Cash Mode has not been activated for this project.');
 
+    /*
+     * The sprint decides, and a caller who said otherwise is told.
+     *
+     * The currency was pinned to the mode and the body's was *ignored*, which
+     * is right about who decides and wrong about what a caller is owed: a
+     * request stating USD against a euro sprint was accepted and recorded as
+     * euros, so the reply said success about a figure that meant something
+     * else. §20 settles this shape for idempotency keys — a key in the query
+     * is refused rather than ignored, because ignoring it leaves the caller
+     * believing they have a property they do not — and it is the same rule
+     * here with money on the other side of it.
+     */
+    const stated = optionalString(body['currency'], 'currency');
+    if (stated && stated !== mode.currency) {
+      throw unprocessable(
+        `This sprint keeps its money in ${mode.currency} and this entry says ${stated}. Brain ` +
+          'does not choose an exchange rate, and a figure that added the two would be a number ' +
+          'nobody can use wearing a label that says it was checked.',
+      );
+    }
+
     const { value, message } = taken(
       await recordMoneyEvent({
         projectId: project.id,

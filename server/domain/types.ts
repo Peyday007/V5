@@ -5711,6 +5711,7 @@ export interface CashCommitmentRow {
   expected_result: string;
   stop_condition: string;
   idempotency_key: string;
+  payload_fingerprint: string | null;
   state: string;
   spent_cents: number | null;
   settled_at: string | null;

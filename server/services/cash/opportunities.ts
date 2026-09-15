@@ -39,6 +39,7 @@ import {
 } from '../../repos/cashAuthority.ts';
 import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { getDb } from '../../db/database.ts';
+import { serializeCash } from '../../repos/cashLock.ts';
 import { recordMoney } from '../../repos/cashLedger.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
@@ -863,20 +864,27 @@ export async function recordMoneyEvent(input: {
     }
   }
 
-  const written = await recordMoney({
-    projectId: input.projectId,
-    opportunityId: input.opportunityId ?? null,
-    commitmentId: input.commitmentId ?? null,
-    kind: input.kind,
-    amountCents: input.amountCents,
-    currency: input.currency,
-    verifiedReference: input.verifiedReference ?? null,
-    fundsAvailableAt: input.fundsAvailableAt ?? null,
-    occurredAt: input.occurredAt,
-    note: input.note ?? null,
-    recordedBy: input.actorRef,
-    idempotencyKey: input.idempotencyKey,
-  });
+  /*
+   * Under the same lock as a commitment, because this is the other half of the
+   * number one is checked against. A settlement landing between a commitment's
+   * insert and its sum would make that sum true of neither moment.
+   */
+  const written = await serializeCash(input.projectId, input.currency, () =>
+    recordMoney({
+      projectId: input.projectId,
+      opportunityId: input.opportunityId ?? null,
+      commitmentId: input.commitmentId ?? null,
+      kind: input.kind,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      verifiedReference: input.verifiedReference ?? null,
+      fundsAvailableAt: input.fundsAvailableAt ?? null,
+      occurredAt: input.occurredAt,
+      note: input.note ?? null,
+      recordedBy: input.actorRef,
+      idempotencyKey: input.idempotencyKey,
+    }),
+  );
   if (!written.ok || !written.entry) return refuse(written.reason);
 
   if (!written.replayed) {
@@ -935,7 +943,16 @@ export async function settleSpend(input: {
     );
   }
 
-  const settled = await getDb().transaction(async () => {
+  /*
+   * Serialized against every other cash decision on this project.
+   *
+   * A settlement releases the unspent part of a hold and writes a cost, so it
+   * moves deployable cash in both directions at once — and a commitment
+   * deciding whether it fits must not do its arithmetic across a settlement
+   * that is half-applied. The lock is the same row `commit()` takes, because
+   * two mechanisms guarding one number is how they come to disagree about it.
+   */
+  const settled = await serializeCash(commitment.projectId, commitment.currency, async () => {
     if (!(await settleCommitment(commitment.id, spent))) return false;
     if (spent > 0) {
       const written = await recordMoney({

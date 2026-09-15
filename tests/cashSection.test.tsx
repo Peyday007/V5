@@ -73,6 +73,7 @@ const POSITION = {
   deployableCents: -20_000,
   completedContributionCents: 75_000,
   shortfall: true,
+  otherCurrencies: [],
 };
 
 const VOCABULARY = {

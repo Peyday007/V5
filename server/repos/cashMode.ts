@@ -106,10 +106,10 @@ export async function activateCashMode(input: {
   const at = cashNow();
   await getDb().run(
     `INSERT INTO cash_modes
-       (id, project_id, owner_user_id, objective, horizon_days, envelope_id, state,
+       (id, project_id, owner_user_id, objective, horizon_days, envelope_id, currency, state,
         activated_at, wound_down_at, archived_at, state_reason,
         created_by_user_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', ?, NULL, NULL, NULL, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, NULL, NULL, NULL, ?, ?, ?)
      ON CONFLICT (project_id) DO NOTHING`,
     [
       newId('csm'),
@@ -118,6 +118,15 @@ export async function activateCashMode(input: {
       input.objective,
       Math.max(1, Math.trunc(input.horizonDays)),
       input.envelopeId,
+      /*
+       * The currency the person chose, which this INSERT used to leave out.
+       *
+       * `053` added the column with `DEFAULT 'USD'`, so omitting it did not
+       * fail — it silently stored dollars for a sprint somebody activated in
+       * euros, and every figure afterwards was correct arithmetic over the
+       * wrong label. A default is what makes a dropped argument invisible.
+       */
+      input.currency,
       at,
       input.createdByUserId,
       at,

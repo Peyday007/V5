@@ -41,6 +41,7 @@ export interface CashPosition {
   deployableCents: number;
   completedContributionCents: number;
   shortfall: boolean;
+  otherCurrencies: string[];
 }
 
 export interface CashOpportunity {

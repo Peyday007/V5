@@ -25,6 +25,8 @@
  */
 import { getDb } from '../db/database.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
+import { serializeCash } from './cashLock.ts';
+import { createHash } from 'node:crypto';
 import type {
   CashAuthority,
   CashAuthorityRow,
@@ -222,6 +224,42 @@ class CommitRefused extends Error {
 }
 
 /**
+ * What this key was a key *for*.
+ *
+ * The immutable request, and nothing else. The same shape and the same reason
+ * as `moneyFingerprint`: the clock, the actor and the authority's own state are
+ * absent, because a retry carries a new clock and a key whose fingerprint
+ * changed between attempts would refuse every legitimate retry — which is the
+ * failure mode that teaches people to stop using keys.
+ *
+ * `expectedResult` and `stopCondition` are in it because they are what the
+ * commitment is *judged* against later. Two requests naming the same money for
+ * the same purpose against different stop conditions are two decisions.
+ */
+export function commitmentFingerprint(input: {
+  amountCents: number;
+  currency: string;
+  opportunityId?: string | null;
+  purpose: string;
+  expectedResult: string;
+  stopCondition: string;
+}): string {
+  return createHash('sha256')
+    .update(
+      [
+        String(Math.max(0, Math.trunc(input.amountCents))),
+        input.currency,
+        input.opportunityId ?? '',
+        input.purpose,
+        input.expectedResult,
+        input.stopCondition,
+      ].join('\u0000'),
+      'utf8',
+    )
+    .digest('hex');
+}
+
+/**
  * Hold part of the ceiling, atomically, and never provisionally.
  *
  * The original was insert-then-rank-then-release and had two defects a review
@@ -316,15 +354,26 @@ export async function commit(input: {
 
   const amount = Math.max(0, Math.trunc(input.amountCents));
   const id = newId('ccm');
+  const fingerprint = commitmentFingerprint({ ...input, amountCents: amount });
 
   try {
-    return await getDb().transaction(async (): Promise<CommitOutcome> => {
+    /*
+     * Serialized, not merely transactional.
+     *
+     * The arithmetic below sums the holds ranked ahead of this one. Under
+     * Postgres READ COMMITTED a concurrent transaction's hold is invisible, so
+     * two commitments can each sum only their own and both clear one ceiling.
+     * `serializeCash` takes a row lock on this project's cash before anything
+     * is read, so the second caller does its sum after the first is visible.
+     */
+    return await serializeCash(input.projectId, input.currency, async (): Promise<CommitOutcome> => {
       await getDb().run(
         `INSERT INTO cash_commitments
            (id, authority_id, project_id, opportunity_id, amount_cents, currency,
-            purpose, expected_result, stop_condition, idempotency_key, state, spent_cents,
+            purpose, expected_result, stop_condition, idempotency_key, payload_fingerprint,
+            state, spent_cents,
             settled_at, released_at, release_reason, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HELD', NULL, NULL, NULL, NULL, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'HELD', NULL, NULL, NULL, NULL, ?, ?, ?)
          ON CONFLICT (project_id, idempotency_key) DO NOTHING`,
         [
           id,
@@ -337,6 +386,7 @@ export async function commit(input: {
           input.expectedResult,
           input.stopCondition,
           input.idempotencyKey,
+          fingerprint,
           input.createdBy,
           now,
           now,
@@ -353,6 +403,34 @@ export async function commit(input: {
         return { ok: false, commitment: null, reason: 'the commitment could not be taken', replayed: false };
       }
       if (existing.id !== id) {
+        /*
+         * The same key, and not the same request.
+         *
+         * `(project_id, idempotency_key)` makes one logical commitment one row,
+         * and until now a colliding caller was told an equivalent commitment
+         * existed without anything having checked that it was equivalent — so
+         * reusing a key with a different amount, opportunity or purpose was
+         * answered with the *first* commitment and a success. That is the one
+         * shape a caller cannot detect, because it is indistinguishable from
+         * their own retry.
+         *
+         * `cash_money_entries` already refuses this, and the two contracts must
+         * not differ: somebody who learns that a reused key is refused for
+         * money and honoured for commitments has learned something false about
+         * both. A row written before this column existed has no fingerprint and
+         * is not second-guessed — an absent reading is not a mismatch.
+         */
+        if (existing.payload_fingerprint !== null && existing.payload_fingerprint !== fingerprint) {
+          return {
+            ok: false,
+            commitment: null,
+            reason:
+              'that idempotency key already names a different commitment. A key identifies one ' +
+              'decision, so reusing it for another is refused rather than answered with the ' +
+              'first — use a key of its own.',
+            replayed: false,
+          };
+        }
         /*
          * Somebody equivalent got there first, and that is success for an
          * idempotent caller: the money was committed once and this is the same

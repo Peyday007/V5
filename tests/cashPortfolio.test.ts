@@ -299,6 +299,7 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     deployableCents: 100_000,
     completedContributionCents: 0,
     shortfall: false,
+    otherCurrencies: [],
   };
   const mode = {
     id: 'csm_1',
