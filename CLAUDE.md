@@ -3623,6 +3623,35 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   neither a scripted-`fetch` component suite nor a screenless service suite can
   see, because a control that posts a field the route does not take passes both.
 
+- **A private operation had nowhere to file what it found, and nothing could
+  create one.** `standingAuthority` refuses every launch on a project with no
+  layer — *"this project having a layer to file the work under"* — and layers
+  are written by `server/seed.ts` for the seeded project and by nothing else:
+  no route, no `npm run admin` command, nothing. So the documented setup for a
+  sprint, which is four people meaning four projects, produced a project that
+  could open discovery, capture ideas and **launch nothing, for ever**. Every
+  row read as healthy and the portfolio stayed empty. It is §24's *waiting
+  nobody can resolve* at a new altitude and worse than the usual case, because
+  the remedy did not exist anywhere to be applied.
+
+  `activate` creates it, because activation is the moment a project becomes an
+  operation: a person's decision, already refusing everything it cannot honour.
+  Only when there is none — a sprint activated on a project that already does
+  research files into what that project already has, and nothing here
+  reorganizes it.
+
+- **And the project a sprint runs on is not interchangeable, which is
+  deliberate and silent.** The compiler reads the in-code project-slug map
+  before a cash mode's chosen envelope, so that *nothing about an existing
+  project's authorization can be changed by activating a cash mode on it*. The
+  consequence is that activating on the seeded `deal-dispatch` project runs
+  discovery, launches missions and harvests **nothing** — the buckets compile as
+  public-records questions whose lane is `official_source`, and `harvest` reads
+  `demand_signal`. Nothing errors. Both of these were found by
+  `tests/cashDeploymentSmoke.test.ts`, which is the first thing in this
+  repository to set a sprint up the way a person actually would, and both are in
+  `docs/CASH-DEPLOYMENT.md` where somebody deploying will read them.
+
 - **Every one of those was a transition that existed, was tested, and could be
   reached by nothing — which is why the acceptance is a walk rather than a
   suite.** `tests/cashIntegrationPass.test.ts` drives one sprint from a person
@@ -3778,7 +3807,7 @@ server/
       view.ts           three capacity numbers that are not each other, and why it is slow
       lab.ts            the eight test modes, and the five this version refuses to run
     cash/
-      lifecycle.ts      activating a sprint, winding it down, and what that stops
+      lifecycle.ts      activating a sprint, giving it somewhere to file, winding it down
       authority.ts      the closed set of commercial actions, and the check
       money.ts          the six figures, and the arithmetic that keeps them apart
       card.ts           what is unknown, and the task that would answer each
@@ -3916,6 +3945,7 @@ tests/                  Vitest suites
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
+  cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker
   cashConcurrency.test.ts    two commitments, forced to overlap, on both backends
   cashCurrencyHttp.test.ts   a sprint that is not in dollars, driven as a person does
   cashHttp.test.ts           Cash Mode's door, driven as an attack

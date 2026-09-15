@@ -33,6 +33,7 @@
  * wrote.
  */
 import { getProject } from '../../repos/projects.ts';
+import { createLayer, listLayers } from '../../repos/layers.ts';
 import {
   activateCashMode,
   getCashMode,
@@ -59,6 +60,16 @@ export const SELECTABLE_CASH_ENVELOPES = ['RUSSELL_CASH_DISCOVERY_V1'] as const;
 export type SelectableCashEnvelope = (typeof SELECTABLE_CASH_ENVELOPES)[number];
 
 export const DEFAULT_CASH_ENVELOPE: SelectableCashEnvelope = 'RUSSELL_CASH_DISCOVERY_V1';
+
+/**
+ * Where a sprint's work is filed when the project has nowhere yet.
+ *
+ * One layer, named for what it holds. A sprint is a temporary section and its
+ * research is about openings, so the name says that rather than naming the
+ * sprint — the layer outlives the wind-down, along with the income, the
+ * customers and the records.
+ */
+export const CASH_LAYER_NAME = 'Opportunity Research';
 
 /** The default rolling outlook. A planning view, never an eligibility gate. */
 export const DEFAULT_HORIZON_DAYS = 7;
@@ -140,6 +151,39 @@ export async function activate(input: {
   }
   const project = await getProject(input.projectId);
   if (!project) return { ok: false, reason: 'No project with that id.' };
+
+  /*
+   * A private operation needs somewhere to file what it finds, and a project
+   * created for one has nowhere.
+   *
+   * `standingAuthority` refuses every launch on a project with no layer —
+   * "this project having a layer to file the work under" — and nothing in any
+   * route or command creates one: `server/seed.ts` gives the seeded project
+   * its layers and a project an operator creates gets none. So the documented
+   * setup for a sprint (§30: four people means four projects) produced a
+   * project that could open discovery, capture ideas, and launch nothing, for
+   * ever. Every row read as healthy and the portfolio stayed empty, which is
+   * the *waiting nobody can resolve* shape at a new altitude — worse than
+   * usual, because the remedy did not exist.
+   *
+   * Activation is the right place: it is the moment the project becomes an
+   * operation, it is a person's decision, and it already refuses everything it
+   * cannot honour. It creates the layer only when there is none, so a sprint
+   * activated on a project that already does research files into what that
+   * project already has and nothing here reorganizes it.
+   *
+   * Found by the deployment smoke test, which is the first thing to set a
+   * sprint up the way a person actually would.
+   */
+  if ((await listLayers(project.id)).length === 0) {
+    await createLayer({ projectId: project.id, name: CASH_LAYER_NAME, orderIndex: 0 });
+    await recordCashEvent({
+      projectId: project.id,
+      kind: 'CASH_LAYER_CREATED',
+      actorRef: input.actorUserId,
+      summary: `Created "${CASH_LAYER_NAME}" so this operation has somewhere to file its work.`,
+    });
+  }
 
   const horizon = Math.max(1, Math.trunc(input.horizonDays ?? DEFAULT_HORIZON_DAYS));
   const { mode, created } = await activateCashMode({
