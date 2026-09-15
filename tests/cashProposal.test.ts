@@ -28,7 +28,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
-import { activate } from '../server/services/cash/lifecycle.ts';
+import { activate, setLifecycle } from '../server/services/cash/lifecycle.ts';
 import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   COMMERCIAL_ACTIONS,
@@ -387,6 +387,35 @@ describe('Brain acts inside the standing authority', () => {
     // Withholding is not a state change, and nothing was recorded as done.
     expect((await getOpportunity(piece.id))!.state).toBe('READY');
     expect(advanced.took.some((one) => one.did === 'BEGAN_EXECUTION')).toBe(false);
+  });
+
+  it('does not start new work once the sprint is winding down', async () => {
+    await granted();
+    const piece = await readyToTest();
+    expect((await setLifecycle({
+      projectId,
+      to: 'WINDING_DOWN',
+      actorUserId: userId,
+      reason: 'Enough for this month.',
+    })).ok).toBe(true);
+
+    // The off switch ends new discovery and never a customer's obligation —
+    // and this is the one thing in Cash Mode it also stops, because Brain
+    // starting a new obligation after somebody said stop is not a person's
+    // decision being carried out. They can still do it by hand.
+    expect(await advanceWithinAuthority(projectId)).toEqual({ took: [], withheld: [] });
+    expect((await getOpportunity(piece.id))!.state).toBe('DISCOVERED');
+
+    // A skip, not a refusal: it resumes by itself.
+    expect((await setLifecycle({
+      projectId,
+      to: 'ACTIVE',
+      actorUserId: userId,
+      reason: 'Back on.',
+    })).ok).toBe(true);
+    expect((await advanceWithinAuthority(projectId)).took).toContainEqual(
+      expect.objectContaining({ opportunityId: piece.id, did: 'MARKED_READY' }),
+    );
   });
 
   it('does nothing for a project with no sprint', async () => {

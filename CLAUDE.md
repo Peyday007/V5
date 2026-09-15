@@ -3541,6 +3541,54 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   the evidence gate is untouched. What moved is who may form a view, not what
   anyone may do with it.
 
+  **A proposal settles seven things, and the two arithmetic ones refuse rather
+  than estimate.** The offer *and its stated edges*, the acceptance condition,
+  the price or the range the sources state, the delivery method, who fulfils
+  it, the expected margin, and when the cash would arrive. A scope with no
+  stated exclusions is the one that gets argued about after the work is done,
+  so the edges are part of the proposal rather than a refinement of it. A
+  **margin needs a price and a bounded exposure** and is withheld naming which
+  half is missing — a margin against an unknown cost fails in the direction
+  that makes a piece look worth doing, which is the shape of error nobody
+  notices because it looks like ambition. **Unpriced effort stays unpriced**:
+  the hours are reported beside the margin rather than multiplied by a rate
+  nobody set, which is the same defect one step along. A negative margin is a
+  reason to decline rather than a reason to raise the price, and it says so.
+
+  **A price is read, never produced, and `services/cash/figures.ts` is what
+  keeps the difference.** It refuses a bare number, because reading the
+  sprint's currency into one is the unknown taken as the favourable
+  assumption; it refuses `k`/`m` shorthand, because `$1,200k` parses cleanly as
+  1,200 and a thousandfold error reported as something somebody published is
+  worse than no figure; it refuses a percentage; and it does not read `USD` out
+  of `USDT`. Its failure mode is **missing** a figure, never inventing one.
+  Where the sources state a range it proposes the low end and says why: the top
+  of a range is the number Brain could least defend if asked.
+
+- **And a view nobody acts on is not autonomy — it is the same form with extra
+  steps.** `advanceWithinAuthority` takes the two decisions that are actually
+  bounded by something a person owns. It **declares a complete card ready to
+  test**, where the bound is the card: `markReady` refuses while a load-bearing
+  field is unknown, so what changed is who presses the button and never what
+  the button checks. And it **begins execution**, where the bound is the
+  standing grant, asked through the same `checkCommercialAuthority` an HTTP
+  caller goes through. The grant is asked *before* the capability, because
+  deny-by-default asks whether this may happen before it asks whether it could.
+
+  **It never manufactures a capability it does not have.** Reaching a buyer
+  needs `SEND_A_MESSAGE`, which reads MISSING on this Brain because no
+  integration of that kind exists, so what happens today is that pieces reach
+  READY by themselves and stop there with the refusal naming it. That is
+  reported as withheld rather than as done. A run that said it had contacted
+  somebody would be the one lie this section could tell that costs real money.
+
+  **And it is the one thing in Cash Mode that winding down also stops.** Every
+  route here keeps working in all three states, because a person may still mark
+  a piece ready and still execute one by hand while winding down — those are
+  their decisions. What must not happen is *Brain* starting a new obligation
+  after somebody has said stop. It is a **skip**, so no state moves, nothing is
+  charged, and it resumes by itself if the sprint is made active again.
+
   **Every item carries a typed answer, and each names an operation that already
   exists.** There is no apply endpoint of the review's own, because a second way
   to do each of those is one forgotten guard away from doing less.
@@ -3548,15 +3596,49 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   opening is answered by taking it, and a button that marked it read would be a
   control that pretends.
 
+- **Being registered was the bug, and a browser found it.** What decides
+  whether a need's completion condition actually holds was an injected reader,
+  wired by a side effect of importing `operate.ts` — on the reasoning that the
+  readings live in modules that import `needs.ts` and a cycle between them is a
+  load-order bug waiting to be found by whichever file loads first. The
+  reasoning was right about cycles and wrong about this one: `needs.ts` already
+  imports `capabilities.ts` and `card.ts` imports nothing but types, so the only
+  thing crossing was `questionKey`, which is a string builder rather than a
+  reading.
+
+  What it cost was real. `operate.ts` is imported by exactly one module in the
+  whole server — the Russell tick — so the route a person's browser calls to
+  close a need reached `closeNeed` with the **default** reader, which means
+  "nothing here can check this", which records the person's word as a
+  `PERSON_SUBSTITUTE` rather than refusing. Pressing *Mark this done* with
+  "Done." would have resolved a need whose capability was still missing, which
+  is exactly what `verified_by` exists to prevent. Every service test passed,
+  because they all import `operate.ts`.
+
+  `services/cash/conditions.ts` is a plain function now, with nothing to
+  register and nothing to forget, and `questionKey` has one home instead of
+  three. It was found by `tests/cashBrowserToDatabase.test.ts`, which mounts
+  the real section over the real routes over the real database — the seam
+  neither a scripted-`fetch` component suite nor a screenless service suite can
+  see, because a control that posts a field the route does not take passes both.
+
 - **Every one of those was a transition that existed, was tested, and could be
   reached by nothing — which is why the acceptance is a walk rather than a
   suite.** `tests/cashIntegrationPass.test.ts` drives one sprint from a person
   activating it through discovery, a harvested opening, the needs Brain raises
   and then answers from the card, the grant, the first recorded action,
-  delivery, settlement and winding down. Only the research worker is simulated
-  and its output is a declared fixture; everything between is the real tick, the
-  real compiler, the real card gate, the real authority check and the real
-  repositories. §24 records the same lesson at the same altitude: walking the
+  delivery, settlement and winding down. **Only the external edge is
+  simulated**: the worker authenticates as a `WORKER` principal, claims a real
+  item off the durable queue and submits through `brain_submit_claims` and
+  `brain_submit_verification`, so the scope check, the lease and generation
+  proof, the lane validation, Step 6's idempotency and Brain's own evidence gate
+  all run — and the items are not the test's either, because `approvePlan`
+  queues the research and completing it is what makes the verification next. An
+  item the test enqueued would only have proved the tools accept a proof the
+  test also wrote. What stays fixture is the sentences a worker found and the
+  two judgements only a reader of a source can make. Everything between is the
+  real tick, the real compiler, the real card gate, the real authority check and
+  the real repositories. §24 records the same lesson at the same altitude: walking the
   journey found five transitions that isolated tests could not see, because a
   test that arranges its own starting state cannot tell a mechanism from a
   function nothing calls.
@@ -3700,6 +3782,8 @@ server/
       opportunities.ts  the producer, and every transition an opportunity has
       capabilities.ts   what Brain can verifiably do, read rather than declared
       answers.ts        research reaching the card, and the view Brain forms on it
+      figures.ts        a money figure read from a source, and never produced
+      conditions.ts     what settles a need, as a function rather than a wiring
       discovery.ts      where the portfolio comes from: buckets, and a lane
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
@@ -3823,6 +3907,9 @@ tests/                  Vitest suites
   cashDiscovery.test.ts      the buckets, the lane, and the blank card they produce
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
   cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
+  cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
+  cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
+  cashFourAccounts.test.ts   four private operations, and the walls between them
   cashConcurrency.test.ts    two commitments, forced to overlap, on both backends
   cashCurrencyHttp.test.ts   a sprint that is not in dollars, driven as a person does
   cashHttp.test.ts           Cash Mode's door, driven as an attack

@@ -514,7 +514,22 @@ export interface AuthorityAdvance {
  */
 export async function advanceWithinAuthority(projectId: string): Promise<AuthorityAdvance> {
   const out: AuthorityAdvance = { took: [], withheld: [] };
-  if (!(await getCashMode(projectId))) return out;
+  const mode = await getCashMode(projectId);
+  if (!mode) return out;
+
+  /*
+   * Only while the sprint is running, and this is the one place in Cash Mode
+   * where winding down stops something other than discovery.
+   *
+   * The rule is that the off switch ends new discovery and never a customer's
+   * obligation, and every route here keeps working in all three states — a
+   * person can still mark a piece ready and still execute one by hand while
+   * winding down, because those are their decisions to take. What must not
+   * happen is *Brain* starting a new obligation after somebody has said stop.
+   * It is a skip rather than a refusal: no state moves, nothing is charged,
+   * and it resumes by itself if the sprint is made active again.
+   */
+  if (mode.state !== 'ACTIVE') return out;
 
   for (const opportunity of await listOpportunities({
     projectId,
