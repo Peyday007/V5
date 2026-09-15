@@ -34,8 +34,20 @@
  * generation proof, the lane validation, Step 6's idempotency and Brain's own
  * evidence gate all run here. What is fixture is what a worker brings in from
  * outside: the sentences it found, and the two judgements only somebody who
- * read the source can make. No live buyer, live payment or live Cowork
- * activation happens in this suite.
+ * read the source can make.
+ *
+ * **Two things this is not, said plainly rather than left to be assumed.** It
+ * is not a live Cowork session: no Routine is fired, no provider is called, no
+ * OAuth token is minted, and nothing external is read — the claims are a
+ * declared fixture and the web is never touched. And it is the tool *layer*
+ * rather than the MCP *transport*: the tools are invoked through the registry
+ * with a constructed principal, so `POST /mcp`, the bearer, the era
+ * dispatcher, origin validation and the rate limiter are **not** exercised
+ * here. `tests/mcp.test.ts` and `tests/oauth.test.ts` are what cover those,
+ * for the reason `packet.test.ts` gives: what is under test here is the
+ * authorization, the gate and the idempotency rather than the wire.
+ *
+ * No live buyer, live payment or live Cowork activation happens in this suite.
  *
  * Everything else actually runs: the durable tick, the discovery producer, the
  * harvest, the capability register, the needs, the continuations, the card, the
@@ -220,8 +232,13 @@ async function authorizeCommerce(): Promise<void> {
  *
  * What is simulated is the one thing that has to be — the **external edge**:
  * the sentences a worker found on the open web, and the two judgements only
- * somebody who read the source can make. No live buyer, no live payment and no
- * live Cowork activation happens in this suite, and nothing here claims one.
+ * somebody who read the source can make. Both are a declared fixture; nothing
+ * here reads the web, fires a Routine or calls a provider.
+ *
+ * The transport is the other half that is not exercised: these are the real
+ * tools reached through the registry, not over `POST /mcp` behind an OAuth
+ * bearer. No live buyer, no live payment and no live Cowork activation happens
+ * in this suite, and nothing here claims one.
  */
 async function principalFor(scopes: WorkerScope[] = WORKER_SCOPES): Promise<Principal> {
   return {

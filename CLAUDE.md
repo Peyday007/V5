@@ -3637,7 +3637,12 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   queues the research and completing it is what makes the verification next. An
   item the test enqueued would only have proved the tools accept a proof the
   test also wrote. What stays fixture is the sentences a worker found and the
-  two judgements only a reader of a source can make. Everything between is the
+  two judgements only a reader of a source can make. **Two things it is not,
+  said rather than assumed**: not a live Cowork session — no Routine fired, no
+  provider called, no token minted, nothing external read — and the tool
+  *layer* rather than the MCP *transport*, since the tools are reached through
+  the registry rather than over `POST /mcp` behind a bearer, which
+  `tests/mcp.test.ts` and `tests/oauth.test.ts` cover instead. Everything between is the
   real tick, the real compiler, the real card gate, the real authority check and
   the real repositories. §24 records the same lesson at the same altitude: walking the
   journey found five transitions that isolated tests could not see, because a
