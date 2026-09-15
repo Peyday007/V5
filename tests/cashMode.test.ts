@@ -48,6 +48,7 @@ import {
   COMMERCIAL_ACTIONS,
 } from '../server/services/cash/authority.ts';
 import { raiseNeed } from '../server/services/cash/needs.ts';
+import { openDiscovery } from '../server/services/cash/discovery.ts';
 import { recordMoneyEvent } from '../server/services/cash/opportunities.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
@@ -411,42 +412,27 @@ describe('winding down stops new discovery and nothing else', () => {
     ).toBe(true);
   });
 
-  it('keeps a discovery bucket stopped however far its openings have got', async () => {
+  it('stops the discovery the producer actually queued', async () => {
     /*
-     * The bucket and the opening are two different relationships, and one
-     * column for both would have been the loophole. A broad bucket question
-     * finds dozens of unrelated openings and is research about none of them —
-     * so reading `discovered_by_candidate_id` as support work would re-open
-     * new discovery the moment any single opening started executing, which is
-     * exactly what the wind-down had just stopped.
+     * Built by `openDiscovery` rather than by hand, because the defect was
+     * exactly a bucket that a hand-built fixture could not have: the guard
+     * asked whether a candidate had an opportunity on `candidate_id`, and a
+     * discovery bucket has none — its link lives on
+     * `discovered_by_candidate_id`, and a bucket that has not found anything
+     * yet has no link at all. So "no link" read as "not a cash idea" and the
+     * queued buckets, which are the whole of what winding down stops, kept
+     * launching.
+     *
+     * A test that made its own candidate agreed with the code either way.
      */
     await activated();
-    const captured = await capture({
-      projectId,
-      actorRef: userId,
-      ownerUserId: userId,
-      title: 'An opening a bucket found',
-      mechanism: 'EXPLICIT_PAID_REQUEST',
-      currency: 'USD',
-    });
-    if (!captured.ok) throw new Error('capture failed');
+    const [opened] = await openDiscovery({ projectId });
+    expect(opened).toBeTruthy();
 
-    const bucket = await createCandidate({
-      projectId,
-      visibility: 'SHARED',
-      title: 'Who is publicly asking to pay for work right now',
-      statement: 'The broad bucket question, which is about no one opening.',
-    });
-    await updateOpportunity(captured.value.id, {
-      discovered_by_candidate_id: bucket.id,
-      // Far enough along that reading the wrong column would let it through.
-      payer: 'The owner, who signs',
-    });
-    await transitionOpportunity({
-      id: captured.value.id,
-      from: ['DISCOVERED'],
-      to: 'EXECUTING',
-    });
+    const active = await getCashMode(projectId);
+    expect(await launchableUnderCashMode({ candidateId: opened!.candidateId, mode: active })).toBe(
+      true,
+    );
 
     await setLifecycle({
       projectId,
@@ -455,7 +441,27 @@ describe('winding down stops new discovery and nothing else', () => {
       reason: 'No new pieces.',
     });
     expect(
-      await launchableUnderCashMode({ candidateId: bucket.id, mode: await getCashMode(projectId) }),
+      await launchableUnderCashMode({
+        candidateId: opened!.candidateId,
+        mode: await getCashMode(projectId),
+      }),
+    ).toBe(false);
+
+    // Archived stops it too, and reactivating lets it go again — the idea
+    // keeps its place rather than being cancelled.
+    await setLifecycle({ projectId, to: 'ARCHIVED', actorUserId: userId, reason: 'Done.' });
+    expect(
+      await launchableUnderCashMode({
+        candidateId: opened!.candidateId,
+        mode: await getCashMode(projectId),
+      }),
+    ).toBe(false);
+    await setLifecycle({ projectId, to: 'ACTIVE', actorUserId: userId, reason: 'Back on.' });
+    expect(
+      await launchableUnderCashMode({
+        candidateId: opened!.candidateId,
+        mode: await getCashMode(projectId),
+      }),
     ).toBe(true);
   });
 

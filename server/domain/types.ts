@@ -5905,6 +5905,47 @@ export interface CashAction {
   createdAt: string;
 }
 
+export interface CashDiscoveryRoundRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  bucket_id: string;
+  mechanism: string;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * One asking of one discovery bucket.
+ *
+ * The durable answer to three questions the activity feed was being asked and
+ * could not keep answering: which buckets have run, which Russell idea asked
+ * each one, and whether a given candidate is discovery work at all.
+ */
+export interface CashDiscoveryRound {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  bucketId: string;
+  mechanism: string;
+  /** Which asking this is. A bucket may be re-asked; each time is its own row. */
+  round: number;
+  candidateId: string;
+  state: 'OPEN' | 'HARVESTED' | 'ABANDONED';
+  openedAt: string;
+  harvestedAt: string | null;
+  /** How many openings it produced. Zero is a finding about where Brain looked. */
+  found: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CashEventRow {
   id: string;
   project_id: string;

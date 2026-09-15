@@ -25,7 +25,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { listCashEvents } from '../server/repos/cashMode.ts';
+import { listCashEvents, recordCashEvent } from '../server/repos/cashMode.ts';
 import { getOpportunity, listOpportunities } from '../server/repos/cashPortfolio.ts';
 import { getCandidate, listCandidates } from '../server/repos/russellCandidates.ts';
 import { createRun } from '../server/repos/runs.ts';
@@ -39,7 +39,9 @@ import {
 } from '../server/repos/research.ts';
 import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
 import { activate, setLifecycle } from '../server/services/cash/lifecycle.ts';
+import { listRounds } from '../server/repos/cashDiscovery.ts';
 import {
+  BARREN_ROUNDS,
   SEARCH_BUCKETS,
   SIGNAL_LANE,
   harvest,
@@ -90,6 +92,8 @@ async function finishedMission(input: {
     sourceUrl: string | null;
     accepted?: boolean;
     sourceDate?: string | null;
+    /** What the claim established. A documented absence is not an opening. */
+    claimType?: 'SOURCED_FACT' | 'NEGATIVE_EXISTENCE' | 'QUOTATION';
   }[];
   fragmentStatus?: 'ACCEPTED' | 'BLOCKED' | 'REJECTED';
 }): Promise<string> {
@@ -160,7 +164,7 @@ async function finishedMission(input: {
       validationState: 'SOURCED' as const,
       validationDetail: null,
       sourced: one.sourceUrl !== null,
-      claimType: 'SOURCED_FACT' as const,
+      claimType: one.claimType ?? ('SOURCED_FACT' as const),
       contentHash: `${one.claim}|${one.sourceUrl ?? ''}`,
     })),
   );
@@ -241,6 +245,149 @@ describe('opening the discovery of a sprint', () => {
   });
 });
 
+describe('discovery keeps going while the sprint is active', () => {
+  it('asks a bucket again once its round is answered and the cool-off has passed', async () => {
+    /*
+     * A bucket was skipped for ever once its opening event existed, so a sprint
+     * discovered five things in its first hour and nothing for the rest of its
+     * life. That is not what a month of broad discovery is for: the buckets are
+     * places to look, published requests appear daily, and a single pass is a
+     * snapshot of one morning.
+     */
+    await activated();
+    const [first] = await openDiscovery({ projectId });
+    expect(first!.round).toBe(1);
+
+    // Not while the first round is live: a second asking would duplicate the
+    // first one's spending on the same question.
+    expect(await openDiscovery({ projectId })).toEqual(
+      expect.not.arrayContaining([expect.objectContaining({ bucketId: first!.bucketId })]),
+    );
+
+    await finishedMission({
+      candidateId: first!.candidateId,
+      claims: [
+        {
+          claim: 'A county published a request for parcel research, closing 30 September 2026.',
+          lane: SIGNAL_LANE,
+          sourceUrl: 'https://example.test/rfp/round-1',
+        },
+      ],
+    });
+    expect(await harvest({ projectId })).toHaveLength(1);
+
+    // Answered, but not yet due: the cool-off is what keeps "ongoing" from
+    // becoming "uncontrolled".
+    const soon = await openDiscovery({ projectId, limit: 9 });
+    expect(soon.some((one) => one.bucketId === first!.bucketId)).toBe(false);
+
+    const tomorrow = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
+    const again = await openDiscovery({ projectId, limit: 9, now: tomorrow });
+    const second = again.find((one) => one.bucketId === first!.bucketId);
+    expect(second?.round).toBe(2);
+
+    // And the second round says what the first already covered, so a worker is
+    // looking for what is new rather than re-reporting what Brain holds.
+    const candidate = (await getCandidate(second!.candidateId))!;
+    expect(candidate.statement).toContain('asked this 1 time before');
+    expect(candidate.statement).toContain('filed 1 opening');
+  });
+
+  it('carries the sprint objective into the question a worker reads', async () => {
+    // The objective was recorded in the event and left out of the candidate, so
+    // the thing a worker read was the generic template and the thing saying
+    // what the sprint was *for* sat in a row nothing downstream opened.
+    await activated();
+    const [opened] = await openDiscovery({ projectId });
+    const candidate = (await getCandidate(opened!.candidateId))!;
+    expect(candidate.statement).toContain('Maximize additional usable cash');
+  });
+
+  it('stops asking a bucket that has documented three times that there is nothing', async () => {
+    await activated();
+    let at = Date.now();
+    let bucketId = '';
+    for (let round = 1; round <= BARREN_ROUNDS; round += 1) {
+      const opened = await openDiscovery({
+        projectId,
+        limit: 9,
+        now: new Date(at).toISOString(),
+      });
+      const mine = bucketId
+        ? opened.find((one) => one.bucketId === bucketId)!
+        : opened[0]!;
+      bucketId = mine.bucketId;
+      expect(mine.round).toBe(round);
+      await finishedMission({
+        candidateId: mine.candidateId,
+        claims: [
+          {
+            claim: `A documented search of the boards found nothing, pass ${round}.`,
+            lane: 'demand_absence',
+            sourceUrl: `https://example.test/search/${round}`,
+          },
+        ],
+      });
+      await harvest({ projectId, limit: 50 });
+      at += 25 * 60 * 60 * 1000;
+    }
+
+    // Brain has now documented that there is nothing there. Asking a fourth
+    // time spends the allowance to learn it again, which is §13's rule about
+    // the archive applied to Brain's own history.
+    const fourth = await openDiscovery({
+      projectId,
+      limit: 9,
+      now: new Date(at).toISOString(),
+    });
+    expect(fourth.some((one) => one.bucketId === bucketId)).toBe(false);
+  });
+
+  it('keeps its identity after more than five hundred unrelated events', async () => {
+    /*
+     * Both halves of discovery read `listCashEvents(projectId, 500)` — the
+     * activity *display window*, hard-capped and newest-first. A month of
+     * ordinary sprint activity pushes the opening events out of it, and then
+     * every bucket re-opens as a duplicate and `harvest` returns nothing at all
+     * because it no longer recognises its own missions.
+     *
+     * A display window is not an index.
+     */
+    await activated();
+    const [opened] = await openDiscovery({ projectId });
+
+    for (let i = 0; i < 520; i += 1) {
+      await recordCashEvent({
+        projectId,
+        kind: 'CASH_NOTE',
+        actorRef: userId,
+        summary: `Ordinary activity ${i}`,
+      });
+    }
+    // The opening event is now well outside the window it used to be read from.
+    const window = await listCashEvents(projectId, 500);
+    expect(window.some((event) => event.kind === 'CASH_DISCOVERY_OPENED')).toBe(false);
+
+    // No duplicate: the bucket is still known to have an open round.
+    const again = await openDiscovery({ projectId, limit: 9 });
+    expect(again.some((one) => one.bucketId === opened!.bucketId)).toBe(false);
+
+    // And the research still files, which is the half that would have failed
+    // silently — a sprint that kept researching and stopped producing anything.
+    await finishedMission({
+      candidateId: opened!.candidateId,
+      claims: [
+        {
+          claim: 'A county published a request for parcel research after all that noise.',
+          lane: SIGNAL_LANE,
+          sourceUrl: 'https://example.test/rfp/after-the-noise',
+        },
+      ],
+    });
+    expect(await harvest({ projectId })).toHaveLength(1);
+  });
+});
+
 describe('harvesting what discovery found', () => {
   it('files a gated demand signal as an opportunity with its provenance', async () => {
     await activated();
@@ -317,18 +464,68 @@ describe('harvesting what discovery found', () => {
           sourceUrl: 'https://example.test/report',
         },
         {
-          claim: 'Nobody asked for anything and there is no buyer here.',
+          claim: 'A county published a request for eight parcel searches, closing 30 September.',
           lane: SIGNAL_LANE,
           sourceUrl: 'https://example.test/rfp/2026-443',
         },
       ],
     });
 
+    // The economics claim reads like an opening and is not one. The lane says
+    // what *kind* of evidence a claim is, and only one kind is a piece of work.
     const harvested = await harvest({ projectId });
-    // The economics claim reads like an opening and is not one; the signal
-    // claim reads like the opposite and is. The column decides, not the words.
     expect(harvested).toHaveLength(1);
-    expect(harvested[0]!.opportunity.buyingSignal).toContain('Nobody asked');
+    expect(harvested[0]!.opportunity.buyingSignal).toContain('county published a request');
+  });
+
+  it('keeps a documented absence as research and out of the portfolio', async () => {
+    /*
+     * This test used to feed "Nobody asked for anything and there is no buyer
+     * here" into the signal lane and **expect an opportunity**, to prove that
+     * the column decided rather than the words. The property was right and the
+     * example proved the defect: a lane says what kind of evidence a claim is,
+     * and "a county published a request" and "nobody is asking" are the same
+     * kind of evidence with opposite answers. Filing the second one put
+     * *nobody is asking* into the portfolio as something to go and sell.
+     *
+     * Two structural readings separate them, and neither is prose.
+     * `NEGATIVE_EXISTENCE` is the claim type the evidence standards already use
+     * for an established absence, and `demand_absence` / `demand_closed` are
+     * lanes of their own so a worker has somewhere to put the finding.
+     */
+    await activated();
+    const [opened] = await openDiscovery({ projectId });
+    await finishedMission({
+      candidateId: opened!.candidateId,
+      claims: [
+        {
+          claim: 'A documented search of the three boards found no open requests in this market.',
+          lane: SIGNAL_LANE,
+          sourceUrl: 'https://example.test/board/search',
+          claimType: 'NEGATIVE_EXISTENCE',
+        },
+        {
+          claim: 'No published request for this work exists on the county portal.',
+          lane: 'demand_absence',
+          sourceUrl: 'https://example.test/portal',
+        },
+        {
+          claim: 'The parcel research request published in June was awarded on 1 August.',
+          lane: 'demand_closed',
+          sourceUrl: 'https://example.test/award/118',
+        },
+      ],
+    });
+
+    expect(await harvest({ projectId })).toEqual([]);
+    expect(await listOpportunities({ projectId })).toEqual([]);
+
+    // The claims are untouched: a documented absence is evidence about where
+    // Brain has already looked, and discarding it would make the next round
+    // search the same ground.
+    const round = (await listRounds(projectId)).find((one) => one.candidateId === opened!.candidateId)!;
+    expect(round.state).toBe('HARVESTED');
+    expect(round.found).toBe(0);
   });
 
   it('refuses a claim the gate rejected, and one with no source', async () => {

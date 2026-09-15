@@ -50,17 +50,27 @@
  * never a favourable assumption, arriving at the moment an opportunity is born
  * rather than being asserted away by whoever created it.
  */
-import { getCashMode, listCashEvents, recordCashEvent } from '../../repos/cashMode.ts';
+import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   createOpportunity,
   opportunityForClaim,
   updateOpportunity,
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
+import {
+  closeRound,
+  listRounds,
+  openRound,
+  openRoundsByCandidate,
+} from '../../repos/cashDiscovery.ts';
 import { citableClaims } from '../../repos/research.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
 import { discoveryAllowed } from './lifecycle.ts';
-import type { CashMechanism, CashOpportunity } from '../../domain/types.ts';
+import type {
+  CashDiscoveryRound,
+  CashMechanism,
+  CashOpportunity,
+} from '../../domain/types.ts';
 
 /**
  * The plan's own search buckets, in code.
@@ -136,9 +146,29 @@ const HARVESTED = 'CASH_OPPORTUNITY_HARVESTED';
 /** The lane a claim must fill to be an opening rather than context. */
 export const SIGNAL_LANE = 'demand_signal';
 
+/**
+ * The lanes whose claims can be an opening at all.
+ *
+ * One entry today, and a set rather than a comparison because the point is
+ * that the *other* declared lanes are not openings: `economics` says what
+ * something pays, `deliverability` says whether it can be done, and
+ * `demand_absence` and `demand_closed` say there is nothing here or there is
+ * no longer. All four are evidence worth keeping and none of them is a piece
+ * of work.
+ *
+ * This was a single comparison against `demand_signal` with a comment saying
+ * the lane was "the whole of" whether something is an opening. It is not: a
+ * lane says what *kind* of evidence a claim is, and "a regional authority
+ * published a paid request" and "nobody in this market is asking" are the same
+ * kind of evidence with opposite answers.
+ */
+export const OPENING_LANES: ReadonlySet<string> = new Set([SIGNAL_LANE]);
+
 export interface OpenedDiscovery {
   bucketId: string;
   candidateId: string;
+  /** Which asking this is. A bucket is re-asked while the sprint is active. */
+  round: number;
 }
 
 /**
@@ -156,58 +186,161 @@ export interface OpenedDiscovery {
 export async function openDiscovery(input: {
   projectId: string;
   limit?: number;
+  now?: string;
 }): Promise<OpenedDiscovery[]> {
   const gate = await discoveryAllowed(input.projectId);
   if (!gate.allowed || !gate.mode) return [];
+  const mode = gate.mode;
+  const now = input.now ?? new Date().toISOString();
 
-  const already = new Set(
-    (await listCashEvents(input.projectId, 500))
-      .filter((event) => event.kind === OPENED)
-      .map((event) => String(event.detail['bucketId'] ?? '')),
-  );
+  /*
+   * What has been asked, from the table that exists to remember it.
+   *
+   * This used to read `listCashEvents(projectId, 500)` — the **activity display
+   * window** — so a month of ordinary sprint activity pushed the opening events
+   * out of it and every bucket was opened again as a duplicate. A display
+   * window is not an index.
+   */
+  const rounds = await listRounds(input.projectId);
+  const byBucket = new Map<string, CashDiscoveryRound[]>();
+  for (const round of rounds) {
+    byBucket.set(round.bucketId, [...(byBucket.get(round.bucketId) ?? []), round]);
+  }
 
   const out: OpenedDiscovery[] = [];
   const limit = Math.max(1, input.limit ?? 1);
   for (const bucket of SEARCH_BUCKETS) {
     if (out.length >= limit) break;
-    if (already.has(bucket.id)) continue;
+    const history = byBucket.get(bucket.id) ?? [];
+    const next = nextRoundFor(history, now);
+    if (next === null) continue;
 
     const candidate = await createCandidate({
       projectId: input.projectId,
       visibility: 'SHARED',
       conversationId: null,
       sourceMessageId: null,
-      title: bucket.title,
-      statement: bucket.question,
+      title: next === 1 ? bucket.title : `${bucket.title} (round ${next})`,
+      statement: questionFor(bucket, mode.objective, next, history),
     });
+
+    const opened = await openRound({
+      projectId: input.projectId,
+      cashModeId: mode.id,
+      bucketId: bucket.id,
+      mechanism: bucket.mechanism,
+      round: next,
+      candidateId: candidate.id,
+    });
+    if (!opened.created) continue;
 
     await recordCashEvent({
       projectId: input.projectId,
       kind: OPENED,
       actorRef: 'BRAIN',
-      summary: `Discovery opened: ${bucket.title}.`,
+      summary: `Discovery opened: ${bucket.title} (round ${next}).`,
       detail: {
         bucketId: bucket.id,
         mechanism: bucket.mechanism,
         candidateId: candidate.id,
-        cashModeId: gate.mode.id,
-        objective: gate.mode.objective,
+        cashModeId: mode.id,
+        round: next,
+        objective: mode.objective,
       },
     });
-    out.push({ bucketId: bucket.id, candidateId: candidate.id });
+    out.push({ bucketId: bucket.id, candidateId: candidate.id, round: next });
   }
   return out;
 }
 
-/** Which bucket a candidate was opened for, from the events. */
-async function bucketsByCandidate(projectId: string): Promise<Map<string, SearchBucket>> {
+/**
+ * How long a finished bucket waits before Brain asks it again.
+ *
+ * A sprint that searched once in its first hour and never again is not what a
+ * month of broad discovery is for — published requests appear daily, and the
+ * buckets are places to look rather than questions with final answers. So a
+ * round is re-asked, and the cool-off is what keeps "ongoing" from becoming
+ * "uncontrolled": one re-ask per bucket per day, and only once the previous
+ * round has actually been answered.
+ */
+export const ROUND_COOL_OFF_MS = 24 * 60 * 60 * 1000;
+
+/** How many times Brain will re-ask a bucket that keeps finding nothing. */
+export const BARREN_ROUNDS = 3;
+
+/**
+ * Which round of this bucket to open now, or null for none.
+ *
+ * Three conditions, and each one is a bound rather than a preference. A bucket
+ * with a live round is not asked twice at once, because the second would
+ * duplicate the first's spending. A finished round waits out the cool-off. And
+ * a bucket whose last `BARREN_ROUNDS` rounds all found nothing stops — not
+ * because looking is forbidden, but because Brain has now documented that
+ * there is nothing there, and re-asking is the allowance spent to learn it
+ * again. That is §13's rule about the archive, applied to Brain's own history.
+ */
+export function nextRoundFor(history: CashDiscoveryRound[], now: string): number | null {
+  if (history.some((one) => one.state === 'OPEN')) return null;
+  if (history.length === 0) return 1;
+
+  const ordered = [...history].sort((a, b) => a.round - b.round);
+  const last = ordered[ordered.length - 1]!;
+  const settledAt = last.harvestedAt ?? last.openedAt;
+  if (Date.parse(now) - Date.parse(settledAt) < ROUND_COOL_OFF_MS) return null;
+
+  const recent = ordered.slice(-BARREN_ROUNDS);
+  if (recent.length >= BARREN_ROUNDS && recent.every((one) => one.found === 0)) return null;
+
+  return last.round + 1;
+}
+
+/**
+ * The question this round actually asks.
+ *
+ * The sprint's objective was recorded in the event and left out of the
+ * candidate, so the thing a worker read was the bucket's generic template and
+ * the thing that said what the sprint was *for* was in a row nobody downstream
+ * opened. The objective is context rather than an instruction — it says which
+ * openings are worth reporting, and it cannot widen the envelope, the evidence
+ * gate or the source classes, all of which are the compiler's.
+ *
+ * A later round says what the earlier ones already covered, so the worker is
+ * looking for what is new rather than re-reporting what Brain already holds.
+ */
+export function questionFor(
+  bucket: SearchBucket,
+  objective: string,
+  round: number,
+  history: readonly CashDiscoveryRound[],
+): string {
+  const parts = [bucket.question, `This is for a short cash sprint whose goal is: ${objective}`];
+  if (round > 1) {
+    const found = history.reduce((total, one) => total + one.found, 0);
+    parts.push(
+      `Brain has asked this ${round - 1} time${round === 2 ? '' : 's'} before and filed ${found} ` +
+        'opening' + (found === 1 ? '' : 's') + '. Report what has been published since, and say ' +
+        'so plainly where nothing has.',
+    );
+  }
+  return parts.join(' ');
+}
+
+/**
+ * Which bucket each live candidate is asking, from the rounds table.
+ *
+ * Read by key rather than scanned out of the last 500 events, which is what
+ * made a busy sprint stop harvesting its own research entirely: with the
+ * opening events out of the window this map came back empty and `harvest`
+ * returned nothing at all.
+ */
+async function liveRounds(
+  projectId: string,
+): Promise<Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>> {
   const byId = new Map(SEARCH_BUCKETS.map((bucket) => [bucket.id, bucket]));
-  const out = new Map<string, SearchBucket>();
-  for (const event of await listCashEvents(projectId, 500)) {
-    if (event.kind !== OPENED) continue;
-    const candidateId = String(event.detail['candidateId'] ?? '');
-    const bucket = byId.get(String(event.detail['bucketId'] ?? ''));
-    if (candidateId && bucket) out.set(candidateId, bucket);
+  const out = new Map<string, { round: CashDiscoveryRound; bucket: SearchBucket }>();
+  for (const [candidateId, round] of await openRoundsByCandidate(projectId)) {
+    const bucket = byId.get(round.bucketId);
+    if (bucket) out.set(candidateId, { round, bucket });
   }
   return out;
 }
@@ -240,14 +373,14 @@ export async function harvest(input: {
   const mode = await getCashMode(input.projectId);
   if (!mode) return [];
 
-  const buckets = await bucketsByCandidate(input.projectId);
-  if (buckets.size === 0) return [];
+  const live = await liveRounds(input.projectId);
+  if (live.size === 0) return [];
 
   const missions = (await listMissions({ projectId: input.projectId })).filter(
     (mission) =>
       mission.state === 'DONE' &&
       mission.candidateId !== null &&
-      buckets.has(mission.candidateId) &&
+      live.has(mission.candidateId) &&
       mission.orchestrationId !== null,
   );
 
@@ -255,7 +388,8 @@ export async function harvest(input: {
   const limit = Math.max(1, input.limit ?? 20);
   for (const mission of missions) {
     if (out.length >= limit) break;
-    const bucket = buckets.get(mission.candidateId!)!;
+    const { bucket, round } = live.get(mission.candidateId!)!;
+    let foundHere = 0;
 
     /*
      * The citable set, not the accepted-fragment one.
@@ -277,8 +411,19 @@ export async function harvest(input: {
       if (out.length >= limit) break;
       // A lane is a row. This is the whole of "is this an opening" — no prose
       // is read, and the gate has already refused anything unsourced.
-      if (claim.evidenceLane !== SIGNAL_LANE) continue;
+      if (!OPENING_LANES.has(claim.evidenceLane ?? '')) continue;
       if (!claim.sourceUrl) continue;
+      /*
+       * A documented absence is a finding, and it is not an opening.
+       *
+       * `NEGATIVE_EXISTENCE` is a claim type the research standards already
+       * recognise — it is how "nothing published says anyone is asking" is
+       * established at all — and filing one as an opportunity would put
+       * *nobody is asking* into the portfolio as a piece of work. The lane says
+       * what kind of evidence a claim is; the claim type says whether it found
+       * something or established that there was nothing.
+       */
+      if (claim.claimType === 'NEGATIVE_EXISTENCE') continue;
       if (await opportunityForClaim(input.projectId, claim.id)) continue;
 
       const created = await createOpportunity({
@@ -335,8 +480,20 @@ export async function harvest(input: {
         },
       });
 
+      foundHere += 1;
       out.push({ opportunity: withSignal ?? created, claimId: claim.id, missionId: mission.id });
     }
+
+    /*
+     * The round is settled by its own bookkeeping, not by the loop ending.
+     *
+     * `found` is what decides whether this bucket is worth asking again, so a
+     * round that produced nothing has to record *nothing* rather than simply
+     * stop being open. Guarded on OPEN, so two ticks reading one finished
+     * mission settle it once — and a round that hit the per-tick limit stays
+     * open, because the claims it has not reached yet are still its own.
+     */
+    if (out.length < limit) await closeRound({ id: round.id, to: 'HARVESTED', found: foundHere });
   }
   return out;
 }

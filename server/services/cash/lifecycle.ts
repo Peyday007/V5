@@ -41,6 +41,7 @@ import {
 } from '../../repos/cashMode.ts';
 import { getApprovalEnvelope } from '../research/approvalEnvelope.ts';
 import { opportunitiesForCandidate } from '../../repos/cashPortfolio.ts';
+import { roundForCandidate } from '../../repos/cashDiscovery.ts';
 import type {
   CashMode,
   CashModeState,
@@ -331,6 +332,22 @@ export async function launchableUnderCashMode(input: {
   mode: CashMode | null;
 }): Promise<boolean> {
   if (!input.mode || input.mode.state === 'ACTIVE') return true;
+
+  /*
+   * Discovery work is classified by a row that says so.
+   *
+   * This asked whether the candidate had an opportunity on `candidate_id` and
+   * read "no link" as "not a cash idea" — and a discovery bucket has no such
+   * link, because its relationship lives on `discovered_by_candidate_id` and a
+   * bucket that has not found anything yet has no link at all. So the queued
+   * buckets, which are precisely the thing winding down exists to stop, sailed
+   * through the guard and kept launching.
+   *
+   * **Inferring a classification from the absence of a different table's row is
+   * what made that possible.** `cash_discovery_rounds` is the statement.
+   */
+  if (await roundForCandidate(input.candidateId)) return false;
+
   const linked = await opportunitiesForCandidate(input.candidateId);
   if (linked.length === 0) return true;
   return linked.some((one) => OBLIGATION_STATES.includes(one.state));

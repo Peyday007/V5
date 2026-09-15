@@ -189,11 +189,32 @@ const MARKET_DISCOVERY: CompilerProfile = {
     {
       id: 'demand_signal',
       description:
-        'The specific published request, posting, listing, notice, filing or announcement ' +
-        'this rests on, attributed to whoever made it, with its URL and the date it was ' +
-        'published or observed. A general statement that an industry has a problem is not ' +
-        'this lane.',
+        'An opening that is **open**: the specific published request, posting, listing, notice, ' +
+        'filing or announcement this rests on, attributed to whoever made it, with its URL and ' +
+        'the date it was published or observed. A general statement that an industry has a ' +
+        'problem is not this lane, and neither is a finding that nobody is asking or that a ' +
+        'request has closed — those have lanes of their own, because everything filed here ' +
+        'becomes a piece of work somebody may go and pursue.',
       necessity: 'REQUIRED',
+    },
+    {
+      id: 'demand_absence',
+      description:
+        'A documented absence: the places a request would have been published were searched ' +
+        'and nothing was found. Name where you looked and when, because a claim that something ' +
+        'does not exist is established by a documented search of the places it would be, or not ' +
+        'at all. This is a real finding and it is deliberately not the signal lane — it belongs ' +
+        'here so that "nobody is asking" cannot be filed as something to go and sell.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'demand_closed',
+      description:
+        'A request that was published and is no longer open: a stated closing date that has ' +
+        'passed, an award or an appointment announced, a listing withdrawn or marked filled. ' +
+        'Worth recording because it says where the demand was, and separate from the signal ' +
+        'lane because it is not something anybody can still win.',
+      necessity: 'CONDITIONAL',
     },
     {
       id: 'economics',
