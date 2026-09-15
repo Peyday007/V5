@@ -31,7 +31,6 @@ import {
   settleNeed,
 } from '../../repos/cashPortfolio.ts';
 import { recordCashEvent } from '../../repos/cashMode.ts';
-import { readCapability } from './capabilities.ts';
 import { readNeedCondition } from './conditions.ts';
 import type { CashNeed, CashOpportunityState } from '../../domain/types.ts';
 import type { Outcome } from './opportunities.ts';

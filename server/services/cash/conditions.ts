@@ -13,10 +13,11 @@
  * reasoning that the readings live in modules that import `needs.ts` and a
  * cycle between them is a load-order bug waiting to be found by whichever file
  * loads first. The reasoning was right about cycles and wrong about this one:
- * `needs.ts` already imports `capabilities.ts`, and `card.ts` imports nothing
- * but types, so there was never a cycle to break here — only `questionKey`,
- * which was in `answers.ts`, and which is a string builder rather than a
- * reading.
+ * what settles a condition is `capabilities.ts`, `card.ts` and
+ * `cashPortfolio.ts`, and none of the three imports `needs.ts` — so there was
+ * never a cycle to break here. The only thing actually crossing was
+ * `questionKey`, which lived in `answers.ts`, and which is a string builder
+ * rather than a reading.
  *
  * What the injection cost was real. `operate.ts` is imported by exactly one
  * module in the whole server, the Russell tick — so the route a person's
@@ -45,7 +46,13 @@ export interface NeedVerification {
 }
 
 /**
- * The key a research need is raised under.
+ * The key a discoverable blank is raised under.
+ *
+ * `question:` rather than `capability:` because the two are answered by
+ * different things, and `startDependentWork` reads exactly that prefix to
+ * decide what research can settle. A missing payer is a fact somebody could
+ * look up; a missing payment processor is an integration, and captured ideas
+ * about integrations are questions nobody can research.
  *
  * Rebuilt per field rather than parsed apart: Brain wrote it, so the field it
  * names is found by constructing the key again and comparing, and nothing

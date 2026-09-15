@@ -3601,10 +3601,11 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   wired by a side effect of importing `operate.ts` — on the reasoning that the
   readings live in modules that import `needs.ts` and a cycle between them is a
   load-order bug waiting to be found by whichever file loads first. The
-  reasoning was right about cycles and wrong about this one: `needs.ts` already
-  imports `capabilities.ts` and `card.ts` imports nothing but types, so the only
-  thing crossing was `questionKey`, which is a string builder rather than a
-  reading.
+  reasoning was right about cycles and wrong about this one: what settles a
+  condition is `capabilities.ts`, `card.ts` and `cashPortfolio.ts`, and **none
+  of the three imports `needs.ts`**, so there was no cycle here to break. The
+  only thing actually crossing was `questionKey`, which is a string builder
+  rather than a reading.
 
   What it cost was real. `operate.ts` is imported by exactly one module in the
   whole server — the Russell tick — so the route a person's browser calls to
