@@ -420,7 +420,14 @@ BRAIN_TEST_DATABASE_URL=postgresql://... npm test
 
 The suites: `cashMode`, `cashMoney`, `cashAuthority`, `cashPortfolio`,
 `cashDefects`, `cashDiscovery`, `cashOperate`, `cashHttp`, `cashSection`,
-`connectorIsolation`.
+`connectorIsolation`, and `cashIntegrationPass` — which walks one sprint from
+activation through discovery, a harvested opening, the needs Brain raises and
+answers, the first recorded action, delivery, settlement and winding down, in
+one pass through the entrances production uses. It exists because every defect
+the review found was a transition that existed, was tested, and could be
+reached by nothing; each of them was invisible to a test that arranges its own
+starting state. Only the research worker is simulated, and its output is a
+declared fixture rather than live research.
 
 Both boot paths were verified: migrations `052_cash_mode` through
 `055_cash_operation` apply from an empty database, and a restart against the

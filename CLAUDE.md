@@ -3490,6 +3490,19 @@ Steps 4 to 12C already built, and none of it is a second set of rules.
   opening is answered by taking it, and a button that marked it read would be a
   control that pretends.
 
+- **Every one of those was a transition that existed, was tested, and could be
+  reached by nothing — which is why the acceptance is a walk rather than a
+  suite.** `tests/cashIntegrationPass.test.ts` drives one sprint from a person
+  activating it through discovery, a harvested opening, the needs Brain raises
+  and then answers from the card, the grant, the first recorded action,
+  delivery, settlement and winding down. Only the research worker is simulated
+  and its output is a declared fixture; everything between is the real tick, the
+  real compiler, the real card gate, the real authority check and the real
+  repositories. §24 records the same lesson at the same altitude: walking the
+  journey found five transitions that isolated tests could not see, because a
+  test that arranges its own starting state cannot tell a mechanism from a
+  function nothing calls.
+
 **What this version does not do, and says so.** It records the authorization and
 the money; it does not itself contact a buyer, issue an invoice or move funds. A
 missing integration is a `cash_needs` row with a recommended way forward, which
@@ -3747,6 +3760,7 @@ tests/                  Vitest suites
   cashPortfolio.test.ts      the unknowns, the dispositions, and the measured compression
   cashDiscovery.test.ts      the buckets, the lane, and the blank card they produce
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
+  cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashHttp.test.ts           Cash Mode's door, driven as an attack
   cashSection.test.tsx       the Cash section in a browser: four states, one control
   connectorIsolation.test.ts one site, two private operations, two identities
