@@ -176,6 +176,27 @@ Two ways a worker authenticates, both real:
    **grants the standing commercial authority**. Those two decisions are a
    person's and there is no path around either.
 
+**Three grants, and they are not the same grant.** This trips people up because
+two of them are called "authority" and the third is called "activation".
+
+| What | Where | Without it |
+|---|---|---|
+| **Activation** | Russell → **Cash** | `runDiscovery` skips the project entirely. No buckets open, no candidates, nothing. It also creates the project's `Opportunity Research` layer, which the next row needs. |
+| **Standing *research* authority** | Russell → **Needs You**, the prefilled **Approve** card | Discovery captures candidates and every one of them **parks**: `standingAuthority` refuses the launch and the idea sits waiting for a decision. Rows look healthy and nothing researches. |
+| **Standing *commercial* authority** | Russell → **Needs You** | Research runs and nothing executes. `advanceWithinAuthority` refuses to begin execution, every `COMMERCIAL_ACTION` is refused, and `max_external_spend` stays 0. **This one is not needed to start researching**, and leaving it ungranted is the correct state until there is something worth spending on. |
+
+So the minimum to get a sprint *researching* is the first two, per project. The
+third is what turns a validated opportunity into an executed one, and it is the
+only one that can cost money.
+
+**None of the three is reachable from a terminal, and that is deliberate.**
+Every cash route is `requirePerson` plus `decideProjectAccess`, which refuses a
+worker by principal *type* — §22's rule that a machine cannot create its own
+work, at the surface where the work costs somebody money. `npm run admin` can
+create the project, the worker and the membership; it cannot activate a sprint
+or grant either authority, and adding a command that could would be the operator
+console again with fewer witnesses.
+
 **Steps 3 to 6 come before step 8 deliberately, and that ordering is new.**
 Activating a sprint against a Brain with no bound surface is not destructive —
 discovery's missions defer on `NO_SURFACE_SERVES_THIS_PROJECT`, spend no attempt
