@@ -49,7 +49,7 @@ import { startPacket } from '../server/services/research/startPacket.ts';
 import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { CASH_LAYER_NAME } from '../server/services/cash/lifecycle.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
-import { createBin } from '../server/repos/bins.ts';
+import { binForOrchestration, createBin } from '../server/repos/bins.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -581,14 +581,104 @@ async function main(): Promise<void> {
        * after a crash, a timeout or a lost response starts nothing twice. A
        * flag would be set by a tick that then died; rows cannot be.
        */
-      const already = new Set(
-        (await listOrchestrationsByProject(project.id)).map((one: { title: string }) => one.title),
+      /*
+       * One bin shape, built by both paths.
+       *
+       * A repaired bin and a fresh one must be the same thing or the repair is
+       * a second, subtly different kind of work item — the "rule applied by one
+       * of two readers" this repository keeps recording. So the construction
+       * lives here and both callers go through it.
+       */
+      const binFor = async (orchestrationId: string, bucket: (typeof SEARCH_BUCKETS)[number]) =>
+        createBin({
+          projectId: project.id,
+          layerId: layer.id,
+          kind: 'RESEARCH_PACKET',
+          title: bucket.title,
+          objective:
+            'Carry this bounded discovery question from an approved plan to gated, sourced ' +
+            'claims, and stop. Read published sources only.',
+          rationale: `Cash Mode discovery bucket ${bucket.id}, started from a terminal.`,
+          manifest: {
+            objective: 'Drain this research packet to its own terminal state.',
+            why:
+              'One bounded question about where money is currently available, answered from ' +
+              'published sources. Every control it passes through is the existing one.',
+            lineage: {
+              projectId: project.id,
+              layerId: layer.id,
+              goal: bucket.question,
+              orchestrationId,
+            },
+            units: [],
+            /*
+             * Left to the fragment rather than restated here. The envelope
+             * already bounds the source types and `planFitsEnvelope` refuses a
+             * fragment that declares none, so a narrower list here would be a
+             * second set of limits nobody reviewed.
+             */
+            acceptableSources: [],
+            excludedSources: [],
+            evidence: [
+              'Each claim carrying its canonical source URL, its publisher and the date it was ' +
+                'published or observed, or recorded as unresolved with the search that failed',
+            ],
+            outputs: ['Gated, sourced claims against this question'],
+            authorizedActions: [
+              'brain_claim_work and the research tools, for work items belonging to this packet',
+            ],
+            prohibitedActions: [
+              'buying anything, or paying for access to any source',
+              'contacting any person or organisation',
+              'advertising, publishing or listing anything',
+              'any work item outside this orchestration',
+              'enabling paid overage',
+            ],
+            budgetUnits: 1,
+            retry: { maxAttempts: 3, backoffSeconds: 60 },
+            stoppingConditions: ['The packet reaches its own terminal state'],
+          },
+          completionContract: 'RESEARCH_PACKET_V1',
+          orchestrationId,
+          createdByType: 'SYSTEM',
+          createdById: `admin:${actor.email}`,
+          ready: true,
+          priority: 8,
+          maxAttempts: 5,
+        });
+
+      const existing = new Map(
+        (await listOrchestrationsByProject(project.id)).map(
+          (one: { title: string; id: string }) => [one.title, one.id] as const,
+        ),
       );
 
       let started = 0;
+      let repaired = 0;
       for (const bucket of SEARCH_BUCKETS) {
-        if (already.has(bucket.title)) {
-          console.log(`  skipped    ${bucket.id} — already started`);
+        /*
+         * Idempotent by the *effect*, not by whether this ran before.
+         *
+         * A per-bucket skip is the shape §27 already had to correct once: it
+         * reads "this was started" and concludes there is nothing to do, which
+         * is only true while the two artefacts are made together. The first
+         * version of this command made the packet and not the bin, so ten
+         * packets exist in production with no bin — and a skip keyed on the
+         * bucket would step over exactly the rows that need repairing, for
+         * ever, while reporting success.
+         *
+         * So each artefact is asked about separately: a packet that exists is
+         * reused, and a bin is built for it if it has none.
+         */
+        const alreadyId = existing.get(bucket.title);
+        if (alreadyId) {
+          if (await binForOrchestration(alreadyId)) {
+            console.log(`  skipped    ${bucket.id} — packet and bin already there`);
+            continue;
+          }
+          const bin = await binFor(alreadyId, bucket);
+          repaired += 1;
+          console.log(`  repaired   ${bucket.id}  ${alreadyId}  bin ${bin.id}`);
           continue;
         }
         const packet = await startPacket({
@@ -618,63 +708,7 @@ async function main(): Promise<void> {
          * packet is: the title check above skips a bucket already started, so
          * neither is made twice.
          */
-        const bin = await createBin({
-          projectId: project.id,
-          layerId: layer.id,
-          kind: 'RESEARCH_PACKET',
-          title: bucket.title,
-          objective:
-            'Carry this bounded discovery question from an approved plan to gated, sourced ' +
-            'claims, and stop. Read published sources only.',
-          rationale: `Cash Mode discovery bucket ${bucket.id}, started from a terminal.`,
-          manifest: {
-            objective: 'Drain this research packet to its own terminal state.',
-            why:
-              'One bounded question about where money is currently available, answered from ' +
-              'published sources. Every control it passes through is the existing one.',
-            lineage: {
-              projectId: project.id,
-              layerId: layer.id,
-              goal: bucket.question,
-              orchestrationId: packet.orchestration.id,
-            },
-            units: [],
-            /*
-             * Left to the fragment rather than restated here. The envelope
-             * already bounds the source types and `planFitsEnvelope` refuses a
-             * fragment that declares none, so naming a narrower list here would
-             * be a second set of limits nobody reviewed.
-             */
-            acceptableSources: [],
-            excludedSources: [],
-            evidence: [
-              'Each claim carrying its canonical source URL, its publisher and the date it was ' +
-                'published or observed, or recorded as unresolved with the search that failed',
-            ],
-            outputs: ['Gated, sourced claims against this question'],
-            authorizedActions: [
-              'brain_claim_work and the research tools, for work items belonging to this packet',
-            ],
-            prohibitedActions: [
-              'buying anything, or paying for access to any source',
-              'contacting any person or organisation',
-              'advertising, publishing or listing anything',
-              'any work item outside this orchestration',
-              'enabling paid overage',
-            ],
-            budgetUnits: 1,
-            retry: { maxAttempts: 3, backoffSeconds: 60 },
-            stoppingConditions: ['The packet reaches its own terminal state'],
-          },
-          completionContract: 'RESEARCH_PACKET_V1',
-          orchestrationId: packet.orchestration.id,
-          createdByType: 'SYSTEM',
-          createdById: `admin:${actor.email}`,
-          ready: true,
-          priority: 8,
-          maxAttempts: 5,
-        });
-
+        const bin = await binFor(packet.orchestration.id, bucket);
         started += 1;
         console.log(`  started    ${bucket.id}  ${packet.orchestration.id}  bin ${bin.id}`);
       }
@@ -687,10 +721,18 @@ async function main(): Promise<void> {
         targetId: project.id,
         projectId: project.id,
         result: 'SUCCESS',
-        metadata: { started: String(started), envelope: 'RUSSELL_CASH_DISCOVERY_V1' },
+        metadata: {
+          started: String(started),
+          repaired: String(repaired),
+          envelope: 'RUSSELL_CASH_DISCOVERY_V1',
+        },
       });
-      console.log(`  ${started} packet(s) started, ${SEARCH_BUCKETS.length - started} already there.`);
+      console.log(
+        `  ${started} started, ${repaired} bin(s) repaired, ` +
+          `${SEARCH_BUCKETS.length - started - repaired} already complete.`,
+      );
       break;
+
     }
     case 'access show': {
       const worker = await workerFrom(rest[0] ?? fail('Name a worker.'));
