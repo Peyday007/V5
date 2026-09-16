@@ -26,6 +26,7 @@
  * fewer witnesses.
  *
  *   npm run admin -- workers list
+ *   npm run admin -- workers create <name> [display name] --admin someone@example.com
  *   npm run admin -- routing show
  *   npm run admin -- routing check <worker> <bin>
  *   npm run admin -- workers disable <name> --admin someone@example.com
@@ -67,6 +68,7 @@ import {
   getWorkerRouting,
   listWorkerRouting,
   setWorkerRouting,
+  createWorker,
   getWorkerByName,
   grantMembership,
   listMembershipsForPrincipal,
@@ -465,6 +467,58 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
       });
       console.log(`  ${project.id}  ${project.slug}  ${project.name}`);
+      break;
+    }
+    /*
+     * Creating a worker identity, which had no terminal path at all.
+     *
+     * `POST /api/admin/workers` was the only one, and
+     * `docs/workers/CONNECTING-A-WORKER.md` step 1 said to use `npm run admin`
+     * while describing the form fields of the operator console §26 deleted. So
+     * the documented first step of connecting a worker named a command that did
+     * not exist and a screen that no longer did, and the real path was a raw
+     * HTTP POST with an administrator's session cookie. A four-project fleet
+     * needs four of these before anything else can be set up.
+     *
+     * **It issues no credential**, which is why it belongs here at all. §26
+     * keeps site credentials off the terminal because the secret is shown once
+     * in a browser to somebody signed in. Nothing of that kind happens here: a
+     * worker identity is a row, and the credential that later speaks for it is
+     * minted by the OAuth consent screen, in a browser, on a human's approval.
+     * A worker created here and never connected can do nothing whatsoever.
+     *
+     * The name rule is the route's, character for character, because two
+     * entrances disagreeing about what a valid name is would be discovered by
+     * whichever one somebody used second.
+     */
+    case 'workers create': {
+      const actor = await administrator();
+      const name = (rest[0] ?? fail('Name the worker.')).trim();
+      if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(name)) {
+        fail('A worker name is 2-64 characters of lowercase letters, digits, dot, dash or underscore.');
+      }
+      if (await getWorkerByName(name)) fail(`A worker called "${name}" already exists.`);
+      const displayName = rest.slice(1).join(' ').trim() || name;
+      const worker = await createWorker({
+        name,
+        displayName,
+        workerType: 'GENERIC',
+        description: null,
+        createdByType: 'HUMAN',
+        createdById: actor.id,
+      });
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'CREATE_WORKER',
+        targetType: 'WORKER',
+        targetId: worker.id,
+        projectId: null,
+        result: 'SUCCESS',
+        metadata: { name: worker.name },
+      });
+      console.log(`  ${worker.id}  ${worker.name}  ${worker.displayName}`);
+      console.log('  It is a member of no project and holds no credential yet.');
       break;
     }
     case 'access show': {

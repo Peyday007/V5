@@ -59,7 +59,7 @@ and reported, rather than spending a fire discovering it.
 
 `BRAIN_ROUTINE_BASE_URL`, `BRAIN_ROUTINE_ID`, `BRAIN_ROUTINE_TOKEN` and
 `BRAIN_ROUTINE_VERSION` are the single-Routine fallback that predates the fleet
-tables. A fleet registered through `npm run fleet` does not need them.
+tables. A fleet registered through the `fleet` CLI does not need them.
 
 ### Optional
 
@@ -149,10 +149,25 @@ Two ways a worker authenticates, both real:
    optional — a Routine bound to no worker serves no project and is never fired
    for project-scoped work, which is every bin.
 6. **Verify every surface before any sprint is activated:**
-   `npm run fleet -- show` (no missing secrets, every Routine `ENABLED` and
-   bound) and `npm run fleet -- verify-surface --probe` per surface. `CONFIGURED`
+   `fleet show` (no missing secrets, every Routine `ENABLED` and
+   bound) and `fleet verify-surface --probe` per surface. `CONFIGURED`
    and `OBSERVED` are two blocks and a perfect configured block over an empty
    observed one is a refusal, not a pass.
+
+   The probe is the *controlled* half and the observed block is the half that
+   settles it: a surface is proven by four rows Brain wrote itself — it fired
+   this Routine, a session arrived and was attributed to the bound worker from
+   that same dispatch row, it was assigned a bin, and the bin reached
+   `COMPLETE`. Arrivals with no completion prove a connector and not a surface.
+
+   **`verify-surface` reads the surface's family from the bound worker's own
+   routing row.** It used to assume FACTORY, so it refused every research
+   Routine with five problems that all restated *this is not a factory
+   surface* — which is every Routine the topology above creates. A research
+   surface is checked for the mirror-image property instead: no repository, no
+   `repository`/`repository-write` capability, and at least one active
+   membership, because routing is project-first and a worker that is a member
+   of nothing can be handed nothing.
 7. **Invite each person** from Russell → **Who** (`POST
    /api/projects/:id/invitations`). The link carries its token in the URL
    *fragment*, so it is never written to an access log. The acceptor chooses
@@ -221,7 +236,7 @@ reported when the fleet supplies it and never rounded up.
 
 So the minimum viable fleet for a working sprint is one account, one Routine,
 one bound worker, and the deployment secret that Routine names. Check it with
-`npm run fleet -- show`, and confirm a fire arrives and finishes something
+`fleet show`, and confirm a fire arrives and finishes something
 rather than assuming it will.
 
 This is also the reason the deployment smoke test stops where it does: it holds
@@ -268,16 +283,35 @@ check the link, and is *verified* rather than applied: the worker must already
 hold an active membership on it. At most one invitation is live per worker, so
 issuing a new one kills a mislaid link.
 
+### Where these commands run
+
+`fleet` and `admin` below are the operator CLIs in `scripts/`. **There is no
+`npm run fleet`** — the npm script was never defined, and every earlier version
+of this document said otherwise. Two invocations are real:
+
+- **On the deployed Brain**, which is the one that matters here:
+  `flyctl ssh console --app <app> -C "sh /app/scripts/fleet.sh <command>"`, or
+  the **Fleet** and **Routing** workflows in GitHub Actions, which are that
+  command with its arguments validated. Reaching either is the authentication
+  (§26), and `--admin <email>` is the attribution.
+- **Against a local database**, for development only: `sh scripts/fleet.sh` and
+  `npm run admin`. Neither touches production.
+
+Not every admin command has a dispatch path. `routing.yml` and `packets.yml`
+each hardcode their own prefix, so `admin projects create` and
+`admin access grant` are reachable only over `flyctl ssh console` or from a
+terminal on the machine.
+
 ### The Routine (what Brain fires), and the binding that makes it usable
 
 ```
-npm run fleet -- register-account  --name <account>
+fleet register-account  --name <account>
 # set the Routine's fire token as a deployment secret, under a name
-npm run fleet -- register-routine  --account <account> --ref trig_… --secret <ENV_VAR_NAME>
+fleet register-routine  --account <account> --ref trig_… --secret <ENV_VAR_NAME>
 ```
 
 ```
-npm run fleet -- bind-worker --ref trig_… --worker worker-<op>
+fleet bind-worker --ref trig_… --worker worker-<op>
 ```
 
 Brain stores the secret's **name** and a sha-256 digest, never the value. A
@@ -414,7 +448,7 @@ the finding by derivation, with nobody withdrawing anything.
 | Which backends did it actually reach? | `GET /api/health` — names the database host, the bucket, the schema version. Never a credential |
 | Is work stuck in the queue? | `npm run admin -- queue list <project>` — type, state and attempt count per item |
 | Is a packet stranded? | `npm run admin -- packets list <project>`, then `npm run report:packet` |
-| Are the surfaces healthy? | `npm run fleet -- show` — state, and the recorded reason behind a quarantine |
+| Are the surfaces healthy? | `fleet show` — state, and the recorded reason behind a quarantine |
 | What is Brain waiting on, per operation? | The Cash screen's **Needs You**, and `whatBrainNeeds` in `GET /api/projects/:id/cash` |
 | Did an audit reviewer share a session with an author? | `npm run admin -- packets independence` — reports, never acts |
 | What is in the shared pool, and what is being reused? | `GET /api/russell/shared-findings` as a signed-in person — `total` is how many exist, `reusable` is how many Brain would actually reuse, and every withheld one carries the reason |
@@ -469,7 +503,7 @@ the first row's answer depends on the deployed fleet.
 
 | Capability | State | What Brain does instead | The need a person sees | Next step |
 | --- | --- | --- | --- | --- |
-| `RESEARCH_A_QUESTION` | **PRESENT** when ≥1 enabled Routine has a registered secret and a bound worker; **MISSING** otherwise | Sends bounded questions and takes back gated, sourced claims | "Brain needs: research a question" | `npm run fleet -- register-routine`, then check a fire arrives and finishes something |
+| `RESEARCH_A_QUESTION` | **PRESENT** when ≥1 enabled Routine has a registered secret and a bound worker; **MISSING** otherwise | Sends bounded questions and takes back gated, sourced claims | "Brain needs: research a question" | `fleet register-routine`, then check a fire arrives and finishes something |
 | `SEND_A_MESSAGE` | **MISSING** | Prepares the offer, the price and the acceptance condition on the card, and stops at READY | "Brain needs: contact the buyer" | An outbound messaging integration. Until one exists, a person sends it and the send is recorded as a confirmed action |
 | `ISSUE_AN_INVOICE` | **MISSING** | Records the agreed scope and the amount | "Brain needs: issue an invoice" | An invoicing integration. Until then, issued outside Brain and settled against its own reference |
 | `TAKE_A_PAYMENT` | **MISSING** | Records a settlement carrying a verifiable reference | "Brain needs: take a payment" | A payment processor. Until then, taken outside Brain |

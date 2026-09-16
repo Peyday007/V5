@@ -399,8 +399,29 @@ async function main(): Promise<void> {
      * asking the router.
      */
     const eligible = snapshot.candidates.filter((candidate) => {
+      /*
+       * Asked about a project this surface actually serves, because routing is
+       * project-first and a bin with no project is not a thing that exists.
+       *
+       * `Bin.projectId` is NOT NULL, so every real bin carries one and
+       * `routeBin` asks about it before anything else. The stub below used to
+       * carry none, which made `servesProjects.includes(undefined)` false for
+       * every candidate and printed `0 eligible now` over a fleet that was
+       * demonstrably working — V1 had 294 fires and a completed bin behind it.
+       * That is this line's *other* failure mode: the comment above records the
+       * day it overstated what the fleet could do, and understating it is worse,
+       * because a fleet that reports itself dead is one somebody starts
+       * repairing.
+       *
+       * The question is asked per candidate, against a project that candidate
+       * serves, so the project dimension is still applied rather than skipped.
+       * A candidate serving no project is correctly ineligible: an unbound
+       * Routine, or one whose worker holds no membership, can be handed nothing.
+       */
+      const [servedProject] = candidate.servesProjects;
+      if (!servedProject) return false;
       const probe = routeBin({
-        bin: { id: 'probe', requiredCapabilities: [] } as never,
+        bin: { id: 'probe', projectId: servedProject, requiredCapabilities: [] } as never,
         candidates: [candidate],
         fleetPolicy: null,
         fleetInFlight: 0,
@@ -527,7 +548,15 @@ async function main(): Promise<void> {
   }
 
 /**
- * One bounded self-test bin for a factory surface.
+ * One bounded self-test bin for a surface, of whichever kind it is.
+ *
+ * It was a factory-only probe, and the fleet it was pointed at had no factory
+ * surface in it. Every research Routine — which is all of them here — refused
+ * with five problems that all said the same thing in different words: *this is
+ * not a factory surface*. `docs/CASH-DEPLOYMENT.md` names this command as the
+ * gate before a sprint may be activated, so the documented gate could not pass
+ * for the only kind of surface the documented topology has. A check that
+ * refuses every healthy thing it is pointed at is not a check.
  *
  * The controlled fire `verify-surface --probe` needs, and deliberately the
  * smallest thing that can produce the whole chain. It is a `DETERMINISTIC_CHECK`
@@ -546,6 +575,8 @@ async function probeBin(input: {
   worker: { id: string; name: string };
   routing: { repositories: string[] };
   routine: { id: string; name: string; capabilities: string[] };
+  /** FACTORY names a repository and must; anything else must not. */
+  family: 'FACTORY' | 'RESEARCH';
 }): Promise<string> {
   const { createBin } = await import('../server/repos/bins.ts');
   const { listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
@@ -555,7 +586,9 @@ async function probeBin(input: {
   const projectId = memberships[0]?.projectId;
   if (!projectId) throw new Error('this worker is a member of no project, so it can be handed nothing');
   const repository = input.routing.repositories[0];
-  if (!repository) throw new Error('this worker is authorized for no repository');
+  if (input.family === 'FACTORY' && !repository) {
+    throw new Error('this worker is authorized for no repository');
+  }
   const nonce = new Date().toISOString();
   const bin = await createBin({
     projectId,
@@ -577,13 +610,24 @@ async function probeBin(input: {
        * empty rather than plausible: an invented sha in a row is a lie whoever
        * reads it next has no way to detect.
        */
-      repository: {
-        remote: `https://github.com/${repository}`,
-        ref: 'main',
-        baseSha: '',
-        integrationBranch: '',
-        pullRequest: null,
-      },
+      /*
+       * Only for a factory surface, and its absence is load-bearing rather than
+       * cosmetic. `familyOf` reads a manifest that names a repository as
+       * repository work *whatever its class says*, so a research probe carrying
+       * an empty repository block would be routed as FACTORY and refused by the
+       * very worker it is trying to prove.
+       */
+      ...(input.family === 'FACTORY' && repository
+        ? {
+            repository: {
+              remote: `https://github.com/${repository}`,
+              ref: 'main',
+              baseSha: '',
+              integrationBranch: '',
+              pullRequest: null,
+            },
+          }
+        : {}),
       acceptableSources: [],
       excludedSources: [],
       evidence: ['one unit result'],
@@ -599,7 +643,13 @@ async function probeBin(input: {
       stoppingConditions: ['the declared unit has a result'],
     },
     completionContract: 'DETERMINISTIC_UNITS_V1',
-    workloadClass: 'FACTORY_SURFACE_PROBE',
+    /*
+     * `familyOf` keys on the prefix: `FACTORY…` is repository work and
+     * `SURFACE_PROBE…` is research. The probe must classify as the family it is
+     * proving, or it routes to a surface other than the one under test and
+     * proves nothing about it.
+     */
+    workloadClass: input.family === 'FACTORY' ? 'FACTORY_SURFACE_PROBE' : 'SURFACE_PROBE_RESEARCH_V1',
     requiredCapabilities: [...input.routine.capabilities],
     createdByType: 'SYSTEM',
     createdById: 'fleet-cli:verify-surface',
@@ -657,32 +707,95 @@ async function probeBin(input: {
       console.log(`  families    ${routing ? `[${routing.families.join(',')}]` : 'no routing row (derived default)'}`);
       console.log(`  repos       ${routing ? `[${routing.repositories.join(',')}]` : '— (a worker with no row may never be handed repository work)'}`);
       if (worker.archived) problems.push('the bound worker is archived');
-      if (!routing) problems.push('the bound worker has no routing row, so it may never be handed repository work');
-      if (routing && !routing.families.includes('FACTORY')) {
-        problems.push(`the bound worker serves [${routing.families.join(',')}] and not FACTORY`);
+      if (!routing) {
+        problems.push('the bound worker has no routing row, so it may never be handed repository work');
       }
       /*
-       * The check this command exists for. A worker that also serves research is
-       * not a separated identity however its connector is named — it is the
-       * research identity wearing a second label, and every routing boundary
-       * downstream would pass while separating nothing.
+       * What this surface is *for* is read from the bound worker's own routing
+       * row, never assumed.
+       *
+       * Every check below used to assume FACTORY, so a research Routine — which
+       * is every Routine in this fleet — was refused with five problems that all
+       * restated "this is not a factory surface". The instrument was pointed at
+       * a fleet it could not describe, and `docs/CASH-DEPLOYMENT.md` names it as
+       * the gate a sprint waits behind, so the gate could never open. A surface
+       * is verified against the contract it actually has.
        */
-      if (routing && routing.families.some((family) => family !== 'FACTORY')) {
-        problems.push(
-          `the bound worker also serves [${routing.families.filter((f) => f !== 'FACTORY').join(',')}] — ` +
-            'a factory surface must not share an identity with research work',
-        );
-      }
-      if (routing && routing.repositories.length === 0) {
-        problems.push('the bound worker is authorized for no repository, so no factory bin can route here');
-      }
-      for (const tag of ['repository', 'repository-write']) {
-        if (!routine.capabilities.includes(tag)) problems.push(`this Routine does not declare ${tag}`);
+      const surfaceFamily: 'FACTORY' | 'RESEARCH' = routing?.families.includes('FACTORY')
+        ? 'FACTORY'
+        : 'RESEARCH';
+      console.log(`  verifying   as a ${surfaceFamily} surface, from the bound worker's routing row`);
+      if (surfaceFamily === 'FACTORY') {
+        /*
+         * The check this command exists for. A worker that also serves research is
+         * not a separated identity however its connector is named — it is the
+         * research identity wearing a second label, and every routing boundary
+         * downstream would pass while separating nothing.
+         */
+        if (routing && routing.families.some((family) => family !== 'FACTORY')) {
+          problems.push(
+            `the bound worker also serves [${routing.families.filter((f) => f !== 'FACTORY').join(',')}] — ` +
+              'a factory surface must not share an identity with research work',
+          );
+        }
+        if (routing && routing.repositories.length === 0) {
+          problems.push('the bound worker is authorized for no repository, so no factory bin can route here');
+        }
+        for (const tag of ['repository', 'repository-write']) {
+          if (!routine.capabilities.includes(tag)) problems.push(`this Routine does not declare ${tag}`);
+        }
+      } else {
+        /*
+         * The research mirror, and the asymmetry is deliberate. A factory surface
+         * is refused for *also* serving research, because the thing being proved
+         * there is separation. Nothing equivalent holds here: RESEARCH and
+         * GENERAL together is the ordinary shape of a research worker, and
+         * `airynworker2` has served both for this fleet's whole life.
+         *
+         * What does matter is that a research surface must never be able to take
+         * repository work, and that it is a member of something — routing is
+         * project-first, so a worker holding no membership can be handed nothing
+         * whatever else is right about it.
+         */
+        if (routing && routing.repositories.length > 0) {
+          problems.push(
+            `the bound worker is authorized for [${routing.repositories.join(',')}] — ` +
+              'a research surface must not be able to take repository work',
+          );
+        }
+        for (const tag of ['repository', 'repository-write']) {
+          if (routine.capabilities.includes(tag)) {
+            problems.push(`this Routine declares ${tag}, which a research surface must not`);
+          }
+        }
+        const { listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
+        const active = (await listMembershipsForPrincipal('WORKER', worker.id)).filter((m) => m.active);
+        console.log(`  projects    ${active.length} active membership(s)`);
+        if (active.length === 0) {
+          problems.push('the bound worker is a member of no project, so no bin can route here');
+        }
+        /*
+         * Said rather than counted as a problem. One worker across several
+         * projects is invariant 41's shape and a privacy question for a person,
+         * not a fact that makes this surface unusable — and calling it a problem
+         * here would block the probe on a condition the probe cannot settle.
+         */
+        if (active.length > 1) {
+          console.log(
+            `  NOTE        this worker serves ${active.length} projects, so every Routine bound to it ` +
+              'can be handed work from all of them (invariant 41)',
+          );
+        }
       }
     }
 
     if (flag('probe') && problems.length === 0 && worker && routing) {
-      const created = await probeBin({ worker, routing, routine });
+      const created = await probeBin({
+        worker,
+        routing,
+        routine,
+        family: routing.families.includes('FACTORY') ? 'FACTORY' : 'RESEARCH',
+      });
       console.log('');
       console.log(`  PROBE       created ${created} — a bounded self-test bin for this surface.`);
       console.log('              It names no objective, changes no repository and belongs to no');
