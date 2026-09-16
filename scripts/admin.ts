@@ -49,6 +49,7 @@ import { startPacket } from '../server/services/research/startPacket.ts';
 import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { CASH_LAYER_NAME } from '../server/services/cash/lifecycle.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
+import { createBin } from '../server/repos/bins.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -602,8 +603,80 @@ async function main(): Promise<void> {
           },
           startedBy: { kind: 'PERSON', id: actor.id },
         });
+        /*
+         * And the bin, in the same breath.
+         *
+         * `startPacket` queues the planning work; it does not make Brain *fire*
+         * anybody for it. A packet's work reaches a worker inside a bin, so a
+         * packet with queued items and no bin is work nothing will ever be sent
+         * for — the rows all read healthy and the fleet stays idle. §23 records
+         * this exact defect on the reopened audit round: a transition that
+         * creates work must also enqueue it, and that one did not.
+         *
+         * Ahead of nothing and behind the packet, so there is no window where a
+         * fire exists and the work does not. Idempotent for the same reason the
+         * packet is: the title check above skips a bucket already started, so
+         * neither is made twice.
+         */
+        const bin = await createBin({
+          projectId: project.id,
+          layerId: layer.id,
+          kind: 'RESEARCH_PACKET',
+          title: bucket.title,
+          objective:
+            'Carry this bounded discovery question from an approved plan to gated, sourced ' +
+            'claims, and stop. Read published sources only.',
+          rationale: `Cash Mode discovery bucket ${bucket.id}, started from a terminal.`,
+          manifest: {
+            objective: 'Drain this research packet to its own terminal state.',
+            why:
+              'One bounded question about where money is currently available, answered from ' +
+              'published sources. Every control it passes through is the existing one.',
+            lineage: {
+              projectId: project.id,
+              layerId: layer.id,
+              goal: bucket.question,
+              orchestrationId: packet.orchestration.id,
+            },
+            units: [],
+            /*
+             * Left to the fragment rather than restated here. The envelope
+             * already bounds the source types and `planFitsEnvelope` refuses a
+             * fragment that declares none, so naming a narrower list here would
+             * be a second set of limits nobody reviewed.
+             */
+            acceptableSources: [],
+            excludedSources: [],
+            evidence: [
+              'Each claim carrying its canonical source URL, its publisher and the date it was ' +
+                'published or observed, or recorded as unresolved with the search that failed',
+            ],
+            outputs: ['Gated, sourced claims against this question'],
+            authorizedActions: [
+              'brain_claim_work and the research tools, for work items belonging to this packet',
+            ],
+            prohibitedActions: [
+              'buying anything, or paying for access to any source',
+              'contacting any person or organisation',
+              'advertising, publishing or listing anything',
+              'any work item outside this orchestration',
+              'enabling paid overage',
+            ],
+            budgetUnits: 1,
+            retry: { maxAttempts: 3, backoffSeconds: 60 },
+            stoppingConditions: ['The packet reaches its own terminal state'],
+          },
+          completionContract: 'RESEARCH_PACKET_V1',
+          orchestrationId: packet.orchestration.id,
+          createdByType: 'SYSTEM',
+          createdById: `admin:${actor.email}`,
+          ready: true,
+          priority: 8,
+          maxAttempts: 5,
+        });
+
         started += 1;
-        console.log(`  started    ${bucket.id}  ${packet.orchestration.id}`);
+        console.log(`  started    ${bucket.id}  ${packet.orchestration.id}  bin ${bin.id}`);
       }
 
       await recordIdentityEvent({
