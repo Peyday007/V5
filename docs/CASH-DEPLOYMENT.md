@@ -435,6 +435,24 @@ work by construction, so redelivery is the recovery. What is worth watching is
 the *opposite*: an item whose attempts are spent, which shows as a terminal
 state in `queue list` and as a bin at `NEEDS_HUMAN`.
 
+**Deferred work usually wakes on the write that fixes it, and once in a while
+waits for its own clock instead.** `rearmSurfaceDeferredIntents` puts a deferred
+intent back when any fleet or membership row is newer than that intent, compared
+**strictly**. So a grant landing in the *same millisecond* as the deferral is not
+seen by that grant — measured while building `tests/projectRouting.test.ts` at
+roughly one run in three on a machine where the two events were 0.3ms apart.
+
+Nothing is lost or abandoned when it happens. The intent keeps its own
+`next_attempt_at`, which a scope deferral puts ten minutes out, so it retries by
+itself; and the next fleet or membership write re-arms it. The comparison is
+left strict on purpose: `<=` makes a candidate match its own stamp for ever,
+which is the unbounded rescan §27 records — up to two hundred extra bin reads
+and routing decisions every ten seconds, indefinitely. A ten-minute worst case
+on a millisecond-wide window is the better trade, and it is **not a launch
+blocker**. If work seems slow to start straight after an `access grant`, this is
+the first thing to rule out and the remedy is to wait one cycle or make any
+further fleet write.
+
 **Unresolved needs are the normal state, not an incident.** An open
 `cash_needs` row stops nothing except the one transition it names in
 `blocks_state`. Every need carries a recommended path and a next step, and a
