@@ -135,13 +135,38 @@ Two ways a worker authenticates, both real:
    `npm run admin -- projects create "Ana's operation" --admin you@example.com`
    Reaching the shell is the authentication; `--admin` is the attribution,
    resolved against the database rather than trusted.
-3. **Invite each person** from Russell → **Who** (`POST
+3. **Create one worker per project and grant it exactly that project.**
+   `POST /api/admin/workers`, then
+   `npm run admin -- access grant worker-<op> <project> --admin you@…`.
+   One worker per private operation is invariant 41 rather than a preference:
+   one identity across two operations is one credential resolving both.
+4. **Give each worker its own connector**, approved as that one worker — see
+   §5b. A connector's MCP credential is per connector, so reusing one hands the
+   new Routine the *old* worker.
+5. **Register one Routine per worker and bind it**, also §5b:
+   `fleet register-account`, `fleet register-routine`, then
+   **`fleet bind-worker --ref trig_… --worker worker-<op>`**. The bind is not
+   optional — a Routine bound to no worker serves no project and is never fired
+   for project-scoped work, which is every bin.
+6. **Verify every surface before any sprint is activated:**
+   `npm run fleet -- show` (no missing secrets, every Routine `ENABLED` and
+   bound) and `npm run fleet -- verify-surface --probe` per surface. `CONFIGURED`
+   and `OBSERVED` are two blocks and a perfect configured block over an empty
+   observed one is a refusal, not a pass.
+7. **Invite each person** from Russell → **Who** (`POST
    /api/projects/:id/invitations`). The link carries its token in the URL
    *fragment*, so it is never written to an access log. The acceptor chooses
    neither their email nor their role — both are read from the row.
-4. **Each person activates their own sprint** in Russell → **Cash**, and
+8. **Each person activates their own sprint** in Russell → **Cash**, and
    **grants the standing commercial authority**. Those two decisions are a
    person's and there is no path around either.
+
+**Steps 3 to 6 come before step 8 deliberately, and that ordering is new.**
+Activating a sprint against a Brain with no bound surface is not destructive —
+discovery's missions defer on `NO_SURFACE_SERVES_THIS_PROJECT`, spend no attempt
+and are put back by the write that fixes it — but `RESEARCH_A_QUESTION` reads
+`MISSING`, the portfolio stays empty, and the first thing a person sees is a
+sprint that looks broken and is not. Register and prove the fleet first.
 
 Activating a sprint on a project with no layer **creates one** — `Opportunity
 Research`, once, only when the project has none — because a project created in
