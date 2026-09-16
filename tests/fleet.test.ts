@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { assignNextBin, createBin, finishBin, getBin, listBinEvents } from '../server/repos/bins.ts';
 import { getDb } from '../server/db/database.ts';
-import { createWorker } from '../server/repos/identity.ts';
+import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import {
   bindRoutineWorker,
@@ -61,6 +61,51 @@ beforeEach(async () => {
   projectId = fixture.project.id;
 });
 
+/**
+ * Bind a Routine to a worker that may actually be handed this project's work.
+ *
+ * Every `dispatchTick` fixture below used to register a Routine bound to
+ * nothing, which routed fine while the fire was project-blind and described a
+ * fleet that could never have delivered a bin: `assignNextBin` scopes its
+ * candidates by the caller's memberships, so an unbound surface — or one whose
+ * worker is a member of nothing — is fired and then correctly refused the work.
+ *
+ * The fire asks that question now, so these fixtures have to answer it. Doing
+ * so makes them describe a fleet that works rather than one that only routes.
+ */
+async function bindToProject(routineId: string, name: string): Promise<string> {
+  const worker = await createWorker({
+    name: `${name}-${Math.random().toString(36).slice(2, 8)}`,
+    createdByType: 'SYSTEM',
+    createdById: 'test',
+  });
+  await grantMembership({
+    projectId,
+    principalType: 'WORKER',
+    principalId: worker.id,
+    role: 'MEMBER',
+    scopes: ['project:read', 'queue:claim'],
+    grantedByType: 'SYSTEM',
+    grantedById: 'test',
+  });
+  await bindRoutineWorker(routineId, worker.id);
+  return worker.id;
+}
+
+/**
+ * `createRoutine`, plus the worker and membership that make it able to deliver.
+ *
+ * Used by every `dispatchTick` fixture below. Creating the Routine unbound and
+ * firing it anyway described a fleet that routes and cannot work; the fire asks
+ * about the project now, so the fixtures state it.
+ */
+async function boundRoutine(input: Parameters<typeof createRoutine>[0]) {
+  const routine = await createRoutine(input);
+  await bindToProject(routine.id, input.name);
+  return routine;
+}
+
+
 /** A bin-shaped object the router can rank. Only the fields it reads. */
 /*
  * A synthetic bin for the pure routing tests.
@@ -95,6 +140,10 @@ function candidate(
     // Unknown rather than empty, which is what a worker with no explicit routing
     // row resolves to — these fixtures are about capacity, not scope.
     servesRepositories: null,
+    // The project dimension is not unknowable, so these capacity fixtures state
+    // it: a candidate that served no project would be refused one dimension
+    // before the capacity question these tests are actually about.
+    servesProjects: [projectId],
     routine: {
       id: 'rtn_1',
       accountId: 'acct_1',
@@ -873,7 +922,7 @@ describe('a burst spends the headroom it measured, once', () => {
     expect(stored!.workloadClass).toBe('RESEARCH_LIGHT');
 
     const account = await createAccount({ name: 'capability-account' });
-    const routine = await createRoutine({
+    const routine = await boundRoutine({
       accountId: account.id,
       routineRef: `trig_cap_${account.id}`,
       name: 'V1',
@@ -888,6 +937,7 @@ describe('a burst spends the headroom it measured, once', () => {
         {
           account,
           routine,
+          servesProjects: [stored!.projectId],
           accountInFlight: 0,
           routineInFlight: 0,
           accountTarget: 1,
@@ -909,7 +959,7 @@ describe('a burst spends the headroom it measured, once', () => {
 
   it('fires one activation at a Routine whose target is one, not five', async () => {
     const account = await createAccount({ name: 'personal' });
-    const routine = await createRoutine({
+    const routine = await boundRoutine({
       accountId: account.id, routineRef: 'trig_one', name: 'one', tokenSecretName: 'FLEET_TEST_SECRET',
     });
     await setPolicy({
@@ -948,10 +998,10 @@ describe('a burst spends the headroom it measured, once', () => {
     // surface may take one; two bins must therefore land on two accounts.
     const one = await createAccount({ name: 'one' });
     const two = await createAccount({ name: 'two' });
-    const ra = await createRoutine({
+    const ra = await boundRoutine({
       accountId: one.id, routineRef: 'trig_a', name: 'a', tokenSecretName: 'FLEET_TEST_SECRET',
     });
-    const rb = await createRoutine({
+    const rb = await boundRoutine({
       accountId: two.id, routineRef: 'trig_b', name: 'b', tokenSecretName: 'FLEET_TEST_SECRET_2',
     });
     await setPolicy({ scope: 'ROUTINE', scopeId: ra.id, target: 1, actor: 'test', reason: 'one each' });
@@ -981,10 +1031,10 @@ describe('a burst spends the headroom it measured, once', () => {
      */
     const one = await createAccount({ name: 'one' });
     const two = await createAccount({ name: 'two' });
-    await createRoutine({
+    await boundRoutine({
       accountId: one.id, routineRef: 'trig_a', name: 'a', tokenSecretName: 'FLEET_TEST_SECRET',
     });
-    await createRoutine({
+    await boundRoutine({
       accountId: two.id, routineRef: 'trig_b', name: 'b', tokenSecretName: 'FLEET_TEST_SECRET_2',
     });
     for (let i = 0; i < 4; i += 1) await readyBin();
@@ -998,10 +1048,10 @@ describe('a burst spends the headroom it measured, once', () => {
   it('routes around an account the operator took out mid-fleet', async () => {
     const one = await createAccount({ name: 'one' });
     const two = await createAccount({ name: 'two' });
-    await createRoutine({
+    await boundRoutine({
       accountId: one.id, routineRef: 'trig_a', name: 'a', tokenSecretName: 'FLEET_TEST_SECRET',
     });
-    await createRoutine({
+    await boundRoutine({
       accountId: two.id, routineRef: 'trig_b', name: 'b', tokenSecretName: 'FLEET_TEST_SECRET_2',
     });
     await setAccountState({ accountId: one.id, from: 'ENABLED', to: 'UNAVAILABLE', reason: 'operator' });
@@ -1015,7 +1065,7 @@ describe('a burst spends the headroom it measured, once', () => {
 
   it('holds every bin when the fleet is paused, and loses none of them', async () => {
     const account = await createAccount({ name: 'personal' });
-    await createRoutine({
+    await boundRoutine({
       accountId: account.id, routineRef: 'trig_one', name: 'one', tokenSecretName: 'FLEET_TEST_SECRET',
     });
     await setPolicy({
@@ -1033,10 +1083,10 @@ describe('a burst spends the headroom it measured, once', () => {
 
   it('skips a Routine whose secret is not deployed rather than failing on it', async () => {
     const account = await createAccount({ name: 'personal' });
-    await createRoutine({
+    await boundRoutine({
       accountId: account.id, routineRef: 'trig_ghost', name: 'ghost', tokenSecretName: 'NOT_DEPLOYED',
     });
-    await createRoutine({
+    await boundRoutine({
       accountId: account.id, routineRef: 'trig_real', name: 'real', tokenSecretName: 'FLEET_TEST_SECRET',
     });
     await readyBin();
@@ -1061,23 +1111,36 @@ describe('a burst spends the headroom it measured, once', () => {
     const routine = await createRoutine({
       accountId: account.id, routineRef: 'trig_one', name: 'one', tokenSecretName: 'FLEET_TEST_SECRET',
     });
+    /*
+     * Bound by an operator rather than observed on arrival, and that is a
+     * change worth naming rather than a fixture convenience.
+     *
+     * This used to create the Routine unbound, fire it, and assert that the
+     * arriving session *taught* the row which worker it was. The fire asks
+     * about the project now, and a Routine bound to no worker serves no
+     * project — so that sequence is unreachable for project-scoped work, which
+     * is every bin in this schema. `bindRoutineWorker`'s observe-on-arrival is
+     * therefore a fallback rather than the normal path, and `fleet bind-worker`
+     * is what an operator uses instead.
+     *
+     * What this still proves is the thing it was written for: a fired surface
+     * whose session actually arrives has its no-show streak cleared, credited
+     * from Brain's own dispatch row.
+     */
+    const worker = await bindToProject(routine.id, 'w1');
     const binId = await readyBin();
     await dispatchTick({ projectIds: [projectId], burst: 1 });
 
     // Fired, and nothing has arrived: the pessimistic count is the honest one.
     expect((await getRoutineByRef('trig_one'))!.consecutiveNoShows).toBe(1);
 
-    const worker = await createWorker({ name: 'w1', createdByType: 'SYSTEM', createdById: 'test' });
-    const assigned = await assignNextBin({ workerId: worker.id, projectIds: [projectId] });
+    const assigned = await assignNextBin({ workerId: worker, projectIds: [projectId] });
     expect(assigned?.bin.id).toBe(binId);
 
     const after = (await getRoutineByRef('trig_one'))!;
     expect(after.consecutiveNoShows).toBe(0);
     expect(shouldQuarantine(after).quarantine).toBe(false);
-    // And the surface learned which identity its sessions authenticate as,
-    // observed rather than declared.
-    expect(after.workerId).toBe(worker.id);
-    void routine;
+    expect(after.workerId).toBe(worker);
   });
 
   it('credits the arrival to the surface that was fired, not to the one that asked', async () => {
@@ -1085,25 +1148,29 @@ describe('a burst spends the headroom it measured, once', () => {
     // that belongs to another Routine must not clear this one's streak.
     const one = await createAccount({ name: 'one' });
     const two = await createAccount({ name: 'two' });
-    await createRoutine({
+    const ra = await createRoutine({
       accountId: one.id, routineRef: 'trig_a', name: 'a', tokenSecretName: 'FLEET_TEST_SECRET',
     });
     const rb = await createRoutine({
       accountId: two.id, routineRef: 'trig_b', name: 'b', tokenSecretName: 'FLEET_TEST_SECRET_2',
     });
+    // Both bound, both able to serve this project — so the only thing that
+    // decides the crediting is which one Brain actually fired.
+    const workerA = await bindToProject(ra.id, 'w-a');
+    await bindToProject(rb.id, 'w-b');
     // Take b out so the fire can only go to a.
     await setRoutineState({ routineId: rb.id, from: 'ENABLED', to: 'UNAVAILABLE', reason: 'held' });
     await readyBin();
     await dispatchTick({ projectIds: [projectId], burst: 1 });
     expect((await getRoutineByRef('trig_a'))!.consecutiveNoShows).toBe(1);
 
-    const worker = await createWorker({ name: 'w1', createdByType: 'SYSTEM', createdById: 'test' });
-    await assignNextBin({ workerId: worker.id, projectIds: [projectId] });
+    await assignNextBin({ workerId: workerA, projectIds: [projectId] });
 
     expect((await getRoutineByRef('trig_a'))!.consecutiveNoShows).toBe(0);
-    expect((await getRoutineByRef('trig_a'))!.workerId).toBe(worker.id);
-    // b was never fired, so it has nothing to clear and nothing to bind.
-    expect((await getRoutineByRef('trig_b'))!.workerId).toBeNull();
+    expect((await getRoutineByRef('trig_a'))!.workerId).toBe(workerA);
+    // b was never fired, so it has nothing to clear: the arrival is credited
+    // from the dispatch row rather than from the worker that turned up.
+    expect((await getRoutineByRef('trig_b'))!.consecutiveNoShows).toBe(0);
   });
 
   it('credits nothing when a takeover follows a lease that expired', async () => {
@@ -1111,7 +1178,7 @@ describe('a burst spends the headroom it measured, once', () => {
     // session genuinely did not finish. Crediting it would erase the one signal
     // that says so.
     const account = await createAccount({ name: 'personal' });
-    await createRoutine({
+    await boundRoutine({
       accountId: account.id, routineRef: 'trig_one', name: 'one', tokenSecretName: 'FLEET_TEST_SECRET',
     });
     const binId = await readyBin();
@@ -1139,7 +1206,7 @@ describe('a burst spends the headroom it measured, once', () => {
      * simulate" about a fleet with months of history.
      */
     const account = await createAccount({ name: 'personal' });
-    await createRoutine({
+    await boundRoutine({
       accountId: account.id, routineRef: 'trig_one', name: 'one', tokenSecretName: 'FLEET_TEST_SECRET',
     });
     const binId = await readyBin();

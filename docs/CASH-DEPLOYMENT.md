@@ -243,7 +243,7 @@ check the link, and is *verified* rather than applied: the worker must already
 hold an active membership on it. At most one invitation is live per worker, so
 issuing a new one kills a mislaid link.
 
-### The Routine (what Brain fires)
+### The Routine (what Brain fires), and the binding that makes it usable
 
 ```
 npm run fleet -- register-account  --name <account>
@@ -251,11 +251,48 @@ npm run fleet -- register-account  --name <account>
 npm run fleet -- register-routine  --account <account> --ref trig_… --secret <ENV_VAR_NAME>
 ```
 
+```
+npm run fleet -- bind-worker --ref trig_… --worker worker-<op>
+```
+
 Brain stores the secret's **name** and a sha-256 digest, never the value. A
 Routine whose secret is absent is left out of routing and reported rather than
-spending a fire to discover it. The worker binding is *observed* from the
-dispatch row on first arrival, and `fleet repoint-routine-worker` repairs a
-wrong one.
+spending a fire to discover it.
+
+**The binding is not optional, and that is a change.** It used to be *observed*
+from the dispatch row on first arrival, which worked because the fire did not
+ask which project a surface could serve. It does now: a Routine bound to no
+worker serves **no project**, so it is never fired for project-scoped work —
+which, since `bins.project_id` is `NOT NULL`, is every bin. So bind it
+explicitly at registration. `fleet repoint-routine-worker` repairs a wrong
+binding; observation on arrival remains as a fallback and is no longer the
+normal path.
+
+### Four operations run at once, and each fire lands where the work can be taken
+
+`routeBin` reads the project as its first dimension, from
+`fleet_routines.worker_id` and that worker's live `project_memberships` — both
+rows Brain wrote, neither supplied by any caller. A surface whose worker does
+not hold the bin's project is refused by name, `NO_SURFACE_SERVES_THIS_PROJECT`,
+before any fire is spent.
+
+So the four-project topology runs as designed, with **no cross-project fires and
+no staggering**. An earlier version of this document recommended bringing up one
+project first, or keeping three Routines `DISABLED` and enabling the one being
+drained. That advice existed because the fire was project-blind, and it is
+withdrawn: with four operations a blind router picked between four surfaces on
+headroom alone, so three fires in four were spent on surfaces the assigner then
+correctly refused, each costing a thirty-minute in-flight window before the
+intent could be re-armed — and `bin_dispatch.max_attempts` is five, so a bin
+could exhaust its dispatch budget without its own worker ever being fired.
+
+The refusal is an **operator wait**: it spends no bin attempt, no dispatch
+attempt and no fire, and the work is put back by the write that answers it.
+Granting a worker the project is an `UPDATE` on `project_memberships`, so that
+table is one of the three the re-arm watermark watches — the other two would
+never have moved. Revoking a membership removes the surface from routing on the
+very next snapshot, because the snapshot reads live memberships and a revoked
+one is not a weaker membership, it is none.
 
 ### What is shared, and what is not
 

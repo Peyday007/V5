@@ -458,6 +458,7 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
           account,
           servesFamilies: ['RESEARCH', 'GENERAL'],
           servesRepositories: [],
+          servesProjects: [bin.projectId],
           routineInFlight: 0,
           accountInFlight: 0,
           routineTarget: null,
@@ -485,6 +486,7 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
           account,
           servesFamilies: ['FACTORY'],
           servesRepositories: ['peyday007/oakwood-junk-removal'],
+          servesProjects: [bin.projectId],
           routineInFlight: 0,
           accountInFlight: 0,
           routineTarget: null,
@@ -495,6 +497,7 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
           account,
           servesFamilies: ['RESEARCH', 'GENERAL'],
           servesRepositories: [],
+          servesProjects: [bin.projectId],
           routineInFlight: 0,
           accountInFlight: 0,
           routineTarget: null,
@@ -509,7 +512,20 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
     if (decision.ok) expect(decision.routine.id).toBe('rtn_research');
   });
 
-  it('treats a Routine bound to no worker as eligible, because the fire is not the boundary', async () => {
+  /*
+   * The title used to say "a Routine bound to no worker is eligible", and that
+   * claim is now too broad to leave standing. What is still true — and what
+   * this proves — is that an **unknown family or repository scope** is eligible,
+   * because the fire is not the boundary for those two.
+   *
+   * The project is a different dimension and fails closed, so a candidate that
+   * genuinely resolves to no worker now carries `servesProjects: []` from the
+   * snapshot and is refused. That is asserted from real rows in
+   * `tests/projectRouting.test.ts`, where the snapshot builds the candidate,
+   * rather than here, where the fixture would have to describe a shape
+   * `fleetSnapshot` cannot produce.
+   */
+  it('treats an unknown family and repository scope as eligible, because the fire is not the boundary for those', async () => {
     const bin = await factoryBin();
     const decision = routeBin({
       bin,
@@ -519,6 +535,7 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
           account,
           servesFamilies: null,
           servesRepositories: null,
+          servesProjects: [bin.projectId],
           routineInFlight: 0,
           accountInFlight: 0,
           routineTarget: null,

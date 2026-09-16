@@ -175,6 +175,27 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       servesRepositories: routine.workerId
         ? scopeByWorker.get(routine.workerId)?.repositories ?? null
         : null,
+      /*
+       * A Routine bound to no worker serves **no project**, and that is the one
+       * place this snapshot deliberately fails closed.
+       *
+       * The two lines above resolve an unbound Routine to `null`, which the
+       * router reads as eligible, because the cost of firing an out-of-scope
+       * surface is one wasted activation and the cost of refusing an unknown is
+       * work nothing is ever started for. That reasoning does not survive being
+       * applied to the project: with one worker per private project, firing a
+       * surface that cannot be handed the bin is not an occasional waste, it is
+       * the *common* case — three fires in four at four operations, each
+       * costing a 30-minute in-flight window before the intent can be re-armed.
+       *
+       * And the bootstrap this would otherwise deadlock has an operator's
+       * answer already: `fleet bind-worker --ref trig_… --worker <name>` states
+       * the binding rather than waiting to observe one, so a freshly registered
+       * Routine is one command away from eligible.
+       */
+      servesProjects: routine.workerId
+        ? scopeByWorker.get(routine.workerId)?.projects ?? []
+        : [],
       routineInFlight: perRoutine.get(routine.id) ?? 0,
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
@@ -188,11 +209,23 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
   return { candidates, fleetPolicy, fleetInFlight, missingSecrets };
 }
 
-/** What one worker may be handed, in the two dimensions the fire decides on. */
+/** What one worker may be handed, in the dimensions the fire decides on. */
 interface WorkerRoutingScope {
   families: string[];
   /** Explicit and exhaustive, or `null` when the worker has no routing row. */
   repositories: string[] | null;
+  /**
+   * The projects this worker holds a **live** membership on.
+   *
+   * Always an array, never null, and that is the difference between this
+   * dimension and the two above. Families and repositories are *scopes an
+   * operator narrows*, so not having narrowed one is an unknown and the router
+   * fails open on it. A project membership is not a narrowing — it is the
+   * authorization itself, written by Brain, and a worker that holds none may be
+   * handed nothing. There is no unknown here to fail open on, so the empty
+   * array is a complete answer rather than a missing one.
+   */
+  projects: string[];
 }
 
 /**
@@ -210,18 +243,42 @@ interface WorkerRoutingScope {
  */
 async function routingScopeForWorker(workerId: string): Promise<WorkerRoutingScope> {
   try {
+    /*
+     * Live memberships, read once and used for both answers.
+     *
+     * `listMembershipsForPrincipal` returns live rows only — "a revoked one is
+     * not a weaker membership; it is none" — so a revocation removes this
+     * Routine from routing on the very next snapshot, with nothing to
+     * invalidate and no cache to miss.
+     */
+    const memberships = await listMembershipsForPrincipal('WORKER', workerId);
+    const projects = memberships
+      .filter((membership) => membership.active)
+      .map((membership) => membership.projectId);
+
     const explicit = await getWorkerRouting(workerId);
-    // An explicit row is exhaustive in both dimensions, which is the same rule
-    // the admission hook reads it by.
-    if (explicit) return { families: explicit.families, repositories: explicit.repositories };
+    // An explicit row is exhaustive in both of *its* dimensions, which is the
+    // same rule the admission hook reads it by. It says nothing about projects:
+    // `worker_routing` has no project column, because the project a worker may
+    // serve is its membership and never a routing preference.
+    if (explicit) {
+      return { families: explicit.families, repositories: explicit.repositories, projects };
+    }
     // The derived default, from the one function that defines it. Its
     // repositories are *unknown* rather than empty — and unreachable, because
     // the derived families never include a repository family.
     return {
-      families: derivedFamiliesFrom(await listMembershipsForPrincipal('WORKER', workerId)),
+      families: derivedFamiliesFrom(memberships),
       repositories: null,
+      projects,
     };
   } catch {
-    return { families: ['RESEARCH', 'GENERAL'], repositories: null };
+    /*
+     * An unreadable row wastes a fire in the two dimensions that fail open, and
+     * serves **no project** in the one that does not. A read that failed is not
+     * evidence of a membership, and manufacturing one here would be exactly the
+     * unknown-as-favourable-assumption invariant 39 forbids.
+     */
+    return { families: ['RESEARCH', 'GENERAL'], repositories: null, projects: [] };
   }
 }

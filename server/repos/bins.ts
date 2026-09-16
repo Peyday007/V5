@@ -2673,7 +2673,22 @@ export async function rearmSurfaceDeferredIntents(input: {
   const routing = await getDb().get<{ at: string | null }>(
     'SELECT MAX(updated_at) AS at FROM worker_routing',
   );
-  const marks = [routines?.at ?? null, routing?.at ?? null].filter(
+  /*
+   * And memberships, because the project dimension is authorized by them.
+   *
+   * `NO_SURFACE_SERVES_THIS_PROJECT` is answered by granting a worker the
+   * project — an `INSERT`/`UPDATE` on `project_memberships` and on neither
+   * table above. Without this row the intent would sit out its whole
+   * operator-scale backoff while the very write that fixed it went unnoticed,
+   * which is the defect this watermark exists to prevent, one table along.
+   * Both `grantMembership` and `revokeMembership` set `updated_at`, so a
+   * revocation moves it too — and the recheck below is `routeBin` itself, so a
+   * revocation simply re-defers rather than waking anything wrongly.
+   */
+  const memberships = await getDb().get<{ at: string | null }>(
+    'SELECT MAX(updated_at) AS at FROM project_memberships',
+  );
+  const marks = [routines?.at ?? null, routing?.at ?? null, memberships?.at ?? null].filter(
     (value): value is string => typeof value === 'string' && value.length > 0,
   );
   if (marks.length === 0) return 0;
