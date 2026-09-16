@@ -46,6 +46,7 @@
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
  */
 import { startPacket } from '../server/services/research/startPacket.ts';
+import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
 import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { CASH_LAYER_NAME } from '../server/services/cash/lifecycle.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
@@ -589,6 +590,21 @@ async function main(): Promise<void> {
        * of two readers" this repository keeps recording. So the construction
        * lives here and both callers go through it.
        */
+      /*
+       * Read once, from the envelope, before anything is started. An envelope
+       * that has lost its template is a refusal rather than a guess: filling a
+       * template that is not there would produce an assignment nothing
+       * authorizes.
+       */
+      const cashEnvelope = getApprovalEnvelope('RUSSELL_CASH_DISCOVERY_V1');
+      if (!cashEnvelope?.assignmentTemplate) {
+        fail('RUSSELL_CASH_DISCOVERY_V1 defines no assignment template in this build.');
+      }
+      const cashAssignment = cashEnvelope.assignmentTemplate.replace(
+        '{JURISDICTION}',
+        cashEnvelope.jurisdiction,
+      );
+
       const binFor = async (orchestrationId: string, bucket: (typeof SEARCH_BUCKETS)[number]) =>
         createBin({
           projectId: project.id,
@@ -647,10 +663,24 @@ async function main(): Promise<void> {
           maxAttempts: 5,
         });
 
+      /*
+       * Only a packet that is still *live* blocks a restart.
+       *
+       * A packet parked at NEEDS_HUMAN because its plan fell outside the
+       * envelope is a recorded refusal, not work in progress: it will never
+       * move on its own, and treating it as "already started" would make the
+       * first malformed attempt permanent. It keeps its row, its fragments and
+       * the reason it stopped — §5, nothing is destroyed — and a corrected
+       * packet starts beside it.
+       *
+       * `FAILED` and `CANCELLED` are here for the same reason. `COMPLETE` is
+       * deliberately not: a question that has been answered is answered.
+       */
+      const DEAD = new Set(['NEEDS_HUMAN', 'FAILED', 'CANCELLED']);
       const existing = new Map(
-        (await listOrchestrationsByProject(project.id)).map(
-          (one: { title: string; id: string }) => [one.title, one.id] as const,
-        ),
+        (await listOrchestrationsByProject(project.id))
+          .filter((one: { status: string }) => !DEAD.has(one.status))
+          .map((one: { title: string; id: string }) => [one.title, one.id] as const),
       );
 
       let started = 0;
@@ -685,7 +715,24 @@ async function main(): Promise<void> {
           projectId: project.id,
           layerId: layer.id,
           title: bucket.title,
-          assignment: bucket.question,
+          /*
+           * The envelope's own authorized assignment with the question filled
+           * in — never the bare question.
+           *
+           * `planFitsEnvelope` compares the assignment against
+           * `assignmentTemplate` and refuses anything else, in those words:
+           * *everything except the question is fixed in code — the scope, the
+           * evidence standard, the completion standard and the exclusions — and
+           * changing any of it needs a person.* Passing the bare question meant
+           * ten packets planned correctly and then parked at NEEDS_HUMAN,
+           * because a plan whose assignment is not the authorized one cannot be
+           * auto-approved however reasonable it looks. That is the envelope
+           * doing its job, and the defect was mine.
+           *
+           * Filled here from the envelope rather than restated, so this command
+           * cannot drift from the text it is judged against.
+           */
+          assignment: cashAssignment.replace('{QUESTION}', bucket.question),
           approval: {
             mode: 'AUTO_WITHIN_ENVELOPE',
             envelopeId: 'RUSSELL_CASH_DISCOVERY_V1',
