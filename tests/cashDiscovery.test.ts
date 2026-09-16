@@ -206,10 +206,10 @@ describe('opening the discovery of a sprint', () => {
 
   it('is idempotent by rows, so a tick that dies re-opens nothing', async () => {
     await activated();
-    const first = await openDiscovery({ projectId, limit: 5 });
+    const first = await openDiscovery({ projectId, limit: SEARCH_BUCKETS.length });
     expect(first).toHaveLength(SEARCH_BUCKETS.length);
 
-    const second = await openDiscovery({ projectId, limit: 5 });
+    const second = await openDiscovery({ projectId, limit: SEARCH_BUCKETS.length });
     expect(second).toEqual([]);
     expect(await listCandidates({ projectId })).toHaveLength(SEARCH_BUCKETS.length);
 
@@ -230,7 +230,7 @@ describe('opening the discovery of a sprint', () => {
 
     // Reactivating opens what it had not reached, rather than starting again.
     await setLifecycle({ projectId, to: 'ACTIVE', actorUserId: userId, reason: 'more to do' });
-    const resumed = await openDiscovery({ projectId, limit: 5 });
+    const resumed = await openDiscovery({ projectId, limit: SEARCH_BUCKETS.length });
     expect(resumed).toHaveLength(SEARCH_BUCKETS.length - 1);
   });
 

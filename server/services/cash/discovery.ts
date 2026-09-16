@@ -138,6 +138,71 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
       'of demand at a higher one, and what do the sources say about rights, delivery and how ' +
       'much remains?',
   },
+  /*
+   * The second wave. The five above all ask *who has published a request*, in
+   * five different places — which is one question wearing five hats, and it is
+   * why discovery kept returning the same shape of opening. These five ask why
+   * money is available at all, and each has a different answer: somebody cannot
+   * get at information, a repeated job has never been packaged, a capability is
+   * cheap here and expensive there, work is already sold but cannot be
+   * delivered, and two openings are worth more together than apart.
+   *
+   * Every one of them still resolves to a *published* artefact with a URL and a
+   * date, because the lane is `demand_signal` and the gate has not moved. A
+   * bucket that invited a worker to reason about where money might be would be
+   * asking it to invent an opening, which is the one thing this table exists to
+   * stop.
+   */
+  {
+    id: 'information-asymmetry',
+    mechanism: 'INFORMATION_ASYMMETRY',
+    title: 'Which facts people are visibly paying to obtain',
+    question:
+      'Where is somebody publicly paying, asking or complaining about the cost of getting at ' +
+      'information that is public but fragmented, unindexed, paywalled, published only as ' +
+      'scans, or scattered across jurisdictions — naming who wants it, what they said it is ' +
+      'worth, and where the underlying records actually sit?',
+  },
+  {
+    id: 'productized-service',
+    mechanism: 'PRODUCTIZED_SERVICE',
+    title: 'Which repeated job is still being bought as a bespoke project',
+    question:
+      'Which narrowly-defined task is being repeatedly commissioned as custom work — the same ' +
+      'brief appearing again and again on boards, listings or agency pages — where the ' +
+      'published prices, turnaround times and deliverables are close enough to be sold as one ' +
+      'fixed-scope, fixed-price offer?',
+  },
+  {
+    id: 'capability-arbitrage',
+    mechanism: 'CAPABILITY_ARBITRAGE',
+    title: 'Where the same deliverable has two published prices',
+    question:
+      'Where is the same deliverable published at materially different prices by different ' +
+      'suppliers, regions, platforms or delivery methods — including work now automatable — ' +
+      'naming both published prices, both sources, the dates, and anything published about ' +
+      'licensing, rights or platform terms that decides whether the spread may lawfully be ' +
+      'taken?',
+  },
+  {
+    id: 'subcontracted-fulfilment',
+    mechanism: 'SUBCONTRACTED_FULFILMENT',
+    title: 'Who has already sold work they cannot currently deliver',
+    question:
+      'Which suppliers have published evidence of more sold work than they can deliver — a ' +
+      'stated backlog, a waitlist, paused intake, a subcontractor or overflow request, a ' +
+      'recruitment notice naming the bottleneck — and what do they say about how the extra ' +
+      'capacity is engaged and paid?',
+  },
+  {
+    id: 'jigsaw-combination',
+    mechanism: 'JIGSAW_COMBINATION',
+    title: 'Which two published openings are worth more together',
+    question:
+      'Which published opening supplies exactly what another published opening is missing — ' +
+      'leads, data, fulfilment capacity, a licence, credibility or capital — naming both ' +
+      'sources, what each side published, and what specifically one supplies to the other?',
+  },
 ]);
 
 const OPENED = 'CASH_DISCOVERY_OPENED';

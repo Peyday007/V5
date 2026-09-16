@@ -25,6 +25,7 @@ import { assessResearch } from './answers.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { cashPosition, explainEntries } from './money.ts';
 import { assemble } from './portfolio.ts';
+import { executionPath, type ExecutionPath } from './execution.ts';
 import { compressedReview } from './review.ts';
 import { authorityFor } from './opportunities.ts';
 import type {
@@ -73,6 +74,15 @@ export interface CashView {
     commitments: CashCommitment[];
   };
   myCurrentWork: AssembledPlan & {
+    /**
+     * The compiled instruction for each live piece, in dependency order.
+     *
+     * Sent with the plan rather than fetched per card, because a reader
+     * deciding what to do today is asking about all of them at once, and
+     * because it is derived — a second call would re-derive it against rows
+     * that may already have moved.
+     */
+    executionPaths: ExecutionPath[];
     /** The load-bearing blanks per opportunity, so a card renders without a second call. */
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;
     /**
@@ -165,6 +175,22 @@ export async function cashView(input: {
               'discovery starts. Everything already in the portfolio keeps running.',
           };
 
+  /*
+   * The instruction for each piece that is actually being worked on, compiled
+   * backwards from settled cash.
+   *
+   * Only the live ones. An execution path for an archived piece is a page
+   * nobody reads, and for a piece still gathering evidence it would be a plan
+   * built on blanks — `executionPath` would name every one of them, which is
+   * honest and still not what a reader of *current work* is asking for.
+   *
+   * Derived here rather than stored, for `placements`' own reason: the moment a
+   * need is answered or a price is established, a stored plan is a stale plan.
+   */
+  const executionPaths: ExecutionPath[] = [...plan.executeNow, ...plan.waiting].map((placement) =>
+    executionPath(placement.opportunity, needs),
+  );
+
   return {
     mode,
     objective: mode?.objective ?? null,
@@ -184,7 +210,7 @@ export async function cashView(input: {
       ),
       commitments: await listCommitments(input.projectId),
     },
-    myCurrentWork: { ...plan, cards, provenance },
+    myCurrentWork: { ...plan, cards, provenance, executionPaths },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
     whatBrainNeeds: needs,
     decisionsForMe: compressedReview({

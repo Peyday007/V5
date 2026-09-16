@@ -5436,6 +5436,22 @@ export const CASH_MECHANISMS = [
   'SUPPLY_DEMAND_MISMATCH',
   'PAIN_TRIGGERED_IMPLEMENTATION',
   'RESALE_OR_ASSET',
+  /*
+   * The second wave, added when the mandate was made explicit: maximise usable
+   * cash inside a week, from any lawful shape of transaction, without bias
+   * toward building a durable company.
+   *
+   * The five above were the plan's original table and they are all *demand you
+   * can already see published*. These five are the shapes that were missing,
+   * and each one is a different reason money is available rather than a
+   * different industry — which is what keeps the table a list of mechanisms
+   * instead of a list of niches.
+   */
+  'INFORMATION_ASYMMETRY',
+  'PRODUCTIZED_SERVICE',
+  'CAPABILITY_ARBITRAGE',
+  'SUBCONTRACTED_FULFILMENT',
+  'JIGSAW_COMBINATION',
   'OTHER',
 ] as const;
 export type CashMechanism = (typeof CASH_MECHANISMS)[number];
