@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'projects list | projects create | workers list | workers create | access show | access grant'
+        description: 'projects list | projects create | workers list | workers create | access show | access grant | research start'
         required: true
         default: projects list
       subject:
@@ -76,7 +76,7 @@ jobs:
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
           case "$ADMIN_COMMAND" in
-            'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant') ;;
+            'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start') ;;
             *)
               echo "::error::Refusing '$ADMIN_COMMAND': see the command list on this workflow."
               exit 1
@@ -86,7 +86,7 @@ jobs:
           # Every mutating command names who it is recorded against. A creation
           # with no author is the thing `--admin` exists to prevent.
           case "$ADMIN_COMMAND" in
-            *create|'access grant')
+            *create|'access grant'|'research start')
               if [ -z "$ADMIN_ADMIN" ]; then
                 echo "::error::'$ADMIN_COMMAND' changes something, so it needs --admin <email>."
                 exit 1
