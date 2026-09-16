@@ -1,0 +1,128 @@
+# The four setup operations, without a terminal.
+#
+# `routing.yml` and `packets.yml` already run `scripts/admin.sh` on the deployed
+# Brain, and each hardcodes its own prefix — `routing …` and `packets …`. So the
+# operations a fleet is actually *built* from had no dispatch path at all:
+# creating a project, creating a worker, and granting that worker exactly one
+# project. They were reachable only by someone holding flyctl and the deployment
+# token at a terminal, which is a real surface and not one a runbook can assume.
+#
+# **This adds convenience and not privilege.** Anyone who can dispatch this can
+# already dispatch `deploy.yml`, `fleet.yml` and `routing.yml`, and could add a
+# workflow of their own besides; repository write access is production
+# administration on this project however the buttons are arranged. What it must
+# not do is grow past the job it is for, so the command list is closed and
+# deliberately short: no disabling, no archiving, no revoking a person's access,
+# no packets and no queue. Those have their own surfaces or belong at a terminal.
+#
+# Reaching this is the authentication, exactly as §26 says of the shell, and
+# `--admin` is the attribution — resolved against the database rather than
+# trusted, because an audit row with no author answers nothing later. §23 already
+# names this exact channel: a GitHub Actions job holding the deployment
+# credential, running `flyctl ssh console`, dispatched on a recorded instruction.
+# It is the weaker, unverifiable `authority_channel`, and recording it as a
+# browser approval would be undetectable afterwards.
+#
+# It handles no secret. Creating a worker issues no credential: the token that
+# later speaks for it is minted by the OAuth consent screen, in a browser, on a
+# human's approval.
+name: Admin
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'projects list | projects create | workers list | workers create | access show | access grant'
+        required: true
+        default: projects list
+      subject:
+        description: 'First argument — a project name (quoted words are fine for projects create), or a worker name'
+        required: false
+        default: ''
+      object:
+        description: 'Second argument — the project, for access grant; the display name, for workers create'
+        required: false
+        default: ''
+      admin:
+        description: '--admin <email>: the administrator this is recorded against. Required by every mutating command.'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  admin:
+    name: Brain administration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Run
+        timeout-minutes: 10
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell. An input
+          # pasted into a command line is an injection whatever the dispatcher
+          # intended, and "only I can run this workflow" is not a guard.
+          ADMIN_COMMAND: ${{ inputs.command }}
+          ADMIN_SUBJECT: ${{ inputs.subject }}
+          ADMIN_OBJECT: ${{ inputs.object }}
+          ADMIN_ADMIN: ${{ inputs.admin }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          case "$ADMIN_COMMAND" in
+            'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant') ;;
+            *)
+              echo "::error::Refusing '$ADMIN_COMMAND': see the command list on this workflow."
+              exit 1
+              ;;
+          esac
+
+          # Every mutating command names who it is recorded against. A creation
+          # with no author is the thing `--admin` exists to prevent.
+          case "$ADMIN_COMMAND" in
+            *create|'access grant')
+              if [ -z "$ADMIN_ADMIN" ]; then
+                echo "::error::'$ADMIN_COMMAND' changes something, so it needs --admin <email>."
+                exit 1
+              fi
+              ;;
+          esac
+
+          # An address additionally needs @ and +.
+          case "$ADMIN_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*)
+              echo "::error::Refusing the administrator address: that is not an address."
+              exit 1
+              ;;
+          esac
+
+          # A project name is a sentence; a worker name is an identifier. Both
+          # are checked against the narrowest class that still admits the real
+          # values, and both refuse everything a shell could act on.
+          case "$ADMIN_SUBJECT$ADMIN_OBJECT" in
+            *[!A-Za-z0-9_.\ -]*)
+              echo "::error::Refusing the arguments: letters, digits, spaces, dot, dash and underscore."
+              exit 1
+              ;;
+          esac
+
+          # The subject is quoted because a project name has spaces in it.
+          args="$ADMIN_COMMAND"
+          if [ -n "$ADMIN_SUBJECT" ]; then args="$args \"$ADMIN_SUBJECT\""; fi
+          if [ -n "$ADMIN_OBJECT" ];  then args="$args \"$ADMIN_OBJECT\""; fi
+          if [ -n "$ADMIN_ADMIN" ];   then args="$args --admin $ADMIN_ADMIN"; fi
+
+          echo "admin $args"
+          set +e
+          flyctl ssh console --app "$app" -C "sh /app/scripts/admin.sh $args" 2>&1 | tee admin.txt
+          set -e
+          # The verdict comes from a line the command printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI.
+          grep -q '^ADMIN: OK' admin.txt
