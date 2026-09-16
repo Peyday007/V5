@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'projects list | projects create | workers list | workers create | access show | access grant | research start'
+        description: 'projects list | projects create | workers list | workers create | access show | access grant | research start | packets list'
         required: true
         default: projects list
       subject:
@@ -76,7 +76,7 @@ jobs:
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
           case "$ADMIN_COMMAND" in
-            'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start') ;;
+            'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'packets list') ;;
             *)
               echo "::error::Refusing '$ADMIN_COMMAND': see the command list on this workflow."
               exit 1
