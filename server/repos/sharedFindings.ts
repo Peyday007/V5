@@ -212,38 +212,120 @@ export interface SharedFindingEvidence {
   contentHash: string;
 }
 
+/**
+ * Snake case, always, and mapped in this module.
+ *
+ * Postgres folds an unquoted identifier to lower case, so `AS claimType` comes
+ * back as `claimtype` and every camel-cased alias reads `undefined` — on the
+ * backend production runs, while the SQLite suite passes. It cost eleven tests
+ * here and it is the same shape as the `rowid`/`seq` tiebreak and the three
+ * connect tables: **a repository layer over two databases is true or merely
+ * compiling, and only the second backend can tell you which.** The repository
+ * convention exists for exactly this: columns are snake case in SQL, view types
+ * are camel case, and the mapper is the only place the two meet.
+ */
 const EVIDENCE_COLUMNS = `
-  f.id                AS findingId,
-  f.claim_id          AS claimId,
-  f.origin_project_id AS originProjectId,
-  f.origin_orchestration_id AS originOrchestrationId,
-  f.origin_fragment_id AS originFragmentId,
-  f.origin_layer_id   AS originLayerId,
-  f.origin_worker_id  AS originWorkerId,
-  f.origin_session_ref AS originSessionRef,
-  f.rule_version      AS ruleVersion,
+  f.id                AS finding_id,
+  f.claim_id          AS claim_id,
+  f.origin_project_id AS origin_project_id,
+  f.origin_orchestration_id AS origin_orchestration_id,
+  f.origin_fragment_id AS origin_fragment_id,
+  f.origin_layer_id   AS origin_layer_id,
+  f.origin_worker_id  AS origin_worker_id,
+  f.origin_session_ref AS origin_session_ref,
+  f.rule_version      AS rule_version,
   f.state             AS state,
-  f.valid_until       AS validUntil,
-  f.revoked_at        AS revokedAt,
-  f.revoked_reason    AS revokedReason,
-  f.promoted_at       AS promotedAt,
+  f.valid_until       AS valid_until,
+  f.revoked_at        AS revoked_at,
+  f.revoked_reason    AS revoked_reason,
+  f.promoted_at       AS promoted_at,
   c.claim             AS claim,
-  c.claim_type        AS claimType,
-  c.source_url        AS sourceUrl,
-  c.source_title      AS sourceTitle,
-  c.source_publisher  AS sourcePublisher,
-  c.source_date       AS sourceDate,
-  c.evidence_excerpt  AS evidenceExcerpt,
-  c.evidence_locator  AS evidenceLocator,
-  c.retrieved_at      AS retrievedAt,
+  c.claim_type        AS claim_type,
+  c.source_url        AS source_url,
+  c.source_title      AS source_title,
+  c.source_publisher  AS source_publisher,
+  c.source_date       AS source_date,
+  c.evidence_excerpt  AS evidence_excerpt,
+  c.evidence_locator  AS evidence_locator,
+  c.retrieved_at      AS retrieved_at,
   c.confidence        AS confidence,
   c.geography         AS geography,
   c.timeframe         AS timeframe,
   c.population        AS population,
   c.definition        AS definition,
-  c.contradiction_state AS contradictionState,
-  c.content_hash      AS contentHash
+  c.contradiction_state AS contradiction_state,
+  c.content_hash      AS content_hash
 `;
+
+interface EvidenceRow {
+  finding_id: string;
+  claim_id: string;
+  origin_project_id: string;
+  origin_orchestration_id: string;
+  origin_fragment_id: string | null;
+  origin_layer_id: string | null;
+  origin_worker_id: string | null;
+  origin_session_ref: string | null;
+  rule_version: string;
+  state: string;
+  valid_until: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  promoted_at: string;
+  claim: string;
+  claim_type: string;
+  source_url: string | null;
+  source_title: string | null;
+  source_publisher: string | null;
+  source_date: string | null;
+  evidence_excerpt: string | null;
+  evidence_locator: string | null;
+  retrieved_at: string | null;
+  confidence: number;
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definition: string | null;
+  contradiction_state: string;
+  content_hash: string;
+}
+
+function mapEvidence(row: EvidenceRow): SharedFindingEvidence {
+  return {
+    findingId: row.finding_id,
+    claimId: row.claim_id,
+    originProjectId: row.origin_project_id,
+    originOrchestrationId: row.origin_orchestration_id,
+    originFragmentId: row.origin_fragment_id,
+    originLayerId: row.origin_layer_id,
+    originWorkerId: row.origin_worker_id,
+    originSessionRef: row.origin_session_ref,
+    ruleVersion: row.rule_version,
+    state: row.state as SharedFindingState,
+    validUntil: row.valid_until,
+    revokedAt: row.revoked_at,
+    revokedReason: row.revoked_reason,
+    promotedAt: row.promoted_at,
+    claim: row.claim,
+    claimType: row.claim_type,
+    sourceUrl: row.source_url,
+    sourceTitle: row.source_title,
+    sourcePublisher: row.source_publisher,
+    sourceDate: row.source_date,
+    evidenceExcerpt: row.evidence_excerpt,
+    evidenceLocator: row.evidence_locator,
+    retrievedAt: row.retrieved_at,
+    // Postgres returns REAL as a number and SQLite does too, but a driver that
+    // handed back a string would produce a confidence nothing could compare.
+    confidence: Number(row.confidence),
+    geography: row.geography,
+    timeframe: row.timeframe,
+    population: row.population,
+    definition: row.definition,
+    contradictionState: row.contradiction_state,
+    contentHash: row.content_hash,
+  };
+}
 
 /**
  * Every finding that may be reused right now.
@@ -276,7 +358,7 @@ export async function eligibleFindings(input: {
   }
   params.push(limit);
 
-  return getDb().all<SharedFindingEvidence>(
+  return (await getDb().all<EvidenceRow>(
     `SELECT ${EVIDENCE_COLUMNS}
        FROM shared_findings f
        JOIN research_claims c ON c.id = f.claim_id
@@ -288,7 +370,7 @@ export async function eligibleFindings(input: {
       ORDER BY f.promoted_at DESC, f.id DESC
       LIMIT ?`,
     params as never[],
-  );
+  )).map(mapEvidence);
 }
 
 /**
@@ -301,14 +383,14 @@ export async function eligibleFindings(input: {
  */
 export async function listFindings(input: { limit?: number } = {}): Promise<SharedFindingEvidence[]> {
   const limit = Math.max(1, Math.min(1000, input.limit ?? 200));
-  return getDb().all<SharedFindingEvidence>(
+  return (await getDb().all<EvidenceRow>(
     `SELECT ${EVIDENCE_COLUMNS}
        FROM shared_findings f
        JOIN research_claims c ON c.id = f.claim_id
       ORDER BY f.promoted_at DESC, f.id DESC
       LIMIT ?`,
     [limit] as never[],
-  );
+  )).map(mapEvidence);
 }
 
 export async function getFinding(id: string): Promise<SharedFinding | null> {
