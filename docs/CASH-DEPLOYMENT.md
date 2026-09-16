@@ -262,10 +262,39 @@ wrong one.
 Shared is the **machinery**: one database, one queue, one fleet, one pool of
 workers. A second worker is throughput, not a second brain.
 
-Shared is **not** the claims. Every claim read is keyed by orchestration and an
-orchestration belongs to one project, so one operation does not reuse another's
-research. That is the privacy boundary working as designed. Cross-project
-knowledge reuse does not exist today and would be a new capability.
+Shared is also, now, the **validated findings** — see CLAUDE.md §31. An earlier
+version of this section ended *"cross-project knowledge reuse does not exist
+today and would be a new capability"*. That was true when it was written and is
+not true now; it is corrected here rather than deleted, because the sentence it
+replaces is the reason somebody might still expect four isolated archives.
+
+What crosses is one thing and it is narrow: a `research_claims` row that cleared
+the seven-condition evidence gate, whose fragment reached `ACCEPTED`, that
+resolves to a canonical source and that nothing has contested. `shared_findings`
+records the promotion as a **pointer** — it stores no statement, no source and no
+passage, because the claim already holds all three — and the pool is derived on
+every read, so a claim that later becomes contested leaves it with nothing
+written anywhere.
+
+What does **not** cross is everything else, and the list is worth reading before
+launch: unfinished research and every gate-rejected claim, conversations and
+messages, candidates and opportunity ownership, human decisions and standing
+grants, the work view (`work_items`, `work_leases`, `bins`), every `cash_*`
+table, documents and extraction runs, missions and audits.
+
+**The blast radius of a shared finding is one thing: it can suppress research in
+another project, and it can do nothing else.** It reaches exactly two callers,
+both of them the coverage classifier — `coverBeforeWork` and `reconcile` — and a
+report's citations come from `citableClaims(orchestrationId)`, which is
+project-scoped. So a shared finding can never enter another project's claim
+ledger, its synthesis or its audit. And it cannot close a requirement on its own:
+`SATISFIED` still needs two independent publishers, which is the same bar it
+always was.
+
+Provenance is recorded in full and *shown* against the reader's own access. A
+person who may not read the originating project still gets the source, the
+publisher, the date and the passage — everything that makes the finding
+checkable — and does not get the name of somebody else's project.
 
 ---
 
@@ -294,6 +323,25 @@ administrators.** Make them ordinary members of their own project. This is
 configuration, not code, and it is the single thing that would quietly undo the
 boundary.
 
+**Withdrawing a shared finding has routes and no screen, and that is a known
+gap rather than an oversight.** It is reachable as a signed-in person:
+
+```
+# what is in the pool, and the id of the one you want
+curl -s -b "$COOKIE" https://<app>/api/russell/shared-findings
+
+# take it out of reuse; ADMIN on the project that produced it
+curl -s -b "$COOKIE" -H 'content-type: application/json' \
+     -H "origin: https://<app>" \
+     -X POST https://<app>/api/russell/shared-findings/<shf_…>/revoke \
+     -d '{"reason":"the statute was amended and this no longer describes it"}'
+```
+
+It destroys nothing: the row keeps its id, its origin and the reason, and the
+claim underneath is never touched. A project that merely *disagrees* does not
+need this at all — recording a contradiction in the originating project excludes
+the finding by derivation, with nobody withdrawing anything.
+
 ---
 
 ## 7. Monitoring
@@ -307,6 +355,18 @@ boundary.
 | Are the surfaces healthy? | `npm run fleet -- show` — state, and the recorded reason behind a quarantine |
 | What is Brain waiting on, per operation? | The Cash screen's **Needs You**, and `whatBrainNeeds` in `GET /api/projects/:id/cash` |
 | Did an audit reviewer share a session with an author? | `npm run admin -- packets independence` — reports, never acts |
+| What is in the shared pool, and what is being reused? | `GET /api/russell/shared-findings` as a signed-in person — `total` is how many exist, `reusable` is how many Brain would actually reuse, and every withheld one carries the reason |
+
+**Two counts rather than one, on purpose.** A single number covering both is the
+"0 of 8 settled" defect §29 records: `total` falling while `reusable` holds
+means findings are being withdrawn or expiring, and `total` holding while
+`reusable` falls means claims are being contested in their originating projects.
+Those have different remedies.
+
+**A shared finding is withdrawn by the project that produced it**, at `ADMIN`,
+and there is no screen for it yet — see the note in §6 below. Until there is,
+it is two authenticated calls, and the derived exclusions need no human action
+at all.
 
 **Stalled leases need no alarm and no sweeper.** An expired lease is claimable
 work by construction, so redelivery is the recovery. What is worth watching is
