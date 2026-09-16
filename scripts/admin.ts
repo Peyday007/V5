@@ -31,6 +31,7 @@
  *   npm run admin -- routing check <worker> <bin>
  *   npm run admin -- workers disable <name> --admin someone@example.com
  *   npm run admin -- workers archive <name> --admin someone@example.com
+ *   npm run admin -- research start <project> --admin someone@example.com
  *   npm run admin -- projects list
  *   npm run admin -- projects create "A name" --admin someone@example.com
  *   npm run admin -- access grant <worker> <project> --admin someone@example.com
@@ -44,6 +45,10 @@
  *   npm run admin -- packets scope [project]
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
  */
+import { startPacket } from '../server/services/research/startPacket.ts';
+import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
+import { CASH_LAYER_NAME } from '../server/services/cash/lifecycle.ts';
+import { createLayer, listLayers } from '../server/repos/layers.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -519,6 +524,99 @@ async function main(): Promise<void> {
       });
       console.log(`  ${worker.id}  ${worker.name}  ${worker.displayName}`);
       console.log('  It is a member of no project and holds no credential yet.');
+      break;
+    }
+    /*
+     * Starting the sprint's discovery research by hand.
+     *
+     * §26 already lists "starting a packet by hand" as an `npm run admin`
+     * operation, and it was the one item on that list with no command behind
+     * it: `startPacket` had exactly two callers, Russell's mission launcher and
+     * a Step 10 command hardcoded to one project and one Michigan licensing
+     * question. So the operation the architecture says belongs on a terminal
+     * could not be performed from one.
+     *
+     * **It authorizes nothing that was not already authorized.** The envelope is
+     * named, never supplied — `RUSSELL_CASH_DISCOVERY_V1` lives in code, was
+     * reviewed, and `startPacket` refuses an id nothing defines rather than
+     * treating "no rules matched" as "everything is allowed". That is §16's
+     * whole property: nobody supplies the limits their own plan is judged
+     * against. The envelope permits published sources only, across any market,
+     * with no spending, no paid API, no contact with any person or
+     * organisation, no advertising and no publishing. Acting on what is found
+     * is a commercial grant a person makes, and this cannot make one.
+     *
+     * **It invents no questions.** The assignments are `SEARCH_BUCKETS`, the
+     * same reviewed in-code table the sprint's own discovery opens, so a
+     * terminal start and an activated sprint ask the identical things. A
+     * command that composed its own research questions would be the second
+     * orchestration system this repository keeps refusing to grow.
+     *
+     * **It is not activation and does not pretend to be.** A cash sprint's
+     * `ACTIVE` row, and the commercial authority beside it, are the two
+     * decisions §30 reserves to a person, and neither is reachable from here.
+     * What this does is start the research those decisions would have started,
+     * under limits a person already set, so the archive is being filled while
+     * the two decisions are outstanding. Activating later reuses this layer
+     * rather than creating a second, because it is named from the same
+     * constant.
+     */
+    case 'research start': {
+      const actor = await administrator();
+      const project = await projectFrom(rest[0] ?? fail('Name a project.'));
+
+      const layers = await listLayers(project.id);
+      const layer =
+        layers.find((one) => one.name === CASH_LAYER_NAME) ??
+        (await createLayer({
+          projectId: project.id,
+          name: CASH_LAYER_NAME,
+          orderIndex: layers.length,
+        }));
+      console.log(`  layer      ${layer.name}  ${layer.id}`);
+
+      /*
+       * Idempotent by the packet's own title on this project, so re-running
+       * after a crash, a timeout or a lost response starts nothing twice. A
+       * flag would be set by a tick that then died; rows cannot be.
+       */
+      const already = new Set(
+        (await listOrchestrationsByProject(project.id)).map((one: { title: string }) => one.title),
+      );
+
+      let started = 0;
+      for (const bucket of SEARCH_BUCKETS) {
+        if (already.has(bucket.title)) {
+          console.log(`  skipped    ${bucket.id} — already started`);
+          continue;
+        }
+        const packet = await startPacket({
+          projectId: project.id,
+          layerId: layer.id,
+          title: bucket.title,
+          assignment: bucket.question,
+          approval: {
+            mode: 'AUTO_WITHIN_ENVELOPE',
+            envelopeId: 'RUSSELL_CASH_DISCOVERY_V1',
+            authorizedBy: `admin:${actor.email}`,
+          },
+          startedBy: { kind: 'PERSON', id: actor.id },
+        });
+        started += 1;
+        console.log(`  started    ${bucket.id}  ${packet.orchestration.id}`);
+      }
+
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'START_RESEARCH',
+        targetType: 'PROJECT',
+        targetId: project.id,
+        projectId: project.id,
+        result: 'SUCCESS',
+        metadata: { started: String(started), envelope: 'RUSSELL_CASH_DISCOVERY_V1' },
+      });
+      console.log(`  ${started} packet(s) started, ${SEARCH_BUCKETS.length - started} already there.`);
       break;
     }
     case 'access show': {
