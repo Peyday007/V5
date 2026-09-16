@@ -465,6 +465,41 @@ describe('a refusal nobody can act on yet', () => {
     await dispatchTick({ burst: 1, projectIds: [seeded] });
     expect(fired).toHaveLength(0);
 
+    /*
+     * Asserted before the re-arm, so a failure says which half broke.
+     *
+     * `rearmed === 0` has two completely different causes — the intent was
+     * never deferred in the first place, or it was and the watermark could not
+     * see the membership — and a bare count cannot tell them apart. This one
+     * observation is what separates them, and it is what identified the tie
+     * below rather than leaving it as an unexplained flake.
+     */
+    const [deferred] = await listDispatchesForBin(bin.id);
+    expect(deferred!.state).toBe('PENDING');
+    expect(deferred!.lastErrorKind).toBe('NO_SURFACE_SERVES_THIS_PROJECT');
+
+    /*
+     * Wait for the clock to leave the deferral's millisecond, and do not
+     * pretend this is a formality.
+     *
+     * The candidate query is `updated_at < watermark`, strictly, so a fleet
+     * write landing in the *same millisecond* as the deferral is not seen by
+     * that write. Measured on this machine at roughly one run in three:
+     * `intent=…350` against `mem=…350`. The strictness is load-bearing — §27
+     * records the unbounded rescan that `<=` reintroduces, where a stamped
+     * candidate matches its own stamp for ever — so the product keeps it, and
+     * the cost is bounded: such an intent still retries on its own
+     * `next_attempt_at`, which this deferral put ten minutes out, and any later
+     * operator write re-arms it.
+     *
+     * In production the two events are a dispatch tick and a person typing a
+     * command. Here they were 0.3ms apart, so the test moves them apart rather
+     * than depending on which side of a millisecond boundary they fall.
+     */
+    while (new Date().toISOString() <= deferred!.updatedAt) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+
     // The operator answers the refusal: the worker is given the project. That
     // write is on `project_memberships`, which is why the re-arm watermark has
     // to watch it — `fleet_routines` and `worker_routing` do not move here.

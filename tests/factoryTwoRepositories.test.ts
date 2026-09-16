@@ -426,6 +426,7 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
       'NO_CAPABLE_SURFACE',
       'NO_SURFACE_SERVES_THIS_FAMILY',
       'NO_SURFACE_SERVES_THIS_REPOSITORY',
+      'NO_SURFACE_SERVES_THIS_PROJECT',
       'ACCOUNT_TARGETS_REACHED',
     ];
     // Every member of the union, and nothing else.
@@ -435,6 +436,9 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
     // makes them re-armable by the write that resolves them.
     expect(REFUSAL_WAIT['NO_ROUTINES_REGISTERED']).toBe('OPERATOR');
     expect(REFUSAL_WAIT['ALL_SURFACES_INELIGIBLE']).toBe('OPERATOR');
+    // And the project, for the same reason: it is answered by `access grant`
+    // and `fleet bind-worker`, which are writes rather than a passage of time.
+    expect(REFUSAL_WAIT['NO_SURFACE_SERVES_THIS_PROJECT']).toBe('OPERATOR');
   });
 
   it('names a switched-off fleet as switched off, not as a missing routing row', async () => {

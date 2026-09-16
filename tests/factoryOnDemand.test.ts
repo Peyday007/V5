@@ -30,7 +30,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
-import { createUser, createWorker, setWorkerRouting } from '../server/repos/identity.ts';
+import { createUser, createWorker, grantMembership, setWorkerRouting } from '../server/repos/identity.ts';
 import { listMembershipsForPrincipal } from '../server/repos/identity.ts';
 import {
   approveChangeRequest,
@@ -101,6 +101,24 @@ afterEach(async () => {
 /** A fleet that is healthy and wrong for this family: the honest starting point. */
 async function researchOnlySurface(): Promise<void> {
   const worker = await createWorker({ name: 'research-only', createdByType: 'SYSTEM', createdById: 't' });
+  /*
+   * A member of this project, so the *family* is what distinguishes it.
+   *
+   * The fire asks about the project before the family now, and a worker that is
+   * a member of nothing is refused on the project — true, but not the point
+   * this fixture exists to make. Granting it the project makes it what its name
+   * claims: a surface that genuinely could take this project's research and
+   * still may not be handed its repository work.
+   */
+  await grantMembership({
+    projectId: fixture.project.id,
+    principalType: 'WORKER',
+    principalId: worker.id,
+    role: 'MEMBER',
+    scopes: ['project:read', 'research:read', 'research:write', 'queue:claim'],
+    grantedByType: 'SYSTEM',
+    grantedById: 'test',
+  });
   await setWorkerRouting({
     workerId: worker.id,
     families: ['RESEARCH', 'GENERAL'],
