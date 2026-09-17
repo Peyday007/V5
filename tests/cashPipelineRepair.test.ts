@@ -26,6 +26,7 @@ import { createUser } from '../server/repos/identity.ts';
 import { activate, setLifecycle } from '../server/services/cash/lifecycle.ts';
 import {
   CASH_DISCOVERY_AUTHORITY_NAME,
+  DISCOVERY_CONCURRENCY,
   discoveryAuthority,
   ensureDiscoveryAuthority,
   resumeAuthorityParkedCandidates,
@@ -34,7 +35,15 @@ import { listGoals } from '../server/repos/russellAuthority.ts';
 import { ALWAYS_PROHIBITED } from '../server/repos/russellAuthority.ts';
 import { liveAuthority } from '../server/repos/cashAuthority.ts';
 import { getDb } from '../server/db/database.ts';
-import { createCandidate, getCandidate, recordJudgment } from '../server/repos/russellCandidates.ts';
+import {
+  createCandidate,
+  getCandidate,
+  listCandidates,
+  recordJudgment,
+} from '../server/repos/russellCandidates.ts';
+import { listOrchestrationsByProject } from '../server/repos/research.ts';
+import { listWorkItems } from '../server/repos/workQueue.ts';
+import { tick } from '../server/services/russell/loop.ts';
 import {
   APPROVAL_ENVELOPES,
   planFitsEnvelope,
@@ -810,6 +819,78 @@ describe('the dashboard', () => {
     expect(round.activity).toBe('PARKED');
     expect(round.blocker).toMatch(/not ready/);
     expect(map.whatHappensNext).toMatch(/cannot proceed/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16 — the chain, from a person pressing Start to work a Routine can claim
+// ---------------------------------------------------------------------------
+
+describe('pressing Start produces work the fleet can actually take', () => {
+  /*
+   * The step that had no test, which is why nobody knew it was broken.
+   *
+   * Every suite that touches this path arranges its own starting state: the
+   * integration walk writes its own research grant and builds its orchestration
+   * by hand, so capture → judge → compile → envelope → launch → queue was
+   * exercised by nothing end to end. That is exactly the stretch where all ten
+   * production ideas died, and §24's lesson at a new seam — a test that arranges
+   * its own starting state cannot tell a mechanism from a function nothing
+   * calls.
+   *
+   * Nothing is simulated here: no worker, no provider, no network. The tick is
+   * the real one, the judgment is the real one, the compiler is the real one
+   * and the envelope is the real one. What is asserted is the thing production
+   * did not have — a claimable work item.
+   */
+  it('captures, judges, compiles and queues real research with nothing parked', async () => {
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+
+    // Several passes, because one tick opens one bucket and the judgment,
+    // compilation and launch each happen on a later one. Six is the ordinary
+    // path rather than a tuned number: it is where the concurrency ceiling
+    // stops it, which is the next assertion.
+    for (let pass = 0; pass < 6; pass += 1) await tick(`repair-${pass}`);
+
+    const candidates = await listCandidates({ projectId });
+    expect(candidates.length).toBeGreaterThan(0);
+    // The whole defect, in one assertion: not one idea parked for want of an
+    // authorization the person had already given by pressing Start.
+    expect(candidates.filter((one) => one.state === 'PARKED')).toEqual([]);
+    expect(candidates.some((one) => one.priority === 'WORTH_DOING')).toBe(true);
+
+    // Compiled against the cash envelope rather than the public-records one,
+    // which is the Westbrook defect this path would otherwise repeat.
+    const packets = await listOrchestrationsByProject(projectId);
+    expect(packets.length).toBeGreaterThan(0);
+    for (const packet of packets) expect(packet.failureReason).toBeNull();
+
+    /*
+     * And the answer production could never reach: work a Routine can claim.
+     *
+     * A queued RESEARCH_FRAGMENT is the thing at the far end of the chain —
+     * an authorized, compiled, envelope-approved question sitting on the
+     * durable queue with nothing else needed from anybody.
+     */
+    const items = await listWorkItems(projectId, { limit: 200 });
+    const queued = items.filter(
+      (one) => one.workType === 'RESEARCH_FRAGMENT' && one.state === 'QUEUED',
+    );
+    expect(queued.length).toBeGreaterThan(0);
+
+    // Bounded by the grant's concurrency and by nothing else. It is a real
+    // capacity limit rather than an allowance, so it caps what runs at once
+    // and never how much may ever run.
+    const running = packets.filter((one) => one.status === 'RESEARCHING');
+    expect(running.length).toBeLessThanOrEqual(DISCOVERY_CONCURRENCY);
+
+    // Still nothing that could touch the world.
+    expect(await liveAuthority(projectId)).toBeNull();
   });
 });
 
