@@ -911,6 +911,64 @@ describe('pressing Start produces work the fleet can actually take', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 24 — finishing what was spent outranks starting the next search
+// ---------------------------------------------------------------------------
+
+describe('where a deep dive sits in the launch queue', () => {
+  /*
+   * Measured in production, once the concurrency deadlock was cleared.
+   *
+   * `nextLaunchable` orders by priority, then `COALESCE(ordinal, 999)`, then
+   * `created_at`. Every candidate judges `WORTH_DOING`, and `recordJudgment`
+   * and `applyJudgment` have both accepted an `ordinal` since they were written
+   * with every caller leaving it null — so the queue was pure arrival order,
+   * and a designed-in within-priority ordering was supplied by nothing. The
+   * fifth mechanism in this repository that nothing called.
+   *
+   * The cost: twenty openings found, and both of their deep dives created
+   * *after* the fifty-odd broad searches still waiting. A sprint could keep
+   * finding openings and never qualify one, which is the endpoint of the whole
+   * chain sitting behind work that has not started.
+   *
+   * The rank is the profile's own declaration, so planning knows nothing about
+   * which kinds of question exist. It is an ordering rather than a permission:
+   * no evidence bar moves, nothing is refused, and a broad search still
+   * launches the moment nothing narrower is waiting.
+   */
+  it('ranks a deep dive ahead of a search that has not started', () => {
+    const discovery = profileFor('RUSSELL_CASH_DISCOVERY_V1')!;
+    const validation = profileFor('RUSSELL_CASH_VALIDATION_V1')!;
+    const records = profileFor('RUSSELL_PUBLIC_RECORDS_V1')!;
+
+    expect(validation.launchOrdinal).toBeLessThan(discovery.launchOrdinal);
+    // And it changes nothing about the ordinary research this Brain already
+    // does: a public-records question keeps a broad search's place.
+    expect(records.launchOrdinal).toBe(discovery.launchOrdinal);
+  });
+
+  it('is what the queue actually orders on', async () => {
+    /*
+     * The ordering is SQL, so it is asserted against the real query rather
+     * than against the constant: a rank nothing sorts by is the defect this
+     * replaces, one layer along.
+     */
+    const source = await readFile(
+      new URL('../server/services/russell/loop.ts', import.meta.url),
+      'utf8',
+    );
+    expect(source).toContain('COALESCE(ordinal, 999)');
+
+    // And the compiler forwards the profile's value into the judgment, which
+    // is the only thing that puts a number in that column.
+    const planning = await readFile(
+      new URL('../server/services/russell/planning.ts', import.meta.url),
+      'utf8',
+    );
+    expect(planning).toContain('ordinal: compiled.mission.launchOrdinal');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 23 — a mission waiting on a person must not hold provider capacity
 // ---------------------------------------------------------------------------
 

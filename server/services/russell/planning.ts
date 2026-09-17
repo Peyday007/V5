@@ -548,11 +548,28 @@ export async function judgeCandidate(
     candidateId: candidate.id,
     state: verdict.state,
     priority: verdict.priority,
+    /*
+     * Where this sits in the launch queue within its priority.
+     *
+     * `recordJudgment` and `applyJudgment` have both accepted an `ordinal`
+     * since they were written and every caller left it null — so a designed-in
+     * within-priority ordering was supplied by nothing, and a queue was pure
+     * arrival order. Production measured the cost: twenty openings found and
+     * both of their deep dives created after the fifty-odd broad searches still
+     * waiting, so a sprint could keep finding openings and never qualify one.
+     *
+     * The value is the compiler profile's own declaration, forwarded. Planning
+     * does not know which kinds of question exist or which should go first —
+     * that is the envelope's vocabulary, and it is an ordering rather than a
+     * permission: no bar moves and nothing is refused.
+     */
+    ordinal: compiled.mission.launchOrdinal,
     reason: verdict.reason,
     judgment: {
       ...verdict.inputs,
       decidedBy: 'COMPILER',
       compilerVersion: compiled.mission.compilerVersion,
+      launchOrdinal: compiled.mission.launchOrdinal,
       envelopeId: compiled.mission.envelopeId,
       jurisdiction: compiled.mission.jurisdiction,
       /*

@@ -53,6 +53,26 @@ export interface CompilerProfile {
    * to permit.
    */
   multipleJurisdictions: 'REFUSE' | 'DESCRIBE';
+  /**
+   * Where this kind of question sits in the launch queue, within its priority.
+   *
+   * `nextLaunchable` orders by priority, then `COALESCE(ordinal, 999)`, then
+   * `created_at` — so with every candidate judged `WORTH_DOING` and every
+   * ordinal null, a queue is pure arrival order. Production measured what that
+   * costs: twenty openings found, both of their deep dives created *after* the
+   * fifty-odd broad searches still waiting, and therefore behind every one of
+   * them. A sprint could keep finding openings and never qualify one.
+   *
+   * **Finishing what has already been spent outranks starting the next
+   * search.** That is an ordering statement rather than a permission, which is
+   * why it belongs on the profile beside the rest of this envelope's
+   * vocabulary: no bar moves, nothing is refused, and a broad search still
+   * launches the moment nothing narrower is waiting.
+   *
+   * Lower goes first, and the numbers are spaced so a kind can be inserted
+   * between two without renumbering the others.
+   */
+  launchOrdinal: number;
   /** Proposed classes. Every one is still filtered through the envelope. */
   proposedSources: string[];
   /** What may never carry a claim on its own. */
@@ -83,6 +103,9 @@ const PUBLIC_RECORDS: CompilerProfile = {
   id: 'PUBLIC_RECORDS',
   fragmentKey: 'official-record',
   multipleJurisdictions: 'REFUSE',
+  // The ordinary case: nothing about a public-records question makes it a
+  // continuation of anything, so it takes its turn by arrival.
+  launchOrdinal: 500,
   proposedSources: [
     'county register of deeds or recording office',
     'county clerk, assessor, equalization or treasurer office',
@@ -168,6 +191,9 @@ const MARKET_DISCOVERY: CompilerProfile = {
   id: 'MARKET_DISCOVERY',
   fragmentKey: 'market-signal',
   multipleJurisdictions: 'DESCRIBE',
+  // A broad search that has not started. It is the thing a deep dive on an
+  // opening already found is allowed to go ahead of.
+  launchOrdinal: 500,
   proposedSources: [
     'a published request, posting, listing, notice or advertisement, attributed to whoever made it',
     'a marketplace, job board, classified or auction listing',
@@ -316,6 +342,16 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
   id: 'COMMERCIAL_VALIDATION',
   fragmentKey: 'opening-validation',
   multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Ahead of a search that has not started.
+   *
+   * This question exists because a broad search already ran, cleared the gate
+   * and filed an opening — so the work behind it is spent either way, and
+   * qualifying it is what turns that spending into something a person can
+   * decide on. Leaving it in arrival order put it behind every bucket in the
+   * sprint, which is how twenty openings sat unqualified.
+   */
+  launchOrdinal: 100,
   proposedSources: [
     'the published request, listing or notice this opening rests on',
     'the buying organisation’s own website, careers page, press release or announcement',

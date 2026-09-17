@@ -224,6 +224,12 @@ export interface CompiledMission {
    * says in those terms rather than asserting it about the subject.
    */
   jurisdiction: { value: string; from: 'SUBJECT' | 'QUESTION' | 'ENVELOPE' };
+  /**
+   * Where this question sits in the launch queue within its priority, declared
+   * by the profile. Forwarded rather than decided here — see
+   * `CompilerProfile.launchOrdinal`.
+   */
+  launchOrdinal: number;
   compilerVersion: string;
 }
 
@@ -551,6 +557,8 @@ export async function compileMission(input: {
     mission: {
       envelopeId,
       compilerVersion: MISSION_COMPILER_VERSION,
+      // The profile's own declaration, forwarded. Nothing here decides it.
+      launchOrdinal: profile.launchOrdinal,
       jurisdiction,
       fragments: [fragment],
       /*
