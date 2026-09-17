@@ -1,23 +1,24 @@
 /**
  * A read-only query runner, for one audit, on a scratch branch. Never deployed.
  *
- * It takes a base64 bundle of statements on argv, refuses anything that is not
- * a SELECT or a WITH, opens the adapter directly rather than `initDatabase()`
+ * It reads a bundle of statements from a file, refuses anything that is not a
+ * SELECT or a WITH, opens the adapter directly rather than `initDatabase()`
  * (which would run the migration chain), and runs every statement inside one
  * `SET TRANSACTION READ ONLY` transaction, so the database is the thing
  * enforcing read-only rather than a promise in a comment.
  *
- *   node --import tsx roq.ts <base64> [maxFieldChars]
+ *   node --import tsx roq.ts <path to the bundle> [maxFieldChars]
  *
  * Statements are separated by `;;` and may carry a leading `-- @label` line.
  * Rows print as JSON, one per line, with long fields clipped so a large ledger
  * cannot bury the answer.
  */
+import { readFileSync } from 'node:fs';
 import { PostgresAdapter } from '../server/db/adapters/postgres.ts';
 import { databaseConfig } from '../server/config.ts';
 import type { Database, Row } from '../server/db/types.ts';
 
-const BUNDLE = process.argv[2] ?? '';
+const BUNDLE_PATH = process.argv[2] ?? '';
 const MAX = Number(process.argv[3] ?? '600') || 600;
 
 function clip(value: unknown): unknown {
@@ -27,7 +28,7 @@ function clip(value: unknown): unknown {
 }
 
 async function main(): Promise<void> {
-  const sql = Buffer.from(BUNDLE, 'base64').toString('utf8');
+  const sql = readFileSync(BUNDLE_PATH, 'utf8');
   const statements = sql
     .split(';;')
     .map((part) => part.trim())

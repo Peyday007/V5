@@ -4,19 +4,23 @@
 # so this version runs only when dispatched on the audit branch. `production`
 # keeps its own packet report and is not touched.
 #
-# It ships `scripts/roq.ts` into the running container, runs it once out of
-# /tmp, and prints what it found. `roq.ts` refuses any statement that is not a
-# SELECT, opens the adapter directly rather than `initDatabase()` (which would
-# run the migration chain), and holds every statement inside one
-# `SET TRANSACTION READ ONLY` transaction. Nothing is built, nothing is
-# deployed, and nothing is written — in the container or in the database.
+# It ships `scripts/roq.ts` and the dispatched SELECT bundle into the running
+# container, runs the bundle once out of /tmp, and prints what it found.
+# `roq.ts` refuses any statement that is not a SELECT, opens the adapter
+# directly rather than `initDatabase()` (which would run the migration chain),
+# and holds every statement inside one `SET TRANSACTION READ ONLY`
+# transaction. Nothing is built, nothing is deployed, and nothing is written —
+# in the container or in the database.
+#
+# The bundle never reaches a shell: it is written to a file with `printf`,
+# compressed, and carried across as base64.
 name: Packet report
 
 on:
   workflow_dispatch:
     inputs:
       sql:
-        description: 'base64 of the SELECT bundle, statements separated by ;;'
+        description: 'The SELECT bundle. Statements separated by ;; and labelled with -- @label'
         required: true
       clip:
         description: 'Clip long text fields to this many characters'
@@ -44,10 +48,6 @@ jobs:
           AUDIT_CLIP: ${{ inputs.clip }}
         run: |
           set -eu
-          case "$AUDIT_SQL" in
-            ''|*[!A-Za-z0-9+/=]*)
-              echo "::error::The bundle is base64 and nothing else."; exit 1 ;;
-          esac
           case "$AUDIT_CLIP" in
             ''|*[!0-9]*) echo "::error::The clip is a number."; exit 1 ;;
           esac
@@ -56,14 +56,21 @@ jobs:
           # Relative imports would resolve against /tmp, so point them at the
           # container's own tree. Nothing is written into /app.
           sed -E "s#from '\.\./server/#from '/app/server/#g" scripts/roq.ts > /tmp/roq.ts
-          b64=$(gzip -9c /tmp/roq.ts | base64 -w0)
+          printf '%s' "$AUDIT_SQL" > /tmp/bundle.sql
+          echo "--- the bundle ---"
+          cat /tmp/bundle.sql
+
+          runner=$(gzip -9c /tmp/roq.ts | base64 -w0)
+          bundle=$(gzip -9c /tmp/bundle.sql | base64 -w0)
 
           flyctl ssh console --app "$app" \
-            -C "/bin/sh -c 'echo $b64 | base64 -d | gzip -dc > /tmp/roq.ts'"
+            -C "/bin/sh -c 'echo $runner | base64 -d | gzip -dc > /tmp/roq.ts'"
+          flyctl ssh console --app "$app" \
+            -C "/bin/sh -c 'echo $bundle | base64 -d | gzip -dc > /tmp/bundle.sql'"
 
           set -o pipefail
           flyctl ssh console --app "$app" \
-            -C "/bin/sh -c 'cd /app && node --import tsx /tmp/roq.ts $AUDIT_SQL $AUDIT_CLIP'" \
+            -C "/bin/sh -c 'cd /app && node --import tsx /tmp/roq.ts /tmp/bundle.sql $AUDIT_CLIP'" \
             2>&1 | tee audit.txt
           grep -q '^ROQ: OK' audit.txt
 
