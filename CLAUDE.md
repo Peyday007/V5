@@ -4059,6 +4059,48 @@ them alone gives the wrong lesson.
   is not moving and why. **A status that contradicts what a person can see is
   worse than no status**, for the seventh time in this file.
 
+Running it found four more, each of which would have stopped the chain at a
+different transition while every test of the part in question passed. They are
+one lesson at four altitudes: **a stage can be correct and still be unreachable,
+and a suite that exercises the stage cannot see that.**
+
+- **The field that decides everything was forbidden by its own schema.**
+  `brain_submit_claims` told a worker, in its description, to set
+  `opportunity_signal` — and declared `additionalProperties: false` without
+  listing it. A client honouring the schema drops the field; one honouring the
+  prose sends what the schema forbids. So the single column that decides whether
+  any opportunity is ever created could never be filled, and the failure would
+  have read exactly like a worker honestly finding no openings. It is declared
+  now, and the instruction also went into the discovery profile's completion
+  criteria, because a worker reads its assignment *before* it starts looking and
+  the submission tool is the wrong end of the job. Found by scanning every tool
+  for a field its description names and its schema does not declare; it was the
+  only real gap.
+- **The Cash Engine Card was computed by nothing.** The module existed, was
+  tested, and no route, view or component ever called it — so the brief that is
+  the whole point of qualifying an opening could not be read by anybody. §29's
+  sentence arriving at the *end* of a pipeline rather than the middle. It is
+  composed in `cashView` from the facts already loaded for `provenance`, so it
+  costs no query, and the screen renders each line as the kind of answer it is.
+- **A researched answer reached the facts and not the row.** `answers.ts` writes
+  the opportunity column *and* the card fact when a need's research settles a
+  field; `applyValidationAnswers` wrote only the fact. The identical question,
+  answered by the deep dive instead, never reached `evidenceCard`,
+  `readyToTest` or `reconcileDiscoverableGaps` — which would go on raising a
+  need for a payer the deep dive had already established and research it twice,
+  which is §13's waste arriving through the door this repair opened. Both read
+  one `COLUMN` map now, because a copy each is the thing that drifts.
+- **The live Brain refused its own release gate, and was right to.** The deploy
+  released, and then answered its own hosted verification with
+  `INVALID_INPUT "verdicts[0].geography_basis" is missing`. Requiring a basis is
+  correct and stays. What was wrong is that the change reached every fixture in
+  `tests/` and not `scripts/verify-hosted.ts` — a scripted worker the suite
+  never runs. So the whole suite passed, the image released, and the packet the
+  release gate itself submits was refused. **A real worker would have
+  resubmitted; a scripted one cannot**, which is the whole difference between a
+  strict contract and a broken one. The guard reads the repository rather than
+  behaviour, because behaviour is exactly what the suite could not see.
+
 **None of the existing work was rewritten to make any of this come out right.**
 Every orchestration, fragment, claim, report, audit, round and parked candidate
 keeps its id, its reason and its lineage; the two migrations are additive; the
