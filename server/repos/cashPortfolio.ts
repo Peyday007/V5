@@ -16,9 +16,16 @@
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { buildUpdate, newId, nowIso, parseJson, toJson } from './util.ts';
-import {
-  OPPORTUNITY_VALIDATION_STATES,
-  type OpportunityValidationState,
+import { OPPORTUNITY_VALIDATION_STATES } from '../domain/types.ts';
+import type {
+  CashMechanism,
+  CashNeed,
+  CashNeedRow,
+  CashNeedState,
+  CashOpportunity,
+  CashOpportunityRow,
+  CashOpportunityState,
+  OpportunityValidationState,
 } from '../domain/types.ts';
 
 /** Reading a stored value back into the closed set, or null. */
@@ -28,15 +35,6 @@ function isValidationState(value: unknown): value is OpportunityValidationState 
     (OPPORTUNITY_VALIDATION_STATES as readonly string[]).includes(value)
   );
 }
-import type {
-  CashMechanism,
-  CashNeed,
-  CashNeedRow,
-  CashNeedState,
-  CashOpportunity,
-  CashOpportunityRow,
-  CashOpportunityState,
-} from '../domain/types.ts';
 
 export function portfolioNow(): string {
   return nowIso();
