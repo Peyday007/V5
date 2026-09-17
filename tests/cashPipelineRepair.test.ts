@@ -64,6 +64,7 @@ import { cashEngineCard, derivedEconomics, ENGINE_FIELDS } from '../server/servi
 import { cashView } from '../server/services/cash/view.ts';
 import { cashRoadmap } from '../server/services/cash/roadmap.ts';
 import { openRound } from '../server/repos/cashDiscovery.ts';
+import { WORK_ITEM_STATES } from '../server/domain/types.ts';
 import { createOpportunity } from '../server/repos/cashPortfolio.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import type {
@@ -900,6 +901,36 @@ describe('pressing Start produces work the fleet can actually take', () => {
 
     // Still nothing that could touch the world.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 22 — a diagnostic that invents a number is worse than one that omits it
+// ---------------------------------------------------------------------------
+
+describe('the production reader counts states that exist', () => {
+  /*
+   * `cash-report` counted work items in a bucket called `COMPLETED`. There is
+   * no such state: the enum says `SUCCEEDED`. So the live sprint, whose items
+   * had succeeded, reported `completed=0` — the single most alarming number
+   * that line can print, and not a true one. It was very nearly read as a
+   * deadlock.
+   *
+   * This is the same defect the whole repair is about, in the instrument built
+   * to find it: a figure that cannot be true, dressed as a measurement. The
+   * remedy is that the buckets come from the enum rather than from strings
+   * somebody typed, so they are exhaustive by construction.
+   */
+  it('names only states the domain declares', async () => {
+    const source = await readFile(new URL('../scripts/cash-report.ts', import.meta.url), 'utf8');
+    // It reads the vocabulary rather than restating it.
+    expect(source).toContain('WORK_ITEM_STATES');
+    // And it may never count a state that does not exist.
+    expect(source).not.toMatch(/'COMPLETED'/);
+    for (const invented of ['COMPLETE', 'DONE', 'FINISHED']) {
+      expect(WORK_ITEM_STATES as readonly string[]).not.toContain(invented);
+    }
+    expect(WORK_ITEM_STATES).toContain('SUCCEEDED');
   });
 });
 

@@ -45,7 +45,9 @@ import { listOrchestrationsByProject } from '../server/repos/research.ts';
 import { cashRoadmap } from '../server/services/cash/roadmap.ts';
 import { CASH_DISCOVERY_AUTHORITY_NAME } from '../server/services/cash/discoveryAuthority.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
+import { WORK_ITEM_STATES } from '../server/domain/types.ts';
 import type { WorkItem } from '../server/domain/types.ts';
+import { listMissions } from '../server/repos/russellMissions.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -70,22 +72,26 @@ function tally<T>(rows: T[], key: (row: T) => string): string {
     .join(' ') || '—';
 }
 
-/** The work items belonging to this project's research, by state. */
-function queueShape(items: WorkItem[]): {
-  queued: number;
-  leased: number;
-  completed: number;
-  failed: number;
-  cancelled: number;
-} {
-  const count = (state: string): number => items.filter((one) => one.state === state).length;
-  return {
-    queued: count('QUEUED'),
-    leased: count('LEASED'),
-    completed: count('COMPLETED'),
-    failed: count('FAILED'),
-    cancelled: count('CANCELLED'),
-  };
+/**
+ * The work items belonging to this project's research, by state.
+ *
+ * Counted from `WORK_ITEM_STATES` rather than from hand-written strings,
+ * because the first version of this counted `COMPLETED` — a state that does not
+ * exist; the enum says `SUCCEEDED`. So a sprint whose items had succeeded
+ * reported `completed=0`, which is the most alarming reading this line can
+ * produce and is not a true one. A diagnostic that invents a number is worse
+ * than one that omits it: it was nearly read as a deadlock.
+ *
+ * The buckets are therefore exhaustive by construction, and `total` is printed
+ * beside them so a reader can see for themselves that they add up.
+ */
+function queueShape(items: WorkItem[]): { total: number; byState: Record<string, number> } {
+  const byState: Record<string, number> = {};
+  for (const state of WORK_ITEM_STATES) byState[state] = 0;
+  for (const item of items) {
+    byState[item.state] = (byState[item.state] ?? 0) + 1;
+  }
+  return { total: items.length, byState };
 }
 
 async function reportProject(projectId: string, projectName: string): Promise<boolean> {
@@ -179,10 +185,22 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   console.log('');
   console.log(`RESEARCH (${orchestrations.length} packets) — ${tally(orchestrations, (one) => one.status)}`);
   console.log(
-    `  work items  queued=${shape.queued} leased=${shape.leased} completed=${shape.completed}` +
-      ` failed=${shape.failed} cancelled=${shape.cancelled}`,
+    `  work items  ${shape.total} total — ` +
+      WORK_ITEM_STATES.map((state) => `${state.toLowerCase()}=${shape.byState[state] ?? 0}`).join(' '),
   );
   console.log(`  by type     ${tally(items, (one) => one.workType)}`);
+
+  /*
+   * What is holding the grant's concurrency.
+   *
+   * A packet can be terminal while the mission that asked for it is still
+   * RUNNING, and a live mission holds one of the very few slots the standing
+   * authority allows — so "nothing is launching" and "nothing is left to
+   * launch" look identical from the packet column alone. This is the one thing
+   * that tells them apart.
+   */
+  const missions = await listMissions({ projectId });
+  console.log(`  missions    ${missions.length} — ${tally(missions, (one) => one.state)}`);
 
   // --- What became a piece of work ----------------------------------------
   const opportunities = await listOpportunities({ projectId });
@@ -219,8 +237,9 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       ` commercial_grant=${commercial ? 'PRESENT' : 'ABSENT'}` +
       ` ideas=${candidates.length}` +
       ` rounds=${roadmap.rounds.total}` +
-      ` queued=${shape.queued} leased=${shape.leased}` +
-      ` completed=${shape.completed} failed=${shape.failed}` +
+      ` queued=${shape.byState['QUEUED'] ?? 0} leased=${shape.byState['LEASED'] ?? 0}` +
+      ` succeeded=${shape.byState['SUCCEEDED'] ?? 0} failed=${shape.byState['FAILED'] ?? 0}` +
+      ` cancelled=${shape.byState['CANCELLED'] ?? 0}` +
       ` opportunities=${opportunities.length}` +
       ` validations=${validationsStarted}` +
       ` cards_complete=${cardsComplete}`,
