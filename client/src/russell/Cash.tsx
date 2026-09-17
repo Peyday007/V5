@@ -36,6 +36,21 @@ import {
 } from '../lib/cashApi.ts';
 import { ReadinessPanel } from './Readiness.tsx';
 
+/**
+ * What a round is really doing, in the words a person reads.
+ *
+ * The state column says OPEN until a round is harvested, which in production
+ * meant ten rounds reading as research under way while every candidate was
+ * parked and no work item existed. The server derives the real answer; this
+ * only names it.
+ */
+const ROUND_ACTIVITY: Record<string, string> = {
+  AWAITING_LAUNCH: 'captured, not started yet',
+  PARKED: 'stopped',
+  RESEARCHING: 'being researched now',
+  ANSWERED: 'research finished',
+};
+
 const DISPOSITION_LABEL: Record<Placement['disposition'], string> = {
   EXECUTE_NOW: 'Execute now',
   RUN_IN_PARALLEL: 'Run in parallel',
@@ -1656,14 +1671,27 @@ function Roadmap({ view }: { view: CashView }): JSX.Element {
                 {round.mechanism} &mdash; round {round.round}
               </span>
               <span className="rs-item-meta" title={`${round.bucketId} \u00b7 ${round.roundId}`}>
+                {ROUND_ACTIVITY[round.activity]}
+                {' \u00b7 '}
                 {round.plan
                   ? `${round.plan.byStatus.ACCEPTED} of ${round.plan.planned} research items done`
-                  : 'Captured; research has not been launched yet'}
+                  : 'no research planned yet'}
                 {' \u00b7 '}
                 {round.found} {round.found === 1 ? 'opening' : 'openings'} found
                 {' \u00b7 '}
                 opened {round.openedAt}
               </span>
+              {/*
+                * Why it is not moving, in the words of whatever stopped it.
+                *
+                * A round reads OPEN until it is harvested, so a parked one used
+                * to show as research under way with nothing behind it — which
+                * is what every round of the live sprint looked like while all
+                * ten candidates were parked and no work item existed anywhere.
+                */}
+              {round.blocker ? (
+                <p className="rs-item-meta">Not moving: {round.blocker}</p>
+              ) : null}
               {round.plan && round.plan.inFlight.length > 0 ? (
                 <ul className="rs-list rs-sublist">
                   {round.plan.inFlight.map((question) => (

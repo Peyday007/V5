@@ -62,6 +62,7 @@ import { evidenceCard } from './card.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
+import { runValidations, type ValidationProgress } from './validation.ts';
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
@@ -679,6 +680,7 @@ export async function operate(
   proposed: Proposed[];
   continuations: Continuation[];
   dependentWork: DependentWork[];
+  validations: ValidationProgress;
   authority: AuthorityAdvance;
 }> {
   if (!(await getCashMode(projectId))) {
@@ -689,6 +691,7 @@ export async function operate(
       proposed: [],
       continuations: [],
       dependentWork: [],
+      validations: { started: [], settled: [] },
       authority: { took: [], withheld: [] },
     };
   }
@@ -706,13 +709,33 @@ export async function operate(
   const continuations = await runNeedContinuations(projectId, now);
   const dependentWork = await startDependentWork(projectId);
   /*
+   * And the bounded deep dive on each opening, which is where the commercial
+   * questions actually get answered.
+   *
+   * After the needs path rather than instead of it: a need is raised for one
+   * blank on one card and is answered by one narrow question, while a
+   * validation qualifies a whole opening. They overlap in what they can fill,
+   * and `mayReplace` decides which answer stands — by authority rather than by
+   * whichever arrived last.
+   */
+  const validations = await runValidations(projectId);
+  /*
    * Last, and that order is the point: a piece only becomes ready because the
    * research landed on its card and the proposal filled what the research could
    * not, both of which happened above. Asking first would ask about last tick's
    * card and defer every decision by one pass.
    */
   const authority = await advanceWithinAuthority(projectId);
-  return { capabilities, gaps, research, proposed, continuations, dependentWork, authority };
+  return {
+    capabilities,
+    gaps,
+    research,
+    proposed,
+    continuations,
+    dependentWork,
+    validations,
+    authority,
+  };
 }
 
 export type { CashOpportunity };

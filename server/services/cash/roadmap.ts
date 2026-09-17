@@ -32,7 +32,8 @@
 import { listRounds } from '../../repos/cashDiscovery.ts';
 import { listOpportunities } from '../../repos/cashPortfolio.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
-import { listFragments } from '../../repos/research.ts';
+import { getOrchestration, listFragments } from '../../repos/research.ts';
+import { getCandidate } from '../../repos/russellCandidates.ts';
 import { FRAGMENT_STATUSES } from '../../domain/types.ts';
 import type {
   CashDiscoveryRound,
@@ -49,6 +50,29 @@ export interface RoadmapStage {
   /** What this stage means, without an internal code in it. */
   note: string;
 }
+
+/**
+ * What is *actually* happening to a round, as opposed to what its state column
+ * says.
+ *
+ * `cash_discovery_rounds.state` says OPEN until the round is harvested, and in
+ * production all ten rounds of the live sprint read OPEN while every one of
+ * their candidates was parked and no work item existed anywhere. A screen that
+ * shows that as research underway is the status that contradicts the control
+ * beside it — §29's own defect, and the reason it is worth a derived column.
+ *
+ *   AWAITING_LAUNCH  the idea is captured and has not been judged yet.
+ *   PARKED           it was judged and cannot proceed. `blocker` says why.
+ *   RESEARCHING      a mission is running and its fragments are with a worker.
+ *   ANSWERED         the mission finished; what it found is being harvested.
+ */
+export const ROUND_ACTIVITIES = [
+  'AWAITING_LAUNCH',
+  'PARKED',
+  'RESEARCHING',
+  'ANSWERED',
+] as const;
+export type RoundActivity = (typeof ROUND_ACTIVITIES)[number];
 
 export interface RoadmapRound {
   roundId: string;
@@ -72,6 +96,16 @@ export interface RoadmapRound {
     /** The questions currently being worked, as the fragments themselves state them. */
     inFlight: string[];
   } | null;
+  /** What is actually happening, derived rather than read off `state`. */
+  activity: RoundActivity;
+  /**
+   * Why it is not moving, in the words whoever stopped it recorded.
+   *
+   * Null when it is moving. Never composed here: it is the candidate's own
+   * reason, or the packet's own failure reason, because a dashboard that
+   * paraphrased a blocker would eventually paraphrase it wrongly.
+   */
+  blocker: string | null;
 }
 
 export interface CashRoadmap {
@@ -133,6 +167,49 @@ async function planFor(round: CashDiscoveryRound): Promise<RoadmapRound['plan']>
   };
 }
 
+/**
+ * What is really happening to one round, and why it is not moving.
+ *
+ * Every branch reads a row Brain wrote. A parked candidate carries the reason
+ * `judgeCandidate` recorded — most often that no standing authority existed,
+ * which was true of all ten production rounds — and a stopped packet carries
+ * its own failure reason. Nothing here composes a blocker out of counts.
+ */
+async function activityOf(
+  round: CashDiscoveryRound,
+  plan: RoadmapRound['plan'],
+): Promise<{ activity: RoundActivity; blocker: string | null }> {
+  const candidate = await getCandidate(round.candidateId);
+  if (candidate && candidate.state === 'PARKED') {
+    return {
+      activity: 'PARKED',
+      blocker:
+        candidate.reason ??
+        'This idea was judged and parked, and its reason was not recorded.',
+    };
+  }
+  if (!plan) {
+    return {
+      activity: 'AWAITING_LAUNCH',
+      blocker: null,
+    };
+  }
+  const packet = await getOrchestration(plan.orchestrationId);
+  if (packet && (packet.status === 'NEEDS_HUMAN' || packet.status === 'FAILED')) {
+    return {
+      activity: 'PARKED',
+      blocker:
+        packet.failureReason ??
+        packet.cancelReason ??
+        'The research stopped and is waiting for a person.',
+    };
+  }
+  const working =
+    plan.byStatus.RUNNING + plan.byStatus.VALIDATING + plan.byStatus.QUEUED + plan.byStatus.PLANNED;
+  if (working > 0) return { activity: 'RESEARCHING', blocker: null };
+  return { activity: 'ANSWERED', blocker: null };
+}
+
 function pipelineOf(opportunities: CashOpportunity[]): RoadmapStage[] {
   const count = (...states: CashOpportunity['state'][]): number =>
     opportunities.filter((one) => states.includes(one.state)).length;
@@ -143,6 +220,22 @@ function pipelineOf(opportunities: CashOpportunity[]): RoadmapStage[] {
       label: 'Openings found',
       count: count('DISCOVERED'),
       note: 'Harvested from an accepted research claim. The card is still blank.',
+    },
+    {
+      key: 'VALIDATING',
+      label: 'Being qualified',
+      count: opportunities.filter(
+        (one) => one.validationState === 'PENDING' || one.validationState === 'RUNNING',
+      ).length,
+      note:
+        'A bounded deep dive is establishing who pays, what it pays, what it costs and what ' +
+        'would rule it out. Published sources only; nothing is contacted or spent.',
+    },
+    {
+      key: 'CARD_READY',
+      label: 'Cards complete',
+      count: opportunities.filter((one) => one.validationState === 'COMPLETE').length,
+      note: 'The deep dive finished. What it could not establish is listed as unknown.',
     },
     {
       key: 'EVIDENCE_CARD',
@@ -192,7 +285,26 @@ function nextStep(input: {
   queued: number;
   blocked: number;
   openRounds: number;
+  /** Rounds that are open and cannot move, with the first one's own reason. */
+  parkedRounds: number;
+  firstBlocker: string | null;
 }): string {
+  /*
+   * A round that cannot move is named first, whatever else is happening.
+   *
+   * In production ten rounds read OPEN, every candidate was parked for want of
+   * a standing authority, no work item existed, and this sentence said a
+   * discovery round was open and its research had not been planned yet. That
+   * is true and it is the wrong thing to say: it reads as patience when what
+   * was needed was a fix. A screen that describes a stall as progress teaches
+   * a person to stop reading it.
+   */
+  if (input.parkedRounds > 0 && input.running === 0 && input.queued === 0) {
+    return (
+      `${input.parkedRounds} discovery round${input.parkedRounds === 1 ? ' is' : 's are'} open ` +
+      `and cannot proceed: ${input.firstBlocker ?? 'the reason was not recorded'}`
+    );
+  }
   if (input.ready > 0) {
     return `${input.ready} opportunit${input.ready === 1 ? 'y is' : 'ies are'} ready to test. Executing one needs a standing authorization from you.`;
   }
@@ -229,6 +341,9 @@ export async function cashRoadmap(projectId: string): Promise<CashRoadmap> {
 
   const live = rounds.filter((one) => one.state === 'OPEN');
   const plans = await Promise.all(live.map((one) => planFor(one)));
+  const activities = await Promise.all(
+    live.map((round, index) => activityOf(round, plans[index] ?? null)),
+  );
 
   const research = { planned: 0, byStatus: emptyCounts() };
   const active: RoadmapRound[] = live.map((round, index) => {
@@ -237,6 +352,7 @@ export async function cashRoadmap(projectId: string): Promise<CashRoadmap> {
       research.planned += plan.planned;
       add(research.byStatus, plan.byStatus);
     }
+    const state = activities[index]!;
     return {
       roundId: round.id,
       bucketId: round.bucketId,
@@ -246,6 +362,8 @@ export async function cashRoadmap(projectId: string): Promise<CashRoadmap> {
       openedAt: round.openedAt,
       found: round.found,
       plan,
+      activity: state.activity,
+      blocker: state.blocker,
     };
   });
 
@@ -266,8 +384,10 @@ export async function cashRoadmap(projectId: string): Promise<CashRoadmap> {
     research,
     pipeline,
     whatHappensNext: nextStep({
+      parkedRounds: active.filter((one) => one.activity === 'PARKED').length,
+      firstBlocker: active.find((one) => one.activity === 'PARKED')?.blocker ?? null,
       ready: stage('READY'),
-      validating: stage('EVIDENCE_CARD'),
+      validating: stage('EVIDENCE_CARD') + stage('VALIDATING'),
       running: research.byStatus.RUNNING,
       queued: research.byStatus.QUEUED,
       blocked: research.byStatus.BLOCKED,

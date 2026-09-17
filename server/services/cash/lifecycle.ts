@@ -41,6 +41,7 @@ import {
   transitionCashMode,
 } from '../../repos/cashMode.ts';
 import { getApprovalEnvelope } from '../research/approvalEnvelope.ts';
+import { ensureDiscoveryAuthority, withdrawDiscoveryAuthority } from './discoveryAuthority.ts';
 import { opportunitiesForCandidate } from '../../repos/cashPortfolio.ts';
 import { roundForCandidate } from '../../repos/cashDiscovery.ts';
 import type {
@@ -196,6 +197,18 @@ export async function activate(input: {
     currency,
   });
 
+  /*
+   * And the authorization that press actually is.
+   *
+   * Idempotent by a unique index, so activating twice authorizes once, and run
+   * outside the `created` branch on purpose: a sprint activated before this
+   * existed is reconciled the next time anything touches it rather than
+   * needing a person to press Start again. `ensureDiscoveryAuthority` says in
+   * full what it does and does not permit; the short version is that it
+   * permits reading published sources and nothing that touches the world.
+   */
+  await ensureDiscoveryAuthority(input.projectId);
+
   if (created) {
     await recordCashEvent({
       projectId: input.projectId,
@@ -282,6 +295,29 @@ export async function setLifecycle(input: {
     summary: `Cash Mode moved from ${mode.state} to ${input.to}.`,
     detail: { from: mode.state, to: input.to, reason },
   });
+
+  /*
+   * The two edges that change what Brain may read.
+   *
+   * Archiving withdraws the internal discovery authorization, because a live
+   * research grant on a project nobody is working is a widening nobody asked
+   * for. Coming back re-authorizes, which is what makes `ARCHIVED → ACTIVE` a
+   * decision rather than a recovery. Winding down is deliberately neither:
+   * §30 keeps delivery, collection and the research supporting an existing
+   * obligation working in every state, and only `openDiscovery` stops.
+   *
+   * Nothing is destroyed either way. The withdrawn grant keeps its id, its
+   * terms and its reason, and every reservation written against it stands.
+   */
+  if (input.to === 'ARCHIVED') {
+    await withdrawDiscoveryAuthority({
+      projectId: input.projectId,
+      actorUserId: input.actorUserId,
+      reason: `The sprint was archived: ${reason}`,
+    });
+  } else if (input.to === 'ACTIVE') {
+    await ensureDiscoveryAuthority(input.projectId);
+  }
 
   const after = await getCashMode(input.projectId);
   if (!after) return { ok: false, reason: 'Cash Mode has never been activated for this project.' };

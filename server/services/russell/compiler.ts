@@ -70,6 +70,7 @@ import {
   type ApprovalEnvelope,
 } from '../research/approvalEnvelope.ts';
 import { properName, statesNamedIn } from '../../domain/jurisdiction.ts';
+import { opportunityForOwnCandidate } from '../../repos/cashPortfolio.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
@@ -132,11 +133,33 @@ const ENVELOPE_BY_PROJECT: Readonly<Record<string, string>> = Object.freeze({
  * The in-code map wins where it has an entry, so nothing about an existing
  * project's authorization can be changed by activating a cash mode on it.
  */
-async function envelopeIdFor(project: Project): Promise<string | null> {
+async function envelopeIdFor(
+  project: Project,
+  candidate: RussellCandidate,
+): Promise<string | null> {
   const declared = ENVELOPE_BY_PROJECT[project.slug];
   if (declared) return declared;
   const mode = await getCashMode(project.id);
   if (!mode) return null;
+  /*
+   * A deep dive on one opening is a different question from the bucket that
+   * found it, so it is judged against a different assignment.
+   *
+   * Decided from a row Brain wrote, never from the idea's prose: an
+   * opportunity's `candidate_id` is "the idea this opportunity *is*" — what
+   * Brain is researching on that opportunity's own behalf — and a bucket's
+   * broad question is recorded as `discovered_by_candidate_id` precisely so
+   * the two cannot be confused.
+   *
+   * It widens nothing. `RUSSELL_CASH_VALIDATION_V1` takes its source classes
+   * and its forbidden actions verbatim from the discovery envelope; what
+   * differs is the assignment template, because asking a market a broad
+   * question and asking one opening what it pays are not the same question and
+   * must not be judged by the same completion standard.
+   */
+  if (await opportunityForOwnCandidate(project.id, candidate.id)) {
+    return 'RUSSELL_CASH_VALIDATION_V1';
+  }
   return isSelectableCashEnvelope(mode.envelopeId) ? mode.envelopeId : null;
 }
 
@@ -343,7 +366,7 @@ export async function compileMission(input: {
 }): Promise<CompileResult> {
   const { candidate, project } = input;
 
-  const envelopeId = await envelopeIdFor(project);
+  const envelopeId = await envelopeIdFor(project, candidate);
   if (!envelopeId) {
     return refuse(
       `no standing research authorization is defined for the project "${project.slug}", so ` +

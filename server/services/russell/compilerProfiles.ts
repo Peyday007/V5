@@ -36,7 +36,7 @@
  */
 import type { EvidenceLane } from '../../domain/types.ts';
 
-export type CompilerProfileId = 'PUBLIC_RECORDS' | 'MARKET_DISCOVERY';
+export type CompilerProfileId = 'PUBLIC_RECORDS' | 'MARKET_DISCOVERY' | 'COMMERCIAL_VALIDATION';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -188,6 +188,10 @@ const MARKET_DISCOVERY: CompilerProfile = {
   lanes: [
     {
       id: 'demand_signal',
+      // One published request proves its own existence. Demanding a second
+      // publisher for "this posting exists" demands something that does not
+      // exist, which is what `SPECIFIC_INSTANCE` says.
+      evidenceKind: 'SPECIFIC_INSTANCE',
       description:
         'An opening that is **open**: the specific published request, posting, listing, notice, ' +
         'filing or announcement this rests on, attributed to whoever made it, with its URL and ' +
@@ -218,6 +222,9 @@ const MARKET_DISCOVERY: CompilerProfile = {
     },
     {
       id: 'economics',
+      // What a *market* pays, rather than what one listing says it pays, is
+      // the shape that turns out to be one vendor's number repeated.
+      evidenceKind: 'GENERALIZED_ECONOMICS',
       description:
         'What it pays and what it costs, from a published price, rate, fee schedule or a ' +
         'stated figure in the request itself — kept separate from the signal, because ' +
@@ -275,12 +282,141 @@ const MARKET_DISCOVERY: CompilerProfile = {
  * wrong kind of question for an authorization nobody had matched it to, which
  * is precisely the defect this module exists to fix.
  */
+/**
+ * The bounded deep dive on one opening Brain has already found.
+ *
+ * Every lane here is a question a person has to have answered before they can
+ * decide, and none of them is a question a *broad* discovery fragment could
+ * honestly have answered: "who is publicly asking to pay for work right now"
+ * has no single payer, price or delivery path, and a production discovery
+ * packet asked to produce all of them filed with half of them unresolved.
+ *
+ * Only one lane is REQUIRED. That is deliberate and it is the difference
+ * between a deep dive and a form: the payer is what makes an opening real, and
+ * everything else is a thing a person is better off knowing is *unknown* than
+ * having invented for them. §30's rule — a missing value stays unknown, a blank
+ * is never a zero — is what the CONDITIONAL lanes encode.
+ */
+const COMMERCIAL_VALIDATION: CompilerProfile = {
+  id: 'COMMERCIAL_VALIDATION',
+  fragmentKey: 'opening-validation',
+  multipleJurisdictions: 'DESCRIBE',
+  proposedSources: [
+    'the published request, listing or notice this opening rests on',
+    'the buying organisation’s own website, careers page, press release or announcement',
+    'a marketplace, job board, classified or auction listing for comparable work',
+    'a published price list, rate card, fee schedule or quote for comparable work',
+    'a supplier, platform or vendor pricing page for the inputs this would need',
+    'a platform’s published terms, policy or rules deciding whether this is permitted',
+    'an official registry, filing, permit or licence record',
+    'a trade association, industry body or trade publication',
+    'a review site, forum or community discussion, as a signal rather than as support',
+  ],
+  excludedSources: [
+    'a figure whose upstream source cannot be identified',
+    'an estimate restated by several publishers from one release, counted more than once',
+    'a forecast or projection presented as a current fact',
+    'a claim with no locatable source at all',
+  ],
+  lanes: [
+    {
+      id: 'payer',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Who actually pays: the organisation or role named in a published source, and the ' +
+        'published way a supplier reaches them. A named buyer in the request itself settles ' +
+        'this; "an industry like this" does not.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'price_evidence',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'What comparable work is published at — a figure or a range, each with its own source ' +
+        'and date. Read from sources, never produced: where nothing publishes one, say so.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'cost_evidence',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'What delivering it would cost, from published prices for the inputs it needs — tools, ' +
+        'data, subcontracted labour, platform fees. A cost nobody publishes is unknown, and an ' +
+        'unknown cost is not a zero.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'timing',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'When money would actually arrive: the published payment terms, payout schedule, ' +
+        'closing date or decision date, quoted from whoever publishes them.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'effort',
+      evidenceKind: 'MARKET_PATTERN',
+      description:
+        'How much human time comparable work is published as taking, across more than one ' +
+        'published example, because one listing’s estimate is that listing’s estimate.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'delivery_requirements',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What delivering it actually requires: whether selling or calling is involved, whether ' +
+        'fulfilment can be subcontracted, and any licence, platform rule or eligibility ' +
+        'condition published anywhere that decides whether this is permitted at all.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'disqualifier',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Any published fact that would rule this out outright — a closed or awarded request, a ' +
+        'restriction excluding a supplier like this one, a requirement nobody here could meet. ' +
+        'A documented absence of one is a real finding and belongs here.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source names who would actually pay, so the opening cannot be qualified.',
+    'Every figure found traces back to one upstream source, so nothing independent supports it.',
+    'What is published settles the demand but not whether it can be delivered, and that is ' +
+      'recorded as unresolved rather than assumed.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Each item is either answered from a quoted published source, or explicitly recorded as ' +
+      'unresolved naming what was searched and what was not found.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed.',
+    'Every claim carries the URL of the source it came from. A claim submitted without one ' +
+      'is rejected, and a fragment whose claims are mostly rejected is blocked outright — ' +
+      'which discards the well-sourced claims beside them. If you found the source but could ' +
+      'not read it, submit the claim with that URL and its retrieval state, which is recorded ' +
+      'as unresolved rather than rejected. If you have no source at all, it is not a claim: ' +
+      'report it instead of submitting it.',
+    'A price, a cost or a duration is read from a source and never produced. Where nothing ' +
+      'publishes one, record it as unknown; an unknown is not a zero and is not an estimate.',
+    `Every finding is about ${scope} or about the opening named in the question; anything ` +
+      'found about a different one is reported as out of scope rather than used.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
   STEP10_MICHIGAN_LICENSING_V1: PUBLIC_RECORDS,
   STEP11_AUDIT_INDEPENDENCE_V1: PUBLIC_RECORDS,
   RUSSELL_CASH_DISCOVERY_V1: MARKET_DISCOVERY,
+  RUSSELL_CASH_VALIDATION_V1: COMMERCIAL_VALIDATION,
 });
 
 export function profileFor(envelopeId: string): CompilerProfile | null {

@@ -564,11 +564,73 @@ export type LaneNecessity = 'REQUIRED' | 'OPTIONAL' | 'CONDITIONAL';
  * what the worker needs to research it and is never used for matching. Keeping
  * them apart is the whole point: see `domain/evidenceLanes.ts`.
  */
+/**
+ * What kind of evidence a lane is asking for, which decides its bar.
+ *
+ * "Two independent sources" is right for a disputed market estimate and wrong
+ * for everything else — `standards.ts` has that argument per claim. This is the
+ * same argument per *lane*, and it exists because the lane is where a fragment
+ * says how many distinct things it needs, which no per-claim standard can know.
+ *
+ *   SPECIFIC_INSTANCE       one opening, one listing, one solicitation. One
+ *                           authoritative primary listing proves its own
+ *                           existence, price, deadline and terms. Demanding a
+ *                           second publisher for "this posting exists" is
+ *                           demanding something that does not exist.
+ *   MARKET_PATTERN          the claim is that something *repeats*. One example
+ *                           cannot establish a pattern however good it is, so
+ *                           this needs several distinct examples — which is a
+ *                           different count from several publishers.
+ *   GENERALIZED_ECONOMICS   a price, an earnings level, a demand level or a
+ *                           margin stated about a market rather than about one
+ *                           listing. This is the shape that turns out to be one
+ *                           vendor's number repeated, so it needs independent
+ *                           publishers or it stays insufficient.
+ */
+export const LANE_EVIDENCE_KINDS = [
+  'SPECIFIC_INSTANCE',
+  'MARKET_PATTERN',
+  'GENERALIZED_ECONOMICS',
+] as const;
+export type LaneEvidenceKind = (typeof LANE_EVIDENCE_KINDS)[number];
+
 export interface EvidenceLane {
   id: string;
   description: string;
   necessity: LaneNecessity;
+  /** Defaults to SPECIFIC_INSTANCE, which is the bar one listing can clear. */
+  evidenceKind?: LaneEvidenceKind;
+  /**
+   * How many distinct examples this lane needs, when the fragment says.
+   *
+   * Distinct *examples*, not distinct hosts: three separately-posted listings
+   * on one board are three examples of a repeated brief and one publisher.
+   * The fragment's completion criteria used to say "at least 3 distinct
+   * qualifying postings" in prose that nothing read, and the gate accepted one.
+   */
+  minDistinctExamples?: number;
 }
+
+/**
+ * What kind of opening a claim establishes, if it establishes one.
+ *
+ * Here rather than in `opportunitySignals.ts` because it is a column's
+ * vocabulary and this file is where those live; that module holds the mapping
+ * to a mechanism and the sentence a worker is shown. `domain/opportunitySignals.ts`
+ * has the whole argument for why this is typed rather than matched against a
+ * lane id — the short version is that the lane id is a planner's word and this
+ * is a closed set.
+ */
+export const OPPORTUNITY_SIGNALS = [
+  'ACTIVE_BUYER_DEMAND',
+  'PAID_TASK_OR_CONTRACT',
+  'PRICING_OR_INFORMATION_ASYMMETRY',
+  'EXPIRING_OPENING',
+  'SUPPLY_DEMAND_MISMATCH',
+  'RESALABLE_ASSET_OPENING',
+  'RECURRING_OUTSOURCED_WORK',
+] as const;
+export type OpportunitySignal = (typeof OPPORTUNITY_SIGNALS)[number];
 
 export const CLAIM_TYPES = [
   'SOURCED_FACT',
@@ -1248,6 +1310,7 @@ export interface ResearchClaimRow {
   evidence_excerpt: string | null;
   evidence_locator: string | null;
   evidence_lane: string | null;
+  opportunity_signal: string | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -2362,6 +2425,15 @@ export interface ResearchClaim {
   evidenceLocator: string | null;
   /** The fragment evidence lane it fills, if any. Coverage is counted per lane. */
   evidenceLane: string | null;
+  /**
+   * The kind of opening this claim establishes, if it establishes one.
+   *
+   * Null for ordinary descriptive evidence, which is most claims. Kept beside
+   * the lane rather than instead of it: the lane says which question the claim
+   * answers and carries coverage, and this says whether the claim describes a
+   * piece of work. Both are true of one claim and neither substitutes.
+   */
+  opportunitySignal: OpportunitySignal | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -5755,6 +5827,19 @@ export interface CashAuthority {
   updatedAt: string;
 }
 
+/**
+ * Where a piece of the portfolio is in its bounded commercial validation.
+ *
+ * `null` is "not started", which is the state every opening is born in.
+ */
+export const OPPORTUNITY_VALIDATION_STATES = [
+  'PENDING',
+  'RUNNING',
+  'COMPLETE',
+  'BLOCKED',
+] as const;
+export type OpportunityValidationState = (typeof OPPORTUNITY_VALIDATION_STATES)[number];
+
 export interface CashOpportunityRow {
   id: string;
   project_id: string;
@@ -5768,6 +5853,13 @@ export interface CashOpportunityRow {
   external_record_id: string | null;
   source_claim_id: string | null;
   discovered_by_candidate_id: string | null;
+  orchestration_id: string | null;
+  fragment_id: string | null;
+  discovery_round_id: string | null;
+  validation_orchestration_id: string | null;
+  validation_state: string | null;
+  validation_started_at: string | null;
+  validation_settled_at: string | null;
   payer: string | null;
   reachable_channel: string | null;
   buying_signal: string | null;
@@ -5836,6 +5928,33 @@ export interface CashOpportunity {
    * research about any one of them. The wind-down guard reads the difference.
    */
   discoveredByCandidateId: string | null;
+  /**
+   * The packet, the fragment and the round this came out of.
+   *
+   * Written at promotion. `sourceClaimId` alone resolves to a claim and leaves
+   * "what research established this, under which question, in which round" to
+   * be walked backwards through a mission row — which four production packets
+   * started by an administrator simply do not have, and which made their 69
+   * accepted claims unreachable. A round of null is honest rather than a gap:
+   * nobody asked a bucket for it.
+   */
+  orchestrationId: string | null;
+  fragmentId: string | null;
+  discoveryRoundId: string | null;
+  /**
+   * The bounded deep dive that turns an opening into a decision, and where it is.
+   *
+   * Discovery answers "somebody published a request". It does not answer who
+   * pays, what to offer, what it costs or when the cash arrives — and forcing a
+   * broad discovery fragment to answer all of that before it may report an
+   * opening is what made those fragments impossible to satisfy. So the
+   * commercial questions are a *second*, bounded assignment against this piece,
+   * and these say which one and how it went.
+   */
+  validationOrchestrationId: string | null;
+  validationState: OpportunityValidationState | null;
+  validationStartedAt: string | null;
+  validationSettledAt: string | null;
   payer: string | null;
   reachableChannel: string | null;
   buyingSignal: string | null;

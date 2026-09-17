@@ -349,7 +349,24 @@ const SOURCED = {
   primary_source: true,
 };
 
-const MATCHES = { geography: 'MATCH', timeframe: 'MATCH', population: 'MATCH', definitions: 'MATCH' };
+/*
+ * A complete scope verdict: the four answers and what each was judged against.
+ *
+ * The basis fields are required for every dimension a fragment declares, and
+ * the submission is refused without them. `UNSTATED` used to be the fourth enum
+ * value and the blank a verifier fell into when it had not looked — and because
+ * the gate fails closed, that silently destroyed good claims.
+ */
+const MATCHES = {
+  geography: 'MATCH',
+  timeframe: 'MATCH',
+  population: 'MATCH',
+  definitions: 'MATCH',
+  geography_basis: 'Judged against the geography the fragment declares.',
+  timeframe_basis: 'Judged against the timeframe the fragment declares.',
+  population_basis: 'Judged against the population the fragment declares.',
+  definitions_basis: 'Judged against the definitions the fragment declares.',
+};
 
 beforeEach(async () => {
   const fixture = await freshProject();

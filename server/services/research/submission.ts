@@ -41,7 +41,7 @@ import {
 import { reconcileAcceptedFragment } from './replan.ts';
 import { applyGate, fragmentPasses, type GateResult, type VerificationInput } from './gate.ts';
 import { validateClaim } from './sources.ts';
-import type { ClaimScopeMatch, ParsedClaim } from './schema.ts';
+import type { ClaimScopeBasis, ClaimScopeMatch, ParsedClaim } from './schema.ts';
 import { independenceGroup } from './standards.ts';
 
 /**
@@ -100,6 +100,7 @@ export async function recordFragmentClaims(input: {
         evidenceExcerpt: claim.evidenceExcerpt ?? null,
         evidenceLocator: claim.evidenceLocator ?? null,
         evidenceLane: claim.evidenceLane ?? null,
+        opportunitySignal: claim.opportunitySignal ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though
@@ -145,6 +146,16 @@ export interface ClaimVerification {
   claimId: string;
   supportsClaim: boolean;
   scopeMatch: ClaimScopeMatch;
+  /**
+   * What the verifier evaluated, per dimension the fragment declared.
+   *
+   * Stored beside the verdict rather than instead of it, so a rejection a
+   * month later says *which* declared value the claim was judged against
+   * rather than only that it did not match. Required at submission by
+   * `scopeAnswerRefusal`; optional on this type because the fixture replay and
+   * the historical rows have none.
+   */
+  scopeBasis?: ClaimScopeBasis;
   note: string;
   contradictionState?: ResearchClaim['contradictionState'];
 }
@@ -175,6 +186,7 @@ export async function gateFragment(input: {
     verdicts.set(verification.claimId, {
       supportsClaim: verification.supportsClaim,
       scopeMatch: verification.scopeMatch,
+      scopeBasis: verification.scopeBasis ?? {},
       note: verification.note,
     });
     if (verification.contradictionState && verification.contradictionState !== 'UNCHALLENGED') {
@@ -206,7 +218,17 @@ export async function gateFragment(input: {
       // later attempt's synthesis: acceptance was decided once, and the reason
       // it was refused travels with it.
       rejectionReason: judgement.reason,
-      scopeMatch: verdicts.get(judgement.claimId)?.scopeMatch ?? null,
+      // The verdict and what it was judged against, together. A reader of a
+      // rejection needs both: "population does not match" answers nothing
+      // without the population it was compared with.
+      scopeMatch: (() => {
+        const verdict = verdicts.get(judgement.claimId);
+        if (!verdict) return null;
+        const basis = verdict.scopeBasis ?? {};
+        return Object.keys(basis).length > 0
+          ? { ...verdict.scopeMatch, basis }
+          : verdict.scopeMatch;
+      })(),
     });
   }
 

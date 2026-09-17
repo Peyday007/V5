@@ -16,6 +16,18 @@
 import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { buildUpdate, newId, nowIso, parseJson, toJson } from './util.ts';
+import {
+  OPPORTUNITY_VALIDATION_STATES,
+  type OpportunityValidationState,
+} from '../domain/types.ts';
+
+/** Reading a stored value back into the closed set, or null. */
+function isValidationState(value: unknown): value is OpportunityValidationState {
+  return (
+    typeof value === 'string' &&
+    (OPPORTUNITY_VALIDATION_STATES as readonly string[]).includes(value)
+  );
+}
 import type {
   CashMechanism,
   CashNeed,
@@ -44,6 +56,13 @@ function mapOpportunity(row: CashOpportunityRow): CashOpportunity {
     externalRecordId: row.external_record_id,
     sourceClaimId: row.source_claim_id,
     discoveredByCandidateId: row.discovered_by_candidate_id,
+    orchestrationId: row.orchestration_id ?? null,
+    fragmentId: row.fragment_id ?? null,
+    discoveryRoundId: row.discovery_round_id ?? null,
+    validationOrchestrationId: row.validation_orchestration_id ?? null,
+    validationState: isValidationState(row.validation_state) ? row.validation_state : null,
+    validationStartedAt: row.validation_started_at ?? null,
+    validationSettledAt: row.validation_settled_at ?? null,
     payer: row.payer,
     reachableChannel: row.reachable_channel,
     buyingSignal: row.buying_signal,
@@ -96,6 +115,17 @@ export interface NewOpportunity {
   externalRecordId?: string | null;
   sourceClaimId?: string | null;
   discoveredByCandidateId?: string | null;
+  /**
+   * The whole chain back to the evidence, written here and never inferred.
+   *
+   * `sourceClaimId` alone resolved to a claim and left "what research
+   * established this, under which question, in which round" to be walked
+   * backwards through a mission row that an administrator-started packet does
+   * not have. These are the rest of it.
+   */
+  orchestrationId?: string | null;
+  fragmentId?: string | null;
+  discoveryRoundId?: string | null;
   expiresAt?: string | null;
   expiryReason?: string | null;
   dependsOnId?: string | null;
@@ -116,6 +146,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
     `INSERT INTO cash_opportunities
        (id, project_id, cash_mode_id, owner_user_id, title, mechanism, industry, source,
         candidate_id, external_record_id, source_claim_id, discovered_by_candidate_id,
+        orchestration_id, fragment_id, discovery_round_id,
         payer, reachable_channel, buying_signal, signal_observed_at,
         offer_scope, acceptance_condition, price_cents, currency, payment_terms,
         fulfillment_owner, delivery_method, required_inputs, deadline, economics_note,
@@ -126,6 +157,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
         declined_by_user_id, declined_reason, reoffered_from_id, archived_reason,
         created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+             ?, ?, ?,
              NULL, NULL, NULL, NULL,
              NULL, NULL, NULL, ?, NULL,
              NULL, NULL, NULL, NULL, NULL,
@@ -134,7 +166,8 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
              ?, ?, 'DISCOVERED',
              NULL, NULL, ?, ?, NULL, ?,
              NULL, NULL, ?, NULL,
-             ?, ?)`,
+             ?, ?)
+     ON CONFLICT DO NOTHING`,
     [
       id,
       input.projectId,
@@ -148,6 +181,9 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
       input.externalRecordId ?? null,
       input.sourceClaimId ?? null,
       input.discoveredByCandidateId ?? null,
+      input.orchestrationId ?? null,
+      input.fragmentId ?? null,
+      input.discoveryRoundId ?? null,
       input.currency,
       input.expiresAt ?? null,
       input.expiryReason ?? null,
@@ -165,8 +201,21 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
     ],
   );
   const created = await getOpportunity(id);
-  if (!created) throw new Error('The opportunity disappeared immediately after being written.');
-  return created;
+  if (created) return created;
+  /*
+   * Lost the race for this claim, which is an ordinary outcome.
+   *
+   * `idx_cash_opportunities_one_per_claim` is what makes "one opportunity per
+   * supported opening" true rather than merely likely: two ticks can both read
+   * that a claim has no opportunity yet, and exactly one of their inserts
+   * lands. The loser reads back the winner's row, which is the same shape
+   * `ensureGoal` and `reserve` take.
+   */
+  if (input.sourceClaimId) {
+    const existing = await opportunityForClaim(input.projectId, input.sourceClaimId);
+    if (existing) return existing;
+  }
+  throw new Error('The opportunity disappeared immediately after being written.');
 }
 
 export async function getOpportunity(id: string): Promise<CashOpportunity | null> {
@@ -241,6 +290,28 @@ export async function opportunitiesForCandidate(
 }
 
 /**
+ * The opportunity a candidate *is*, in one project.
+ *
+ * `candidate_id` means "the idea this opportunity is" — Brain researching on
+ * this opportunity's own behalf — and is deliberately a different column from
+ * `discovered_by_candidate_id`, which is the broad bucket that found it. The
+ * compiler reads this to know it is compiling a deep dive rather than a bucket,
+ * which is a row rather than a reading of the idea's prose.
+ */
+export async function opportunityForOwnCandidate(
+  projectId: string,
+  candidateId: string,
+): Promise<CashOpportunity | null> {
+  const rows = await getDb().all<CashOpportunityRow>(
+    `SELECT * FROM cash_opportunities
+      WHERE project_id = ? AND candidate_id = ?
+      ORDER BY created_at DESC, id DESC`,
+    [projectId, candidateId],
+  );
+  return rows[0] ? mapOpportunity(rows[0]) : null;
+}
+
+/**
  * The evidence card, or any other non-state field.
  *
  * Deliberately cannot write `state`: a lifecycle move is
@@ -284,6 +355,10 @@ export async function updateOpportunity(
     candidate_id: string | null;
     external_record_id: string | null;
     discovered_by_candidate_id: string | null;
+    validation_orchestration_id: string | null;
+    validation_state: OpportunityValidationState | null;
+    validation_started_at: string | null;
+    validation_settled_at: string | null;
   }>,
 ): Promise<CashOpportunity | null> {
   const { clause, values } = buildUpdate(patch);

@@ -3946,6 +3946,126 @@ The marker is deliberately narrow: one capability, no way for an ordinary
 migration to opt out of its transaction, and nothing on the Postgres chain,
 which has `ALTER COLUMN ... DROP NOT NULL` and needs none of it.
 
+## 33. A pipeline is what actually ran, not what each stage would do if it were reached.
+
+A production audit of the four research surfaces — *Brain Research A*, *1-B*,
+*1-C*, *1-D* — measured what Cash Mode had actually produced after ten discovery
+rounds: twenty orchestrations, forty-six fragments, eighty-two claims, four filed
+reports, four audits, **zero opportunities**, **zero cards**, and ten candidates
+parked. Every stage passed its own tests. Every row read as healthy. The four
+Routines were not the defect and no per-Routine remedy exists: they are
+interchangeable execution surfaces for one pooled worker, and B, C and D were
+idle because the queue was empty rather than because their instructions were
+wrong. **Attribution came from `research_passes.executor_routine_id` rather than
+from a Routine firing near the same time**, which is what made that sayable.
+
+What the audit found was four disconnections in a row, each of which made the
+one after it unreachable — so the stages downstream were never wrong, they were
+never asked. The repair is recorded here as one section because reading any of
+them alone gives the wrong lesson.
+
+- **Pressing Start authorized nothing, so every idea parked.** Activation wrote
+  a `cash_modes` row, discovery captured its buckets, and the compiler then
+  refused each one for want of a `russell_goals` standing authority — a decision
+  §24 correctly reserves to a person, being asked for a second time about a
+  decision the person had just made. Ten candidates sat `PARKED` with three
+  honest sentences on them and nobody was ever shown a card to answer, because an
+  ungranted project raises no `russell_human_requests` row. **Start is the
+  authorization**: `ensureDiscoveryAuthority` writes the internal discovery grant
+  from the activation, named and bounded in code, with `ON CONFLICT DO NOTHING`
+  against a partial unique index so two ticks produce one grant. It authorizes
+  **reading published sources and nothing else** — the prohibitions are
+  `ALWAYS_PROHIBITED` unioned with publishing, `max_external_spend` is the same
+  literal zero, and **no commercial action is granted by it at any point**. The
+  commercial grant of §30 is untouched, still separate, still a person's. There
+  is no second Start, no extra lock, no form and no confirmation step: what was
+  added is that the button now means what the screen already said it meant.
+  `resumeAuthorityParkedCandidates` reaches the ten already parked, and only
+  those parked for exactly that reason — it matches the sentences Brain itself
+  composed and refuses to unpark anything else.
+- **The envelope refused six of ten correctly-shaped plans before a source was
+  read, and the screen it failed on was aimed at the wrong subject.**
+  `forbiddenActions` was tested against a fragment's question, definitions,
+  population and completion criteria — every one of which says what to *look
+  for*, and none of which says what Brain will *do*. So a fragment asking which
+  government surplus listings are open was refused for describing a purchase,
+  because a surplus auction *is* a purchase and the word appears in any honest
+  description of one. `services/research/actorScope.ts` is the distinction: a
+  forbidden phrase is Brain's own action unless a governor within forty
+  characters turns it into a described thing, and always when the researcher is
+  named as its subject. **Narrowing a screen is safe here precisely because this
+  was never the enforcement** — the grant's prohibitions, the zero spend and the
+  absence of any acting tool are — so the failure mode is admitting a plan whose
+  effects are blocked anyway, and the tests pin the refusals rather than the
+  admissions. The source allowlist was widened the same way, and **the refusal
+  now quotes the envelope's own rule back**: a plan told what it accepts rather
+  than only that it was refused is one a worker can correct.
+- **A rejection with no reason is a claim destroyed silently, and there were
+  thirteen.** All thirteen rejected claims in the four Cash packets failed on
+  `SCOPE_MATCH`, and twelve of those were `UNSTATED` rather than `MISMATCH` —
+  including a $125M settlement and three marketplace postings that were
+  *literally* the declared population. The evidence was fine; nobody had said so,
+  and the gate fails closed. `UNSTATED` is gone from what a verifier may submit:
+  the answers are MATCH, MISMATCH, NOT_APPLICABLE and UNKNOWN, **each with a
+  quoted fragment value beside it**, and a submission missing one is **refused**
+  rather than stored — so the worker corrects it and the claim survives, instead
+  of the claim dying to preserve an incomplete verdict. `UNSTATED` still *parses*,
+  because the thirteen existing rows still mean what they meant and none of them
+  was touched.
+- **"Two independent sources" was applied where §14 says it must not be.** One
+  published request proves one published request; requiring a second publisher
+  for it is requiring somebody else to have published the same notice. The bar is
+  per lane now, declared by the compiler profile and carried on the lane row:
+  `SPECIFIC_INSTANCE` needs one example from one publisher, `MARKET_PATTERN` two
+  distinct examples, `GENERALIZED_ECONOMICS` two independent publishers. **No
+  blanket minimum anywhere**, and no bar was lowered in the aggregate — a
+  `DATED` condition was added beside it, refusing a time-sensitive claim with no
+  observation date, because §30 already said an undated signal cannot be told
+  apart from one somebody remembers from March.
+- **Nothing connected an accepted claim to an opportunity, and the code that
+  looked as though it did could never fire.** `harvest` read
+  `evidence_lane === 'demand_signal'` and required a `russell_missions` row that
+  the admin-started packets did not have — so four filed reports full of accepted
+  openings produced nothing, twice over. The bridge is **typed rather than
+  guessed**: a worker that read the source chooses one of seven
+  `OPPORTUNITY_SIGNALS` for a claim, or none, and only a signalled claim is
+  promoted. **An existing claim cannot become an opportunity merely by existing**
+  — every historical row carries a null signal, by construction rather than by a
+  cutoff date — and a unique partial index makes one claim at most one
+  opportunity whichever tick gets there first.
+- **Discovery and commercial validation were one question, and it could only be
+  answered badly.** The four reports answered *who is asking* and *what they
+  published*, and answered none of the fourteen commercial questions — not
+  poorly, but not at all, because nothing ever asked them. They are two packets
+  now under two profiles: discovery finds openings, and a bounded deep dive under
+  `RUSSELL_CASH_VALIDATION_V1` asks who pays, what it pays, what it costs, how
+  long it takes and what would rule it out, from published sources, at most two
+  at a time. What comes back lands on a **Cash Engine Card** where every answer
+  says which of four things it is — a gated `FACT` resolving to a URL and a
+  passage, an `ESTIMATE` carrying its basis, assumptions and uncertainty, a
+  person's `DECISION`, or an honest `UNKNOWN`. **A margin is withheld rather than
+  computed against an unknown cost**, naming which half is missing, because that
+  error fails in the direction that makes a piece look worth doing.
+- **A card read the column and ignored the answer beside it.**
+  `applyValidationAnswers` fills `payer` from a gated claim without touching the
+  opportunity column, and the engine card read the column alone — so a question
+  Brain had answered, with a claim id on it, displayed as *we do not know*. The
+  column still wins wherever it has a value and readiness is untouched; a
+  recorded fact answers the field where it does not.
+- **Four reports shared one filename and the dashboard said work was moving.**
+  `buildNames` takes a variant, so two cash packets in one layer no longer
+  collide, and the roadmap reports an `activity` derived from rows —
+  `PARKED` with the blocker's own words rather than `OPEN`. The page says what
+  is not moving and why. **A status that contradicts what a person can see is
+  worse than no status**, for the seventh time in this file.
+
+**None of the existing work was rewritten to make any of this come out right.**
+Every orchestration, fragment, claim, report, audit, round and parked candidate
+keeps its id, its reason and its lineage; the two migrations are additive; the
+thirteen rejected claims stand exactly as recorded. The repair is what happens
+*next* — which is the only honest way to fix a pipeline whose defect was that it
+had never run to the end.
+
 ---
 
 ---
@@ -3974,6 +4094,7 @@ server/
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
+    opportunitySignals.ts  what kind of opening a claim is, and what it becomes
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     auditReopens.ts     the record behind a re-audit, and its one reservation
@@ -4084,6 +4205,9 @@ server/
       answers.ts        research reaching the card, and the view Brain forms on it
       figures.ts        a money figure read from a source, and never produced
       conditions.ts     what settles a need, as a function rather than a wiring
+      discoveryAuthority.ts  what pressing Start authorizes, and what it never will
+      validation.ts     the bounded deep dive, and what it puts on the card
+      engineCard.ts     fact, estimate, decision, unknown — and the margin withheld
       discovery.ts      where the portfolio comes from: buckets, and a lane
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
@@ -4117,6 +4241,7 @@ server/
       schema.ts         zero-trust validation of every research pass
       sources.ts        what makes a claim sourced; structural URL validation
       standards.ts      the evidence standard per claim type, and independence
+      actorScope.ts     whose action a forbidden phrase is: Brain’s, or the source’s
       gate.ts           the seven evidence conditions, applied per fragment
       splitting.ts      fragment splitting and the dependency order
       bundling.ts       which fragments may share one job, and which never may
@@ -4210,6 +4335,7 @@ tests/                  Vitest suites
   cashAuthority.test.ts      the closed vocabulary, and the race for the last dollar
   cashPortfolio.test.ts      the unknowns, the dispositions, and the measured compression
   cashDiscovery.test.ts      the buckets, the lane, and the blank card they produce
+  cashPipelineRepair.test.ts the fifteen proofs the production audit asked for
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
   cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent

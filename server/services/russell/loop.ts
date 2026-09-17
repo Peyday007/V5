@@ -324,7 +324,15 @@ export interface TickReport {
    * Reported by id rather than counted, because "which bucket" is the thing a
    * person asks when a sprint looks quiet, and a count cannot answer it.
    */
-  cashDiscovery: { projectId: string; opened: string[]; harvested: string[] }[];
+  cashDiscovery: {
+    projectId: string;
+    opened: string[];
+    harvested: string[];
+    /** True on the one tick that wrote the sprint's discovery authorization. */
+    authorized: boolean;
+    /** Ideas that had parked for want of it and are back in the ordinary queue. */
+    resumed: string[];
+  }[];
   /**
    * What each sprint's operating pass did about what its pieces need.
    *
@@ -892,11 +900,29 @@ export async function tick(owner: string): Promise<TickReport> {
     for (const project of await listProjects()) {
       try {
         const run = await runDiscovery(project.id);
-        if (run.opened.length > 0 || run.harvested.length > 0) {
+        /*
+         * Reported when anything happened at all, which now includes the two
+         * things reconciliation does.
+         *
+         * `runDiscovery` has always returned four facts and this read two of
+         * them — the same shape as destructuring `{ audits }` and dropping the
+         * synthesis beside it. A grant written and ten ideas put back are
+         * exactly what somebody watching a repaired sprint needs to see, and a
+         * tick that did both while opening nothing would have reported
+         * silence.
+         */
+        if (
+          run.opened.length > 0 ||
+          run.harvested.length > 0 ||
+          run.authorized ||
+          run.resumed.length > 0
+        ) {
           report.cashDiscovery.push({
             projectId: project.id,
             opened: run.opened.map((one) => one.bucketId),
             harvested: run.harvested.map((one) => one.opportunity.id),
+            authorized: run.authorized,
+            resumed: run.resumed,
           });
         }
       } catch {

@@ -188,6 +188,15 @@ function verification(count: number): unknown {
         population: 'MATCH',
         definitions: 'MATCH',
       },
+      // Required of every dimension the fragment declares, and all four are
+      // declared here. A verdict with no basis cannot be told apart from one
+      // nobody formed, so the submission is refused rather than stored.
+      scopeBasis: {
+        geography: 'The fragment declares United States, and the source is a US figure.',
+        timeframe: 'The fragment declares 2024, and the source is dated within it.',
+        population: 'The fragment declares B2B firms with a sales team.',
+        definitions: 'The fragment defines an outsourced SDR, and the source uses that sense.',
+      },
       contradictionState: 'UNCHALLENGED',
       note: 'The source states this directly.',
     })),

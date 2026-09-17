@@ -179,11 +179,28 @@ describe('activating', () => {
     expect(mode!.objective).toContain('usable cash');
   });
 
-  it('records who activated it and why', async () => {
+  it('records who activated it and why, and what that authorized', async () => {
     await activated();
     const events = await listCashEvents(projectId);
-    expect(events.some((event) => event.kind === 'CASH_MODE_ACTIVATED')).toBe(true);
-    expect(events[0]!.actorRef).toBe(userId);
+    /*
+     * Named rather than taken by position.
+     *
+     * Activating now writes two events in the same moment — the activation and
+     * the internal research authorization it carries — and `listCashEvents`
+     * tiebreaks a shared second on a random id, so reading `events[0]` was a
+     * coin flip between them. A test that has to win a coin flip is a test
+     * about ordering rather than about what it says it is about.
+     */
+    const activation = events.find((event) => event.kind === 'CASH_MODE_ACTIVATED');
+    expect(activation).toBeTruthy();
+    expect(activation!.actorRef).toBe(userId);
+
+    // And pressing Start is what authorized the reading, with the person who
+    // pressed it on the row rather than a process that wanted a grant.
+    const authorized = events.find((event) => event.kind === 'CASH_DISCOVERY_AUTHORIZED');
+    expect(authorized).toBeTruthy();
+    expect(authorized!.actorRef).toBe('BRAIN');
+    expect(authorized!.detail).toMatchObject({ authorizedByUserId: userId, maxExternalSpend: 0 });
   });
 });
 

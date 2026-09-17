@@ -44,6 +44,7 @@
  */
 import crypto from 'node:crypto';
 import { listEvents } from '../../repos/events.ts';
+import { ownActionMatches } from './actorScope.ts';
 import type { ResearchFragment, ResearchOrchestration } from '../../domain/types.ts';
 
 /**
@@ -155,6 +156,22 @@ export type ApprovalEnvelope = AssignmentPin & {
   forbiddenScope: RegExp;
   /** Source types a fragment may accept. Anything else is outside. */
   allowedSourceTypes: RegExp;
+  /**
+   * What `allowedSourceTypes` actually permits, in this envelope's own words.
+   *
+   * Required, because the refusal that quotes it used to be a constant reading
+   * *"which is not a primary statute, regulation or regulator source"* for
+   * every envelope. That is true of the two statutory ones and a plain lie
+   * about the cash discovery envelope, which admits marketplaces, listings,
+   * job boards, auctions, forums and company pages by design. Production
+   * refused six correctly-shaped plans with that sentence, and an operator
+   * reading it would have concluded cash discovery demands statutes.
+   *
+   * A refusal must quote the rule that actually refused it. Making this a
+   * required field rather than an optional one is the point: a new envelope
+   * cannot be added without saying what its own allowlist means.
+   */
+  sourceRule: string;
   /** Language that would mean spending money or acting on the world. */
   forbiddenActions: RegExp;
   /** The evidence floor the envelope refuses to see lowered. */
@@ -351,6 +368,113 @@ submitting anything anywhere; making any commitment on anybody's behalf. This is
 read-only research into what is already published, and every action beyond reading needs
 a separate commercial authorization from a person.`;
 
+/**
+ * The bounded deep dive that turns one opening into a decision.
+ *
+ * Discovery asks a broad question — "which buyers have published a paid
+ * request" — and answers it with openings. It cannot also answer who pays, what
+ * to offer, what that costs, how long the money takes and what would disqualify
+ * it, and making it try is what produced fragments no worker could satisfy: a
+ * production discovery packet was asked for a payer, a channel, a price and a
+ * closing condition in one lane set, and filed with half of them unresolved.
+ *
+ * So the commercial questions are a *second* assignment, against one opening
+ * that already exists, with the opening's own source quoted into it. It is
+ * bounded by construction: one subject, named in the question, and the same
+ * published-sources-only rule.
+ *
+ * It authorizes nothing new. Every prohibition below is the discovery
+ * envelope's, word for word, because a deep dive that could contact a buyer to
+ * ask their budget would be the one thing this whole section is arranged to
+ * make impossible.
+ */
+export const CASH_VALIDATION_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what a person would need to know before acting on
+this specific opening:
+
+{QUESTION}
+
+Subject: one opening, named above. Everything you establish must be about that opening or
+about the market it sits in, and anything you find about a different one is recorded as
+out of scope rather than used.
+
+Market: {JURISDICTION}. Say which market each finding is about.
+
+What to settle, as far as published sources allow: who the payer actually is and what
+published evidence says they buy; how a supplier reaches them; what comparable work is
+published at, as a figure or a range with its source; what the direct costs of delivering
+it are, from published prices; what capital is required before any money arrives; how long
+published terms say payment takes; how much human time comparable work is published as
+taking; whether selling, calling, fulfilment or subcontracted labour is required; what the
+first steps would be; what the bottleneck is; and what published fact would disqualify this
+outright.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+and each carrying the date it was published or last observed. A price is read from a
+source, never produced: where nothing publishes one, record that it is unknown and say what
+would settle it. An organisation's own site is conclusive about what that organisation says
+and worth nothing as independent confirmation of anything else.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found. An unknown stays
+unknown. Do not convert a blank into a zero, and do not estimate a figure no source states.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or
+submitting anything anywhere; making any commitment on anybody's behalf. This is
+read-only research into what is already published, and every action beyond reading needs
+a separate commercial authorization from a person.`;
+
+/**
+ * What a cash question may cite, what that means in words, and what it may
+ * never instruct Brain to do.
+ *
+ * Shared by the discovery envelope and the validation envelope rather than
+ * written twice, because the two authorize the same *actions* and differ only
+ * in the assignment they pin. Two copies would be two things to keep in step,
+ * and the one nobody reads is the one that drifts.
+ *
+ * The allowlist refused six of ten correctly-shaped production plans, and every
+ * refusal was the alphabet rather than the rule. `company (?:site|website|page|
+ * blog)` does not match "company careers page"; `review site` does not match
+ * "Yelp review thread"; `licen[cs]e` does not match "licensing board"; `price
+ * list` does not match "a platform's own pricing page". Each of those is
+ * exactly the sort of published artefact these envelopes exist to admit, and
+ * each cost a whole plan at the planning pass.
+ *
+ * So the entries are the *classes*, spelled loosely enough to survive ordinary
+ * phrasing: a bare stem where the family is unambiguous (`licen[cs]` covers
+ * licence, license and licensing), and the noun on its own where the qualifier
+ * was what kept missing (`review`, `careers`, `pricing`). A source type still
+ * has to be *declared* by the fragment and still has to match, so a fragment
+ * that accepted "whatever we find" is refused for declaring nothing.
+ *
+ * What is still refused is what was always refused: anything that is not a
+ * published artefact somebody can open. A private database, a purchased list,
+ * an interview, a phone call and a personal contact match none of these, and
+ * the source-validation gate refuses an unreachable URL besides.
+ */
+const CASH_SOURCE_TYPES =
+  /(official|government|\.gov|statut|regulat|public record|filing|registry|register|court|permit|licen[cs]|tender|procurement|bid|rfp|rfq|solicitation|marketplace|market place|job board|job posting|jobs? page|careers?|hiring|recruit|listing|classified|posting|advert|auction|exchange|price|pricing|rate card|fee schedule|quote|catalog|inventory|directory|capability statement|dsbs|small business search|trade (?:association|body|publication)|industry (?:report|survey|body)|census|statistic|bureau|standards body|company|business|supplier|vendor|platform|site|website|web page|page|blog|status page|press release|annual report|prospectus|news|publication|journal|review|rating|testimonial|forum|community|social|bounty|contest|challenge|prize|appraisal|valuation|comparable|complaint|terms of service|terms and conditions|policy|rules|api)/i;
+
+const CASH_SOURCE_RULE =
+  'a published source somebody can open — an official or government record, a marketplace, ' +
+  'auction, job board or classified listing, a company or platform page including pricing, ' +
+  'careers and terms, a directory, a trade or industry publication, news, a forum or review ' +
+  'thread, a bounty or contest listing, or a published appraisal or valuation';
+
+/**
+ * Language that would mean acting on the world rather than reading about it.
+ *
+ * These are phrases describing Brain *doing* something, never words that happen
+ * to appear in a commercial subject — and `actorScope.ts` is what makes that
+ * distinction hold, because the fields this is tested against say what to look
+ * for rather than what Brain will do. A bare `\bpay\b` would refuse "establish
+ * how long after invoicing a buyer pays", which is the ordinary question these
+ * envelopes exist to allow.
+ */
+const CASH_FORBIDDEN_ACTIONS =
+  /\b(purchase|paid api|api key|subscription fee|subscribe to|pay for access|paywall bypass|buy (?:the |a |an )?(?:list|data|access|leads)|telephone call|phone call|call the|cold call|email the|write to the|contact the|reach out to|message the|dm the|submit a (?:request|bid|proposal|application) to|file a (?:complaint|request|petition)|register with|apply for a|sign up (?:for|with)|place an? (?:ad|advert|order|bid)|run an? (?:ad|advert|campaign)|post to|publish (?:a|our|the report|this report|a listing)|list (?:it |the item )?for sale|negotiate with|agree terms with|commit (?:funds|money)|make a payment|send payment|hire|engage a contractor)\b/i;
+
 export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Object.freeze({
   /**
    * The standing authorization Russell's compiled missions run under.
@@ -396,6 +520,8 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|minnesota|mississippi|missouri|montana|nebraska|nevada|ohio|oklahoma|oregon|pennsylvania|tennessee|texas|utah|vermont|virginia|washington|wisconsin|wyoming|new york|new jersey|north carolina|south carolina|west virginia|rhode island|new hampshire|new mexico|north dakota|south dakota)\b/i,
     allowedSourceTypes:
       /(register of deeds|recorder|county clerk|city clerk|township clerk|village clerk|assessor|equalization|treasurer|county|municipal|statut|\bmcl\b|public act|administrative code|administrative rule|state of michigan|michigan department|department of|bureau of|lara|secretary of state|legislature|\.gov|official|primary|government|public record|open data|portal|fee schedule|recording office)/i,
+    sourceRule:
+      'an official Michigan state, county or municipal record, portal or published guidance',
     /*
      * Phrases that describe an action, never words that appear in the subject.
      *
@@ -480,8 +606,33 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     // source type still has to be *declared* by the fragment and still has to
     // match, so a fragment that accepted "whatever we find" is refused for
     // declaring nothing — `planFitsEnvelope` refuses an empty list outright.
-    allowedSourceTypes:
-      /(official|government|\.gov|statut|regulat|public record|filing|registry|register|court|permit|licen[cs]e|tender|procurement|bid|rfp|rfq|solicitation|marketplace|job board|listing|classified|posting|auction|exchange|price list|rate card|fee schedule|catalog|inventory|directory|trade (?:association|body|publication)|industry (?:report|survey|body)|census|statistic|bureau|standards body|company (?:site|website|page|blog)|press release|annual report|filing|prospectus|news|publication|journal|review site|forum|community|social)/i,
+    /*
+     * Published sources of every kind a market question is answered from.
+     *
+     * This list refused six of ten correctly-shaped production plans, and every
+     * refusal was the alphabet rather than the rule. `company (?:site|website|
+     * page|blog)` does not match "company careers page"; `review site` does not
+     * match "Yelp review thread"; `licen[cs]e` does not match "licensing
+     * board"; `price list` does not match "a platform's own pricing page".
+     * Each of those is exactly the sort of published artefact this envelope
+     * exists to admit, and each cost a whole plan at the planning pass.
+     *
+     * So the entries below are the *classes*, spelled loosely enough to survive
+     * ordinary phrasing: a bare stem where the family is unambiguous
+     * (`licen[cs]` covers licence, license and licensing), and the noun on its
+     * own where the qualifier was what kept missing (`review`, `careers`,
+     * `pricing`). A source type still has to be *declared* by the fragment and
+     * still has to match, so a fragment that accepted "whatever we find" is
+     * refused for declaring nothing — `planFitsEnvelope` refuses an empty list
+     * outright.
+     *
+     * What it still refuses is what it always refused: anything that is not a
+     * published artefact somebody can open. A private database, a purchased
+     * list, an interview, a phone call and a personal contact match none of
+     * these, and the source-validation gate refuses an unreachable URL besides.
+     */
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
     /*
      * Language that would mean acting on the world rather than reading about
      * it. The same construction the public-records envelope settled on and for
@@ -490,8 +641,46 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
      * `\bpay\b` would refuse "establish how long after invoicing a buyer pays",
      * which is the ordinary question this envelope exists to allow.
      */
-    forbiddenActions:
-      /\b(purchase|paid api|api key|subscription fee|subscribe to|pay for access|paywall bypass|buy (?:the |a |an )?(?:list|data|access|leads)|telephone call|phone call|call the|cold call|email the|write to the|contact the|reach out to|message the|dm the|submit a (?:request|bid|proposal|application) to|file a (?:complaint|request|petition)|register with|apply for a|sign up (?:for|with)|place an? (?:ad|advert|order|bid)|run an? (?:ad|advert|campaign)|post to|publish (?:a|our|the report|this report|a listing)|list (?:it |the item )?for sale|negotiate with|agree terms with|commit (?:funds|money)|make a payment|send payment|hire|engage a contractor)\b/i,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * The bounded deep dive on one opening the discovery envelope already found.
+   *
+   * Everything about what it may *do* is `RUSSELL_CASH_DISCOVERY_V1`'s, taken
+   * deliberately rather than written afresh: the same source classes, the same
+   * forbidden actions, the same zero external effect. What differs is the
+   * assignment it pins, which asks the commercial questions about one named
+   * subject instead of asking a market a broad question.
+   *
+   * It is a separate envelope rather than a second template on the first
+   * because `planFitsEnvelope` pins exactly one template per envelope, and a
+   * packet must be judged against the rules for the question it is actually
+   * asking. Adding it is a code change somebody reviews, which is where "does
+   * this authorize an effect?" gets asked — and the answer here is no: it
+   * authorizes reading about something Brain has already found.
+   */
+  RUSSELL_CASH_VALIDATION_V1: Object.freeze({
+    id: 'RUSSELL_CASH_VALIDATION_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it: published sources only, across any industry, business model or ' +
+      'market, with no spending, no paid API or purchased data, no contact with any person or ' +
+      'organisation, no advertising, no publishing and no external effect of any kind. This ' +
+      'envelope is that authorization applied to one opening Brain has already found, so a ' +
+      'person can decide whether to act on it. Acting is authorized separately by a ' +
+      'commercial grant a person makes, and never by this envelope.',
+    assignmentTemplate: CASH_VALIDATION_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    // One opening, and as many bounded questions about it as the unknowns
+    // require. Every condition applies to each of them.
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
     minIndependentSourcesFloor: 1,
   } satisfies ApprovalEnvelope),
 
@@ -527,6 +716,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     // secondary source may support a claim, so nothing else is admissible.
     allowedSourceTypes:
       /(statut|delaware code|del\. c\.|title 6|state code|administrative code|regulation|division of corporations|department of state|secretary of state|official|primary|government)/i,
+    sourceRule: 'Delaware statutory material or the state\'s own published guidance',
     forbiddenActions:
       /\b(purchase|pay|payment|subscribe|subscription|invoice|paywall bypass|contact|telephone|phone call|email the|write to|submit a request to|file a|register with|apply for)\b/i,
     minIndependentSourcesFloor: 1,
@@ -590,6 +780,7 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       /\b(alabama|alaska|arizona|arkansas|colorado|connecticut|delaware|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|ohio|oklahoma|oregon|pennsylvania|tennessee|texas|utah|vermont|virginia|washington|wisconsin|wyoming|new york|new jersey|north carolina|south carolina|west virginia|rhode island|new hampshire|new mexico|north dakota|south dakota|federal|sec\b)\b/i,
     allowedSourceTypes:
       /(statut|fla\. stat|florida statutes|bus\. ?& ?prof|business and professions|state code|administrative code|regulation|department of business|bureau of real estate|secretary of state|official|primary|government|legislature)/i,
+    sourceRule: 'a primary statute, administrative code, regulator or official state source',
     forbiddenActions:
       /\b(purchase|pay|payment|subscribe|subscription|invoice|paywall bypass|contact|telephone|phone call|email the|write to|submit a request to|file a|register with|apply for)\b/i,
     minIndependentSourcesFloor: 1,
@@ -634,6 +825,9 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
      */
     allowedSourceTypes:
       /(statut|regulation|administrative rule|administrative code|occupational code|licensing act|regulator|declaratory ruling|attorney general|agency guidance|lara|department of licensing|board of real estate|official|primary|government|case law|court)/i,
+    sourceRule:
+      'a Michigan statute, administrative rule, regulator publication, declaratory ruling or ' +
+      'court decision',
     forbiddenActions:
       /\b(purchase|pay|payment|subscribe|subscription|invoice|licence fee to access|paywall bypass|contact|telephone|phone call|email the|write to|submit a request to|file a complaint|register with|apply for)\b/i,
     minIndependentSourcesFloor: 1,
@@ -784,10 +978,26 @@ export function planFitsEnvelope(input: {
     if (envelope.forbiddenScope.test(prose) || envelope.forbiddenScope.test(geography)) {
       reasons.push(`${where} reaches outside ${envelope.jurisdiction}.`);
     }
-    if (envelope.forbiddenActions.test(prose)) {
+    /*
+     * An action Brain would take, rather than a transaction the sources are
+     * about.
+     *
+     * The fields scanned here — the question, the definitions, the population
+     * and the completion criteria — say what to look for and what counts.
+     * None of them says what Brain will do. So a bare word match refused a
+     * fragment about government surplus auctions for containing "purchase",
+     * which is the subject of every honest description of one. `actorScope.ts`
+     * has the whole argument and the reason narrowing is the safe direction:
+     * the grant's `max_external_spend = 0`, the separate commercial grant and
+     * the absence of any tool that performs an effect are the enforcement, and
+     * this is a screen standing in front of them.
+     */
+    const ownActions = ownActionMatches(prose, envelope.forbiddenActions);
+    if (ownActions.length > 0) {
       reasons.push(
-        `${where} describes an action outside reading published sources. The envelope authorizes ` +
-          'no spending and no contact with anybody.',
+        `${where} instructs the researcher to ${ownActions[0]!.phrase.toLowerCase()}, which is ` +
+          'an action on the world rather than reading a published source. This envelope ' +
+          'authorizes no spending, no purchase, no contact, no commitment and no publication.',
       );
     }
     if (fragment.acceptableSourceTypes.length === 0) {
@@ -795,8 +1005,19 @@ export function planFitsEnvelope(input: {
     }
     for (const source of fragment.acceptableSourceTypes) {
       if (!envelope.allowedSourceTypes.test(source)) {
+        /*
+         * The envelope's own rule, never a constant.
+         *
+         * This sentence read "which is not a primary statute, regulation or
+         * regulator source" for every envelope. It is true of the two
+         * statutory ones and a plain lie about cash discovery, which admits
+         * marketplaces, listings, job boards, auctions, company pages and
+         * forums by design — and production refused six correct plans with it.
+         * An operator reading that would go and look for statutes.
+         */
         reasons.push(
-          `${where} accepts "${source}", which is not a primary statute, regulation or regulator source.`,
+          `${where} accepts "${source}", which this envelope does not admit. It admits ` +
+            `${envelope.sourceRule}.`,
         );
       }
     }

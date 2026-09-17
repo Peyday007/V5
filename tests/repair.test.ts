@@ -100,6 +100,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     sourceDate: '2024-04-03',
     evidenceExcerpt: 'Employment: 81,580 telemarketers employment estimate',
     evidenceLocator: 'National estimates table',
+    opportunitySignal: null,
     evidenceLane: 'official statistics',
     retrievedAt: '2025-01-05',
     confidence: 0.8,
@@ -178,7 +179,7 @@ describe('a repair plan', () => {
     const plan = buildRepairPlan({
       fragment: fragment({ requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }] }),
       gate: gate({
-        coverage: [{ lane: 'statute', description: 'statute', necessity: 'REQUIRED', acceptedClaims: 0, independentSources: 0, meetsThreshold: false }],
+        coverage: [{ lane: 'statute', description: 'statute', necessity: 'REQUIRED', evidenceKind: 'SPECIFIC_INSTANCE', acceptedClaims: 0, distinctExamples: 0, independentSources: 0, requiredExamples: 1, requiredIndependentSources: 1, meetsThreshold: false }],
       }),
       history: [fragment()],
       claims: [
@@ -217,24 +218,36 @@ describe('a repair plan', () => {
             lane: 'operative_authority',
             description: 'The statute.',
             necessity: 'REQUIRED',
+            evidenceKind: 'SPECIFIC_INSTANCE',
             acceptedClaims: 0,
+            distinctExamples: 0,
             independentSources: 0,
+            requiredExamples: 1,
+            requiredIndependentSources: 1,
             meetsThreshold: false,
           },
           {
             lane: 'regulator_guidance',
             description: 'Guidance, if any.',
             necessity: 'CONDITIONAL',
+            evidenceKind: 'SPECIFIC_INSTANCE',
             acceptedClaims: 0,
+            distinctExamples: 0,
             independentSources: 0,
+            requiredExamples: 1,
+            requiredIndependentSources: 1,
             meetsThreshold: false,
           },
           {
             lane: 'commentary',
             description: 'Commentary.',
             necessity: 'OPTIONAL',
+            evidenceKind: 'SPECIFIC_INSTANCE',
             acceptedClaims: 0,
+            distinctExamples: 0,
             independentSources: 0,
+            requiredExamples: 1,
+            requiredIndependentSources: 1,
             meetsThreshold: false,
           },
         ],
@@ -257,7 +270,7 @@ describe('a repair plan', () => {
     const plan = buildRepairPlan({
       fragment: fragment({ requiredEvidence: [{ id: 'statute', description: 'statute', necessity: 'REQUIRED' }] }),
       gate: gate({
-        coverage: [{ lane: 'statute', description: 'statute', necessity: 'REQUIRED', acceptedClaims: 0, independentSources: 0, meetsThreshold: false }],
+        coverage: [{ lane: 'statute', description: 'statute', necessity: 'REQUIRED', evidenceKind: 'SPECIFIC_INSTANCE', acceptedClaims: 0, distinctExamples: 0, independentSources: 0, requiredExamples: 1, requiredIndependentSources: 1, meetsThreshold: false }],
       }),
       history: [fragment()],
       // Tagged, and rejected — so the lane really has nothing in it.

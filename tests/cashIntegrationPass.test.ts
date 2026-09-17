@@ -321,6 +321,17 @@ async function workerResearches(input: {
     claimType?: 'SOURCED_FACT' | 'NEGATIVE_EXISTENCE';
     sourceDate?: string;
     supports?: boolean;
+    /*
+     * What kind of opening the worker says this claim is, from the closed
+     * vocabulary, or nothing when it is not one.
+     *
+     * This is the fixture half of the bridge: a claim becomes a piece of work
+     * because somebody who read the source typed it as an opening, never
+     * because a sentence about it matched a word. A claim with no signal is
+     * evidence and nothing else, which is why the documented absence below
+     * carries none.
+     */
+    signal?: string;
   }[];
   sufficiency?: 'SUFFICIENT' | 'INSUFFICIENT';
 }): Promise<{ missionId: string; orchestrationId: string }> {
@@ -393,6 +404,7 @@ async function workerResearches(input: {
       retrieved_at: '2026-09-12',
       confidence: 0.9,
       primary_source: true,
+      ...(one.signal ? { opportunity_signal: one.signal } : {}),
     })),
     search_queries: [input.question],
   });
@@ -419,6 +431,10 @@ async function workerResearches(input: {
       timeframe: 'MATCH',
       population: 'MATCH',
       definitions: 'MATCH',
+      geography_basis: 'Judged against the geography the fragment declares.',
+      timeframe_basis: 'Judged against the timeframe the fragment declares.',
+      population_basis: 'Judged against the population the fragment declares.',
+      definitions_basis: 'Judged against the definitions the fragment declares.',
       note: 'Read the page.',
     })),
     sufficiency: input.sufficiency ?? 'SUFFICIENT',
@@ -598,6 +614,7 @@ describe('one sprint, from activation to money in and winding down', () => {
             'closing 30 September 2026.',
           lane: 'demand_signal',
           sourceUrl: 'https://example.test/notices/2026-441',
+          signal: 'PAID_TASK_OR_CONTRACT',
         },
         {
           claim:

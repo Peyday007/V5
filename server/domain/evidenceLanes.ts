@@ -154,5 +154,20 @@ export function requiredLanes(lanes: EvidenceLane[]): EvidenceLane[] {
 /** `id — description` , for a prompt, a refusal or a report. */
 export function describeLane(lane: EvidenceLane): string {
   const mark = lane.necessity === 'REQUIRED' ? '' : ` (${lane.necessity.toLowerCase()})`;
-  return `${lane.id}${mark} — ${lane.description}`;
+  /*
+   * The lane's bar, where it has declared one.
+   *
+   * A worker cannot meet a requirement it was never shown. The count used to
+   * live only in the fragment's prose completion criteria, which the gate did
+   * not read and the worker had no reason to treat as binding — so a fragment
+   * asking for three distinct postings was answered with one, and the gate
+   * accepted it.
+   */
+  const kind = lane.evidenceKind && lane.evidenceKind !== 'SPECIFIC_INSTANCE'
+    ? `, ${lane.evidenceKind.toLowerCase().replace(/_/g, ' ')}`
+    : '';
+  const examples = lane.minDistinctExamples && lane.minDistinctExamples > 1
+    ? `, at least ${lane.minDistinctExamples} distinct examples`
+    : '';
+  return `${lane.id}${mark}${kind}${examples} — ${lane.description}`;
 }

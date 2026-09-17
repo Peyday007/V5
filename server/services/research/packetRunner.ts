@@ -51,6 +51,7 @@ import type {
   WorkItem,
   WorkerScope,
 } from '../../domain/types.ts';
+import { exampleIdentity, laneFloor } from './gate.ts';
 import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
 import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
@@ -826,13 +827,27 @@ function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]): Gate
 
   const coverage: LaneCoverage[] = fragment.requiredEvidence.map((lane) => {
     const inLane = accepted.filter((claim) => claim.evidenceLane === lane.id);
+    // The same floor the gate applied, read from the same function, so a
+    // repair plan is made against the bar the fragment was actually judged at.
+    const floor = laneFloor(lane);
+    const examples = new Set(
+      inLane.map((claim) => exampleIdentity(claim)).filter((id): id is string => id !== null),
+    );
+    const sources = countIndependentSources(inLane);
     return {
       lane: lane.id,
       description: lane.description,
       necessity: lane.necessity,
+      evidenceKind: floor.kind,
       acceptedClaims: inLane.length,
-      independentSources: countIndependentSources(inLane),
-      meetsThreshold: inLane.length > 0,
+      distinctExamples: examples.size,
+      independentSources: sources,
+      requiredExamples: floor.examples,
+      requiredIndependentSources: floor.independentSources,
+      meetsThreshold:
+        inLane.length > 0 &&
+        examples.size >= floor.examples &&
+        sources >= floor.independentSources,
     };
   });
 

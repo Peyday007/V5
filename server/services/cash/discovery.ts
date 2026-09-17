@@ -33,15 +33,32 @@
  * Nothing here bypasses any of that, and nothing here is a second pipeline.
  *
  * ---------------------------------------------------------------------------
- * Half two: a lane is a row, so a signal is not a judgement
+ * Half two: the signal is a column, chosen by somebody who read the source
  * ---------------------------------------------------------------------------
  *
  * Turning a finished mission into opportunities looks like it needs a reader:
- * which of these accepted claims is an *opening*? It does not, because the lane
- * is structural. `MARKET_DISCOVERY` declares `demand_signal` as a REQUIRED
- * evidence lane, a claim records which lane it fills, and the gate has already
- * refused anything unsourced. So "this claim is a demand signal" is a column,
- * and the harvest reads it rather than reading prose.
+ * which of these accepted claims is an *opening*? It does not, and the first
+ * version of this file got the reason nearly right and the mechanism wrong. It
+ * read `evidence_lane === 'demand_signal'` — a literal no lane id in this
+ * repository has ever been — and additionally required a `russell_missions`
+ * row, which the packets an administrator starts do not have. So it matched
+ * nothing, twice over, and four filed reports full of accepted openings
+ * produced no portfolio at all. **A condition that can never hold is not a
+ * rule, it is an absence with a comment on it.**
+ *
+ * What replaces it is still a column and still not prose: a worker that read
+ * the source names one of seven `OPPORTUNITY_SIGNALS` on the claim, or none,
+ * and `signalledClaims` returns exactly the accepted ones that carry it. The
+ * judgement is made once, by the only party that can make it — somebody who
+ * read the page — and is then a value from a closed vocabulary that Brain
+ * matches exactly. A claim with no signal is evidence and nothing else, which
+ * is why every row written before this existed carries null and **cannot
+ * become an opportunity merely by existing**.
+ *
+ * The mechanism follows from the signal by a lookup rather than a reading, and
+ * a `NEGATIVE_EXISTENCE` claim is never promoted: a documented absence is
+ * evidence about where Brain looked, and filing it would put "nobody is asking"
+ * into the portfolio as something to go and sell.
  *
  * What comes out is an opportunity in `DISCOVERED` with its **card blank**, and
  * that is the honest shape: a published request is evidence that somebody asked
@@ -63,9 +80,14 @@ import {
   openRound,
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
-import { citableClaims } from '../../repos/research.ts';
+import { signalledClaims } from '../../repos/research.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
+import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
 import { discoveryAllowed } from './lifecycle.ts';
+import {
+  ensureDiscoveryAuthority,
+  resumeAuthorityParkedCandidates,
+} from './discoveryAuthority.ts';
 import type {
   CashDiscoveryRound,
   CashMechanism,
@@ -208,26 +230,20 @@ export const SEARCH_BUCKETS: readonly SearchBucket[] = Object.freeze([
 const OPENED = 'CASH_DISCOVERY_OPENED';
 const HARVESTED = 'CASH_OPPORTUNITY_HARVESTED';
 
-/** The lane a claim must fill to be an opening rather than context. */
-export const SIGNAL_LANE = 'demand_signal';
-
 /**
- * The lanes whose claims can be an opening at all.
+ * The lane the discovery profile declares for a published opening.
  *
- * One entry today, and a set rather than a comparison because the point is
- * that the *other* declared lanes are not openings: `economics` says what
- * something pays, `deliverability` says whether it can be done, and
- * `demand_absence` and `demand_closed` say there is nothing here or there is
- * no longer. All four are evidence worth keeping and none of them is a piece
- * of work.
- *
- * This was a single comparison against `demand_signal` with a comment saying
- * the lane was "the whole of" whether something is an opening. It is not: a
- * lane says what *kind* of evidence a claim is, and "a regional authority
- * published a paid request" and "nobody in this market is asking" are the same
- * kind of evidence with opposite answers.
+ * It says what *kind* of evidence a claim is, and that turned out not to be
+ * the question the harvest asks. `demand_signal` and `demand_absence` are the
+ * same kind of evidence with opposite answers, and a claim in either can be a
+ * dated published artefact — so the lane is what the gate judges coverage
+ * against, and the `opportunity_signal` column is what decides whether
+ * something is a piece of work. `OPENING_LANES` used to be here as a set with
+ * one entry and a comment saying it decided that; it was read by nothing once
+ * the signal arrived, and a constant that claims to be a rule while nothing
+ * calls it is worse than no rule at all.
  */
-export const OPENING_LANES: ReadonlySet<string> = new Set([SIGNAL_LANE]);
+export const SIGNAL_LANE = 'demand_signal';
 
 export interface OpenedDiscovery {
   bucketId: string;
@@ -413,23 +429,47 @@ async function liveRounds(
 export interface Harvested {
   opportunity: CashOpportunity;
   claimId: string;
-  missionId: string;
+  /** The mission that produced it, where one did. Null for a packet an
+   *  administrator started, which has no mission and is no less authorized. */
+  missionId: string | null;
 }
 
 /**
  * Turn what discovery found into pieces of the portfolio.
  *
- * Reads finished missions rather than being hooked to the moment one finishes,
- * which is the third time this repository has needed that distinction: a hook
- * fixes one entrance, and rows reach every entrance plus everything already
- * stranded. A mission that completed before this existed is harvested on the
- * next tick.
+ * ---------------------------------------------------------------------------
+ * What it reads, and what it used to read
+ * ---------------------------------------------------------------------------
  *
- * **Not gated by the sprint's lifecycle**, and that is deliberate. Filing what
- * a mission already found is not new discovery — the spending happened when the
- * mission ran — and dropping results because the sprint wound down in the
- * meantime would throw away work already paid for. Winding down stops
- * `openDiscovery`; it does not stop the answers arriving.
+ * It reads **claims that say they are openings**, in this project, that cleared
+ * the gate. Two things about that are corrections, and both were measured in
+ * production rather than reasoned about.
+ *
+ * It used to decide "is this an opening" by comparing `evidence_lane` against
+ * the literal `demand_signal`. Fragment planners name their own lanes, so the
+ * two halves were never speaking one vocabulary: 82 claims carried seventeen
+ * distinct lane ids and `demand_signal` appears zero times. Now a claim carries
+ * a typed `opportunity_signal` from a closed set, validated on submission — see
+ * `domain/opportunitySignals.ts` for why that is typed rather than matched.
+ *
+ * And it used to walk candidate → mission → orchestration, so a packet with no
+ * mission row was invisible. Four production packets started by an
+ * administrator hold 69 accepted claims that could never have been harvested,
+ * however good they were. An authorized research orchestration in a cash
+ * project *is* the provenance; a mission is one way of arriving at one.
+ *
+ * **Nothing about this promotes an old claim retroactively.** A claim with no
+ * signal is not an opening, and every claim written before the column existed
+ * has none. They stay exactly where they are, as archive evidence.
+ *
+ * ---------------------------------------------------------------------------
+ * Not gated by the sprint's lifecycle
+ * ---------------------------------------------------------------------------
+ *
+ * Deliberate, and unchanged. Filing what research already found is not new
+ * discovery — the spending happened when it ran — and dropping results because
+ * the sprint wound down would throw away work already paid for. Winding down
+ * stops `openDiscovery`; it does not stop the answers arriving.
  */
 export async function harvest(input: {
   projectId: string;
@@ -438,127 +478,157 @@ export async function harvest(input: {
   const mode = await getCashMode(input.projectId);
   if (!mode) return [];
 
-  const live = await liveRounds(input.projectId);
-  if (live.size === 0) return [];
+  const limit = Math.max(1, input.limit ?? 20);
 
-  const missions = (await listMissions({ projectId: input.projectId })).filter(
-    (mission) =>
-      mission.state === 'DONE' &&
-      mission.candidateId !== null &&
-      live.has(mission.candidateId) &&
-      mission.orchestrationId !== null,
-  );
+  /*
+   * Which round each orchestration belongs to, where one does.
+   *
+   * A mission links a round's candidate to the orchestration it launched, and
+   * that is how a bucket's own bookkeeping (`found`, and therefore whether the
+   * bucket is worth asking again) stays correct. An orchestration with no
+   * mission simply has no round, which is honest rather than a gap: nobody
+   * asked a bucket for it.
+   */
+  const live = await liveRounds(input.projectId);
+  const missions = await listMissions({ projectId: input.projectId });
+  const roundByOrchestration = new Map<
+    string,
+    { round: CashDiscoveryRound; bucket: SearchBucket; missionDone: boolean }
+  >();
+  const missionByOrchestration = new Map<string, string>();
+  for (const mission of missions) {
+    if (!mission.orchestrationId) continue;
+    missionByOrchestration.set(mission.orchestrationId, mission.id);
+    if (!mission.candidateId) continue;
+    const entry = live.get(mission.candidateId);
+    if (entry) {
+      roundByOrchestration.set(mission.orchestrationId, {
+        ...entry,
+        missionDone: mission.state === 'DONE',
+      });
+    }
+  }
+
+  const signalled = await signalledClaims({ projectId: input.projectId, limit: limit * 4 });
 
   const out: Harvested[] = [];
-  const limit = Math.max(1, input.limit ?? 20);
-  for (const mission of missions) {
+  const foundPerRound = new Map<string, number>();
+
+  for (const entry of signalled) {
     if (out.length >= limit) break;
-    const { bucket, round } = live.get(mission.candidateId!)!;
-    let foundHere = 0;
+    const { claim } = entry;
+    const signal = claim.opportunitySignal;
+    if (!signal) continue;
+    if (!claim.sourceUrl) continue;
+    /*
+     * A documented absence is a finding, and it is not an opening.
+     *
+     * `NEGATIVE_EXISTENCE` is how "nothing published says anyone is asking"
+     * is established at all, and filing one as an opportunity would put
+     * *nobody is asking* into the portfolio as a piece of work.
+     */
+    if (claim.claimType === 'NEGATIVE_EXISTENCE') continue;
+
+    const context = roundByOrchestration.get(entry.orchestrationId) ?? null;
 
     /*
-     * The citable set, not the accepted-fragment one.
+     * One opportunity per supported opening, decided by the database.
      *
-     * A bucket question is deliberately broad — "which buyers have published a
-     * paid request" — so a fragment answering it will often fall short on
-     * *coverage* while every claim it produced passed the seven-condition gate
-     * on its own. `acceptedClaims` would discard all of them for that, which is
-     * the exact defect `citableClaims` was written for one altitude up: a
-     * five-state question answered for one state, with the other four states'
-     * verified facts thrown away. A gated claim is a real observation whether
-     * or not the question around it was fully settled.
-     *
-     * What does not change is what the claim *is*. Coverage is not weakened
-     * here, because an opening is a single observation rather than an answer to
-     * the bucket.
+     * The read stays because it makes the common case cheap and gives the
+     * loop something to skip; the unique index on `(project, source_claim_id)`
+     * is what actually decides, so two ticks racing produce one piece of work
+     * rather than two.
      */
-    for (const claim of await citableClaims(mission.orchestrationId!)) {
-      if (out.length >= limit) break;
-      // A lane is a row. This is the whole of "is this an opening" — no prose
-      // is read, and the gate has already refused anything unsourced.
-      if (!OPENING_LANES.has(claim.evidenceLane ?? '')) continue;
-      if (!claim.sourceUrl) continue;
-      /*
-       * A documented absence is a finding, and it is not an opening.
-       *
-       * `NEGATIVE_EXISTENCE` is a claim type the research standards already
-       * recognise — it is how "nothing published says anyone is asking" is
-       * established at all — and filing one as an opportunity would put
-       * *nobody is asking* into the portfolio as a piece of work. The lane says
-       * what kind of evidence a claim is; the claim type says whether it found
-       * something or established that there was nothing.
-       */
-      if (claim.claimType === 'NEGATIVE_EXISTENCE') continue;
-      if (await opportunityForClaim(input.projectId, claim.id)) continue;
+    if (await opportunityForClaim(input.projectId, claim.id)) continue;
 
-      const created = await createOpportunity({
-        projectId: input.projectId,
-        cashModeId: mode.id,
-        ownerUserId: mode.ownerUserId,
-        title: clamp(claim.claim, 160),
-        mechanism: bucket.mechanism,
-        currency: mode.currency,
-        source: claim.sourcePublisher ?? claim.sourceTitle ?? claim.sourceUrl,
-        /*
-         * The bucket is where this came from, never what it is.
-         *
-         * `candidateId` means "the Russell idea this opportunity is", and the
-         * wind-down guard reads exactly that column to tell new discovery from
-         * research supporting an existing obligation. A bucket question found
-         * dozens of unrelated openings and is research about none of them, so
-         * writing it there would make the guard read a discovery bucket as
-         * support work the moment any one of its openings started executing —
-         * and re-open the bucket during a wind-down that had stopped it.
-         */
-        discoveredByCandidateId: mission.candidateId,
-        sourceClaimId: claim.id,
-        nextAction:
-          'Establish who can approve payment and how to reach them. The source says somebody ' +
-          'asked; it does not say who pays.',
-      });
+    const created = await createOpportunity({
+      projectId: input.projectId,
+      cashModeId: mode.id,
+      ownerUserId: mode.ownerUserId,
+      title: clamp(claim.claim, 160),
+      // From the claim's own signal rather than from the bucket that asked.
+      // One broad question turns up openings of several kinds, and filing all
+      // of them under the bucket's heading is wrong for most of them.
+      mechanism: mechanismForSignal(signal),
+      currency: mode.currency,
+      source: claim.sourcePublisher ?? claim.sourceTitle ?? claim.sourceUrl,
+      discoveredByCandidateId: context ? context.round.candidateId : null,
+      sourceClaimId: claim.id,
+      // The rest of the chain, written here and never inferred later: which
+      // packet established this, under which fragment's question, in which
+      // round of which bucket.
+      orchestrationId: entry.orchestrationId,
+      fragmentId: entry.fragmentId,
+      discoveryRoundId: context ? context.round.id : null,
+      nextAction:
+        'Establish who can approve payment and how to reach them. The source says somebody ' +
+        'asked; it does not say who pays.',
+    });
+    if (!created) continue;
 
-      /*
-       * The signal, and only the signal.
-       *
-       * A published request is evidence that somebody asked for something. It
-       * is not a payer, a price, an acceptance condition or a delivery path,
-       * and writing any of those from it would be the favourable assumption the
-       * card exists to refuse. They stay unknown, which is what makes them
-       * appear as tasks.
-       */
-      const withSignal = await updateOpportunity(created.id, {
-        buying_signal: clamp(claim.claim, 1_000),
-        signal_observed_at: claim.sourceDate ?? claim.retrievedAt ?? null,
-      });
+    /*
+     * The signal, and only the signal.
+     *
+     * A published request is evidence that somebody asked for something. It
+     * is not a payer, a price, an acceptance condition or a delivery path,
+     * and writing any of those from it would be the favourable assumption the
+     * card exists to refuse. They stay unknown, which is what makes them
+     * appear as tasks — and as the questions the bounded validation assignment
+     * then goes and answers.
+     */
+    const withSignal = await updateOpportunity(created.id, {
+      buying_signal: clamp(claim.claim, 1_000),
+      signal_observed_at: claim.sourceDate ?? claim.retrievedAt ?? null,
+    });
 
-      await recordCashEvent({
-        projectId: input.projectId,
-        opportunityId: created.id,
-        kind: HARVESTED,
-        actorRef: 'BRAIN',
-        summary: `An opening was harvested from a claim in "${bucket.title}".`,
-        detail: {
-          bucketId: bucket.id,
-          claimId: claim.id,
-          missionId: mission.id,
-          sourceUrl: claim.sourceUrl,
-        },
-      });
+    const missionId = missionByOrchestration.get(entry.orchestrationId) ?? null;
+    await recordCashEvent({
+      projectId: input.projectId,
+      opportunityId: created.id,
+      kind: HARVESTED,
+      actorRef: 'BRAIN',
+      summary: context
+        ? `An opening was harvested from a claim in "${context.bucket.title}".`
+        : 'An opening was harvested from an authorized research packet.',
+      detail: {
+        signal,
+        bucketId: context ? context.bucket.id : null,
+        claimId: claim.id,
+        orchestrationId: entry.orchestrationId,
+        fragmentId: entry.fragmentId,
+        missionId,
+        sourceUrl: claim.sourceUrl,
+      },
+    });
 
-      foundHere += 1;
-      out.push({ opportunity: withSignal ?? created, claimId: claim.id, missionId: mission.id });
+    if (context) {
+      foundPerRound.set(context.round.id, (foundPerRound.get(context.round.id) ?? 0) + 1);
     }
+    out.push({ opportunity: withSignal ?? created, claimId: claim.id, missionId });
+  }
 
-    /*
-     * The round is settled by its own bookkeeping, not by the loop ending.
-     *
-     * `found` is what decides whether this bucket is worth asking again, so a
-     * round that produced nothing has to record *nothing* rather than simply
-     * stop being open. Guarded on OPEN, so two ticks reading one finished
-     * mission settle it once — and a round that hit the per-tick limit stays
-     * open, because the claims it has not reached yet are still its own.
-     */
-    if (out.length < limit) await closeRound({ id: round.id, to: 'HARVESTED', found: foundHere });
+  /*
+   * A round is settled by its own bookkeeping, not by the loop ending.
+   *
+   * `found` decides whether the bucket is worth asking again, so a round whose
+   * mission has finished has to record what it found — **including nothing**.
+   * That is why this is outside the "did anything promote" path: a bucket that
+   * documented an absence has answered its question, and leaving it OPEN would
+   * stop it ever being asked again while looking like it was still running.
+   *
+   * Guarded on OPEN by `closeRound`, so two ticks reading one finished mission
+   * settle it once. A round whose mission is still running is left alone,
+   * because its claims have not all arrived.
+   */
+  if (out.length < limit) {
+    for (const entry of roundByOrchestration.values()) {
+      if (!entry.missionDone) continue;
+      await closeRound({
+        id: entry.round.id,
+        to: 'HARVESTED',
+        found: foundPerRound.get(entry.round.id) ?? 0,
+      });
+    }
   }
   return out;
 }
@@ -581,13 +651,38 @@ function clamp(text: string, max: number): string {
 export async function runDiscovery(projectId: string): Promise<{
   opened: OpenedDiscovery[];
   harvested: Harvested[];
+  /** True only on the tick that first wrote the discovery authorization. */
+  authorized: boolean;
+  /** Ideas that had parked for want of it and are back in the queue. */
+  resumed: string[];
 }> {
   // One read answers both halves for the many projects that hold no sprint at
   // all, which is what makes this cheap enough to run for every project on
   // every tick.
-  if (!(await getCashMode(projectId))) return { opened: [], harvested: [] };
+  if (!(await getCashMode(projectId))) {
+    return { opened: [], harvested: [], authorized: false, resumed: [] };
+  }
+
+  /*
+   * First, the authorization that pressing Start already gave.
+   *
+   * Here rather than only at activation, because a hook fixes one entrance and
+   * rows reach every entrance plus everything already stranded — the fifth
+   * time this repository has needed that sentence. A sprint activated before
+   * this existed is reconciled on the next tick with nobody pressing anything,
+   * and the ten ideas it parked for want of a grant come back through the
+   * ordinary judgment path rather than through a second Start action.
+   *
+   * Both are idempotent: the grant by a unique index, the resumption by being
+   * guarded on the exact state it is answering.
+   */
+  const authorized = await ensureDiscoveryAuthority(projectId);
+  const resumed = authorized ? await resumeAuthorityParkedCandidates({ projectId }) : [];
+
   return {
     opened: await openDiscovery({ projectId, limit: 1 }),
     harvested: await harvest({ projectId, limit: 10 }),
+    authorized: authorized?.created ?? false,
+    resumed: resumed.map((one) => one.candidateId),
   };
 }

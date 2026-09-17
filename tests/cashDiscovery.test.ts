@@ -22,6 +22,7 @@
  * with a **blank card**: a published request is evidence somebody asked, and it
  * is not a payer, a price, an acceptance condition or a delivery path.
  */
+import type { OpportunitySignal } from '../server/domain/types.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -89,6 +90,15 @@ async function finishedMission(input: {
   claims: {
     claim: string;
     lane: string | null;
+    /**
+     * The typed opening this claim establishes, if it establishes one.
+     *
+     * Separate from the lane on purpose, and that separation *is* the repair.
+     * Whether a claim is a piece of work used to be read off the lane id, and
+     * lane ids are a planner's words: production wrote seventeen of them across
+     * 82 claims and not one was the literal the harvest compared against.
+     */
+    signal?: OpportunitySignal;
     sourceUrl: string | null;
     accepted?: boolean;
     sourceDate?: string | null;
@@ -96,7 +106,7 @@ async function finishedMission(input: {
     claimType?: 'SOURCED_FACT' | 'NEGATIVE_EXISTENCE' | 'QUOTATION';
   }[];
   fragmentStatus?: 'ACCEPTED' | 'BLOCKED' | 'REJECTED';
-}): Promise<string> {
+}): Promise<{ missionId: string; orchestrationId: string }> {
   const run = await createRun({
     projectId,
     layerId: layer.id,
@@ -159,6 +169,7 @@ async function finishedMission(input: {
       evidenceExcerpt: one.claim,
       evidenceLocator: 'the listing body',
       evidenceLane: one.lane,
+      opportunitySignal: one.signal ?? null,
       retrievedAt: '2026-09-12',
       confidence: 0.8,
       validationState: 'SOURCED' as const,
@@ -184,7 +195,7 @@ async function finishedMission(input: {
   await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
   await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
   await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'DONE' });
-  return mission.id;
+  return { missionId: mission.id, orchestrationId: orchestration.id };
 }
 
 describe('opening the discovery of a sprint', () => {
@@ -270,6 +281,7 @@ describe('discovery keeps going while the sprint is active', () => {
         {
           claim: 'A county published a request for parcel research, closing 30 September 2026.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/round-1',
         },
       ],
@@ -380,6 +392,7 @@ describe('discovery keeps going while the sprint is active', () => {
         {
           claim: 'A county published a request for parcel research after all that noise.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/after-the-noise',
         },
       ],
@@ -398,6 +411,7 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'A county drain commission posted a paid request for parcel research closing 30 September 2026.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/2026-441',
         },
       ],
@@ -427,6 +441,7 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'A buyer published a request for eight hours of drafting work at $95 an hour.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/2026-442',
         },
       ],
@@ -466,6 +481,7 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'A county published a request for eight parcel searches, closing 30 September.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/2026-443',
         },
       ],
@@ -501,6 +517,7 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'A documented search of the three boards found no open requests in this market.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/board/search',
           claimType: 'NEGATIVE_EXISTENCE',
         },
@@ -537,12 +554,14 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'A buyer is asking, according to a page that could not be located.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/2026-444',
           accepted: false,
         },
         {
           claim: 'Somebody mentioned a buyer.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: null,
         },
       ],
@@ -562,6 +581,7 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'One buyer published a paid request; the rest of the market was not covered.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/2026-445',
         },
       ],
@@ -583,6 +603,7 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'A buyer published a request.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/2026-446',
         },
       ],
@@ -600,6 +621,7 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'A buyer published a paid request for survey work.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/2026-447',
         },
       ],
@@ -620,6 +642,7 @@ describe('harvesting what discovery found', () => {
         {
           claim: 'A buyer published a paid request before the sprint ended.',
           lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
           sourceUrl: 'https://example.test/rfp/2026-448',
         },
       ],
@@ -633,7 +656,21 @@ describe('harvesting what discovery found', () => {
     expect(run.harvested).toHaveLength(1);
   });
 
-  it('ignores a mission for a candidate discovery did not open', async () => {
+  /*
+   * A packet a bucket did not open is still authorized research in this sprint.
+   *
+   * This test used to assert the opposite, and that assertion was the defect.
+   * `harvest` walked candidate → mission → round, so a packet with no mission
+   * was invisible — which in production meant four packets an administrator
+   * started, holding 69 accepted claims, could never produce a single piece of
+   * work however good they were.
+   *
+   * What decides is the claim's own typed signal, not which question produced
+   * it. The round is null, honestly, because no bucket asked for it, and the
+   * wind-down guard keeps reading `discoveredByCandidateId` for the difference
+   * between new discovery and work supporting an obligation.
+   */
+  it('files an opening from a packet no bucket opened, with no round on it', async () => {
     await activated();
     await openDiscovery({ projectId });
     const { createCandidate } = await import('../server/repos/russellCandidates.ts');
@@ -647,17 +684,80 @@ describe('harvesting what discovery found', () => {
       candidateId: stranger.id,
       claims: [
         {
-          claim: 'A statutory fact that happens to have been filed under this lane.',
+          claim: 'A county published a request for parcel research, closing 30 September 2026.',
           lane: SIGNAL_LANE,
-          sourceUrl: 'https://example.test/mcl/339',
+          signal: 'ACTIVE_BUYER_DEMAND',
+          sourceUrl: 'https://example.test/rfp/stranger',
         },
       ],
+    });
+
+    const filed = await harvest({ projectId });
+    expect(filed).toHaveLength(1);
+    expect(filed[0]!.opportunity.discoveryRoundId).toBeNull();
+    expect(filed[0]!.opportunity.discoveredByCandidateId).toBeNull();
+    expect(filed[0]!.opportunity.orchestrationId).not.toBeNull();
+  });
+
+  /*
+   * And a claim the *deep dive* produced is not a second opening.
+   *
+   * A validation packet researches one opening that already exists, so it will
+   * legitimately establish demand, a price and a deadline about it. Harvesting
+   * those would file the answer to "is this worth doing" as another piece of
+   * work and then validate that in turn — a loop that looks like discovery and
+   * is one packet chasing its own tail.
+   */
+  it('does not harvest a validation packet\'s own findings', async () => {
+    await activated();
+    const opened = await openDiscovery({ projectId });
+    await finishedMission({
+      candidateId: opened[0]!.candidateId,
+      claims: [
+        {
+          claim: 'A county published a request for parcel research, closing 30 September 2026.',
+          lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
+          sourceUrl: 'https://example.test/rfp/one',
+        },
+      ],
+    });
+    const [first] = await harvest({ projectId });
+    expect(first).toBeDefined();
+
+    const { createCandidate } = await import('../server/repos/russellCandidates.ts');
+    const deepDive = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Validate that opening',
+      statement: 'Who pays, what it pays and when it closes.',
+    });
+    const validation = await finishedMission({
+      candidateId: deepDive.id,
+      claims: [
+        {
+          claim: 'The same county also published a second, larger request for the same work.',
+          lane: SIGNAL_LANE,
+          signal: 'ACTIVE_BUYER_DEMAND',
+          sourceUrl: 'https://example.test/rfp/two',
+        },
+      ],
+    });
+    const { updateOpportunity } = await import('../server/repos/cashPortfolio.ts');
+    await updateOpportunity(first!.opportunity.id, {
+      validation_orchestration_id: validation.orchestrationId,
+      validation_state: 'RUNNING',
     });
 
     expect(await harvest({ projectId })).toEqual([]);
   });
 
   it('does nothing at all for a project with no sprint', async () => {
-    expect(await runDiscovery(projectId)).toEqual({ opened: [], harvested: [] });
+    expect(await runDiscovery(projectId)).toEqual({
+      opened: [],
+      harvested: [],
+      authorized: false,
+      resumed: [],
+    });
   });
 });

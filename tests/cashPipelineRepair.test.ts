@@ -1,0 +1,836 @@
+/**
+ * The fifteen things the production audit said were not true, made true.
+ *
+ * Each `describe` here is one of them, and each one is written against the
+ * defect it exists to stop coming back rather than against the happy path:
+ * every suite in this file that could pass by asserting a success asserts the
+ * refusal instead, because the refusals are what the production run lost.
+ *
+ * What the audit found, in one paragraph. A sprint was activated and ten
+ * discovery buckets opened; every one of their candidates parked on *no
+ * standing authority exists for this project*, a sentence stored in a JSON
+ * column no surface read. Separately, twenty administrator-started packets ran:
+ * six were refused at the planning pass for declaring source types like
+ * "company careers page", with a message saying they were not statutes — which
+ * that envelope does not require. Four reached a filed report, thirteen of
+ * their claims were destroyed by a verification pass that answered `UNSTATED`
+ * rather than looking, and all four filed as "Opportunity Research v1" so three
+ * were immediately superseded. Zero opportunities were produced, because the
+ * bridge from a claim to a piece of work compared the lane id against the
+ * literal `demand_signal`, which none of the seventeen lane ids production
+ * wrote ever was.
+ */
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { activate, setLifecycle } from '../server/services/cash/lifecycle.ts';
+import {
+  CASH_DISCOVERY_AUTHORITY_NAME,
+  discoveryAuthority,
+  ensureDiscoveryAuthority,
+  resumeAuthorityParkedCandidates,
+} from '../server/services/cash/discoveryAuthority.ts';
+import { listGoals } from '../server/repos/russellAuthority.ts';
+import { ALWAYS_PROHIBITED } from '../server/repos/russellAuthority.ts';
+import { liveAuthority } from '../server/repos/cashAuthority.ts';
+import { getDb } from '../server/db/database.ts';
+import { createCandidate, getCandidate, recordJudgment } from '../server/repos/russellCandidates.ts';
+import {
+  APPROVAL_ENVELOPES,
+  planFitsEnvelope,
+} from '../server/services/research/approvalEnvelope.ts';
+import { applyGate } from '../server/services/research/gate.ts';
+import {
+  declaredScopeOf,
+  scopeAnswerRefusal,
+  parseVerificationPass,
+} from '../server/services/research/schema.ts';
+import type { ClaimScopeMatch } from '../server/services/research/schema.ts';
+import { buildCanonicalName } from '../server/domain/naming.ts';
+import { cashEngineCard, derivedEconomics } from '../server/services/cash/engineCard.ts';
+import type {
+  ResearchClaim,
+  ResearchFragment,
+  ResearchOrchestration,
+  CashCardFact,
+  CashOpportunity,
+} from '../server/domain/types.ts';
+
+let projectId = '';
+let userId = '';
+
+beforeEach(async () => {
+  const fixture = await freshProject();
+  projectId = fixture.project.id;
+  const user = await createUser({
+    email: `repair-${Math.random().toString(36).slice(2, 10)}@example.test`,
+    displayName: 'Owner',
+    password: 'correct horse battery staple',
+  });
+  userId = user.id;
+});
+
+async function start(): Promise<void> {
+  const outcome = await activate({
+    projectId,
+    ownerUserId: userId,
+    actorUserId: userId,
+    objective: 'Maximize additional usable cash over the next few weeks.',
+  });
+  expect(outcome.ok).toBe(true);
+}
+
+// ---------------------------------------------------------------------------
+// 1, 2 — starting Cash Mode is the authorization, and it authorizes only reading
+// ---------------------------------------------------------------------------
+
+describe('pressing Start is the authorization', () => {
+  it('creates the internal discovery authorization exactly once', async () => {
+    await start();
+    const first = await discoveryAuthority(projectId);
+    expect(first).not.toBeNull();
+    expect(first!.name).toBe(CASH_DISCOVERY_AUTHORITY_NAME);
+
+    // Activating again, and every tick after it, authorizes once.
+    await start();
+    await ensureDiscoveryAuthority(projectId);
+    await ensureDiscoveryAuthority(projectId);
+
+    const live = (await listGoals(projectId)).filter(
+      (goal) => goal.state === 'ACTIVE' && goal.name === CASH_DISCOVERY_AUTHORITY_NAME,
+    );
+    expect(live).toHaveLength(1);
+    expect(live[0]!.id).toBe(first!.id);
+  });
+
+  it('grants no commercial authority and permits no external action', async () => {
+    await start();
+    const grant = await discoveryAuthority(projectId);
+    expect(grant).not.toBeNull();
+
+    // Research, and nothing else.
+    expect(grant!.allowedWork).toEqual(['RESEARCH']);
+    // Every external effect is prohibited on the row itself, not by a rule
+    // somebody has to remember.
+    for (const prohibition of ALWAYS_PROHIBITED) {
+      expect(grant!.prohibitions).toContain(prohibition);
+    }
+    expect(grant!.prohibitions).toContain('NEW_SPENDING');
+    expect(grant!.prohibitions).toContain('PURCHASE');
+    expect(grant!.prohibitions).toContain('CONTACT_PERSON');
+    expect(grant!.prohibitions).toContain('PUBLISH_EXTERNALLY');
+    expect(grant!.maxExternalSpend).toBe(0);
+
+    // And it is not a commercial grant. That is a separate decision a person
+    // makes deliberately, and starting a sprint does not make it.
+    expect(await liveAuthority(projectId)).toBeNull();
+  });
+
+  it('withdraws it when the sprint is archived, and restores it when it comes back', async () => {
+    await start();
+    await setLifecycle({
+      projectId,
+      to: 'ARCHIVED',
+      actorUserId: userId,
+      reason: 'The sprint is over.',
+    });
+    expect(await discoveryAuthority(projectId)).toBeNull();
+
+    await setLifecycle({
+      projectId,
+      to: 'ACTIVE',
+      actorUserId: userId,
+      reason: 'Picking it back up.',
+    });
+    expect(await discoveryAuthority(projectId)).not.toBeNull();
+
+    // Nothing was destroyed: the withdrawn grant keeps its row and its reason.
+    const all = await listGoals(projectId);
+    expect(all.filter((goal) => goal.state === 'REVOKED')).toHaveLength(1);
+    expect(all.find((goal) => goal.state === 'REVOKED')!.revokedReason).toContain('archived');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3 — the ideas that parked for want of it come back, once, without duplication
+// ---------------------------------------------------------------------------
+
+describe('ideas parked for want of the grant', () => {
+  it('resumes them through the ordinary path and creates no duplicate', async () => {
+    // A candidate parked exactly as production's ten were: judged, and stopped
+    // on the sentence `standingAuthority()` composes.
+    const candidate = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Who is publicly asking to pay for work right now',
+      statement: 'Which buyers have published a paid request?',
+    });
+    await recordJudgment({
+      candidateId: candidate.id,
+      state: 'PARKED',
+      priority: 'PARKED',
+      reason:
+        'this depends on no standing authority exists for this project, which is not ready',
+      judgment: { blockedBy: 'no standing authority exists for this project' },
+      supporting: [],
+      contradicting: [],
+    });
+
+    // Without a grant, nothing moves.
+    expect(await resumeAuthorityParkedCandidates({ projectId })).toEqual([]);
+
+    await start();
+    const resumed = await resumeAuthorityParkedCandidates({ projectId });
+    expect(resumed.map((one) => one.candidateId)).toEqual([candidate.id]);
+
+    const after = await getCandidate(candidate.id);
+    // Back where `unjudged()` will find it — that selector reads `priority IS
+    // NULL` — and it is the same row, not a second one.
+    expect(after!.state).toBe('CAPTURED');
+    expect(after!.priority).toBeNull();
+    expect(after!.id).toBe(candidate.id);
+
+    // Running it again resumes nothing: the guard is on the exact state it
+    // answers, so a second tick is a no-op rather than a second resumption.
+    expect(await resumeAuthorityParkedCandidates({ projectId })).toEqual([]);
+  });
+
+  it('leaves an idea parked for any other reason exactly where it is', async () => {
+    await start();
+    const candidate = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Something the archive already answered',
+      statement: 'A question this project has already researched.',
+    });
+    await recordJudgment({
+      candidateId: candidate.id,
+      state: 'PARKED',
+      priority: 'PARKED',
+      reason: 'Researched once and it produced no report.',
+      judgment: { blockedBy: 'the archive already answers this' },
+      supporting: [],
+      contradicting: [],
+    });
+
+    expect(await resumeAuthorityParkedCandidates({ projectId })).toEqual([]);
+    expect((await getCandidate(candidate.id))!.state).toBe('PARKED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4, 5 — the envelope admits market sources and still refuses every effect
+// ---------------------------------------------------------------------------
+
+describe('the cash discovery envelope', () => {
+  const ENVELOPE = APPROVAL_ENVELOPES['RUSSELL_CASH_DISCOVERY_V1']!;
+
+  function packet(): ResearchOrchestration {
+    return {
+      id: 'orc_test',
+      assignment: ENVELOPE.assignmentTemplate!.replace('{QUESTION}', 'Who is asking to pay?')
+        .replace('{JURISDICTION}', 'the market this question names'),
+      fixture: false,
+      unresolvedGapPolicy: null,
+    } as unknown as ResearchOrchestration;
+  }
+
+  function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
+    return {
+      fragmentKey: 'market-signal',
+      question: 'Which buyers have published a paid request for work deliverable within weeks?',
+      geography: 'United States',
+      timeframe: 'Postings open as of today',
+      population: 'Individual postings naming a task and a payment',
+      definitions: 'A paid request is one posting naming a task and a payment amount.',
+      acceptableSourceTypes: ['a marketplace or job board listing'],
+      excludedSourceTypes: ['a forecast presented as a current fact'],
+      completionCriteria: ['at least one dated published request'],
+      minIndependentSources: 1,
+      requiredEvidence: [{ id: 'demand_signal', description: 'a published request', necessity: 'REQUIRED' }],
+      ...overrides,
+    } as unknown as ResearchFragment;
+  }
+
+  /*
+   * The exact source phrases production was refused for.
+   *
+   * Every one of these cost a whole plan at the planning pass, and every one is
+   * an ordinary published artefact this envelope's own authorization admits.
+   */
+  const ADMITTED = [
+    'company careers page',
+    "A platform's own public pricing page",
+    'named domain appraisal service report',
+    "A business's own careers/hiring page",
+    'Small-business capability-statement directories (e.g. SBA Dynamic Small Business Search / DSBS)',
+    'state consumer-protection or licensing board complaint record',
+    'Google Business review thread',
+    'Yelp review thread',
+    'government surplus auction platform listing page',
+    'public freelance or project marketplace listing page',
+    'Official government procurement portal listing',
+    'bounty platform public listing',
+  ];
+
+  it('admits the market sources it refused six production plans for', () => {
+    for (const source of ADMITTED) {
+      const verdict = planFitsEnvelope({
+        envelope: ENVELOPE,
+        orchestration: packet(),
+        fragments: [fragment({ acceptableSourceTypes: [source] })],
+      });
+      expect(verdict.reasons.join(' '), source).not.toMatch(/does not admit/);
+    }
+  });
+
+  it('still refuses a source that is not a published artefact', () => {
+    const verdict = planFitsEnvelope({
+      envelope: ENVELOPE,
+      orchestration: packet(),
+      fragments: [fragment({ acceptableSourceTypes: ['a purchased contact list'] })],
+    });
+    expect(verdict.fits).toBe(false);
+    // And the refusal quotes this envelope's own rule rather than a constant
+    // about statutes, which is what sent an operator looking for the wrong fix.
+    expect(verdict.reasons.join(' ')).toMatch(/this envelope does not admit/);
+    expect(verdict.reasons.join(' ')).toMatch(/a published source somebody can open/);
+    expect(verdict.reasons.join(' ')).not.toMatch(/primary statute/);
+  });
+
+  /*
+   * The half that must not move.
+   *
+   * Each of these is Brain being told to do something to the world, and each
+   * is refused whatever the subject matter is.
+   */
+  const STILL_REFUSED = [
+    'Email the buyer to confirm the budget.',
+    'Contact the agency and ask what they will pay.',
+    'Purchase the dataset and quote the figures.',
+    'Place a bid on the surplus lot.',
+    'Publish a listing offering the service.',
+    'Register with the marketplace to see the full posting.',
+    'We will call the supplier to confirm the price.',
+  ];
+
+  it('refuses every instruction to act on the world', () => {
+    for (const question of STILL_REFUSED) {
+      const verdict = planFitsEnvelope({
+        envelope: ENVELOPE,
+        orchestration: packet(),
+        fragments: [fragment({ question })],
+      });
+      expect(verdict.fits, question).toBe(false);
+      expect(verdict.reasons.join(' ')).toMatch(
+        /an action on the world rather than reading a published source/,
+      );
+    }
+  });
+
+  /*
+   * And the half that was refusing the work it exists to permit.
+   *
+   * A surplus auction *is* a purchase; a listing explains how to place a bid;
+   * a platform's terms say who may contact whom. None of those is Brain acting.
+   */
+  const READING_ABOUT_A_TRANSACTION = [
+    'Which government surplus listings are currently available to purchase, and what does the listing say about the closing time?',
+    'Record what the listing says about how to place a bid, quoting the platform.',
+    "Establish what the platform's own terms state about a third party contacting the two listers.",
+    'Which businesses are hiring for a role that describes the gap?',
+    'Which assets are listed for sale at a published price?',
+  ];
+
+  it('admits reading about a transaction it may not perform', () => {
+    for (const question of READING_ABOUT_A_TRANSACTION) {
+      const verdict = planFitsEnvelope({
+        envelope: ENVELOPE,
+        orchestration: packet(),
+        fragments: [fragment({ question })],
+      });
+      expect(verdict.reasons.join(' '), question).not.toMatch(/an action on the world/);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6, 7, 8 — the evidence bar, per lane and per kind
+// ---------------------------------------------------------------------------
+
+describe('the evidence bar', () => {
+  function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
+    return {
+      id: `clm_${Math.random().toString(36).slice(2, 10)}`,
+      orchestrationId: 'orc_test',
+      fragmentId: 'frg_test',
+      passId: null,
+      passKey: 'TARGETED',
+      claim: 'A buyer published a request for parcel research.',
+      sourceUrl: 'https://example.test/rfp/1',
+      sourceTitle: 'A listing',
+      sourcePublisher: 'A marketplace',
+      sourceDate: '2026-09-10',
+      evidenceExcerpt: 'the listing body',
+      evidenceLocator: 'the listing body',
+      evidenceLane: 'task_listing',
+      opportunitySignal: null,
+      retrievedAt: '2026-09-12',
+      confidence: 0.8,
+      contradictionState: 'UNCHALLENGED',
+      retrievalState: 'RETRIEVED',
+      contradictionNote: null,
+      validationState: 'SOURCED',
+      validationDetail: null,
+      sourced: true,
+      derived: false,
+      derivedFrom: [],
+      accepted: false,
+      rejectionReason: null,
+      scopeMatch: null,
+      claimType: 'SOURCED_FACT',
+      sourceGroup: 'host:example.test',
+      primarySource: true,
+      geography: null,
+      timeframe: null,
+      population: null,
+      definition: null,
+      requirementIds: [],
+      jobId: null,
+      contentHash: Math.random().toString(36),
+      createdAt: new Date().toISOString(),
+      ...overrides,
+    } as unknown as ResearchClaim;
+  }
+
+  function fragment(overrides: Partial<ResearchFragment> = {}): ResearchFragment {
+    return {
+      id: 'frg_test',
+      geography: 'United States',
+      timeframe: null,
+      population: null,
+      definitions: null,
+      minIndependentSources: 1,
+      requiredEvidence: [
+        { id: 'task_listing', description: 'a published listing', necessity: 'REQUIRED' },
+      ],
+      ...overrides,
+    } as unknown as ResearchFragment;
+  }
+
+  const MATCH: ClaimScopeMatch = {
+    geography: 'MATCH',
+    timeframe: 'MATCH',
+    population: 'MATCH',
+    definitions: 'MATCH',
+  };
+
+  function verify(claims: ResearchClaim[]) {
+    return {
+      verdicts: new Map(
+        claims.map((one) => [one.id, { supportsClaim: true, scopeMatch: MATCH, note: '' }]),
+      ),
+      sufficiency: 'SUFFICIENT' as const,
+      missingLanes: [],
+      unresolvedGaps: [],
+    };
+  }
+
+  it('lets one authoritative listing prove one specific opening', () => {
+    const claims = [claim()];
+    const gate = applyGate({
+      fragment: fragment(),
+      claims,
+      verification: verify(claims),
+    });
+    expect(gate.integrity).toBe('PASS');
+    expect(gate.sufficiency).toBe('SUFFICIENT');
+    expect(gate.coverage[0]!.evidenceKind).toBe('SPECIFIC_INSTANCE');
+    expect(gate.coverage[0]!.requiredExamples).toBe(1);
+  });
+
+  it('enforces the distinct-example count a fragment declares', () => {
+    // The production fragment's own completion criteria asked for three
+    // independently-posted listings. The gate accepted one, because the
+    // criteria were prose nothing read.
+    const declared = fragment({
+      requiredEvidence: [
+        {
+          id: 'task_listing',
+          description: 'three separately-posted listings for the same task',
+          necessity: 'REQUIRED',
+          evidenceKind: 'MARKET_PATTERN',
+          minDistinctExamples: 3,
+        },
+      ],
+    });
+
+    const one = [claim()];
+    const short = applyGate({ fragment: declared, claims: one, verification: verify(one) });
+    expect(short.sufficiency).toBe('INSUFFICIENT');
+    expect(short.coverage[0]!.meetsThreshold).toBe(false);
+    expect(short.coverage[0]!.requiredExamples).toBe(3);
+
+    // Three postings on ONE board are three distinct examples and one
+    // publisher. Both are true and they answer different questions.
+    const three = [
+      claim({ sourceUrl: 'https://example.test/project/40667257' }),
+      claim({ sourceUrl: 'https://example.test/project/40703833' }),
+      claim({ sourceUrl: 'https://example.test/project/40706646' }),
+    ];
+    const met = applyGate({ fragment: declared, claims: three, verification: verify(three) });
+    expect(met.coverage[0]!.distinctExamples).toBe(3);
+    expect(met.coverage[0]!.independentSources).toBe(1);
+    expect(met.coverage[0]!.meetsThreshold).toBe(true);
+  });
+
+  it('makes a generalized economics lane need more than one publisher', () => {
+    const declared = fragment({
+      requiredEvidence: [
+        {
+          id: 'task_listing',
+          description: 'what this kind of work pays across the market',
+          necessity: 'REQUIRED',
+          evidenceKind: 'GENERALIZED_ECONOMICS',
+        },
+      ],
+    });
+    const oneHost = [
+      claim({ sourceUrl: 'https://example.test/a' }),
+      claim({ sourceUrl: 'https://example.test/b' }),
+    ];
+    const short = applyGate({ fragment: declared, claims: oneHost, verification: verify(oneHost) });
+    expect(short.coverage[0]!.meetsThreshold).toBe(false);
+    expect(short.coverage[0]!.requiredIndependentSources).toBe(2);
+
+    const twoHosts = [
+      claim({ sourceUrl: 'https://example.test/a', sourceGroup: 'host:example.test' }),
+      claim({ sourceUrl: 'https://other.test/b', sourceGroup: 'host:other.test' }),
+    ];
+    const met = applyGate({ fragment: declared, claims: twoHosts, verification: verify(twoHosts) });
+    expect(met.coverage[0]!.meetsThreshold).toBe(true);
+  });
+
+  it('refuses a time-sensitive claim that says when nothing', () => {
+    // 52 of 82 production claims carried no publication date, against an
+    // assignment whose own evidence standard demanded one. Nothing checked.
+    const dated = fragment({ timeframe: 'Postings open as of 2026-09-16' });
+    const undated = [claim({ sourceDate: null, retrievedAt: null })];
+    const gate = applyGate({ fragment: dated, claims: undated, verification: verify(undated) });
+    expect(gate.claims[0]!.accepted).toBe(false);
+    expect(gate.claims[0]!.failedCondition).toBe('DATED');
+
+    // The retrieval date counts. "This is what the page said when it was read"
+    // is an honest observation date, and is often the only one a listing has.
+    const observed = [claim({ sourceDate: null, retrievedAt: '2026-09-16' })];
+    const fine = applyGate({ fragment: dated, claims: observed, verification: verify(observed) });
+    expect(fine.claims[0]!.accepted).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9 — a required scope dimension cannot silently become UNSTATED
+// ---------------------------------------------------------------------------
+
+describe('the verification contract', () => {
+  const DECLARED = declaredScopeOf({
+    geography: 'United States',
+    timeframe: 'Postings open as of 2026-09-16',
+    population: 'Distinct, separately-posted project listings',
+    definitions: null,
+  });
+
+  it('refuses UNSTATED for a dimension the fragment declares', () => {
+    const refusal = scopeAnswerRefusal({
+      where: 'verdicts[0]',
+      declared: DECLARED,
+      scopeMatch: {
+        geography: 'MATCH',
+        timeframe: 'MATCH',
+        population: 'UNSTATED',
+        definitions: 'MATCH',
+      },
+      scopeBasis: { geography: 'US', timeframe: 'open now', population: 'the listings' },
+    });
+    expect(refusal).toMatch(/UNSTATED, which is no longer an answer/);
+  });
+
+  it('refuses a verdict with no basis for a declared dimension', () => {
+    const refusal = scopeAnswerRefusal({
+      where: 'verdicts[0]',
+      declared: DECLARED,
+      scopeMatch: {
+        geography: 'MATCH',
+        timeframe: 'MATCH',
+        population: 'MATCH',
+        definitions: 'NOT_APPLICABLE',
+      },
+      scopeBasis: { geography: 'US', timeframe: 'open now' },
+    });
+    expect(refusal).toMatch(/population_basis" is missing/);
+  });
+
+  it('accepts a complete answer, including an honest UNKNOWN', () => {
+    expect(
+      scopeAnswerRefusal({
+        where: 'verdicts[0]',
+        declared: DECLARED,
+        scopeMatch: {
+          geography: 'MATCH',
+          timeframe: 'MATCH',
+          population: 'UNKNOWN',
+          definitions: 'MATCH',
+        },
+        scopeBasis: {
+          geography: 'United States — the posting is New York, NY.',
+          timeframe: 'Open as of 2026-09-16 — the posting has no stated close.',
+          population: 'The posting does not say whether it is one of a repeated series.',
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it('refuses a whole verification pass whose verdict is incomplete', () => {
+    const body = JSON.stringify({
+      claimVerdicts: [
+        {
+          claimIndex: 0,
+          supportsClaim: true,
+          scopeMatch: {
+            geography: 'MATCH',
+            timeframe: 'MATCH',
+            population: 'MATCH',
+            definitions: 'MATCH',
+          },
+          contradictionState: 'UNCHALLENGED',
+          note: 'The listing states it directly.',
+        },
+      ],
+      sufficiency: 'SUFFICIENT',
+      missingLanes: [],
+      unresolvedGaps: [],
+      reasoning: 'Everything checked out.',
+    });
+    const parsed = parseVerificationPass(body, DECLARED);
+    expect(parsed.ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13 — the historical rows this repair must not touch
+// ---------------------------------------------------------------------------
+
+describe('what the repair must not touch', () => {
+  it('leaves a claim written before the signal column existed unpromotable', async () => {
+    // Every production claim has `opportunity_signal = NULL`, because the
+    // column did not exist when they were written. A claim with no signal is
+    // not an opening, so none of them is promoted retroactively — which is the
+    // instruction's own rule: existing evidence may be reused as archive
+    // evidence and may not become an opportunity merely by existing.
+    const { signalledClaims } = await import('../server/repos/research.ts');
+    expect(await signalledClaims({ projectId })).toEqual([]);
+  });
+
+  it('keeps the canonical name a packet outside a cash project already had', () => {
+    // Deal Dispatch files one packet per layer version, so its names must be
+    // byte-identical: `launch()` treats one specification as researchable once,
+    // and a changed name would relaunch work already done.
+    expect(buildCanonicalName('Monetization Logic', 'v1')).toBe('Monetization Logic v1');
+    expect(buildCanonicalName('Monetization Logic', 'v1', null)).toBe('Monetization Logic v1');
+  });
+
+  it('separates two concurrent packets answering different questions', () => {
+    // Four production packets filed as "Opportunity Research v1" and three were
+    // immediately marked superseded, because supersession is keyed on the name.
+    const first = buildCanonicalName(
+      'Opportunity Research',
+      'v1',
+      'Who is publicly asking to pay for work right now',
+    );
+    const second = buildCanonicalName(
+      'Opportunity Research',
+      'v1',
+      'Which facts people are visibly paying to obtain',
+    );
+    expect(first).not.toBe(second);
+    expect(first).toContain('Opportunity Research v1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12 — the card separates fact, estimate, assumption and unknown
+// ---------------------------------------------------------------------------
+
+describe('the Cash Engine Card', () => {
+  function opportunity(overrides: Partial<CashOpportunity> = {}): CashOpportunity {
+    return {
+      id: 'cop_test',
+      projectId,
+      title: 'A county published a request for parcel research',
+      currency: 'USD',
+      payer: null,
+      reachableChannel: null,
+      buyingSignal: 'A county published a request for parcel research, closing 30 September.',
+      signalObservedAt: '2026-09-16',
+      offerScope: null,
+      acceptanceCondition: null,
+      priceCents: null,
+      paymentTerms: null,
+      fulfillmentOwner: null,
+      deliveryMethod: null,
+      deadline: null,
+      economicsNote: null,
+      peakFundingCents: null,
+      humanHours: null,
+      nextAction: null,
+      validationState: 'COMPLETE',
+      ...overrides,
+    } as unknown as CashOpportunity;
+  }
+
+  function fact(overrides: Partial<CashCardFact>): CashCardFact {
+    return {
+      id: `ccf_${Math.random().toString(36).slice(2, 8)}`,
+      projectId,
+      opportunityId: 'cop_test',
+      kind: 'EVIDENCE',
+      value: '',
+      claimId: null,
+      needId: null,
+      basis: null,
+      assumptions: null,
+      uncertainty: null,
+      decidedBy: 'BRAIN',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...overrides,
+    } as unknown as CashCardFact;
+  }
+
+  it('says of every answer whether it is a fact, an estimate or a person’s', () => {
+    const card = cashEngineCard({
+      opportunity: opportunity(),
+      facts: [
+        fact({
+          field: 'revenueRange',
+          kind: 'EVIDENCE',
+          value: 'Comparable parcel-research work is listed at $400–$900.',
+          claimId: 'clm_price',
+        }),
+        fact({
+          field: 'requiredCapital',
+          kind: 'RECOMMENDATION',
+          value: 'At most the direct costs above.',
+          basis: 'The published direct costs.',
+          assumptions: 'That nothing else has to be bought first.',
+          uncertainty: 'A cost that turns up later raises it.',
+        }),
+        fact({ field: 'offer', kind: 'PERSON', value: 'One parcel report, one county.' }),
+      ],
+    });
+
+    const by = (key: string) => card.entries.find((one) => one.key === key)!;
+    expect(by('revenueRange').kind).toBe('FACT');
+    expect(by('revenueRange').claimId).toBe('clm_price');
+    expect(by('requiredCapital').kind).toBe('ESTIMATE');
+    expect(by('requiredCapital').uncertainty).not.toBeNull();
+    expect(by('offer').kind).toBe('DECISION');
+    // And what nobody has answered stays unknown rather than becoming a zero.
+    expect(by('directCosts').kind).toBe('UNKNOWN');
+    expect(by('directCosts').value).toBeNull();
+    expect(card.unknowns).toContain('directCosts');
+  });
+
+  it('withholds a margin rather than computing one against an unknown cost', () => {
+    const card = cashEngineCard({
+      opportunity: opportunity(),
+      facts: [
+        fact({ field: 'revenueRange', kind: 'EVIDENCE', value: '$400–$900', claimId: 'clm_price' }),
+      ],
+    });
+    const margin = derivedEconomics(card).find((one) => one.key === 'margin')!;
+    expect(margin.value).toBeNull();
+    expect(margin.withheld).toMatch(/direct costs are unknown/);
+
+    const both = cashEngineCard({
+      opportunity: opportunity(),
+      facts: [
+        fact({ field: 'revenueRange', kind: 'EVIDENCE', value: '$400–$900', claimId: 'clm_price' }),
+        fact({ field: 'directCosts', kind: 'EVIDENCE', value: '$120 of data fees', claimId: 'clm_cost' }),
+      ],
+    });
+    const computed = derivedEconomics(both).find((one) => one.key === 'margin')!;
+    expect(computed.value).not.toBeNull();
+    // Every input is named by the claim it came from, so a reader can check the
+    // number rather than believe it.
+    expect(computed.inputs.map((one) => one.claimId)).toEqual(['clm_price', 'clm_cost']);
+    expect(computed.formula).toMatch(/less the published direct costs/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14 — reading the dashboard changes nothing
+// ---------------------------------------------------------------------------
+
+describe('the dashboard', () => {
+  it('reads and refreshes without mutating any work', async () => {
+    await start();
+    const { openDiscovery } = await import('../server/services/cash/discovery.ts');
+    await openDiscovery({ projectId });
+
+    const { cashView } = await import('../server/services/cash/view.ts');
+    const before = await snapshot();
+    await cashView({ projectId });
+    await cashView({ projectId });
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('shows an open round whose candidate is parked as stopped, with the reason', async () => {
+    await start();
+    const { openDiscovery } = await import('../server/services/cash/discovery.ts');
+    const [opened] = await openDiscovery({ projectId });
+    expect(opened).toBeDefined();
+
+    await recordJudgment({
+      candidateId: opened!.candidateId,
+      state: 'PARKED',
+      priority: 'PARKED',
+      reason: 'this depends on something that is not ready',
+      judgment: { blockedBy: 'something else' },
+      supporting: [],
+      contradicting: [],
+    });
+
+    const { cashRoadmap } = await import('../server/services/cash/roadmap.ts');
+    const map = await cashRoadmap(projectId);
+    const round = map.active.find((one) => one.roundId !== undefined)!;
+    // The round's own state column still says OPEN. What a person is shown is
+    // what is actually happening, which is nothing.
+    expect(round.state).toBe('OPEN');
+    expect(round.activity).toBe('PARKED');
+    expect(round.blocker).toMatch(/not ready/);
+    expect(map.whatHappensNext).toMatch(/cannot proceed/);
+  });
+});
+
+/** Every row this repair is not allowed to change, as one comparable value. */
+async function snapshot(): Promise<Record<string, number>> {
+  const db = getDb();
+  const out: Record<string, number> = {};
+  for (const table of [
+    'research_orchestrations',
+    'research_fragments',
+    'research_claims',
+    'research_passes',
+    'documents',
+    'audits',
+    'cash_discovery_rounds',
+    'cash_opportunities',
+    'russell_candidates',
+    'work_items',
+  ]) {
+    const row = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`);
+    out[table] = Number(row?.n ?? 0);
+  }
+  return out;
+}
