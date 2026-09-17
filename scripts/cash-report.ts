@@ -137,6 +137,24 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   const candidates = await listCandidates({ projectId });
   console.log('');
   console.log(`IDEAS (${candidates.length}) — ${tally(candidates, (one) => one.state)}`);
+  /*
+   * A parked idea prints the exact field the resume reads, not a paraphrase.
+   *
+   * `resumeAuthorityParkedCandidates` matches `judgment.blockedBy` against the
+   * sentences `checkAuthority` itself composes, and refuses to unpark anything
+   * else — so when a park survives a tick, the one thing worth knowing is
+   * which of those sentences it actually carries. Printing `reason` alone
+   * would be printing a neighbour of the answer.
+   */
+  for (const candidate of candidates.filter((one) => one.state === 'PARKED')) {
+    // Already mapped out of the row by the repository, so it is read rather
+    // than parsed here — the raw column is what `blockedOnStandingAuthority`
+    // reads, and both resolve to the same value.
+    const blockedBy = candidate.judgment['blockedBy'];
+    console.log(`  PARKED ${candidate.id} priority=${candidate.priority ?? '—'}`);
+    console.log(`      blockedBy: ${trim(typeof blockedBy === 'string' ? blockedBy : null)}`);
+    console.log(`      reason:    ${trim(candidate.reason)}`);
+  }
 
   const roadmap = await cashRoadmap(projectId);
   console.log('');
