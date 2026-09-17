@@ -21,6 +21,7 @@
  * wrote ever was.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate, setLifecycle } from '../server/services/cash/lifecycle.ts';
@@ -894,6 +895,48 @@ describe('pressing Start produces work the fleet can actually take', () => {
 
     // Still nothing that could touch the world.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 18 — a researched answer reaches the card's own reader, not only its facts
+// ---------------------------------------------------------------------------
+
+describe('what the deep dive answers', () => {
+  /*
+   * `answers.ts` writes the opportunity column *and* the card fact when a
+   * need's research settles a field. `applyValidationAnswers` wrote only the
+   * fact — so the identical question, answered by the deep dive instead,
+   * reached `cash_card_facts` and never reached `evidenceCard`, `readyToTest`
+   * or anything else that reads the row.
+   *
+   * Two writers for one field with only one of them counting is this
+   * repository's own recurring defect, and the fix is the one it keeps
+   * reaching for: both read the same map rather than keeping a copy each.
+   */
+  it('writes the opportunity column as well as the fact, from one shared map', async () => {
+    const { COLUMN } = await import('../server/services/cash/answers.ts');
+    const validation = await import('../server/services/cash/validation.ts');
+
+    // Every lane the deep dive fills resolves either to a real column or to an
+    // engine field that deliberately has none. What must not exist is a third
+    // answer — a field this believes has a column that the other writer does
+    // not agree about.
+    const fields = Object.values(validation.FIELD_BY_LANE);
+    expect(fields).toContain('payer');
+    expect(COLUMN['payer']).toBe('payer');
+    // `hours` is an engine field: a card fact and nothing else, by design.
+    expect(fields).toContain('hours');
+    expect(COLUMN['hours']).toBeUndefined();
+
+    // And the module reads that map rather than restating it, which is the
+    // half that stops the two drifting apart later.
+    const source = await readFile(
+      new URL('../server/services/cash/validation.ts', import.meta.url),
+      'utf8',
+    );
+    expect(source).toMatch(/import \{ COLUMN \} from '\.\/answers\.ts'/);
+    expect(source).toContain('updateOpportunity(opportunity.id, { [column]: value }');
   });
 });
 

@@ -88,7 +88,7 @@ const BRAIN = 'BRAIN';
  * output. It is recorded as a card fact, where a person reads it, and changes
  * no column.
  */
-const COLUMN: Record<string, string> = {
+export const COLUMN: Record<string, string> = {
   payer: 'payer',
   access: 'reachable_channel',
   offer: 'offer_scope',

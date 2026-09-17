@@ -46,6 +46,7 @@ import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts'
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { citableClaims, getOrchestration } from '../../repos/research.ts';
 import { cardFact, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
+import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
 import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
@@ -314,7 +315,7 @@ export { getOpportunity };
  * same rule `answers.ts` established for the needs path and the reason a card
  * field resolves to a passage exactly as a report's sentence does.
  */
-const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
+export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   payer: 'payer',
   price_evidence: 'revenueRange',
   cost_evidence: 'directCosts',
@@ -358,12 +359,38 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
       // `mayReplace` is the order, and it is about authority rather than
       // recency.
       if (!mayReplace(existing, 'EVIDENCE')) continue;
+      const value = clampText(claim.claim, 600);
+      /*
+       * The column as well as the fact, where the field has one.
+       *
+       * `answers.ts` writes both when a *need's* research settles a card field,
+       * and this wrote only the fact — so the same question, answered by the
+       * deep dive instead, reached `cash_card_facts` and never reached
+       * `evidenceCard`, `readyToTest` or anything else that reads the row. Two
+       * writers for one field with only one of them counting is this file's own
+       * recurring defect: a rule applied by one of two readers is worse than
+       * none, because the two disagree about the same opening.
+       *
+       * `COLUMN` is imported rather than restated for exactly that reason — a
+       * second copy is the thing that drifts. Most of the fields the deep dive
+       * fills are engine fields with no column at all, which is why this is a
+       * lookup rather than an assumption: `payer` has one, `hours` does not,
+       * and a field with none is a card fact and nothing else.
+       *
+       * It changes no evidence and lowers no bar: the claim already cleared the
+       * gate, `mayReplace` still decides authority, and a person's answer still
+       * stands.
+       */
+      const column = COLUMN[field];
+      if (column) {
+        await updateOpportunity(opportunity.id, { [column]: value } as never);
+      }
       await recordCardFact({
         projectId,
         opportunityId: opportunity.id,
         field,
         kind: 'EVIDENCE',
-        value: clampText(claim.claim, 600),
+        value,
         claimId: claim.id,
         decidedBy: 'BRAIN',
       });
