@@ -62,6 +62,8 @@ import type { ClaimScopeMatch } from '../server/services/research/schema.ts';
 import { buildCanonicalName } from '../server/domain/naming.ts';
 import { cashEngineCard, derivedEconomics, ENGINE_FIELDS } from '../server/services/cash/engineCard.ts';
 import { cashView } from '../server/services/cash/view.ts';
+import { cashRoadmap } from '../server/services/cash/roadmap.ts';
+import { openRound } from '../server/repos/cashDiscovery.ts';
 import { createOpportunity } from '../server/repos/cashPortfolio.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import type {
@@ -898,6 +900,125 @@ describe('pressing Start produces work the fleet can actually take', () => {
 
     // Still nothing that could touch the world.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 21 — the size of a sprint must not decide whether its own screen works
+// ---------------------------------------------------------------------------
+
+describe('reading the roadmap of a sprint that has grown', () => {
+  /*
+   * Production, at 52 ideas:
+   *
+   *     EMAXCONNSESSION max clients reached in session mode
+   *     — max clients are limited to pool_size: 15
+   *       in: SELECT * FROM russell_missions WHERE candidate_id = $1 …
+   *       at latestMissionForCandidate … planFor … cashRoadmap
+   *
+   * `cashRoadmap` read every open round with an unbounded `Promise.all`, and
+   * each round costs several queries — so the fan-out was a multiple of however
+   * many rounds a sprint happened to have, against a pooler in session mode
+   * where every connection is a client. Because the roadmap is part of
+   * `cashView`, that is the Cash page failing to load rather than a report
+   * failing to print, and it arrives precisely when a sprint starts working.
+   *
+   * The bound is asserted by driving the real function against many rounds and
+   * counting how many reads are in flight at once, because the number is the
+   * defect: a version that passes this cannot exhaust a pool that size.
+   */
+  it('never has more reads in flight than the pool can hold', async () => {
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+
+    // Enough open rounds that an unbounded fan-out would exceed the pool.
+    for (let round = 0; round < 24; round += 1) {
+      const candidate = await createCandidate({
+        projectId,
+        visibility: 'SHARED',
+        title: `Bucket ${round}`,
+        statement: `A question for bucket ${round}.`,
+      });
+      await openRound({
+        projectId,
+        cashModeId: (await getCashMode(projectId))!.id,
+        bucketId: `bucket-${round}`,
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        candidateId: candidate.id,
+        round: 1,
+        question: `A question for bucket ${round}.`,
+      } as never);
+    }
+
+    const db = getDb();
+    let live = 0;
+    let peak = 0;
+    const realAll = db.all.bind(db);
+    (db as unknown as { all: typeof db.all }).all = (async (...args: unknown[]) => {
+      live += 1;
+      peak = Math.max(peak, live);
+      try {
+        return await (realAll as (...a: unknown[]) => Promise<unknown>)(...args);
+      } finally {
+        live -= 1;
+      }
+    }) as typeof db.all;
+
+    try {
+      const map = await cashRoadmap(projectId);
+      expect(map.rounds.total).toBe(24);
+      // Every round is still described — the bound slows the read, it does not
+      // shorten the answer.
+      expect(map.active).toHaveLength(24);
+    } finally {
+      (db as unknown as { all: typeof db.all }).all = realAll;
+    }
+
+    // The pooled connection production uses holds 15. Well inside it.
+    expect(peak).toBeLessThanOrEqual(12);
+  });
+
+  it('keeps each round\'s plan attached to that round', async () => {
+    /*
+     * Order, not just count. `plans` and `activities` are zipped back against
+     * the rounds by index, so a bounded map returning completions in finishing
+     * order would attach one round's plan to another round's row — a wrong
+     * answer that reads as a working page, which is worse than the crash it
+     * replaced.
+     */
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    for (let round = 0; round < 9; round += 1) {
+      const candidate = await createCandidate({
+        projectId,
+        visibility: 'SHARED',
+        title: `Bucket ${round}`,
+        statement: `A question for bucket ${round}.`,
+      });
+      await openRound({
+        projectId,
+        cashModeId: (await getCashMode(projectId))!.id,
+        bucketId: `ordered-${round}`,
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        candidateId: candidate.id,
+        round: 1,
+        question: `A question for bucket ${round}.`,
+      } as never);
+    }
+    const map = await cashRoadmap(projectId);
+    for (const round of map.active) {
+      // Each row's own bucket, rather than a neighbour's.
+      expect(round.bucketId.startsWith('ordered-')).toBe(true);
+    }
+    expect(new Set(map.active.map((one) => one.bucketId)).size).toBe(9);
   });
 });
 

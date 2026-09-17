@@ -327,11 +327,60 @@ function nextStep(input: {
 }
 
 /**
+ * How many rounds are read at once.
+ *
+ * The rounds were read with an unbounded `Promise.all`, on the reasoning that a
+ * dashboard walking them one at a time would take longer than the tick that
+ * produces the rows — which is true, and is not the whole story. Each round
+ * costs several queries, so the fan-out is a multiple of however many rounds a
+ * sprint happens to have, and the cloud Postgres is reached through a pooler in
+ * session mode where every connection is a client.
+ *
+ * Production measured it at 52 ideas: the reader died with
+ * `EMAXCONNSESSION max clients reached in session mode — pool_size: 15`, and
+ * because `cashRoadmap` is part of `cashView`, that is the Cash page failing to
+ * load rather than a report failing to print. **A dashboard that cannot be read
+ * is worse than a slow one**, and the size of a sprint is exactly the thing that
+ * must not decide whether its own screen works.
+ *
+ * Four keeps the parallelism that made this fast and leaves the pool room for
+ * the requests it is shared with. It is a bound rather than a target: a sprint
+ * with three rounds still reads all three at once.
+ */
+const ROUNDS_READ_AT_ONCE = 4;
+
+/**
+ * `Promise.all` with a ceiling, preserving input order.
+ *
+ * Order matters here: `plans` and `activities` are zipped back against `live` by
+ * index, so a helper that returned completions in finishing order would quietly
+ * attach one round's plan to another round's row.
+ */
+async function mapBounded<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      out[index] = await fn(items[index]!, index);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/**
  * Read the roadmap. Nothing here writes.
  *
- * The rounds are read once and their plans in parallel, because a dashboard
- * that walked them one at a time would take longer than the tick that produces
- * the rows it is describing.
+ * The rounds are read once and their plans in parallel — bounded, because the
+ * fan-out is otherwise a multiple of however many rounds a sprint has and the
+ * pooled connection is not. See `ROUNDS_READ_AT_ONCE`.
  */
 export async function cashRoadmap(projectId: string): Promise<CashRoadmap> {
   const [rounds, opportunities] = await Promise.all([
@@ -340,9 +389,9 @@ export async function cashRoadmap(projectId: string): Promise<CashRoadmap> {
   ]);
 
   const live = rounds.filter((one) => one.state === 'OPEN');
-  const plans = await Promise.all(live.map((one) => planFor(one)));
-  const activities = await Promise.all(
-    live.map((round, index) => activityOf(round, plans[index] ?? null)),
+  const plans = await mapBounded(live, ROUNDS_READ_AT_ONCE, (one) => planFor(one));
+  const activities = await mapBounded(live, ROUNDS_READ_AT_ONCE, (round, index) =>
+    activityOf(round, plans[index] ?? null),
   );
 
   const research = { planned: 0, byStatus: emptyCounts() };
