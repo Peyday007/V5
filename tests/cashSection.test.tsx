@@ -41,25 +41,33 @@ let calls: string[] = [];
 let bodies: Record<string, unknown> = {};
 
 const PROJECT = 'prj_1';
-const OPERATIONS = 'GET /api/cash/operations';
+const OPERATIONS = 'GET /api/cash/mode';
 const VIEW = `GET /api/projects/${PROJECT}/cash`;
 const MODE = `POST /api/projects/${PROJECT}/cash/mode`;
 const AUTHORITY = `POST /api/projects/${PROJECT}/cash/authority`;
 const PREVIEW = `POST /api/projects/${PROJECT}/cash/authority/preview`;
 
-/** One operation this person has, which is what the section runs over. */
+/**
+ * The one Cash Mode, which is what the section runs over.
+ *
+ * There is no list and no picker: the server resolves the single root and sends
+ * its own objective, so the section renders what it is given rather than
+ * choosing between sprints.
+ */
 const MINE = {
-  operations: [
-    {
-      projectId: PROJECT,
-      projectName: 'The private operation',
-      objective: 'Maximize additional usable cash over the next few weeks.',
-      state: 'ACTIVE',
-      currency: 'USD',
-      activatedAt: '2026-09-15T00:00:00.000Z',
-    },
-  ],
-  candidates: [],
+  root: { projectId: PROJECT, projectName: 'Cash Mode' },
+  mode: {
+    projectId: PROJECT,
+    state: 'ACTIVE',
+    currency: 'USD',
+    activatedAt: '2026-09-15T00:00:00.000Z',
+    objective: 'The canonical mandate.',
+  },
+  objective: {
+    summary: 'Find and validate as many lawful ways to produce usable cash quickly as the evidence supports.',
+    full: 'The canonical mandate, in full.',
+  },
+  currencies: ['USD', 'GBP', 'EUR', 'CAD', 'AUD'],
 };
 
 const POSITION = {
@@ -272,30 +280,22 @@ describe('the four states of a read are four screens', () => {
     expect(calls).toContain(VIEW);
   });
 
-  it('offers to start one where a person has none', async () => {
+  it('offers to start it when it is not running, and asks nothing else', async () => {
     base({
-      [OPERATIONS]: {
-        body: {
-          operations: [],
-          candidates: [{ projectId: 'prj_other', projectName: 'Somewhere else' }],
-        },
-      },
+      [OPERATIONS]: { body: { ...MINE, root: null, mode: null } },
     });
     await mount(null);
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
-    expect(screen.getByLabelText(/which operation/i)).toBeTruthy();
-    // And it does not read a project it was not told about.
+    // No picker. There is one frontier, so there is nothing to choose between.
+    expect(screen.queryByLabelText(/which operation/i)).toBeNull();
+    // And it does not read a root that does not exist yet.
     expect(calls).not.toContain(VIEW);
   });
 });
 
-describe('a project with no sprint', () => {
+describe('Cash Mode is not running yet', () => {
   function none(): void {
-    base({
-      [OPERATIONS]: {
-        body: { operations: [], candidates: [{ projectId: PROJECT, projectName: 'Mine' }] },
-      },
-    });
+    base({ [OPERATIONS]: { body: { ...MINE, root: null, mode: null } } });
   }
 
   it('offers the one thing that starts it, and says starting it spends nothing', async () => {
@@ -305,48 +305,70 @@ describe('a project with no sprint', () => {
     expect(screen.getByText(/separate decision, and it is yours/i)).toBeTruthy();
   });
 
-  it('will not start one on an objective nobody wrote', async () => {
+  it('requires no objective, and shows Brain’s own instead', async () => {
+    /*
+     * The field this replaced was required, with a 12-character floor. An
+     * objective typed into a box silently becomes a boundary the Brain will not
+     * search past, made of whatever the person did not think to write — and
+     * nobody can see that omission afterwards. So the mandate is shown rather
+     * than solicited, and the button is live immediately.
+     */
+    none();
+    await mount();
+    const button = await screen.findByRole('button', { name: /start cash mode/i });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByLabelText(/what is this account trying to produce/i)).toBeNull();
+    expect(screen.getByText(new RegExp(MINE.objective.summary.slice(0, 40), 'i'))).toBeTruthy();
+  });
+
+  it('keeps the currency and constraints collapsed, so neither is a step', async () => {
     none();
     await mount();
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
-    expect(
-      (screen.getByRole('button', { name: /start cash mode/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    expect(screen.queryByLabelText(/one currency/i)).toBeNull();
 
-    fireEvent.change(screen.getByLabelText(/what is this account trying to produce/i), {
-      target: { value: 'money' },
+    fireEvent.click(screen.getByRole('button', { name: /add constraints/i }));
+    expect(screen.getByLabelText(/one currency/i)).toBeTruthy();
+    expect(screen.getByText(/added to the mandate above, never substituted/i)).toBeTruthy();
+  });
+
+  it('starts on one click, sending no objective at all', async () => {
+    none();
+    routes['POST /api/cash/activate'] = {
+      body: { mode: {}, changed: true, message: 'Cash Mode is active.' },
+    };
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /start cash mode/i }));
     });
-    expect((screen.getByRole('button', { name: /start cash mode/i }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    const sent = bodies['POST /api/cash/activate'] as Record<string, unknown>;
+    expect(sent).toBeTruthy();
+    expect(sent['objective']).toBeUndefined();
+    expect(sent['projectId']).toBeUndefined();
+    // Re-read rather than assuming what the POST produced.
+    expect(calls.filter((call) => call === OPERATIONS).length).toBe(2);
   });
 
-  it('pins the sprint to one currency, because Brain does not convert', async () => {
+  it('sends constraints when a person supplied them, as an addition', async () => {
     none();
-    await mount();
-    await waitFor(() => expect(screen.getByLabelText(/one currency/i)).toBeTruthy());
-    expect(screen.getByText(/a second currency is a second sprint/i)).toBeTruthy();
-  });
-
-  it('starts one when there is an objective, and re-reads rather than assuming', async () => {
-    none();
-    routes[MODE] = { body: { mode: {}, changed: true, message: 'Cash Mode is active.' } };
+    routes['POST /api/cash/activate'] = {
+      body: { mode: {}, changed: true, message: 'Cash Mode is active.' },
+    };
     await mount();
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
-    fireEvent.change(screen.getByLabelText(/what is this account trying to produce/i), {
-      target: { value: 'Maximize additional usable cash over the next few weeks.' },
+    fireEvent.click(screen.getByRole('button', { name: /add constraints/i }));
+    fireEvent.change(screen.getByLabelText(/prioritise, rule out/i), {
+      target: { value: 'Nothing needing a vehicle.' },
     });
     fireEvent.change(screen.getByLabelText(/one currency/i), { target: { value: 'GBP' } });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /start cash mode/i }));
     });
-    expect(bodies[MODE]).toMatchObject({
-      objective: 'Maximize additional usable cash over the next few weeks.',
+    expect(bodies['POST /api/cash/activate']).toMatchObject({
+      constraints: 'Nothing needing a vehicle.',
       currency: 'GBP',
     });
-    // The operations are re-read, rather than the screen assuming what the POST
-    // produced.
-    expect(calls.filter((call) => call === OPERATIONS).length).toBe(2);
   });
 });
 

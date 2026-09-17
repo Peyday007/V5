@@ -262,17 +262,39 @@ afterEach(async () => {
 });
 
 describe('four operations, four walls', () => {
-  it('shows each person their own operation and nobody else’s', async () => {
+  /*
+   * **This suite's subject changed, and the change is the point.**
+   *
+   * It was written when Cash Mode was four sprints in four projects, and it
+   * proved they could not see each other. That model was wrong — it divided
+   * *discovery*, so one market question would have been researched four times
+   * and four archives would each have had to rediscover what the others knew.
+   *
+   * What survives is the wall itself, because the wall was never a Cash Mode
+   * mechanism: it is a `project_memberships` row read through
+   * `decideProjectAccess`, and every assertion below about one person being
+   * refused another's project still holds exactly as written. What no longer
+   * holds is that Cash Mode *presents* four of them, so that is the one thing
+   * restated here.
+   *
+   * Privacy inside the shared frontier is `services/cash/jobs.ts` now, pinned
+   * in `cashOneMode.test.ts`.
+   */
+  it('shows one Cash Mode, not one per person', async () => {
     for (const account of accounts) {
       await readyOpening(account, `${account.name}'s opening`);
     }
 
     for (const account of accounts) {
-      const mine = await as(account, 'GET', '/cash/operations');
+      const mine = await as(account, 'GET', '/cash/mode');
       expect(mine.status).toBe(200);
-      expect(mine.body.operations.map((one: { projectId: string }) => one.projectId)).toEqual([
-        account.projectId,
-      ]);
+      /*
+       * One frontier. There is no list, no picker and no per-person answer —
+       * the root is resolved server-side and the objective is Brain's own, so
+       * every reader is told about the same one.
+       */
+      expect(Array.isArray(mine.body.operations)).toBe(false);
+      expect(mine.body.objective.full.length).toBeGreaterThan(200);
 
       const view = await as(account, 'GET', `/projects/${account.projectId}/cash`);
       expect(view.status).toBe(200);

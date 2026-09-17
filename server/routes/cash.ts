@@ -35,6 +35,7 @@ import {
   optionalString,
   optionalStringArray,
   pathId,
+  requireBrainAdmin,
   requirePerson,
   requireProject,
   requiredString,
@@ -84,6 +85,13 @@ import {
 } from '../services/cash/opportunities.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
+import {
+  CANONICAL_CASH_OBJECTIVE,
+  CANONICAL_CASH_SUMMARY,
+  findCashRoot,
+  objectiveWith,
+  resolveOrCreateCashRoot,
+} from '../services/cash/root.ts';
 import { recordCashEvent } from '../repos/cashMode.ts';
 import {
   CASH_MECHANISMS,
@@ -196,31 +204,97 @@ async function requireOpportunity(id: string) {
  * Bounded in the query by `visibleProjectIds` rather than filtered afterwards,
  * so an operation this person cannot read is not counted, let alone named.
  */
+/**
+ * The one Cash Mode, and what it is for.
+ *
+ * This replaced a listing of "operations" a person chose between. There is one
+ * frontier, so there is nothing to choose: the root is resolved server-side and
+ * the objective is Brain's own. See `services/cash/root.ts` for why the four
+ * person-derived projects stay underneath rather than being offered here.
+ *
+ * It creates nothing. A person looking at an inactive page must not bring a
+ * root into existence by looking at it.
+ */
 cashRouter.get(
-  '/cash/operations',
+  '/cash/mode',
   handler(async () => {
     requirePerson();
-    const projects = await listProjects();
-    const visible = new Set(visibleProjectIds(currentPrincipal(), projects.map((p) => p.id)));
-    const modes = await listCashModes(projects.filter((p) => visible.has(p.id)).map((p) => p.id));
-    const byId = new Map(projects.map((p) => [p.id, p]));
+    const root = await findCashRoot();
+    const mode = root ? await getCashMode(root.id) : null;
     return {
-      operations: modes.map((mode) => ({
-        projectId: mode.projectId,
-        projectName: byId.get(mode.projectId)?.name ?? null,
-        objective: mode.objective,
-        state: mode.state,
-        currency: mode.currency,
-        activatedAt: mode.activatedAt,
-      })),
-      /**
-       * Projects this person could start one in. Offered so that "there is no
-       * sprint here" has somewhere to go rather than being a dead end.
+      /*
+       * Null until somebody presses the button. The client renders the
+       * canonical objective and a single control from this, and derives no
+       * sentence of its own — §29's one-projection rule.
        */
-      candidates: projects
-        .filter((p) => visible.has(p.id) && !modes.some((m) => m.projectId === p.id))
-        .map((p) => ({ projectId: p.id, projectName: p.name })),
+      root: root ? { projectId: root.id, projectName: root.name } : null,
+      mode: mode
+        ? {
+            projectId: mode.projectId,
+            state: mode.state,
+            currency: mode.currency,
+            activatedAt: mode.activatedAt,
+            objective: mode.objective,
+          }
+        : null,
+      objective: { summary: CANONICAL_CASH_SUMMARY, full: CANONICAL_CASH_OBJECTIVE },
+      currencies: [...SPRINT_CURRENCIES],
     };
+  }),
+);
+
+/**
+ * Start it. One click, no configuration.
+ *
+ * No project: there is one frontier and the server resolves where it lives,
+ * adopting research that already exists rather than stranding it. No objective:
+ * the canonical one is in code, because a person asked to describe the mandate
+ * in a text box silently narrows it by whatever they leave out, and nobody can
+ * see the omission afterwards.
+ *
+ * `constraints` is optional and **additive** — `objectiveWith` appends it under
+ * a heading that says which half is the standing mandate and which is this
+ * week's steer. It cannot remove anything.
+ *
+ * It authorizes no spending. The commercial grant below is a separate decision
+ * and this route cannot make one.
+ */
+cashRouter.post(
+  '/cash/activate',
+  handler(async (req) => {
+    const principal = requirePerson();
+    /*
+     * And a Brain administrator, explicitly.
+     *
+     * The project-scoped cash routes reach ADMIN through `requireProject`, and
+     * this one has no project to be scoped by — it may *create* the root. So
+     * the level is asked for directly rather than inherited, because a route
+     * that creates a project and starts the shared frontier is not something
+     * every signed-in person should be able to press.
+     */
+    await requireBrainAdmin();
+    const body = bodyOf(req);
+
+    /*
+     * One Cash Mode in the whole Brain. Checked before a root is created, so a
+     * second press cannot leave an empty project behind.
+     */
+    const already = await findCashRoot();
+    if (already && (await getCashMode(already.id))) {
+      const mode = (await getCashMode(already.id))!;
+      return { mode, changed: false, message: `Cash Mode has been running since ${mode.activatedAt}.` };
+    }
+
+    const root = await resolveOrCreateCashRoot();
+    const outcome = await activate({
+      projectId: root.id,
+      ownerUserId: principal.id,
+      actorUserId: principal.id,
+      objective: objectiveWith(optionalString(body['constraints'], 'constraints')),
+      currency: optionalString(body['currency'], 'currency'),
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return { mode: outcome.mode, changed: outcome.changed, message: outcome.message };
   }),
 );
 
@@ -295,7 +369,7 @@ cashRouter.post(
       // somebody else is how an administrator sets a project up for its owner.
       ownerUserId: optionalString(body['ownerUserId'], 'ownerUserId') ?? principal.id,
       actorUserId: principal.id,
-      objective: requiredString(body['objective'], 'objective'),
+      objective: objectiveWith(optionalString(body['constraints'], 'constraints')),
       horizonDays: optionalInteger(body['horizonDays'], 'horizonDays', { min: 1, max: 365 }),
       envelopeId: optionalString(body['envelopeId'], 'envelopeId'),
       currency: optionalString(body['currency'], 'currency'),

@@ -60,47 +60,48 @@ function money(cents: number, currency: string): string {
  * wrong one, because the shell hands out the first project a person can see. An
  * operation is what a sprint belongs to, so it is chosen here.
  */
-export function CashView_({ projectId }: { projectId: string | null }): JSX.Element {
-  const operations = useAsync(() => CashApi.operations(), []);
-  const [chosen, setChosen] = useState<string | null>(null);
-
-  const known = operations.data;
+export function CashView_({ projectId: _shellProject }: { projectId: string | null }): JSX.Element {
   /*
-   * The shell's project wins only when it is genuinely one of this person's
-   * operations. Otherwise the first operation they have, and otherwise nothing
-   * — at which point the screen offers to start one rather than guessing.
+   * No operation is chosen, because there is nothing to choose between.
+   *
+   * This used to read a list of sprints and pick one — the shell's project if
+   * it happened to have a sprint, otherwise the first the person had. That was
+   * the four-operation model rendered: four frontiers, four objectives, and a
+   * question in front of a person before anything could start. The server now
+   * resolves the single root, so the shell's project is deliberately ignored.
    */
-  const selected =
-    chosen ??
-    (known?.operations.some((o) => o.projectId === projectId) ? projectId : null) ??
-    known?.operations[0]?.projectId ??
-    null;
+  const reading = useAsync(() => CashApi.mode(), []);
+  const known = reading.data ?? null;
+  const rootId = known?.root?.projectId ?? null;
 
   const view = useAsync(
-    () => (selected ? CashApi.view(selected) : Promise.resolve(null as CashView | null)),
-    [selected],
+    () => (rootId ? CashApi.view(rootId) : Promise.resolve(null as CashView | null)),
+    [rootId],
   );
 
-  if (known && known.operations.length === 0) {
-    return (
-      <Activate
-        candidates={known.candidates}
-        preferred={projectId}
-        currencies={['USD', 'GBP', 'EUR', 'CAD', 'AUD']}
-        onActivated={() => {
-          operations.reload();
-          view.reload();
-        }}
-      />
-    );
-  }
-
-  if (!selected) {
+  if (!known) {
     return (
       <section className="rs-view rs-view-cash">
         <h2>Cash</h2>
-        <p className="rs-state rs-state-loading">Finding your operations&hellip;</p>
+        <p className="rs-state rs-state-loading">Reading Cash Mode&hellip;</p>
       </section>
+    );
+  }
+
+  /*
+   * Not started: no root at all, or a root with no sprint on it. Both are the
+   * same thing to a person and get the same one-button card.
+   */
+  if (!known.mode) {
+    return (
+      <Activate
+        objective={known.objective}
+        currencies={known.currencies}
+        onActivated={() => {
+          reading.reload();
+          view.reload();
+        }}
+      />
     );
   }
 
@@ -131,101 +132,89 @@ export function CashView_({ projectId }: { projectId: string | null }): JSX.Elem
     );
   }
 
-  if (!data) {
+  /*
+   * `known.mode` above says a sprint exists; this says the *view* has caught up
+   * with it. Both are asked, because the two reads are separate requests and a
+   * render between them would otherwise dereference a mode that is not there
+   * yet — the same "loading is not the same as absent" distinction the error
+   * branch above makes.
+   */
+  if (!data || !rootId || !data.mode) {
     return (
       <section className="rs-view rs-view-cash">
         <h2>Cash</h2>
-        <p className="rs-state rs-state-loading">Reading this account&rsquo;s sprint&hellip;</p>
+        <p className="rs-state rs-state-loading">Reading the frontier&hellip;</p>
       </section>
-    );
-  }
-
-  if (!data.mode) {
-    return (
-      <Activate
-        candidates={[{ projectId: selected, projectName: null }]}
-        preferred={selected}
-        currencies={data.vocabulary.currencies}
-        onActivated={() => {
-          operations.reload();
-          view.reload();
-        }}
-      />
     );
   }
 
   return (
     <section className="rs-view rs-view-cash">
       <h2>Cash</h2>
-      {known && known.operations.length > 1 ? (
-        <label className="rs-field-label">
-          Which operation
-          <select
-            value={selected}
-            onChange={(event) => setChosen(event.target.value)}
-          >
-            {known.operations.map((operation) => (
-              <option key={operation.projectId} value={operation.projectId}>
-                {operation.projectName ?? operation.projectId} &middot;{' '}
-                {operation.state.toLowerCase().replace('_', ' ')}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      <p className="rs-lede">{data.objective}</p>
+      {/*
+        * Brain's mandate, not a sentence somebody typed. The short reading is
+        * what is shown; the full text is on the element so it is always
+        * reachable rather than paraphrased away.
+        */}
+      <p className="rs-lede" title={known.objective.full}>
+        {known.objective.summary}
+      </p>
       <p className="rs-hint">{data.discovery.reason}</p>
 
-      <Decisions view={data} projectId={selected} onChanged={view.reload} />
+      <Decisions view={data} projectId={rootId} onChanged={view.reload} />
       <MyCash view={data} />
       <CurrentWork view={data} onChanged={view.reload} />
       <Needs view={data} />
       <Done view={data} />
-      <Lifecycle
-        projectId={selected}
-        state={data.mode.state}
-        onChanged={view.reload}
-      />
+      <Lifecycle projectId={rootId} state={data.mode.state} onChanged={view.reload} />
     </section>
   );
 }
 
 /**
- * No sprint here yet.
+ * Cash Mode is not running yet.
  *
- * Turning one on spends nothing and authorizes nothing: it creates a sprint for
- * opportunities to belong to, and the separate decision about money is the one
- * below it. What it *does* fix is the two things that cannot be changed
- * afterwards — which operation this is, and the one currency the money is kept
- * in.
+ * One button, and deliberately nothing else required.
+ *
+ * It used to ask two questions first: *which operation* — a picker over four
+ * person-derived sprints — and *what is this account trying to produce*, a
+ * required free-text objective with a 12-character floor. Both were wrong for
+ * the same reason. There is one shared frontier, so there is no operation to
+ * choose; and an objective typed into a box silently becomes a boundary the
+ * Brain will not search past, made of whatever the person did not think to
+ * write that morning. Nobody can see that omission afterwards.
+ *
+ * So the mandate is Brain's own and is shown rather than solicited, and the
+ * constraints box is collapsed, optional, and **additive** — the server appends
+ * it under a heading that keeps the standing mandate legible beside it.
+ *
+ * Starting it still takes one deliberate click, because activation is a
+ * person's decision. It authorizes no spending: what Brain may do with money is
+ * a separate grant, below, and this card cannot make one.
  */
 function Activate({
-  candidates,
-  preferred,
+  objective,
   currencies,
   onActivated,
 }: {
-  candidates: { projectId: string; projectName: string | null }[];
-  preferred: string | null;
+  objective: { summary: string; full: string };
   currencies: string[];
   onActivated(): void;
 }): JSX.Element {
-  const [objective, setObjective] = useState('');
   const [currency, setCurrency] = useState(currencies[0] ?? 'USD');
-  const [where, setWhere] = useState<string>(
-    candidates.some((c) => c.projectId === preferred)
-      ? preferred!
-      : (candidates[0]?.projectId ?? ''),
-  );
+  const [constraints, setConstraints] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   async function submit(): Promise<void> {
-    if (!where) return;
     setBusy(true);
     setProblem(null);
     try {
-      await CashApi.activate(where, { objective, currency });
+      await CashApi.start({
+        ...(constraints.trim().length > 0 ? { constraints: constraints.trim() } : {}),
+        currency,
+      });
       onActivated();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : String(error));
@@ -237,43 +226,33 @@ function Activate({
   return (
     <section className="rs-view rs-view-cash">
       <h2>Cash</h2>
-      <p className="rs-lede">
-        A temporary operating section inside Brain. It searches broadly, assembles a private
-        portfolio of cash-producing opportunities for this account, and keeps every other part of
-        Brain exactly as it is.
-      </p>
       <div className="rs-card rs-cash-activate">
-        {candidates.length === 0 ? (
-          <p className="rs-state rs-state-empty">
-            You are not on a project that could hold a sprint. A sprint belongs to one project,
-            because a project is the privacy boundary — nobody else&rsquo;s appears here.
-          </p>
-        ) : (
-          <>
-            <label className="rs-field-label" htmlFor="cash-where">
-              Which operation
-            </label>
-            <select id="cash-where" value={where} onChange={(e) => setWhere(e.target.value)}>
-              {candidates.map((candidate) => (
-                <option key={candidate.projectId} value={candidate.projectId}>
-                  {candidate.projectName ?? candidate.projectId}
-                </option>
-              ))}
-            </select>
+        <p className="rs-authority-headline">What Cash Mode does</p>
+        <p className="rs-lede">{objective.summary}</p>
+        <p className="rs-item-meta">Not started.</p>
 
-            <label className="rs-field-label" htmlFor="cash-objective">
-              What is this account trying to produce?
-            </label>
-            <textarea
-              id="cash-objective"
-              rows={3}
-              value={objective}
-              onChange={(event) => setObjective(event.target.value)}
-              placeholder="Maximize additional usable cash over the next few weeks while building toward established cash flow."
-            />
+        <p className="rs-hint">
+          Starting this spends nothing and authorizes nothing. What Brain may do with money is a
+          separate decision, and it is yours.
+        </p>
+        {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+        <button type="button" className="rs-button" disabled={busy} onClick={submit}>
+          {busy ? 'Starting\u2026' : 'Start Cash Mode'}
+        </button>
 
+        <button
+          type="button"
+          className="rs-button-quiet"
+          aria-expanded={showAdvanced}
+          aria-controls="cash-advanced"
+          onClick={() => setShowAdvanced((open) => !open)}
+        >
+          {showAdvanced ? 'Hide constraints' : 'Add constraints (optional)'}
+        </button>
+        {showAdvanced ? (
+          <div id="cash-advanced">
             <label className="rs-field-label" htmlFor="cash-currency">
-              The one currency this sprint keeps its money in
+              The one currency this keeps its money in
             </label>
             <select
               id="cash-currency"
@@ -287,26 +266,31 @@ function Activate({
               ))}
             </select>
             <p className="rs-hint">
-              A sprint holds exactly one. Brain does not choose an exchange rate, so an entry in
-              another currency is refused rather than converted — a second currency is a second
-              sprint.
+              It holds exactly one. Brain does not choose an exchange rate, so an entry in another
+              currency is refused rather than converted.
             </p>
 
+            <label className="rs-field-label" htmlFor="cash-constraints">
+              Anything to prioritise, rule out, or make Brain aware of
+            </label>
+            <textarea
+              id="cash-constraints"
+              rows={3}
+              value={constraints}
+              onChange={(event) => setConstraints(event.target.value)}
+              placeholder="A deadline, a category to avoid, a resource you have, a budget change."
+            />
             <p className="rs-hint">
-              Turning this on creates nothing that can be spent. What Brain may do with money is a
-              separate decision, and it is yours.
+              This is added to the mandate above, never substituted for it. Leaving it empty
+              narrows nothing.
             </p>
-            {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
-            <button
-              type="button"
-              className="rs-button"
-              disabled={busy || !where || objective.trim().length < 12}
-              onClick={submit}
-            >
-              {busy ? 'Starting\u2026' : 'Start Cash Mode'}
-            </button>
-          </>
-        )}
+
+            <details>
+              <summary className="rs-field-label">The mandate in full</summary>
+              <p className="rs-item-meta">{objective.full}</p>
+            </details>
+          </div>
+        ) : null}
       </div>
     </section>
   );

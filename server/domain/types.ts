@@ -5484,6 +5484,72 @@ export const CASH_DISPOSITIONS = [
 ] as const;
 export type CashDisposition = (typeof CASH_DISPOSITIONS)[number];
 
+/**
+ * An execution job: the first thing in Cash Mode that is somebody's.
+ *
+ * Discovery, evidence and the opportunity itself are shared across the whole
+ * Brain. A job is where separation begins, because it is the first moment there
+ * is anything private to separate — an owner, a budget, a credential, a
+ * decision. `RELEASED` hands the work back without destroying the row, so a
+ * reassignment keeps the history of who held it before.
+ */
+export const CASH_JOB_STATES = [
+  'UNASSIGNED',
+  'ASSIGNED',
+  'EXECUTING',
+  'DELIVERING',
+  'COLLECTED',
+  'RELEASED',
+] as const;
+export type CashJobState = (typeof CASH_JOB_STATES)[number];
+
+/**
+ * Who may read a job's working state.
+ *
+ * `PRIVATE` is the default in the schema rather than here, because the safe
+ * answer must not be the one somebody remembers to choose.
+ */
+export const CASH_JOB_VISIBILITIES = ['PRIVATE', 'SHARED'] as const;
+export type CashJobVisibility = (typeof CASH_JOB_VISIBILITIES)[number];
+
+export interface CashJobRow {
+  id: string;
+  opportunity_id: string;
+  project_id: string;
+  state: string;
+  owner_user_id: string | null;
+  visibility: string;
+  budget_cents: number | null;
+  currency: string;
+  note: string | null;
+  assigned_at: string | null;
+  released_at: string | null;
+  release_reason: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashJob {
+  id: string;
+  opportunityId: string;
+  projectId: string;
+  state: CashJobState;
+  /** Null is ordinary: a job may wait for dependencies before anybody holds it. */
+  ownerUserId: string | null;
+  visibility: CashJobVisibility;
+  /** Null means no ceiling of its own; the grant on the root is the outer bound. */
+  budgetCents: number | null;
+  currency: string;
+  note: string | null;
+  assignedAt: string | null;
+  releasedAt: string | null;
+  releaseReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const CASH_COMMITMENT_STATES = ['HELD', 'SETTLED', 'RELEASED'] as const;
 export type CashCommitmentState = (typeof CASH_COMMITMENT_STATES)[number];
 

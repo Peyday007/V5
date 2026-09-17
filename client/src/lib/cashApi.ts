@@ -208,6 +208,21 @@ export interface CashOperations {
   candidates: { projectId: string; projectName: string | null }[];
 }
 
+/** The single shared frontier, as the server reads it. */
+export interface CashModeReading {
+  root: { projectId: string; projectName: string | null } | null;
+  mode: {
+    projectId: string;
+    state: CashModeState;
+    currency: string;
+    activatedAt: string | null;
+    objective: string;
+  } | null;
+  /** Brain's own mandate: a short reading, and the text itself. */
+  objective: { summary: string; full: string };
+  currencies: string[];
+}
+
 const p = (value: string): string => encodeURIComponent(value);
 
 export const CashApi = {
@@ -219,7 +234,22 @@ export const CashApi = {
    * shown — and could activate — the wrong one. The operation is chosen rather
    * than inherited.
    */
-  operations: (): Promise<CashOperations> => api('/api/cash/operations'),
+  /**
+   * The one Cash Mode, and what it is for.
+   *
+   * This replaced `operations`, which listed sprints a person chose between.
+   * There is one shared frontier, so there is nothing to choose: the server
+   * resolves where it lives and sends its own objective. Reading it creates
+   * nothing.
+   */
+  mode: (): Promise<CashModeReading> => api('/api/cash/mode'),
+
+  /** One click. No project, no objective — see `services/cash/root.ts`. */
+  start: (body: {
+    constraints?: string;
+    currency?: string;
+  }): Promise<{ mode: CashMode; changed: boolean; message: string }> =>
+    api('/api/cash/activate', { method: 'POST', body: JSON.stringify(body) }),
 
   view: (projectId: string): Promise<CashView> => api(`/api/projects/${p(projectId)}/cash`),
 
