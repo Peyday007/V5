@@ -351,6 +351,18 @@ export interface TickReport {
     cardsAnswered: string[];
     /** Pieces Brain formed a commercial view about, as recommendations. */
     termsProposed: string[];
+    /**
+     * Deep dives this pass started, and the ones it moved.
+     *
+     * `runValidations` has always returned both and the report read neither —
+     * the same "returned four facts and read two" shape `runDiscovery` had, and
+     * the reason it matters is diagnostic rather than cosmetic: a tick whose
+     * only effect was starting the qualification of an opening would have
+     * reported silence, which is indistinguishable from a tick that did
+     * nothing.
+     */
+    validationsStarted: string[];
+    validationsSettled: string[];
   }[];
   /** Claims this pass promoted into the Brain-wide shared pool. */
   sharedPromoted: string[];
@@ -962,7 +974,9 @@ export async function tick(owner: string): Promise<TickReport> {
           operated.continuations.length > 0 ||
           operated.dependentWork.length > 0 ||
           operated.research.applied.length > 0 ||
-          operated.proposed.length > 0
+          operated.proposed.length > 0 ||
+          operated.validations.started.length > 0 ||
+          operated.validations.settled.length > 0
         ) {
           report.cashOperations.push({
             projectId: project.id,
@@ -972,6 +986,10 @@ export async function tick(owner: string): Promise<TickReport> {
             dependentWork: operated.dependentWork.map((one) => one.candidateId),
             cardsAnswered: operated.research.applied.map((one) => one.needId),
             termsProposed: operated.proposed.map((one) => one.opportunityId),
+            validationsStarted: operated.validations.started.map((one) => one.opportunityId),
+            validationsSettled: operated.validations.settled.map(
+              (one) => `${one.opportunityId}=${one.to}`,
+            ),
           });
         }
       } catch {
