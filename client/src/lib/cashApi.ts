@@ -147,6 +147,44 @@ export interface ReviewItem {
   answer: ReviewAnswer;
 }
 
+/**
+ * One line of the Cash Engine Card, as the server composed it.
+ *
+ * `kind` is the whole point and is never re-derived here: a gated research
+ * claim, Brain's own estimate carrying its basis, a person's decision, or an
+ * honest unknown. A screen that rendered an estimate the way it renders a fact
+ * would have told somebody a guess was checked.
+ */
+export interface EngineCardEntryView {
+  key: string;
+  label: string;
+  value: string | null;
+  kind: 'FACT' | 'ESTIMATE' | 'DECISION' | 'UNKNOWN';
+  task: string;
+  claimId: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+}
+
+export interface EngineCardView {
+  opportunityId: string;
+  entries: EngineCardEntryView[];
+  unknowns: string[];
+  validationState: string | null;
+  recommendation: EngineCardEntryView | null;
+}
+
+export interface DerivedFigureView {
+  key: string;
+  label: string;
+  formula: string;
+  inputs: { field: string; value: string; claimId: string | null }[];
+  value: string | null;
+  /** Why it is null, when it is. Never an estimate standing in for a refusal. */
+  withheld: string | null;
+}
+
 export interface CashView {
   mode: CashMode | null;
   objective: string | null;
@@ -199,6 +237,10 @@ export interface CashView {
     peakFundingCents: number;
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;
     provenance: Record<string, CashCardFact[]>;
+    /** The decision brief per piece: every answer, and what kind of answer it is. */
+    engineCards: Record<string, EngineCardView>;
+    /** The arithmetic, with its inputs named and its refusals stated. */
+    economics: Record<string, DerivedFigureView[]>;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: CashNeed[];

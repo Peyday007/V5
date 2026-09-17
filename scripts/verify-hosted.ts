@@ -1175,6 +1175,21 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
       timeframe: 'MATCH',
       population: 'MATCH',
       definitions: 'MATCH',
+      /*
+       * What each verdict was judged against, which the contract now requires
+       * for every dimension the fragment declares.
+       *
+       * `UNSTATED` used to be the fourth answer and the one a verifier fell
+       * into when it had not looked, so it destroyed claims silently — twelve
+       * of thirteen production rejections were that rather than a real
+       * mismatch. The submission is refused without a basis so a worker
+       * corrects it instead of the claim dying, and this harness is a
+       * scripted worker like any other: it says what it judged.
+       */
+      geography_basis: 'The geography this fragment declares.',
+      timeframe_basis: 'The timeframe this fragment declares.',
+      population_basis: 'The population this fragment declares.',
+      definitions_basis: 'The definitions this fragment declares.',
       note: claim.claimType === 'UNSUPPORTED_ASSERTION' ? 'Nothing supports it.' : 'Reads directly.',
     })),
     sufficiency: 'SUFFICIENT',

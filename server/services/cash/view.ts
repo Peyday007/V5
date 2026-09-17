@@ -21,6 +21,8 @@ import { listCommitments } from '../../repos/cashAuthority.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { describeAuthority } from './authority.ts';
 import { evidenceCard } from './card.ts';
+import { cashEngineCard, derivedEconomics } from './engineCard.ts';
+import type { DerivedFigure, EngineCard } from './engineCard.ts';
 import { assessResearch } from './answers.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
 import { cashPosition, explainEntries } from './money.ts';
@@ -112,6 +114,26 @@ export interface CashView {
      * deriving it would be a second opinion about one card.
      */
     provenance: Record<string, CashCardFact[]>;
+    /**
+     * The whole decision brief per piece, and what it will not compute.
+     *
+     * `cashEngineCard` composes the twelve readiness fields with the twelve a
+     * person actually decides on, each saying whether it is a gated fact, an
+     * estimate carrying its basis, somebody's decision, or an honest unknown —
+     * and `derivedEconomics` names its inputs and withholds a margin rather
+     * than taking one against an unknown cost.
+     *
+     * It is here because it was computed by nothing: the module existed, was
+     * tested, and no route, view or component ever called it, so the card that
+     * is the whole point of qualifying an opening could not be read by anyone.
+     * The file's own recurring sentence, at the last transition of the chain.
+     *
+     * Composed from the facts already loaded for `provenance` rather than
+     * fetched per piece: the same rows, read once.
+     */
+    engineCards: Record<string, EngineCard>;
+    /** The arithmetic behind each piece, with every input named. */
+    economics: Record<string, DerivedFigure[]>;
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: CashNeed[];
@@ -176,6 +198,8 @@ export async function cashView(input: {
   }
 
   const cards: CashView['myCurrentWork']['cards'] = {};
+  const engineCards: CashView['myCurrentWork']['engineCards'] = {};
+  const economics: CashView['myCurrentWork']['economics'] = {};
   for (const opportunity of opportunities) {
     const card = evidenceCard(opportunity);
     cards[opportunity.id] = {
@@ -183,6 +207,13 @@ export async function cashView(input: {
       missing: card.readiness.missing.map(String),
       summary: card.readiness.summary,
     };
+    // The same facts `provenance` was built from, so this costs no query.
+    const engine = cashEngineCard({
+      opportunity,
+      facts: provenance[opportunity.id] ?? [],
+    });
+    engineCards[opportunity.id] = engine;
+    economics[opportunity.id] = derivedEconomics(engine);
   }
 
   const discovery =
@@ -250,7 +281,7 @@ export async function cashView(input: {
       ),
       commitments,
     },
-    myCurrentWork: { ...plan, cards, provenance, executionPaths },
+    myCurrentWork: { ...plan, cards, provenance, engineCards, economics, executionPaths },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
     whatBrainNeeds: needs,
     /*

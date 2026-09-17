@@ -60,7 +60,10 @@ import {
 } from '../server/services/research/schema.ts';
 import type { ClaimScopeMatch } from '../server/services/research/schema.ts';
 import { buildCanonicalName } from '../server/domain/naming.ts';
-import { cashEngineCard, derivedEconomics } from '../server/services/cash/engineCard.ts';
+import { cashEngineCard, derivedEconomics, ENGINE_FIELDS } from '../server/services/cash/engineCard.ts';
+import { cashView } from '../server/services/cash/view.ts';
+import { createOpportunity } from '../server/repos/cashPortfolio.ts';
+import { getCashMode } from '../server/repos/cashMode.ts';
 import type {
   ResearchClaim,
   ResearchFragment,
@@ -895,6 +898,108 @@ describe('pressing Start produces work the fleet can actually take', () => {
 
     // Still nothing that could touch the world.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 20 — a stricter contract has to reach the callers the suite never runs
+// ---------------------------------------------------------------------------
+
+describe('every in-repo caller speaks the current verification contract', () => {
+  /*
+   * How this was found: the deployed release refused its own hosted
+   * verification.
+   *
+   * Making `*_basis` required is right — twelve of thirteen production
+   * rejections were `UNSTATED`, a verdict nobody formed, and the submission is
+   * refused now so a worker corrects it instead of the claim dying silently.
+   * What was wrong is that the change reached every fixture in `tests/` and not
+   * `scripts/verify-hosted.ts`, which is a scripted worker the suite never
+   * runs. So the whole suite passed, the image released, and the live Brain
+   * refused the packet its own release gate submits:
+   *
+   *     brain_submit_verification: INVALID_INPUT
+   *     "verdicts[0].geography_basis" is missing.
+   *
+   * The refusal was correct in every respect. The caller was stale, and a real
+   * worker would simply have resubmitted — a scripted one cannot.
+   *
+   * This reads the repository rather than behaviour, because behaviour is
+   * exactly what the suite could not see: nothing here executes that script.
+   */
+  it('supplies a basis wherever it builds a scope verdict', async () => {
+    const callers = ['../scripts/verify-hosted.ts'];
+    for (const caller of callers) {
+      const source = await readFile(new URL(caller, import.meta.url), 'utf8');
+      if (!source.includes('brain_submit_verification')) continue;
+      for (const dimension of ['geography', 'timeframe', 'population', 'definitions']) {
+        // It answers the dimension, so it must say what it judged it against.
+        expect(
+          source.includes(`${dimension}:`) ? source.includes(`${dimension}_basis:`) : true,
+        ).toBe(true);
+      }
+      // And it may never send the answer the contract withdrew.
+      expect(source).not.toMatch(/geography: 'UNSTATED'/);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19 — the card is reachable by a reader, which is what "visible" means
+// ---------------------------------------------------------------------------
+
+describe('the Cash Engine Card is served', () => {
+  /*
+   * The defect: `cashEngineCard` was written, tested, and called by nothing.
+   *
+   * No route, no view and no component ever composed it — so the brief that is
+   * the entire point of qualifying an opening could not be read by anybody, and
+   * the last transition of the acceptance chain was unreachable while every
+   * test of the card itself passed. It is this file's recurring sentence
+   * arriving at the end of the pipeline rather than the middle: a mechanism
+   * nothing calls is not a mechanism.
+   *
+   * Asserted through `cashView`, which is what the route returns, rather than
+   * by calling the composer again — the question is whether a *reader* gets it.
+   */
+  it('reaches the view a person actually loads', async () => {
+    const mode = await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    expect(mode.ok).toBe(true);
+
+    const opening = await createOpportunity({
+      projectId,
+      cashModeId: (await getCashMode(projectId))!.id,
+      ownerUserId: userId,
+      title: 'A county published a request for parcel research',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      source: 'RESEARCH',
+      currency: 'USD',
+      sourceClaimId: 'clm_for_this_opening',
+    } as never);
+
+    const view = await cashView({ projectId });
+    const card = view.myCurrentWork.engineCards[opening.id];
+    expect(card).toBeTruthy();
+    expect(card!.opportunityId).toBe(opening.id);
+
+    // Every question a decision turns on is present, and a blank is the task
+    // that would answer it rather than a zero.
+    for (const key of ENGINE_FIELDS) {
+      expect(card!.entries.some((entry) => entry.key === key)).toBe(true);
+    }
+    const unanswered = card!.entries.find((entry) => entry.value === null)!;
+    expect(unanswered.kind).toBe('UNKNOWN');
+    expect(unanswered.task.length).toBeGreaterThan(0);
+
+    // And the arithmetic refuses rather than estimating, with its reason.
+    const margin = view.myCurrentWork.economics[opening.id]!.find((one) => one.key === 'margin')!;
+    expect(margin.value).toBeNull();
+    expect(margin.withheld).toBeTruthy();
   });
 });
 

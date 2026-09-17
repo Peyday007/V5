@@ -31,6 +31,8 @@ import {
   type CashModeState,
   type CashReadiness,
   type CashView,
+  type DerivedFigureView,
+  type EngineCardView,
   type Placement,
   type ReviewItem,
 } from '../lib/cashApi.ts';
@@ -1387,6 +1389,20 @@ function CurrentWork({
                     earned still counts.
                   </p>
                 ) : null}
+                {/*
+                  * Optional access on purpose.
+                  *
+                  * The server always sends both, but a deploy replaces the
+                  * server and the browser tab separately — so for the minutes
+                  * between, a client built after the field existed can be
+                  * holding a view fetched before it did. Rendering nothing is
+                  * the right answer there; throwing would take the whole
+                  * portfolio down over a card.
+                  */}
+                <EngineCard
+                  card={plan.engineCards?.[placement.opportunity.id]}
+                  economics={plan.economics?.[placement.opportunity.id] ?? []}
+                />
                 <Actions
                   placement={placement}
                   allowedActions={view.authority.allowedActions}
@@ -1398,6 +1414,91 @@ function CurrentWork({
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * What a person needs before deciding, and where each answer came from.
+ *
+ * The server composes this; nothing is derived here. Each line says which of
+ * four things its answer is, and the four are rendered differently on purpose:
+ * a gated claim carries the id it resolves to, an estimate carries its basis
+ * and what would change it and is labelled a proposal, a person's decision says
+ * so, and an unknown shows the task that would answer it rather than a blank.
+ *
+ * Rendering an estimate the way a fact is rendered would tell somebody a guess
+ * was checked, which is the one thing this section may not do.
+ */
+const ENGINE_KIND_LABEL: Record<string, string> = {
+  FACT: 'from a source',
+  ESTIMATE: "Brain's proposal",
+  DECISION: 'your decision',
+  UNKNOWN: 'not known yet',
+};
+
+function EngineCard({
+  card,
+  economics,
+}: {
+  card: EngineCardView | undefined;
+  economics: DerivedFigureView[];
+}): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  if (!card) return null;
+
+  const answered = card.entries.filter((entry) => entry.value !== null);
+  const unknown = card.entries.filter((entry) => entry.value === null);
+
+  return (
+    <div className="rs-cash-engine">
+      <button type="button" className="rs-link-button" onClick={() => setOpen(!open)}>
+        {open ? 'Hide the full card' : 'Show the full card'} &mdash; {answered.length} answered,{' '}
+        {unknown.length} still unknown
+        {card.validationState ? ` · deep dive ${card.validationState}` : ' · no deep dive yet'}
+      </button>
+      {open ? (
+        <>
+          <ul className="rs-list rs-sublist">
+            {card.entries.map((entry) => (
+              <li key={entry.key}>
+                <p className="rs-item-title">
+                  {entry.label} <span className="rs-badge">{ENGINE_KIND_LABEL[entry.kind]}</span>
+                </p>
+                {entry.value === null ? (
+                  <p className="rs-item-meta">{entry.task}</p>
+                ) : (
+                  <p className="rs-decision-why">{entry.value}</p>
+                )}
+                {entry.claimId ? (
+                  <p className="rs-item-meta">Resolves to claim {entry.claimId}.</p>
+                ) : null}
+                {entry.kind === 'ESTIMATE' ? (
+                  <p className="rs-item-meta">
+                    Basis: {entry.basis ?? '\u2014'} · Assumes: {entry.assumptions ?? '\u2014'} ·
+                    Would change if: {entry.uncertainty ?? '\u2014'}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          {economics.length > 0 ? (
+            <ul className="rs-list rs-sublist">
+              {economics.map((figure) => (
+                <li key={figure.key}>
+                  <p className="rs-item-title">{figure.label}</p>
+                  <p className="rs-item-meta">{figure.formula}</p>
+                  {figure.value ? (
+                    <p className="rs-decision-why">{figure.value}</p>
+                  ) : (
+                    <p className="rs-item-meta">Withheld: {figure.withheld}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : null}
+    </div>
   );
 }
 
