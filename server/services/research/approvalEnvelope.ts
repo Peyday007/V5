@@ -52,8 +52,16 @@ import type { ResearchFragment, ResearchOrchestration } from '../../domain/types
  *
  * Recorded on every automatic approval, because "Brain approved this" is only
  * auditable if you can tell which rules it applied.
+ *
+ * `2026-09-17.1` is the Cash discovery repair: the action screen asks whose
+ * action a forbidden phrase is rather than whether the phrase appears, and the
+ * source allowlist admits the published request, listing, notice, price list
+ * and platform-terms classes the cash envelope was always meant to. Both are
+ * narrowings of a screen, and an approval recorded under the earlier version
+ * was judged by the earlier rules — which is the whole reason this constant is
+ * on the row rather than only in the file.
  */
-export const ENVELOPE_VALIDATOR_VERSION = '2026-09-09.1';
+export const ENVELOPE_VALIDATOR_VERSION = '2026-09-17.1';
 
 /** The exact assignment the Step 10 envelope authorizes, and nothing else. */
 export const MICHIGAN_LICENSING_ASSIGNMENT = `Determine whether, under Michigan law, a success-fee intermediary who arranges

@@ -89,8 +89,15 @@ import type { MissionSpec, PlanObservations } from './planning.ts';
  * specification as researchable once, so a compiler change is what legitimately
  * produces a second attempt at an idea. That makes the version a reviewed code
  * change rather than a counter anything can advance.
+ *
+ * What does the relaunching is the *specification* — `specificationKey` is the
+ * objective and the why-now, and this constant is not in it — so bumping this
+ * alone re-researches nothing. `2026-09-17.1` is exactly that case: the cash
+ * discovery profile's lanes gained an evidence kind, which changes the bar a
+ * fragment is judged at and leaves every compiled sentence byte for byte as it
+ * was.
  */
-export const MISSION_COMPILER_VERSION = '2026-09-09.1';
+export const MISSION_COMPILER_VERSION = '2026-09-17.1';
 
 /**
  * Which envelope a project's compiled missions run under.
