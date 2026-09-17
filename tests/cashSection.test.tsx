@@ -162,6 +162,120 @@ function opportunity(over: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
+/**
+ * The roadmap as the server sends it: the plan's own denominator, never a
+ * target. Five planned on one round, of which one is with a worker.
+ */
+const ROADMAP = {
+  mechanisms: ['EXPLICIT_PAID_REQUEST'],
+  rounds: { open: 1, harvested: 0, abandoned: 0, total: 1 },
+  active: [
+    {
+      roundId: 'cdr_1',
+      bucketId: 'paid-requests',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      round: 1,
+      state: 'OPEN',
+      openedAt: '2026-09-15T00:00:00.000Z',
+      found: 2,
+      plan: {
+        orchestrationId: 'orc_1',
+        planned: 5,
+        byStatus: {
+          PLANNED: 1,
+          QUEUED: 1,
+          RUNNING: 1,
+          VALIDATING: 0,
+          ACCEPTED: 1,
+          BLOCKED: 1,
+          REJECTED: 0,
+          CANCELLED: 0,
+          NEEDS_HUMAN: 0,
+        },
+        inFlight: ['Who is publicly asking to pay for work right now?'],
+      },
+    },
+  ],
+  research: {
+    planned: 5,
+    byStatus: {
+      PLANNED: 1,
+      QUEUED: 1,
+      RUNNING: 1,
+      VALIDATING: 0,
+      ACCEPTED: 1,
+      BLOCKED: 1,
+      REJECTED: 0,
+      CANCELLED: 0,
+      NEEDS_HUMAN: 0,
+    },
+  },
+  pipeline: [
+    { key: 'DISCOVERED', label: 'Openings found', count: 2, note: 'The card is still blank.' },
+    { key: 'EVIDENCE_CARD', label: 'Being validated', count: 1, note: 'Filling in the blanks.' },
+    { key: 'READY', label: 'Ready to test', count: 1, note: 'Needs your authorization.' },
+    { key: 'EXECUTING', label: 'Being pursued', count: 0, note: 'Against a grant you gave.' },
+    { key: 'COLLECTED', label: 'Collected', count: 0, note: 'Delivered and settled.' },
+    { key: 'CLOSED', label: 'Declined or archived', count: 0, note: 'Kept with its reason.' },
+  ],
+  whatHappensNext: '1 opportunity is ready to test. Executing one needs a standing authorization from you.',
+};
+
+/**
+ * A forecast with one figure and the rest withheld, which is the ordinary shape
+ * early on and the one the screen has to render honestly.
+ */
+const WITHHELD = {
+  valueCents: null,
+  lowCents: null,
+  highCents: null,
+  fromRows: 0,
+  confidence: 'NONE' as const,
+  basis: 'Read from the qualified opportunities.',
+  unknown: ['Exposure', 'Payer'],
+  blocking: 'Each card needs its exposure answered before Brain can total it.',
+};
+
+const FORECAST = {
+  currency: 'USD',
+  qualified: 1,
+  considered: 4,
+  upfrontCash: WITHHELD,
+  ongoingCosts: WITHHELD,
+  revenue: {
+    valueCents: 75_000,
+    lowCents: 75_000,
+    highCents: 75_000,
+    fromRows: 1,
+    confidence: 'SINGLE_ROW' as const,
+    basis: 'The prices stated on qualified opportunities.',
+    unknown: [],
+    blocking: '',
+  },
+  contribution: WITHHELD,
+  timeToFirstDollar: {
+    days: null,
+    lowDays: null,
+    highDays: null,
+    fromRows: 0,
+    confidence: 'NONE' as const,
+    basis: 'Read from the payment terms and deadline.',
+    unknown: ['Cash dates'],
+    blocking: 'No opportunity yet states when cash would arrive.',
+  },
+  breakEven: {
+    days: null,
+    lowDays: null,
+    highDays: null,
+    fromRows: 0,
+    confidence: 'NONE' as const,
+    basis: 'When cumulative contribution covers the cash put in.',
+    unknown: ['Cash dates'],
+    blocking: 'Break-even needs both a dated cash-in and a recurring cost.',
+  },
+  humanHours: { total: null, fromRows: 0, unknown: ['Economics'] },
+};
+
 function view(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     mode: {
@@ -183,6 +297,10 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
       lines: [],
       maxConcurrent: 0,
       heldCents: 20_000,
+      maxCommittedCents: 0,
+      maxPerActionCents: 0,
+      committedCents: 0,
+      spentCents: 0,
       allowedActions: [],
     },
     myCash: { position: POSITION, entries: [], commitments: [] },
@@ -253,6 +371,8 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
       underlyingCount: 3,
       summary: '2 things to decide, standing for 3 underlying items.',
     },
+    roadmap: ROADMAP,
+    forecast: FORECAST,
     vocabulary: VOCABULARY,
     ...over,
   };
@@ -290,11 +410,205 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function mount(projectId: string | null = PROJECT): Promise<void> {
+async function mount(
+  projectId: string | null = PROJECT,
+  isBrainAdmin = false,
+): Promise<void> {
   await act(async () => {
-    render(<CashSection projectId={projectId} isBrainAdmin={false} />);
+    render(<CashSection projectId={projectId} isBrainAdmin={isBrainAdmin} />);
   });
 }
+
+describe('activation does not take the invitation away', () => {
+  /*
+   * The People and capacity panel used to render only on the card that starts a
+   * sprint, so pressing Start removed the one entrance to inviting anybody —
+   * an *activation* state deciding an *enrollment* question it has nothing to
+   * do with. §32 already records that the readiness counts stop nothing; this
+   * is the other half of the same sentence, which is that they must still be
+   * reachable once the work is running.
+   */
+  it('keeps the counts on the running sprint, where they used to disappear', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('People and capacity')).toBeTruthy());
+    expect(screen.getByText('Human members')).toBeTruthy();
+    expect(screen.getByText('Claude capacity accounts')).toBeTruthy();
+    // And says plainly that they are counts rather than a gate, because the
+    // last thing this screen did with them was refuse to start.
+    expect(screen.getByText(/Counts, not gates/)).toBeTruthy();
+  });
+
+  it('offers the same invitation control to an administrator, and no second one', async () => {
+    base({ 'GET /api/members': { body: { links: [] } } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByLabelText(/invite somebody/i)).toBeTruthy());
+    // One entrance. A second invitation path is the thing this must not become.
+    expect(screen.getAllByLabelText(/invite somebody/i)).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /make a private link/i })).toBeTruthy();
+    // The existing route, unchanged — not a Cash-specific one.
+    expect(calls).toContain('GET /api/members');
+  });
+
+  it('still refuses to offer it to somebody who is not an administrator', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('People and capacity')).toBeTruthy());
+    expect(screen.queryByLabelText(/invite somebody/i)).toBeNull();
+    expect(calls).not.toContain('GET /api/members');
+  });
+});
+
+describe('the research roadmap', () => {
+  it('sits above the activity log rather than being it', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('What Brain is researching')).toBeTruthy());
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
+    expect(headings.indexOf('What Brain is researching')).toBeLessThan(
+      headings.indexOf('Everything that has happened'),
+    );
+  });
+
+  it('takes every number from the server and invents no target', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('What Brain is researching')).toBeTruthy());
+
+    expect(screen.getByText(ROADMAP.whatHappensNext)).toBeTruthy();
+    // The plan's own denominator. Five, because the plan holds five — not
+    // twenty, and not a percentage of a number nobody knows.
+    expect(screen.getByText('1 of 5 research items done', { exact: false })).toBeTruthy();
+    expect(document.body.textContent ?? '').not.toMatch(/\b20\b/);
+    expect(document.body.textContent ?? '').not.toMatch(/%/);
+
+    // The question a worker is on, in the fragment's own words.
+    expect(
+      screen.getByText('Who is publicly asking to pay for work right now?'),
+    ).toBeTruthy();
+    for (const stage of ROADMAP.pipeline) expect(screen.getByText(stage.label)).toBeTruthy();
+  });
+
+  it('translates the event code and keeps it', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('Everything that has happened')).toBeTruthy());
+    const line = screen.getByText(/An opening was written down/);
+    // Translated for the person, and the underlying code is still on the row
+    // for somebody who needs it.
+    expect(line.getAttribute('title')).toBe('CASH_OPPORTUNITY_CAPTURED');
+    expect(screen.getByText('Captured "A paid intake repair".')).toBeTruthy();
+  });
+});
+
+describe('the money picture', () => {
+  it('shows the authorization figures as facts, including zero', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('The money picture')).toBeTruthy());
+
+    expect(screen.getByText('Authorized')).toBeTruthy();
+    expect(screen.getByText('Committed')).toBeTruthy();
+    expect(screen.getByText('Spent')).toBeTruthy();
+    expect(screen.getByText('Remaining authorized capacity')).toBeTruthy();
+    // Nothing authorized is something Brain knows. It must not read like a
+    // figure that has not been worked out.
+    expect(
+      screen.getByText(/No spending has been authorized here yet/),
+    ).toBeTruthy();
+  });
+
+  it('withholds an estimate the evidence does not carry, and says what is blank', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('The money picture')).toBeTruthy());
+
+    expect(screen.getAllByText('Not yet estimable').length).toBeGreaterThan(0);
+    // Several withheld estimates name the same blanks, which is correct: they
+    // are blocked on the same missing evidence.
+    expect(screen.getAllByText(/Still unknown: Exposure, Payer/).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Each card needs its exposure answered/).length,
+    ).toBeGreaterThan(0);
+    // And the one figure the evidence does carry is shown with where it came
+    // from, rather than beside the others as though they were alike.
+    expect(screen.getByText(/from a single opening/)).toBeTruthy();
+  });
+
+  it('reports the hours beside the money and never inside it', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('The money picture')).toBeTruthy());
+    expect(screen.getByText(/Nobody has estimated the hours/)).toBeTruthy();
+  });
+});
+
+describe('the spending limits are limits', () => {
+  it('says so, and does not claim to be a forecast or to set money aside', async () => {
+    base();
+    await mount();
+    await waitFor(() =>
+      expect(
+        screen.getByText((_text, node) =>
+          (node?.textContent ?? '').startsWith('These are limits, not a forecast'),
+        ),
+      ).toBeTruthy(),
+    );
+    expect(
+      screen.getByText(/Nothing is set aside, reserved or pre-paid by setting them/),
+    ).toBeTruthy();
+  });
+
+  it('takes ordinary money and sends cents, and refuses what it cannot read', async () => {
+    base({ [PREVIEW]: { body: { lines: ['Brain may commit up to USD 1,000.00.'] } } });
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/most that may be committed at once/i)).toBeTruthy(),
+    );
+
+    fireEvent.change(screen.getByLabelText(/most that may be committed at once/i), {
+      target: { value: '1,000.50' },
+    });
+    fireEvent.change(screen.getByLabelText(/most in any single commitment/i), {
+      target: { value: '$250' },
+    });
+    fireEvent.change(screen.getByLabelText(/how many opportunities may be executing/i), {
+      target: { value: '2' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /show me what this authorizes/i }));
+    });
+    // Commas and a currency symbol are tolerated because people type them; the
+    // route still receives cents and its guards are untouched.
+    expect(bodies[PREVIEW]).toMatchObject({
+      maxCommittedCents: 100_050,
+      maxPerActionCents: 25_000,
+      maxConcurrent: 2,
+    });
+  });
+
+  it('will not guess at an amount it cannot read', async () => {
+    base();
+    await mount();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/most that may be committed at once/i)).toBeTruthy(),
+    );
+    fireEvent.change(screen.getByLabelText(/most that may be committed at once/i), {
+      target: { value: 'about a thousand' },
+    });
+    fireEvent.change(screen.getByLabelText(/most in any single commitment/i), {
+      target: { value: '250' },
+    });
+    fireEvent.change(screen.getByLabelText(/how many opportunities may be executing/i), {
+      target: { value: '2' },
+    });
+    expect(screen.getByText(/Brain will not guess at an amount it cannot read/)).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: /show me what this authorizes/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+});
 
 describe('the four states of a read are four screens', () => {
   it('does not claim the work is absent when a person may not see it', async () => {
@@ -468,7 +782,9 @@ describe('the decision nothing can proceed without', () => {
   it('is named first and is not folded away', async () => {
     base();
     await mount();
-    await waitFor(() => expect(screen.getByText('Decide what Brain may spend here')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText(/Spending limits .* what Brain may spend here/)).toBeTruthy(),
+    );
     const headings = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
     expect(headings[0]).toBe('Decisions for you');
   });
@@ -476,8 +792,13 @@ describe('the decision nothing can proceed without', () => {
   it('shows the outstanding approval once, as the control rather than twice', async () => {
     base();
     await mount();
-    await waitFor(() => expect(screen.getByText('Decide what Brain may spend here')).toBeTruthy());
-    expect(screen.getAllByText('Decide what Brain may spend here').length).toBe(1);
+    await waitFor(() =>
+      expect(screen.getByText(/Spending limits .* what Brain may spend here/)).toBeTruthy(),
+    );
+    expect(screen.getAllByText(/Spending limits .* what Brain may spend here/).length).toBe(1);
+    // The server's own list titles it the old way; the card is the control, so
+    // the list entry is the one that goes.
+    expect(screen.queryByText('Decide what Brain may spend here')).toBeNull();
     expect(screen.getByText('3 cards with no payer')).toBeTruthy();
   });
 
@@ -891,11 +1212,19 @@ describe('the decision nothing can proceed without', () => {
     await mount();
     await waitFor(() => expect(screen.getByLabelText(/most that may be committed at once/i)).toBeTruthy());
 
+    /*
+     * Typed in ordinary money and sent in cents.
+     *
+     * The two ceilings used to be typed in cents, which asked a person to do a
+     * hundredfold conversion in the one box where being out by a factor of a
+     * hundred is a spending limit. Nothing about the grant moved: what arrives
+     * at the route is what always arrived.
+     */
     fireEvent.change(screen.getByLabelText(/most that may be committed at once/i), {
-      target: { value: '50000' },
+      target: { value: '500.00' },
     });
-    fireEvent.change(screen.getByLabelText(/most in one commitment/i), {
-      target: { value: '10000' },
+    fireEvent.change(screen.getByLabelText(/most in any single commitment/i), {
+      target: { value: '100' },
     });
     fireEvent.change(screen.getByLabelText(/how many opportunities may be executing/i), {
       target: { value: '2' },
@@ -934,8 +1263,8 @@ describe('the decision nothing can proceed without', () => {
     await mount();
     await waitFor(() => expect(screen.getByLabelText(/most that may be committed at once/i)).toBeTruthy());
     for (const [label, value] of [
-      [/most that may be committed at once/i, '50000'],
-      [/most in one commitment/i, '10000'],
+      [/most that may be committed at once/i, '500'],
+      [/most in any single commitment/i, '100'],
       [/how many opportunities may be executing/i, '2'],
     ] as const) {
       fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -946,7 +1275,7 @@ describe('the decision nothing can proceed without', () => {
     expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText(/most that may be committed at once/i), {
-      target: { value: '900000' },
+      target: { value: '9000' },
     });
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
   });
@@ -984,7 +1313,11 @@ describe('the money, and the work', () => {
     // A payment that has not settled is earned and is not available. Two rows
     // carry it — customer payments and completed contribution — which is the
     // point of keeping them as separate figures.
-    expect(screen.getAllByText('USD 750.00').length).toBe(2);
+    // Three now: the two the position carries, plus the forecast's revenue —
+    // which is a *forecast* of the same money and is in its own table under its
+    // own heading, because a figure Brain worked out from a card is not the
+    // same kind of number as one an append-only entry produced.
+    expect(screen.getAllByText('USD 750.00').length).toBe(3);
     expect(screen.getAllByText('USD 0.00').length).toBeGreaterThan(0);
     // Deployable is negative and is printed as such rather than clamped to nil.
     expect(screen.getByText('-USD 200.00')).toBeTruthy();

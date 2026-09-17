@@ -38,6 +38,8 @@ import type {
 import type { AssembledPlan } from './portfolio.ts';
 import type { CashPosition } from './money.ts';
 import type { CompressedReview } from './review.ts';
+import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
+import { cashForecast, type CashForecast } from './forecast.ts';
 
 export interface CashView {
   /** Null when the section has never been activated here. */
@@ -57,6 +59,21 @@ export interface CashView {
     maxConcurrent: number;
     /** Held and spent so far, with no denominator where there is no ceiling. */
     heldCents: number;
+    /**
+     * The ceilings the grant itself carries, and what has been spent against it.
+     *
+     * Sent so the money picture can separate an **authorization** — a limit a
+     * person set — from a **forecast**, which is arithmetic over evidence. They
+     * are two different kinds of number and a screen that showed them alike
+     * would be inviting somebody to read one as the other. Zero when there is
+     * no grant, which is a fact rather than a blank.
+     */
+    maxCommittedCents: number;
+    maxPerActionCents: number;
+    /** Money committed and not yet released, from `cash_commitments`. */
+    committedCents: number;
+    /** Money a commitment recorded as actually spent. */
+    spentCents: number;
     /**
      * The actions this grant actually permits.
      *
@@ -99,6 +116,16 @@ export interface CashView {
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: CashNeed[];
   decisionsForMe: CompressedReview;
+  /**
+   * Where the research is up to, counted from rows. See `roadmap.ts`.
+   *
+   * Beside `whatBrainHasDone` rather than instead of it: the event feed answers
+   * *what happened* and this answers *where is this up to*, and using the first
+   * as the second is what left a person reading internal codes for progress.
+   */
+  roadmap: CashRoadmap;
+  /** What the evidence supports saying about money, and what it does not. */
+  forecast: CashForecast;
 }
 
 export async function cashView(input: {
@@ -191,6 +218,13 @@ export async function cashView(input: {
     executionPath(placement.opportunity, needs),
   );
 
+  /*
+   * Read once and used twice: the authority block totals them and `myCash`
+   * sends them. Two reads of one table is how two figures on one screen come to
+   * disagree about the same commitment.
+   */
+  const commitments = await listCommitments(input.projectId);
+
   return {
     mode,
     objective: mode?.objective ?? null,
@@ -201,6 +235,12 @@ export async function cashView(input: {
       lines: authority ? describeAuthority(authority) : [],
       maxConcurrent: authority?.maxConcurrent ?? 0,
       heldCents: position.heldCommitmentsCents,
+      maxCommittedCents: authority?.maxCommittedCents ?? 0,
+      maxPerActionCents: authority?.maxPerActionCents ?? 0,
+      committedCents: commitments
+        .filter((one) => one.state === 'HELD')
+        .reduce((total, one) => total + one.amountCents, 0),
+      spentCents: commitments.reduce((total, one) => total + (one.spentCents ?? 0), 0),
       allowedActions: authority?.allowedActions ?? [],
     },
     myCash: {
@@ -208,11 +248,18 @@ export async function cashView(input: {
       entries: explainEntries(
         await listMoneyEntries({ projectId: input.projectId, currency, limit: 50 }),
       ),
-      commitments: await listCommitments(input.projectId),
+      commitments,
     },
     myCurrentWork: { ...plan, cards, provenance, executionPaths },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
     whatBrainNeeds: needs,
+    /*
+     * Both are pure reads over rows that already existed. Neither enqueues,
+     * transitions, claims or cancels anything, which is what makes adding them
+     * to this payload safe while the sprint is running.
+     */
+    roadmap: await cashRoadmap(input.projectId),
+    forecast: await cashForecast({ projectId: input.projectId, currency }),
     decisionsForMe: compressedReview({
       mode,
       stalled,

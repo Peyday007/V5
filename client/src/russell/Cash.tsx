@@ -54,6 +54,26 @@ function money(cents: number, currency: string): string {
 }
 
 /**
+ * A typed amount in ordinary money, as cents.
+ *
+ * Null when it is not a well-formed amount, which is what the control checks
+ * rather than trying to guess what somebody meant. Commas and a leading
+ * currency symbol are tolerated because people type them; anything else is
+ * refused, because rounding an ambiguous string into a spending ceiling is the
+ * wrong direction to be forgiving in.
+ *
+ * Presentation only. The API still takes cents and its guards are unchanged —
+ * this is the conversion that stops a person being asked to do it in their
+ * head, which is how $250 gets typed where 25000 was meant.
+ */
+function centsFromAmount(typed: string): number | null {
+  const cleaned = typed.trim().replace(/^[^0-9.]+/, '').replace(/,/g, '');
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  const [whole = '0', fraction = ''] = cleaned.split('.');
+  return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+}
+
+/**
  * The section, over one chosen operation.
  *
  * `projectId` is the shell's current selection and is a **candidate**, not the
@@ -177,10 +197,32 @@ export function CashView_({
       <p className="rs-hint">{data.discovery.reason}</p>
 
       <Decisions view={data} projectId={rootId} onChanged={view.reload} />
+      <MoneyPicture view={data} />
       <MyCash view={data} />
       <CurrentWork view={data} onChanged={view.reload} />
       <Needs view={data} />
+      <Roadmap view={data} />
       <Done view={data} />
+      {/*
+        * People and capacity, on the running sprint.
+        *
+        * It used to render only on the not-started card, so activating removed
+        * the one entrance to inviting somebody — which made an activation state
+        * decide an enrollment question it has nothing to do with. The two are
+        * independent: people join a Brain whether or not a sprint is running,
+        * and the counts stop nothing either way (§32). This is the *same*
+        * component the activation card mounts, with the same routes behind it;
+        * there is no second invitation path and nothing about enrollment
+        * changed.
+        */}
+      <section className="rs-card rs-cash-people">
+        <h3>People and capacity</h3>
+        <p className="rs-hint">
+          Counts, not gates. Anybody can be invited while the sprint runs, and a capacity
+          account can be registered at any time; neither stops or starts the work below.
+        </p>
+        <ReadinessPanel readiness={known.readiness} isBrainAdmin={isBrainAdmin} />
+      </section>
       <Lifecycle projectId={rootId} state={data.mode.state} onChanged={view.reload} />
     </section>
   );
@@ -754,7 +796,7 @@ function Authority({
   if (view.authority.exists) {
     return (
       <div className="rs-authority">
-        <p className="rs-authority-headline">What Brain may spend here</p>
+        <p className="rs-authority-headline">Spending limits &mdash; what Brain may spend here</p>
         <ul className="rs-authority-list">
           {view.authority.lines.map((line) => (
             <li key={line} className="rs-authority-limit">
@@ -806,17 +848,33 @@ function Authority({
     );
   }
 
+  /** Whether there is anything to spend on yet, which decides how loud this is. */
+  const hasWork = view.myCurrentWork.placements.length > 0;
+
+  /*
+   * Typed in ordinary money, sent in cents.
+   *
+   * The two ceilings used to be typed *in cents*, which asked a person to do a
+   * conversion in their head in the one box where being out by a factor of a
+   * hundred is a spending limit. Nothing about the grant moved: the route still
+   * takes cents, `checkCommercialAuthority` still decides, and the preview a
+   * person approves is still the server's own sentences about the values that
+   * actually arrive.
+   */
+  const committedCents = centsFromAmount(committed);
+  const perActionCents = centsFromAmount(perAction);
+  const concurrentCount = Number(concurrent);
   const numbers = {
-    maxCommittedCents: Number(committed),
-    maxPerActionCents: Number(perAction),
-    maxConcurrent: Number(concurrent),
+    maxCommittedCents: committedCents ?? 0,
+    maxPerActionCents: perActionCents ?? 0,
+    maxConcurrent: concurrentCount,
   };
   const complete =
-    [committed, perAction, concurrent].every((value) => value.trim().length > 0) &&
-    Number.isInteger(numbers.maxCommittedCents) &&
-    Number.isInteger(numbers.maxPerActionCents) &&
-    Number.isInteger(numbers.maxConcurrent) &&
-    numbers.maxConcurrent >= 1 &&
+    committedCents !== null &&
+    perActionCents !== null &&
+    concurrent.trim().length > 0 &&
+    Number.isInteger(concurrentCount) &&
+    concurrentCount >= 1 &&
     actions.length > 0;
 
   async function run(what: 'preview' | 'approve'): Promise<void> {
@@ -839,37 +897,64 @@ function Authority({
 
   return (
     <div className="rs-authority">
-      <p className="rs-authority-headline">Decide what Brain may spend here</p>
+      <p className="rs-authority-headline">Spending limits &mdash; what Brain may spend here</p>
       <p className="rs-hint">
-        Nothing can be committed, quoted or collected until this exists, however good an opening
-        is. Discovery keeps running meanwhile, and reading this card creates nothing.
+        These are <em>limits</em>, not a forecast and not a budget anybody expects to be used.
+        Nothing is set aside, reserved or pre-paid by setting them; they are the ceiling every
+        commitment is checked against. Nothing can be committed, quoted or collected until this
+        exists, however good an opening is. Discovery keeps running meanwhile, and reading this
+        card creates nothing.
       </p>
 
-      <div className="rs-cash-authority-details">
+      {/*
+        * The decision stays named; the form is what folds.
+        *
+        * With nothing in the portfolio yet, a set of empty ceiling boxes is the
+        * largest thing on the screen and the least useful, which is what the
+        * money picture above is actually for. §29's rule is that the approval a
+        * project cannot proceed without is never folded away — so the headline,
+        * the consequence and the control to open it are always visible, and
+        * only the inputs start closed. Once there is something to spend on,
+        * they start open.
+        */}
+      <details className="rs-cash-authority-details" open={hasWork}>
+        <summary className="rs-linklike">
+          {hasWork ? 'Set the limits' : 'Set the limits now, or leave it until there is an opening'}
+        </summary>
         <label className="rs-field-label" htmlFor="cash-committed">
-          Most that may be committed at once, in cents
+          Most that may be committed at once
         </label>
         <input
           id="cash-committed"
-          inputMode="numeric"
+          inputMode="decimal"
+          placeholder={`${view.myCash.position.currency} 1,000.00`}
           value={committed}
           onChange={(event) => {
             setCommitted(event.target.value);
             setPreview(null);
           }}
         />
+        <p className="rs-hint">
+          In ordinary {view.myCash.position.currency}, not cents. The total Brain may have held
+          against openings at any one moment. Money released or settled stops counting against it.
+        </p>
         <label className="rs-field-label" htmlFor="cash-per-action">
-          Most in one commitment, in cents
+          Most in any single commitment
         </label>
         <input
           id="cash-per-action"
-          inputMode="numeric"
+          inputMode="decimal"
+          placeholder={`${view.myCash.position.currency} 250.00`}
           value={perAction}
           onChange={(event) => {
             setPerAction(event.target.value);
             setPreview(null);
           }}
         />
+        <p className="rs-hint">
+          The size of one commitment Brain may make without you. It is a per-item ceiling, not a
+          share of the figure above.
+        </p>
         <label className="rs-field-label" htmlFor="cash-concurrent">
           How many opportunities may be executing at once
         </label>
@@ -886,6 +971,12 @@ function Authority({
           This bounds what may be <em>executing</em>, which is real fulfilment capacity. It is not
           a limit on how many pieces the portfolio may hold.
         </p>
+        {[committed, perAction].some((typed) => typed.trim().length > 0) &&
+        (committedCents === null || perActionCents === null) ? (
+          <p className="rs-state rs-state-error">
+            Type an amount like 1000 or 1,000.50. Brain will not guess at an amount it cannot read.
+          </p>
+        ) : null}
         <fieldset>
           <legend className="rs-field-label">What it authorizes</legend>
           {view.vocabulary.commercialActions.map((action) => (
@@ -906,7 +997,7 @@ function Authority({
             </label>
           ))}
         </fieldset>
-      </div>
+      </details>
 
       <ul className="rs-authority-never">
         {view.vocabulary.neverAuthorizable.map((entry) => (
@@ -941,6 +1032,212 @@ function Authority({
       )}
       {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
     </div>
+  );
+}
+
+/**
+ * The money picture: what is *known*, and what the evidence cannot yet say.
+ *
+ * Two kinds of number and they are never shown alike. A **fact** is derived
+ * from an append-only entry or from a limit a person set — authorized,
+ * committed, spent, remaining — and zero is one of those: "nothing authorized"
+ * is something Brain knows, not something it has failed to work out. A
+ * **forecast** is arithmetic over evidence on opportunity cards, and where the
+ * cards are blank it is withheld naming the blanks, rather than estimated.
+ *
+ * Nothing on this screen is computed here. Every figure comes down on the view;
+ * a client deriving one would be a second opinion about one sprint.
+ */
+function MoneyPicture({ view }: { view: CashView }): JSX.Element {
+  const currency = view.forecast.currency;
+  const grant = view.authority;
+  const remaining = Math.max(grant.maxCommittedCents - grant.committedCents, 0);
+
+  const facts: { label: string; value: string; note: string }[] = [
+    {
+      label: 'Authorized',
+      value: grant.exists ? money(grant.maxCommittedCents, currency) : money(0, currency),
+      note: grant.exists
+        ? 'The most that may be committed at once, which you set.'
+        : 'No spending has been authorized here yet. Nothing can be committed until it is.',
+    },
+    {
+      label: 'Committed',
+      value: money(grant.committedCents, currency),
+      note: 'Authorized and held against something, not yet spent.',
+    },
+    {
+      label: 'Spent',
+      value: money(grant.spentCents, currency),
+      note: 'Money that has actually left the account.',
+    },
+    {
+      label: 'Remaining authorized capacity',
+      value: grant.exists ? money(remaining, currency) : money(0, currency),
+      note: grant.exists
+        ? 'What is left inside the limit you set, not a forecast of what will be used.'
+        : 'There is no limit to have room inside yet.',
+    },
+  ];
+
+  const estimates: {
+    key: string;
+    label: string;
+    value: string | null;
+    range: string | null;
+    basis: string;
+    unknown: string[];
+    blocking: string;
+    confidence: string;
+    fromRows: number;
+  }[] = [
+    { key: 'upfront', label: 'Upfront cash needed', e: view.forecast.upfrontCash },
+    { key: 'ongoing', label: 'Ongoing costs', e: view.forecast.ongoingCosts },
+    { key: 'revenue', label: 'Revenue', e: view.forecast.revenue },
+    { key: 'contribution', label: 'Profit contribution', e: view.forecast.contribution },
+  ].map(({ key, label, e }) => ({
+    key,
+    label,
+    value: e.valueCents === null ? null : money(e.valueCents, currency),
+    range:
+      e.lowCents === null || e.highCents === null || e.lowCents === e.highCents
+        ? null
+        : `${money(e.lowCents, currency)} to ${money(e.highCents, currency)}`,
+    basis: e.basis,
+    unknown: e.unknown,
+    blocking: e.blocking,
+    confidence: e.confidence,
+    fromRows: e.fromRows,
+  }));
+
+  const durations: {
+    key: string;
+    label: string;
+    value: string | null;
+    range: string | null;
+    basis: string;
+    unknown: string[];
+    blocking: string;
+    confidence: string;
+    fromRows: number;
+  }[] = [
+    { key: 'first-dollar', label: 'Time to the first dollar', d: view.forecast.timeToFirstDollar },
+    { key: 'break-even', label: 'Time to break even', d: view.forecast.breakEven },
+  ].map(({ key, label, d }) => ({
+    key,
+    label,
+    value: d.days === null ? null : `${d.days} ${d.days === 1 ? 'day' : 'days'}`,
+    range:
+      d.lowDays === null || d.highDays === null || d.lowDays === d.highDays
+        ? null
+        : `${d.lowDays} to ${d.highDays} days`,
+    basis: d.basis,
+    unknown: d.unknown,
+    blocking: d.blocking,
+    confidence: d.confidence,
+    fromRows: d.fromRows,
+  }));
+
+  const rows = [...estimates, ...durations];
+
+  return (
+    <section className="rs-card rs-cash-picture">
+      <h3>The money picture</h3>
+
+      <p className="rs-item-meta">
+        These four are facts. They are what you authorized and what has actually moved.
+      </p>
+      <div className="rs-table-wrap">
+        <table>
+          <caption className="rs-visually-hidden">
+            Authorized, committed, spent and remaining: figures Brain knows
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Figure</th>
+              <th scope="col">Amount</th>
+              <th scope="col">What it means</th>
+            </tr>
+          </thead>
+          <tbody>
+            {facts.map((fact) => (
+              <tr key={fact.label}>
+                <th scope="row">{fact.label}</th>
+                <td>{fact.value}</td>
+                <td>{fact.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="rs-item-meta">
+        These are estimates over the openings Brain has qualified &mdash;{' '}
+        {view.forecast.qualified} of {view.forecast.considered}. An estimate is shown only where
+        the evidence carries it; the rest say exactly what is still unknown.
+      </p>
+      <div className="rs-table-wrap">
+        <table>
+          <caption className="rs-visually-hidden">
+            What the evidence supports estimating, and what it does not
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Estimate</th>
+              <th scope="col">Figure</th>
+              <th scope="col">Range and confidence</th>
+              <th scope="col">Where it comes from</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <th scope="row">{row.label}</th>
+                <td>{row.value ?? <span className="rs-item-meta">Not yet estimable</span>}</td>
+                <td>
+                  {row.value === null
+                    ? '\u2014'
+                    : `${row.range ?? 'No spread: one figure'} \u00b7 ${
+                        row.confidence === 'SEVERAL_ROWS'
+                          ? `from ${row.fromRows} openings`
+                          : row.confidence === 'SINGLE_ROW'
+                            ? 'from a single opening'
+                            : 'no supporting rows'
+                      }`}
+                </td>
+                <td>
+                  {row.basis}
+                  {row.value === null ? (
+                    <>
+                      {' '}
+                      <strong>{row.blocking}</strong>
+                      {row.unknown.length > 0 ? ` Still unknown: ${row.unknown.join(', ')}.` : ''}
+                    </>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {view.forecast.humanHours.total === null ? (
+        <p className="rs-hint">
+          Nobody has estimated the hours these openings would take.
+          {view.forecast.humanHours.unknown.length > 0
+            ? ` Still unknown: ${view.forecast.humanHours.unknown.join(', ')}.`
+            : ''}
+        </p>
+      ) : (
+        <p className="rs-hint">
+          {view.forecast.humanHours.total} hours of your own work across{' '}
+          {view.forecast.humanHours.fromRows}{' '}
+          {view.forecast.humanHours.fromRows === 1 ? 'opening' : 'openings'}. Reported beside the
+          money rather than inside it: no hourly rate has been set, so turning hours into a cost
+          would be a number nobody chose.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -1262,11 +1559,209 @@ function Needs({ view }: { view: CashView }): JSX.Element {
   );
 }
 
-/** What Brain has done: the append-only history, newest first. */
+/**
+ * Where the research is up to.
+ *
+ * Above the activity log and deliberately separate from it. The log answers
+ * *what happened* — a stream of event codes, newest first — and reading it for
+ * progress is what left a person watching `CASH_DISCOVERY_OPENED` scroll past
+ * with no idea whether that was one of three things or one of thirty. This
+ * answers *where is this up to*, and every number on it is a count the server
+ * took over rows that already existed.
+ *
+ * **Every denominator here is the plan's own.** A round's planned count is how
+ * many fragments its mission actually holds. There is no target in this file,
+ * and no completion percentage over discovery as a whole: discovery is
+ * open-ended by mandate, so a percentage of it would be a fraction of a number
+ * nobody knows. A *round* is bounded, so a round is what carries a fraction.
+ *
+ * It renders a projection and presses nothing. There is no control on it.
+ */
+function Roadmap({ view }: { view: CashView }): JSX.Element {
+  const map = view.roadmap;
+  const research = map.research;
+  const queued = research.byStatus.PLANNED + research.byStatus.QUEUED;
+  const running = research.byStatus.RUNNING + research.byStatus.VALIDATING;
+  /*
+   * Every status is on the screen, so the rows sum to the plan.
+   *
+   * A table that showed five of nine statuses would be a denominator that does
+   * not add up, and the missing four are exactly the ones a person needs to see:
+   * stopped work, and work that stopped for them.
+   */
+  const stopped = research.byStatus.CANCELLED + research.byStatus.NEEDS_HUMAN;
+
+  return (
+    <section className="rs-card rs-cash-roadmap">
+      <h3>What Brain is researching</h3>
+      <p className="rs-hint">{map.whatHappensNext}</p>
+
+      <div className="rs-table-wrap">
+        <table>
+          <caption className="rs-visually-hidden">
+            The research plan of the rounds that are open, counted from the plan itself
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Research</th>
+              <th scope="col">How many</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Planned in the open rounds</th>
+              <td>{research.planned}</td>
+            </tr>
+            <tr>
+              <th scope="row">Waiting to start</th>
+              <td>{queued}</td>
+            </tr>
+            <tr>
+              <th scope="row">Being researched now</th>
+              <td>{running}</td>
+            </tr>
+            <tr>
+              <th scope="row">Finished and accepted</th>
+              <td>{research.byStatus.ACCEPTED}</td>
+            </tr>
+            <tr>
+              <th scope="row">Rejected at the evidence gate</th>
+              <td>{research.byStatus.REJECTED}</td>
+            </tr>
+            <tr>
+              <th scope="row">Blocked</th>
+              <td>{research.byStatus.BLOCKED}</td>
+            </tr>
+            <tr>
+              <th scope="row">Stopped, or waiting on a person</th>
+              <td>{stopped}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p className="rs-item-meta">
+        {map.rounds.open} {map.rounds.open === 1 ? 'round' : 'rounds'} open of {map.rounds.total}{' '}
+        opened so far ({map.rounds.harvested} harvested, {map.rounds.abandoned} abandoned), across{' '}
+        {map.mechanisms.length} {map.mechanisms.length === 1 ? 'way' : 'ways'} of earning.
+      </p>
+
+      {map.active.length === 0 ? (
+        <p className="rs-hint">No round is open right now. {view.discovery.reason}</p>
+      ) : (
+        <ul className="rs-list">
+          {map.active.map((round) => (
+            <li key={round.roundId} className="rs-row">
+              <span className="rs-item-title">
+                {round.mechanism} &mdash; round {round.round}
+              </span>
+              <span className="rs-item-meta" title={`${round.bucketId} \u00b7 ${round.roundId}`}>
+                {round.plan
+                  ? `${round.plan.byStatus.ACCEPTED} of ${round.plan.planned} research items done`
+                  : 'Captured; research has not been launched yet'}
+                {' \u00b7 '}
+                {round.found} {round.found === 1 ? 'opening' : 'openings'} found
+                {' \u00b7 '}
+                opened {round.openedAt}
+              </span>
+              {round.plan && round.plan.inFlight.length > 0 ? (
+                <ul className="rs-list rs-sublist">
+                  {round.plan.inFlight.map((question) => (
+                    <li key={question} className="rs-item-meta">
+                      {question}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="rs-table-wrap">
+        <table>
+          <caption className="rs-visually-hidden">
+            What discovery has produced, counted by the state each piece is in
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Stage</th>
+              <th scope="col">How many</th>
+              <th scope="col">What it means</th>
+            </tr>
+          </thead>
+          <tbody>
+            {map.pipeline.map((stage) => (
+              <tr key={stage.key}>
+                <th scope="row">{stage.label}</th>
+                <td>{stage.count}</td>
+                <td>{stage.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * An event code, in the words somebody reads.
+ *
+ * The code is kept rather than replaced: it is on the row's own title, so the
+ * underlying detail stays reachable exactly as it was. A kind with no entry
+ * falls back to its own words rather than to a shrug, so a new event kind
+ * reaches the screen legibly without this map having to be remembered.
+ */
+const EVENT_PLAIN: Record<string, string> = {
+  CASH_MODE_ACTIVATED: 'Cash Mode started',
+  CASH_MODE_WINDING_DOWN: 'Winding down: no new discovery',
+  CASH_MODE_ARCHIVED: 'Archived',
+  CASH_MODE_ACTIVE: 'Made active again',
+  CASH_LAYER_CREATED: 'Somewhere to file the work was created',
+  CASH_DISCOVERY_OPENED: 'A new search was opened',
+  CASH_OPPORTUNITY_HARVESTED: 'An opening was harvested from the research',
+  CASH_OPPORTUNITY_CAPTURED: 'An opening was written down',
+  CASH_OPPORTUNITY_READY: 'An opening became ready to test',
+  CASH_OPPORTUNITY_DECLINED: 'An opening was declined',
+  CASH_OPPORTUNITY_ARCHIVED: 'An opening was archived',
+  CASH_OPPORTUNITY_REOFFERED: 'An archived opening was offered again',
+  CASH_OPENING_EXHAUSTED: 'An opening ran out of attempts',
+  CASH_CARD_UPDATED: 'An answer was filled in on a card',
+  CASH_CARD_ANSWERED: 'Research answered something on a card',
+  CASH_TERMS_PROPOSED: 'Brain proposed terms for an opening',
+  CASH_NEED_RAISED: 'Brain said what it is missing',
+  CASH_NEED_RESOLVED: 'Something Brain was missing was answered',
+  CASH_NEED_WITHDRAWN: 'A need was withdrawn',
+  CASH_AUTHORITY_GRANTED: 'You set what Brain may spend',
+  CASH_AUTHORITY_WITHDRAWN: 'Spending authority was withdrawn',
+  CASH_COMMITTED: 'Money was committed',
+  CASH_COMMITMENT_RELEASED: 'A commitment was released',
+  CASH_COMMITMENT_SETTLED: 'A commitment was settled',
+  CASH_MONEY_RECORDED: 'A money record was added',
+  CASH_ACTION_RECORDED: 'Brain did something in the world',
+  CASH_EXECUTION_STARTED: 'Work on an opening started',
+};
+
+function plainEvent(kind: string): string {
+  const known = EVENT_PLAIN[kind];
+  if (known !== undefined) return known;
+  const words = kind.replace(/^CASH_/, '').toLowerCase().replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * What Brain has done: the append-only history, newest first.
+ *
+ * Supporting detail under the roadmap rather than the progress report itself.
+ * The internal code is translated and kept: it is on the row, so a person
+ * reading for progress is not decoding enum names and somebody debugging has
+ * lost nothing.
+ */
 function Done({ view }: { view: CashView }): JSX.Element {
   return (
     <section className="rs-card rs-cash-history">
-      <h3>What Brain has done</h3>
+      <h3>Everything that has happened</h3>
       {view.whatBrainHasDone.length === 0 ? (
         <p className="rs-hint">Nothing has happened here yet.</p>
       ) : (
@@ -1274,8 +1769,8 @@ function Done({ view }: { view: CashView }): JSX.Element {
           {view.whatBrainHasDone.map((event) => (
             <li key={event.id} className="rs-row">
               <span className="rs-item-title">{event.summary}</span>
-              <span className="rs-item-meta">
-                {event.kind} &middot; {event.createdAt}
+              <span className="rs-item-meta" title={event.kind}>
+                {plainEvent(event.kind)} &middot; {event.createdAt}
               </span>
             </li>
           ))}

@@ -9,8 +9,18 @@
  */
 import { api } from './api.ts';
 import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
+/*
+ * The roadmap and the forecast are the server's shapes, imported rather than
+ * restated. `CashReadiness` already established the precedent here and the
+ * reason is the same one §24 gives for sending an authority's limits down with
+ * the view: a client holding its own copy of a contract is a second contract,
+ * and the copy is the one that drifts. These are type-only imports, so nothing
+ * of the server reaches the bundle.
+ */
+import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
+import type { CashForecast } from '../../../server/services/cash/forecast.ts';
 
-export type { CashReadiness };
+export type { CashReadiness, CashRoadmap, CashForecast };
 
 export type CashModeState = 'ACTIVE' | 'WINDING_DOWN' | 'ARCHIVED';
 
@@ -147,6 +157,15 @@ export interface CashView {
     lines: string[];
     maxConcurrent: number;
     heldCents: number;
+    /**
+     * The ceilings the grant carries, and what has been committed and spent
+     * against them. Sent so the money picture can show an authorization as an
+     * authorization rather than as a forecast.
+     */
+    maxCommittedCents: number;
+    maxPerActionCents: number;
+    committedCents: number;
+    spentCents: number;
     /** What this grant permits, so the screen offers those and not the vocabulary. */
     allowedActions: string[];
   };
@@ -183,6 +202,10 @@ export interface CashView {
   };
   whatBrainHasDone: CashEvent[];
   whatBrainNeeds: CashNeed[];
+  /** Where the research is up to, counted from rows. Never mutated by reading it. */
+  roadmap: CashRoadmap;
+  /** What the evidence supports saying about money, and what it does not. */
+  forecast: CashForecast;
   decisionsForMe: { items: ReviewItem[]; underlyingCount: number; summary: string };
   vocabulary: {
     mechanisms: string[];

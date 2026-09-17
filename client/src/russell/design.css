@@ -2459,6 +2459,20 @@ button.rs-card:hover {
 }
 
 /*
+ * The questions a round is working on, under the round that owns them.
+ *
+ * `rs-row` is a wrapping flex row, so a nested list needs to take the whole
+ * line rather than sit beside the meta text — otherwise a long question reflows
+ * into the gap between two spans and reads as part of them.
+ */
+.rs-sublist {
+  flex-basis: 100%;
+  margin: 0;
+  padding-inline-start: var(--gap-3);
+  border-inline-start: 2px solid var(--rule);
+}
+
+/*
  * The one table on this screen, and its own scroller.
  *
  * Eight figures with an explanation each is genuinely tabular, and §29 allows a
