@@ -1,32 +1,28 @@
-# SCRATCH BRANCH ONLY — the transport for one read-only Cash research audit.
+# Reading one packet's authoritative rows, without a terminal and without a
+# person relaying them.
 #
-# `workflow_dispatch` runs the workflow file from the ref it is dispatched on,
-# so this version runs only when dispatched on the audit branch. `production`
-# keeps its own packet report and is not touched.
+# Separate from `deploy.yml` on purpose. Watching a live packet means asking the
+# same question every so often — has the worker claimed the synthesis, did the
+# judge record a verdict, is anything still leased — and asking it through the
+# deploy pipeline would mean building an image, redeploying the app and running
+# the full hosted verification to read four numbers. That is eight minutes and a
+# restart per question, so in practice it would not be asked, and the answer
+# would come from somebody's screenshot instead.
 #
-# It ships `scripts/roq.ts` and the dispatched SELECT bundle into the running
-# container, runs the bundle once out of /tmp, and prints what it found.
-# `roq.ts` refuses any statement that is not a SELECT, opens the adapter
-# directly rather than `initDatabase()` (which would run the migration chain),
-# and holds every statement inside one `SET TRANSACTION READ ONLY`
-# transaction. Nothing is built, nothing is deployed, and nothing is written —
-# in the container or in the database.
-#
-# The bundle never reaches a shell: it is written to a file with `printf`,
-# compressed, and carried across as base64.
+# It is read-only, in the script and here: it opens the database, prints, and
+# closes. No deploy, no restart, no migration, no write. The one thing it can do
+# to production is read it.
 name: Packet report
 
 on:
   workflow_dispatch:
     inputs:
-      sql:
-        description: 'The SELECT bundle. Statements separated by ;; and labelled with -- @label'
+      orchestration:
+        description: 'Orchestration id to report on (orc_...)'
         required: true
-      clip:
-        description: 'Clip long text fields to this many characters'
-        required: false
-        default: '600'
 
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a report that raced a restart would be reporting whichever half answered.
 concurrency:
   group: deploy-brain
   cancel-in-progress: false
@@ -35,48 +31,19 @@ jobs:
   report:
     name: Read the packet
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Read
+      - name: Report
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          # Through the environment, never interpolated into a shell command.
-          AUDIT_SQL: ${{ inputs.sql }}
-          AUDIT_CLIP: ${{ inputs.clip }}
         run: |
-          set -eu
-          case "$AUDIT_CLIP" in
-            ''|*[!0-9]*) echo "::error::The clip is a number."; exit 1 ;;
-          esac
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-
-          # Relative imports would resolve against /tmp, so point them at the
-          # container's own tree. Nothing is written into /app.
-          sed -E "s#from '\.\./server/#from '/app/server/#g" scripts/roq.ts > /tmp/roq.ts
-          printf '%s' "$AUDIT_SQL" > /tmp/bundle.sql
-          echo "--- the bundle ---"
-          cat /tmp/bundle.sql
-
-          runner=$(gzip -9c /tmp/roq.ts | base64 -w0)
-          bundle=$(gzip -9c /tmp/bundle.sql | base64 -w0)
-
+          set +e
           flyctl ssh console --app "$app" \
-            -C "/bin/sh -c 'echo $runner | base64 -d | gzip -dc > /tmp/roq.ts'"
-          flyctl ssh console --app "$app" \
-            -C "/bin/sh -c 'echo $bundle | base64 -d | gzip -dc > /tmp/bundle.sql'"
-
-          set -o pipefail
-          flyctl ssh console --app "$app" \
-            -C "/bin/sh -c 'cd /app && node --import tsx /tmp/roq.ts /tmp/bundle.sql $AUDIT_CLIP'" \
-            2>&1 | tee audit.txt
-          grep -q '^ROQ: OK' audit.txt
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: cash-audit
-          path: audit.txt
-          retention-days: 7
+            -C "sh /app/scripts/packet-report.sh --orchestration ${{ inputs.orchestration }}" \
+            2>&1 | tee packet-report.txt
+          set -e
+          grep -q '^PACKET-REPORT: OK' packet-report.txt
