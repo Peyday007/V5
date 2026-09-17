@@ -60,6 +60,44 @@ function option(name: string): string | null {
   return i === -1 ? null : (argv[i + 1] ?? null);
 }
 
+/**
+ * A human name, which may have spaces in it.
+ *
+ * The dispatch workflow splits its arguments on whitespace, so a name with a
+ * space cannot arrive as one argument at all — `--account Brain Research A`
+ * reaches here as three. `rename` has always written those as underscores and
+ * turned them back; `register-routine` did not, which made an account whose
+ * name has a space in it unreachable from the one surface an operator has.
+ * Every account in this fleet but two is named that way, so the convention was
+ * right and it was applied in one of the two places that needed it.
+ *
+ * It is deliberately only for the options that carry a *name*. A `trig_…` ref,
+ * a worker id and a secret name never contain a space, and folding underscores
+ * in those would corrupt values that legitimately have them.
+ */
+function nameOption(name: string): string | null {
+  return option(name)?.replace(/_/g, ' ') ?? null;
+}
+
+/**
+ * An account named by `--ref`, where the same flag also carries `trig_…` ids.
+ *
+ * A trigger id has underscores in it, so folding `--ref` the way `nameOption`
+ * folds a name would corrupt every one of them. The value is therefore tried
+ * exactly as typed first and only then as a name with its underscores turned
+ * back into spaces — a raw match always wins, so no account that was reachable
+ * before becomes unreachable now.
+ *
+ * Without it an account whose name has a space in it could be created and then
+ * never renamed, quarantined, re-enabled or given a target through the one
+ * surface an operator has. §24's sentence at a command line: an escalation
+ * whose remedy cannot be typed is not a remedy.
+ */
+async function accountByRef(ref: string | null): Promise<Awaited<ReturnType<typeof getAccountByName>>> {
+  if (!ref) return null;
+  return (await getAccountByName(ref)) ?? (await getAccountByName(ref.replace(/_/g, ' ')));
+}
+
 const ACTOR = option('actor') ?? 'operator:fleet-cli';
 
 function ok(line: string): void {
@@ -79,7 +117,7 @@ async function main(): Promise<void> {
   /* ---------------------------------------------------------------------- */
 
   if (command === 'register-account') {
-    const name = option('name');
+    const name = nameOption('name');
     if (!name) return refuse('pass --name.');
     const existing = await getAccountByName(name);
     if (existing) {
@@ -95,10 +133,10 @@ async function main(): Promise<void> {
   }
 
   if (command === 'register-routine') {
-    const accountName = option('account');
+    const accountName = nameOption('account');
     const ref = option('ref');
     const secret = option('secret');
-    const name = option('name') ?? ref;
+    const name = nameOption('name') ?? ref;
     if (!accountName || !ref || !secret) {
       return refuse('pass --account <name> --ref <trig_…> --secret <ENV_VAR_NAME>.');
     }
@@ -272,7 +310,7 @@ async function main(): Promise<void> {
       return refuse(`--to must be one of ${FLEET_STATES.join(', ')}.`);
     }
     if (kind === 'account') {
-      const account = await getAccountByName(ref);
+      const account = await accountByRef(ref);
       if (!account) return refuse(`no account named "${ref}".`);
       const changed = await setAccountState({ accountId: account.id, from: account.state, to, reason });
       if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
@@ -297,11 +335,10 @@ async function main(): Promise<void> {
    */
   if (command === 'rename') {
     const kind = (option('kind') ?? '').toLowerCase();
+    // By the trigger it fires, or by what it is currently called — and what it
+    // is called may have spaces in it, so the ref is read both ways below.
     const ref = option('ref');
-    // Underscores become spaces, the same way `set-state --reason` does it: the
-    // dispatch workflow splits its arguments on whitespace, so a name with a
-    // space in it cannot arrive as one argument any other way.
-    const to = option('to')?.replace(/_/g, ' ');
+    const to = nameOption('to');
     if (!kind || !ref || !to) {
       return refuse('pass --kind account|routine --ref <name|trig_\u2026> --to <New_Name>.');
     }
@@ -309,17 +346,20 @@ async function main(): Promise<void> {
       return refuse(`--kind must be account or routine, not "${kind}".`);
     }
     if (kind === 'account') {
-      const account = await getAccountByName(ref);
+      const account = await accountByRef(ref);
       if (!account) return refuse(`no account named "${ref}".`);
       if (account.name === to) return ok(`rename account ${ref}: already called that`);
       const changed = await renameAccount({ accountId: account.id, from: account.name, to });
       if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
       return ok(`rename account ${ref} -> ${to} (credential, state and routines untouched)`);
     }
-    // By the trigger it fires, or by what it is currently called.
+    // By the trigger it fires, or by what it is currently called — the latter
+    // raw first and then with underscores folded, for `accountByRef`'s reason.
+    const all = await listRoutines();
     const routine =
       (await getRoutineByRef(ref)) ??
-      (await listRoutines()).find((one) => one.name === ref) ??
+      all.find((one) => one.name === ref) ??
+      all.find((one) => one.name === ref.replace(/_/g, ' ')) ??
       null;
     if (!routine) return refuse(`no Routine registered as ${ref}.`);
     if (routine.name === to) return ok(`rename routine ${ref}: already called that`);
@@ -345,7 +385,7 @@ async function main(): Promise<void> {
 
     let scopeId: string | null = null;
     if (scope === 'ACCOUNT') {
-      const account = ref ? await getAccountByName(ref) : null;
+      const account = await accountByRef(ref);
       if (!account) return refuse('pass --ref <account name> for an ACCOUNT target.');
       scopeId = account.id;
     } else if (scope === 'ROUTINE') {
