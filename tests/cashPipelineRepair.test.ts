@@ -33,7 +33,7 @@ import {
   ensureDiscoveryAuthority,
   resumeAuthorityParkedCandidates,
 } from '../server/services/cash/discoveryAuthority.ts';
-import { listGoals, reserve } from '../server/repos/russellAuthority.ts';
+import { listGoals, reserve, setGoalConcurrency } from '../server/repos/russellAuthority.ts';
 import { ALWAYS_PROHIBITED } from '../server/repos/russellAuthority.ts';
 import { liveAuthority } from '../server/repos/cashAuthority.ts';
 import { getDb } from '../server/db/database.ts';
@@ -908,6 +908,78 @@ describe('pressing Start produces work the fleet can actually take', () => {
 
     // Still nothing that could touch the world.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 26 — how much may run at once, and reaching a grant already written
+// ---------------------------------------------------------------------------
+
+describe('the concurrency a running sprint is held to', () => {
+  /*
+   * Reproduced from production and then locally: the deep dives were ranked
+   * first, had a compiled specification and nothing else wrong with them, and
+   * still never launched — two long discovery missions held both slots while
+   * twenty-four filed openings waited to be qualified, and the fleet sat idle
+   * with four eligible Routines and nothing in flight.
+   *
+   * The number was two, and its own comment justified that by saying it left
+   * room "for the validation work those missions create" — which one grant
+   * governing both kinds cannot do. Ordering is what separates them, and that
+   * is `CompilerProfile.launchOrdinal`, a different mechanism entirely.
+   */
+  it('is a ceiling that still refuses, and is bounded by what was measured', async () => {
+    // Bounded by §22's measured ceiling of ten concurrent bins on one Routine,
+    // against a fleet of four — not a number chosen to sound safe.
+    expect(DISCOVERY_CONCURRENCY).toBeGreaterThan(2);
+    expect(DISCOVERY_CONCURRENCY).toBeLessThanOrEqual(10);
+  });
+
+  it('reaches a grant written under an earlier number', async () => {
+    /*
+     * `ensureGoal` is `ON CONFLICT DO NOTHING`, so a changed constant reaches
+     * every sprint started afterwards and no sprint already running. That is
+     * the same "a fix cannot reach the damage" trap this file already records,
+     * and it would have left the live sprint on two for ever.
+     */
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    const goal = (await discoveryAuthority(projectId))!;
+
+    // A grant as it was written under the old constant.
+    await setGoalConcurrency(goal.id, 2);
+    expect((await discoveryAuthority(projectId))!.maxConcurrent).toBe(2);
+
+    await ensureDiscoveryAuthority(projectId);
+    const moved = (await discoveryAuthority(projectId))!;
+    expect(moved.maxConcurrent).toBe(DISCOVERY_CONCURRENCY);
+
+    // Nothing else about what was authorized moves with it.
+    expect(moved.id).toBe(goal.id);
+    expect(moved.allowedWork).toEqual(goal.allowedWork);
+    expect(moved.prohibitions).toEqual(goal.prohibitions);
+    expect(moved.maxExternalSpend).toBe(0);
+    expect(moved.workPolicy).toBe(goal.workPolicy);
+    // And a commercial grant is still a separate decision nobody has made.
+    expect(await liveAuthority(projectId)).toBeNull();
+  });
+
+  it('writes nothing once the grant already agrees', async () => {
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    const before = (await discoveryAuthority(projectId))!;
+    await ensureDiscoveryAuthority(projectId);
+    const after = (await discoveryAuthority(projectId))!;
+    expect(after.maxConcurrent).toBe(DISCOVERY_CONCURRENCY);
+    expect(after.updatedAt).toBe(before.updatedAt);
   });
 });
 

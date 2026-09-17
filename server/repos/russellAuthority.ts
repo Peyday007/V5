@@ -868,6 +868,26 @@ export async function settleReservation(reservationId: string): Promise<boolean>
 }
 
 /**
+ * Move a live grant's concurrency, and nothing else about it.
+ *
+ * Concurrency is provider capacity rather than an allowance (§24), so it is the
+ * one term of a standing authority that can be corrected without re-deciding
+ * what was authorized: the work class, the prohibitions, the spend ceiling and
+ * the owner are all untouched, and a grant that is not ACTIVE is refused.
+ *
+ * Narrow by construction — one column, guarded on the row still being live —
+ * because a general "update a grant" would be a way to widen one.
+ */
+export async function setGoalConcurrency(goalId: string, maxConcurrent: number): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE russell_goals SET max_concurrent = ?, updated_at = ?
+      WHERE id = ? AND state = 'ACTIVE'`,
+    [Math.max(0, Math.trunc(maxConcurrent)), nowIso(), goalId],
+  );
+  return result.changes === 1;
+}
+
+/**
  * Push a live reservation's expiry out, so time does not refund a budget.
  *
  * The TTL is what stops a crashed launch holding a slot for ever, and that is

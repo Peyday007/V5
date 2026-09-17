@@ -44,7 +44,12 @@
  * loser of the race reads back the winner's row. The seventh time this codebase
  * has needed a compare-and-swap on a value the claimant does not supply.
  */
-import { ensureGoal, liveGoalNamed, revokeGoal } from '../../repos/russellAuthority.ts';
+import {
+  ensureGoal,
+  liveGoalNamed,
+  revokeGoal,
+  setGoalConcurrency,
+} from '../../repos/russellAuthority.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import { getDb } from '../../db/database.ts';
 import { nowIso } from '../../repos/util.ts';
@@ -63,16 +68,35 @@ export const CASH_DISCOVERY_AUTHORITY_NAME = 'Cash Mode internal discovery';
 const RESEARCH_WORK = 'RESEARCH';
 
 /**
- * How many discovery missions may be in flight at once under this grant.
+ * How many of this sprint's missions may be in flight at once.
  *
  * The one limit on it that is real. §24 removed the lifetime quotas because
  * nothing they rationed was scarce — the subscription behind a research mission
  * is already paid for — and left concurrency, which is provider capacity rather
- * than an allowance. Two, because a sprint opens one bucket per tick and a
- * fleet that is busy on ten simultaneous discovery missions is a fleet with
- * nothing left for the validation work those missions create.
+ * than an allowance.
+ *
+ * **It was two, and its own reasoning was wrong.** That comment said two left a
+ * fleet with something "for the validation work those missions create", and one
+ * grant governs discovery *and* validation alike — so the number could not
+ * reserve anything for anybody. It capped the total, and the queue handed both
+ * slots to whatever arrived first. What actually orders the two is
+ * `CompilerProfile.launchOrdinal`, which is a different mechanism entirely.
+ *
+ * Production then measured the cost of the number itself. Two long discovery
+ * missions held both slots while twenty-four filed openings waited to be
+ * qualified, and the deep dives — correctly ranked first, with a compiled
+ * specification and nothing else wrong with them — simply had nowhere to run.
+ * Meanwhile the fleet sat **idle**: four eligible Routines, nothing in flight,
+ * three hundred and seventeen fires on the first with two refusals.
+ *
+ * Six, which is bounded by what has actually been observed rather than chosen
+ * to sound safe: §22 records a measured operating ceiling of ten concurrent
+ * bins on one Routine, and this fleet has four. It is still a ceiling and still
+ * refuses the seventh, and it authorizes nothing — every mission it admits
+ * passes the same envelope, the same evidence gate and the same three audit
+ * roles it did at two.
  */
-export const DISCOVERY_CONCURRENCY = 2;
+export const DISCOVERY_CONCURRENCY = 6;
 
 export interface EnsuredAuthority {
   goal: RussellGoal;
@@ -130,6 +154,38 @@ export async function ensureDiscoveryAuthority(
     // clock" failure §30 forbids one table along.
     expiresAt: null,
   });
+
+  /*
+   * A grant written under an earlier constant keeps its own number, and this
+   * is what reaches it.
+   *
+   * `ensureGoal` is `ON CONFLICT DO NOTHING`, so changing
+   * `DISCOVERY_CONCURRENCY` would otherwise reach every sprint started after
+   * the change and no sprint already running — which is this repository's own
+   * recurring sentence, and the second time tonight it would have applied to a
+   * number I had just corrected. The live sprint would have kept two for ever.
+   *
+   * It is narrow on purpose. Only the grant Brain issues under its own
+   * canonical name is touched, only the concurrency, and only to the constant
+   * in this file — nothing a person wrote by hand is reconciled to anything,
+   * and no other term of the grant moves. Ordering the check by inequality
+   * keeps it idempotent: once they agree, no tick writes anything.
+   */
+  if (goal.maxConcurrent !== DISCOVERY_CONCURRENCY) {
+    const from = goal.maxConcurrent;
+    if (await setGoalConcurrency(goal.id, DISCOVERY_CONCURRENCY)) {
+      await recordCashEvent({
+        projectId,
+        kind: 'CASH_DISCOVERY_AUTHORIZED',
+        actorRef: 'BRAIN',
+        summary:
+          `How much of this sprint may run at once moved from ${from} to ` +
+          `${DISCOVERY_CONCURRENCY}. It is provider capacity rather than an allowance, and ` +
+          'nothing about what may be researched, spent or acted on changed.',
+        detail: { goalId: goal.id, from, to: DISCOVERY_CONCURRENCY },
+      });
+    }
+  }
 
   if (created) {
     await recordCashEvent({
