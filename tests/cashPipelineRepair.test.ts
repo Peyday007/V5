@@ -46,6 +46,7 @@ import {
 import { listOrchestrationsByProject } from '../server/repos/research.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
+import { applyDeclaredLaunchOrdinals } from '../server/services/russell/planning.ts';
 import { OPPORTUNITY_SIGNALS } from '../server/domain/opportunitySignals.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { tick } from '../server/services/russell/loop.ts';
@@ -907,6 +908,94 @@ describe('pressing Start produces work the fleet can actually take', () => {
 
     // Still nothing that could touch the world.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 25 — the rank has to reach what was judged before it existed
+// ---------------------------------------------------------------------------
+
+describe('an idea judged before its envelope declared a rank', () => {
+  /*
+   * Measured in production, minutes after the rank shipped.
+   *
+   * `judgeCandidate` writes `ordinal` from the compiler profile and only ever
+   * runs on an *unjudged* candidate — `unjudged()` selects `priority IS NULL`.
+   * So the two deep dives on filed openings, already `QUEUED` with a null
+   * ordinal when the rank went live, stayed exactly where they had been:
+   * behind every broad search in the sprint. The ranking that existed to move
+   * them could not reach them.
+   *
+   * This repository's own recurring sentence, and I walked into it: a fix
+   * deployed after the damage does not undo the damage. The remedy is derived
+   * from rows, like `rearmSurfaceDeferredIntents` one layer down.
+   */
+  it('is given its envelope rank, and nothing else about it moves', async () => {
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+
+    const candidate = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'Qualify: a county published a request for parcel research',
+      statement: 'A bounded question about one published opening.',
+    });
+    // Judged the way everything judged before the rank existed was: queued,
+    // WORTH_DOING, no ordinal, and the envelope on its own recorded judgment.
+    await recordJudgment({
+      candidateId: candidate.id,
+      state: 'QUEUED',
+      priority: 'WORTH_DOING',
+      reason: 'a bounded deep dive on an opening already filed',
+      judgment: { envelopeId: 'RUSSELL_CASH_VALIDATION_V1', decidedBy: 'COMPILER' },
+    });
+    const before = (await getCandidate(candidate.id))!;
+    expect(before.ordinal).toBeNull();
+
+    const ranked = await applyDeclaredLaunchOrdinals(50);
+    expect(ranked).toContain(candidate.id);
+
+    const after = (await getCandidate(candidate.id))!;
+    expect(after.ordinal).toBe(profileFor('RUSSELL_CASH_VALIDATION_V1')!.launchOrdinal);
+    // Ordering is not permission: nothing else about the idea is touched.
+    expect(after.state).toBe(before.state);
+    expect(after.priority).toBe(before.priority);
+    expect(after.reason).toBe(before.reason);
+  });
+
+  it('never overwrites a rank already recorded, and is safe to repeat', async () => {
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    const candidate = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'An idea a person ranked by hand',
+      statement: 'A question somebody put at the front themselves.',
+    });
+    await recordJudgment({
+      candidateId: candidate.id,
+      state: 'QUEUED',
+      priority: 'WORTH_DOING',
+      ordinal: 7,
+      reason: 'a person put this first',
+      judgment: { envelopeId: 'RUSSELL_CASH_DISCOVERY_V1', decidedBy: 'COMPILER' },
+    });
+
+    expect(await applyDeclaredLaunchOrdinals(50)).not.toContain(candidate.id);
+    expect((await getCandidate(candidate.id))!.ordinal).toBe(7);
+
+    // And a second pass over an already-ranked queue does nothing at all.
+    const first = await applyDeclaredLaunchOrdinals(50);
+    const second = await applyDeclaredLaunchOrdinals(50);
+    expect(second.filter((id) => first.includes(id))).toEqual([]);
   });
 });
 

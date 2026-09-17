@@ -54,6 +54,9 @@ import {
   type CompiledMission,
 } from './compiler.ts';
 import { judge, type JudgmentInputs } from './judgment.ts';
+import { profileFor } from './compilerProfiles.ts';
+import { getDb } from '../../db/database.ts';
+import { nowIso } from '../../repos/util.ts';
 import { RESEARCH_WORK_CLASS } from './launch.ts';
 import type { ExistingClaim, RussellCandidate } from '../../domain/types.ts';
 
@@ -341,6 +344,63 @@ export interface JudgeOutcome {
  * priority is left alone unless this is one of the three passes allowed to
  * supersede one.
  */
+/**
+ * Give an already-judged idea the launch rank its own envelope declares.
+ *
+ * `judgeCandidate` writes `ordinal` from the compiler profile, and it only ever
+ * runs on an *unjudged* candidate — `unjudged()` selects `priority IS NULL`. So
+ * the rank reached everything judged after it existed and nothing judged
+ * before, which is this repository's own recurring sentence: **a fix deployed
+ * after the damage does not undo the damage.**
+ *
+ * Production measured it immediately. The two deep dives on filed openings were
+ * already `QUEUED` with a null ordinal when the rank shipped, so they stayed
+ * exactly where they had been — behind every broad search in the sprint — and
+ * the ranking that existed to move them could never reach them.
+ *
+ * So the rank is derived from rows rather than hooked to the moment a judgment
+ * is made: the envelope is on the candidate's own recorded judgment, written
+ * there by `judgeCandidate`, and the profile declares what that envelope is
+ * worth. It is the shape `rearmSurfaceDeferredIntents` uses one layer down, and
+ * for the identical reason — rows reach everything already stranded, a hook
+ * reaches one entrance.
+ *
+ * It decides nothing else. State, priority, reason and judgment are untouched;
+ * the guard is `ordinal IS NULL`, so a rank already recorded is never
+ * overwritten and running this twice changes nothing the first run did not.
+ * Ordering is not permission: no evidence bar moves and nothing is refused.
+ */
+export async function applyDeclaredLaunchOrdinals(limit: number): Promise<string[]> {
+  const rows = await getDb().all<{ id: string; judgment: string }>(
+    `SELECT id, judgment FROM russell_candidates
+      WHERE state = 'QUEUED' AND ordinal IS NULL AND project_id IS NOT NULL
+      ORDER BY created_at, id
+      LIMIT ?`,
+    [Math.max(1, limit)],
+  );
+
+  const ranked: string[] = [];
+  for (const row of rows) {
+    let envelopeId: unknown;
+    try {
+      envelopeId = (JSON.parse(row.judgment) as Record<string, unknown>)['envelopeId'];
+    } catch {
+      continue;
+    }
+    if (typeof envelopeId !== 'string') continue;
+    const profile = profileFor(envelopeId);
+    if (!profile) continue;
+    // Guarded on the column still being null, so nothing recorded is replaced.
+    const moved = await getDb().run(
+      `UPDATE russell_candidates SET ordinal = ?, updated_at = ?
+        WHERE id = ? AND state = 'QUEUED' AND ordinal IS NULL`,
+      [profile.launchOrdinal, nowIso(), row.id],
+    );
+    if (moved.changes === 1) ranked.push(row.id);
+  }
+  return ranked;
+}
+
 export async function judgeCandidate(
   candidateId: string,
   options: {

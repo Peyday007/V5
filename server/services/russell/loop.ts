@@ -114,7 +114,12 @@ import {
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
-import { askArchive, judgeCandidate, specifyOverriddenCandidate } from './planning.ts';
+import {
+  applyDeclaredLaunchOrdinals,
+  askArchive,
+  judgeCandidate,
+  specifyOverriddenCandidate,
+} from './planning.ts';
 import { promoteEligibleClaims } from '../../repos/sharedFindings.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
@@ -366,6 +371,14 @@ export interface TickReport {
   }[];
   /** Claims this pass promoted into the Brain-wide shared pool. */
   sharedPromoted: string[];
+  /**
+   * Ideas given the launch rank their own envelope declares.
+   *
+   * Only ever the ones judged before that rank existed: the guard is
+   * `ordinal IS NULL`, so this empties out once it has caught up and a silence
+   * here means there is nothing left to rank.
+   */
+  ranked: string[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -407,6 +420,7 @@ const EMPTY: TickReport = {
   cashDiscovery: [],
   cashOperations: [],
   sharedPromoted: [],
+  ranked: [],
   bounded: false,
 };
 
@@ -1108,6 +1122,20 @@ export async function tick(owner: string): Promise<TickReport> {
     // A launch that crashed between its steps is finished here rather than at
     // boot only, so a mission half-built at 3am does not wait for a restart.
     await repairLaunches();
+
+    /*
+     * Rank what was judged before its envelope declared a rank.
+     *
+     * Before the launch step, so an idea this moves can take a slot in the same
+     * pass rather than waiting one out. Derived from rows, because
+     * `judgeCandidate` writes the rank and only ever sees an unjudged
+     * candidate — so everything judged earlier would have kept a null ordinal
+     * for ever, which is the whole reason this exists rather than the judgment
+     * being enough on its own.
+     */
+    for (const id of await applyDeclaredLaunchOrdinals(cycle.maxEventsPerCycle)) {
+      report.ranked.push(id);
+    }
 
     // 4. Start at most one thing.
     const launchable = await nextLaunchable(cycle.maxEventsPerCycle);
