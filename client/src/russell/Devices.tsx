@@ -15,6 +15,8 @@
  * sentence a person reads is the one the rule actually applies.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { CashApi, type CashReadiness } from '../lib/cashApi.ts';
+import { ReadinessPanel } from './Readiness.tsx';
 import {
   PASSKEY_UNSUPPORTED,
   Passkeys,
@@ -30,6 +32,55 @@ const ORIGIN_LABEL: Record<MemberPasskey['originKind'], string> = {
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Who can get in, on a page that is always reachable.
+ *
+ * The same panel sits on the Cash activation card, which is where the count is
+ * read and where the owner is looking before anything starts — but that card
+ * stops rendering the moment Cash Mode is running, and taking somebody's only
+ * way of inviting a person with it would be the disappearing control §29 keeps
+ * having to correct. Here it survives activation.
+ *
+ * Offered to a Brain administrator only. That is a convenience and never the
+ * control: `/api/members` refuses anybody else with the same 404 a missing one
+ * gives, whatever this renders, so the worst an ordinary member sees is a
+ * section that did not appear.
+ */
+function Members(): JSX.Element | null {
+  const [readiness, setReadiness] = useState<CashReadiness | null>(null);
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    CashApi.members().then(
+      (answer) => {
+        if (!live) return;
+        setReadiness(answer.readiness);
+        setAllowed(true);
+      },
+      () => {
+        if (live) setAllowed(false);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (allowed !== true || !readiness) return null;
+  return (
+    <section className="rs-view">
+      <h2>People and capacity</h2>
+      <p className="rs-hint">
+        Cash Mode starts when four people can sign in and four capacity accounts have each proven
+        a surface. Being ready is not being authorized: what Brain may spend is a separate
+        decision, and it stays yours.
+      </p>
+      <ReadinessPanel readiness={readiness} isBrainAdmin />
+    </section>
+  );
 }
 
 export function Devices(): JSX.Element {
@@ -148,6 +199,7 @@ export function Devices(): JSX.Element {
           </ul>
         </>
       ) : null}
+      <Members />
     </section>
   );
 }
