@@ -39,7 +39,7 @@ import { listOpportunities } from '../server/repos/cashPortfolio.ts';
 import { cardFactsFor } from '../server/repos/cashCardFacts.ts';
 import { liveAuthority } from '../server/repos/cashAuthority.ts';
 import { listGoals } from '../server/repos/russellAuthority.ts';
-import { listCandidates } from '../server/repos/russellCandidates.ts';
+import { getCandidate, listCandidates } from '../server/repos/russellCandidates.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { listOrchestrationsByProject } from '../server/repos/research.ts';
 import { cashRoadmap } from '../server/services/cash/roadmap.ts';
@@ -47,7 +47,7 @@ import { CASH_DISCOVERY_AUTHORITY_NAME } from '../server/services/cash/discovery
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { WORK_ITEM_STATES } from '../server/domain/types.ts';
 import type { WorkItem } from '../server/domain/types.ts';
-import { listMissions } from '../server/repos/russellMissions.ts';
+import { latestMissionForCandidate, listMissions } from '../server/repos/russellMissions.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -224,6 +224,29 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
         ` · packet ${opportunity.orchestrationId ?? '—'}` +
         ` · round ${opportunity.discoveryRoundId ?? '—'}`,
     );
+    /*
+     * Why a started deep dive has not launched yet.
+     *
+     * `validation=PENDING` says the candidate exists and no mission is running
+     * for it, and that one word covers four different situations with four
+     * different remedies: it is waiting its turn in the launch queue, it has no
+     * compiled specification so `nextLaunchable` will never see it, it was
+     * parked, or a mission exists and something else is wrong. Nothing in the
+     * row says which, so the row is printed.
+     */
+    if (opportunity.candidateId && opportunity.validationState !== 'COMPLETE') {
+      const candidate = await getCandidate(opportunity.candidateId);
+      const mission = await latestMissionForCandidate(opportunity.candidateId);
+      const spec = candidate?.judgment?.['missionSpec'];
+      console.log(
+        `      deep dive   candidate ${opportunity.candidateId}` +
+          ` state=${candidate?.state ?? '—'} priority=${candidate?.priority ?? '—'}` +
+          ` ordinal=${candidate?.ordinal ?? '—'}` +
+          ` spec=${spec ? 'yes' : 'NO — nextLaunchable cannot see it'}` +
+          ` mission=${mission ? `${mission.state}` : 'none yet'}`,
+      );
+      if (candidate?.reason) console.log(`      deep dive   reason: ${trim(candidate.reason)}`);
+    }
   }
 
   const events = await listCashEvents(projectId);
