@@ -3786,6 +3786,109 @@ writes and a fixture that hand-wrote them would be testing the fixture. The
 provenance it asserts is therefore Brain's own record of who executed the pass.
 It is **not** a live Cowork session and it is the tool layer rather than the MCP
 transport, the same two sentences `cashIntegrationPass` already has to say.
+
+## 32. A member is a device, and readiness is a count of rows.
+
+Step 12D (`server/services/identity/webauthn.ts`, `enrollment.ts`,
+`passkeyAuth.ts`, `server/routes/passkeys.ts`,
+`server/services/cash/readiness.ts`, `client/src/components/Enrol.tsx`) brings
+the four people into the Brain and puts one count in front of the button that
+starts Cash Mode. It adds a way *in* and no way around: authentication is the
+same `Principal` every route already resolves, authorization is the same
+`decideProjectAccess`, and the two person-only Cash decisions are untouched.
+
+- **There is no email address and no password, and that is the feature.** An
+  address exists to recover a password, and there is no password here to
+  recover — so a member slot is a `users` row with `email`, `password_verifier`,
+  `password_algorithm` and `password_updated_at` all NULL, and
+  `getPasswordVerifierByEmail` answers `null` for it. A passkey account is
+  therefore not reachable by the password path *at all*, rather than reachable
+  and always refused: the difference is that the second one has a verifier
+  somebody could get wrong about.
+- **The link is the whole authority, and it is spent by one guarded `UPDATE`.**
+  Random, digest-stored, prefix-indexed, compared in constant time, bound to one
+  slot, revocable before use, and single-use after — the properties
+  `worker_invitations` and §26's person invitation already established, at a
+  third door. Two requests holding one intercepted link produce one passkey and
+  one ordinary refusal.
+- **A refusal is one body.** Absent, malformed, expired, spent, withdrawn, a
+  signature that did not check out, a credential already registered elsewhere —
+  one sentence, and it names the remedy rather than the reason. Invariant 23,
+  where the thing being refused is a secret somebody may legitimately hold.
+- **The token is in the URL fragment, never the path.** Not sent to any server,
+  not written to any access log, taken out of the address bar as soon as it is
+  read. The two routes that spend it are on the guard's unauthenticated
+  allowlist for `/api/auth/login`'s exact reason: an invited person holds no
+  credential but the one in their hand.
+- **A challenge is a server-side row, taken once.** Not a cookie, not a value
+  echoed back — the fifth time this codebase has needed a compare-and-swap on a
+  value the claimant does not supply. It is taken *before* anything is verified,
+  so one intercepted assertion cannot be replayed even against a signature that
+  would otherwise check out.
+- **Recovery retires before it issues.** A replacement link handed out beside a
+  credential that still works is not a recovery, it is a second door — and if
+  the device was lost because somebody else has it, the whole point is that it
+  stops working now rather than when the replacement is used. The revoked row
+  keeps its reason; nothing is deleted.
+- **Nothing here mints a credential, and the tests do.** The verifier is Node
+  crypto and a hand-written partial CBOR reader — `attestation: none` only,
+  ES256 and RS256 only, a counter that may not go backwards. The synthetic
+  authenticator lives in `tests/helpers/authenticator.ts` and nowhere in
+  `server/`, because a Brain that could make a passkey would be manufacturing
+  the one thing a person is supposed to be holding.
+- **Readiness is derived, and `HEALTHY` is not `CONFIGURED`.** A member is READY
+  when they hold a live passkey — not when a slot exists and not when a link was
+  sent, both of which are things the administrator did. A capacity account is
+  HEALTHY only once a session Brain fired has arrived and finished something;
+  registered-with-a-secret is `CONFIGURED`, which is §23's rule that a perfect
+  configured block over an empty observed one is a refusal rather than a pass.
+- **The disabled button is a hint; the route is the control.** `POST
+  /api/cash/activate` re-reads the count and refuses with both figures in the
+  sentence, and creates nothing on the way to refusing. A screen that disagreed
+  with it would be §29's defect again — a status contradicting the control
+  beside it teaches a person to stop reading it — so the screen renders the
+  server's own reading and forms no opinion.
+- **Being ready is not being authorized.** Four READY and four HEALTHY lets the
+  sprint *start*. What Brain may spend is still the standing commercial grant of
+  §30, still a person's, and still a separate decision.
+- **A capacity account is not a person and is not a lane.** `Brain Research A`
+  to `D` are surfaces Brain fires; `V1` and `V2` are sites. `fleet rename`
+  exists because the two had borrowed one name, and it changes the label and
+  nothing else — not the trigger, not the secret's name, not the digest, not the
+  worker binding, not the state — so it is safe to run against the surface that
+  is mid-packet. All four pull from the same queue; there is no
+  project-coloured or person-coloured research lane.
+
+**The migration that made this possible was written twice and was silently
+destructive both times. The correction is recorded rather than quietly
+applied.** SQLite cannot relax a `NOT NULL`, so `users` had to be rebuilt — and
+`PRAGMA foreign_keys` is a documented no-op *inside a transaction*, which is
+where every migration runs. So the `OFF` the standard recipe relies on did
+nothing: foreign keys stayed on, `DROP TABLE users` performed an implicit DELETE
+of every row, and every `ON DELETE CASCADE` aimed at `users` fired — sessions,
+conversations, messages, collections, preferences, milestones. **It did not
+fail. It succeeded, having deleted the Brain's history.** The second attempt
+renamed instead of dropping, on the reasoning that `legacy_alter_table` would
+stop the rename following; measured, it does not — with foreign keys on, a
+rename rewrites the other tables' `REFERENCES` clauses either way, and the drop
+that followed cascaded exactly as before.
+
+Neither was visible from reading the file, from a typecheck, or from the whole
+suite, because every other suite migrates an *empty* database. Both were visible
+from one row. So a migration may now carry `-- brain:rebuild-without-foreign-keys`
+on its first line, and the runner does what SQLite's own twelve-step procedure
+says: the pragma outside the transaction, the rebuild inside it, **`PRAGMA
+foreign_key_check` before the commit** — which is the half that makes it safe
+rather than merely permitted — and the pragma restored afterwards whatever
+happened. `tests/migrationRebuild.test.ts` seeds a person, a session and a
+conversation, migrates over them, and fails if any of the three is gone; it was
+run against the destructive version to confirm it catches it, because a
+regression test nobody has seen fail is a claim rather than a reading.
+
+The marker is deliberately narrow: one capability, no way for an ordinary
+migration to opt out of its transaction, and nothing on the Postgres chain,
+which has `ALTER COLUMN ... DROP NOT NULL` and needs none of it.
+
 ---
 
 ---
@@ -3828,6 +3931,7 @@ server/
     cashActions.ts    what was actually done, and under which grant
     cashLock.ts       where two cash decisions stop being concurrent
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
+    passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
   services/
@@ -3853,6 +3957,9 @@ server/
     reconcile.ts        scan & reconcile
     identity/
         secrets.ts        scrypt for passwords, sha-256 for generated credentials
+      webauthn.ts       a registration and an assertion, verified against Node crypto
+      enrollment.ts     a member slot, its one link, and the recovery that retires first
+      passkeyAuth.ts    the relying party, the challenge, and one refusal for everything
       context.ts        the request's principal, and why it is also on the request
       policy.ts         roles, scopes, and the one authorization decision
       authenticate.ts   cookie or bearer -> principal, from server rows only
@@ -3923,6 +4030,7 @@ server/
       discovery.ts      where the portfolio comes from: buckets, and a lane
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
+      readiness.ts      four people and four surfaces, counted from rows
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning
@@ -4004,6 +4112,7 @@ server/
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
+    passkeys.ts         enrolling, signing in with a device, and your own devices
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
@@ -4016,6 +4125,9 @@ client/                 React UI
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
   src/russell/Cash.tsx  one person's private sprint, and nobody else's
+  src/russell/Readiness.tsx  who can get in and what can run, rendered not derived
+  src/russell/Devices.tsx    your own passkeys, and nobody else's
+  src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate
   src/russell/Home.tsx  the command center: state, focus, maturity strip, collections
   src/russell/Fleet.tsx capacity, surfaces, policy as rows, and the lab beside it
   src/russell/Frontier.tsx  the five regions, each item naming what it came from
@@ -4048,6 +4160,10 @@ tests/                  Vitest suites
   cashFourAccounts.test.ts   four private operations, and the walls between them
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker
   sharedKnowledge.test.ts    one finding, two operations, and the wall between them
+  webauthn.test.ts           a real P-256 credential, and every refusal that would not have been one
+  passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits
+  passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new
+  migrationRebuild.test.ts   a rebuild over rows, and the cascade it must not fire
   cashConcurrency.test.ts    two commitments, forced to overlap, on both backends
   cashCurrencyHttp.test.ts   a sprint that is not in dollars, driven as a person does
   cashHttp.test.ts           Cash Mode's door, driven as an attack

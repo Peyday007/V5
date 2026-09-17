@@ -8,6 +8,9 @@
  * the defect §29 records.
  */
 import { api } from './api.ts';
+import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
+
+export type { CashReadiness };
 
 export type CashModeState = 'ACTIVE' | 'WINDING_DOWN' | 'ARCHIVED';
 
@@ -221,6 +224,26 @@ export interface CashModeReading {
   /** Brain's own mandate: a short reading, and the text itself. */
   objective: { summary: string; full: string };
   currencies: string[];
+  /** Whether anybody can get in, and whether anything can run. Derived. */
+  readiness: CashReadiness;
+}
+
+export interface MemberSlotLink {
+  id: string;
+  userId: string;
+  displayName: string;
+  kind: 'ENROLLMENT' | 'RECOVERY';
+  state: 'LIVE' | 'USED' | 'EXPIRED' | 'REVOKED';
+  expiresAt: string;
+}
+
+export interface IssuedEnrollment {
+  enrollmentId: string;
+  userId: string;
+  displayName: string;
+  /** Shown once. The server does not store it and cannot show it again. */
+  token: string;
+  expiresAt: string;
 }
 
 const p = (value: string): string => encodeURIComponent(value);
@@ -243,6 +266,31 @@ export const CashApi = {
    * nothing.
    */
   mode: (): Promise<CashModeReading> => api('/api/cash/mode'),
+
+  /*
+   * Member slots and their links.
+   *
+   * On the cash client rather than a new one because this is where the count
+   * they feed is read, and a second module for four calls is a second place for
+   * the same shapes to drift.
+   */
+  members: (): Promise<{ readiness: CashReadiness; links: MemberSlotLink[] }> =>
+    api('/api/members'),
+
+  inviteMember: (displayName: string): Promise<{ enrollment: IssuedEnrollment }> =>
+    api('/api/members', { method: 'POST', body: JSON.stringify({ displayName }) }),
+
+  recoverMember: (userId: string, reason: string): Promise<{ enrollment: IssuedEnrollment }> =>
+    api(`/api/members/${p(userId)}/recovery`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  withdrawLink: (enrollmentId: string, reason: string): Promise<{ revoked: boolean }> =>
+    api(`/api/members/enrollments/${p(enrollmentId)}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
 
   /** One click. No project, no objective — see `services/cash/root.ts`. */
   start: (body: {

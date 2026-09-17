@@ -47,6 +47,7 @@ import {
 } from './Views.tsx';
 import { parseRoute, type Navigation, type Route } from '../lib/router.ts';
 import { CashSection } from './Cash.tsx';
+import { Devices } from './Devices.tsx';
 
 /**
  * The six, and then the two.
@@ -409,6 +410,18 @@ export function RussellShell({
                   </li>
                 ) : null}
                 <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      go({ name: 'DEVICES' });
+                    }}
+                  >
+                    Your devices
+                  </button>
+                </li>
+                <li role="none">
                   <button type="button" role="menuitem" onClick={() => go({ name: 'LEGACY' })}>
                     Full console
                   </button>
@@ -463,7 +476,10 @@ export function RussellShell({
           </>
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
-        {route.name === 'CASH' ? <CashSection projectId={projectId} /> : null}
+        {route.name === 'DEVICES' ? <Devices /> : null}
+        {route.name === 'CASH' ? (
+          <CashSection projectId={projectId} isBrainAdmin={user.isBrainAdmin} />
+        ) : null}
         {route.name === 'SEARCH' ? (
           <Search
             onOpen={(href) => {

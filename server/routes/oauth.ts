@@ -1054,7 +1054,7 @@ async function consentPage(
        <button type="submit">Approve</button>
      </form>`
      }
-     <p class="note">Approving as <strong>${esc(person.handle)}</strong>.
+     <p class="note">Approving as <strong>${esc(person.handle ?? person.displayName)}</strong>.
        ${esc(clientName)} never sees your password or your own access — it receives a
        token for the worker you choose, which you can revoke at any time.</p>`),
   );

@@ -463,7 +463,7 @@ export async function previewInvitation(token: unknown): Promise<PreviewOutcome>
       role: invitation.role,
       roleExplanation: ROLE_EXPLANATION[invitation.role],
       invitedEmail: invitation.invitedEmail,
-      invitedByName: inviter.displayName || inviter.email,
+      invitedByName: inviter.displayName || inviter.email || 'a Brain administrator',
       expiresAt: invitation.expiresAt,
       accountNeeded,
       acceptable,
@@ -723,7 +723,10 @@ export async function acceptInvitation(input: {
     projectName: project.name,
     role: invitation.role,
     userId: invited.id,
-    email: invited.email,
+    // From the **invitation**, which is where the address came from in the
+    // first place and the one place it is guaranteed to exist: an account may
+    // have enrolled with a passkey and hold no address of its own.
+    email: invitation.invitedEmail,
     createdAccount,
     // An acceptance hands out no session. A new account has to sign in, and an
     // existing one may already be signed in elsewhere; either way nothing about
@@ -817,7 +820,9 @@ export async function invitationsForProject(projectId: string): Promise<Invitati
   const out: InvitationSummary[] = [];
   for (const invitation of rows) {
     const inviter = await getUser(invitation.invitedByUserId);
-    const invitedByName = inviter ? inviter.displayName || inviter.email : 'somebody who has left';
+    const invitedByName = inviter
+      ? inviter.displayName || inviter.email || 'a Brain administrator'
+      : 'somebody who has left';
     const state: InvitationSummary['state'] =
       invitation.acceptedAt !== null
         ? 'ACCEPTED'

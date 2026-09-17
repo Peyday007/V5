@@ -187,7 +187,7 @@ export async function whoForProject(input: {
     if (!user) continue;
     people.push({
       id: user.id,
-      name: user.displayName || user.email,
+      name: user.displayName || user.email || user.id,
       email: depth === 'OPERATOR' ? user.email : null,
       role: membership.role,
       roleLabel: membership.role ? ROLE_LABELS[membership.role] : 'No role',
@@ -208,7 +208,7 @@ export async function whoForProject(input: {
   if (input.principal && !people.some((person) => person.id === input.principal!.id)) {
     people.unshift({
       id: input.principal.id,
-      name: input.principal.displayName || input.principal.handle,
+      name: input.principal.displayName || input.principal.handle || 'You',
       email: depth === 'OPERATOR' ? input.principal.handle : null,
       role: null,
       roleLabel: input.principal.isBrainAdmin ? 'Brain administrator' : 'Has access',

@@ -14,6 +14,7 @@ import { Api } from './lib/api.ts';
 import type { SessionUser } from './lib/api.ts';
 import { SignIn } from './components/SignIn.tsx';
 import { AcceptInvitation } from './components/AcceptInvitation.tsx';
+import { Enrol } from './components/Enrol.tsx';
 import { useRoute } from './lib/router.ts';
 import { RussellShell } from './russell/RussellShell.tsx';
 import App from './App.tsx';
@@ -50,6 +51,27 @@ export default function Root(): JSX.Element {
    */
   if (navigation.route.name === 'INVITE') {
     return <AcceptInvitation onAccepted={() => navigation.go({ name: 'HOME' })} />;
+  }
+
+  /*
+   * An enrollment link, for the same reason and ahead of the same gate. The
+   * person holding one has no account, no address and no password — that is the
+   * whole design — so a gate in front of this screen would make it reachable
+   * only by people who no longer need it.
+   *
+   * Unlike an invitation it *ends* signed in, because registering the device is
+   * itself the authentication. So it asks the session again rather than sending
+   * anybody to a login screen they could not use.
+   */
+  if (navigation.route.name === 'ENROL') {
+    return (
+      <Enrol
+        onEnrolled={() => {
+          ask();
+          navigation.go({ name: 'HOME' });
+        }}
+      />
+    );
   }
 
   if (user === undefined) {

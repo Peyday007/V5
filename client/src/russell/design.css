@@ -2526,3 +2526,142 @@ button.rs-card:hover {
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
 }
+
+/* ---------------------------------------------------------------------------
+ * Enrolling with a device
+ *
+ * Its own small screen rather than a panel in the shell, because the person
+ * reading it is not signed in yet and there is no shell around them. One
+ * column, a phone-width gutter, and nothing that needs a viewport wider than a
+ * hand.
+ * ------------------------------------------------------------------------ */
+
+.rs-enrol {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: var(--gap-4) 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-enrol h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.rs-enrol-name,
+.rs-enrol-note {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.rs-enrol-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.rs-enrol-input {
+  padding: var(--gap-1);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.rs-enrol-go {
+  padding: var(--gap-2);
+  border: 1px solid var(--verdigris);
+  border-radius: var(--r-1);
+  background: var(--verdigris);
+  color: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rs-enrol-go:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.rs-enrol-error {
+  margin: 0;
+  color: var(--iron);
+  line-height: 1.5;
+}
+
+.rs-enrol-expiry {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+}
+
+/* ---------------------------------------------------------------------------
+ * Readiness: who can get in, and what can run
+ * ------------------------------------------------------------------------ */
+
+.rs-ready {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+}
+
+.rs-ready-count {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-1) var(--gap-2);
+  align-items: baseline;
+}
+
+.rs-ready-count strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-ready-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-1);
+}
+
+.rs-ready-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-1);
+  justify-content: space-between;
+  align-items: baseline;
+  padding: var(--gap-1);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-1);
+}
+
+.rs-ready-state {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.rs-ready-state[data-state='READY'],
+.rs-ready-state[data-state='HEALTHY'] {
+  color: var(--verdigris);
+}
+
+.rs-ready-link {
+  width: 100%;
+  word-break: break-all;
+  font-family: var(--code);
+  font-size: 0.85rem;
+  padding: var(--gap-1);
+  border: 1px dashed var(--rule);
+  border-radius: var(--r-1);
+  background: var(--surface-sunk);
+}

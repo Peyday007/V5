@@ -2950,11 +2950,20 @@ export type DenialReason = (typeof DENIAL_REASONS)[number];
 
 export interface UserRow {
   id: string;
-  email: string;
+  /**
+   * Null for a member who enrolled with a passkey.
+   *
+   * An address is how a password is recovered, and there is no password to
+   * recover here (§26's invitation journey is the one that still needs one).
+   * Requiring it of somebody who will never use it would be collecting a
+   * personal detail for nothing.
+   */
+  email: string | null;
   display_name: string;
-  password_algorithm: string;
-  password_verifier: string;
-  password_updated_at: string;
+  /** Null together with the verifier: a passkey-only account has no password. */
+  password_algorithm: string | null;
+  password_verifier: string | null;
+  password_updated_at: string | null;
   must_change_password: number;
   is_brain_admin: number;
   disabled_at: string | null;
@@ -3143,13 +3152,15 @@ export interface IdentityEventRow {
  */
 export interface User {
   id: string;
-  email: string;
+  /** Null for a passkey-only member; see `UserRow.email`. */
+  email: string | null;
   displayName: string;
   isBrainAdmin: boolean;
   mustChangePassword: boolean;
   disabled: boolean;
   disabledAt: string | null;
-  passwordUpdatedAt: string;
+  /** Null when this account has never had a password. */
+  passwordUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -3238,8 +3249,15 @@ export interface IdentityEvent {
 export interface Principal {
   type: PrincipalType;
   id: string;
-  /** For a person their email, for a worker its canonical name. */
-  handle: string;
+  /**
+   * For a person their email, for a worker its canonical name.
+   *
+   * Null for a person who enrolled with a passkey and therefore has no address.
+   * Nothing authorizes on it — it is what a screen prints and what the password
+   * routes look an account up by, and both of those have to say "there is none"
+   * rather than substitute something that reads like one.
+   */
+  handle: string | null;
   displayName: string;
   /** Brain-wide administration. Always false for a worker. */
   isBrainAdmin: boolean;
@@ -5493,6 +5511,80 @@ export type CashDisposition = (typeof CASH_DISPOSITIONS)[number];
  * decision. `RELEASED` hands the work back without destroying the row, so a
  * reassignment keeps the history of who held it before.
  */
+/* --------------------------------------------------------------------------
+ * Passkeys, member slots and the links that fill them
+ * ------------------------------------------------------------------------ */
+
+/** How a registered device came to exist, so an audit can tell the cases apart. */
+export const PASSKEY_ORIGINS = ['ENROLLMENT', 'ADDED_DEVICE', 'RECOVERY'] as const;
+export type PasskeyOrigin = (typeof PASSKEY_ORIGINS)[number];
+
+export interface UserPasskeyRow {
+  id: string;
+  user_id: string;
+  credential_id: string;
+  public_key: string;
+  algorithm: number;
+  sign_count: number;
+  label: string;
+  origin_kind: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+}
+
+export interface UserPasskey {
+  id: string;
+  userId: string;
+  /** The authenticator's own id, base64url. */
+  credentialId: string;
+  /** The COSE public key, base64url. Public, so stored as it is. */
+  publicKey: string;
+  algorithm: number;
+  signCount: number;
+  label: string;
+  originKind: PasskeyOrigin;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
+}
+
+export const ENROLLMENT_KINDS = ['ENROLLMENT', 'RECOVERY'] as const;
+export type EnrollmentKind = (typeof ENROLLMENT_KINDS)[number];
+
+export interface MemberEnrollmentRow {
+  id: string;
+  user_id: string;
+  display_name: string;
+  kind: string;
+  token_prefix: string;
+  token_digest: string;
+  issued_by_user_id: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+}
+
+export interface MemberEnrollment {
+  id: string;
+  /** The slot this link fills. Fixed at issue; the acceptor does not choose it. */
+  userId: string;
+  displayName: string;
+  kind: EnrollmentKind;
+  tokenPrefix: string;
+  tokenDigest: string;
+  issuedByUserId: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
+}
+
 export const CASH_JOB_STATES = [
   'UNASSIGNED',
   'ASSIGNED',

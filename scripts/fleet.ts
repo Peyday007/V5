@@ -25,6 +25,8 @@ import {
   sessionsForRoutine,
   listAccounts,
   listRoutines,
+  renameAccount,
+  renameRoutine,
   policyHistory,
   repointRoutineWorker,
   setRoutineCapabilities,
@@ -281,6 +283,52 @@ async function main(): Promise<void> {
     const changed = await setRoutineState({ routineId: routine.id, from: routine.state, to, reason });
     if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
     return ok(`set-state routine ${ref} ${routine.state} -> ${to}`);
+  }
+
+  /*
+   * Rename a surface.
+   *
+   * A label and nothing else. `V1` and `V2` were the site names borrowed for
+   * capacity surfaces, which is exactly the collision that makes a fleet reading
+   * ambiguous — so a capacity surface is called `Brain Research A` and a site
+   * keeps `V1`. Nothing about the credential, the trigger, the bound worker or
+   * the state moves, which is why this is safe to run against a Routine that is
+   * mid-packet.
+   */
+  if (command === 'rename') {
+    const kind = (option('kind') ?? '').toLowerCase();
+    const ref = option('ref');
+    // Underscores become spaces, the same way `set-state --reason` does it: the
+    // dispatch workflow splits its arguments on whitespace, so a name with a
+    // space in it cannot arrive as one argument any other way.
+    const to = option('to')?.replace(/_/g, ' ');
+    if (!kind || !ref || !to) {
+      return refuse('pass --kind account|routine --ref <name|trig_\u2026> --to <New_Name>.');
+    }
+    if (kind !== 'account' && kind !== 'routine') {
+      return refuse(`--kind must be account or routine, not "${kind}".`);
+    }
+    if (kind === 'account') {
+      const account = await getAccountByName(ref);
+      if (!account) return refuse(`no account named "${ref}".`);
+      if (account.name === to) return ok(`rename account ${ref}: already called that`);
+      const changed = await renameAccount({ accountId: account.id, from: account.name, to });
+      if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
+      return ok(`rename account ${ref} -> ${to} (credential, state and routines untouched)`);
+    }
+    // By the trigger it fires, or by what it is currently called.
+    const routine =
+      (await getRoutineByRef(ref)) ??
+      (await listRoutines()).find((one) => one.name === ref) ??
+      null;
+    if (!routine) return refuse(`no Routine registered as ${ref}.`);
+    if (routine.name === to) return ok(`rename routine ${ref}: already called that`);
+    const changed = await renameRoutine({ routineId: routine.id, from: routine.name, to });
+    if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
+    return ok(
+      `rename routine ${routine.routineRef} "${routine.name}" -> "${to}" ` +
+        '(secret name, digest, worker binding and state untouched)',
+    );
   }
 
   /* ---------------------------------------------------------------------- */
@@ -959,7 +1007,7 @@ async function probeBin(input: {
 
   refuse(
     `unknown command "${command}". Try: show, register-account, register-routine, bind-worker, ` +
-      'repoint-worker, ' +
+      'repoint-worker, rename, ' +
       'set-state, set-target, boost, pause, resume, policy-history, explain-route, verify-surface, scale-advice, ' +
       'profile, simulate.',
   );

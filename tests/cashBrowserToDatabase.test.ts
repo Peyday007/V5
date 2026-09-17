@@ -211,7 +211,7 @@ afterEach(async () => {
 
 async function mount(): Promise<void> {
   await act(async () => {
-    render(createElement(CashSection, { projectId }));
+    render(createElement(CashSection, { projectId, isBrainAdmin: false }));
   });
   await waitFor(() => expect(screen.getByText('Pipeline')).toBeTruthy());
 }

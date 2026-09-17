@@ -29,10 +29,12 @@ import { useAsync } from './useAsync.ts';
 import {
   CashApi,
   type CashModeState,
+  type CashReadiness,
   type CashView,
   type Placement,
   type ReviewItem,
 } from '../lib/cashApi.ts';
+import { ReadinessPanel } from './Readiness.tsx';
 
 const DISPOSITION_LABEL: Record<Placement['disposition'], string> = {
   EXECUTE_NOW: 'Execute now',
@@ -60,7 +62,18 @@ function money(cents: number, currency: string): string {
  * wrong one, because the shell hands out the first project a person can see. An
  * operation is what a sprint belongs to, so it is chosen here.
  */
-export function CashView_({ projectId: _shellProject }: { projectId: string | null }): JSX.Element {
+export function CashView_({
+  projectId: _shellProject,
+  isBrainAdmin,
+}: {
+  projectId: string | null;
+  /**
+   * Whether to *offer* the invite control. It is a convenience and never the
+   * control: the route refuses anybody else with the same 404 a missing one
+   * gives, whatever this renders.
+   */
+  isBrainAdmin: boolean;
+}): JSX.Element {
   /*
    * No operation is chosen, because there is nothing to choose between.
    *
@@ -97,6 +110,8 @@ export function CashView_({ projectId: _shellProject }: { projectId: string | nu
       <Activate
         objective={known.objective}
         currencies={known.currencies}
+        readiness={known.readiness}
+        isBrainAdmin={isBrainAdmin}
         onActivated={() => {
           reading.reload();
           view.reload();
@@ -195,10 +210,14 @@ export function CashView_({ projectId: _shellProject }: { projectId: string | nu
 function Activate({
   objective,
   currencies,
+  readiness,
+  isBrainAdmin,
   onActivated,
 }: {
   objective: { summary: string; full: string };
   currencies: string[];
+  readiness: CashReadiness;
+  isBrainAdmin: boolean;
   onActivated(): void;
 }): JSX.Element {
   const [currency, setCurrency] = useState(currencies[0] ?? 'USD');
@@ -235,10 +254,29 @@ function Activate({
           Starting this spends nothing and authorizes nothing. What Brain may do with money is a
           separate decision, and it is yours.
         </p>
+
+        <ReadinessPanel readiness={readiness} isBrainAdmin={isBrainAdmin} />
+
         {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
-        <button type="button" className="rs-button" disabled={busy} onClick={submit}>
+        <button
+          type="button"
+          className="rs-button"
+          disabled={busy || !readiness.mayStart}
+          onClick={submit}
+        >
           {busy ? 'Starting\u2026' : 'Start Cash Mode'}
         </button>
+        {/*
+          * The disabled button is a hint, and the sentence beside it is the
+          * reason. The control is the route, which refuses this for the same
+          * reasons whatever the screen renders — §17's rule that a hidden
+          * button is not authorization, at the one click this count exists for.
+          */}
+        {readiness.mayStart ? null : (
+          <p className="rs-hint">
+            Not ready to start. {readiness.blockedBy.join(' ')}
+          </p>
+        )}
 
         <button
           type="button"

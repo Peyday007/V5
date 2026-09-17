@@ -85,6 +85,7 @@ import {
 } from '../services/cash/opportunities.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
+import { cashReadiness } from '../services/cash/readiness.ts';
 import {
   CANONICAL_CASH_OBJECTIVE,
   CANONICAL_CASH_SUMMARY,
@@ -239,6 +240,13 @@ cashRouter.get(
         : null,
       objective: { summary: CANONICAL_CASH_SUMMARY, full: CANONICAL_CASH_OBJECTIVE },
       currencies: [...SPRINT_CURRENCIES],
+      /*
+       * The gate, sent with the thing it gates so the page cannot render a
+       * live button against a stale count. Two screens deriving one fact
+       * separately is how they come to disagree — §29's rule, at the control
+       * that starts everything.
+       */
+      readiness: await cashReadiness(),
     };
   }),
 );
@@ -283,6 +291,23 @@ cashRouter.post(
     if (already && (await getCashMode(already.id))) {
       const mode = (await getCashMode(already.id))!;
       return { mode, changed: false, message: `Cash Mode has been running since ${mode.activatedAt}.` };
+    }
+
+    /*
+     * The gate is enforced here and not only on the screen.
+     *
+     * A disabled button is a hint; a route that started the shared frontier
+     * because somebody posted to it anyway would be the real control missing.
+     * §17's rule that a hidden button is not authorization, at the one click
+     * this whole readiness count exists for.
+     */
+    const readiness = await cashReadiness();
+    if (!readiness.mayStart) {
+      throw unprocessable(
+        `Cash Mode is not ready to start. ${readiness.blockedBy.join(' ')} ` +
+          `Members ${readiness.members.ready}/${readiness.members.required} READY, ` +
+          `capacity ${readiness.capacity.healthy}/${readiness.capacity.required} HEALTHY.`,
+      );
     }
 
     const root = await resolveOrCreateCashRoot();

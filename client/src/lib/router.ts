@@ -35,6 +35,8 @@ export type Route =
    * written to any access log — so this route carries no parameter at all.
    */
   | { name: 'INVITE' }
+  | { name: 'ENROL' }
+  | { name: 'DEVICES' }
   | { name: 'LEGACY' }
   | { name: 'NOT_FOUND'; path: string };
 
@@ -70,6 +72,10 @@ export function parseRoute(pathname: string): Route {
       return { name: 'SEARCH' };
     case 'invite':
       return { name: 'INVITE' };
+    case 'enrol':
+      return { name: 'ENROL' };
+    case 'devices':
+      return { name: 'DEVICES' };
     case 'legacy':
       return { name: 'LEGACY' };
     default:
@@ -103,6 +109,10 @@ export function pathFor(route: Route): string {
       return '/search';
     case 'INVITE':
       return '/invite';
+    case 'ENROL':
+      return '/enrol';
+    case 'DEVICES':
+      return '/devices';
     case 'LEGACY':
       return '/legacy';
     default:

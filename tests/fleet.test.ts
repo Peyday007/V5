@@ -26,6 +26,7 @@ import {
   currentPolicy,
   effectiveTarget,
   getAccountByName,
+  getRoutine,
   getRoutineByRef,
   listAccounts,
   listRoutines,
@@ -34,6 +35,8 @@ import {
   recordRoutineCheckIn,
   recordRoutineFire,
   recordRoutineNoShow,
+  renameAccount,
+  renameRoutine,
   setAccountState,
   setPolicy,
   setRoutineState,
@@ -1269,5 +1272,74 @@ describe('a burst spends the headroom it measured, once', () => {
       delete process.env['BRAIN_ROUTINE_ID'];
       delete process.env['BRAIN_ROUTINE_TOKEN'];
     }
+  });
+});
+
+describe('renaming a surface', () => {
+  it('changes the label and touches nothing the fire depends on', async () => {
+    /*
+     * `V1` and `V2` were the site names borrowed for capacity surfaces, which is
+     * what makes a fleet reading ambiguous — so a capacity surface becomes
+     * `Brain Research A` and a site keeps its own name. The reason this needs a
+     * test rather than an UPDATE is the surface being renamed is the one already
+     * doing the work: a rename that disturbed its credential, its trigger or its
+     * worker binding would stop the packet it is in the middle of.
+     */
+    const account = await createAccount({ name: 'primary', planLabel: 'Max 20x' });
+    const worker = await createWorker({
+      name: 'shared-research',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: 'trig_live',
+      name: 'V1',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN_V1',
+      tokenDigest: 'a-digest-taken-at-registration',
+      capabilities: ['research'],
+      workerId: worker.id,
+    });
+
+    expect(await renameRoutine({ routineId: routine.id, from: 'V1', to: 'Brain Research A' })).toBe(
+      true,
+    );
+
+    const after = (await getRoutine(routine.id))!;
+    expect(after.name).toBe('Brain Research A');
+    // Everything the dispatcher actually reads is byte-identical.
+    expect(after.routineRef).toBe(routine.routineRef);
+    expect(after.tokenSecretName).toBe(routine.tokenSecretName);
+    expect(after.tokenDigest).toBe(routine.tokenDigest);
+    expect(after.workerId).toBe(routine.workerId);
+    expect(after.state).toBe(routine.state);
+    expect(after.capabilities).toEqual(routine.capabilities);
+    expect(after.totalFires).toBe(routine.totalFires);
+    // And it is still found by the trigger Brain fires, which is its identity.
+    expect((await getRoutineByRef('trig_live'))!.id).toBe(routine.id);
+  });
+
+  it('is guarded on the name it was given, so two renames produce one', async () => {
+    const account = await createAccount({ name: 'primary', planLabel: 'Max 20x' });
+    const routine = await createRoutine({
+      accountId: account.id, routineRef: 'trig_x', name: 'V1', tokenSecretName: 'S_X',
+    });
+    expect(await renameRoutine({ routineId: routine.id, from: 'V1', to: 'Brain Research A' })).toBe(true);
+    // The second caller read `V1` too, and loses. An ordinary outcome.
+    expect(await renameRoutine({ routineId: routine.id, from: 'V1', to: 'Something Else' })).toBe(false);
+    expect((await getRoutine(routine.id))!.name).toBe('Brain Research A');
+  });
+
+  it('renames an account without disturbing the Routines under it', async () => {
+    const account = await createAccount({ name: 'friend-2', planLabel: 'Max 20x' });
+    const routine = await createRoutine({
+      accountId: account.id, routineRef: 'trig_y', name: 'V2', tokenSecretName: 'S_Y',
+    });
+    expect(await renameAccount({ accountId: account.id, from: 'friend-2', to: 'Brain Research B' })).toBe(
+      true,
+    );
+    expect((await getAccountByName('Brain Research B'))!.id).toBe(account.id);
+    expect((await getRoutine(routine.id))!.accountId).toBe(account.id);
+    expect((await getRoutine(routine.id))!.tokenSecretName).toBe('S_Y');
   });
 });

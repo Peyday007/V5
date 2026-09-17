@@ -82,7 +82,7 @@ async function aPerson(options: { admin?: boolean; email?: string } = {}) {
 }
 
 function principalFor(
-  user: { id: string; email: string; displayName: string; isBrainAdmin: boolean },
+  user: { id: string; email: string | null; displayName: string; isBrainAdmin: boolean },
   memberships: ProjectMembership[],
 ): Principal {
   return {
@@ -122,7 +122,7 @@ function workerPrincipal(
 describe('passwords', () => {
   it('never stores anything a password can be recovered from', async () => {
     const user = await aPerson();
-    const found = await getPasswordVerifierByEmail(user.email);
+    const found = await getPasswordVerifierByEmail(user.email!);
     expect(found).not.toBeNull();
     expect(found!.verifier).not.toContain(PASSWORD);
     expect(found!.verifier.startsWith('scrypt$')).toBe(true);

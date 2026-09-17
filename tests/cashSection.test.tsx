@@ -54,6 +54,52 @@ const PREVIEW = `POST /api/projects/${PROJECT}/cash/authority/preview`;
  * its own objective, so the section renders what it is given rather than
  * choosing between sprints.
  */
+/**
+ * A fleet and a membership that are both full.
+ *
+ * Declared as the *ready* shape so that a test wanting the gate has to say so,
+ * and a test that forgot it fails loudly rather than rendering a disabled
+ * button nobody asserted on.
+ */
+const READY = {
+  members: {
+    ready: 4,
+    required: 4,
+    rows: [
+      { userId: 'usr_1', displayName: 'One', state: 'READY' as const },
+      { userId: 'usr_2', displayName: 'Two', state: 'READY' as const },
+      { userId: 'usr_3', displayName: 'Three', state: 'READY' as const },
+      { userId: 'usr_4', displayName: 'Four', state: 'READY' as const },
+    ],
+  },
+  capacity: {
+    healthy: 4,
+    required: 4,
+    rows: [
+      { accountId: 'fac_a', name: 'Brain Research A', state: 'HEALTHY' as const },
+      { accountId: 'fac_b', name: 'Brain Research B', state: 'HEALTHY' as const },
+      { accountId: 'fac_c', name: 'Brain Research C', state: 'HEALTHY' as const },
+      { accountId: 'fac_d', name: 'Brain Research D', state: 'HEALTHY' as const },
+    ],
+  },
+  mayStart: true,
+  blockedBy: [],
+};
+
+/** The same reading with one person short, which is the ordinary state today. */
+const NOT_READY = {
+  ...READY,
+  members: {
+    ...READY.members,
+    ready: 3,
+    rows: READY.members.rows.map((row, index) =>
+      index === 3 ? { ...row, state: 'INVITED' as const } : row,
+    ),
+  },
+  mayStart: false,
+  blockedBy: ['1 more member(s) need a passkey registered.'],
+};
+
 const MINE = {
   root: { projectId: PROJECT, projectName: 'Cash Mode' },
   mode: {
@@ -68,6 +114,7 @@ const MINE = {
     full: 'The canonical mandate, in full.',
   },
   currencies: ['USD', 'GBP', 'EUR', 'CAD', 'AUD'],
+  readiness: READY,
 };
 
 const POSITION = {
@@ -245,7 +292,7 @@ afterEach(() => {
 
 async function mount(projectId: string | null = PROJECT): Promise<void> {
   await act(async () => {
-    render(<CashSection projectId={projectId} />);
+    render(<CashSection projectId={projectId} isBrainAdmin={false} />);
   });
 }
 
@@ -319,6 +366,44 @@ describe('Cash Mode is not running yet', () => {
     expect((button as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByLabelText(/what is this account trying to produce/i)).toBeNull();
     expect(screen.getByText(new RegExp(MINE.objective.summary.slice(0, 40), 'i'))).toBeTruthy();
+  });
+
+  it('will not offer the click until four people and four accounts are ready', async () => {
+    /*
+     * The disabled button is a hint and the route is the control — but a hint
+     * that disagreed with the route would teach a person to stop reading the
+     * screen, which is §29's recurring defect. So both halves are asserted: the
+     * button is not pressable, and the reason the server gave is shown.
+     */
+    base({ [OPERATIONS]: { body: { ...MINE, root: null, mode: null, readiness: NOT_READY } } });
+    await mount();
+    const button = await screen.findByRole('button', { name: /start cash mode/i });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/1 more member\(s\) need a passkey registered/i)).toBeTruthy();
+    // The counts, in the words the person was told to wait for.
+    expect(screen.getByText(/3 \/ 4 READY/)).toBeTruthy();
+    expect(screen.getByText(/4 \/ 4 HEALTHY/)).toBeTruthy();
+  });
+
+  it('says nothing private about anybody while it counts them', async () => {
+    base({ [OPERATIONS]: { body: { ...MINE, root: null, mode: null, readiness: NOT_READY } } });
+    await mount();
+    await screen.findByRole('button', { name: /start cash mode/i });
+    // A name and a state. The payload carries nothing else, and the screen
+    // invents nothing: no address, no device, no count of what they can reach.
+    expect(screen.getByText('One')).toBeTruthy();
+    expect(screen.getByText(/Link sent/i)).toBeTruthy();
+    expect(document.body.textContent ?? '').not.toMatch(/@/);
+  });
+
+  it('offers no invite control to somebody who is not a Brain administrator', async () => {
+    base({ [OPERATIONS]: { body: { ...MINE, root: null, mode: null, readiness: NOT_READY } } });
+    await mount();
+    await screen.findByRole('button', { name: /start cash mode/i });
+    expect(screen.queryByLabelText(/invite somebody/i)).toBeNull();
+    // And it does not even ask: the route would refuse, and a refusal on a
+    // screen somebody is reading is noise about a control they do not have.
+    expect(calls).not.toContain('GET /api/members');
   });
 
   it('keeps the currency and constraints collapsed, so neither is a step', async () => {
