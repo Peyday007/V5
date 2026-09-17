@@ -2560,6 +2560,35 @@ remote.
   and no fix is claimed for it — but the narrowing is evidence somebody
   debugging it should have, and the checks that did pass are the ones that say
   the released commit is live and its persistence survived.
+
+  **A fifth has happened, and it put a number on the sentence above.** Run 235,
+  `6b44cd5`: release success, the pre-restart hosted verification passed on the
+  released image, and after the restart every restart-survival check passed
+  again — the live lease, the fencing generation, the attempt history, the
+  factory campaign, its three units, the review's verdict and independence tier,
+  the writeback — followed by the whole identity, queue, idempotency and MCP
+  surface. It then reached the audit roles and recorded, in order:
+  `the three audit roles have three sessions across two accounts` at 08:03:35,
+  the PRIMARY pass at 08:03:37, the ADVERSARIAL pass at 08:03:39, and then
+  nothing until `HOSTED-VERIFICATION: FAIL could-not-complete` / `fetch failed`
+  at **08:08:57**. That is **five minutes and eighteen seconds** of silence at
+  the judge step, against a work item lease of five minutes.
+
+  So the correlation is now tight enough to state precisely and still not a
+  cause. Four of the five ended in `brain_complete_work: FENCE_LOST` and this
+  one in a bare `fetch failed`, which is the same event seen from either side of
+  a lease that lapsed mid-step — or two different faults that happen to land in
+  the same place. **Nothing here establishes which**, and the next person to
+  look at it should measure how long the judge pass actually takes before
+  assuming the lease is the thing that is wrong.
+
+  What it is *not* is a failed release. The image was released, and the
+  verification that ran against it before the restart passed in full, so the
+  commit is live and serving. A run that says `release: success`,
+  `hosted verification: success`, `after the restart: failure` has proved the
+  deployment and failed its own scripted packet, and reading it as "the deploy
+  did not work" would send somebody to re-deploy a version that is already
+  there.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
