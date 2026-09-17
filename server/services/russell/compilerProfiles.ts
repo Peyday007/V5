@@ -266,6 +266,21 @@ const MARKET_DISCOVERY: CompilerProfile = {
     'A demand signal names who made the request and when. "An industry has this problem" is ' +
       'not evidence that one buyer will pay this week, and is reported as context rather than ' +
       'as a signal.',
+    /*
+     * The one instruction that decides whether anything is ever created.
+     *
+     * A claim becomes a piece of work because the person who read the source
+     * said what kind of opening it is, and `opportunity_signal` is the only
+     * field that says so. It was documented on the submission tool and nowhere
+     * a worker reads *while researching*, which is the wrong end of the job:
+     * by the time somebody is filling in a claim they have already decided
+     * what they were looking for.
+     */
+    'Where a claim establishes a concrete opening somebody could act on, set its ' +
+      'opportunity_signal to the kind it is — see brain_submit_claims for the list. Most ' +
+      'claims are descriptive evidence and carry none, which is not a deficiency. It lowers ' +
+      'no bar: a signalled claim passes exactly the same evidence gate as every other, and ' +
+      'an unsignalled one is still evidence.',
     'Sources that are really one source are counted once, and the duplication is reported: ' +
       'two pages of one site, one release carried by three outlets, three publishers ' +
       'restating one upstream estimate.',

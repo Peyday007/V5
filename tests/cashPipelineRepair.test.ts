@@ -42,6 +42,9 @@ import {
   recordJudgment,
 } from '../server/repos/russellCandidates.ts';
 import { listOrchestrationsByProject } from '../server/repos/research.ts';
+import { findTool } from '../server/mcp/tools.ts';
+import { profileFor } from '../server/services/russell/compilerProfiles.ts';
+import { OPPORTUNITY_SIGNALS } from '../server/domain/opportunitySignals.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import {
@@ -891,6 +894,81 @@ describe('pressing Start produces work the fleet can actually take', () => {
 
     // Still nothing that could touch the world.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17 — the contract a worker reads has to admit what it asks for
+// ---------------------------------------------------------------------------
+
+describe('the submission contract', () => {
+  /*
+   * The defect this exists for, stated plainly.
+   *
+   * `brain_submit_claims` told a worker, in its description, to set
+   * `opportunity_signal` on a claim that establishes an opening — and the
+   * schema beside it declared `additionalProperties: false` without that
+   * property. A client honouring the schema drops the field; one honouring the
+   * prose sends something the schema forbids. Either way the single column that
+   * decides whether any opportunity is ever created could never be filled, and
+   * the failure reads exactly like a worker honestly finding no openings.
+   *
+   * It is the file's own recurring sentence at a new surface: a mechanism
+   * nothing can call is not a mechanism. §27 records the same shape one door
+   * along — `brain_check_in`'s schema saying its `session_ref` decided nothing
+   * while the independence floor decided on it.
+   */
+  it('declares every input field its own description tells a caller to set', () => {
+    const declaredNames = (node: unknown, out = new Set<string>()): Set<string> => {
+      if (!node || typeof node !== 'object') return out;
+      const shape = node as Record<string, unknown>;
+      const properties = shape['properties'];
+      if (properties && typeof properties === 'object') {
+        for (const [key, child] of Object.entries(properties as Record<string, unknown>)) {
+          out.add(key);
+          declaredNames(child, out);
+        }
+      }
+      if (shape['items']) declaredNames(shape['items'], out);
+      return out;
+    };
+
+    const tool = findTool('brain_submit_claims')!;
+    const declared = declaredNames(tool.inputSchema);
+    // Named rather than scanned: this asserts the specific field whose absence
+    // was measured, so the test fails on the defect rather than on wording.
+    expect(tool.description).toContain('opportunity_signal');
+    expect(declared.has('opportunity_signal')).toBe(true);
+
+    const items = (tool.inputSchema as any).properties.claims.items;
+    // The half that makes the omission fatal rather than merely untidy.
+    expect(items.additionalProperties).toBe(false);
+    expect(items.properties.opportunity_signal.enum).toEqual([...OPPORTUNITY_SIGNALS]);
+  });
+
+  it('tells a worker about the signal while it is researching, not only at submission', () => {
+    /*
+     * The other half, and the one a schema check cannot see. A worker reads its
+     * assignment before it starts looking; by the time it is filling in a claim
+     * it has already decided what it was looking for. So the instruction lives
+     * in the discovery profile's own completion criteria, which `assignmentFor`
+     * hands over verbatim.
+     */
+    const profile = profileFor('RUSSELL_CASH_DISCOVERY_V1')!;
+    const criteria = profile.completionCriteria('the markets this sprint may look at');
+    expect(criteria.some((line) => line.includes('opportunity_signal'))).toBe(true);
+    // And it may never read as a bar somebody has to clear to be believed.
+    const line = criteria.find((one) => one.includes('opportunity_signal'))!;
+    expect(line).toMatch(/lowers\s+no\s+bar/);
+  });
+
+  it('leaves the public-records profile alone', () => {
+    // The instruction is the cash discovery profile's vocabulary, not a rule
+    // every research assignment in the Brain acquires.
+    const profile = profileFor('RUSSELL_PUBLIC_RECORDS_V1')!;
+    for (const line of profile.completionCriteria('Michigan')) {
+      expect(line).not.toContain('opportunity_signal');
+    }
   });
 });
 

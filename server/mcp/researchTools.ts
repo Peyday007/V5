@@ -1107,6 +1107,16 @@ const submitClaimsTool: McpTool = {
                 'verbatim. The gate asks per lane whether any accepted claim filled it, so an ' +
                 'untagged claim cannot answer the question it was found for, however good it is.',
             },
+            opportunity_signal: {
+              type: 'string',
+              enum: [...OPPORTUNITY_SIGNALS],
+              description:
+                'Optional, and absent for most claims. Set it only when this claim establishes ' +
+                'a concrete opening somebody could act on, naming which kind it is: ' +
+                OPPORTUNITY_SIGNALS.map((signal) => `${signal} — ${SIGNAL_GUIDE[signal]}`).join('; ') +
+                '. Descriptive evidence carries none, and that is not a deficiency. It lowers no ' +
+                'bar: a claim with a signal passes exactly the same gate as every other.',
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
