@@ -23,6 +23,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { freshProject } from './helpers.ts';
+import { listLayers } from '../server/repos/layers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { activate, setLifecycle } from '../server/services/cash/lifecycle.ts';
 import {
@@ -32,7 +33,7 @@ import {
   ensureDiscoveryAuthority,
   resumeAuthorityParkedCandidates,
 } from '../server/services/cash/discoveryAuthority.ts';
-import { listGoals } from '../server/repos/russellAuthority.ts';
+import { listGoals, reserve } from '../server/repos/russellAuthority.ts';
 import { ALWAYS_PROHIBITED } from '../server/repos/russellAuthority.ts';
 import { liveAuthority } from '../server/repos/cashAuthority.ts';
 import { getDb } from '../server/db/database.ts';
@@ -65,6 +66,11 @@ import { cashView } from '../server/services/cash/view.ts';
 import { cashRoadmap } from '../server/services/cash/roadmap.ts';
 import { openRound } from '../server/repos/cashDiscovery.ts';
 import { WORK_ITEM_STATES } from '../server/domain/types.ts';
+import {
+  launchMission,
+  renewLiveMissionReservations,
+  transitionMission,
+} from '../server/repos/russellMissions.ts';
 import { createOpportunity } from '../server/repos/cashPortfolio.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import type {
@@ -901,6 +907,108 @@ describe('pressing Start produces work the fleet can actually take', () => {
 
     // Still nothing that could touch the world.
     expect(await liveAuthority(projectId)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 23 — a mission waiting on a person must not hold provider capacity
+// ---------------------------------------------------------------------------
+
+describe('a parked mission and the concurrency it was holding', () => {
+  /*
+   * The deadlock production reached, measured from its own rows.
+   *
+   * `NEEDS_HUMAN` is not a terminal state, so a parked mission's reservation is
+   * never settled — and `renewLiveMissionReservations` listed `NEEDS_HUMAN`
+   * among the live states, so the hold was renewed every tick and could never
+   * age out either. The slot was held for ever by work that was not running.
+   *
+   * The live sprint: `maxConcurrent` two, three missions — one RUNNING and two
+   * parked — and fifty-two ideas queued behind them that could never launch,
+   * including the two deep dives the portfolio was waiting on. Nothing was
+   * wrong with any of the fifty-two. There was no slot, and there never would
+   * be one.
+   *
+   * Concurrency is real provider capacity (§24), and a mission waiting on a
+   * person uses none of it.
+   */
+  async function heldConcurrency(goalId: string): Promise<number> {
+    const row = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM russell_budget_reservations
+        WHERE goal_id = ? AND kind = 'MISSION' AND state = 'HELD' AND expires_at > ?`,
+      [goalId, new Date().toISOString()],
+    );
+    return Number(row?.n ?? 0);
+  }
+
+  it('stops counting against the ceiling once the mission parks', async () => {
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    const goal = (await discoveryAuthority(projectId))!;
+
+    const candidate = await createCandidate({
+      projectId,
+      visibility: 'SHARED',
+      title: 'An opening worth qualifying',
+      statement: 'A bounded question about one published opening.',
+    });
+    // The reservation the launch service takes, made here directly: what is
+    // under test is what happens to the hold, not how the hold is acquired.
+    const held = await reserve({
+      goalId: goal.id,
+      kind: 'MISSION',
+      idempotencyKey: `mission:${candidate.id}`,
+    });
+    expect(held.ok).toBe(true);
+
+    const { mission } = await launchMission({
+      projectId,
+      layerId: (await listLayers(projectId))[0]!.id,
+      visibility: 'SHARED',
+      objective: 'A bounded question about one published opening.',
+      whyNow: 'the sprint is active',
+      idempotencyKey: `mission:${candidate.id}`,
+      candidateId: candidate.id,
+      goalId: goal.id,
+      reservationId: held.reservation!.id,
+    } as never);
+
+    // Running, so it is genuinely using capacity.
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+    await renewLiveMissionReservations(10);
+    expect(await heldConcurrency(goal.id)).toBe(1);
+
+    // Parked on a person. It is not running, and must not hold the slot.
+    await transitionMission({
+      missionId: mission.id,
+      from: 'RUNNING',
+      to: 'NEEDS_HUMAN',
+      waitingOn: 'a person: the packet stopped at a decision',
+    });
+    await renewLiveMissionReservations(10);
+    expect(await heldConcurrency(goal.id)).toBe(0);
+
+    // The row is kept, not destroyed: still HELD, still on the audit.
+    const kept = await getDb().get<{ state: string }>(
+      `SELECT state FROM russell_budget_reservations WHERE goal_id = ? AND kind = 'MISSION'`,
+      [goal.id],
+    );
+    expect(kept?.state).toBe('HELD');
+
+    // And answering the park gives the capacity back, so nothing is lost by
+    // freeing it: `renewReservation` is guarded on HELD, never on expiry.
+    await transitionMission({
+      missionId: mission.id,
+      from: 'NEEDS_HUMAN',
+      to: 'RUNNING',
+      waitingOn: null,
+    });
+    await renewLiveMissionReservations(10);
+    expect(await heldConcurrency(goal.id)).toBe(1);
   });
 });
 

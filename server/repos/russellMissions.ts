@@ -383,15 +383,57 @@ export async function transitionMission(input: {
  * should — *no tick has tended this in two hours*, which for a thirty-second
  * loop is genuinely abandoned rather than merely slow.
  *
+ * **A mission parked at `NEEDS_HUMAN` is not one of the live ones, and
+ * renewing it deadlocked a production sprint.** Concurrency is real provider
+ * capacity (§24), and a mission waiting on a person is using none of it — but
+ * `NEEDS_HUMAN` is not a terminal state, so its reservation is never settled,
+ * and this renewed it on every tick so the hold could never age out either.
+ * The slot was therefore held for ever by work that was not running.
+ *
+ * Production measured it exactly: a sprint with `maxConcurrent` of two, three
+ * missions — one RUNNING and two parked — and **fifty-two ideas queued behind
+ * them that could never launch**, including the two deep dives the portfolio
+ * was waiting on. Nothing was broken in any of the fifty-two; there was simply
+ * no slot, and there never would be, because the two holding it were waiting
+ * for an answer nobody was being asked for.
+ *
+ * So a parked mission's hold is **expired rather than renewed**: the row stays
+ * exactly as written, still `HELD`, still on the audit, and simply stops
+ * counting against the ceiling. Expiring rather than only skipping the renewal
+ * is what reaches the missions that are *already* parked — waiting out a
+ * two-hour TTL that the previous tick just extended would leave a stuck sprint
+ * stuck, and rows reach everything while a hook reaches one entrance.
+ *
+ * Answering the park costs nothing: `renewReservation` is guarded on `HELD`
+ * and not on expiry, so a mission that goes back to RUNNING is renewed again on
+ * the next tick and counts again from then.
+ *
  * Returns the reservation ids it renewed, so the tick can report a number
  * rather than a silence.
  */
 export async function renewLiveMissionReservations(limit: number): Promise<string[]> {
+  /*
+   * Parked first, so a freed slot is available to the same tick's launch step.
+   * One guarded statement: it only ever moves an unexpired hold backwards, so
+   * running it twice changes nothing the first run did not already do.
+   */
+  await getDb().run(
+    `UPDATE russell_budget_reservations
+        SET expires_at = ?
+      WHERE state = 'HELD'
+        AND expires_at > ?
+        AND id IN (
+          SELECT reservation_id FROM russell_missions
+           WHERE state = 'NEEDS_HUMAN' AND reservation_id IS NOT NULL
+        )`,
+    [nowIso(), nowIso()],
+  );
+
   const rows = await getDb().all<{ reservation_id: string }>(
     `SELECT m.reservation_id AS reservation_id
        FROM russell_missions m
        JOIN russell_budget_reservations r ON r.id = m.reservation_id
-      WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING','NEEDS_HUMAN')
+      WHERE m.state IN ('PLANNED','LAUNCHING','RUNNING','WAITING')
         AND m.reservation_id IS NOT NULL
         AND r.state = 'HELD'
       ORDER BY r.expires_at
