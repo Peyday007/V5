@@ -1,0 +1,57 @@
+# Reading a Cash sprint's authoritative rows, without a terminal and without a
+# person relaying them.
+#
+# `packet-report.yml` answers "what does this packet hold" and this answers the
+# same question one altitude up: is the sprint running, what does its own
+# authorization permit, is a commercial grant present, where is every discovery
+# round, what is in the queue, and what has reached the portfolio.
+#
+# It exists because the audit that found the Cash pipeline had never run to the
+# end had to ship a scratch query runner into the container to ask, and a
+# question worth asking once about a live sprint is worth being able to ask
+# again. A scratch runner is also the thing you can get wrong: this one is
+# committed, reviewed and read-only in the script as well as here.
+#
+# It is read-only: it opens the database, prints, and closes. No deploy, no
+# restart, no migration, no write. The one thing it can do to production is read
+# it.
+name: Cash report
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Optional project id (prj_...). Omit to report every project running a sprint.'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a report that raced a restart would be reporting whichever half answered.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read the sprint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          args=""
+          if [ -n "${{ inputs.project }}" ]; then
+            args="--project ${{ inputs.project }}"
+          fi
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/cash-report.sh $args" \
+            2>&1 | tee cash-report.txt
+          set -e
+          grep -q '^CASH-REPORT: OK' cash-report.txt
