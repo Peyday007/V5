@@ -3880,7 +3880,9 @@ on its first line, and the runner does what SQLite's own twelve-step procedure
 says: the pragma outside the transaction, the rebuild inside it, **`PRAGMA
 foreign_key_check` before the commit** — which is the half that makes it safe
 rather than merely permitted — and the pragma restored afterwards whatever
-happened. `tests/migrationRebuild.test.ts` seeds a person, a session and a
+happened. `docs/ONBOARDING.md` is the journey as a person walks it — inviting somebody,
+what they see, losing a device, and what turns a registered capacity account
+into a proven one. `tests/migrationRebuild.test.ts` seeds a person, a session and a
 conversation, migrates over them, and fails if any of the three is gone; it was
 run against the destructive version to confirm it catches it, because a
 regression test nobody has seen fail is a claim rather than a reading.
