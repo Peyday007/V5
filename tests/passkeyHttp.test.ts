@@ -388,25 +388,91 @@ describe('administering members', () => {
   });
 });
 
-describe('the activation gate', () => {
-  it('refuses to start Cash Mode while the counts are short, and names both', async () => {
-    const reading = await call<{ readiness: { mayStart: boolean } }>('GET', '/api/cash/mode', {
-      cookie: adminCookie,
-    });
-    expect(reading.status).toBe(200);
-    expect(reading.body.readiness.mayStart).toBe(false);
+describe('starting Cash Mode below four of four', () => {
+  /*
+   * The readiness count no longer gates activation. It was the owner's
+   * decision to wait for everybody rather than a property of the system, and
+   * it has been withdrawn — so what this proves is the narrow thing that
+   * changed and the wide thing that did not.
+   *
+   * The wide thing matters more: removing a gate is exactly the change that
+   * quietly removes its neighbours, because they sit in the same handler. So
+   * every other refusal on this route is asserted *while the counts are still
+   * short*, which is the only state in which a leftover readiness check could
+   * hide behind a different one.
+   */
 
-    const attempt = await call<{ error: string }>('POST', '/api/cash/activate', {
+  it('still refuses an unauthenticated caller, and a person who is not a Brain administrator', async () => {
+    const anonymous = await call<{ error?: string }>('POST', '/api/cash/activate', { body: {} });
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.body?.error).toBe('Not authorized.');
+
+    /*
+     * 404 rather than 403: invariant 23, unchanged. `requireBrainAdmin` is what
+     * produces it, and it sits above the readiness check that was removed — so
+     * this is the assertion that the removal did not take the guard above it
+     * along. It is compared against the *other* administrator-only route rather
+     * than against a path that does not exist, because a missing route names
+     * the path it could not find; what must match here is the refusal a person
+     * without administration gets, wherever they meet it.
+     */
+    const ordinary = await call<{ error?: string }>('POST', '/api/cash/activate', {
+      cookie: plainCookie,
+      body: {},
+    });
+    const elsewhere = await call<{ error?: string }>('GET', '/api/members', {
+      cookie: plainCookie,
+    });
+    expect(ordinary.status).toBe(404);
+    expect(elsewhere.status).toBe(404);
+    expect(ordinary.text).toBe(elsewhere.text);
+
+    // And none of those refusals created anything.
+    const after = await call<{ mode: unknown }>('GET', '/api/cash/mode', { cookie: adminCookie });
+    expect(after.body.mode).toBeNull();
+  });
+
+  it('lets a Brain administrator start it while the counts are short, and still reports them', async () => {
+    const before = await call<{ readiness: { mayStart: boolean; members: { ready: number } } }>(
+      'GET',
+      '/api/cash/mode',
+      { cookie: adminCookie },
+    );
+    expect(before.status).toBe(200);
+    // The precondition this test exists for: genuinely below four of four.
+    expect(before.body.readiness.mayStart).toBe(false);
+
+    const started = await call<{ mode: { projectId: string } | null; changed: boolean }>(
+      'POST',
+      '/api/cash/activate',
+      { cookie: adminCookie, body: {} },
+    );
+    expect(started.status).toBe(200);
+    expect(started.body.changed).toBe(true);
+    expect(started.body.mode).not.toBeNull();
+
+    /*
+     * The counters survive activation unchanged. Removing what they gated is
+     * not removing them: the remaining members and Routines still have to join,
+     * and this is where somebody looks to see who has not.
+     */
+    const after = await call<{
+      mode: unknown;
+      readiness: { mayStart: boolean; members: { ready: number; required: number } };
+    }>('GET', '/api/cash/mode', { cookie: adminCookie });
+    expect(after.body.mode).not.toBeNull();
+    expect(after.body.readiness.mayStart).toBe(false);
+    expect(after.body.readiness.members.required).toBe(4);
+    expect(after.body.readiness.members.ready).toBe(before.body.readiness.members.ready);
+  });
+
+  it('still starts exactly one, so a second press changes nothing', async () => {
+    const again = await call<{ changed: boolean; message: string }>('POST', '/api/cash/activate', {
       cookie: adminCookie,
       body: {},
     });
-    // Not a disabled button: the route itself refuses.
-    expect(attempt.status).toBe(422);
-    expect(attempt.body.error).toMatch(/Members \d+\/4 READY/);
-    expect(attempt.body.error).toMatch(/capacity \d+\/4 HEALTHY/);
-
-    // And nothing was created on the way to refusing.
-    const after = await call<{ mode: unknown }>('GET', '/api/cash/mode', { cookie: adminCookie });
-    expect(after.body.mode).toBeNull();
+    expect(again.status).toBe(200);
+    expect(again.body.changed).toBe(false);
+    expect(again.body.message).toMatch(/has been running since/i);
   });
 });

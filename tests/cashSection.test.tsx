@@ -368,21 +368,28 @@ describe('Cash Mode is not running yet', () => {
     expect(screen.getByText(new RegExp(MINE.objective.summary.slice(0, 40), 'i'))).toBeTruthy();
   });
 
-  it('will not offer the click until four people and four accounts are ready', async () => {
+  it('offers the click below four of four, and still reports the counts', async () => {
     /*
-     * The disabled button is a hint and the route is the control — but a hint
-     * that disagreed with the route would teach a person to stop reading the
-     * screen, which is §29's recurring defect. So both halves are asserted: the
-     * button is not pressable, and the reason the server gave is shown.
+     * The four-of-four count was the owner's decision to wait for everybody
+     * rather than a property of the system, and it was withdrawn. What must
+     * hold now is both halves at once: the button is pressable, and the counts
+     * are still on the screen unchanged — a lock removed by hiding the reading
+     * would have taken the one thing that says who still cannot sign in.
+     *
+     * The sentence that explained the lock is gone with it, and that is
+     * asserted rather than left to chance: "not ready to start" beside a
+     * button that starts is §29's status contradicting the control beside it.
      */
     base({ [OPERATIONS]: { body: { ...MINE, root: null, mode: null, readiness: NOT_READY } } });
     await mount();
     const button = await screen.findByRole('button', { name: /start cash mode/i });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/1 more member\(s\) need a passkey registered/i)).toBeTruthy();
-    // The counts, in the words the person was told to wait for.
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText(/not ready to start/i)).toBeNull();
+    // The counters are untouched: still derived, still shown, still honest.
     expect(screen.getByText(/3 \/ 4 READY/)).toBeTruthy();
     expect(screen.getByText(/4 \/ 4 HEALTHY/)).toBeTruthy();
+    expect(screen.getByText('One')).toBeTruthy();
+    expect(screen.getByText(/Link sent/i)).toBeTruthy();
   });
 
   it('says nothing private about anybody while it counts them', async () => {

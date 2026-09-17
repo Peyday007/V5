@@ -294,22 +294,21 @@ cashRouter.post(
     }
 
     /*
-     * The gate is enforced here and not only on the screen.
+     * Readiness is reported and does not gate.
      *
-     * A disabled button is a hint; a route that started the shared frontier
-     * because somebody posted to it anyway would be the real control missing.
-     * §17's rule that a hidden button is not authorization, at the one click
-     * this whole readiness count exists for.
+     * The four-of-four count was the owner's decision to wait for everybody
+     * rather than a property of the system, and it has been withdrawn. The
+     * counts are still derived and still shown — a person starting below them
+     * can see exactly who cannot sign in yet and which surfaces are unproven —
+     * but they stop nothing, and the remaining members and Routines join
+     * afterwards through the paths they always did.
+     *
+     * Nothing else about this route moved. `requirePerson` and
+     * `requireBrainAdmin` above are unchanged, the one-Cash-Mode check is
+     * unchanged, and **being able to start is still not being authorized to
+     * spend**: the standing commercial grant of §30 is a separate decision
+     * this route cannot make.
      */
-    const readiness = await cashReadiness();
-    if (!readiness.mayStart) {
-      throw unprocessable(
-        `Cash Mode is not ready to start. ${readiness.blockedBy.join(' ')} ` +
-          `Members ${readiness.members.ready}/${readiness.members.required} READY, ` +
-          `capacity ${readiness.capacity.healthy}/${readiness.capacity.required} HEALTHY.`,
-      );
-    }
-
     const root = await resolveOrCreateCashRoot();
     const outcome = await activate({
       projectId: root.id,

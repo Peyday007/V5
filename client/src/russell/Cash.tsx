@@ -258,25 +258,21 @@ function Activate({
         <ReadinessPanel readiness={readiness} isBrainAdmin={isBrainAdmin} />
 
         {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
-        <button
-          type="button"
-          className="rs-button"
-          disabled={busy || !readiness.mayStart}
-          onClick={submit}
-        >
+        {/*
+          * Readiness is reported above and does not gate this button.
+          *
+          * The four-of-four count was the owner's decision to wait for
+          * everybody rather than a property of the system, and it has been
+          * withdrawn — on the screen and on the route together, because a
+          * button enabled against a route that still refused would be the
+          * worse of the two failures. The panel above still says who cannot
+          * sign in yet and which surfaces are unproven; it simply stops
+          * nothing. The "not ready to start" sentence went with the lock: a
+          * status contradicting the control beside it is §29's own defect.
+          */}
+        <button type="button" className="rs-button" disabled={busy} onClick={submit}>
           {busy ? 'Starting\u2026' : 'Start Cash Mode'}
         </button>
-        {/*
-          * The disabled button is a hint, and the sentence beside it is the
-          * reason. The control is the route, which refuses this for the same
-          * reasons whatever the screen renders — §17's rule that a hidden
-          * button is not authorization, at the one click this count exists for.
-          */}
-        {readiness.mayStart ? null : (
-          <p className="rs-hint">
-            Not ready to start. {readiness.blockedBy.join(' ')}
-          </p>
-        )}
 
         <button
           type="button"

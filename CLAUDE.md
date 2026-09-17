@@ -3855,15 +3855,28 @@ same `Principal` every route already resolves, authorization is the same
   HEALTHY only once a session Brain fired has arrived and finished something;
   registered-with-a-secret is `CONFIGURED`, which is §23's rule that a perfect
   configured block over an empty observed one is a refusal rather than a pass.
-- **The disabled button is a hint; the route is the control.** `POST
-  /api/cash/activate` re-reads the count and refuses with both figures in the
-  sentence, and creates nothing on the way to refusing. A screen that disagreed
-  with it would be §29's defect again — a status contradicting the control
-  beside it teaches a person to stop reading it — so the screen renders the
-  server's own reading and forms no opinion.
-- **Being ready is not being authorized.** Four READY and four HEALTHY lets the
-  sprint *start*. What Brain may spend is still the standing commercial grant of
-  §30, still a person's, and still a separate decision.
+- **The count is reported and does not gate, and that is a recorded correction
+  rather than a quiet weakening.** It used to: the Start button was disabled
+  below four of four and `POST /api/cash/activate` re-read the count and
+  refused with both figures. The owner has since withdrawn it — **waiting for
+  everybody was their decision, never a property of the system** — so both
+  halves went together, because a button enabled against a route that still
+  refused is the worse of the two failures. The counts are still derived, still
+  shown and still honest; they simply stop nothing, and the remaining members
+  and Routines join afterwards through the paths they always did. The sentence
+  that explained the lock went with it: *"not ready to start"* beside a button
+  that starts is §29's status contradicting the control beside it.
+- **Nothing beside it moved, and the tests say so while the counts are short.**
+  `requirePerson` and `requireBrainAdmin` are unchanged — an ordinary member
+  still gets the same 404 the other administrator-only route gives them — the
+  one-Cash-Mode check is unchanged, and no other guard on that handler was
+  touched. Removing a gate is exactly the change that quietly removes its
+  neighbours, because they sit in the same function, so the coverage asserts
+  every neighbour **in the state a leftover readiness check could have hidden
+  in**, and was run against the restored lock to confirm it fails.
+- **Being ready is not being authorized, and neither is starting.** What Brain
+  may spend is still the standing commercial grant of §30, still a person's,
+  and still a separate decision this route cannot make.
 - **A capacity account is not a person and is not a lane.** `Brain Research A`
   to `D` are surfaces Brain fires; `V1` and `V2` are sites. `fleet rename`
   exists because the two had borrowed one name, and it changes the label and
