@@ -2547,6 +2547,19 @@ remote.
   the cause would have been the comfortable half-truth this file exists to
   refuse — and the next slow verification would have been debugged against a
   fixed bug.
+
+  **A fourth has since happened, and what is worth recording is how narrow it
+  is.** Schema 53's deploy: release success, the hosted verification
+  `PASS 174/174` on the released image, then after the restart **156 checks
+  passed — including every restart-survival check, the live lease, the fencing
+  generation, the attempt history, the factory campaign and its writeback** —
+  and it failed at the end with `brain_complete_work: FENCE_LOST` at the judge
+  audit step, exactly where the other three did. So the shape is consistent:
+  always post-restart, always the judge step, always a long step outrunning the
+  work item's five-minute lease. **That is still a reading and not a cause**,
+  and no fix is claimed for it — but the narrowing is evidence somebody
+  debugging it should have, and the checks that did pass are the ones that say
+  the released commit is live and its persistence survived.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
