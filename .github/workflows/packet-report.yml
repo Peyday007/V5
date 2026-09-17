@@ -1,28 +1,28 @@
-# Reading one packet's authoritative rows, without a terminal and without a
-# person relaying them.
+# SCRATCH BRANCH ONLY — the transport for one read-only Cash research audit.
 #
-# Separate from `deploy.yml` on purpose. Watching a live packet means asking the
-# same question every so often — has the worker claimed the synthesis, did the
-# judge record a verdict, is anything still leased — and asking it through the
-# deploy pipeline would mean building an image, redeploying the app and running
-# the full hosted verification to read four numbers. That is eight minutes and a
-# restart per question, so in practice it would not be asked, and the answer
-# would come from somebody's screenshot instead.
+# `workflow_dispatch` runs the workflow file from the ref it is dispatched on,
+# so this version runs only when dispatched on the audit branch. `production`
+# keeps its own packet report and is not touched.
 #
-# It is read-only, in the script and here: it opens the database, prints, and
-# closes. No deploy, no restart, no migration, no write. The one thing it can do
-# to production is read it.
+# It ships `scripts/roq.ts` into the running container, runs it once out of
+# /tmp, and prints what it found. `roq.ts` refuses any statement that is not a
+# SELECT, opens the adapter directly rather than `initDatabase()` (which would
+# run the migration chain), and holds every statement inside one
+# `SET TRANSACTION READ ONLY` transaction. Nothing is built, nothing is
+# deployed, and nothing is written — in the container or in the database.
 name: Packet report
 
 on:
   workflow_dispatch:
     inputs:
-      orchestration:
-        description: 'Orchestration id to report on (orc_...)'
+      sql:
+        description: 'base64 of the SELECT bundle, statements separated by ;;'
         required: true
+      clip:
+        description: 'Clip long text fields to this many characters'
+        required: false
+        default: '600'
 
-# Never at the same time as a deploy: the machine is being replaced during one,
-# and a report that raced a restart would be reporting whichever half answered.
 concurrency:
   group: deploy-brain
   cancel-in-progress: false
@@ -31,19 +31,45 @@ jobs:
   report:
     name: Read the packet
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Report
+      - name: Read
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into a shell command.
+          AUDIT_SQL: ${{ inputs.sql }}
+          AUDIT_CLIP: ${{ inputs.clip }}
         run: |
+          set -eu
+          case "$AUDIT_SQL" in
+            ''|*[!A-Za-z0-9+/=]*)
+              echo "::error::The bundle is base64 and nothing else."; exit 1 ;;
+          esac
+          case "$AUDIT_CLIP" in
+            ''|*[!0-9]*) echo "::error::The clip is a number."; exit 1 ;;
+          esac
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          set +e
+
+          # Relative imports would resolve against /tmp, so point them at the
+          # container's own tree. Nothing is written into /app.
+          sed -E "s#from '\.\./server/#from '/app/server/#g" scripts/roq.ts > /tmp/roq.ts
+          b64=$(gzip -9c /tmp/roq.ts | base64 -w0)
+
           flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/packet-report.sh --orchestration ${{ inputs.orchestration }}" \
-            2>&1 | tee packet-report.txt
-          set -e
-          grep -q '^PACKET-REPORT: OK' packet-report.txt
+            -C "/bin/sh -c 'echo $b64 | base64 -d | gzip -dc > /tmp/roq.ts'"
+
+          set -o pipefail
+          flyctl ssh console --app "$app" \
+            -C "/bin/sh -c 'cd /app && node --import tsx /tmp/roq.ts $AUDIT_SQL $AUDIT_CLIP'" \
+            2>&1 | tee audit.txt
+          grep -q '^ROQ: OK' audit.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cash-audit
+          path: audit.txt
+          retention-days: 7
