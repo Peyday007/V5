@@ -67,10 +67,12 @@
  * something after an error most needs and most rarely gets.
  */
 import {
+  attachProbe,
+  claimProbe,
   connectionForUser,
   ensureConnection,
   moveConnection,
-  setProbe,
+  releaseProbeClaim,
   setRegistration,
   setTrigger,
 } from '../../repos/capacityConnections.ts';
@@ -659,22 +661,34 @@ export async function submitTrigger(input: {
     };
   }
 
-  if (connection.triggerRef !== triggerRef) {
-    const moved = await setTrigger({
-      connectionId: connection.id,
-      triggerRef,
-      from: connection.state,
-      to: 'ROUTINE_DETAILS_NEEDED',
-    });
-    if (!moved && connection.triggerRef !== null) {
-      return {
-        ok: false,
-        reason:
-          'This connection already names a different trigger. A Brain administrator repoints a ' +
-          'registered surface; replacing one silently would leave sessions attributed to a ' +
-          'Routine that is no longer the one being fired.',
-      };
-    }
+  /*
+   * A different trigger is refused **before** anything is written.
+   *
+   * The first version wrote first and refused on a lost compare-and-swap, and
+   * the swap was guarded on the *state* rather than on the trigger — so a
+   * submission naming a different id matched, succeeded, and replaced a
+   * recorded trigger while the refusal below could never fire. Once a Routine
+   * is registered that leaves this row and `fleet_routines.routine_ref`
+   * disagreeing, which is Brain firing one surface while its own record names
+   * another. A refusal after a successful write is not a refusal.
+   */
+  if (connection.triggerRef !== null && connection.triggerRef !== triggerRef) {
+    return {
+      ok: false,
+      reason:
+        'This connection already names a different trigger. A Brain administrator repoints a ' +
+        'registered surface; replacing one silently would leave sessions attributed to a ' +
+        'Routine that is no longer the one being fired.',
+    };
+  }
+
+  if (connection.triggerRef === null) {
+    /*
+     * A compare-and-swap on `trigger_ref IS NULL`. Losing it means another tab
+     * recorded the same id first, which is the outcome this call wanted — so
+     * there is nothing to report and nothing to retry.
+     */
+    await setTrigger({ connectionId: connection.id, triggerRef, to: 'ROUTINE_DETAILS_NEEDED' });
   }
 
   const current = (await connectionForUser(input.user.id))!;
@@ -777,6 +791,21 @@ export async function sendProbe(input: {
     }
   }
 
+  /*
+   * **Claim, then act.** §24's own rule, and the check above is not a substitute
+   * for it: two concurrent presses both read a connection with no live probe,
+   * and a version that created the bin first would build two and then discover
+   * that one of them had lost the swap. The bin is the effect, so the guard has
+   * to be on the far side of nothing.
+   *
+   * The window this opens loses a *claim* rather than an effect — `PROBE_SENT`
+   * with no bin derives straight back to `CONFIGURED` on the next read, because
+   * the read path maps the bin's presence rather than remembering a state.
+   */
+  if (!(await claimProbe({ connectionId: connection.id, from: connection.state }))) {
+    return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
+  }
+
   let binId: string;
   try {
     binId = await createProbeBin({
@@ -788,15 +817,11 @@ export async function sendProbe(input: {
       createdById: input.actor.id,
     });
   } catch (error: unknown) {
+    await releaseProbeClaim({ connectionId: connection.id, to: connection.state });
     if (error instanceof ProbeRefused) return { ok: false, reason: error.message };
     throw error;
   }
 
-  await setProbe({
-    connectionId: connection.id,
-    binId,
-    from: connection.state,
-    to: 'PROBE_SENT',
-  });
+  await attachProbe({ connectionId: connection.id, binId });
   return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
 }

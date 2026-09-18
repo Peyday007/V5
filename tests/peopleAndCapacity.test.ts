@@ -513,6 +513,80 @@ describe('connecting a Claude account is durable and resumable', () => {
     expect(routine?.tokenSecretName).toBe(row!.secretName);
   });
 
+  /**
+   * A different trigger is refused before anything is written.
+   *
+   * The first version wrote first and refused on a lost compare-and-swap, and
+   * the swap was on the *state* rather than on the trigger — so a submission
+   * naming a different id matched, succeeded, and replaced a recorded one while
+   * the refusal could never fire. Once a Routine is registered that leaves the
+   * connection and `fleet_routines.routine_ref` disagreeing, which is Brain
+   * firing one surface while its own record names another.
+   */
+  it('refuses to replace a trigger it has already recorded', async () => {
+    const user = await connectable('Airyn', 'airyn@example.invalid');
+    await issueConnectorInvitation({ user, actor: owner, origin: ORIGIN });
+    await submitTrigger({
+      user,
+      actor: user,
+      triggerRef: 'trig_01HHHHHHHHHHHHHHHHHHHHHH',
+      origin: ORIGIN,
+    });
+
+    const replaced = await submitTrigger({
+      user,
+      actor: user,
+      triggerRef: 'trig_01IIIIIIIIIIIIIIIIIIIIII',
+      origin: ORIGIN,
+    });
+    expect(replaced.ok).toBe(false);
+    expect(!replaced.ok && replaced.reason).toMatch(/already names a different trigger/i);
+
+    // The row and the Routine still agree, which is the thing that matters.
+    const row = await connectionForUser(user.id);
+    expect(row?.triggerRef).toBe('trig_01HHHHHHHHHHHHHHHHHHHHHH');
+    const routine = await getRoutine(row!.routineId!);
+    expect(routine?.routineRef).toBe('trig_01HHHHHHHHHHHHHHHHHHHHHH');
+  });
+
+  /**
+   * Claim, then act — the concurrent case, which an early return cannot cover.
+   *
+   * Two presses that both read a connection with no live probe. A version that
+   * created the bin before the compare-and-swap would build two and then find
+   * one of them had lost, which is two activations against one surface for one
+   * question.
+   */
+  it('makes one probe bin when two presses race', async () => {
+    const user = await connectable('Airyn', 'airyn@example.invalid');
+    await issueConnectorInvitation({ user, actor: owner, origin: ORIGIN });
+    await submitTrigger({
+      user,
+      actor: user,
+      triggerRef: 'trig_01JJJJJJJJJJJJJJJJJJJJJJ',
+      origin: ORIGIN,
+    });
+    const connection = await connectionForUser(user.id);
+    process.env[connection!.secretName] = 'the-bearer-an-administrator-set';
+    try {
+      await connectionView({ user, origin: ORIGIN });
+      const [a, b] = await Promise.all([
+        sendProbe({ user, actor: user, origin: ORIGIN }),
+        sendProbe({ user, actor: user, origin: ORIGIN }),
+      ]);
+      expect(a.ok && b.ok).toBe(true);
+      const bins = await listBins({ limit: 100 });
+      expect(bins.filter((bin) => bin.kind === 'DETERMINISTIC_CHECK').length).toBe(1);
+      // And the one bin that exists is the one the connection names.
+      const after = await connectionForUser(user.id);
+      expect(after?.probeBinId).toBe(
+        bins.find((bin) => bin.kind === 'DETERMINISTIC_CHECK')!.id,
+      );
+    } finally {
+      delete process.env[connection!.secretName];
+    }
+  });
+
   it('refuses a trigger another surface already holds', async () => {
     const airyn = await connectable('Airyn', 'airyn@example.invalid');
     const caleb = await person('Caleb', 'caleb@example.invalid');
