@@ -79,6 +79,32 @@ that run through the API, checks the run succeeded and that the record names the
 run's own `head_sha`, drops it in `$RUNNER_TEMP`, and hands it to the reporter,
 which compares it **exactly** to the revision the container reports for itself.
 
+**And a deploy alone does not close it today, which is an operational fact
+rather than a gap in this branch.** The last `Deploy` run on `production` that
+concluded `success` is **run 236 at `82b3106`**, on 2026-09-17 at 08:36. The
+**eighteen runs since have all failed**, every one of them after the image was
+released and the *pre*-restart verification had passed — so those commits are
+live and serving, and what failed is the scripted packet the release gate runs
+after the restart. §27 records nine of these now and still claims no cause.
+
+The consequence for P is precise rather than general. `gh run list --status
+success --limit 1` finds run 236 and fetches its artifact, and the reporter then
+refuses it, correctly: the record names `82b3106` and the container reports a
+different revision, which is *"a statement that what is running was never
+proved"* rather than a weaker pass. **So P stays open with a reason, not for
+want of a file** — and it closes on the first post-restart verification that
+passes at the deployed revision.
+
+What this round added toward that is a reading rather than a remedy. Neither
+`scripts/verify-hosted.ts` nor `scripts/mcpModernClient.ts` passes an
+`AbortSignal` anywhere, and `undici`'s default `headersTimeout` measures
+300 000ms on the runtime the container runs — the same five minutes as a work
+item lease, which is why a bare `fetch failed` at that boundary has been
+ambiguous in both directions. Each audit role's calls are now timed and
+announced before they are made, and the failure handler walks `error.cause`.
+No timeout, retry, lease or pool change: §20 refuses the retry and §27 refuses
+the ceiling without a reading.
+
 ## 3 · Waiting on one credential, and on nothing being faked to avoid it
 
 | | condition |
