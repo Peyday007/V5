@@ -895,11 +895,18 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
   );
 
   /*
-   * And the private half did not. Asserted on the **whole serialized body**
-   * rather than on the keys, because a figure nested inside an opportunity is
-   * the same disclosure as one at the top level — and the money keys are what
-   * the first version of this projection leaked, by passing `deployableCents`
-   * into a function that composes a sentence out of it.
+   * And the private half did not.
+   *
+   * Matched as a **JSON key at any depth** — `"name":` — rather than as a bare
+   * word in the serialized body. Both halves of that are deliberate. At any
+   * depth, because a figure nested inside an opportunity is the same disclosure
+   * as one at the top level, and the money keys are precisely what the first
+   * version of this projection leaked: `deployableCents` passed into a function
+   * that composes a sentence out of it. As a key, because `entries`,
+   * `commitments` and `provenance` are ordinary English and this runs in a
+   * release gate — a false finding there costs somebody an hour and teaches
+   * them to stop believing the gate, which §29 says is worse than the defect it
+   * was looking for.
    */
   const raw = JSON.stringify(body ?? {});
   for (const forbidden of [
@@ -919,10 +926,11 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
     'executionPaths',
     'provenance',
   ]) {
+    const key = `"${forbidden}":`;
     record(
       `the shared frontier carries no ${forbidden}`,
-      !raw.includes(forbidden),
-      !raw.includes(forbidden) ? '' : `"${forbidden}" appeared in the shared body`,
+      !raw.includes(key),
+      !raw.includes(key) ? '' : `${key} appeared in the shared body`,
     );
   }
   record(
