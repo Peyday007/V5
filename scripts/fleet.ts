@@ -158,13 +158,52 @@ async function main(): Promise<void> {
           'and a digest, never the value.',
       );
     }
+    /*
+     * One trigger token per Routine, and the digest is what actually says so.
+     *
+     * `UNIQUE (routine_ref)` already stops the same trigger being registered
+     * twice. It says nothing about the *token*, and a pool is exactly where that
+     * gap bites: the intended arrangement is one Claude account, one connector,
+     * one Routine and one deployment secret each, and the easy mistake is to
+     * point the second Routine at the first one's secret — or at a new secret
+     * name holding the same pasted value.
+     *
+     * Both are refused, and the digest check is the one that matters. A name
+     * collision is visible to anybody reading `fleet show`; two different names
+     * holding one token are indistinguishable there, and the fleet would look
+     * like two surfaces while being one trigger fired twice — over-firing one
+     * account while reporting headroom on another, which is `declared_plan_power`
+     * arithmetic-on-a-fiction in a new place.
+     *
+     * The digest is already stored at registration (`token_digest`), so this
+     * costs one read and reveals nothing: a digest is not recoverable to a value,
+     * and the refusal names the Routine rather than either secret's contents.
+     */
+    const digest = credentialDigest(value);
+    const registered = await listRoutines();
+    const sameName = registered.find((other) => other.tokenSecretName === secret);
+    if (sameName) {
+      return refuse(
+        `${secret} is already the deployment secret for ${sameName.name} (${sameName.routineRef}). ` +
+          'Each Routine holds its own trigger token under its own secret name — sharing one ' +
+          'would make two surfaces one trigger fired twice.',
+      );
+    }
+    const sameToken = registered.find((other) => other.tokenDigest === digest);
+    if (sameToken) {
+      return refuse(
+        `the value in ${secret} is the same trigger token already registered for ${sameToken.name} ` +
+          `(${sameToken.routineRef}) under ${sameToken.tokenSecretName}. Two names for one token ` +
+          'is still one token; create a trigger for this Routine and store its own.',
+      );
+    }
     if (flag('dry-run')) return ok(`dry-run register-routine ref=${ref} secret=${secret} (nothing written)`);
     const routine = await createRoutine({
       accountId: account.id,
       routineRef: ref,
       name: name!,
       tokenSecretName: secret,
-      tokenDigest: credentialDigest(value),
+      tokenDigest: digest,
       routineVersion: option('version'),
       baseUrl: option('base-url'),
       capabilities: (option('capabilities') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
@@ -890,6 +929,122 @@ async function probeBin(input: {
     return refuse(`verify-surface ${ref}: ${problems.length} problem(s) above.`);
   }
 
+  /*
+   * Is the Factory a pool, and is every member of it proven?
+   *
+   * `verify-surface` answers that about one Routine. This answers it about the
+   * set, and the difference is the whole reason it exists: a pool with one
+   * surface missing or one surface never run looks, per-Routine, exactly like a
+   * smaller healthy pool. The expected set is derived from rows — every Routine
+   * bound to the named logical worker — so a Routine somebody forgot to register
+   * is an absence this can see, and a Routine bound to the *wrong* worker is
+   * named rather than quietly skipped.
+   *
+   * **It refuses success unless every surface closed its own chain**: Brain
+   * fired that Routine, a session arrived and was attributed to the expected
+   * worker from that same dispatch row, it was handed the bin, and the bin
+   * reached COMPLETE. Nothing about a configured row counts, which is §23's
+   * CONFIGURED/OBSERVED split applied to a set instead of a single surface.
+   *
+   * `--probe` creates one bounded self-test per unproven surface, **pinned to
+   * that surface**. It proves pooled dispatch and identity and nothing else:
+   * the manifest forbids every repository operation, so repository access stays
+   * unproven until a real campaign does it.
+   */
+  if (command === 'verify-pool') {
+    const repository = (option('repository') ?? option('repo') ?? '').trim().toLowerCase();
+    const workerName = option('worker') ?? 'factory-brain';
+    if (!repository) {
+      return refuse('pass --repository <owner/name>, e.g. --repository peyday007/v5.');
+    }
+    const { verifyFactoryPool } = await import('../server/services/dispatch/pool.ts');
+    let report;
+    try {
+      report = await verifyFactoryPool({ workerName, repository });
+    } catch (error) {
+      return refuse(error instanceof Error ? error.message : String(error));
+    }
+
+    console.log(`POOL  ${report.repository}  as ${report.expectedWorkerName}`);
+    console.log(`  surfaces   ${report.surfaces.length}`);
+    for (const surface of report.surfaces) {
+      console.log('');
+      console.log(`  ${surface.verdict.padEnd(8)} ${surface.routineName}  (${surface.accountName})`);
+      console.log(`    ref       ${surface.routineRef}`);
+      console.log(`    worker    ${surface.boundWorker ?? '— (no binding)'}` +
+        (surface.authenticatesAsExpected ? '' : `  NOT ${report.expectedWorkerName}`));
+      console.log(
+        `    eligible  ${surface.eligible ? 'yes' : `no — ${surface.ineligibleBecause.join('; ')}`}`,
+      );
+      console.log(
+        `    headroom  ${surface.headroom.used}/${surface.headroom.limit ?? '∞'} in flight` +
+          (surface.cooldownUntil ? `  cooling until ${surface.cooldownUntil}` : ''),
+      );
+      console.log(`    fires     ${surface.lastOutcome}`);
+      if (surface.chain) {
+        console.log(`    proven    fired ${surface.chain.sentAt ?? 'recorded on the dispatch'}`);
+        console.log(`              arrived ${surface.chain.sessionRef} at ${surface.chain.observedAt}`);
+        console.log(`              assigned and completed ${surface.chain.binId}`);
+      }
+      for (const problem of surface.problems) console.log(`    PROBLEM   ${problem}`);
+    }
+
+    if (flag('probe')) {
+      const { createProbeBin, ProbeRefused } = await import('../server/services/fleet/probe.ts');
+      console.log('');
+      for (const surface of report.surfaces) {
+        if (surface.verdict === 'PROVEN') continue;
+        /*
+         * A faulted surface is not probed. Its connector authenticates as
+         * somebody else, so a fire would produce another foreign arrival and
+         * another row saying the same thing — spending an activation to
+         * re-learn a fact already on the screen. The remedy is to reconnect it
+         * against the right worker, and that is a person's.
+         */
+        if (surface.verdict === 'FAULT') {
+          console.log(`  SKIPPED   ${surface.routineName}: reconnect it as ${report.expectedWorkerName} first.`);
+          continue;
+        }
+        const routine = await getRoutineByRef(surface.routineRef);
+        const worker = routine?.workerId ? await getWorker(routine.workerId) : null;
+        const routing = routine?.workerId ? await getWorkerRouting(routine.workerId) : null;
+        if (!routine || !worker || !routing) {
+          console.log(`  SKIPPED   ${surface.routineName}: nothing to probe until it is bound and routed.`);
+          continue;
+        }
+        try {
+          const created = await createProbeBin({
+            worker,
+            repositories: routing.repositories,
+            routine,
+            family: 'FACTORY',
+            createdByType: 'SYSTEM',
+            createdById: 'fleet-cli:verify-pool',
+          });
+          console.log(`  PROBE     ${surface.routineName}: ${created} — pinned to this surface.`);
+        } catch (error) {
+          const why = error instanceof ProbeRefused ? error.message : String(error);
+          console.log(`  SKIPPED   ${surface.routineName}: ${why}`);
+        }
+      }
+      console.log('');
+      console.log('  Each probe names no objective, changes no repository and belongs to no');
+      console.log('  campaign. Brain fires its own surface for it within a tick; run');
+      console.log('  verify-pool again once they have been answered.');
+    }
+
+    console.log('');
+    if (report.ok) {
+      console.log(`  VERIFIED  ${report.surfaces.length} surface(s), each fired, each arrived as`);
+      console.log(`            ${report.expectedWorkerName}, each handed a bin and each completing it.`);
+      console.log('            This proves pooled dispatch and identity. It proves nothing about');
+      console.log('            repository access — the first real campaign does that.');
+      return ok(`verify-pool ${repository} VERIFIED surfaces=${report.surfaces.length}`);
+    }
+    for (const problem of report.problems) console.log(`  PROBLEM   ${problem}`);
+    return refuse(`verify-pool ${repository}: ${report.problems.length} problem(s) above.`);
+  }
+
   if (command === 'scale-advice') {
     const snapshot = await fleetSnapshot();
     const ready = (await listBins({ states: ['READY'], limit: 500 })).length;
@@ -970,7 +1125,8 @@ async function probeBin(input: {
   refuse(
     `unknown command "${command}". Try: show, register-account, register-routine, bind-worker, ` +
       'repoint-worker, rename, ' +
-      'set-state, set-target, boost, pause, resume, policy-history, explain-route, verify-surface, scale-advice, ' +
+      'set-state, set-target, boost, pause, resume, policy-history, explain-route, verify-surface, ' +
+      'verify-pool, scale-advice, ' +
       'profile, simulate.',
   );
 }

@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'show | register-account | register-routine | set-capabilities | bind-worker | repoint-worker | rename | set-state | set-target | boost | pause | resume | policy-history | explain-route | verify-surface | scale-advice | profile | simulate'
+        description: 'show | register-account | register-routine | set-capabilities | bind-worker | repoint-worker | rename | set-state | set-target | boost | pause | resume | policy-history | explain-route | verify-surface | verify-pool | scale-advice | profile | simulate'
         required: true
         default: show
       name:
@@ -44,6 +44,16 @@ on:
         default: ''
       target:
         description: '--target (a concurrency target, or a boost target)'
+        required: false
+        default: ''
+      repository:
+        # Its own input because an owner/name carries a slash, which `extra`
+        # refuses and the named-value class refuses — and folding it the way an
+        # account name is folded would be ambiguous, since a repository name may
+        # legitimately contain the underscore that folding turns into a space.
+        # A slash cannot start a command, redirect, or substitute, so it is safe
+        # to allow here and nowhere else.
+        description: '--repository owner/name, for verify-pool'
         required: false
         default: ''
       capabilities:
@@ -93,6 +103,7 @@ jobs:
           FLEET_SECRET: ${{ inputs.secret }}
           FLEET_SCOPE: ${{ inputs.scope }}
           FLEET_TARGET: ${{ inputs.target }}
+          FLEET_REPOSITORY: ${{ inputs.repository }}
           FLEET_CAPABILITIES: ${{ inputs.capabilities }}
           FLEET_EXTRA: ${{ inputs.extra }}
           FLEET_DRY_RUN: ${{ inputs.dry_run }}
@@ -113,6 +124,15 @@ jobs:
                 ;;
             esac
           done
+          # A repository is one value with a slash in it.
+          case "$FLEET_REPOSITORY" in
+            ''|*[!A-Za-z0-9_./-]*)
+              if [ -n "$FLEET_REPOSITORY" ]; then
+                echo "::error::Refusing '$FLEET_REPOSITORY': a repository is letters, digits, dot, dash, underscore and slash."
+                exit 1
+              fi
+              ;;
+          esac
           # A capability list is one value with commas in it.
           case "$FLEET_CAPABILITIES" in
             ''|*[!A-Za-z0-9_.:,-]*)
@@ -142,6 +162,7 @@ jobs:
           if [ -n "$FLEET_SECRET" ];  then args="$args --secret $FLEET_SECRET"; fi
           if [ -n "$FLEET_SCOPE" ];   then args="$args --scope $FLEET_SCOPE"; fi
           if [ -n "$FLEET_TARGET" ];  then args="$args --target $FLEET_TARGET"; fi
+          if [ -n "$FLEET_REPOSITORY" ]; then args="$args --repository $FLEET_REPOSITORY"; fi
           # Always, for set-capabilities, and quoted: the empty list is the
           # one that clears a capability, and a flag appended only when the
           # value is non-blank can never express it.
