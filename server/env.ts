@@ -89,6 +89,25 @@ export const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 export const BRAIN_REVISION: string | null =
   (process.env['BRAIN_REVISION'] ?? '').trim() || null;
 
+/**
+ * Which repository this image was built from, stamped beside the revision.
+ *
+ * A commit id on its own does not say whose commit it is. Every acceptance
+ * reading that binds itself to a deployment compares a revision against the
+ * checkout it was taken from — and that comparison is only meaningful if both
+ * ends are the same repository. `ATTESTING_REPOSITORY` fixes the CI side of
+ * that in code, and the hosted record binds to it through a workflow run URL;
+ * this is the same fact from the *running image*, which is the end no CI
+ * configuration can assert on behalf of.
+ *
+ * `null` for anything the deploy workflow did not build, exactly as the
+ * revision is — a local checkout and a test legitimately have neither, and a
+ * reading that cannot name its repository is refused rather than assumed to be
+ * about this one.
+ */
+export const BRAIN_REPOSITORY: string | null =
+  (process.env['BRAIN_REPOSITORY'] ?? '').trim() || null;
+
 /** Absolute path for a path stored relative to the data root. */
 export function resolveDataPath(relativePath: string): string {
   return path.resolve(DATA_ROOT, relativePath);

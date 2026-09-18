@@ -927,6 +927,9 @@ function readDeployedPhone(): PhoneReading {
   const problems = phoneRecordProblems(parsed, {
     intendedHost: INTENDED_BRAIN_HOST,
     revision: revisionOf().revision,
+    // Fixed in code, for §24's reason: nobody supplies the limits their own
+    // work is judged against. The same constant the hosted record binds to.
+    repository: ATTESTING_REPOSITORY,
   });
   if (problems.length > 0) {
     const saw = `the attached reading is not about this run: ${problems.join('; ')}`;

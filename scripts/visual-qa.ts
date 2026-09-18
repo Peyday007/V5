@@ -1345,6 +1345,16 @@ async function inspectDeployed(options: Options): Promise<void> {
    * cannot name its revision must be refused rather than trusted.
    */
   const health = await visit(cookie, '/api/health');
+  /*
+   * Whose commit, beside which commit.
+   *
+   * Reported by the deployed Brain itself rather than read from whatever
+   * checkout this harness happens to be running in — the harness's own remote
+   * says which repository *it* came from and nothing about the image it is
+   * inspecting, which is the wrong end of the binding.
+   */
+  const deployedRepository =
+    typeof health?.['repository'] === 'string' ? (health['repository'] as string) : null;
   const deployedRevision =
     typeof health?.['revision'] === 'string' ? (health['revision'] as string) : null;
   const expectedRevision = options.expectRevision;
@@ -1569,6 +1579,7 @@ async function inspectDeployed(options: Options): Promise<void> {
 
   const record: DeployedPhoneRecord = {
     brain: origin,
+    repository: deployedRepository,
     inspectedAt: new Date().toISOString(),
     deployedRevision,
     expectedRevision,

@@ -11,11 +11,13 @@ import { describe, expect, it } from 'vitest';
 import { isPhoneRecord, phoneRecordProblems, type DeployedPhoneRecord } from '../scripts/phoneRecord.ts';
 
 const HOST = 'northline-brain.fly.dev';
+const REPOSITORY = 'Peyday007/V5';
 const REVISION = 'a'.repeat(40);
 
 function record(over: Partial<DeployedPhoneRecord> = {}): DeployedPhoneRecord {
   return {
     brain: `https://${HOST}`,
+    repository: REPOSITORY,
     inspectedAt: '2026-09-14T10:00:00.000Z',
     deployedRevision: REVISION,
     expectedRevision: REVISION,
@@ -65,6 +67,10 @@ describe('a reading has to be shaped like one', () => {
     expect(isPhoneRecord(partial)).toBe(false);
   });
 
+  it('refuses a repository that is neither a string nor an honest null', () => {
+    expect(isPhoneRecord({ ...record(), repository: 42 })).toBe(false);
+  });
+
   it('refuses a timestamp that is not one', () => {
     expect(isPhoneRecord(record({ inspectedAt: 'yesterday' }))).toBe(false);
   });
@@ -75,10 +81,35 @@ describe('a reading has to be shaped like one', () => {
 });
 
 describe('and it has to be about the Brain being judged', () => {
-  const against = { intendedHost: HOST, revision: REVISION };
+  const against = { intendedHost: HOST, revision: REVISION, repository: REPOSITORY };
 
   it('accepts one of the intended host at this revision', () => {
     expect(phoneRecordProblems(record(), against)).toEqual([]);
+  });
+
+  /*
+   * Whose commit it is, asked before which commit it is.
+   *
+   * A revision comparison is a binding only if both ends are the same
+   * repository; across two it is two unrelated forty-character strings that
+   * happen to be equal. The deployed Brain reports this itself now, and an
+   * image that does not is refused rather than assumed to be this one.
+   */
+  it('refuses a reading of a Brain built from another repository', () => {
+    const problems = phoneRecordProblems(record({ repository: 'someone/fork' }), against);
+    expect(problems.join(' ')).toMatch(/means nothing across two repositories/);
+  });
+
+  it('refuses a reading whose image carries no repository stamp at all', () => {
+    const problems = phoneRecordProblems(record({ repository: null }), against);
+    expect(problems.join(' ')).toMatch(/reports no repository/);
+  });
+
+  it('refuses the right revision from the wrong repository', () => {
+    // The case the binding exists for: every other field agrees.
+    const problems = phoneRecordProblems(record({ repository: 'someone/fork' }), against);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(/someone\/fork/);
   });
 
   it('refuses a reading of another deployment', () => {
@@ -138,7 +169,7 @@ describe('and it has to be about the Brain being judged', () => {
   });
 
   it('refuses everything when the run cannot say what it is judging', () => {
-    const problems = phoneRecordProblems(record(), { intendedHost: null, revision: null });
+    const problems = phoneRecordProblems(record(), { intendedHost: null, revision: null, repository: REPOSITORY });
     expect(problems.join(' ')).toMatch(/cannot say which Brain was intended/);
     expect(problems.join(' ')).toMatch(/cannot name its own revision/);
   });

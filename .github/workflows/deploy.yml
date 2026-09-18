@@ -219,7 +219,8 @@ jobs:
         run: |
           set -o pipefail
           if flyctl deploy --ha=false --remote-only \
-               --build-arg BRAIN_REVISION="$GITHUB_SHA" 2>&1 | tee deploy.txt; then
+               --build-arg BRAIN_REVISION="$GITHUB_SHA" \
+               --build-arg BRAIN_REPOSITORY="$GITHUB_REPOSITORY" 2>&1 | tee deploy.txt; then
             exit 0
           fi
           if ! grep -qiE 'depot builder|failed to list workers|authentication handshake failed|error releasing builder' deploy.txt; then
@@ -232,7 +233,8 @@ jobs:
           fi
           echo "::warning::The Depot builder never answered. Building on Fly's own remote builder instead."
           flyctl deploy --ha=false --remote-only --depot=false \
-            --build-arg BRAIN_REVISION="$GITHUB_SHA"
+            --build-arg BRAIN_REVISION="$GITHUB_SHA" \
+            --build-arg BRAIN_REPOSITORY="$GITHUB_REPOSITORY"
 
       # When a deploy fails, say why here rather than sending somebody to a
       # dashboard.

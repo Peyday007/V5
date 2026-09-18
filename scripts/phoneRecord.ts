@@ -28,6 +28,17 @@
 export interface DeployedPhoneRecord {
   /** The origin inspected. Never a credential, and never a path. */
   brain: string;
+  /**
+   * Which repository the deployed Brain says it was built from.
+   *
+   * Read from the authenticated `/api/health` beside the revision, because a
+   * commit id on its own does not say whose commit it is — and the whole of
+   * this record's binding is a revision compared against a checkout. Two
+   * repositories are two different claims however identical their history
+   * looks. `null` when the deployed image carries no stamp, which is refused
+   * rather than assumed to be this one.
+   */
+  repository: string | null;
   inspectedAt: string;
   /**
    * The revision the deployed Brain reports for **itself**, from the
@@ -74,6 +85,7 @@ export function isPhoneRecord(value: unknown): value is DeployedPhoneRecord {
   const linked = record.missionLinkedResult;
   return (
     typeof record.brain === 'string' &&
+    (record.repository === null || typeof record.repository === 'string') &&
     typeof record.inspectedAt === 'string' &&
     !Number.isNaN(Date.parse(record.inspectedAt)) &&
     (record.deployedRevision === null || typeof record.deployedRevision === 'string') &&
@@ -111,9 +123,36 @@ export function isPhoneRecord(value: unknown): value is DeployedPhoneRecord {
  */
 export function phoneRecordProblems(
   record: DeployedPhoneRecord,
-  against: { intendedHost: string | null; revision: string | null },
+  against: {
+    intendedHost: string | null;
+    revision: string | null;
+    /** The repository this reading must be about, fixed in code by its caller. */
+    repository: string;
+  },
 ): string[] {
   const problems: string[] = [];
+
+  /*
+   * Whose commit, asked before which commit.
+   *
+   * A revision comparison is only a binding if both ends are the same
+   * repository; otherwise it is two unrelated forty-character strings that
+   * happen to be equal. The deployed Brain reports this itself, so what is
+   * compared is the image's own statement rather than anything the harness
+   * knew — and an image with no stamp is refused, because an unknown may never
+   * be read as the favourable assumption.
+   */
+  if (record.repository === null) {
+    problems.push(
+      'the deployed Brain reports no repository, so the revision below is a bare commit id ' +
+        'rather than a statement about this tree',
+    );
+  } else if (record.repository !== against.repository) {
+    problems.push(
+      `the reading is of a Brain built from ${record.repository} and this tree is ` +
+        `${against.repository} — a revision means nothing across two repositories`,
+    );
+  }
 
   let host: string | null = null;
   try {
