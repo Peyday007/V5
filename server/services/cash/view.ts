@@ -223,16 +223,25 @@ export async function cashView(input: {
 
   const needs = await listNeeds({ projectId: input.projectId, states: ['OPEN'] });
   /*
-   * Which needs the research is not going to answer on its own.
+   * Which needs the research is not going to answer on its own, **and why**.
    *
    * A projection: it re-reads the missions and writes nothing, so the read path
    * says what is true now rather than what the last tick happened to record. A
    * need whose research is merely running stays out of the review, because that
    * is work in progress rather than a decision.
+   *
+   * `detail` travels with the id, and that is the whole correction. This line
+   * used to end `.map((one) => one.need.id)` — deriving the one sentence that
+   * answers *"Brain said it would look this up, so why am I being asked?"* and
+   * then dropping it on the floor. The card had nothing left but the need's
+   * stored `whyItMatters`, which asserts that Brain does the looking up, so
+   * every one of these cards contradicted itself. Re-fetching it in the review
+   * was the other option and is the one this repository keeps refusing: two
+   * readers of one fact disagree eventually.
    */
   const stalled = (await assessResearch(input.projectId))
     .filter((one) => one.state !== 'ANSWERED' && one.state !== 'RUNNING')
-    .map((one) => one.need.id);
+    .map((one) => ({ needId: one.need.id, detail: one.detail }));
 
   const discovery =
     mode === null
