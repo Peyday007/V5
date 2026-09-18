@@ -52,11 +52,19 @@ export interface SurfaceReading {
    * It is here because a pool makes the name ambiguous in the one direction
    * that matters. Several surfaces serving one logical worker all read
    * `Factory Brain …`, and a person asked to fix one has to know *which
-   * Routine* — a name they chose is a label and this is the identifier the
-   * remedy is applied to. It is not a credential and not a secret: a trigger
-   * reference on its own fires nothing.
+   * Routine* — a name they chose is a label and this is the identifier
+   * `fleet set-state` and `bind-worker` are applied to.
+   *
+   * **Operator depth, matching `services/fleet/capacity.ts`.** It is not a
+   * credential — a trigger reference on its own fires nothing, because the
+   * bearer is a deployment secret nothing in this repository can read back —
+   * but §34 put it behind that line on the People surface deliberately, and
+   * this route admits any project member with technical detail reserved for
+   * ADMIN. Two surfaces disagreeing about where one identifier belongs is how
+   * the quieter of the two stops being a boundary. Null is *you are not told*,
+   * which is a different fact from *there is none*.
    */
-  routineRef: string;
+  routineRef: string | null;
   name: string;
   accountId: string;
   accountName: string;
@@ -274,7 +282,7 @@ export async function fleetView(input: {
     const { usable, reason, recorded } = usability(routine, account, now);
     return {
       routineId: routine.id,
-      routineRef: routine.routineRef,
+      routineRef: input.includeTechnical ? routine.routineRef : null,
       name: routine.name,
       accountId: routine.accountId,
       accountName: account?.name ?? 'unregistered',

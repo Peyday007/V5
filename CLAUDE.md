@@ -2854,6 +2854,21 @@ remote.
   first real campaign's to prove, and reporting a green probe as a green campaign
   would be the comfortable half-truth this file exists to refuse.
 
+  **Putting the Routine's reference in front of every project member was mine
+  and is corrected here rather than quietly.** A pool makes the *name*
+  ambiguous — three surfaces all reading `Factory Brain …` — so the Fleet page
+  gained the `trig_…` beside each, at ordinary depth. `/projects/:id/fleet`
+  admits any project member and reserves technical detail for ADMIN, and §34
+  had already decided the same identifier belongs behind that line on the
+  People surface: *"never the trigger ref and never the secret's name"*. It is
+  not a credential — the bearer is a deployment secret nothing in this
+  repository can read back — and that is exactly why it was easy to put in the
+  wrong place. **Two surfaces disagreeing about where one identifier belongs is
+  how the quieter of the two stops being a boundary.** Operator depth now, in
+  both, and `null` there says *you are not told* rather than *there is none*.
+  The binding, the headroom and the last outcome stay where a member can read
+  them, because those are what make a pool legible as a pool.
+
 - **A checkout is not a target, and noticing that a rule's reason is imprecise is
   not authority to reverse the rule.** A fired worker reads
   `.claude/settings.json` from the repository its Routine *attaches*, which is

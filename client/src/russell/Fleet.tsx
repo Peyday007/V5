@@ -158,8 +158,9 @@ export function FleetCentre({ projectId }: { projectId: string | null }): JSX.El
                 {/* Raw identifiers arrive only for a caller entitled to them. */}
                 {surface.workerId ? (
                   <p className="rs-ref rs-at-technical">
-                    {surface.routineRef} · {surface.routineId} · worker {surface.workerId} ·{' '}
-                    {surface.consecutiveFailures} failures, {surface.consecutiveNoShows} no-shows
+                    {surface.routineRef ?? surface.routineId} · {surface.routineId} · worker{' '}
+                    {surface.workerId} · {surface.consecutiveFailures} failures,{' '}
+                    {surface.consecutiveNoShows} no-shows
                   </p>
                 ) : null}
               </article>

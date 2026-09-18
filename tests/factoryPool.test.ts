@@ -321,18 +321,29 @@ describe('several accounts serving one logical Factory worker', () => {
     const mine = view.surfaces.filter((s) => s.boundWorker === 'factory-brain');
     expect(mine).toHaveLength(3);
     for (const surface of mine) {
-      expect(surface.routineRef).toMatch(/^trig_pool_[abc]$/);
       expect(surface.accountName).toMatch(/^claude-[abc]$/);
       expect(surface.headroom.used).toBe(0);
       // Nobody has set a target for these, and that is not a ceiling of zero.
       expect(surface.headroom.limit).toBeNull();
       expect(surface.lastOutcome).toBe('never fired');
     }
-    // Three accounts, three references: the pool is legible as a pool.
+    // Three accounts: the pool is legible as a pool without any raw identifier.
     expect(new Set(mine.map((s) => s.accountName)).size).toBe(3);
-    expect(new Set(mine.map((s) => s.routineRef)).size).toBe(3);
-    // And the reference is not technical detail, while the raw ids still are.
+    /*
+     * The trigger reference is operator depth, matching §34's own decision on
+     * the People surface — this route admits any project member. The binding,
+     * the headroom and the outcome are what a member is owed; the identifier a
+     * remedy is applied to is what an administrator is.
+     */
+    expect(mine.every((s) => s.routineRef === null)).toBe(true);
     expect(mine.every((s) => s.workerId === null)).toBe(true);
+
+    const operator = await fleetView({ includeTechnical: true, projectId });
+    const refs = operator.surfaces
+      .filter((s) => s.boundWorker === 'factory-brain')
+      .map((s) => s.routineRef);
+    expect(refs.every((ref) => ref !== null && /^trig_pool_[abc]$/.test(ref))).toBe(true);
+    expect(new Set(refs).size).toBe(3);
   });
 
   it('counts a surface that is carrying work against its own recorded ceiling', async () => {
@@ -347,7 +358,8 @@ describe('several accounts serving one logical Factory worker', () => {
     await dispatchTick({ burst: 5, projectIds: [projectId] });
 
     const { fleetView } = await import('../server/services/fleet/view.ts');
-    const view = await fleetView({ includeTechnical: false, projectId });
+    // Operator depth, because this asserts on the surface by its trigger ref.
+    const view = await fleetView({ includeTechnical: true, projectId });
     const busy = view.surfaces.find((s) => s.routineRef === surfaces[0]!.routineRef)!;
     expect(busy.headroom).toEqual({ used: 1, limit: 2 });
     /*
