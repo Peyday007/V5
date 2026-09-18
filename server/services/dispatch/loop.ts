@@ -79,6 +79,10 @@ import { routeBin } from './router.ts';
 import { OPERATOR_RESOLVED_ROUTING_REFUSALS, waitsForOperator } from './router.ts';
 import { markDispatchRoutine } from '../../repos/bins.ts';
 import { claimRoutineFireSlot, recordAccountRefusal, recordRoutineFire, setRoutineState } from '../../repos/fleet.ts';
+import {
+  enforceCapacityLimits,
+  runningCapacityMeasurements,
+} from '../fleet/capacityMeasurement.ts';
 
 /*
  * How a routing refusal is classified now lives in `router.ts`, beside the union
@@ -158,6 +162,17 @@ export interface TickResult {
   unrouted: Record<string, number>;
   /** Registered Routines whose secret this deployment does not hold. */
   missingSecrets: number;
+  /**
+   * Bounded capacity measurements this tick stopped, with the declared stop
+   * condition that ended each one.
+   *
+   * Here rather than in the lab, because the envelope has to bound the run
+   * *while it runs*. A ceiling read once the experiment has finished is a
+   * description of what happened; this is asked before the tick creates any
+   * further intent, so a measurement that has reached forty activations cannot
+   * buy a forty-first.
+   */
+  capacityMeasurementsStopped: { experimentId: string; reason: string }[];
 }
 
 /**
@@ -179,7 +194,31 @@ export async function dispatchTick(
     deferred: 0,
     unrouted: {},
     missingSecrets: 0,
+    capacityMeasurementsStopped: [],
   };
+
+  /*
+   * Enforce the one envelope that bounds real fires, before anything else.
+   *
+   * First in the tick because every step below it makes the run larger: the
+   * re-arm puts deferred intents back, `ensureDispatchIntent` creates new ones,
+   * and the burst sends them. Cancelling a measurement's outstanding bins here
+   * advances their fencing generation, so those steps find nothing to fire and
+   * a late completion from a worker still holding one matches nothing (§19).
+   */
+  for (const experimentId of await runningCapacityMeasurements()) {
+    try {
+      const outcome = await enforceCapacityLimits({ experimentId });
+      if (outcome.stopped) {
+        result.capacityMeasurementsStopped.push({
+          experimentId,
+          reason: outcome.reason ?? 'the measurement finished',
+        });
+      }
+    } catch {
+      /* a measurement whose rows could not be read stays RUNNING and is asked again */
+    }
+  }
 
   result.superseded = await supersedeStaleIntents();
 

@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { getDb, getMigrationReport, activeDatabaseConfig } from '../db/database.ts';
 import { getStorage, activeStorageConfig } from '../services/storage/index.ts';
 import { getSchemaVersion } from '../db/migrate.ts';
-import { BRAIN_REVISION, DATA_ROOT, DB_PATH } from '../env.ts';
+import { BRAIN_REPOSITORY, BRAIN_REVISION, DATA_ROOT, DB_PATH } from '../env.ts';
 import { defaultProviderName, listProviderStatuses } from '../providers/index.ts';
 import { ocrStatus } from '../services/documents/ocr.ts';
 import { antigravityStatus, recheckAntigravity } from '../providers/antigravity/runtime.ts';
@@ -60,6 +60,15 @@ healthRouter.get(
        * than trusted.
        */
       revision: BRAIN_REVISION,
+      /*
+       * And whose commit that is.
+       *
+       * A revision compared against a checkout means nothing unless both ends
+       * are the same repository, and until this existed the deployed Brain
+       * could not say which one it came from. Same rule as the line above:
+       * `null` rather than a guess.
+       */
+      repository: BRAIN_REPOSITORY,
       driver: migrations?.driver ?? db.kind,
       databasePath: migrations?.databasePath ?? DB_PATH,
       dataRoot: DATA_ROOT,

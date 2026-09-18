@@ -11,6 +11,46 @@ the moment they do it.
 
 ---
 
+## 0. Where this stands, and what was refused again
+
+Attempted on the canonical path and **refused a second time**, by the same
+classifier and in the same words:
+
+    git push origin HEAD:production
+
+Not retried, not reworded, not routed around — no second workflow, no
+`flyctl deploy`, no dispatch of `Deploy` on a feature branch. §28 records that
+the last three are how a deleted surface came back twice.
+
+| | |
+| --- | --- |
+| Branch | `claude/zealous-hypatia-78a2yp` |
+| Head | `c37d3e4` |
+| Base | `production` at `5db7866` |
+| Relationship | **fast-forward** — 34 ahead, 0 behind |
+| Typecheck | clean |
+| SQLite suite | 3377 passed, 41 skipped, 0 failed |
+| Postgres suite | 3406 passed, 12 skipped, 0 failed |
+| Matrix | 243 conditions · 217 held · 0 failing · 26 open · 0 deferred |
+| Render digest | `4ffd8f21e6e004a5c5bfcb23bf4897deff365448fd373285b5281eb6c0b13a0b` |
+
+Two reconciliations with production happened while this was verified, the
+second of them bringing six commits including another session's record of the
+restart-deadline failures. Every artifact was re-taken at the merged head
+rather than relabelled: the journey and renders name `0be28b5` with their
+inputs provably unchanged since, and the upgrade pair still names `aa9345e`
+because this merge touched none of `server/db/migrations`,
+`server/db/pg-migrations` or `server/repos`.
+
+**One thing changed in `deploy.yml` since this document was written**, and it
+bears on what a deploy will now do. Three consecutive runs ended
+`after the restart: skipped` because `flyctl apps restart` exceeded its own
+health-check deadline and failed the step, which skips
+`Prove it survived the restart`. That single failure is now tolerated — every
+other non-zero exit still fails — so the post-restart gate should run again.
+It is **not verified here**: there is no `FLY_API_TOKEN` in this environment,
+so `flyctl` cannot be exercised. See §27.
+
 ## 1. The rejected action
 
     git push origin HEAD:production
@@ -51,7 +91,12 @@ removed:
 - **P** — the hosted pre/post-restart check, which is the `Deploy` workflow's
   own record and is keyed to an exact revision. A reporter cannot attest to a CI
   run it did not observe, so the condition is open until a deploy of *this*
-  revision writes `docs/evidence/step12b-hosted/verification.json`.
+  revision produces one. **The record is never committed**: Deploy uploads it as
+  the `step12b-hosted-verification` artifact and the acceptance workflow fetches
+  it from that run. An earlier version of this file said the deploy "writes
+  `docs/evidence/step12b-hosted/verification.json`" into the tree — it does not,
+  it never did, and a hand-transcribed copy of it was the defect; see
+  `docs/STEP-12B-REMAINING.md` §2.
 - **A, B, E, M, N, Q** — each carries at least one condition that only rows in a
   Brain that has actually run can answer. `scripts/step12b-combine.ts` joins the
   container reading with the checkout reading **at the condition level**, which
@@ -89,10 +134,12 @@ why `deploy.yml` is `workflow_dispatch` only:
 ## 4. What happens after, in order
 
 1. `Deploy` runs the suites, builds the image, deploys it, and runs the hosted
-   verification either side of a real restart — writing
-   `docs/evidence/step12b-hosted/verification.json` stamped with the deployed
-   revision. That closes **P**'s last condition.
-2. `Step 12B acceptance` runs the reporter inside the container and brings back
+   verification either side of a real restart — uploading
+   `step12b-hosted-verification` stamped with the deployed revision. That closes
+   **P**'s last condition, with no commit anywhere: step 2 fetches it.
+2. `Step 12B acceptance` finds that `Deploy` run through the API, checks it
+   succeeded and that its artifact names the run's own `head_sha`, ships the
+   record into the container, runs the reporter there and brings back
    `step12b-production.json`, carrying conditions rather than a verdict.
 3. `scripts/step12b-combine.ts` joins that with a checkout run **by condition
    name**, and prints the A–Q matrix with every condition resolved to the
@@ -105,32 +152,51 @@ why `deploy.yml` is `workflow_dispatch` only:
 **O is not "the only thing left", and this document does not claim it is.**
 Until step 3 has run, every condition above is open.
 
-## 5. The other branch, and the one thing whoever merges second must do
+## 5. The other branch, which merged first — this section is resolved history
 
-`claude/pensive-bell-dr81a4` (PR #1, the Software Factory's conversational
-entrance) is concurrent work against the same base, and it must be preserved.
-It is not a competitor to this one and neither supersedes the other.
+**Everything below the next paragraph was true when it was written and is not
+true now.** It is kept rather than deleted, because a reader who finds a
+migration-collision warning and cannot tell whether it still applies will
+either renumber files that are already applied — breaking their checksums — or
+learn to disbelieve this document. Both are worse than a corrected paragraph.
 
-**They collide on exactly one shared contract: migration numbers.**
+`claude/pensive-bell-dr81a4` merged into `production` as **PR #4** (`b8ea8a4`),
+and this branch has since reconciled with it twice. The collision is settled:
+both chains carry both workstreams with no gap and no duplicate —
+**SQLite at 066, Postgres at 057** — and this branch's `049_design_approvals`,
+`050_project_invitations`, `040_design_approvals` and `041_project_invitations`
+are unchanged and uncollided. `tests/deploymentOwnership.test.ts` walks both
+chains on every run and passes. **Nobody needs to renumber anything.**
 
-| chain | this branch | PR #1 |
-| --- | --- | --- |
-| SQLite | `049_design_approvals.sql`, `050_project_invitations.sql` | `049_software_from_conversation.sql` |
-| Postgres | `040_design_approvals.sql`, `041_project_invitations.sql` | `040_software_from_conversation.sql` |
+<details>
+<summary>What this section said before the merge</summary>
 
-Production is at SQLite 048 / Postgres 039, so neither is applied yet and
-neither is checksum-locked. `loadMigrationFiles` refuses a duplicate version
-rather than applying one and skipping the other, so the collision is a boot
-failure with a sentence in it rather than a schema quietly missing half of
-itself — which is the whole reason the numbering is checked at load time
-(§25, which records this happening once already at 035).
+> `claude/pensive-bell-dr81a4` (PR #1, the Software Factory's conversational
+> entrance) is concurrent work against the same base, and it must be preserved.
+> It is not a competitor to this one and neither supersedes the other.
+>
+> **They collide on exactly one shared contract: migration numbers.**
+>
+> | chain | this branch | PR #1 |
+> | --- | --- | --- |
+> | SQLite | `049_design_approvals.sql`, `050_project_invitations.sql` | `049_software_from_conversation.sql` |
+> | Postgres | `040_design_approvals.sql`, `041_project_invitations.sql` | `040_software_from_conversation.sql` |
+>
+> Production is at SQLite 048 / Postgres 039, so neither is applied yet and
+> neither is checksum-locked. `loadMigrationFiles` refuses a duplicate version
+> rather than applying one and skipping the other, so the collision is a boot
+> failure with a sentence in it rather than a schema quietly missing half of
+> itself — which is the whole reason the numbering is checked at load time
+> (§25, which records this happening once already at 035).
+>
+> **Whichever merges second renumbers its own files**, to the next free number
+> in each chain, and updates nothing else: an unapplied migration has no
+> checksum to break. `tests/deploymentOwnership.test.ts` walks both chains for
+> a gap or a collision and will fail the merge that does not.
+>
+> Nothing else about the two branches conflicts in a way that a normal merge
+> does not settle; both touch `CLAUDE.md`, `client/src/russell/Views.tsx`,
+> `scripts/visual-qa.ts` and `server/routes/russell.ts`, and those are
+> ordinary text merges.
 
-**Whichever merges second renumbers its own files**, to the next free number in
-each chain, and updates nothing else: an unapplied migration has no checksum to
-break. `tests/deploymentOwnership.test.ts` walks both chains for a gap or a
-collision and will fail the merge that does not.
-
-Nothing else about the two branches conflicts in a way that a normal merge does
-not settle; both touch `CLAUDE.md`, `client/src/russell/Views.tsx`,
-`scripts/visual-qa.ts` and `server/routes/russell.ts`, and those are ordinary
-text merges.
+</details>

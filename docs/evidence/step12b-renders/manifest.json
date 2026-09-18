@@ -1,21 +1,21 @@
 {
-  "revision": "d54abc4c9ee91cd2a94ea1e78ae295274f0309b2",
-  "treeDirtyAtManifestTime": false,
-  "renderSetDigest": "30a11180bc3b8047f122a70b6790d850a0057c53214901422ceca3d67e48f05e",
+  "revision": "0be28b5ac8fa2a0734034bd5c98c46bb4bd98278",
+  "treeDirtyAtManifestTime": true,
+  "renderSetDigest": "4ffd8f21e6e004a5c5bfcb23bf4897deff365448fd373285b5281eb6c0b13a0b",
   "renderCount": 12,
-  "generatedAt": "2026-09-13T03:25:39.302Z",
+  "generatedAt": "2026-09-18T21:56:49.311Z",
   "renders": [
     {
       "screen": "needs-you-empty",
       "width": 1180,
       "file": "needs-you-empty-1180.png",
-      "bytes": 153695
+      "bytes": 155494
     },
     {
       "screen": "needs-you-empty",
       "width": 953,
       "file": "needs-you-empty-953.png",
-      "bytes": 149195
+      "bytes": 151160
     },
     {
       "screen": "needs-you-empty",
@@ -27,55 +27,55 @@
       "screen": "needs-you-populated",
       "width": 1180,
       "file": "needs-you-populated-1180.png",
-      "bytes": 207636
+      "bytes": 286871
     },
     {
       "screen": "needs-you-populated",
       "width": 953,
       "file": "needs-you-populated-953.png",
-      "bytes": 210379
+      "bytes": 290021
     },
     {
       "screen": "needs-you-populated",
       "width": 390,
       "file": "needs-you-populated-390.png",
-      "bytes": 177205
+      "bytes": 214292
     },
     {
       "screen": "project-constellation",
       "width": 1180,
       "file": "project-constellation-1180.png",
-      "bytes": 219391
+      "bytes": 221637
     },
     {
       "screen": "project-constellation",
       "width": 953,
       "file": "project-constellation-953.png",
-      "bytes": 228934
+      "bytes": 231048
     },
     {
       "screen": "project-constellation",
       "width": 390,
       "file": "project-constellation-390.png",
-      "bytes": 162917
+      "bytes": 163210
     },
     {
       "screen": "russell-home",
       "width": 1180,
       "file": "russell-home-1180.png",
-      "bytes": 231080
+      "bytes": 238362
     },
     {
       "screen": "russell-home",
       "width": 953,
       "file": "russell-home-953.png",
-      "bytes": 231415
+      "bytes": 228252
     },
     {
       "screen": "russell-home",
       "width": 390,
       "file": "russell-home-390.png",
-      "bytes": 155460
+      "bytes": 156337
     }
   ]
 }

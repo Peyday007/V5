@@ -164,11 +164,17 @@ export function RussellShell({
   const [depth, setDepth] = useDepth();
 
   const projects = useAsync(() => Api.projects(), []);
-  const project: Project | null = projects.data?.projects[0] ?? null;
-  const projectId = project?.id ?? null;
-
   const conversations = useAsync(() => RussellApi.conversations(), []);
   const [openedId, setOpenedId] = useState<string | null>(null);
+
+  /*
+   * The project a brand-new thread is attached to, and the fallback below.
+   *
+   * The first one this person can read — which is what the whole shell used to
+   * run on. It is still right *here*: a thread that does not exist yet has no
+   * attachment to follow.
+   */
+  const defaultProject: Project | null = projects.data?.projects[0] ?? null;
 
   /*
    * The thread a person lands on.
@@ -191,7 +197,7 @@ export function RussellShell({
       hour: '2-digit',
       minute: '2-digit',
     })}`;
-    void RussellApi.openConversation(title, projectId).then(
+    void RussellApi.openConversation(title, defaultProject?.id ?? null).then(
       (created) => {
         if (!cancelled) setOpenedId(created.id);
       },
@@ -202,9 +208,49 @@ export function RussellShell({
     return () => {
       cancelled = true;
     };
-  }, [openedId, conversations.loading, conversations.error, conversations.data, projectId]);
+  }, [openedId, conversations.loading, conversations.error, conversations.data, defaultProject]);
 
   const conversationId = route.name === 'CONVERSATION' ? route.conversationId : openedId;
+
+  /*
+   * Opening a thread makes it the one this shell is in.
+   *
+   * Without it, `openedId` stayed on whichever thread the landing effect chose,
+   * so leaving a thread for Knows, Work or Needs You silently went back to
+   * *that* one's project — and a person who had just read a thread about one
+   * project would be shown another's without being told. The route is the
+   * person's own statement about what they are looking at, so it wins.
+   */
+  useEffect(() => {
+    if (route.name === 'CONVERSATION' && route.conversationId !== openedId) {
+      setOpenedId(route.conversationId);
+    }
+  }, [route, openedId]);
+
+  /*
+   * Which project every other screen is about.
+   *
+   * It was `projects[0]`: the first project this person can read, in whatever
+   * order the list came back. So a person reading a thread attached to one
+   * project and then opening Knows, Work or Needs You was shown a *different*
+   * project's — silently, with nothing on the page saying which. The defect is
+   * §27's at a new surface: **a row outranks prose, and the conversation's
+   * attachment is the row.** `russell_conversations.project_id` is written by
+   * `routing.ts` with an `attachment_source` recording who decided it, so it is
+   * the one statement about what the person is looking at that has provenance.
+   *
+   * Falls back to the first readable project, because a private thread attached
+   * to nothing still has to render something — and it can only ever *narrow* to
+   * a project this person already reads, since the list itself is
+   * `decideProjectAccess`'s answer.
+   */
+  const openConversation =
+    conversations.data?.conversations.find((thread) => thread.id === conversationId) ?? null;
+  const project: Project | null =
+    (openConversation?.projectId
+      ? (projects.data?.projects.find((row) => row.id === openConversation.projectId) ?? null)
+      : null) ?? defaultProject;
+  const projectId = project?.id ?? null;
 
   const signOut = useCallback(() => {
     void Api.logout().then(onSignedOut, onSignedOut);

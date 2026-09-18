@@ -95,6 +95,13 @@ ENV BRAIN_DATA_DIR=/app/data
 ARG BRAIN_REVISION=""
 ENV BRAIN_REVISION=$BRAIN_REVISION
 
+# And whose commit it is. A revision compared against a checkout is only
+# meaningful if both ends are the same repository, and until this existed the
+# running image could not say which one it was built from. Unset is a
+# legitimate answer for the same reasons as above.
+ARG BRAIN_REPOSITORY=""
+ENV BRAIN_REPOSITORY=$BRAIN_REPOSITORY
+
 # The host tells us the port; 8080 is the fallback for a plain `docker run`.
 ENV PORT=8080
 EXPOSE 8080

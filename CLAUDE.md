@@ -2798,6 +2798,55 @@ remote.
   strings this change removed present in the first and absent in the second.
   The remedy is still `deploy.yml`'s own restart step and still deliberately
   left to whoever is editing that file.
+
+  **Run 254 is a different condition from the three above, and counting it with
+  them would bury both.** Those three are `flyctl`'s restart wait expiring, so
+  the post-restart verification never ran. This one restarted cleanly and the
+  verification *did* run: `3a73bb1`, release success, pre-restart success, the
+  restart itself success — and then the PRIMARY pass at 10:46:46, the
+  ADVERSARIAL at 10:46:49, three seconds apart, and nothing at all for **five
+  minutes and twenty-three seconds** before
+  `HOSTED-VERIFICATION: FAIL could-not-complete` / `fetch failed`. It ends
+  `after the restart: failure` rather than `skipped`, which is the distinction
+  the paragraph above draws between a gate that fails and one that does not run.
+
+  What is new is two facts about the client, both checkable by reading and one
+  of them measured. **Neither `scripts/verify-hosted.ts` nor
+  `scripts/mcpModernClient.ts` passes an `AbortSignal` anywhere**, so no
+  timeout in that path is one this repository chose. And measured on the
+  runtime the container runs, against a server that accepts a connection and
+  never answers:
+
+      node v22.22.2
+      elapsed_ms=300885
+      outer=TypeError: fetch failed
+      cause=HeadersTimeoutError: Headers Timeout Error [UND_ERR_HEADERS_TIMEOUT]
+
+  `undici`'s default `headersTimeout` is 300 000ms and it surfaces as
+  *precisely* the string two of these runs printed. **The work item lease is
+  also five minutes.** Two unrelated clocks of the same length, and the
+  paragraphs above read every one of these as the lease — which conflates two
+  signatures that share a boundary for two different reasons. A run ending
+  `brain_complete_work: FENCE_LOST` reached a server that answered, so its
+  lease had genuinely lapsed; a run ending in a bare `fetch failed` at ~300s
+  may never have been told anything at all. **Which one a given run was is not
+  established for any of them**, because the field that says so was thrown
+  away: the top-level handler printed `error.message` and discarded
+  `error.cause`, where `undici` puts `UND_ERR_HEADERS_TIMEOUT`, `ECONNRESET`
+  and `ECONNREFUSED` — three faults with three remedies, collapsed into one
+  word. §33's sentence at a `catch`.
+
+  So the change is instrumentation and nothing else: each audit role's claim,
+  submit and complete is timed and announced **before** it is made, so the next
+  occurrence names a call instead of a gap between two lines, and the two calls
+  that do succeed give the baseline a failure alone can never supply. **No
+  timeout was added, no retry, no lease change and no pool change.** A retry is
+  refused by §20 — an unknown outcome is never automatically resent — and the
+  ceiling is refused by §27's own rule two paragraphs up: instrument first,
+  size from the reading. Nothing here claims a cause. What made the server take
+  that long, if it did, is still unknown, and the next person to look at this
+  now gets a duration per call instead of a silence.
+
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
@@ -5323,4 +5372,41 @@ compiling:
 
 ```
 BRAIN_TEST_DATABASE_URL=postgresql://... npm test
+```
+
+**That run leaks a schema per test file, and the database it leaves behind
+eventually fails an unrelated test.** `tests/helpers.ts` derives its schema name
+in `schemaForThisFile()` from `path.basename(DATA_ROOT)`, and vitest hands out a
+**per-run random** data root — so the names look like
+`brain_t_brain_test_03atu2` and differ every run. `openTestDatabase()` drops and
+recreates *that* schema at the start of each file, which cleans this run's and
+can never touch the previous run's, and nothing drops it afterwards.
+
+What that costs is measured rather than guessed, because it is not obvious.
+`storageHealth()`'s `measure()` has a Postgres-only branch —
+`SELECT pg_database_size(current_database())`, where SQLite gets one
+`fs.statSync` — and `pg_database_size()` stats every file in the database
+directory, so it grows with the leak:
+
+| test database | `pg_database_size()` | `connectContract` storage test |
+| --- | --- | --- |
+| 5363 MB, 464 043 relations, 511 leaked schemas | 12.0 s | 34 204 ms — FAIL at 30 s |
+| 60 MB, 5 801 relations, none leaked | 1.7 s | 3 871 ms — pass |
+
+Every timing in that `describe` scaled exactly with its `storageHealth()` call
+count — 1 call ≈ 12 s, 2 ≈ 22 s, 4 ≈ 34 s — which is what identified the query,
+and `psql`'s own connection baseline is 0.07 s, so the 1.7 s is real filesystem
+work rather than client overhead. **CI never sees it**, because its Postgres
+starts empty; only the local run this section asks for degrades, which is the
+worst place for it — a suite that gets slower every time you run it until
+something unrelated times out is one people stop running.
+
+Until the harness drops its schema on the way out, clean up between runs. One
+statement per schema: dropping five hundred in a transaction exhausts
+`max_locks_per_transaction`.
+
+```
+psql "$BRAIN_TEST_DATABASE_URL" -tAc \
+  "SELECT nspname FROM pg_namespace WHERE nspname LIKE 'brain\_t\_%'" \
+  | while read -r s; do psql "$BRAIN_TEST_DATABASE_URL" -qc "DROP SCHEMA IF EXISTS $s CASCADE"; done
 ```

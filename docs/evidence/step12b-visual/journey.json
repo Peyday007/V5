@@ -1,6 +1,6 @@
 {
-  "takenAt": "2026-09-13T15:41:06.105Z",
-  "revision": "d62f64392a8b9db9c28e8bb93e35468c389827f7",
+  "takenAt": "2026-09-18T21:56:03.881Z",
+  "revision": "0be28b5ac8fa2a0734034bd5c98c46bb4bd98278",
   "phoneWidth": 390,
   "steps": [
     {
@@ -170,18 +170,20 @@
     "ideaOverriddenByAPerson": true,
     "ideaPriority": "MUST_DO",
     "russellsJudgmentKept": true,
-    "parkedMissionId": "rms_c48e96d27b51438098e0",
-    "parkedRequestId": "rhr_c442765bf6144e8c9a9f",
-    "parkedOrchestrationId": "orc_bd5188acdca2442189bd",
+    "parkedMissionId": "rms_35a7c927a9014c658063",
+    "parkedRequestId": "rhr_f46d74113afc46458f9f",
+    "parkedOrchestrationId": "orc_8fcfb54cf8af4a3db9a8",
     "missionStateBefore": "NEEDS_HUMAN",
     "missionStateAfter": "RUNNING",
     "requestSettled": true,
     "workIdentifiedOnScreen": true,
-    "workIdsOnScreen": "Mission=rms_c48e96d27b51438098e0 Packet=orc_bd5188acdca2442189bd Bin=bin_d94695e5b3ac44daa5c2 State=NEEDS_HUMAN Attempt=1",
+    "workIdsOnScreen": "Mission=rms_35a7c927a9014c658063 Packet=orc_8fcfb54cf8af4a3db9a8 Bin=bin_0f44369c864b4ea4af07 State=NEEDS_HUMAN Attempt=1",
     "filedDocumentOnScreen": null,
     "knowledgeRows": 0,
     "knowledgeCitingThisMission": 0,
-    "askedTurnStatus": "PENDING"
+    "askedTurnStatus": "PENDING",
+    "httpProgressMatchesBriefing": true,
+    "httpProgressSaw": "two routes as a signed-in person: headline/stage/denominator agree, ratio agrees, milestones agree; denominators [foundations | missions | steps]; no percentage in any of 4 headlines; ratio whole or absent"
   },
   "stepsWalked": 23,
   "stepsThatArrived": 23,

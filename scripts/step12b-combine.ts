@@ -54,6 +54,16 @@ interface ConditionRecord {
   name: string;
   held: boolean | null;
   saw: string;
+  /**
+   * What kind of thing answered it, carried through the join.
+   *
+   * `TREE` is a mechanism read out of the repository, `EXERCISED` is a run that
+   * drove it against its own scratch database, `FLEET` needs a real Brain's
+   * rows and `PERSON` is a decision. The union must not lose it: a condition
+   * answered `TREE` in one reading and open `FLEET` in the other is the exact
+   * pair somebody would otherwise total as "implemented, therefore done".
+   */
+  evidence?: 'TREE' | 'EXERCISED' | 'FLEET' | 'PERSON';
   needs?: 'CHECKOUT' | 'PRODUCTION' | 'ISOLATED';
   /**
    * Waiting on somebody — the third shape of `held: null`.
@@ -366,7 +376,12 @@ function main(): void {
           `${name} — ` +
             exercised.map((entry) => `${entry.from}=${entry.condition.held}`).join(' vs '),
         );
-        merged.push({ name, held: false, saw: 'the two runs disagree about it' });
+        merged.push({
+          name,
+          held: false,
+          saw: 'the two runs disagree about it',
+          evidence: exercised[0]?.condition.evidence,
+        });
         continue;
       }
       if (exercised.length > 0) {

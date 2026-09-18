@@ -219,7 +219,8 @@ jobs:
         run: |
           set -o pipefail
           if flyctl deploy --ha=false --remote-only \
-               --build-arg BRAIN_REVISION="$GITHUB_SHA" 2>&1 | tee deploy.txt; then
+               --build-arg BRAIN_REVISION="$GITHUB_SHA" \
+               --build-arg BRAIN_REPOSITORY="$GITHUB_REPOSITORY" 2>&1 | tee deploy.txt; then
             exit 0
           fi
           if ! grep -qiE 'depot builder|failed to list workers|authentication handshake failed|error releasing builder' deploy.txt; then
@@ -232,7 +233,8 @@ jobs:
           fi
           echo "::warning::The Depot builder never answered. Building on Fly's own remote builder instead."
           flyctl deploy --ha=false --remote-only --depot=false \
-            --build-arg BRAIN_REVISION="$GITHUB_SHA"
+            --build-arg BRAIN_REVISION="$GITHUB_SHA" \
+            --build-arg BRAIN_REPOSITORY="$GITHUB_REPOSITORY"
 
       # When a deploy fails, say why here rather than sending somebody to a
       # dashboard.
@@ -410,13 +412,53 @@ jobs:
       # one finished, and one with a live lease — are exactly where they were.
       # The process that created them is gone, so nothing in the container can
       # fake that.
+      #
+      # `flyctl`'s own health wait is not this step's gate, and letting it be
+      # one stopped the post-restart verification running at all.
+      #
+      # Three consecutive deploys ended `after the restart: skipped` — runs
+      # 252, 253 and 35349935034 — each with `failed to wait for health checks
+      # to pass: context deadline exceeded` and exit 126, and each with the
+      # *next* step answering `healthy again after 1-2 attempt(s)` between
+      # twenty-four and eighty-three seconds later. §27 records all three.
+      #
+      # What those runs printed while waiting is what decides this: `Waiting
+      # for 811d651c26d948 to become healthy (started, 0/1)`. **`started` is
+      # the machine state**, so the restart was ordered and the machine was
+      # coming up; `flyctl` gave up on its own deadline rather than on
+      # anything about the restart. This step has no business failing the job
+      # for that, because the two steps after it are the actual gates: the
+      # health poll below fails the job if `/healthz` never answers, and the
+      # verification after that asserts the three work items survived — which
+      # the process that created them is gone to fake.
+      #
+      # **Only that one failure is tolerated.** Any other non-zero exit still
+      # fails, because swallowing them all is how "either side of a restart"
+      # decays into a lie with nobody editing a line — which is the exact
+      # decay this step's own heading was written from. And `Prove it survived
+      # the restart` deliberately keeps its default `if: success()`: it must
+      # not run against a Brain that was never restarted, or it would report a
+      # pass that means nothing.
       - name: Restart it, so persistence means something
         if: always() && steps.release.outcome == 'success'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          flyctl apps restart "$app"
+          set +e
+          flyctl apps restart "$app" 2>&1 | tee restart.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" = "0" ]; then
+            echo "restart ordered, and flyctl saw it healthy"
+            exit 0
+          fi
+          if grep -q 'failed to wait for health checks to pass' restart.txt; then
+            echo "::notice::flyctl ordered the restart and then gave up waiting for its own health check (exit ${code}). The machine state it printed while waiting was 'started', so this is flyctl's deadline rather than a failed restart. The next two steps are the gate."
+            exit 0
+          fi
+          echo "::error::flyctl apps restart failed for a reason that is not its own health-check wait (exit ${code}). Read the output above."
+          exit "$code"
 
       - name: Wait for it to answer after the restart
         if: always() && steps.release.outcome == 'success'

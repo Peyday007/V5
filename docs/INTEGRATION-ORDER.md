@@ -7,11 +7,17 @@ owns, written down so that it is not a thing anybody has to rediscover.
 
 | | |
 | --- | --- |
-| **First** | **PR #2** — Step 12B, `claude/zealous-hypatia-78a2yp` |
-| **Second** | **PR #1** — Software Factory, `claude/pensive-bell-dr81a4` |
+| **First** | **PR #2** — Step 12B, `claude/zealous-hypatia-78a2yp` — **MERGED** at `dd1f9be`, 2026-09-13, and deployed |
+| **Second** | **PR #1** — Software Factory, `claude/pensive-bell-dr81a4` — its turn now |
 
 The order is the owner's decision, recorded here rather than inferred from
 timestamps.
+
+**The first half has happened.** `production` is at
+`dd1f9be279efce3adc82ec4c27e9797e79814eea` and carries SQLite **050** /
+Postgres **041**. Everything below about what PR #1 owes is now live rather
+than anticipated, and the numbers have moved — read the table below rather
+than an earlier copy of it.
 
 ---
 
@@ -24,9 +30,11 @@ timestamps.
 | SQLite | `049_design_approvals.sql`, `050_project_invitations.sql` | `049_software_from_conversation.sql` |
 | Postgres | `040_design_approvals.sql`, `041_project_invitations.sql` | `040_software_from_conversation.sql` |
 
-`production` is at SQLite **048** / Postgres **039**. Neither branch's migrations
-are applied anywhere, so neither is checksum-locked and renumbering one costs
-nothing.
+`production` **was** at SQLite 048 / Postgres 039 when this was written. It is
+now at SQLite **050** / Postgres **041**, because PR #2 merged. PR #1's
+migrations are still unapplied anywhere, so they are not checksum-locked and
+renumbering them costs nothing — which is the whole reason the order was
+decided in advance rather than discovered at a boot failure.
 
 `loadMigrationFiles` refuses a duplicate version rather than applying one and
 skipping the other, so a collision is **a boot failure with a sentence in it**
@@ -34,11 +42,15 @@ rather than a schema quietly missing half of itself. That is the whole reason th
 numbering is checked at load time, and §25 records it happening once already, at
 035, between these same two workstreams.
 
-## What PR #2 owes
+## What PR #2 owed, and what it did
 
-Nothing to PR #1. It is a fast-forward onto `production` as it stands, its
-migrations take the next free numbers in both chains, and it leaves
-`production` at SQLite 050 / Postgres 041.
+Nothing to PR #1. It was a fast-forward onto `production` as it stood, its
+migrations took the next free numbers in both chains, and it left `production`
+at SQLite 050 / Postgres 041. That is done.
+
+Two follow-up commits sit above it on the same branch name — the hosted restart
+record from the deploy of `dd1f9be`, and a fix to a reporter measurement window.
+Neither adds a migration, so neither changes anything in this file.
 
 ## What PR #1 owes, before it merges
 
@@ -50,7 +62,10 @@ Four things, and none of them is the owner's to do.
 2. **Renumber its own unapplied migrations** to the next free number in each
    chain — SQLite `049_software_from_conversation.sql` → **051**, Postgres
    `040_software_from_conversation.sql` → **042** — and change nothing else
-   inside them. An unapplied migration has no checksum to break.
+   inside them. An unapplied migration has no checksum to break. Those are the
+   next free numbers against `production` as it stands today; confirm them with
+   `ls server/db/migrations | tail -1` after step 1 rather than trusting this
+   line, because this file is a plan and the chain is the fact.
 3. **Preserve both workstreams.** Both branches touch `CLAUDE.md`,
    `client/src/russell/Views.tsx`, `scripts/visual-qa.ts` and
    `server/routes/russell.ts`. Those are ordinary text merges and every

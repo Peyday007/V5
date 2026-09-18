@@ -65,7 +65,12 @@ import {
   getDb,
   initDatabase,
 } from '../server/db/database.ts';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  isPhoneRecord,
+  phoneRecordProblems,
+  type DeployedPhoneRecord,
+} from './phoneRecord.ts';
 import { createProject, listProjects } from '../server/repos/projects.ts';
 import { createLayer, updateLayer } from '../server/repos/layers.ts';
 import type { LayerStatus } from '../server/domain/types.ts';
@@ -96,19 +101,43 @@ import {
 } from '../server/repos/fleet.ts';
 import { LENSES, frontierFor } from '../server/services/russell/frontier.ts';
 import {
+  PROVIDER_CAPACITY_ENVELOPE,
+  PROVIDER_CAPACITY_ENVELOPE_ID,
+  PROVIDER_CAPACITY_MAX_ACTIVATIONS,
+  PROVIDER_CAPACITY_MAX_PAID_SPEND,
+  withinProviderCapacityEnvelope,
+} from '../server/services/fleet/measurementEnvelope.ts';
+import {
+  capacityEvidence,
+  claimsCapacityEnvelope,
+} from '../server/services/fleet/capacityMeasurement.ts';
+import {
   dismissFrontierItem,
   listFrontier,
   resolveUnseenFrontierItems,
 } from '../server/repos/russellFrontier.ts';
-import { askableLenses, openInquiry, validateLensReply } from '../server/services/russell/inquiry.ts';
+import {
+  INQUIRY_UNIT_KEY,
+  askableLenses,
+  decideFinding,
+  dispatchInquiry,
+  getInquiry,
+  listInquiries,
+  inquiryContext,
+  openInquiry,
+  settleInquiry,
+  validateLensReply,
+} from '../server/services/russell/inquiry.ts';
 import {
   DEFAULT_TARGET_WITH_NO_PRIOR_POLICY,
   LAB_MODES,
   applyFinding,
   declareExperiment,
+  restorationOf,
   rollbackFinding,
   runExperiment,
 } from '../server/services/fleet/lab.ts';
+import type { TestEnvelope } from '../server/services/fleet/lab.ts';
 import { MAP_TYPES, mapFor } from '../server/services/russell/maps.ts';
 import { PREFERENCES, checkPreference, defaults } from '../server/services/russell/preferences.ts';
 import { SEARCH_KINDS, search } from '../server/services/russell/search.ts';
@@ -154,7 +183,13 @@ import { execFileSync } from 'node:child_process';
 import { BRAIN_REVISION } from '../server/env.ts';
 import { initStorage } from '../server/services/storage/index.ts';
 import { seedDealDispatch } from '../server/seed.ts';
-import { createGoal, reserve } from '../server/repos/russellAuthority.ts';
+import {
+  authorityNow,
+  createGoal,
+  listReservations,
+  releaseReservation,
+  reserve,
+} from '../server/repos/russellAuthority.ts';
 import { launch } from '../server/services/russell/launch.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import { NEEDS_HUMAN_CHOICES, choicesFor } from '../server/services/russell/needsHuman.ts';
@@ -183,7 +218,7 @@ import {
   setBrainAdmin,
 } from '../server/repos/identity.ts';
 import { listEvents } from '../server/repos/events.ts';
-import { createBin } from '../server/repos/bins.ts';
+import { createBin, putBinUnitResult } from '../server/repos/bins.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { workloadProfile } from '../server/services/dispatch/profiles.ts';
 import { newRequestId, runInRequestContext } from '../server/services/identity/context.ts';
@@ -402,10 +437,34 @@ function record(
  * `deferredBy` — a decision an owner made, with who, when and where it is
  * recorded. Nothing here constructs one.
  */
+/**
+ * What *kind* of thing answered a condition.
+ *
+ * Four answers, because they are four different claims and the difference is
+ * the one this reporter is most often asked to blur:
+ *
+ * - `TREE` — the mechanism is **implemented**, read out of the repository. It
+ *   says a runner exists and says nothing about it having run.
+ * - `EXERCISED` — this run **drove it**, through the real services against an
+ *   isolated database it created and deleted. No worker, no network, no
+ *   provider.
+ * - `FLEET` — only a real Brain's rows can answer it: a worker arrived, a fire
+ *   was traced, a site delivered, a person read a screen on a deployment.
+ * - `PERSON` — a decision somebody has to take. Not a run anywhere.
+ *
+ * It is on the record rather than in the prose beside it, because *"the reader
+ * and the runner exist"* and *"the measurement happened"* are exactly the two
+ * sentences that read alike in a summary and mean opposite things. A reader
+ * that has to infer which one it is looking at will eventually infer wrongly.
+ */
+type EvidenceKind = 'TREE' | 'EXERCISED' | 'FLEET' | 'PERSON';
+
 interface GateCondition {
   name: string;
   held: boolean | null;
   saw: string;
+  /** Filled in by `recordConditions` where a helper did not set it. */
+  evidence?: EvidenceKind;
   needs?: Environment;
   /**
    * Not unexercisable and not standing: **waiting on somebody**.
@@ -454,6 +513,20 @@ interface GateCondition {
  */
 let READING_PRODUCTION = false;
 
+/*
+ * The revision each committed record names, remembered where it is read.
+ *
+ * Module-level because they are read inside the gates and reported in the
+ * emitted record's header, and a second read of the same file to answer the
+ * header would be two readers of one fact — the thing this repository keeps
+ * having to correct.
+ */
+let journeyRevisionForRecord: string | null = null;
+let manifestRevisionForRecord: string | null = null;
+let manifestDigestForRecord: string | null = null;
+let renderDigestOnDisk: string | null = null;
+let upgradeRevisionForRecord: string | null = null;
+
 /**
  * A condition whose evidence is a real Brain's rows.
  *
@@ -474,20 +547,47 @@ let READING_PRODUCTION = false;
  * joined, which is why both helpers keep the name fixed and move only the
  * answer.
  */
+/**
+ * One policy row out of a history, by id — the version matters as much as the
+ * target, because restoration is "newer *and* carrying the displaced setting".
+ */
+function policyRow(
+  history: { id: string; target: number; version: number }[],
+  id: string | null,
+): { target: number; version: number } | null {
+  const found = id === null ? undefined : history.find((row) => row.id === id);
+  return found ? { target: found.target, version: found.version } : null;
+}
+
+/** What the fleet is running on: the newest row in a newest-first history. */
+function liveRow(
+  history: { target: number; version: number }[],
+): { target: number; version: number } | null {
+  const first = history[0];
+  return first ? { target: first.target, version: first.version } : null;
+}
+
 function fromCheckout(name: string, held: boolean, saw: string): GateCondition {
   return REPO_VISIBLE
-    ? { name, held, saw }
-    : { name, held: null, saw: 'this run cannot see the repository', needs: 'CHECKOUT' };
+    ? { name, held, saw, evidence: 'TREE' }
+    : {
+        name,
+        held: null,
+        saw: 'this run cannot see the repository',
+        needs: 'CHECKOUT',
+        evidence: 'TREE',
+      };
 }
 
 function fromProduction(name: string, held: boolean, saw: string): GateCondition {
   return READING_PRODUCTION
-    ? { name, held, saw }
+    ? { name, held, saw, evidence: 'FLEET' }
     : {
         name,
         held: null,
         saw: 'this run does not read the deployed Brain',
         needs: 'PRODUCTION',
+        evidence: 'FLEET',
       };
 }
 
@@ -539,6 +639,34 @@ function recordConditions(
   conditions: GateCondition[],
   lede: string,
 ): void {
+  /*
+   * Anything a helper did not stamp is derived from the condition itself.
+   *
+   * **The first version of this said `awaits ? 'PERSON' : 'EXERCISED'` and was
+   * wrong in the direction the field exists to prevent.** Thirteen conditions
+   * are written as plain literals carrying `needs: 'PRODUCTION'` by hand
+   * rather than through `fromProduction`, so they came out labelled as
+   * something this run had driven — which is precisely the "a runner exists,
+   * therefore it ran" reading the kind was added to make impossible. Found by
+   * reading the emitted record rather than by any test, because every count in
+   * it was still correct: only the word beside them was wrong.
+   *
+   * So `needs` decides first, since it names the environment that can answer:
+   * `PRODUCTION` is a real Brain's rows and `CHECKOUT` is the repository. A
+   * condition with neither and an `awaits` is a decision. What is left is what
+   * this run actually drove.
+   */
+  for (const condition of conditions) {
+    if (condition.evidence !== undefined) continue;
+    condition.evidence =
+      condition.needs === 'PRODUCTION'
+        ? 'FLEET'
+        : condition.needs === 'CHECKOUT'
+          ? 'TREE'
+          : condition.awaits !== undefined
+            ? 'PERSON'
+            : 'EXERCISED';
+  }
   const verdict = verdictOf(conditions);
   const broke = conditions.filter((c) => c.held === false);
   const waiting = conditions.filter(
@@ -684,6 +812,312 @@ function productUnchangedSince(revision: string): boolean {
   return unchangedSince(revision, ['client', 'server']);
 }
 
+/**
+ * Everything a journey record is a reading *of*.
+ *
+ * The product is two thirds of it. The other third is the harness: a journey
+ * says 23 steps arrived, nothing was clipped and every chrome control answered
+ * `elementFromPoint` — and which steps, which controls and what counts as
+ * arriving are all `scripts/visual-qa.ts`. A record taken before that file
+ * changed describes a run of a different instrument against the same product,
+ * and `productUnchangedSince` would have called it current.
+ *
+ * It is the defect this reporter was already corrected for once, one file
+ * along: `deployedUnchangedSince` left `scripts/` out of the inputs to an
+ * image and was deleted for it. The same omission had survived here, where it
+ * is worse — because extending `MUST_REACH` to three destinations production
+ * shipped is exactly the kind of change that makes an old reading wrong while
+ * leaving it looking right.
+ */
+function journeyInputsUnchangedSince(revision: string): boolean {
+  return unchangedSince(revision, ['client', 'server', 'scripts/visual-qa.ts']);
+}
+
+/**
+ * The repository whose Actions runs may attest a deploy of this Brain.
+ *
+ * A hosted verification record names the workflow run that produced it, and
+ * that name is only worth anything if it cannot be pointed somewhere else. A
+ * fork, a scratch repository, or any account at all can run a workflow that
+ * writes this file with `beforeRestart: true` in it — so the repository is
+ * fixed **in code**, the way `repositoryEnvelope.ts`, `probeEnvelope.ts` and
+ * `approvalEnvelope.ts` already fix theirs, for the reason §24 gives: nobody
+ * supplies the limits their own work is judged against.
+ *
+ * It is not a security boundary and does not pretend to be one. Provenance is
+ * established by *where the artifact was fetched from* — the acceptance
+ * workflow downloads it from a named, successful `Deploy` run through the
+ * GitHub API — and this constant refuses a record that does not even claim to
+ * come from here.
+ */
+const ATTESTING_REPOSITORY = 'Peyday007/V5';
+
+/** `https://github.com/<owner>/<repo>/actions/runs/<id>`, and nothing else. */
+const WORKFLOW_RUN_URL = new RegExp(
+  `^https://github\\.com/${ATTESTING_REPOSITORY.replace('/', '\\/')}/actions/runs/(\\d+)$`,
+);
+
+/**
+ * What the Deploy workflow proved, as an **external input** rather than a file
+ * in this tree.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it may not live in the repository, and why the first version did
+ * ---------------------------------------------------------------------------
+ *
+ * The Deploy workflow already says it: *"Uploaded rather than committed: this
+ * job holds the deployment credential and must not be able to push to the
+ * branch it just deployed."* It writes `verification.json`, uploads it as the
+ * `step12b-hosted-verification` artifact, and stops.
+ *
+ * **I then transcribed that artifact into the tree by hand and taught P to read
+ * it from there, and both halves of that were wrong.** A committed record is
+ * necessarily one commit *later* than the revision it attests, so an exact
+ * revision match reads false for a record that is perfectly good — and my
+ * remedy for that was `deployedUnchangedSince`, which accepted the record while
+ * a named list of paths had not moved. That list omitted real image inputs,
+ * `scripts/` among them, which the commit carrying the record *was itself
+ * changing*. So it was a loosening that did not even hold at the moment it was
+ * introduced. It is deleted rather than extended: a list of image inputs has to
+ * be maintained against a Dockerfile nobody will re-read, and getting it wrong
+ * is silent.
+ *
+ * What replaces it needs no tolerance at all, because it removes the thing the
+ * tolerance existed for. **The artifact is attached to the report instead of
+ * committed**, so attaching this deploy's evidence takes no commit and no
+ * second deployment, and the revision it names is compared **exactly** to the
+ * revision this run is. In the container that is the sha stamped into the image
+ * at build time, which is precisely the thing the deploy proved something
+ * about.
+ *
+ * Four outcomes, and they are deliberately four rather than two:
+ *
+ *   nothing attached        `held: null` — a deploy at this revision has not
+ *                           been attached. Open, never exempt.
+ *   attached but not a record   `held: false`. Somebody attached something.
+ *                           *We could not read it* is a defect, not an absence.
+ *   attached, other revision    `held: false`, both revisions named. What is
+ *                           running was not what was proved.
+ *   attached, this revision     `held` is the run's own two verdicts.
+ */
+interface HostedRecord {
+  revision: string;
+  ranAt: string;
+  beforeRestart: boolean;
+  afterRestart: boolean;
+  workflowRun: string;
+}
+
+type HostedAttachment =
+  | { kind: 'ABSENT'; saw: string }
+  | { kind: 'UNREADABLE'; saw: string }
+  | { kind: 'READ'; record: HostedRecord; runId: string; saw: string };
+
+/**
+ * Where the attachment is, if one was attached.
+ *
+ * `--hosted <path>` or `BRAIN_STEP12B_HOSTED`, and a path **inside this
+ * repository is refused**. That refusal is the whole point rather than
+ * fastidiousness: a flag pointing at a tracked file is the committed record
+ * again wearing an argument, and it would quietly restore the defect this
+ * replaced. A checkout that stays clean is also what lets `unchangedSince`
+ * and `revisionOf().dirty` mean anything.
+ */
+/* ==========================================================================
+ * The deployed phone reading
+ *
+ * A read-only inspection of the **deployed** Brain through the phone interface,
+ * attached the same way the hosted record is and for the same reasons.
+ *
+ * Two of J's conditions are about a *result*: a question a person typed that
+ * was answered, and a conclusion under Knows citing the mission that produced
+ * it. Neither can happen on a Brain this repository spawns — no inference is
+ * bought (§24), so a turn stays PENDING and no packet files a report — so they
+ * are open against a deployed Brain rather than awarded from navigation.
+ *
+ * `scripts/visual-qa.ts --deployed=<origin>` produces the record, reads only,
+ * seeds nothing and grants nothing: the answers it reports are work that was
+ * already there. It refuses to write its record inside this repository, and so
+ * does this reader, for the reason the hosted record taught — a reading of a
+ * running Brain committed into the tree is stale the moment it lands.
+ * ========================================================================== */
+
+/**
+ * The Brain this checkout deploys, read from `fly.toml` rather than typed.
+ *
+ * The same reasoning `.github/CANONICAL_BRANCH` carries: the intended target is
+ * a fact recorded in the repository, and a reporter that accepted whichever
+ * origin an attachment named would be letting the evidence choose what it is
+ * evidence about. Null when `fly.toml` cannot be read, which a run inside the
+ * deployed image genuinely cannot — and that is an absence rather than a pass.
+ */
+const INTENDED_BRAIN_HOST: string | null = (() => {
+  const app = /^app\s*=\s*"([^"]+)"/m.exec(file('fly.toml') ?? '')?.[1] ?? null;
+  return app === null ? null : `${app}.fly.dev`;
+})();
+
+/**
+ * A phone reading, validated against the Brain and the revision being judged.
+ *
+ * ---------------------------------------------------------------------------
+ * What this replaced, and why the shape changed
+ * ---------------------------------------------------------------------------
+ *
+ * The first version parsed the file and cast it: `JSON.parse(...) as
+ * DeployedPhoneRecord`. A cast is not a check — any JSON object at all became a
+ * record, a reading of a *different* Brain was read as evidence about this one,
+ * a `revisionMatches: true` beside two revisions that differ was believed, and
+ * findings the harness itself recorded were never consulted. Every one of those
+ * makes the report say something about a deployment it did not read.
+ *
+ * So the record is validated the way the hosted attachment already is, against
+ * three separate facts that fail separately and are reported separately: it is
+ * **shaped** like a reading, it is of **this Brain**, and it is of **this
+ * revision**. A record that carries its own findings is kept and *marked*,
+ * because "the harness found something outstanding" is a reading rather than a
+ * missing one — and a condition that reads as unattached would hide it.
+ */
+interface PhoneReading {
+  /** Non-null only when the attachment is a reading of this Brain at this revision. */
+  record: DeployedPhoneRecord | null;
+  saw: string;
+  /** Why it is not evidence about this run, when it is not. */
+  refusal: string | null;
+  /** What the harness itself recorded as outstanding on that run. */
+  findings: string[];
+}
+
+function readDeployedPhone(): PhoneReading {
+  const flagAt = process.argv.indexOf('--phone');
+  const fromFlag = flagAt >= 0 ? process.argv[flagAt + 1] : undefined;
+  const raw = (fromFlag ?? process.env['BRAIN_STEP12B_PHONE'] ?? '').trim();
+  if (raw.length === 0) {
+    return {
+      record: null,
+      refusal: null,
+      findings: [],
+      saw:
+        'no deployed phone reading was attached. `npx tsx scripts/visual-qa.ts ' +
+        '--deployed=<origin> --emit-phone=<path>` produces one; it reads only, seeds nothing ' +
+        'and grants nothing, and it needs a person\'s credential on that Brain because every ' +
+        'route it reads is behind requirePerson.',
+    };
+  }
+  const resolved = path.resolve(raw);
+  const inside = path.relative(REPO, resolved);
+  if (inside.length > 0 && !inside.startsWith('..') && !path.isAbsolute(inside)) {
+    return {
+      record: null,
+      refusal: `the reading is inside this repository (${inside}), which it may not be`,
+      findings: [],
+      saw: `the reading is inside this repository (${inside}), which it may not be`,
+    };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+  } catch (error) {
+    const saw = `${resolved} could not be read: ${(error as Error).message}`;
+    return { record: null, refusal: saw, findings: [], saw };
+  }
+  if (!isPhoneRecord(parsed)) {
+    const saw = `${resolved} is not a phone reading: it does not carry the fields one has`;
+    return { record: null, refusal: saw, findings: [], saw };
+  }
+  const problems = phoneRecordProblems(parsed, {
+    intendedHost: INTENDED_BRAIN_HOST,
+    revision: revisionOf().revision,
+    // Fixed in code, for §24's reason: nobody supplies the limits their own
+    // work is judged against. The same constant the hosted record binds to.
+    repository: ATTESTING_REPOSITORY,
+  });
+  if (problems.length > 0) {
+    const saw = `the attached reading is not about this run: ${problems.join('; ')}`;
+    return { record: null, refusal: saw, findings: parsed.findings, saw };
+  }
+  return {
+    record: parsed,
+    refusal: null,
+    findings: parsed.findings,
+    saw: `${resolved} — ${parsed.brain} at ${(parsed.deployedRevision ?? '').slice(0, 8)}`,
+  };
+}
+
+function hostedAttachmentPath(): string | null {
+  const flagAt = process.argv.indexOf('--hosted');
+  const fromFlag = flagAt >= 0 ? process.argv[flagAt + 1] : undefined;
+  const raw = (fromFlag ?? process.env['BRAIN_STEP12B_HOSTED'] ?? '').trim();
+  return raw.length > 0 ? raw : null;
+}
+
+function readHostedAttachment(): HostedAttachment {
+  const supplied = hostedAttachmentPath();
+  if (supplied === null) {
+    return {
+      kind: 'ABSENT',
+      saw:
+        'no hosted verification was attached to this report. The Deploy workflow uploads one ' +
+        'as the step12b-hosted-verification artifact; attach it with --hosted <path> or ' +
+        'BRAIN_STEP12B_HOSTED. A reporter cannot attest a CI run it did not observe, and ' +
+        'reading the workflow file would check that the steps are written down rather than ' +
+        'that they passed.',
+    };
+  }
+
+  const resolved = path.resolve(supplied);
+  const inside = path.relative(REPO, resolved);
+  if (inside.length > 0 && !inside.startsWith('..') && !path.isAbsolute(inside)) {
+    return {
+      kind: 'UNREADABLE',
+      saw:
+        `the attachment is inside this repository (${inside}), and a hosted record kept in the ` +
+        'tree is the committed record again: it needs a commit per deploy, and it lands one ' +
+        'commit after the revision it attests. Attach the artifact from outside the worktree.',
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+  } catch (error) {
+    return {
+      kind: 'UNREADABLE',
+      saw: `${resolved} could not be read as JSON: ${(error as Error).message}`,
+    };
+  }
+
+  const record = parsed as Partial<HostedRecord>;
+  const problems: string[] = [];
+  if (typeof record.revision !== 'string' || !/^[0-9a-f]{40}$/.test(record.revision)) {
+    problems.push('revision is not a 40-character commit id');
+  }
+  if (typeof record.ranAt !== 'string' || Number.isNaN(Date.parse(record.ranAt))) {
+    problems.push('ranAt is not a timestamp');
+  }
+  if (record.beforeRestart !== true && record.beforeRestart !== false) {
+    problems.push('beforeRestart is not a boolean');
+  }
+  if (record.afterRestart !== true && record.afterRestart !== false) {
+    problems.push('afterRestart is not a boolean');
+  }
+  const runMatch =
+    typeof record.workflowRun === 'string' ? WORKFLOW_RUN_URL.exec(record.workflowRun) : null;
+  if (runMatch === null) {
+    problems.push(`workflowRun does not name a run of ${ATTESTING_REPOSITORY}`);
+  }
+  if (problems.length > 0 || runMatch === null) {
+    return { kind: 'UNREADABLE', saw: `the attachment is not a hosted record: ${problems.join('; ')}` };
+  }
+
+  const runId = runMatch[1] as string;
+  return {
+    kind: 'READ',
+    record: record as HostedRecord,
+    runId,
+    saw: `run ${runId} at ${(record.revision as string).slice(0, 8)}`,
+  };
+}
+
 function visualEvidence(): { index: string | null; images: number; journeySteps: number } {
   const index = file('docs/evidence/step12b-visual.md');
   const dir = path.join(REPO, 'docs', 'evidence', 'step12b-visual');
@@ -767,6 +1201,59 @@ interface FleetReading {
     knowledgeRows: number;
     missions: number;
     filedDocuments: number;
+    /**
+     * The one declared capacity measurement, if it has been taken there.
+     *
+     * Read from `capability_experiments` by the envelope id its manifest names,
+     * and judged against the envelope declared in code — so a run that widened
+     * its own ceiling is reported as outside rather than as a measurement.
+     */
+    providerMeasurement: {
+      id: string;
+      mode: string;
+      state: string;
+      isolated: boolean;
+      /** Does it even claim to be the declared measurement? */
+      declaredCorrectly: boolean;
+      reasons: string[];
+      /** Correlated execution evidence. A health check has none of it. */
+      binsCreated: number;
+      activations: number;
+      arrivals: number;
+      distinctSessions: number;
+      completions: number;
+      maxObservedConcurrency: number;
+      stoppedBecause: string | null;
+      measured: boolean;
+    } | null;
+    /**
+     * A canary that ran on the deployed fleet, and what it left behind.
+     *
+     * Q's last condition is about the deployed fleet rather than a fixture, and
+     * it is *allowed* — a controlled canary inside an isolated scope with a
+     * recorded rollback is what the Lab is for. What it may not do is change
+     * what ordinary work is eligible for, or leave a policy behind.
+     */
+    deployedCanary: {
+      experimentId: string;
+      isolated: boolean;
+      applied: string | null;
+      rolledBack: boolean;
+      /** What the canary itself wrote, and what it recorded displacing. */
+      canaryTarget: number | null;
+      displacedTarget: number | null;
+      /** The displaced target, or the dispatcher default when there was none. */
+      expectedAfterRollback: number;
+      liveTarget: number | null;
+      liveIsNewerThanCanary: boolean;
+      /** A newer row carrying the displaced setting — never merely a newer id. */
+      restored: boolean;
+      /** Why not, in the words `restorationOf` refused it in. */
+      restorationReason: string | null;
+      /** The linked retest and comparison the cycle exists for. */
+      retested: boolean;
+      knowledgeInScope: number;
+    } | null;
     /**
      * One completed mission, followed all the way to what the project believes.
      *
@@ -874,6 +1361,26 @@ async function readDesignDecision(revision: string | null): Promise<DesignReadin
   if (!fs.existsSync(indexPath)) {
     return empty('docs/evidence/step12b-renders/index.json does not exist');
   }
+  /*
+   * What the committed manifest claims, for the record's header.
+   *
+   * Read from the manifest rather than recomputed, because the digest below is
+   * taken from the bytes on disk and the two together are the claim: *this
+   * revision produced these bytes*. A header that named a revision the
+   * manifest does not would be a third opinion about the same fact.
+   */
+  try {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'),
+    ) as { revision?: unknown; renderSetDigest?: unknown };
+    manifestRevisionForRecord =
+      typeof manifest.revision === 'string' ? manifest.revision : null;
+    manifestDigestForRecord =
+      typeof manifest.renderSetDigest === 'string' ? manifest.renderSetDigest : null;
+  } catch {
+    manifestRevisionForRecord = null;
+    manifestDigestForRecord = null;
+  }
 
   let declared: { screen: string; width: number; file: string }[];
   try {
@@ -900,6 +1407,7 @@ async function readDesignDecision(revision: string | null): Promise<DesignReadin
       bytes: fs.readFileSync(path.join(dir, entry.file)),
     })),
   );
+  renderDigestOnDisk = digest;
   const reading: DesignReading = {
     digest,
     count,
@@ -1005,6 +1513,208 @@ async function readOperationalFleet(): Promise<FleetReading> {
     const filedDocuments = await one(
       "SELECT COUNT(*) AS total FROM russell_missions WHERE document_id IS NOT NULL",
     );
+    /*
+     * ---------------------------------------------------------------------
+     * The declared capacity measurement, read from what actually fired
+     * ---------------------------------------------------------------------
+     *
+     * **The first version of this asked for `state = 'COMPLETE'`, a TECHNICAL
+     * scope and a matching envelope, and every one of those is satisfiable with
+     * zero worker execution.** A `HEALTH_CHECK` declared through the ordinary
+     * Lab routes with the right manifest reads rows, completes in milliseconds,
+     * fires nothing, and would have answered "how much a real Cowork surface
+     * holds". The correction is recorded rather than quietly applied: an
+     * envelope is a bound on a measurement, not a measurement.
+     *
+     * So the reading is the correlation `capacityMeasurement.ts` produces —
+     * bins carrying the experiment's own id, `bin_dispatch` rows Brain marked
+     * SENT naming a provider session, arrivals attributed from those same
+     * dispatch rows, and bins that reached COMPLETE. A health check correlates
+     * to no bins; an in-process queue exercise produces leases and no SENT
+     * dispatch, because nothing was fired at a provider.
+     */
+    let providerMeasurement: FleetReading['history']['providerMeasurement'] = null;
+    try {
+      const candidates = await getDb().all<{
+        id: string;
+        mode: string;
+        state: string;
+        envelope: string;
+        manifest: string;
+        purpose: string | null;
+      }>(
+        `SELECT e.id, e.mode, e.state, e.envelope, e.manifest, p.purpose
+           FROM capability_experiments e
+           LEFT JOIN projects p ON p.id = e.project_id
+          WHERE e.manifest LIKE ?
+          ORDER BY e.created_at DESC
+          LIMIT 5`,
+        [`%${PROVIDER_CAPACITY_ENVELOPE_ID}%`],
+      );
+      const row = candidates[0] ?? null;
+      if (row) {
+        let envelope: TestEnvelope | null = null;
+        let manifest: Record<string, unknown> = {};
+        try {
+          envelope = JSON.parse(row.envelope) as TestEnvelope;
+          manifest = JSON.parse(row.manifest) as Record<string, unknown>;
+        } catch {
+          envelope = null;
+        }
+        const claim = envelope ? claimsCapacityEnvelope(manifest, envelope) : null;
+        const evidence = await capacityEvidence(row.id);
+        providerMeasurement = {
+          id: row.id,
+          mode: row.mode,
+          state: row.state,
+          isolated: row.purpose === 'TECHNICAL',
+          declaredCorrectly: claim?.ok === true,
+          reasons: claim && !claim.ok ? claim.reasons : envelope ? [] : ['its envelope is unreadable'],
+          binsCreated: evidence.binsCreated,
+          activations: evidence.activations,
+          arrivals: evidence.arrivals,
+          distinctSessions: evidence.distinctSessions,
+          completions: evidence.completions,
+          maxObservedConcurrency: evidence.maxObservedConcurrency,
+          stoppedBecause: evidence.stoppedBecause,
+          /*
+           * The whole condition. Every clause is a row about something that
+           * happened outside Brain, and the last two are what a health check
+           * and an in-process exercise respectively cannot have.
+           */
+          measured:
+            claim?.ok === true &&
+            row.purpose === 'TECHNICAL' &&
+            row.state === 'COMPLETE' &&
+            evidence.binsCreated > 0 &&
+            evidence.activations > 0 &&
+            evidence.arrivals > 0 &&
+            evidence.completions > 0,
+        };
+      }
+    } catch {
+      providerMeasurement = null;
+    }
+
+    /*
+     * ---------------------------------------------------------------------
+     * A canary that ran on the deployed fleet, and what it left behind
+     * ---------------------------------------------------------------------
+     *
+     * I wrote once that a reporter driving a canary against the live fleet
+     * "would be the contamination R5 forbids, committed by the thing checking
+     * for it". **That is wrong as stated and the correction is recorded rather
+     * than quietly applied.** A controlled canary inside an isolated scope,
+     * with a declared rollback and a recorded restore, is exactly what the Lab
+     * is for — §29's own account of it is a cycle that applies, retests,
+     * compares and rolls back, with every version kept so a rollback is a write
+     * forward rather than a delete. Contamination is a canary that *changes
+     * what ordinary work is eligible for* or leaves a policy behind, and those
+     * are the two things asked here.
+     *
+     * This reads; it does not drive one. Driving one on the deployed fleet is a
+     * person's decision through `applyFinding`, which is unchanged.
+     */
+    let deployedCanary: FleetReading['history']['deployedCanary'] = null;
+    try {
+      const applied = await getDb().all<{
+        id: string;
+        applied_policy_id: string | null;
+        displaced_policy_id: string | null;
+        displaced_target: number | null;
+        rolled_back_at: string | null;
+        result: string | null;
+        purpose: string | null;
+        project_id: string;
+      }>(
+        `SELECT e.id, e.applied_policy_id, e.displaced_policy_id, e.displaced_target,
+                e.rolled_back_at, e.result, e.project_id, p.purpose
+           FROM capability_experiments e
+           LEFT JOIN projects p ON p.id = e.project_id
+          WHERE e.applied_policy_id IS NOT NULL
+          ORDER BY e.applied_at DESC
+          LIMIT 1`,
+      );
+      const row = applied[0] ?? null;
+      if (row) {
+        /*
+         * ---------------------------------------------------------------
+         * Restoration is a *value*, and the first version compared an id
+         * ---------------------------------------------------------------
+         *
+         * It asked whether the live policy's id differed from the canary's,
+         * which any newer row satisfies — **including one that kept the
+         * canary's own target.** A rollback writes forward (§29), so the row
+         * after a canary always has a different id; the question is whether it
+         * carries the setting the canary displaced. The correction is recorded
+         * rather than quietly applied.
+         *
+         * Both cases are asked, because they have different right answers:
+         * a canary over a real policy must restore that policy's target, and a
+         * canary over *no* prior policy must restore the dispatcher default —
+         * and `applyFinding` records which it was, before it replaced anything.
+         */
+        const canary = await getDb().get<{ target: number; version: number }>(
+          'SELECT target, version FROM fleet_policy WHERE id = ?',
+          [row.applied_policy_id],
+        );
+        const live = await getDb().get<{ id: string; target: number; version: number; reason: string | null }>(
+          `SELECT id, target, version, reason FROM fleet_policy
+            WHERE scope = 'FLEET' ORDER BY version DESC LIMIT 1`,
+        );
+        const inScope = await getDb().get<{ total: number }>(
+          'SELECT COUNT(*) AS total FROM russell_knowledge WHERE project_id = ?',
+          [row.project_id],
+        );
+        /*
+         * One reader, shared with the rollback itself.
+         *
+         * `restorationOf` is in `lab.ts` beside `rollbackFinding`, because a
+         * rule applied by one of two readers is worse than none: the reporter
+         * and the transition would otherwise be able to disagree about what
+         * "restored" means, and the one nobody runs is the one that drifts.
+         */
+        const verdict = restorationOf({
+          rolledBackAt: row.rolled_back_at,
+          displacedTarget: row.displaced_target,
+          canary: canary ?? null,
+          live: live ?? null,
+        });
+        const expected = verdict.expected;
+        let retested = false;
+        try {
+          const parsed = JSON.parse(row.result ?? '{}') as Record<string, unknown>;
+          // The linked retest and comparison the cycle is *for* — an unrelated
+          // policy row cannot stand in for it.
+          retested = parsed['comparison'] !== undefined || parsed['retest'] !== undefined;
+        } catch {
+          retested = false;
+        }
+        deployedCanary = {
+          experimentId: row.id,
+          isolated: row.purpose === 'TECHNICAL',
+          applied: row.applied_policy_id,
+          rolledBack: row.rolled_back_at !== null,
+          canaryTarget: canary?.target ?? null,
+          displacedTarget: row.displaced_target,
+          expectedAfterRollback: expected,
+          liveTarget: live?.target ?? null,
+          liveIsNewerThanCanary: (live?.version ?? 0) > (canary?.version ?? 0),
+          /*
+           * Restored **iff** the live policy is a newer row than the canary and
+           * carries the setting the canary displaced. A newer row retaining the
+           * canary's value fails here, which is the defect this replaced.
+           */
+          restored: verdict.restored,
+          restorationReason: verdict.restored ? null : verdict.reason,
+          retested,
+          knowledgeInScope: Number(inScope?.total ?? 0),
+        };
+      }
+    } catch {
+      deployedCanary = null;
+    }
+
     /*
      * The completion chain, followed rather than counted.
      *
@@ -1137,6 +1847,8 @@ async function readOperationalFleet(): Promise<FleetReading> {
       semanticMerges,
       frontierItems,
       answeredLenses,
+      providerMeasurement,
+      deployedCanary,
       knowledgeRows,
       missions,
       filedDocuments,
@@ -1186,6 +1898,8 @@ async function readOperationalFleet(): Promise<FleetReading> {
         knowledgeRows: 0,
         missions: 0,
         filedDocuments: 0,
+        providerMeasurement: null,
+        deployedCanary: null,
         completionChain: null,
         conversations: 0,
         answeredTurns: 0,
@@ -1655,33 +2369,145 @@ async function runMissionChain(): Promise<ChainResult> {
       `packet ${missionA?.orchestrationId ?? 'none'}, bin ${missionA?.binId ?? 'none'}, ` +
         `${missionA ? (await currentFragments(missionA.orchestrationId!)).length : 0} fragment(s)`,
     );
-    const heldReservations = await getDb().all<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM russell_budget_reservations
-        WHERE goal_id = ? AND kind = 'MISSION' AND state = 'HELD'`,
+    /*
+     * A slot for each, and each for the length of that mission's live span.
+     *
+     * **This asked for a raw count of two and that was a number rather than a
+     * property — the correction is recorded rather than quietly applied.** Two
+     * is what the table holds only while exactly two missions exist and neither
+     * has parked, and neither half of that is fixed: the missions are launched
+     * by the tick inside `settle(8)`, one per cycle, and `missionA` parks when
+     * its packet falls outside the envelope. A parked mission is waiting on a
+     * person and is using no provider capacity, so its hold is expired rather
+     * than renewed (§24) — which frees a slot, so the loop launches the third
+     * idea, so the table holds three rows. Measured at the failing instant:
+     * three missions, two NEEDS_HUMAN with holds already lapsed and one RUNNING
+     * with a live one. The product was doing exactly what the next check's own
+     * comment describes; the count was asserting a stage of the loop.
+     *
+     * So the two things the title actually claims are asked instead, and both
+     * are stronger than the count was: **one reservation per mission, keyed to
+     * the mission it belongs to** — a count of two could be satisfied by two
+     * rows belonging to nothing — and **no more live holds than the ceiling**,
+     * which is the invariant the reservation exists for and which the count
+     * never looked at, since `state = 'HELD'` says nothing about expiry.
+     */
+    const missionSlots = await getDb().all<{
+      idempotency_key: string;
+      expires_at: string;
+    }>(
+      `SELECT idempotency_key, expires_at FROM russell_budget_reservations
+        WHERE goal_id = ? AND kind = 'MISSION' AND state = 'HELD'
+        ORDER BY created_at`,
       [goal.id],
+    );
+    const missionsWithSlots = await listMissions({ projectId });
+    const slotNow = authorityNow();
+    const live = missionSlots.filter((row) => row.expires_at > slotNow);
+    const everyMissionHasItsOwn = missionsWithSlots.every((mission) =>
+      missionSlots.some((row) => row.idempotency_key.includes(mission.candidateId ?? '\u0000')),
     );
     check(
       'L2 · `reserve` held a slot for each, for the length of its live span',
-      Number(heldReservations[0]?.n ?? 0) === 2,
-      `${Number(heldReservations[0]?.n ?? 0)} HELD mission reservation(s)`,
+      missionsWithSlots.length > 0 &&
+        missionSlots.length === missionsWithSlots.length &&
+        everyMissionHasItsOwn &&
+        live.length <= goal.maxConcurrent,
+      `${missionsWithSlots.length} mission(s), ${missionSlots.length} held slot(s), ` +
+        `one per mission keyed to it: ${everyMissionHasItsOwn}; ` +
+        `${live.length} of them still live against a ceiling of ${goal.maxConcurrent} — ` +
+        missionsWithSlots
+          .map((mission) => {
+            const row = missionSlots.find((slot) =>
+              slot.idempotency_key.includes(mission.candidateId ?? '\u0000'),
+            );
+            return (
+              `${mission.id}/${mission.state}: ` +
+              (row === undefined
+                ? 'NO SLOT'
+                : `${(row.expires_at > slotNow ? 'live until ' : 'lapsed at ') + row.expires_at}`)
+            );
+          })
+          .join(' | '),
     );
 
     /*
-     * And the ceiling refusing a third, asked of `reserve` itself.
+     * And the ceiling refusing the next one, asked of `reserve` itself — while
+     * the slots are genuinely in use, which is the half that changed underneath
+     * this check.
      *
-     * Nothing is created by this: an over-ceiling reservation releases its own
-     * row before returning, which is why the probe is safe to make and why the
-     * refusal names `AT_ONCE` rather than a sentence somebody has to match.
+     * **It used to launch two missions and probe for a third, and that stopped
+     * being a fair question.** Production diagnosed a live deadlock from the
+     * sprint's own rows: two missions parked at `NEEDS_HUMAN` held both slots
+     * for ever, `renewLiveMissionReservations` renewed the hold on every tick
+     * so it could never age out either, and fifty-two queued ideas could never
+     * launch — none of them broken, simply no slot and never going to be one.
+     * Concurrency is real provider capacity, and a mission waiting on a person
+     * is using none of it, so a parked mission's hold is expired rather than
+     * renewed. `missionA` parks during the launch above, so by the time this
+     * line runs one of the two slots is legitimately free and the old probe was
+     * asserting behaviour the product had deliberately stopped having.
+     *
+     * So the ceiling is filled to its declared number first, from the rows
+     * rather than from an assumption about how many missions happen to be
+     * parked, and *then* the next one is probed. That is strictly the stronger
+     * question: it establishes the refusal is the ceiling doing its job rather
+     * than an accident of how the chain happened to leave the world.
+     */
+    const heldNow = await listReservations(goal.id);
+    const activeMissions = heldNow.filter(
+      (row) =>
+        row.kind === 'MISSION' &&
+        row.state === 'HELD' &&
+        (row.expiresAt ?? '') > authorityNow(),
+    ).length;
+    const fillers: string[] = [];
+    for (let taken = activeMissions; taken < goal.maxConcurrent; taken += 1) {
+      const filler = await reserve({
+        goalId: goal.id,
+        kind: 'MISSION',
+        idempotencyKey: `step12b:acceptance:ceiling-filler:${randomUUID()}`,
+      });
+      if (filler.ok && filler.reservation) fillers.push(filler.reservation.id);
+    }
+    /*
+     * Nothing is created by the probe itself: an over-ceiling reservation
+     * releases its own row before returning, which is why it is safe to make
+     * and why the refusal names `AT_ONCE` rather than a sentence somebody has
+     * to match. The fillers are released immediately afterwards, so the world
+     * this chain hands to its next link is the one it found.
      */
     const overCeiling = await reserve({
       goalId: goal.id,
       kind: 'MISSION',
       idempotencyKey: `step12b:acceptance:ceiling-probe:${randomUUID()}`,
     });
+    for (const id of fillers) {
+      await releaseReservation({ reservationId: id, reason: 'acceptance ceiling probe' });
+    }
     check(
-      'L5 · while both are live, `reserve` refuses the next one as a wait, not a wall',
+      'L5 · with every slot in use, `reserve` refuses the next one as a wait, not a wall',
       !overCeiling.ok && overCeiling.refusedBy === 'AT_ONCE',
-      `refusedBy=${overCeiling.refusedBy ?? 'none'} — "${overCeiling.reason}"`,
+      `${goal.maxConcurrent} slot(s), ${activeMissions} already live, ${fillers.length} filled: ` +
+        `refusedBy=${overCeiling.refusedBy ?? 'none'} — "${overCeiling.reason}"`,
+    );
+    /*
+     * And the other half of that production fix, which is what freed the slot:
+     * a parked mission's hold stops counting without being destroyed. The row
+     * stays `HELD` and stays on the audit (§5); what moved is its expiry.
+     */
+    const parkedHold = heldNow.find(
+      (row) =>
+        row.kind === 'MISSION' &&
+        row.state === 'HELD' &&
+        (row.expiresAt ?? '') <= authorityNow(),
+    );
+    check(
+      'L5 · a mission waiting on a person stops holding capacity, and keeps its row',
+      parkedHold !== undefined,
+      parkedHold
+        ? `reservation ${parkedHold.id} is still HELD with its hold expired at ${parkedHold.expiresAt}`
+        : `no expired HELD mission reservation exists; ${heldNow.length} reservation(s) read`,
     );
 
     /* -- The readings the rerank is measured against ----------------------- */
@@ -1691,10 +2517,6 @@ async function runMissionChain(): Promise<ChainResult> {
       projectId,
       projectName: seeded.project.name,
     });
-    const ordinalsBefore = await getDb().all<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM russell_candidates WHERE project_id = ? AND ordinal IS NOT NULL`,
-      [projectId],
-    );
 
     /* -- Link 3: the decision, derived by Brain and answered by a person ---- */
     const packetA = missionA?.orchestrationId
@@ -1850,22 +2672,43 @@ async function runMissionChain(): Promise<ChainResult> {
      * And the half that makes it a *derivation*: there is nowhere to store it.
      *
      * §29's rule is "a collection is a row; a rank is not". The check is the
-     * schema itself — a column that does not exist cannot have been written —
-     * plus the one column that *could* pin an order staying untouched, because
-     * `ordinal` is a person's manual pin and nothing in this chain is one.
+     * schema itself — a column that does not exist cannot have been written.
+     *
+     * **It also required `russell_candidates.ordinal` to be null everywhere,
+     * and that stopped being the right question.** The comment beside it said
+     * `ordinal` was "a person's manual pin", which was true when it was
+     * written. Production changed what the column means: `judgeCandidate`
+     * writes a **launch rank** into it from the compiler profile the
+     * candidate's own recorded judgment names, and a later pass fills it in for
+     * ideas judged before the rank existed — rows reaching what a hook cannot,
+     * which is this repository's own recurring repair. That is a derivation
+     * too, and one the product needs, so an acceptance gate that failed
+     * whenever the queue was correctly ranked would be refusing the fix.
+     *
+     * The two are different ranks and only one of them is §29's. §29 is about
+     * what a *person is shown* — the backlog order and a thread's standing —
+     * and those still have nowhere to live, which is what `noRankColumn` says.
+     * `ordinal` orders what launches next, and what makes it a derivation
+     * rather than a pin is that it follows a judgment: so that is what is
+     * asked, of rows. A candidate carrying an ordinal and no recorded
+     * judgment would be somebody's thumb on the queue.
      */
     const noRankColumn =
       !(await columnExists('russell_candidates', 'rank')) &&
       !(await columnExists('russell_candidates', 'standing')) &&
       !(await columnExists('russell_conversations', 'rank')) &&
       !(await columnExists('russell_conversations', 'standing'));
+    const pinnedWithoutJudgment = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM russell_candidates
+        WHERE project_id = ? AND ordinal IS NOT NULL AND priority IS NULL`,
+      [projectId],
+    );
     check(
       'L4 · and it is derived, because no table in this schema could have stored it',
-      noRankColumn &&
-        Number(ordinalsBefore[0]?.n ?? -1) === 0 &&
-        Number(ordinalsAfter[0]?.n ?? -1) === 0,
+      noRankColumn && Number(pinnedWithoutJudgment[0]?.n ?? -1) === 0,
       `no rank/standing column on russell_candidates or russell_conversations; ` +
-        `${Number(ordinalsAfter[0]?.n ?? -1)} candidate(s) carry a manual ordinal`,
+        `${Number(ordinalsAfter[0]?.n ?? -1)} candidate(s) carry a launch ordinal and ` +
+        `${Number(pinnedWithoutJudgment[0]?.n ?? -1)} of them carry one without a judgment behind it`,
     );
 
     /* -- Link 3b: the knowledge writeback, and the guard that stops it here - */
@@ -3211,15 +4054,52 @@ async function runConnectedSiteExercise(): Promise<{
  * database is put back afterwards so everything downstream sees what it expects.
  * Returns null rather than throwing: a second reading that could not be taken
  * is a missing measurement, never a finding about the loop.
+ *
+ * ---------------------------------------------------------------------------
+ * It waits for a window at least one tick wide, and the first version did not
+ * ---------------------------------------------------------------------------
+ *
+ * The comment above used to end "a minute or two of real elapsed time, several
+ * ticks at the loop's own interval", and that was true of a checkout run whose
+ * exercises take minutes. **In the container they do not.** The image carries no
+ * `tests/`, `docs/` or `client/src`, so the repository half of the report is
+ * skipped and the whole run takes seconds — production measured 16 of them,
+ * against `RUSSELL_TICK_MS` of 30,000. Both readings fell inside one tick, the
+ * cursor was byte-identical at `17:59:40.794Z → 17:59:40.794Z`, and L reported
+ * FAIL about a loop that was `RUNNING`, error-free and had last run 16 seconds
+ * earlier.
+ *
+ * A window narrower than the thing it measures can only ever answer "no". So
+ * this polls until the cursor moves or a deadline two ticks wide passes —
+ * **and it can still fail**: a loop that has genuinely stopped produces the same
+ * timestamp for seventy-five seconds and the condition says so. What changed is
+ * that "it did not move" now means the loop did not tick, rather than that the
+ * report was quick.
  */
-async function reReadCycle(): Promise<{ state: string; lastRanAt: string | null } | null> {
+const CURSOR_WINDOW_MS = 75_000;
+
+async function reReadCycle(
+  /** The cursor as the first reading saw it. Null means there was nothing to move. */
+  since: string | null,
+): Promise<{ state: string; lastRanAt: string | null } | null> {
+  const deadline = Date.now() + CURSOR_WINDOW_MS;
   try {
     await closeDatabase();
     await initDatabase();
-    const row = await getDb().get<{ state: string; last_ran_at: string | null }>(
-      'SELECT state, last_ran_at FROM russell_cycle LIMIT 1',
-    );
-    return row ? { state: row.state, lastRanAt: row.last_ran_at } : null;
+    let latest: { state: string; lastRanAt: string | null } | null = null;
+    for (;;) {
+      const row = await getDb().get<{ state: string; last_ran_at: string | null }>(
+        'SELECT state, last_ran_at FROM russell_cycle LIMIT 1',
+      );
+      latest = row ? { state: row.state, lastRanAt: row.last_ran_at } : null;
+      const moved =
+        latest !== null &&
+        latest.lastRanAt !== null &&
+        since !== null &&
+        Date.parse(latest.lastRanAt) > Date.parse(since);
+      if (moved || latest === null || Date.now() >= deadline) return latest;
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+    }
   } catch {
     return null;
   } finally {
@@ -4072,6 +4952,7 @@ async function main(): Promise<void> {
     { knowledgeIds: new Set(), layerIds: new Set(), frontierIds: new Set(), held: [] },
   );
   const discarded = invented.ok && invented.result.findings.length === 0;
+
   /*
    * Resolve-never-delete, and a person's dismissal — both driven rather than
    * described.
@@ -4129,6 +5010,92 @@ async function main(): Promise<void> {
       ).find((item) => item.id === dismissTarget.id) ?? null
     : null;
 
+  /*
+   * ---------------------------------------------------------------------
+   * The asked lens, driven all the way to a person's decision
+   * ---------------------------------------------------------------------
+   *
+   * This condition used to be `held: null` with a paragraph explaining that a
+   * Brain filling these in would be manufacturing insight. **The paragraph is
+   * right about what Brain may not do and was being used as a reason not to
+   * exercise the path a person and a worker *can* take** — which is this
+   * repository's own recurring defect, met from the other side: a state that
+   * says "only a reader can settle this" with no path a reader can take.
+   *
+   * Nothing here invents a discovery. A person opens the inquiry, a worker's
+   * reply arrives as a bin unit result, and `validateLensReply` decides what
+   * survives — a finding naming rows this project does not hold is discarded,
+   * and so is one restating something it already believes. What is asserted is
+   * that the path carries a real answer to a real decision, and that the
+   * decision is a person's.
+   */
+  const askedLens = asked[0]!;
+  const opened = await openInquiry({
+    projectId: snapshot.id,
+    projectName: snapshot.name,
+    lens: askedLens.key,
+    openedBy: dismisser.id,
+  });
+  let inquiryBin: string | null = null;
+  let answeredInquiry: Awaited<ReturnType<typeof getInquiry>> = null;
+  let acceptedFinding: Awaited<ReturnType<typeof decideFinding>> | null = null;
+  if (opened.ok) {
+    inquiryBin = await dispatchInquiry(opened.inquiry);
+    if (inquiryBin) {
+      // A knowledge id this project actually holds, taken from the same
+      // context `validateLensReply` resolves references against — so the real
+      // finding resolves and the invented one cannot.
+      const context = await inquiryContext(snapshot.id);
+      const anchorId = [...context.knowledgeIds][0] ?? null;
+      const reply = {
+        findings: [
+          {
+            // Real: it names a knowledge row this project holds, so the
+            // reference resolves in scope.
+            subject: 'What the archive never asks about recording backlogs',
+            statement:
+              'Nothing here distinguishes a clerk being slow from a queue being long, and the ' +
+              'two have different remedies.',
+            rationale: 'Read against what the project already believes about recording.',
+            references: anchorId ? [{ kind: 'KNOWLEDGE' as const, id: anchorId }] : [],
+          },
+          {
+            // Invented: the reference resolves to nothing, so it is discarded.
+            subject: 'A subject with nothing under it',
+            statement: 'An assertion about a row this project does not have.',
+            rationale: 'None.',
+            references: [{ kind: 'KNOWLEDGE' as const, id: 'rkn_not_in_this_project' }],
+          },
+        ],
+      };
+      const value = JSON.stringify(reply);
+      await putBinUnitResult({
+        binId: inquiryBin,
+        unitKey: INQUIRY_UNIT_KEY,
+        value,
+        contentHash: createHash('sha256').update(value).digest('hex'),
+        leaseId: null,
+        leaseGeneration: null,
+      });
+      const running = await getInquiry(opened.inquiry.id);
+      if (running) answeredInquiry = await settleInquiry(running);
+      if (answeredInquiry && answeredInquiry.findings.length > 0) {
+        acceptedFinding = await decideFinding({
+          inquiryId: answeredInquiry.id,
+          findingIndex: 0,
+          decision: 'ACCEPTED',
+          reason: 'Worth looking at — nothing else in the project draws that line.',
+          decidedBy: dismisser.id,
+        });
+        answeredInquiry = await getInquiry(answeredInquiry.id);
+      }
+    }
+  }
+  const acceptedFrontierItem =
+    acceptedFinding !== null && acceptedFinding.ok ? acceptedFinding.frontierItemId : null;
+  const acceptedIntoFrontier = typeof acceptedFrontierItem === 'string';
+  const lensDecidedBy =
+    answeredInquiry?.decisions.find((entry) => entry.findingIndex === 0)?.decision ?? null;
   recordConditions(
     'D',
     'Discovery Frontier v1',
@@ -4190,18 +5157,45 @@ async function main(): Promise<void> {
           : 'no frontier item existed to dismiss',
       },
       {
+        name: 'a person opened an asked lens, and it became a question for a worker',
+        held: opened.ok && inquiryBin !== null,
+        saw: opened.ok
+          ? `${askedLens.key} opened by a person, carried by bin ${inquiryBin ?? 'none'}`
+          : `refused: ${opened.reason}`,
+      },
+      {
+        name: 'the reply was validated, and the finding with nothing under it was discarded',
+        held:
+          answeredInquiry?.state === 'ANSWERED' &&
+          answeredInquiry.findings.length === 1 &&
+          answeredInquiry.discarded === 1,
+        saw: answeredInquiry
+          ? `${answeredInquiry.state}: ${answeredInquiry.findings.length} kept, ` +
+            `${answeredInquiry.discarded} discarded — ${answeredInquiry.discardReasons.join('; ') || 'no reason recorded'}`
+          : 'the inquiry never reached a reply',
+      },
+      {
         name: 'an asked lens has been answered by a reader on real work',
-        held: null,
-        saw:
-          `${asked.length} asked lenses are put and none is answered. That is the design: ` +
-          'what adjacent possibility is absent, what lesson transfers, what the map hides — ' +
-          'a Brain that filled these in from a template would be manufacturing insight, ' +
-          'which is §8 at the altitude where breaking it is most tempting.',
+        /*
+         * "By a reader" is the whole condition: a surviving finding is a
+         * *proposal*, and it becomes a frontier item only when a person accepts
+         * it. Nothing a worker said moves anything by itself.
+         */
+        held: answeredInquiry?.state === 'ANSWERED' && acceptedIntoFrontier && lensDecidedBy === 'ACCEPTED',
+        saw: answeredInquiry
+          ? `${answeredInquiry.lens} answered, finding 0 ${lensDecidedBy ?? 'undecided'} by a person` +
+            `${acceptedFrontierItem ? ` → frontier item ${acceptedFrontierItem}` : ' → no frontier item'}`
+          : 'no inquiry was answered in this run',
       },
       fromProduction(
         'the frontier is derived on the deployed Brain too, not only in a fixture',
         seen.frontierItems > 0,
         `${seen.frontierItems} frontier row(s) and ${seen.answeredLenses} answered inquiry(ies) in ${fleet.source}`,
+      ),
+      fromProduction(
+        'and a lens has been asked and answered there, on the project’s own work',
+        seen.answeredLenses > 0,
+        `${seen.answeredLenses} answered inquiry(ies) in ${fleet.source}`,
       ),
     ],
     `A project snapshot built from real rows — three declared foundations, ${believed.length} ` +
@@ -4544,16 +5538,159 @@ async function main(): Promise<void> {
         held: refusedOutsideTechnical !== null,
         saw: refusedOutsideTechnical ?? 'it ran',
       },
+      /*
+       * ---------------------------------------------------------------------
+       * "How much a real Cowork surface holds", made answerable
+       * ---------------------------------------------------------------------
+       *
+       * This was `held: null` with a paragraph saying the ceiling was one
+       * nobody had set. **That was true and it was the thing to fix**, not a
+       * reason to leave the row unanswerable: a bounded measurement nobody has
+       * declared cannot be taken, and one with no declared bounds should not
+       * be. So `measurementEnvelope.ts` declares it — 10 concurrent bins (Step
+       * 10's own recommended operating ceiling), 40 activations, 30 minutes,
+       * five stop conditions, synthetic work, $0 paid spend — in code, for
+       * §24's reason.
+       *
+       * **Then the envelope was all there was, and this gate accepted it.** An
+       * experiment that was COMPLETE, TECHNICAL, and carried matching bounds
+       * satisfied the condition — and a `HEALTH_CHECK` declared through the
+       * ordinary Lab routes satisfies all three with zero worker execution.
+       * The correction is recorded rather than quietly applied: an envelope is
+       * a bound on a measurement, never a measurement, and what is read now is
+       * evidence only a fire can produce — dispatches Brain marked `SENT`
+       * naming a provider session, arrivals attributed from those same rows,
+       * and bins that reached `COMPLETE` — correlated to this experiment's own
+       * bins. `tests/capacityMeasurement.test.ts` drives a health check and an
+       * in-process queue exercise to prove neither can reach it.
+       *
+       * **And a second thing I over-claimed is corrected here.** I wrote that
+       * the authorization "was never missing", because
+       * `POST /projects/:id/lab/:id/run` requires a person at OPERATOR depth
+       * sending `authorizePressure: true`. A route that *can* carry an
+       * authorization is not an authorization: it says such a decision is
+       * possible, and says nothing about whether this measurement was
+       * approved. Until the executable path existed there was nothing coherent
+       * to approve, which is why the decision is presented now and not before.
+       * What it asks for is one bounded run inside the envelope above, and it
+       * is a decision rather than a permission.
+       */
       {
-        name: 'how much a real Cowork surface holds',
-        held: null,
+        name: 'the one capacity measurement this product wants is declared, bounded, in code',
+        held:
+          withinProviderCapacityEnvelope(PROVIDER_CAPACITY_ENVELOPE).ok &&
+          PROVIDER_CAPACITY_ENVELOPE.stopConditions.length >= 3 &&
+          PROVIDER_CAPACITY_MAX_PAID_SPEND === 0,
         saw:
-          'every result carries PROVIDER_UNTESTED. Measuring it means putting real pressure ' +
-          'on a fleet serving real research, against a ceiling nobody set — and simulating it ' +
-          'would produce figures a reader could not tell from measurements. The mechanism is ' +
-          'complete and the measurement is not taken; an operator with an isolated scope can ' +
-          'take it with no code change.',
+          `${PROVIDER_CAPACITY_ENVELOPE_ID}: ceiling ${PROVIDER_CAPACITY_ENVELOPE.ceiling}, ` +
+          `${PROVIDER_CAPACITY_MAX_ACTIVATIONS} activations, ` +
+          `${PROVIDER_CAPACITY_ENVELOPE.durationMinutes}m, ` +
+          `${PROVIDER_CAPACITY_ENVELOPE.stopConditions.length} stop condition(s), ` +
+          `${PROVIDER_CAPACITY_ENVELOPE.workKind} work, $${PROVIDER_CAPACITY_MAX_PAID_SPEND} paid`,
       },
+      {
+        name: 'a measurement that widened its own ceiling is not that measurement',
+        held: (() => {
+          const widened = withinProviderCapacityEnvelope({
+            ...PROVIDER_CAPACITY_ENVELOPE,
+            ceiling: PROVIDER_CAPACITY_ENVELOPE.ceiling + 20,
+            workKind: 'REAL_CANARY',
+          });
+          return !widened.ok && widened.reasons.length >= 2;
+        })(),
+        saw: (() => {
+          const widened = withinProviderCapacityEnvelope({
+            ...PROVIDER_CAPACITY_ENVELOPE,
+            ceiling: PROVIDER_CAPACITY_ENVELOPE.ceiling + 20,
+            workKind: 'REAL_CANARY',
+          });
+          return widened.ok ? 'it was accepted' : `refused: ${widened.reasons.join('; ')}`;
+        })(),
+      },
+      /*
+       * The executable path, read from the checkout rather than described.
+       *
+       * Three separate facts, because they fail separately: something creates
+       * the bins, a person's authorization is what starts it, and something
+       * stops it while it runs. A measurement with the first two and not the
+       * third is a run with an envelope nobody applies.
+       */
+      fromCheckout(
+        'the envelope has a runner: bins are created, and only a person at OPERATOR depth starts it',
+        (() => {
+          const runner = file('server/services/fleet/capacityMeasurement.ts') ?? '';
+          const lab = file('server/services/fleet/lab.ts') ?? '';
+          return (
+            /export async function startCapacityMeasurement/.test(runner) &&
+            /await createBin\(/.test(runner) &&
+            /if \(!input\.pressureAuthorized\)/.test(runner) &&
+            /startCapacityMeasurement\(\{/.test(lab) &&
+            /isBoundedCapacityMeasurement/.test(lab)
+          );
+        })(),
+        'capacityMeasurement.ts creates the bins and refuses without pressureAuthorized; ' +
+          'lab.ts routes a FLEET_PROVIDER experiment carrying the envelope into it',
+      ),
+      fromCheckout(
+        'the envelope is enforced while the run is happening, not read after it stopped',
+        (() => {
+          const loop = file('server/services/dispatch/loop.ts') ?? '';
+          const runner = file('server/services/fleet/capacityMeasurement.ts') ?? '';
+          return (
+            /runningCapacityMeasurements\(\)/.test(loop) &&
+            /enforceCapacityLimits\(/.test(loop) &&
+            /capacityMeasurementsStopped/.test(loop) &&
+            /retireBin\(/.test(runner)
+          );
+        })(),
+        'the dispatch tick asks every running measurement before it creates any further intent, ' +
+          'and stopping one cancels its outstanding bins — which advances their fencing generation',
+      ),
+      fromCheckout(
+        'a health check and an in-process queue exercise are proved unable to satisfy this',
+        (() => {
+          const suite = file('tests/capacityMeasurement.test.ts') ?? '';
+          return (
+            /a health check carrying the same manifest and envelope produces no evidence at all/.test(
+              suite,
+            ) &&
+            /an in-process queue exercise claims, leases and completes and still produces no activation/.test(
+              suite,
+            )
+          );
+        })(),
+        'both negative cases are driven through the real services in tests/capacityMeasurement.test.ts',
+      ),
+      fromProduction(
+        'how much a real Cowork surface holds',
+        seen.providerMeasurement !== null && seen.providerMeasurement.measured,
+        seen.providerMeasurement === null
+          ? `no experiment on the deployed Brain names ${PROVIDER_CAPACITY_ENVELOPE_ID}, so every ` +
+            'Lab result there still carries PROVIDER_UNTESTED. The envelope is declared and the ' +
+            'runner exists; what is absent is a bounded run somebody authorized.'
+          : `${seen.providerMeasurement.id} (${seen.providerMeasurement.mode}, ` +
+            `${seen.providerMeasurement.state}) in a ` +
+            `${seen.providerMeasurement.isolated ? 'TECHNICAL' : 'LIVE'} scope: ` +
+            `${seen.providerMeasurement.binsCreated} bin(s), ` +
+            `${seen.providerMeasurement.activations} activation(s), ` +
+            `${seen.providerMeasurement.arrivals} arrival(s) over ` +
+            `${seen.providerMeasurement.distinctSessions} session(s), ` +
+            `${seen.providerMeasurement.completions} completion(s), ` +
+            `max observed concurrency ${seen.providerMeasurement.maxObservedConcurrency}` +
+            `${seen.providerMeasurement.stoppedBecause ? `, stopped because ${seen.providerMeasurement.stoppedBecause}` : ''}` +
+            `${seen.providerMeasurement.declaredCorrectly ? '' : ` — NOT the declared measurement: ${seen.providerMeasurement.reasons.join('; ')}`}`,
+      ),
+      fromProduction(
+        'and it is a reading of real fires, which no health check could have produced',
+        seen.providerMeasurement !== null &&
+          seen.providerMeasurement.activations > 0 &&
+          seen.providerMeasurement.arrivals > 0,
+        seen.providerMeasurement === null
+          ? 'no measurement exists there to read'
+          : `${seen.providerMeasurement.activations} dispatch(es) Brain marked SENT with a provider ` +
+            `session, and ${seen.providerMeasurement.arrivals} arrival(s) attributed from those same ` +
+            'dispatch rows. A HEALTH_CHECK creates no bins, so it correlates to neither.',
+      ),
     ],
     `${LAB_MODES.length} modes declared, run and read back in an isolated TECHNICAL scope, ` +
       'spending nothing — and the three conditions T3, T4 and T5 name are asked of what each ' +
@@ -4971,6 +6108,8 @@ async function main(): Promise<void> {
       knowledgeRows?: number | null;
       knowledgeCitingThisMission?: number | null;
       askedTurnStatus?: string | null;
+      httpProgressMatchesBriefing?: boolean | null;
+      httpProgressSaw?: string | null;
     };
     findings: string[];
   }
@@ -4979,13 +6118,16 @@ async function main(): Promise<void> {
   if (journeyRaw) {
     try {
       journey = JSON.parse(journeyRaw) as JourneyRecord;
-      journeyStillDescribesThisTree = journey.revision !== null && productUnchangedSince(journey.revision);
+      journeyRevisionForRecord = journey.revision;
+      journeyStillDescribesThisTree =
+        journey.revision !== null && journeyInputsUnchangedSince(journey.revision);
     } catch {
       journey = null;
     }
   }
 
   const effects = journey?.effects ?? null;
+  const deployedPhone = readDeployedPhone();
   const resumed =
     effects !== null &&
     effects.parkedMissionId !== null &&
@@ -5109,6 +6251,34 @@ async function main(): Promise<void> {
         ? `the mission's own detail reads: ${effects.workIdsOnScreen.slice(0, 150)}`
         : 'no technical detail was read off the mission card',
     ),
+    /*
+     * The attachment itself, asked before anything is read out of it.
+     *
+     * Its own condition rather than folded into the two below, because the
+     * three answers send a reader somewhere different: nothing attached is a
+     * run to take, a refused attachment is a reading of the wrong Brain or the
+     * wrong revision, and a valid one is the only case where the results
+     * beneath it mean anything. The first version had no such row at all — it
+     * cast the JSON and read fields out of whatever came back.
+     */
+    deployedPhone.record === null && deployedPhone.refusal === null
+      ? {
+          name: 'the attached phone reading is of this Brain, at this revision, and does not contradict itself',
+          held: null,
+          saw: deployedPhone.saw,
+          needs: 'PRODUCTION' as const,
+        }
+      : {
+          name: 'the attached phone reading is of this Brain, at this revision, and does not contradict itself',
+          held: deployedPhone.record !== null,
+          saw:
+            deployedPhone.record !== null
+              ? `${deployedPhone.record.brain} (the Brain ${INTENDED_BRAIN_HOST ?? 'this tree'} deploys) ` +
+                `at ${(deployedPhone.record.deployedRevision ?? '').slice(0, 8)}, ` +
+                `read ${deployedPhone.record.inspectedAt}, ` +
+                `${deployedPhone.findings.length} finding(s) recorded`
+              : (deployedPhone.refusal ?? 'refused'),
+        },
     effects && (effects.knowledgeCitingThisMission ?? 0) > 0
       ? fromCheckout(
           'and its result was inspected there — a conclusion under Knows citing that mission',
@@ -5116,7 +6286,39 @@ async function main(): Promise<void> {
           `${effects.knowledgeCitingThisMission} conclusion(s) cite ` +
             `${effects.parkedMissionId ?? 'the mission'}, of ${effects.knowledgeRows ?? 0} in the project`,
         )
-      : {
+      : deployedPhone.record !== null
+        ? {
+            name: 'and its result was inspected there — a conclusion under Knows citing that mission',
+            held:
+              // The origin, the revision and the record's own internal
+              // consistency were decided at read time — a record that failed
+              // any of them is not here at all — so what is left to ask is
+              // whether the harness recorded anything outstanding on that run.
+              deployedPhone.findings.length === 0 &&
+              deployedPhone.record.missionLinkedResult.found &&
+              // The mission came from the conversation whose answer the
+              // condition above read — not from anywhere else in the Brain.
+              // An answer in one thread and a result in another are two facts,
+              // not a sequence.
+              deployedPhone.record.missionLinkedResult.missionFromConversation &&
+              deployedPhone.record.missionLinkedResult.readOnScreen,
+            saw: deployedPhone.findings.length > 0
+              ? `the reading of ${deployedPhone.record.brain} recorded ` +
+                `${deployedPhone.findings.length} outstanding finding(s): ` +
+                deployedPhone.findings.slice(0, 3).join('; ')
+              : deployedPhone.record.missionLinkedResult.found
+                ? `on ${deployedPhone.record.brain} at phone width: conclusion ` +
+                  `${deployedPhone.record.missionLinkedResult.knowledgeId} cites mission ` +
+                  `${deployedPhone.record.missionLinkedResult.missionId}, which that same ` +
+                  'conversation produced' +
+                  `${deployedPhone.record.missionLinkedResult.citesDocument ? ', its document' : ''}` +
+                  `${deployedPhone.record.missionLinkedResult.citesAudit ? ' and the audit that judged it' : ''}` +
+                  `; on screen: ${deployedPhone.record.missionLinkedResult.screenSaw ?? 'not read'}`
+                : `on ${deployedPhone.record.brain}: no conversation there holds a person's ` +
+                  'question, a COMPLETE reply and a conclusion citing a mission that same ' +
+                  'conversation produced',
+          }
+        : {
           name: 'and its result was inspected there — a conclusion under Knows citing that mission',
           held: null,
           saw:
@@ -5125,7 +6327,8 @@ async function main(): Promise<void> {
             `${effects?.filedDocumentOnScreen ? `, though a document ${effects.filedDocumentOnScreen} is filed` : ', and no document is filed'}` +
             '. A conclusion needs a claim through gate.ts and a judge’s verdict, which needs a ' +
             'worker that reached the sources — so this Brain is correct to hold none, and ' +
-            'inventing one would be inventing a research result.',
+            'inventing one would be inventing a research result. ' +
+            deployedPhone.saw,
           needs: 'PRODUCTION',
         },
     effects?.askedTurnStatus === 'COMPLETE'
@@ -5134,13 +6337,36 @@ async function main(): Promise<void> {
           true,
           'Russell’s turn is COMPLETE',
         )
-      : {
+      : deployedPhone.record !== null
+        ? {
+            name: 'the question a person typed was answered rather than left waiting',
+            held:
+              deployedPhone.findings.length === 0 &&
+              deployedPhone.record.answeredQuestion.found &&
+              // COMPLETE, not merely "not PENDING". A FAILED reply is an answer
+              // that did not happen, and the first version of this counted one.
+              deployedPhone.record.answeredQuestion.status === 'COMPLETE' &&
+              deployedPhone.record.answeredQuestion.readOnScreen,
+            saw: deployedPhone.findings.length > 0
+              ? `the reading of ${deployedPhone.record.brain} recorded ` +
+                `${deployedPhone.findings.length} outstanding finding(s): ` +
+                deployedPhone.findings.slice(0, 3).join('; ')
+              : deployedPhone.record.answeredQuestion.found
+                ? `on ${deployedPhone.record.brain} at phone width: a person's question in ` +
+                  `${deployedPhone.record.answeredQuestion.conversationId} has a ` +
+                  `${deployedPhone.record.answeredQuestion.status} reply, and the page carried its ` +
+                  `own words — ${deployedPhone.record.answeredQuestion.screenSaw ?? 'not read'}`
+                : `on ${deployedPhone.record.brain}: no conversation holds a question a person ` +
+                  'typed and a COMPLETE reply to it',
+          }
+        : {
           name: 'the question a person typed was answered rather than left waiting',
           held: null,
           saw:
             `Russell’s turn is ${effects?.askedTurnStatus ?? 'not readable'}. §24: no inference is ` +
             'bought, so a turn persists as PENDING with its reason and a worker answers it — ' +
-            'which a Brain with no fleet cannot do.',
+            'which a Brain with no fleet cannot do. ' +
+            deployedPhone.saw,
           needs: 'PRODUCTION',
         },
     fromCheckout(
@@ -5153,13 +6379,13 @@ async function main(): Promise<void> {
         : 'not read',
     ),
     fromCheckout(
-      'the reading still describes this tree — no product code has moved since',
+      'the reading still describes this tree — neither the product nor the harness has moved',
       journeyStillDescribesThisTree,
       journey
         ? `taken at ${journey.revision?.slice(0, 8) ?? 'unknown'}; ` +
           (journeyStillDescribesThisTree
-            ? 'client/ and server/ are byte-identical at HEAD'
-            : 'the product has changed since — re-run scripts/visual-qa.ts')
+            ? 'client/, server/ and scripts/visual-qa.ts are byte-identical at HEAD'
+            : 'an input has changed since — re-run scripts/visual-qa.ts')
         : 'not read',
     ),
     fromCheckout(
@@ -5372,7 +6598,7 @@ async function main(): Promise<void> {
    * is A's pending-turn projection.
    */
   const ranAgoMs = seen.cycleLastRanAt ? Date.now() - Date.parse(seen.cycleLastRanAt) : null;
-  const secondReading = READING_PRODUCTION ? await reReadCycle() : null;
+  const secondReading = READING_PRODUCTION ? await reReadCycle(seen.cycleLastRanAt) : null;
   const cursorMoved =
     secondReading !== null &&
     secondReading.lastRanAt !== null &&
@@ -5402,6 +6628,34 @@ async function main(): Promise<void> {
     'Always-on loop',
     [
       ...autoNext.map((entry) => ({ name: entry.name, held: entry.held, saw: entry.saw })),
+      /*
+       * And every other condition the chain drove, as one scored row.
+       *
+       * **The chain can fail and say so while every count reads zero failing,
+       * and it did — the correction is recorded rather than quietly applied.**
+       * `L2 ·` (launch) and `L3 ·` (writeback) are exercised here and promoted
+       * to no gate: `L1 ·` goes to B, `F ·` to F, `L4/L5/L6 ·` here. So a
+       * reservation condition that did not hold appeared in the evidence
+       * block's heading as FAILED, in its own line as DID NOT HOLD, and in the
+       * summary as `0 failing` — which is §29's status contradicting the
+       * control beside it, at the one place a reader checks first.
+       *
+       * Promoting all eight was the other answer and is the wrong shape: they
+       * belong to links this gate does not score, and seventeen scenarios is
+       * the contract. One row carrying *whether the exercise this gate cites
+       * held at all* puts the failure in the denominator without moving the
+       * matrix, and it names which condition, because a bare false is the
+       * thing this whole repair is about.
+       */
+      {
+        name: 'every condition the mission chain drove held, including the links this gate does not score',
+        held: chainFailed.length === 0,
+        saw:
+          chainFailed.length === 0
+            ? `${chain.checks.length} condition(s) driven, all held`
+            : `${chainFailed.length} of ${chain.checks.length} did not hold: ` +
+              chainFailed.map((entry) => `${entry.name} — ${entry.saw}`).join('; '),
+      },
       /*
        * The first link, from production, because it is the one a checkout
        * cannot reach: a mission that *finished* and a project that believes
@@ -5473,7 +6727,11 @@ async function main(): Promise<void> {
             name: 'and its cursor moved between two readings — a window, not a timestamp',
             held: cursorMoved,
             saw: secondReading
-              ? `${seen.cycleLastRanAt ?? 'none'} → ${secondReading.lastRanAt ?? 'none'}`
+              ? `${seen.cycleLastRanAt ?? 'none'} → ${secondReading.lastRanAt ?? 'none'}` +
+                (cursorMoved
+                  ? ''
+                  : ` — unchanged across a ${CURSOR_WINDOW_MS / 1000}s window, which is ` +
+                    `${Math.round(CURSOR_WINDOW_MS / 30_000)} ticks at the loop's own interval`)
               : 'the second reading could not be taken',
           }
         : {
@@ -5726,14 +6984,52 @@ async function main(): Promise<void> {
             saw: `this run reads ${fleet.source}, whose projects are this run's own fixtures`,
             needs: 'PRODUCTION',
           },
-      {
-        name: 'the same comparison made over HTTP with an authenticated principal',
-        held: null,
-        saw:
-          'driven through the services the routes call, which is where the derivation lives. ' +
-          'The route layer adds authorization, and that is exercised by I and by ' +
-          'tests/russellHttp.test.ts rather than duplicated here.',
-      },
+      /*
+       * The same comparison, over a socket, as a signed-in person.
+       *
+       * This used to be `held: null` with a paragraph: *"driven through the
+       * services the routes call, which is where the derivation lives. The
+       * route layer adds authorization, and that is exercised by I and by
+       * tests/russellHttp.test.ts rather than duplicated here."* Every
+       * sentence of that is true and it is still the substitution this file
+       * refuses everywhere else — **a scenario whose unmet condition is a
+       * paragraph is a scenario nobody can finish**, which is the exact
+       * sentence `docs/STEP-12B-GATE-RECONCILIATION.md` was written around.
+       *
+       * It is answered in the phone journey rather than here, because the
+       * question needs a real server on a real socket and a real person signed
+       * into it — and that harness already has both while this reporter has
+       * neither. Spawning a Brain inside a read-only reporter to ask one
+       * question would be the more expensive way to get a worse answer, and
+       * would put a bootstrap password and a port lottery into a report.
+       *
+       * Two routes, two independent derivations: `/progress` calls
+       * `projectProgress`, `/briefing` calls `briefing`, and they must agree
+       * field for field while naming three *different* denominators.
+       */
+      /*
+       * Written out rather than through `fromCheckout`, because this condition
+       * has three outcomes and that helper has two. A checkout whose journey
+       * recorded no comparison is a **missing measurement** — `null` — and must
+       * not read as a disagreement between two routes. *We could not tell* is
+       * never *we checked*, this file's oldest rule.
+       */
+      !REPO_VISIBLE
+        ? {
+            name: 'the same comparison made over HTTP with an authenticated principal',
+            held: null,
+            saw: 'this run cannot see the repository',
+            needs: 'CHECKOUT' as const,
+          }
+        : {
+            name: 'the same comparison made over HTTP with an authenticated principal',
+            held: effects?.httpProgressMatchesBriefing ?? null,
+            saw:
+              effects?.httpProgressSaw ??
+              (journey === null
+                ? 'no journey record exists yet, so the comparison has not been made'
+                : 'this journey predates the HTTP comparison, so it recorded none'),
+          },
     ],
     `Four readers of one projection, driven against one project with ${foundations.length} ` +
       `foundations in ${new Set(foundations.map((f) => f.status)).size} different states at one ` +
@@ -5998,6 +7294,7 @@ async function main(): Promise<void> {
           : ' — but server/db has moved since it was taken');
   const sqliteUpgrade = upgradeRecord('sqlite');
   const postgresUpgrade = upgradeRecord('postgres');
+  upgradeRevisionForRecord = sqliteUpgrade?.revision ?? postgresUpgrade?.revision ?? null;
 
   /*
    * The hosted verification, which is the Deploy workflow's and belongs to a
@@ -6005,26 +7302,21 @@ async function main(): Promise<void> {
    *
    * It runs against a real machine either side of a real restart, and a
    * reporter cannot attest a CI run it did not observe — so what it reads is
-   * the record that run leaves behind, and the condition is open until one
-   * exists for this revision. Open, not exempt: R13 is a requirement.
+   * the record that run leaves behind, **attached to this report from outside
+   * the worktree** rather than committed into it. The reasoning is on
+   * `readHostedAttachment`; the short version is that a committed record needs
+   * a commit per deploy and lands one commit after the revision it attests, and
+   * the tolerance I built for that omitted real image inputs.
+   *
+   * The comparison is exact, and it can be exact because the record no longer
+   * has to be older than the tree. Open until one is attached for this
+   * revision. Open, not exempt: R13 is a requirement.
    */
-  interface HostedRecord {
-    revision: string;
-    ranAt: string;
-    beforeRestart: boolean;
-    afterRestart: boolean;
-    workflowRun: string;
-  }
-  const hostedRaw = file(path.join('docs', 'evidence', 'step12b-hosted', 'verification.json'));
-  let hosted: HostedRecord | null = null;
-  if (hostedRaw) {
-    try {
-      hosted = JSON.parse(hostedRaw) as HostedRecord;
-    } catch {
-      hosted = null;
-    }
-  }
-  const hostedMatches = hosted !== null && hosted.revision === revisionOf().revision;
+  const hostedAttachment = readHostedAttachment();
+  const thisRevision = revisionOf().revision;
+  const hosted = hostedAttachment.kind === 'READ' ? hostedAttachment.record : null;
+  const hostedIsThisRevision = hosted !== null && hosted.revision === thisRevision;
+
   /*
    * Probed directly rather than gated on `REPO_VISIBLE`, and the difference is
    * not pedantry.
@@ -6140,17 +7432,39 @@ async function main(): Promise<void> {
       ),
       {
         name: 'the hosted verification passes either side of a real restart of a real machine',
-        held: hosted === null ? null : hostedMatches && hosted.beforeRestart && hosted.afterRestart,
-        ...(hosted === null ? { awaits: 'a Deploy run at this revision' } : {}),
+        /*
+         * `FLEET` rather than `PERSON`, even though it carries an `awaits`.
+         *
+         * What answers it is a `Deploy` run of this revision leaving a record
+         * behind — a real machine restarted and re-proved. Nobody has to
+         * *decide* anything for that to happen; it is an action on the
+         * canonical path. The two conditions that genuinely wait on a decision
+         * are H and O, and calling this the same kind would have put a deploy
+         * and an approval in one column.
+         */
+        evidence: 'FLEET' as const,
+        held:
+          hostedAttachment.kind === 'ABSENT'
+            ? null
+            : hostedAttachment.kind === 'UNREADABLE'
+              ? false
+              : hostedIsThisRevision &&
+                hostedAttachment.record.beforeRestart &&
+                hostedAttachment.record.afterRestart,
+        ...(hostedAttachment.kind === 'ABSENT'
+          ? { awaits: 'a Deploy run at this revision, attached to this report' }
+          : {}),
         saw:
-          hosted === null
-            ? 'no hosted record exists for any revision yet. The Deploy workflow produces it; ' +
-              'a reporter cannot attest a CI run it did not observe, and reading the workflow ' +
-              'file would check that the steps are written down rather than that they passed.'
-            : hostedMatches
-              ? `run ${hosted.workflowRun} at ${hosted.revision.slice(0, 8)}: before=` +
-                `${hosted.beforeRestart}, after=${hosted.afterRestart}`
-              : `the only hosted record is for ${hosted.revision.slice(0, 8)}, not this revision`,
+          hostedAttachment.kind !== 'READ'
+            ? hostedAttachment.saw
+            : hostedIsThisRevision
+              ? `run ${hostedAttachment.runId} at ${hostedAttachment.record.revision.slice(0, 8)}` +
+                ` — this exact revision, attested by ${revisionOf().attestedBy} — before=` +
+                `${hostedAttachment.record.beforeRestart}, after=${hostedAttachment.record.afterRestart}` +
+                `, ran at ${hostedAttachment.record.ranAt}`
+              : `run ${hostedAttachment.runId} proved ${hostedAttachment.record.revision.slice(0, 8)}` +
+                `, and this run is ${(thisRevision ?? 'an unknown revision').slice(0, 8)}` +
+                ` (${revisionOf().attestedBy}) — so what is running is not what was proved`,
       },
     ],
     'Three of these are facts about what this run itself did — it migrated an empty database, ' +
@@ -6236,6 +7550,15 @@ async function main(): Promise<void> {
     reason: 'Canary complete',
   });
   const afterFirstRollback = await currentPolicy('FLEET', null);
+  /*
+   * The rows as they stood at that moment.
+   *
+   * `restorationOf` asks whether the *live* policy carries the displaced
+   * setting, and the second canary is about to write two more versions — so the
+   * first branch has to be judged against the row that was live when it was
+   * rolled back, not against whatever the chain does afterwards.
+   */
+  const historyAfterFirst = await policyHistory('FLEET', null, 20);
 
   /*
    * And the branch with something to displace. An operator's own target, set
@@ -6318,6 +7641,19 @@ async function main(): Promise<void> {
     ['rolling it back restores the target it displaced', secondRollbackTarget === operatorTarget],
     ['and names that target in the reason', new RegExp(`displaced \\(${operatorTarget}\\)`).test(afterSecondRollback?.reason ?? '')],
     ['both rollbacks are written forward, so nothing is destroyed', history.some((row) => row.target === canaryOverNothing) && history.some((row) => row.target === canaryOverPolicy) && rolledBackToNothing.rolledBackAt !== null && rolledBackToPolicy.rolledBackAt !== null],
+    /*
+     * And the same reader the deployed reading uses, run over these rows.
+     *
+     * The two conditions above compare numbers directly, which is the strongest
+     * thing this chain can say. These ask the shared function, because the
+     * production half of Q has no numbers of its own to compare against and
+     * must therefore trust `restorationOf` — so the chain exercises the reader
+     * rather than only the outcome. A rule applied by one of two readers is
+     * worse than none.
+     */
+    ['the shared restoration reader agrees that the first rollback restored the default', restorationOf({ rolledBackAt: rolledBackToNothing.rolledBackAt, displacedTarget: appliedOverNothing.displacedTarget, canary: policyRow(historyAfterFirst, appliedOverNothing.appliedPolicyId), live: liveRow(historyAfterFirst) }).restored],
+    ['and that the second restored the target it displaced', restorationOf({ rolledBackAt: rolledBackToPolicy.rolledBackAt, displacedTarget: appliedOverPolicy.displacedTarget, canary: policyRow(history, appliedOverPolicy.appliedPolicyId), live: liveRow(history) }).restored],
+    ['and refuses a newer row that kept the canary\'s own number', restorationOf({ rolledBackAt: rolledBackToPolicy.rolledBackAt, displacedTarget: appliedOverPolicy.displacedTarget, canary: { target: canaryOverPolicy, version: 1 }, live: { target: canaryOverPolicy, version: 2 } }).restored === false],
   ] as const;
   const canaryFailed = canaryConditions.filter(([, held]) => !held).map(([name]) => name);
 
@@ -6378,15 +7714,73 @@ async function main(): Promise<void> {
         held,
         saw: held ? 'held' : 'did not hold',
       })),
-      {
-        name: 'the same canary cycle against the deployed fleet',
-        held: null,
-        saw:
-          'a canary displaces a policy version somebody is actually running on, so a reporter ' +
-          'that drove one against the live fleet would be the contamination R5 forbids, ' +
-          'committed by the thing checking for it. Applying a finding on the deployed fleet is ' +
-          "an operator's decision, through the same `applyFinding` this exercises.",
-      },
+      /*
+       * ---------------------------------------------------------------------
+       * The deployed fleet's own canary, read rather than driven
+       * ---------------------------------------------------------------------
+       *
+       * I wrote that a canary against the live fleet "would be the
+       * contamination R5 forbids, committed by the thing checking for it".
+       * **That is wrong as stated, and the correction is recorded rather than
+       * quietly applied.** A controlled canary inside an isolated scope, with a
+       * declared rollback and a recorded restore, is what the Lab is *for* —
+       * the cycle applies, retests, compares and rolls back, and every version
+       * stays in the history so a rollback is a write forward rather than a
+       * delete. Contamination is a canary that changes what **ordinary work**
+       * is eligible for, or that leaves its own number live. Those are the two
+       * things asked here, and they are asked of rows rather than assumed.
+       *
+       * This reads; it still does not drive one. Driving a canary on the
+       * deployed fleet is a person's decision through `applyFinding`, which is
+       * unchanged — and a reporter that took it would be choosing what the
+       * fleet runs on, which is not a reporter's decision however safe the
+       * cycle is.
+       */
+      fromProduction(
+        'a canary ran against the deployed fleet, in an isolated scope, and rolled back',
+        seen.deployedCanary !== null &&
+          seen.deployedCanary.isolated &&
+          seen.deployedCanary.rolledBack,
+        seen.deployedCanary === null
+          ? 'no experiment on the deployed Brain has applied a policy, so no canary has run ' +
+            'there. The cycle is proved against real fleet_policy rows in an isolated scope by ' +
+            'the conditions above; what is absent is a person choosing to run one on the fleet.'
+          : `${seen.deployedCanary.experimentId} in a ` +
+            `${seen.deployedCanary.isolated ? 'TECHNICAL' : 'LIVE'} scope applied ` +
+            `${seen.deployedCanary.applied} and ` +
+            `${seen.deployedCanary.rolledBack ? 'rolled back' : 'HAS NOT ROLLED BACK'}`,
+      ),
+      fromProduction(
+        'and the fleet is running on the setting that canary displaced, not merely on a newer row',
+        seen.deployedCanary !== null && seen.deployedCanary.restored,
+        seen.deployedCanary === null
+          ? 'no canary has run there'
+          : `the canary wrote target ${seen.deployedCanary.canaryTarget ?? '?'} over ` +
+            `${seen.deployedCanary.displacedTarget === null ? 'no prior policy' : `target ${seen.deployedCanary.displacedTarget}`}` +
+            `, so a rollback must leave ${seen.deployedCanary.expectedAfterRollback}` +
+            ` — the live target is ${seen.deployedCanary.liveTarget ?? '?'} on a row that is ` +
+            `${seen.deployedCanary.liveIsNewerThanCanary ? 'newer than' : 'NOT newer than'} the canary` +
+            `${seen.deployedCanary.restorationReason ? `: ${seen.deployedCanary.restorationReason}` : ''}`,
+      ),
+      fromProduction(
+        'and the cycle it is part of retested under the canary and compared',
+        seen.deployedCanary !== null && seen.deployedCanary.retested,
+        seen.deployedCanary === null
+          ? 'no canary has run there'
+          : seen.deployedCanary.retested
+            ? "the experiment's own result carries the retest and the comparison"
+            : 'the experiment recorded no retest or comparison, so an applied-and-rolled-back ' +
+              'policy is all that happened — which is not the cycle',
+      ),
+      fromProduction(
+        'and nothing it did reached what the project believes',
+        seen.deployedCanary !== null &&
+          seen.deployedCanary.isolated &&
+          seen.deployedCanary.knowledgeInScope === 0,
+        seen.deployedCanary === null
+          ? 'no canary has run there'
+          : `the scope it ran in holds ${seen.deployedCanary.knowledgeInScope} knowledge row(s)`,
+      ),
     ],
     'The canary cycle is driven end to end against real `fleet_policy` rows in an isolated ' +
       'TECHNICAL scope, both ways round: real work refused as a first canary on a pressure test ' +
@@ -6537,6 +7931,63 @@ async function main(): Promise<void> {
         revision: stamp.revision,
         revisionAttestedBy: stamp.attestedBy,
         treeDirty: stamp.dirty,
+        /*
+         * Which revision every committed record names, and whether its own
+         * inputs have moved since.
+         *
+         * A record cannot name the commit that contains it — its bytes are an
+         * input to that commit's hash — so a reading taken at the head will
+         * always name a revision at or behind it. That is fine and it is also
+         * exactly where a stale artifact hides, so the question is answered
+         * here rather than left to somebody comparing four files by eye: each
+         * one names a revision, and `inputsUnchanged` says whether anything it
+         * is a reading *of* has changed between then and now.
+         *
+         * `false` is the only interesting value. It means the record describes
+         * a tree this one is not, and the remedy is to re-take it rather than
+         * to relabel it.
+         */
+        evidenceRevisions: {
+          journey: {
+            revision: journeyRevisionForRecord,
+            inputsUnchanged: journeyRevisionForRecord
+              ? journeyInputsUnchangedSince(journeyRevisionForRecord)
+              : null,
+            inputs: ['client', 'server', 'scripts/visual-qa.ts'],
+          },
+          /*
+           * The renders are asked by **digest**, not by a path diff.
+           *
+           * The first version compared `docs/evidence/step12b-renders` against
+           * the revision the manifest names — and the manifest lives in that
+           * directory, so an artifacts-only commit that regenerated both made
+           * the record report its own renders as changed. The manifest's claim
+           * was never about a path: it is *this revision produced bytes with
+           * this digest*, and the digest is recomputed from disk on every run.
+           * So that is what is compared, which is also strictly stronger — a
+           * path can move without the bytes changing and bytes can change
+           * without git noticing a rename.
+           */
+          renders: {
+            revision: manifestRevisionForRecord,
+            inputsUnchanged:
+              manifestDigestForRecord === null || renderDigestOnDisk === null
+                ? null
+                : manifestDigestForRecord === renderDigestOnDisk,
+            inputs: ['the digest of the declared render set'],
+          },
+          upgrade: {
+            revision: upgradeRevisionForRecord,
+            inputsUnchanged: upgradeRevisionForRecord
+              ? unchangedSince(upgradeRevisionForRecord, [
+                  'server/db/migrations',
+                  'server/db/pg-migrations',
+                  'server/repos',
+                ])
+              : null,
+            inputs: ['server/db/migrations', 'server/db/pg-migrations', 'server/repos'],
+          },
+        },
         generatedAt: new Date().toISOString(),
         repositoryVisible: REPO_VISIBLE,
         operationalReading: fleet.unreadable
