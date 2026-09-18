@@ -82,8 +82,25 @@ export interface RoadmapRound {
   round: number;
   state: CashDiscoveryRound['state'];
   openedAt: string;
-  /** Openings this round has produced so far. Zero is a finding, not a blank. */
-  found: number;
+  /**
+   * Openings this round produced, once it has been counted.
+   *
+   * **Null while the round is OPEN**, and that is the correction rather than a
+   * nicety. `cash_discovery_rounds.found` is `NOT NULL DEFAULT 0` and is
+   * written by exactly one statement — `closeRound`, which is guarded on
+   * `state = 'OPEN'` and moves the round out of it. So on a live round the
+   * column is the default, meaning *not counted yet*, and the comment that used
+   * to sit here said the opposite: "zero is a finding, not a blank". It is a
+   * finding on a settled round and a blank on every other, and this projection
+   * only ever returns live ones — so in production every `found` it published
+   * was a blank being read as a measurement. The Cash page said "0 openings
+   * found" about rounds that had produced thirty-one signals between them.
+   *
+   * The two readers of the *row* rather than this field are unaffected and were
+   * already right: `nextRoundFor` returns before its barren check whenever any
+   * round is OPEN, so what it and `questionFor` see is always settled.
+   */
+  found: number | null;
   /**
    * The plan behind it: how many fragments its mission actually holds, and
    * where each one is. Null when the round has no mission yet — which is a real
@@ -409,7 +426,8 @@ export async function cashRoadmap(projectId: string): Promise<CashRoadmap> {
       round: round.round,
       state: round.state,
       openedAt: round.openedAt,
-      found: round.found,
+      // Not counted until something counted it. See the field's own note.
+      found: round.state === 'OPEN' ? null : round.found,
       plan,
       activity: state.activity,
       blocker: state.blocker,

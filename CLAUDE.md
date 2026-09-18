@@ -4396,6 +4396,28 @@ and a suite that exercises the stage cannot see that.**
   not repairing them, the documented reissue is a person's, and replaying live
   Cash research was outside what was authorized.
 
+- **A default was published as a measurement, and its own comment said it was
+  not.** `RoadmapRound.found` carried *"Zero is a finding, not a blank"* —
+  true of a settled round and false of every other, because
+  `cash_discovery_rounds.found` is `NOT NULL DEFAULT 0` and is written by one
+  statement, `closeRound`, which is guarded on `state = 'OPEN'` and moves the
+  round out of it. The projection returns only **live** rounds, so every
+  `found` it ever published was that default: the Cash page said *"0 openings
+  found"* on rounds that had between them produced all thirty-one signals in
+  the portfolio, and `cash-report` printed `found=0` beside the round ids those
+  signals name. It is null while the round is OPEN now, and both readers say
+  *not counted yet* — §30's rule that an unknown is never an assumption, in the
+  direction nobody checks, because an understatement reads as modesty.
+
+  **The two readers of the row rather than the projection were already right,
+  and were left alone.** `nextRoundFor` decides whether a bucket is worth
+  asking again, and reading an unsettled zero there would retire a bucket whose
+  rounds were still running — the same defect with real consequences instead of
+  cosmetic ones. It cannot happen: the function returns before its barren check
+  whenever any round is OPEN, so everything it and `questionFor` see is
+  settled. Checking that before changing anything is why the fix is three
+  display sites and no logic.
+
 **None of the existing work was rewritten to make any of this come out right.**
 Every orchestration, fragment, claim, report, audit, round and parked candidate
 keeps its id, its reason and its lineage; the two migrations are additive; the

@@ -2164,7 +2164,9 @@ function Roadmap({ view }: { view: CashView }): JSX.Element {
                   ? `${round.plan.byStatus.ACCEPTED} of ${round.plan.planned} research items done`
                   : 'no research planned yet'}
                 {' \u00b7 '}
-                {round.found} {round.found === 1 ? 'opening' : 'openings'} found
+                {round.found === null
+                  ? 'openings not counted yet'
+                  : `${round.found} ${round.found === 1 ? 'opening' : 'openings'} found`}
                 {' \u00b7 '}
                 opened {round.openedAt}
               </span>
