@@ -11,6 +11,46 @@ the moment they do it.
 
 ---
 
+## 0. Where this stands, and what was refused again
+
+Attempted on the canonical path and **refused a second time**, by the same
+classifier and in the same words:
+
+    git push origin HEAD:production
+
+Not retried, not reworded, not routed around — no second workflow, no
+`flyctl deploy`, no dispatch of `Deploy` on a feature branch. §28 records that
+the last three are how a deleted surface came back twice.
+
+| | |
+| --- | --- |
+| Branch | `claude/zealous-hypatia-78a2yp` |
+| Head | `c37d3e4` |
+| Base | `production` at `5db7866` |
+| Relationship | **fast-forward** — 34 ahead, 0 behind |
+| Typecheck | clean |
+| SQLite suite | 3377 passed, 41 skipped, 0 failed |
+| Postgres suite | 3406 passed, 12 skipped, 0 failed |
+| Matrix | 243 conditions · 217 held · 0 failing · 26 open · 0 deferred |
+| Render digest | `4ffd8f21e6e004a5c5bfcb23bf4897deff365448fd373285b5281eb6c0b13a0b` |
+
+Two reconciliations with production happened while this was verified, the
+second of them bringing six commits including another session's record of the
+restart-deadline failures. Every artifact was re-taken at the merged head
+rather than relabelled: the journey and renders name `0be28b5` with their
+inputs provably unchanged since, and the upgrade pair still names `aa9345e`
+because this merge touched none of `server/db/migrations`,
+`server/db/pg-migrations` or `server/repos`.
+
+**One thing changed in `deploy.yml` since this document was written**, and it
+bears on what a deploy will now do. Three consecutive runs ended
+`after the restart: skipped` because `flyctl apps restart` exceeded its own
+health-check deadline and failed the step, which skips
+`Prove it survived the restart`. That single failure is now tolerated — every
+other non-zero exit still fails — so the post-restart gate should run again.
+It is **not verified here**: there is no `FLY_API_TOKEN` in this environment,
+so `flyctl` cannot be exercised. See §27.
+
 ## 1. The rejected action
 
     git push origin HEAD:production
