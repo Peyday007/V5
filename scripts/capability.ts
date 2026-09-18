@@ -48,6 +48,10 @@ import {
 } from '../server/services/realize/packet.ts';
 import { decisionReadiness, directorPass } from '../server/services/realize/director.ts';
 import { compile } from '../server/services/realize/compile.ts';
+import {
+  answerAuthorityGap,
+  gapsAwaitingAPerson,
+} from '../server/services/realize/authority.ts';
 import { applyProof, readProof } from '../server/services/realize/prove.ts';
 
 function out(line = ''): void {
@@ -84,6 +88,9 @@ const USAGE = `
   packet compile <packetId>                           the change request it implies
   packet prove <packetId> [--apply]                   what the evidence supports, and what it does not
   packet section <packetId> <SECTION> <file.json>     write a design section a reader authored
+  packet awaiting <packetId>                          every gap waiting on a person
+  packet answer <gapId> --grant|--refuse --admin <e>  a person's answer to one of them
+           --statement <words>
   packets                                             every packet, and faculties with none
 
   submit <binId> <file.json> --worker <handle>        submit a reading through the worker path
@@ -477,6 +484,73 @@ async function packet(argv: string[]): Promise<void> {
       out('');
       out(`  ${written.section} v${written.version}  ${written.authorKind}`);
       out('');
+      break;
+    }
+    case 'awaiting': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet awaiting <packetId>');
+      const waiting = await gapsAwaitingAPerson(id as string);
+      out('');
+      if (waiting.length === 0) {
+        out('  Nothing on this packet is waiting on a person.');
+        out('');
+        break;
+      }
+      out(`  ${waiting.length} gap(s) waiting on a person`);
+      for (const gap of waiting) {
+        out('');
+        out(`    ${gap.id}  ${gap.state}  ${gap.aspect}`);
+        out(`        ${gap.requirement}`);
+        if (gap.evidence) out(`        judged from: ${gap.evidence}`);
+      }
+      out('');
+      out('  Answer one with: packet answer <gapId> --grant|--refuse --admin <email> --statement "…"');
+      out('');
+      break;
+    }
+    /*
+     * A person's answer to a gap no amount of building closes.
+     *
+     * `readiness` refuses the packet while any `REQUIRES_PERSON_AUTHORITY` gap
+     * is open, correctly — and until this existed the only callers of the
+     * transition that answers one were tests, which is §24's *waiting nobody
+     * can resolve* landing on the single decision the whole packet stops at.
+     *
+     * `--grant` and `--refuse` are separate flags rather than a value, because
+     * a default here would be a default about somebody's authority. The service
+     * is what guards it: only a gap actually waiting on a person, only an
+     * enabled administrator, and the whole proof in the statement that makes
+     * the change.
+     */
+    case 'answer': {
+      const gapId = rest[0];
+      const grant = rest.includes('--grant');
+      const refuse = rest.includes('--refuse');
+      const admin = flag(rest, 'admin');
+      const statement = flag(rest, 'statement');
+      if (!gapId || !admin || !statement || grant === refuse) {
+        fail(
+          'Usage: packet answer <gapId> --grant|--refuse --admin <email> --statement "…"\n' +
+            '  Exactly one of --grant and --refuse: a default about somebody\u2019s authority is ' +
+            'not a default this may have.',
+        );
+      }
+      const outcome = await answerAuthorityGap({
+        gapId: gapId as string,
+        answer: grant ? 'GRANTED' : 'REFUSED',
+        statement: statement as string,
+        answeredByEmail: admin as string,
+        // Reaching this shell is what authenticated the call, and Brain cannot
+        // check that — so the weaker, unverifiable value, never the stronger.
+        channel: 'SHELL',
+        executedByRef: process.env['BRAIN_EXECUTED_BY'] ?? null,
+      });
+      out('');
+      out(`  ${outcome.answered ? 'Answered' : 'Not answered'}  ${gapId}`);
+      out(`  ${outcome.reason}`);
+      if (outcome.gap) out(`  Now: ${outcome.gap.state}  ${outcome.gap.kind}`);
+      out('');
+      if (!outcome.answered) fail('Nothing changed.');
       break;
     }
     case 'prove': {

@@ -309,11 +309,29 @@ describe('the system self-model', () => {
       const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
       expect(dockerfile).toMatch(/COPY server \.\/server/);
       expect(dockerfile).not.toMatch(/COPY tests/);
-      // And neither `docs/` nor CLAUDE.md, which is what makes DOCUMENTED
+      // And nothing lands *at* `docs/`, which is what makes DOCUMENTED
       // unreadable from a deployment too. This assertion is the one that would
       // have caught the original defect: `documentedReading` answered NO.
-      expect(dockerfile).not.toMatch(/COPY docs/);
+      //
+      // The destination is what matters, not the source, and this caught a real
+      // change: the blueprint has to reach the image, because `registerBlueprint`
+      // reads a source by path — and the first version of that copy put it at
+      // `docs/capability`. A `docs/` tree holding one blueprint is worse than an
+      // absent one, because `index.docs.length === 0` is the only thing standing
+      // between this reading and a confident `NO` for every component that
+      // blueprint does not name. So a source under `docs/` may be copied, and
+      // never to a destination under `docs/`.
+      expect(dockerfile).not.toMatch(/COPY\s+\S+\s+\.\/docs/);
       expect(dockerfile).not.toMatch(/COPY CLAUDE\.md/);
+    });
+
+    it('carries the blueprint as an input, outside the tree DOCUMENTED is read from', () => {
+      // Two halves, and the reading above is only honest while both hold: the
+      // bytes are in the image at all, and they are not where `readTextIndex`
+      // looks. A blueprint is a statement about faculties Brain wants; it is
+      // never documentation of components Brain has.
+      const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
+      expect(dockerfile).toMatch(/COPY docs\/capability \.\/blueprints/);
     });
 
     it('answers DOCUMENTED unknown rather than no when nothing is readable', async () => {

@@ -5210,6 +5210,42 @@ other reconciliations, with the self-model refresh next to it; a test asserts
 the loop's own source reaches both, and both are wrapped so a kernel that cannot
 advance never stops Russell writing back a mission.
 
+- **A gap waiting on a person had no way for that person to answer it.**
+  `readiness` refuses a packet while any `REQUIRES_PERSON_AUTHORITY` gap is
+  open, which is correct — and `judgeGap` and `setGapState` were called by tests
+  and by nothing else, so the packet stopped at the one decision the whole
+  kernel waits for and no transition could record it. §24 writes *a state that
+  says "waiting for a person" which that person cannot resolve is not waiting;
+  it is stuck* at four altitudes and §27 at a fifth; this is the sixth, and it
+  is the one where the escalation is the entire point of the stage.
+  `services/realize/authority.ts` is the answering transition, and four
+  properties are what make it an answer rather than a way around the gate. It
+  answers **only a gap already waiting on a person** — the kind is a condition
+  *in the statement that makes the change*, because a caller that could
+  reclassify any gap could turn a `MUST_BE_RESEARCHED` into something needing no
+  research with somebody else's name on it. It **grants nothing**: the
+  authorizations Brain actually enforces are untouched, and approving the
+  objective and approving the release stay person-only decisions on the Build
+  surface. It is **attributed, and attribution is not authentication** — §23's
+  column pair, with the channel defaulting to the weaker unverifiable value
+  because Brain cannot check one. And a **refusal is recorded as a refusal**,
+  `WAIVED` with the words on it, which is a different fact from a grant and must
+  never read the same.
+
+- **The blueprint could not reach the deployed image, and the obvious fix was
+  wrong in a way a guard caught.** `.dockerignore` excludes `docs/`, and
+  `registerBlueprint` reads a source by path — so the first version copied
+  `docs/capability` to `docs/capability`. `readTextIndex` reads `docs/`, and
+  `documentedReading` answers `unknown(NO_DOCS_HERE)` **only while that
+  directory is absent**: a `docs/` tree holding one blueprint would have made
+  every component the blueprint does not name read a confident `NO`, which is
+  the exact reading corrected once already. So the bytes land at `blueprints/`,
+  outside the tree DOCUMENTED is read from, which is also what the `objectives/`
+  precedent actually records — the remedy there was to move the input out of
+  `docs/`, never to start copying `docs/` in. **A blueprint is a statement about
+  faculties Brain wants and is never documentation of components Brain has**,
+  which is §35's own first sentence arriving at a path.
+
 **What is true of this kernel today, said plainly.** Thirteen faculties are
 canonically defined from the real blueprint, each anchored to a named block in
 its extracted text, after an audit that refused two of fifteen with its reasons
@@ -5387,6 +5423,7 @@ server/
       refresh.ts        when the reading stopped being about this system
     realize/
       gaps.ts           what Brain derives, and the four kinds it refuses to
+      authority.ts      the answer to a gap no amount of building closes
       packet.ts         the ten-section packet, versioned, as living state
       director.ts       what to research, and when to stop — with the reason
       compile.ts        the change request a decision-ready packet implies
@@ -5516,6 +5553,7 @@ tests/                  Vitest suites
   capabilityDirector.test.ts most gaps are not research, and the archive comes first
   capabilityCompile.test.ts  every clause traces to a gap, and it starts nothing
   capabilityProof.test.ts    a merge moves no dimension; each one needs its own evidence
+  capabilityAuthority.test.ts  the escalation's answering transition, and every refusal in it
   step12bProduct.test.ts     the product decisions, where they are decided
   step12bResponsive.test.ts  the widths that were clipping, and why they no longer do
   cashMode.test.ts           the lifecycle, and the off switch that is not the Brain's

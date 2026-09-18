@@ -68,15 +68,25 @@ COPY scripts ./scripts
 # twice: once for living under `docs/` (excluded) and once for this COPY being
 # absent. Prose a person approved, no secrets, and no authority of its own.
 COPY objectives ./objectives
-# The capability blueprint and its amendments. `.dockerignore` excludes `docs/`
-# wholesale, which is right for everything else under it and wrong for these:
-# `registerBlueprint` reads a source *by path* and hashes the bytes it read, so
-# a blueprint that exists only in the repository is one the deployed Brain can
-# never ingest — verbatim the failure the `objectives/` comment above records.
-# Prose the owner supplied, no secrets, and no authority of its own; what it
-# can do to a faculty is bounded by `INGESTION_MAY_MOVE`, which is DEFINITION
-# and nothing else.
-COPY docs/capability ./docs/capability
+# The capability blueprint and its amendments, at `blueprints/` and deliberately
+# not at `docs/`. `registerBlueprint` reads a source *by path* and hashes the
+# bytes it read, so a blueprint that exists only in the repository is one the
+# deployed Brain can never ingest — verbatim the failure the `objectives/`
+# comment above records, and the remedy that comment records is to move the
+# input out of `docs/` rather than to start copying `docs/` in.
+#
+# **Which is not merely tidiness here, and the first version of this line got it
+# wrong.** `readTextIndex` reads `docs/`, and `documentedReading` answers
+# `unknown(NO_DOCS_HERE)` only while that directory is *absent*. A `docs/` tree
+# holding the blueprint and nothing else is worse than none: every component the
+# blueprint does not happen to name would read a confident `NO`, which is the
+# exact defect that reading was corrected for once already. A blueprint is a
+# statement about faculties Brain wants, never documentation of components Brain
+# has — §35's own first sentence, at a path.
+#
+# Prose the owner supplied, no secrets, and no authority of its own; what it can
+# move is bounded by `INGESTION_MAY_MOVE`, which is DEFINITION and nothing else.
+COPY docs/capability ./blueprints
 COPY --from=build /app/client/dist ./client/dist
 
 # Not root. The process needs no privilege: it opens a socket and talks to two
