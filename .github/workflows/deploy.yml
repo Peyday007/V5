@@ -410,13 +410,46 @@ jobs:
       # one finished, and one with a live lease — are exactly where they were.
       # The process that created them is gone, so nothing in the container can
       # fake that.
+      #
+      # **`flyctl`'s own wait is not the judge, and three runs in a row proved
+      # it.** `flyctl apps restart` waits for health checks with a deadline
+      # shorter than this machine's cold start: it printed five minutes of
+      # `Waiting for … to become healthy (started, 0/1)`, exited 126 with
+      # `context deadline exceeded`, and the very next step answered
+      # `healthy again after 1 attempt(s)` twenty-four seconds later. The
+      # machine was already back. But a failing step with no `if:` skips every
+      # step after it, so `after the restart: skipped` — three deploys running,
+      # the post-restart verification not failing but *not running at all*.
+      #
+      # That is the erosion worth naming: a gate that never runs stops being
+      # evidence long before anybody notices, and re-deploying is the wrong
+      # answer to it — the image is live, and a re-deploy restarts a Brain
+      # holding leased work to re-prove what the pre-restart pass already
+      # proved.
+      #
+      # So the wait below is the judge, because it polls the public URL from
+      # outside the machine and is what the next step actually depends on. This
+      # step tolerates *exactly* the health-check deadline and nothing else —
+      # the same shape as the Depot fallback in the Deploy step, and for the
+      # same reason: a failure that says nothing about the commit must not read
+      # like one that does. A restart refused for any other reason still fails
+      # here, once.
       - name: Restart it, so persistence means something
         if: always() && steps.release.outcome == 'success'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          flyctl apps restart "$app"
+          set -o pipefail
+          if flyctl apps restart "$app" 2>&1 | tee restart.txt; then
+            exit 0
+          fi
+          if grep -qiE 'failed to wait for health checks|context deadline exceeded' restart.txt; then
+            echo "::warning::flyctl gave up waiting for health checks. The machine was asked to restart; whether it came back is decided by the next step, which polls the public URL."
+            exit 0
+          fi
+          echo "::error::The restart was refused for a reason that is not the health-check wait. Read the output above."
+          exit 1
 
       - name: Wait for it to answer after the restart
         if: always() && steps.release.outcome == 'success'

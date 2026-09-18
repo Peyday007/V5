@@ -2798,6 +2798,26 @@ remote.
   strings this change removed present in the first and absent in the second.
   The remedy is still `deploy.yml`'s own restart step and still deliberately
   left to whoever is editing that file.
+- **`flyctl`'s health-check wait was deciding whether the restart gate ran, and
+  the remedy §27 left to `deploy.yml` is taken here.** Three consecutive deploys
+  ended `after the restart: skipped` — not failing, *not running* — because
+  `flyctl apps restart` waits with a deadline shorter than this machine's cold
+  start, exits 126, and a failing step with no `if:` skips every step after it.
+  Run 35349935034 put the number on it: five minutes of
+  `Waiting for … to become healthy`, and the very next step answering
+  `healthy again after 1 attempt(s)` **twenty-four seconds later**. The machine
+  was already back.
+
+  The wait that polls the public URL from outside the machine is the judge now,
+  because it is what the next step actually depends on, and the restart step
+  tolerates **exactly** the health-check deadline — the same shape as the Depot
+  fallback beside it, and for the same reason: a failure that says nothing about
+  the commit must not read like one that does. A restart refused for any other
+  reason still fails, once. **A tolerance that matches everything is not a
+  tolerance, it is a removed check**, so that is the half the guard pins: the
+  step must still carry an `::error::` and an `exit 1`, and must not end in
+  `|| true`.
+
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first

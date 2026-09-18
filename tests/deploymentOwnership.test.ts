@@ -118,6 +118,42 @@ describe('one branch owns production', () => {
   });
 });
 
+describe('the restart that makes persistence mean something actually runs', () => {
+  /*
+   * §27 records three consecutive deploys ending `after the restart: skipped`.
+   * `flyctl apps restart` waits for health checks with a deadline shorter than
+   * this machine's cold start, exits non-zero, and a failing step with no `if:`
+   * skips every step after it — so the post-restart verification was not
+   * failing, it was not running. A gate that never runs stops being evidence
+   * long before anybody notices.
+   *
+   * Two properties, and the second is the one that keeps the first honest.
+   */
+  const deploy = read('.github/workflows/deploy.yml');
+  const restart = deploy.slice(
+    deploy.indexOf('- name: Restart it'),
+    deploy.indexOf('- name: Wait for it to answer after the restart'),
+  );
+
+  it('tolerates the health-check deadline, because the poll after it is the judge', () => {
+    expect(restart).toMatch(/failed to wait for health checks/);
+    expect(restart).toMatch(/context deadline exceeded/);
+    // And the thing it defers to has to be there, polling from outside the
+    // machine rather than asking the machine about itself.
+    expect(deploy).toContain('- name: Wait for it to answer after the restart');
+    expect(deploy).toMatch(/healthz/);
+  });
+
+  it('does not swallow a restart refused for any other reason', () => {
+    // A tolerance that matches everything is not a tolerance, it is a removed
+    // check — and it would hide a machine that never restarted at all, which is
+    // precisely what the step exists to cause.
+    expect(restart).not.toMatch(/\|\|\s*true/);
+    expect(restart).toMatch(/::error::/);
+    expect(restart).toMatch(/exit 1/);
+  });
+});
+
 describe('a dispatch surface offers the commands it actually accepts', () => {
   /*
    * `admin.yml` carries the command list twice: once as the input's own
