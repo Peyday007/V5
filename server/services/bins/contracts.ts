@@ -839,6 +839,8 @@ async function evaluateFactoryDelivery(bin: Bin): Promise<ContractVerdict> {
 
 const EVALUATORS: Record<string, Evaluator> = {
   DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
+  BLUEPRINT_EXTRACTION_V1: evaluateBlueprintExtraction,
+  BLUEPRINT_AUDIT_V1: evaluateBlueprintAudit,
   RESEARCH_PACKET_V1: evaluateResearchPacket,
   SURFACE_PROBE_V1: evaluateSurfaceProbe,
   RUSSELL_TURN_V1: evaluateRussellTurn,
@@ -926,6 +928,122 @@ async function evaluateRussellLens(bin: Bin): Promise<ContractVerdict> {
   if (!Array.isArray((parsed as Record<string, unknown>)['findings'])) {
     return refuse('RETRY', ['The reply carried no "findings" array.'], observed);
   }
+  return satisfied(observed);
+}
+
+/* ------------------------------------------------------------------------- */
+/* BLUEPRINT_EXTRACTION_V1 / BLUEPRINT_AUDIT_V1                               */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Every declared section has a submission, and each one is structurally one.
+ *
+ * Structure only, and the shallowness is the design — the same argument
+ * `evaluateRussellLens` makes. Whether a definition is *faithful* to the source
+ * is what the independent audit decides, and whether it is well-formed is what
+ * `validateFacultyDefinition` decides after the lease is gone. Judging either
+ * here would charge an attempt against a worker whose reading was fine and
+ * whose quote happened to be paraphrased, and it would make the worker's own
+ * `brain_bin_complete` fail its ownership proof.
+ *
+ * What it does refuse is a section nobody answered. A bin that passed with
+ * units missing would let a partial reading look like a complete one, and the
+ * count of sections is exactly what makes coverage checkable at all.
+ */
+async function evaluateBlueprintExtraction(bin: Bin): Promise<ContractVerdict> {
+  return await evaluateDeclaredSubmissions(bin, {
+    what: 'section',
+    requiredKeys: ['definition', 'quote'],
+  });
+}
+
+/**
+ * Every proposed definition has a verdict, and each one is structurally one.
+ *
+ * The verdict's *value* is matched exactly in `settleAudit`, against a closed
+ * set, and only `FAITHFUL` promotes. This establishes that the audit happened
+ * at all — a bin that completed with no verdicts would leave every candidate
+ * unjudged, and an unjudged candidate is not promoted, so the bin would have
+ * cost a fire and moved nothing.
+ */
+async function evaluateBlueprintAudit(bin: Bin): Promise<ContractVerdict> {
+  return await evaluateDeclaredSubmissions(bin, {
+    what: 'candidate',
+    requiredKeys: ['verdict', 'reason'],
+  });
+}
+
+/**
+ * The half both blueprint contracts share.
+ *
+ * One function rather than two near-identical ones, because two readers of one
+ * rule disagree eventually — which is a sentence this codebase has had to write
+ * about `reconcileRepairs`, `reconcileAcceptedFragment` and `sentences()`
+ * already.
+ */
+async function evaluateDeclaredSubmissions(
+  bin: Bin,
+  spec: { what: string; requiredKeys: string[] },
+): Promise<ContractVerdict> {
+  const units: BinUnitSpec[] = bin.manifest.units ?? [];
+  const results = await listBinUnitResults(bin.id);
+  const byKey = new Map(results.map((row) => [row.unitKey, row]));
+
+  const missing: string[] = [];
+  const malformed: string[] = [];
+
+  for (const unit of units) {
+    const stored = byKey.get(unit.key);
+    if (!stored) {
+      missing.push(unit.key);
+      continue;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stored.value);
+    } catch {
+      malformed.push(`${unit.key} (not valid JSON)`);
+      continue;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      malformed.push(`${unit.key} (not a structured object)`);
+      continue;
+    }
+    const record = parsed as Record<string, unknown>;
+    const absent = spec.requiredKeys.filter((key) => record[key] === undefined);
+    if (absent.length > 0) malformed.push(`${unit.key} (no ${absent.join(', ')})`);
+  }
+
+  const observed = {
+    unitsDeclared: units.length,
+    resultsStored: results.length,
+    missing,
+    malformed,
+  };
+
+  if (units.length === 0) {
+    return refuse(
+      'HUMAN',
+      [
+        `The manifest declares no ${spec.what}s, so there is nothing this contract could ` +
+          'verify. A bin with no standard is satisfied vacuously, which is worse than refused.',
+      ],
+      observed,
+    );
+  }
+
+  const reasons: string[] = [];
+  if (missing.length > 0) {
+    reasons.push(
+      `${missing.length} declared ${spec.what}(s) have no submission: ${missing.join(', ')}.`,
+    );
+  }
+  if (malformed.length > 0) {
+    reasons.push(
+      `${malformed.length} submission(s) are not structurally usable: ${malformed.join(', ')}.`,
+    );
+  }
+  if (reasons.length > 0) return refuse('RETRY', reasons, observed);
   return satisfied(observed);
 }
 

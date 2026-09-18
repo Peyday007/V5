@@ -330,6 +330,39 @@ export const EVENT_TYPES = [
    * where it is and this says why the packet came back.
    */
   'RESEARCH_PARK_RESTORED',
+
+  /* ----------------------------------------------------------------------- */
+  /* The self-expansion kernel                                                */
+  /* ----------------------------------------------------------------------- */
+
+  /**
+   * A capability blueprint or an amendment became a registered, readable source.
+   *
+   * On the project's own history rather than in a log, because this is the row
+   * every canonical faculty definition later traces back to. An amendment
+   * records the source it amends rather than editing it, which is §5 at a new
+   * kind of artifact: the original keeps its bytes and its hash.
+   */
+  'CAPABILITY_SOURCE_REGISTERED',
+
+  /**
+   * A worker's reading of a source was validated, and what survived it.
+   *
+   * Counts rather than prose: how many definitions were proposed, how many were
+   * refused, and why. A refusal is kept on the candidate row; this is the event
+   * that says the reading happened at all.
+   */
+  'CAPABILITY_SOURCE_READ',
+
+  /**
+   * One faculty definition became canonical.
+   *
+   * Carries the audit that let it across. Promoting moves exactly one of the
+   * six dimensions — the definition — and that is asserted rather than stated:
+   * a Brain that read a document about a faculty and reported the faculty as
+   * implemented would be lying in the most expensive available direction.
+   */
+  'FACULTY_PROMOTED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -4134,6 +4167,19 @@ export const COMPLETION_CONTRACTS = [
   // back from the forge to confirm it points at the commit that was integrated.
   // It stops there: merging is a person's decision and no worker scope grants it.
   'FACTORY_DELIVERY_V1',
+  // A capability blueprint, read. Brain declares one unit per section it found
+  // in the document's own headings, so coverage is a question about rows rather
+  // than about a summary, and the worker proposes one structured definition per
+  // unit. Every definition must quote the source; the quote is anchored in the
+  // extracted text by Brain and the page comes from the block it was found in,
+  // never from the model. See `services/capability/extraction.ts`.
+  'BLUEPRINT_EXTRACTION_V1',
+  // That reading, judged by a session that did not produce it. One verdict per
+  // proposed definition, matched exactly against a closed set, and only
+  // `FAITHFUL` may reach `promoteCandidate`. A candidate nobody judged is not
+  // promoted: an unjudged definition that became canonical because nobody got to
+  // it is exactly the vacuous satisfaction the candidate stage exists to prevent.
+  'BLUEPRINT_AUDIT_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 
