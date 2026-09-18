@@ -1,6 +1,6 @@
 {
-  "takenAt": "2026-09-18T12:03:26.856Z",
-  "revision": "aa9345e755ceb9c423e237ff3ba219c0f78a3652",
+  "takenAt": "2026-09-18T21:56:03.881Z",
+  "revision": "0be28b5ac8fa2a0734034bd5c98c46bb4bd98278",
   "phoneWidth": 390,
   "steps": [
     {
@@ -170,14 +170,14 @@
     "ideaOverriddenByAPerson": true,
     "ideaPriority": "MUST_DO",
     "russellsJudgmentKept": true,
-    "parkedMissionId": "rms_6477b6eb0e2d4e9a8a29",
-    "parkedRequestId": "rhr_369907ddf5a34dcd8d1a",
-    "parkedOrchestrationId": "orc_4248eea7451b4539af8f",
+    "parkedMissionId": "rms_35a7c927a9014c658063",
+    "parkedRequestId": "rhr_f46d74113afc46458f9f",
+    "parkedOrchestrationId": "orc_8fcfb54cf8af4a3db9a8",
     "missionStateBefore": "NEEDS_HUMAN",
     "missionStateAfter": "RUNNING",
     "requestSettled": true,
     "workIdentifiedOnScreen": true,
-    "workIdsOnScreen": "Mission=rms_6477b6eb0e2d4e9a8a29 Packet=orc_4248eea7451b4539af8f Bin=bin_2f09dbda0f5a480fbff3 State=NEEDS_HUMAN Attempt=1",
+    "workIdsOnScreen": "Mission=rms_35a7c927a9014c658063 Packet=orc_8fcfb54cf8af4a3db9a8 Bin=bin_0f44369c864b4ea4af07 State=NEEDS_HUMAN Attempt=1",
     "filedDocumentOnScreen": null,
     "knowledgeRows": 0,
     "knowledgeCitingThisMission": 0,
