@@ -186,6 +186,32 @@ describe('a dispatch surface offers the commands it actually accepts', () => {
     }
   });
 
+  it('never puts a dispatch input into the command it sends, and never evals one', () => {
+    /*
+     * `flyctl ssh console -C` takes ONE command string, and the shell inside
+     * the production container runs it. So an input interpolated into that
+     * string is not an argument, it is a command — a quote ends the string and
+     * everything after it executes. Anyone who can dispatch this can already
+     * dispatch `deploy.yml`, so it is not a privilege escalation; it is still a
+     * hole, and the *quieter* half is the ordinary quoting bug, because an
+     * authority statement is prose and a truncated one is reported as success.
+     *
+     * The inputs therefore arrive as environment variables and are parsed with
+     * `shlex`, which applies shell quoting rules and executes nothing. `eval`
+     * is named here because `eval "set -- $ARGS"` is the tidy-looking version
+     * of the same hole: it honours quotes and also runs `$(…)`.
+     */
+    const run = kernel.slice(kernel.indexOf('- name: Run'));
+    expect(run).toContain('COMMAND: ${{ inputs.command }}');
+    expect(run).toContain('ARGS: ${{ inputs.args }}');
+    expect(run).toContain('shlex.quote');
+    // Neither input may appear as an interpolation anywhere in the script body.
+    const script = run.slice(run.indexOf('run: |'));
+    expect(script).not.toContain('${{ inputs.command }}');
+    expect(script).not.toContain('${{ inputs.args }}');
+    expect(script).not.toMatch(/\beval\b/);
+  });
+
   it('cannot deploy, and says so by containing no deploy command', () => {
     // The floor `leaves exactly one workflow able to deploy` already sets, said
     // again at the surface most likely to grow one: the kernel's job is to read

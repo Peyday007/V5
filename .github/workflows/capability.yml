@@ -51,13 +51,38 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      # The inputs reach the shell as *environment variables*, never as `${{ }}`
+      # interpolated into the script, and they are parsed rather than evaluated.
+      #
+      # That is not style. `-C` takes one command string, so an input pasted
+      # into it is executed by the shell inside the production container: a
+      # quote in an argument ends the string and everything after it is a
+      # command. It is a script-injection surface at the same time as being an
+      # ordinary quoting bug — and the quoting bug is the one that would have
+      # bitten first and quietest, because an authority statement is prose. §27
+      # already records what silent truncation costs: it is the one outcome the
+      # far end cannot recover from, because it is reported as success.
+      #
+      # `shlex` is the whole of the fix, and it is deliberately not `eval`:
+      # `eval "set -- $ARGS"` reads like a tidy way to honour quotes and is the
+      # identical hole one line along, because `$(…)` inside the string runs.
+      # `shlex.split` applies the same quoting rules and executes nothing, and
+      # `shlex.quote` puts the words back together so the container receives
+      # exactly the characters that were typed, whatever they are.
       - name: Run
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COMMAND: ${{ inputs.command }}
+          ARGS: ${{ inputs.args }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          remote=$(python3 - <<'PY'
+          import os, shlex
+          words = shlex.split(os.environ.get('COMMAND', '')) + shlex.split(os.environ.get('ARGS', ''))
+          print(' '.join(['sh', '/app/scripts/capability.sh'] + [shlex.quote(w) for w in words]))
+          PY
+          )
+          echo "Running: $remote"
           # `tee` would otherwise hide a non-zero exit behind its own success.
           set -o pipefail
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/capability.sh ${{ inputs.command }} ${{ inputs.args }}" \
-            2>&1 | tee capability.txt
+          flyctl ssh console --app "$app" -C "$remote" 2>&1 | tee capability.txt
