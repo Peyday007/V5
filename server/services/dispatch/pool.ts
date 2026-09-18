@@ -253,7 +253,7 @@ function judgeSurface(
     headroom: { used, limit },
     cooldownUntil,
     lastFiredAt: input.routine.lastFiredAt,
-    lastOutcome: describeLastOutcome(input.routine),
+    lastOutcome: lastOutcomeOf(input.routine),
     chain: proof.chain,
     verdict,
     problems,
@@ -269,7 +269,15 @@ function judgeSurface(
  * support and no more. A phrase that implied a per-fire record would be a figure
  * that was never measured.
  */
-function describeLastOutcome(routine: FleetRoutine): string {
+/**
+ * What happened the last time Brain fired this surface, in a person's words.
+ *
+ * Exported because the Fleet view needs the identical sentence: two readers
+ * composing their own account of one row is how the terminal and the screen
+ * come to disagree about the same surface, which is the defect §29 records
+ * about a status that contradicts the control beside it.
+ */
+export function lastOutcomeOf(routine: FleetRoutine): string {
   if (routine.totalFires === 0) return 'never fired';
   if (routine.state === 'QUARANTINED') {
     return `quarantined${routine.stateReason ? `: ${routine.stateReason.slice(0, 120)}` : ''}`;

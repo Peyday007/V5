@@ -307,6 +307,60 @@ describe('several accounts serving one logical Factory worker', () => {
     expect(new Set(snapshot.candidates.map((c) => c.account.id)).size).toBe(3);
   });
 
+  it('shows the pool operationally, with the four facts a list of Routines cannot say', async () => {
+    /*
+     * Property 9 on the product surface rather than only on a terminal. Every
+     * surface in one pool carries the same *name*, so a list of names cannot say
+     * whether three accounts are covering for one worker or are three separate
+     * pools — the binding says that, the reference says which Routine a remedy
+     * is applied to, and the headroom and the last fire say whether this one is
+     * carrying any of the load.
+     */
+    const { fleetView } = await import('../server/services/fleet/view.ts');
+    const view = await fleetView({ includeTechnical: false, projectId });
+    const mine = view.surfaces.filter((s) => s.boundWorker === 'factory-brain');
+    expect(mine).toHaveLength(3);
+    for (const surface of mine) {
+      expect(surface.routineRef).toMatch(/^trig_pool_[abc]$/);
+      expect(surface.accountName).toMatch(/^claude-[abc]$/);
+      expect(surface.headroom.used).toBe(0);
+      // Nobody has set a target for these, and that is not a ceiling of zero.
+      expect(surface.headroom.limit).toBeNull();
+      expect(surface.lastOutcome).toBe('never fired');
+    }
+    // Three accounts, three references: the pool is legible as a pool.
+    expect(new Set(mine.map((s) => s.accountName)).size).toBe(3);
+    expect(new Set(mine.map((s) => s.routineRef)).size).toBe(3);
+    // And the reference is not technical detail, while the raw ids still are.
+    expect(mine.every((s) => s.workerId === null)).toBe(true);
+  });
+
+  it('counts a surface that is carrying work against its own recorded ceiling', async () => {
+    await setPolicy({
+      scope: 'ACCOUNT',
+      scopeId: surfaces[0]!.accountId,
+      target: 2,
+      actor: 'test',
+      reason: 'two at a time',
+    });
+    await factoryBin('busy', { pinnedRoutineId: surfaces[0]!.routineId });
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+
+    const { fleetView } = await import('../server/services/fleet/view.ts');
+    const view = await fleetView({ includeTechnical: false, projectId });
+    const busy = view.surfaces.find((s) => s.routineRef === surfaces[0]!.routineRef)!;
+    expect(busy.headroom).toEqual({ used: 1, limit: 2 });
+    /*
+     * Fired, and nobody has turned up yet — which is what this fixture's fake
+     * provider actually does, and what the sentence says. A reading that called
+     * that "1 fired" would be describing the request rather than the outcome.
+     */
+    expect(busy.lastOutcome).toContain('nobody arriving');
+    // And its neighbours are untouched: headroom is per surface, not per fleet.
+    const idle = view.surfaces.find((s) => s.routineRef === surfaces[1]!.routineRef)!;
+    expect(idle.headroom.used).toBe(0);
+  });
+
   it('reports the pool as the set it is, and refuses to call it proven before anything has run', async () => {
     const report = await verifyFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
     expect(report.surfaces).toHaveLength(3);

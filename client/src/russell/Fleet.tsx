@@ -119,6 +119,24 @@ export function FleetCentre({ projectId }: { projectId: string | null }): JSX.El
                   {surface.accountName}
                   {surface.reason ? ` · ${surface.reason}` : ''}
                 </p>
+                {/*
+                  Which identity this surface serves, and how much of its own
+                  allowance is in use.
+
+                  Several surfaces in one pool all read `Factory Brain …`, so
+                  the name alone cannot say whether three accounts are covering
+                  for one worker or are three separate pools. The binding says
+                  it, and the headroom beside it is the reading the router
+                  routes on rather than a second count of the same thing.
+                */}
+                <p className="rs-item-meta">
+                  {surface.boundWorker ? `Runs as ${surface.boundWorker}` : 'Bound to no worker yet'}
+                  {' · '}
+                  {surface.headroom.limit === null
+                    ? `${surface.headroom.used} in flight, no ceiling set`
+                    : `${surface.headroom.used} of ${surface.headroom.limit} in flight`}
+                </p>
+                <p className="rs-item-meta">Last fire: {surface.lastOutcome}</p>
                 {surface.capabilities.length > 0 ? (
                   <p className="rs-item-meta rs-at-interested">
                     Can do: {surface.capabilities.join(', ')}
@@ -140,8 +158,8 @@ export function FleetCentre({ projectId }: { projectId: string | null }): JSX.El
                 {/* Raw identifiers arrive only for a caller entitled to them. */}
                 {surface.workerId ? (
                   <p className="rs-ref rs-at-technical">
-                    {surface.routineId} · worker {surface.workerId} · {surface.consecutiveFailures}{' '}
-                    failures, {surface.consecutiveNoShows} no-shows
+                    {surface.routineRef} · {surface.routineId} · worker {surface.workerId} ·{' '}
+                    {surface.consecutiveFailures} failures, {surface.consecutiveNoShows} no-shows
                   </p>
                 ) : null}
               </article>
