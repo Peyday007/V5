@@ -48,6 +48,7 @@ import { decisionReadiness, directorPass } from '../server/services/realize/dire
 import { compile } from '../server/services/realize/compile.ts';
 import { handOff } from '../server/services/realize/handoff.ts';
 import { applyRealization, readRealization } from '../server/services/realize/realized.ts';
+import { askTheWorld, outstandingQuestions } from '../server/services/realize/askTheWorld.ts';
 
 function out(line = ''): void {
   console.log(line);
@@ -475,6 +476,51 @@ async function packet(argv: string[]): Promise<void> {
       out('');
       break;
     }
+    case 'ask': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet ask <packetId> [--project <id> --layer <id>]');
+      const scope = await ensureArchitectureScope();
+      const layers = await listLayers(scope.id);
+      const layerId = flag(rest, 'layer') ?? layers[0]?.id ?? null;
+      if (!layerId) fail('That project has no layer for the work to file under.');
+      const outcome = await askTheWorld({
+        packetId: id as string,
+        projectId: flag(rest, 'project') ?? scope.id,
+        layerId,
+      });
+      out('');
+      out(`  ${outcome.explanation}`);
+      out(`  Already answered by the archive: ${outcome.alreadyAnswered}`);
+      out(`  Asked: ${outcome.asked.length}`);
+      for (const row of outcome.asked) {
+        out(`    ${row.question.aspect.padEnd(24)} ${row.candidateId ?? 'not captured'}`);
+        out(`      ${row.reason}`);
+      }
+      if (outcome.notResearch.length > 0) {
+        out('');
+        out(`  ${outcome.notResearch.length} gap(s) are real and are not research:`);
+        for (const row of outcome.notResearch) out(`    ${row.kind.padEnd(28)} ${row.remedy}`);
+      }
+      out('');
+      out('  Nothing was launched, approved or spent. Each of these is an idea, and whether');
+      out('  it becomes a mission is the standing authority\'s decision on the same path');
+      out('  every other idea takes.');
+      out('');
+      break;
+    }
+    case 'outstanding': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet outstanding <packetId>');
+      const rows = await outstandingQuestions(id as string);
+      out('');
+      if (rows.length === 0) out('  Nothing is out with the world for this packet.');
+      for (const row of rows) {
+        out(`  ${row.candidateId}  ${row.requirement}`);
+        out(`    ${row.reason}`);
+      }
+      out('');
+      break;
+    }
     case 'handoff': {
       const id = rest[0];
       if (!id) fail('Usage: packet handoff <packetId> [--project <id>] [--remote <url>]');
@@ -541,7 +587,7 @@ async function packet(argv: string[]): Promise<void> {
       break;
     }
     default:
-      fail('Usage: packet <open|derive|show|research|compile|handoff|realize> …');
+      fail('Usage: packet <open|derive|show|research|compile|ask|outstanding|handoff|realize> …');
   }
 }
 

@@ -247,3 +247,95 @@ A command that changes nothing exits non-zero rather than printing success.
   Brain does not have this code, so no fired Routine has read a blueprint.
 - **No change request has been compiled or approved.** `compile` refuses the
   Research Intelligence packet on its remaining person clause, which is correct.
+
+---
+
+## 9. The three ends that were built and reachable by nothing
+
+§8 above is the honest report this kernel shipped with, and three of its
+sentences named the same defect rather than three different ones. Each was a
+complete, tested mechanism whose only caller printed its result or did not
+exist — this repository's most-recorded failure, arriving at the layer whose
+whole job is telling a sentence in a document from a mechanism that runs.
+
+| What existed | What called it | What that cost |
+|---|---|---|
+| `moveDimension`, which can write all six dimensions | `promoteCandidate`, moving `DEFINITION` only | Five columns written by nothing; every faculty read `ABSENT` and `UNTESTED` off a row nobody had asked |
+| `compile()`, composing a complete `ObjectiveSubmission` | `scripts/capability.ts`, which printed it | A decision-ready packet and a Factory waiting for exactly this ask, with a person retyping between them |
+| `directorPass`, composing bounded questions | nothing | *"No research mission has been run for a capability gap"* — the faculty that decides what Brain should learn about itself could learn nothing |
+
+### `realized.ts` — the five dimensions, and the one it may not touch
+
+Three are derived: `CONTRACT` from the packet's own sections, `IMPLEMENTATION`
+from its classified gaps held against the self-model, `EVALUATION` from the
+faculty's declared standard held against what covers it. Three are refused by
+name in a constant, each with the reason beside it, so a later change that wants
+one has to delete a sentence somebody wrote.
+
+What makes it worth having is what it will not say:
+
+- **An unclassified packet yields no implementation reading at all** — not
+  `ABSENT`. `NEEDS_A_READING` is the kernel saying somebody has to look, and
+  deriving a state over it answers the question the gap exists to ask.
+- **An `UNKNOWN` may raise a state and may never lower one.** The deployed image
+  carries `server` and `client` and not `tests`, so a Brain scanning itself in
+  production reads `EVALUATED: UNKNOWN` about everything it is made of. Without
+  the guard every proven faculty walks back to untested on every pass, and the
+  next reader rebuilds something that works.
+- **`FAILING` is unreachable from here.** The self-model records that a suite
+  *exists* and says nothing about whether it passes, so inferring failure from
+  an absence would produce an alarm nobody can act on.
+- **`AVAILABILITY` has no mover.** Not a check inside one — the absence of a
+  function, asserted by a test that reads the file. Whether a faculty is
+  switched on for real work is the one dimension whose wrong answer is a wrong
+  *action*, and a Brain that could switch its own faculties on is §22's worker
+  creating its own work one altitude up.
+
+Writing the fixture found a hole in it. `judgeGap` could not record *which*
+component a reader matched, so a reader answering `EXISTS_AND_LIVE` said
+something serves the requirement and could not say what — and the reach count
+read an empty set of keys as *no unknowns*, which walked straight to `LIVE`. A
+served requirement with no component behind it is an unknown now. Both halves
+were invisible to reading and visible from one fixture.
+
+### `handoff.ts` — the ask, and nothing after it
+
+`compile()` unchanged, then `submitObjective`, then stop. It does not import the
+approval; a test matches the import statements rather than the file, because
+this module's own header names `approveAndStartCampaign` in order to say it is
+somewhere else. The packet is claimed with a guarded `UPDATE` on
+`change_request_id IS NULL` — the one value that means nobody holds this yet and
+is never what a winner leaves behind, which is §34's correction at the probe
+claim where a guard satisfied by the state it claimed *into* turned out to be no
+guard at all on the second backend.
+
+### `askTheWorld.ts` — a question becomes an idea, never a packet
+
+The obvious shape is `startPacket` with the question in it. It is wrong for the
+reason §25 settled at the connected-site boundary: **a connector may ask, and
+only a person in Russell may authorise the spending.** A capability question is
+in exactly that position, and it is Brain reasoning about Brain — the least
+supervised thing in this codebase and therefore the last place to invent a
+second way of starting research.
+
+So a question becomes a `russell_candidates` row, which spends nothing, and
+every rule that already governs an idea applies unchanged: the archive check
+runs again inside the compiler, the standing authority decides whether a mission
+launches, the approval envelope decides whether the plan may start unasked, and
+the gate, the verification pass and three audit roles are where they were. There
+is **no authorization in the module and no import that could grant one**, which
+a test asserts against the import statements by name.
+
+The gap moves to `ASSIGNED` carrying the candidate, so the next pass — which
+reads only `OPEN` gaps — asks nothing twice, and the link from a gap to its work
+is a join rather than a search that a merge could answer wrongly.
+
+### What is still not true
+
+- **No faculty is implemented.** `realized.ts` can now *say* one is, from rows,
+  and on this repository every faculty's packet still holds unread gaps.
+- **Nothing has been deployed.** Every reading here is local, and the hosted
+  tool list not carrying `brain_propose_plan_revision` is what says so.
+- **No capability research has actually run.** `askTheWorld` captures the idea;
+  whether a mission follows is the standing authority's decision, and none has
+  been granted on the architecture project.

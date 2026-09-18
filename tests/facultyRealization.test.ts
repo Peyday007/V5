@@ -33,6 +33,7 @@ import {
   readRealization,
 } from '../server/services/realize/realized.ts';
 import { handOff } from '../server/services/realize/handoff.ts';
+import { askTheWorld, outstandingQuestions } from '../server/services/realize/askTheWorld.ts';
 import {
   derivePacket,
   getPacket,
@@ -495,3 +496,140 @@ describe('handing a decision-ready packet to the Factory', () => {
     expect(Number(rows[0]?.n ?? 0)).toBe(1);
   });
 });
+
+/* ------------------------------------------------------------------------- */
+
+describe('asking the world what a packet still needs to know', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  it('turns a researchable gap into an idea, and moves the gap to it', async () => {
+    const { project, layers } = await freshProject();
+    const layerId = layers[0]?.id;
+    if (!layerId) throw new Error('the fixture project has no layer');
+    const facultyId = await promoteFaculty(definition());
+    const packetId = await classifiedPacket({ facultyId, kind: 'MUST_BE_BUILT' });
+    // A reader turns one gap into a question about the world. The others stay
+    // as things to build, which is the common case and is not research.
+    const gaps = await listGaps(packetId);
+    const first = gaps[0];
+    if (!first) throw new Error('the packet derived no gaps');
+    await judgeGap({
+      gapId: first.id,
+      kind: 'MUST_BE_RESEARCHED',
+      evidence: 'A reader could not tell what would satisfy this without looking it up.',
+      derivedBy: 'PERSON',
+    });
+
+    const outcome = await askTheWorld({ packetId, projectId: project.id, layerId });
+    expect(outcome.asked).toHaveLength(1);
+    const asked = outcome.asked[0];
+    expect(asked?.candidateId).toBeTruthy();
+    expect(asked?.gapId).toBe(first.id);
+
+    // The link is a row rather than a search, so a merge cannot make a later
+    // reader resolve the wrong idea.
+    const outstanding = await outstandingQuestions(packetId);
+    expect(outstanding.map((row) => row.candidateId)).toEqual([asked?.candidateId]);
+
+    // Everything else was reported as real and not research, rather than asked.
+    expect(outcome.notResearch.length).toBe(gaps.length - 1);
+  });
+
+  it('asks nothing twice, because the gap it asked about is no longer open', async () => {
+    const { project, layers } = await freshProject();
+    const layerId = layers[0]?.id;
+    if (!layerId) throw new Error('the fixture project has no layer');
+    const facultyId = await promoteFaculty(definition());
+    const packetId = await classifiedPacket({ facultyId, kind: 'MUST_BE_BUILT' });
+    const first = (await listGaps(packetId))[0];
+    if (!first) throw new Error('the packet derived no gaps');
+    await judgeGap({
+      gapId: first.id,
+      kind: 'MUST_BE_RESEARCHED',
+      evidence: 'A reader could not tell what would satisfy this without looking it up.',
+      derivedBy: 'PERSON',
+    });
+
+    const once = await askTheWorld({ packetId, projectId: project.id, layerId });
+    const twice = await askTheWorld({ packetId, projectId: project.id, layerId });
+    expect(once.asked).toHaveLength(1);
+    expect(twice.asked).toHaveLength(0);
+
+    const candidates = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM russell_candidates WHERE project_id = ?`,
+      [project.id] as never[],
+    );
+    expect(Number(candidates[0]?.n ?? 0)).toBe(1);
+  });
+
+  it('launches, approves, enqueues and spends nothing', async () => {
+    const { project, layers } = await freshProject();
+    const layerId = layers[0]?.id;
+    if (!layerId) throw new Error('the fixture project has no layer');
+    const facultyId = await promoteFaculty(definition());
+    const packetId = await classifiedPacket({ facultyId, kind: 'MUST_BE_BUILT' });
+    const first = (await listGaps(packetId))[0];
+    if (!first) throw new Error('the packet derived no gaps');
+    await judgeGap({
+      gapId: first.id,
+      kind: 'MUST_BE_RESEARCHED',
+      evidence: 'A reader could not tell what would satisfy this without looking it up.',
+      derivedBy: 'PERSON',
+    });
+
+    const before = await counts();
+    await askTheWorld({ packetId, projectId: project.id, layerId });
+    const after = await counts();
+
+    // A capability question is Brain reasoning about Brain, which is the least
+    // supervised thing in this codebase — so it may ask and it may not spend.
+    expect(after).toEqual(before);
+
+    // And the assertion is not vacuous: something did happen, in the one table
+    // an idea is allowed to reach. A pass that had captured nothing would
+    // satisfy the equality above while doing nothing at all.
+    const candidates = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM russell_candidates WHERE project_id = ?`,
+      [project.id] as never[],
+    );
+    expect(Number(candidates[0]?.n ?? 0)).toBe(1);
+  });
+
+  it('holds no authorization and imports nothing that could grant one', () => {
+    const source = readFileSync('server/services/realize/askTheWorld.ts', 'utf8');
+    const imports = source.match(/^import[\s\S]*?from\s+'[^']+';$/gm) ?? [];
+    const joined = imports.join('\n');
+    for (const forbidden of [
+      'approvalEnvelope',
+      'standingAuthority',
+      'russell/authority',
+      'russell/launch',
+      'startPacket',
+      'approvePlan',
+      'enqueue',
+    ]) {
+      expect(joined).not.toContain(forbidden);
+    }
+  });
+});
+
+/** Every table a launch, an approval, an enqueue or a spend would touch. */
+async function counts(): Promise<Record<string, number>> {
+  const tables = [
+    'russell_missions',
+    'russell_goals',
+    'research_orchestrations',
+    'research_fragments',
+    'work_items',
+    'work_leases',
+    'bins',
+  ];
+  const out: Record<string, number> = {};
+  for (const table of tables) {
+    const rows = await getDb().all<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`);
+    out[table] = Number(rows[0]?.n ?? 0);
+  }
+  return out;
+}
