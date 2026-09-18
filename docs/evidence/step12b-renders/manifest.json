@@ -1,21 +1,21 @@
 {
-  "revision": "83d6f11ba0a65ba0dfe8ed0dfc41b69d8521ab0e",
+  "revision": "6e796a3cf7386800fd357161edec460abcd34b28",
   "treeDirtyAtManifestTime": true,
-  "renderSetDigest": "a40a6135144b875a19cb78aabd7d8f65b3df635600e62bd104256899019fa60a",
+  "renderSetDigest": "4ffd8f21e6e004a5c5bfcb23bf4897deff365448fd373285b5281eb6c0b13a0b",
   "renderCount": 12,
-  "generatedAt": "2026-09-14T21:22:44.373Z",
+  "generatedAt": "2026-09-18T10:34:17.981Z",
   "renders": [
     {
       "screen": "needs-you-empty",
       "width": 1180,
       "file": "needs-you-empty-1180.png",
-      "bytes": 153565
+      "bytes": 155494
     },
     {
       "screen": "needs-you-empty",
       "width": 953,
       "file": "needs-you-empty-953.png",
-      "bytes": 149084
+      "bytes": 151160
     },
     {
       "screen": "needs-you-empty",
@@ -27,13 +27,13 @@
       "screen": "needs-you-populated",
       "width": 1180,
       "file": "needs-you-populated-1180.png",
-      "bytes": 285004
+      "bytes": 286871
     },
     {
       "screen": "needs-you-populated",
       "width": 953,
       "file": "needs-you-populated-953.png",
-      "bytes": 287957
+      "bytes": 290021
     },
     {
       "screen": "needs-you-populated",
@@ -45,13 +45,13 @@
       "screen": "project-constellation",
       "width": 1180,
       "file": "project-constellation-1180.png",
-      "bytes": 219687
+      "bytes": 221637
     },
     {
       "screen": "project-constellation",
       "width": 953,
       "file": "project-constellation-953.png",
-      "bytes": 229210
+      "bytes": 231048
     },
     {
       "screen": "project-constellation",
@@ -63,13 +63,13 @@
       "screen": "russell-home",
       "width": 1180,
       "file": "russell-home-1180.png",
-      "bytes": 236511
+      "bytes": 238362
     },
     {
       "screen": "russell-home",
       "width": 953,
       "file": "russell-home-953.png",
-      "bytes": 226426
+      "bytes": 228252
     },
     {
       "screen": "russell-home",

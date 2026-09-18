@@ -1,12 +1,12 @@
 {
   "dialect": "postgres",
   "preVersion": 31,
-  "postVersion": 42,
-  "settledVersion": 42,
+  "postVersion": 57,
+  "settledVersion": 57,
   "rowsBefore": 8,
   "preservedTables": 14,
   "addedTables": 6,
   "layersAfter": 3,
-  "revision": "1e88e7a400f149da1a191a807b39b1e2c8fca8b4",
-  "ranAt": "2026-09-13T22:47:26.914Z"
+  "revision": "6e796a3cf7386800fd357161edec460abcd34b28",
+  "ranAt": "2026-09-18T10:34:31.191Z"
 }
