@@ -173,6 +173,7 @@ export function mapBin(row: BinRow): Bin {
     // declared a capability routed as if it had declared none.
     requiredCapabilities: parseJson<string[]>(row.required_capabilities ?? '[]', []),
     workloadClass: row.workload_class,
+    pinnedRoutineId: row.pinned_routine_id ?? null,
     lastRefusal: row.last_refusal,
     refusalCount: row.refusal_count,
     createdByType: row.created_by_type,
@@ -504,6 +505,16 @@ export interface CreateBinInput {
   requiredCapabilities?: string[];
   workloadClass?: string | null;
   /**
+   * The one Routine this bin may be fired at, for a surface probe.
+   *
+   * Restrictive only and never widening: the pinned Routine still has to clear
+   * state, project, family, repository, capability, rate limit and target, and
+   * admission is still decided on the authenticated worker. Its whole purpose is
+   * that a pool of interchangeable surfaces can be proved one member at a time —
+   * see `067_routine_pin.sql`.
+   */
+  pinnedRoutineId?: string | null;
+  /**
    * The factory campaign this bin serves, for a bin that is software work.
    *
    * Its own field rather than `orchestrationId`, which already means a research
@@ -535,11 +546,11 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
        attempt_count, max_attempts, lease_generation, lease_id, worker_id, lease_credential_id,
        lease_session_ref, leased_at, heartbeat_at, lease_expires_at, lease_renewals,
        checkpoint, checkpoint_at, terminal_reason, last_refusal, refusal_count,
-       required_capabilities, workload_class, factory_campaign_id,
+       required_capabilities, workload_class, pinned_routine_id, factory_campaign_id,
        created_by_type, created_by_id, created_at, updated_at, ready_at, completed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, NULL, NULL,
              NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0,
-             ?, ?, ?,
+             ?, ?, ?, ?,
              ?, ?, ?, ?, ?, NULL)`,
     [
       id,
@@ -559,6 +570,12 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
       Math.max(1, input.maxAttempts ?? 3),
       toJson(input.requiredCapabilities ?? []),
       input.workloadClass ?? null,
+      /*
+       * Written by Brain, from a Routine an operator named, and by nothing a
+       * caller sent. It only ever narrows the candidate list — see
+       * `067_routine_pin.sql`.
+       */
+      input.pinnedRoutineId ?? null,
       input.factoryCampaignId ?? null,
       input.createdByType,
       input.createdById ?? null,
@@ -2554,19 +2571,74 @@ export async function markDispatchDeferred(
 
 export async function markDispatchFailed(
   id: string,
-  input: { kind: string; message: string; retryAfterMs?: number | null },
+  input: {
+    kind: string;
+    message: string;
+    retryAfterMs?: number | null;
+    /**
+     * Whether the bin should be charged for this fire.
+     *
+     * ---------------------------------------------------------------------
+     * Why a refusal by a surface is not the bin's fault
+     * ---------------------------------------------------------------------
+     *
+     * `claimDispatchIntent` increments `attempt_count`, and this function is
+     * where an intent either keeps that charge or abandons at `max_attempts`.
+     * With one Routine that was the right accounting: a fire the provider
+     * refused was the only fire there was, and five of them meant the surface
+     * was not going to answer.
+     *
+     * With a pool it is wrong, and wrong in the direction that destroys work.
+     * `AUTH`, `NOT_FOUND`, `PAUSED`, `RATE_LIMIT`, `SERVER` and `NETWORK`
+     * against a *chosen* surface are facts about that surface, and the
+     * dispatcher acts on each of them immediately — a non-retryable one
+     * quarantines the Routine, a rate limit advances its `retry_at` — so the
+     * very next routing decision is a different one. Charging the bin means
+     * five bad surfaces in a pool retire a bin that nothing was ever wrong
+     * with, and the operator sees `ABANDONED` on work whose only crime was
+     * being first in the queue while somebody's token was stale.
+     *
+     * §23 already says this about the surface: *a refusal is not misconduct*.
+     * This is the same sentence one row along, about the bin.
+     *
+     * Refunding is safe because it is not unbounded. The thing that stops a
+     * refused fire looping is that the surface leaves routing — quarantined,
+     * or rate-limited until its own `retry_at` — so once every surface has
+     * refused, routing itself returns `ALL_SURFACES_INELIGIBLE` or
+     * `ALL_SURFACES_RATE_LIMITED`, which are deferrals with long backoffs and
+     * an operator's write as their answering transition. The bin waits for a
+     * person instead of dying, which is the outcome this codebase wants
+     * everywhere else.
+     *
+     * Defaults to charging, so every existing caller keeps the behaviour it
+     * had and only a failure the dispatcher can attribute to a surface is
+     * refunded.
+     */
+    refundAttempt?: boolean;
+  },
 ): Promise<BinDispatchState> {
   const at = binNow();
   const current = await getDispatch(id);
   if (!current) return 'ABANDONED';
-  const exhausted = current.attemptCount >= current.maxAttempts;
-  const delay = input.retryAfterMs ?? dispatchBackoffMs(current.attemptCount);
+  const refund = input.refundAttempt === true;
+  /*
+   * Read against the charge this fire actually leaves behind. A refunded
+   * attempt is one the bin never spent, so it must not count toward
+   * exhaustion — otherwise the refund would be cosmetic and the bin would
+   * abandon on exactly the schedule it did before.
+   */
+  const charged = refund ? Math.max(0, current.attemptCount - 1) : current.attemptCount;
+  const exhausted = charged >= current.maxAttempts;
+  const delay = input.retryAfterMs ?? dispatchBackoffMs(charged);
   const next = plusMs(at, delay);
   const state: BinDispatchState = exhausted ? 'ABANDONED' : 'PENDING';
   await getDb().run(
     `UPDATE bin_dispatch SET state = ?, next_attempt_at = ?, last_error_kind = ?,
-       last_error = ?, updated_at = ? WHERE id = ?`,
-    [state, next, bounded(input.kind, 80), bounded(input.message, 500), at, id],
+       last_error = ?,
+       attempt_count = CASE WHEN ? = 1 AND attempt_count > 0 THEN attempt_count - 1
+                            ELSE attempt_count END,
+       updated_at = ? WHERE id = ?`,
+    [state, next, bounded(input.kind, 80), bounded(input.message, 500), refund ? 1 : 0, at, id],
   );
   await recordBinEvent({
     eventType: exhausted ? 'DISPATCH_ABANDONED' : 'DISPATCH_RETRY',
@@ -2576,7 +2648,9 @@ export async function markDispatchFailed(
     provider: 'claude-routine',
     outcome: state,
     reason: `${input.kind}: ${input.message}`,
-    measures: { backoffMs: delay },
+    // Said rather than implied: a reader counting attempts off the ledger must
+    // be able to tell a fire the bin paid for from one it did not.
+    measures: { backoffMs: delay, ...(refund ? { attemptRefunded: true } : {}) },
   });
   return state;
 }
