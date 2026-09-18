@@ -75,8 +75,13 @@ jobs:
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
+          # The allowlist is the control; the input's own description is only a
+          # label. Adding a command to one and not the other is how a command
+          # that exists everywhere else gets refused here — which is what
+          # happened to `people list`, and what made a deployed image
+          # unverifiable by the one command that could have proved it.
           case "$ADMIN_COMMAND" in
-            'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'packets list') ;;
+            'people list'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'packets list') ;;
             *)
               echo "::error::Refusing '$ADMIN_COMMAND': see the command list on this workflow."
               exit 1
