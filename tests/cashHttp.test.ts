@@ -674,14 +674,92 @@ describe('one account’s whole journey', () => {
     expect(bare.status).toBe(400);
   });
 
+  it('never lets what a person posts read as Brain having checked', async () => {
+    /*
+     * The form that posted here is gone, and this is the route it posted to —
+     * which was already right, and which I was briefly wrong about.
+     *
+     * The rule is that a *generic* confirmation must not mark a Brain-owned
+     * requirement **satisfied**, and `closeNeed` already refuses to be told:
+     * `BRAIN_READ_THE_ROW` is written only when Brain re-read the condition
+     * and it held. Everything a person can post lands on `PERSON_SUBSTITUTE`
+     * instead — *somebody is doing this by hand*, with the capability still
+     * reading `MISSING` — which is the opposite of satisfied, and is the only
+     * way out for a piece blocked on something Brain cannot do. Refusing that
+     * too, as I first did, turns a rule about honesty into §24's escalation
+     * with no answering transition.
+     *
+     * So what was generic was the *form*, and the form is what went. The walk
+     * in `cashIntegrationPass` pins the refusal on a need Brain raised, where
+     * the condition is checkable; this pins the label at the door, on the one
+     * shape a person can create, where it is the only reading there is.
+     */
+    // Its own need rather than the journey's: this consumes what it acts on,
+    // and the ordered steps after it read the same list.
+    const made = await call<{ need: { id: string } }>('POST', `${CASH()}/needs`, {
+      cookie: adminCookie,
+      body: {
+        blockedAction: 'Take a card payment',
+        whyItMatters: 'The buyer cannot pay without one.',
+        recommendedPath: 'Connect a payment processor.',
+        setupEffort: 'An afternoon.',
+        nextStep: 'Connect it.',
+        completionCondition: 'A payment has cleared.',
+      },
+    });
+    expect(made.status).toBe(200);
+
+    const closed = await call<{ need: { verifiedBy: string | null } }>(
+      'POST',
+      `/api/cash/needs/${made.body.need.id}/close`,
+      {
+        cookie: adminCookie,
+        body: { to: 'RESOLVED', resolution: 'I connected it, honestly.' },
+      },
+    );
+    expect(closed.status).toBe(200);
+    expect(closed.body.need.verifiedBy).toBe('PERSON_SUBSTITUTE');
+    expect(closed.body.need.verifiedBy).not.toBe('BRAIN_READ_THE_ROW');
+  });
+
+  it('still lets a person withdraw a need that is no longer wanted', async () => {
+    /*
+     * Saying a thing is no longer required is a decision about what to *want*,
+     * which is a person's, and it claims nothing about what happened. It is
+     * the transition that stops an unwanted need being permanent.
+     */
+    // Its own need, for the reason above.
+    const made = await call<{ need: { id: string } }>('POST', `${CASH()}/needs`, {
+      cookie: adminCookie,
+      body: {
+        blockedAction: 'Advertise this opening',
+        whyItMatters: 'It would reach more buyers.',
+        recommendedPath: 'Buy a listing on the trade board.',
+        setupEffort: 'Minutes.',
+        nextStep: 'Buy the listing.',
+        completionCondition: 'The listing is live.',
+      },
+    });
+    expect(made.status).toBe(200);
+
+    const withdrawn = await call('POST', `/api/cash/needs/${made.body.need.id}/close`, {
+      cookie: adminCookie,
+      body: { to: 'WITHDRAWN', resolution: 'We are not selling this after all.' },
+    });
+    expect(withdrawn.status).toBe(200);
+  });
+
   it('shows the whole private section in one read', async () => {
     const view = await call<{
       objective: string;
       discovery: { open: boolean };
       myCurrentWork: { placements: { disposition: string }[] };
-      whatBrainNeeds: unknown[];
+      whatBrainNeeds: { id: string; researchStatus: string | null }[];
       whatBrainHasDone: unknown[];
-      decisionsForMe: { items: unknown[]; underlyingCount: number };
+      decisionsForMe: {
+        items: { key: string; underlying: string[]; answer: { kind: string } }[];
+        underlyingCount: number;
+      };
       vocabulary: { neverAuthorizable: string[] };
     }>('GET', CASH(), { cookie: adminCookie });
 
@@ -691,6 +769,25 @@ describe('one account’s whole journey', () => {
     expect(view.body.whatBrainNeeds.length).toBe(1);
     expect(view.body.whatBrainHasDone.length).toBeGreaterThan(3);
     expect(view.body.vocabulary.neverAuthorizable).toContain('PAID_OVERAGE');
+
+    /*
+     * And the open need is under Brain's work rather than under the person's
+     * decisions, which is the property two unit tests used to assert against a
+     * field `ReviewInput` no longer has.
+     *
+     * It is asserted here because here it is not vacuous: this project has an
+     * open need, `cashView` loads it, and a review section that started
+     * emitting items for one again would fail this without anything having to
+     * remember to hand it over. `researchStatus` is the derived sentence
+     * travelling with it — `null` here, because nothing has assessed this
+     * fixture's research, and null is *running* rather than an omission.
+     */
+    const needId = view.body.whatBrainNeeds[0]!.id;
+    expect(view.body.whatBrainNeeds[0]).toHaveProperty('researchStatus');
+    for (const item of view.body.decisionsForMe.items) {
+      expect(item.key.startsWith('NEED_')).toBe(false);
+      expect(item.underlying).not.toContain(needId);
+    }
   });
 
   it('refuses an opportunity id somebody guessed, in the same words as a missing one', async () => {

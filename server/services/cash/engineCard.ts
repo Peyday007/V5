@@ -43,7 +43,13 @@
  * column still wins, but an answer Brain holds must not be displayed as an
  * unknown.
  */
-import { evidenceCard, type CardFieldKey, type EvidenceCard } from './card.ts';
+import {
+  evidenceCard,
+  fieldOwner,
+  type CardFieldKey,
+  type EvidenceCard,
+  type FieldOwner,
+} from './card.ts';
 import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
 
 /**
@@ -100,6 +106,19 @@ export interface EngineCardEntry {
   kind: CardEntryKind;
   /** What would answer it. A property of the question, not of today's blank. */
   task: string;
+  /**
+   * Whose question this is, from the one place that already decides it.
+   *
+   * Carried on the entry because the screen could not tell otherwise, and a
+   * screen that cannot tell renders a person-answer box under every blank —
+   * which is exactly what it did: a text input and a **Confirm** under the
+   * payer, the price, the delivery method and the economics, every one of them
+   * a fact about the world that §33's own `owner` correction had already
+   * assigned to Brain. Deriving it here rather than in the client keeps
+   * `fieldOwner` the single decision; a second copy in TypeScript would be the
+   * two-readers-disagreeing defect at a new boundary.
+   */
+  owner: FieldOwner;
   /** EVIDENCE only: the gated claim this resolves to. */
   claimId: string | null;
   /** ESTIMATE only, and all three are required of one. */
@@ -289,6 +308,7 @@ export function cashEngineCard(input: {
       value,
       kind: kindOf(fact, value),
       task: field.task,
+      owner: fieldOwner(field.key),
       claimId: fact?.claimId ?? null,
       basis: fact?.basis ?? null,
       assumptions: fact?.assumptions ?? null,
@@ -305,6 +325,7 @@ export function cashEngineCard(input: {
       value,
       kind: kindOf(fact, value),
       task: LABELS[key].task,
+      owner: fieldOwner(key),
       claimId: fact?.claimId ?? null,
       basis: fact?.basis ?? null,
       assumptions: fact?.assumptions ?? null,

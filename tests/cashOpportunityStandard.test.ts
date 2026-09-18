@@ -592,62 +592,25 @@ describe('Brain researches facts and a person decides person-only things', () =>
     }
   });
 
-  it('deduplicates the sentences inside one grouped card', () => {
-    /*
-     * Needs grouped by an identical recommended path routinely carry an
-     * identical explanation, and the card printed one copy per row — thirty
-     * times, in production. A card that repeats itself is one nobody finishes.
-     */
-    const need = (id: string) => ({
-      id,
-      projectId,
-      opportunityId: null,
-      blockedAction: 'Reach the buyer',
-      whyItMatters: 'Reaching a buyer needs a way to send a message.',
-      recommendedPath: 'Connect a way to send messages.',
-      requiredCapability: 'SEND_A_MESSAGE',
-      expectedCostCents: null,
-      setupEffort: 'An afternoon',
-      nextStep: 'Pick one and connect it.',
-      completionCondition: 'A way to send a message is connected.',
-      blocksState: 'EXECUTING' as const,
-      requestKey: null,
-      occurrence: 1,
-      candidateId: null,
-      continuedAt: null,
-      claimedAt: null,
-      state: 'OPEN' as const,
-      verifiedBy: null,
-      resolution: null,
-      resolvedAt: null,
-      createdAt: '2026-09-15T00:00:00.000Z',
-      updatedAt: '2026-09-15T00:00:00.000Z',
-    });
-    const review = compressedReview({
-      mode: null,
-      stalled: [],
-      authority: null,
-      position: {
-        currency: 'USD',
-        pipelineCents: 0,
-        customerPaymentsCents: 0,
-        availableFundsCents: 0,
-        unpaidCommitmentsCents: 0,
-        heldCommitmentsCents: 0,
-        reservesCents: 0,
-        deployableCents: 0,
-        completedContributionCents: 0,
-        shortfall: false,
-      } as never,
-      placements: [],
-      needs: [need('cnd_1'), need('cnd_2'), need('cnd_3')] as never,
-      now: '2026-09-15T12:00:00.000Z',
-    });
-    const item = review.items.find((one) => one.key.startsWith('NEED_'))!;
-    const sentence = 'Reaching a buyer needs a way to send a message.';
-    expect(item.why).toBe(sentence);
-    expect(item.why.split(sentence).length - 1).toBe(1);
-  });
+  /*
+   * A test stood here and is gone rather than adapted, because adapting it
+   * would have made it assert nothing.
+   *
+   * It asserted the deduplicated sentence inside a grouped need card — three
+   * needs sharing one reason printed it three times, and a card that repeats
+   * itself is one nobody finishes reading. The dedup was right and the card it
+   * was inside asked a person to mark three Brain-owned requirements done, so
+   * the card is gone and `ReviewInput` no longer takes needs at all. A test
+   * handing them over would pass whatever this module did with a field it
+   * never receives, and a vacuous guard is worse than none: it reads as
+   * coverage.
+   *
+   * The three rows still exist and still say the same thing. They are under
+   * *What Brain needs*, one entry each with its own blocked action and its own
+   * research status, so there is no single card for a sentence to repeat
+   * inside — and that no need reaches the review is asserted over HTTP, on a
+   * project that has open ones, in `cashHttp.test.ts`.
+   */
 });
 
 // ---------------------------------------------------------------------------

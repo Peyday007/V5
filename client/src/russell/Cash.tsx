@@ -563,7 +563,6 @@ function DecisionAnswer({
   const [problem, setProblem] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [said, setSaid] = useState('');
-  const [substitute, setSubstitute] = useState('');
   const [reference, setReference] = useState('');
   const [done, setDone] = useState<string | null>(null);
 
@@ -576,7 +575,6 @@ function DecisionAnswer({
       setDone(await work());
       setAsking(false);
       setSaid('');
-      setSubstitute('');
       setReference('');
       onDone();
     } catch (error) {
@@ -634,6 +632,33 @@ function DecisionAnswer({
 
   const opportunityId = item.answer.targets[0] ?? null;
 
+  /*
+   * A trigger only for the kinds this component actually implements.
+   *
+   * It used to render one for *any* kind, which was harmless only while every
+   * kind had a branch below. Removing `RESOLVE_NEED` made it visible: the
+   * button still drew itself from `answer.label`, and pressing it opened
+   * nothing — a dead control, which is worse than the wrong form it replaced,
+   * because a person presses it twice and concludes the page is broken.
+   *
+   * The union no longer contains that kind, so typed code cannot produce one;
+   * this payload arrives over `fetch` and is not typed at runtime, and a
+   * rolling deploy serves an old body to a new bundle for as long as it takes
+   * the last instance to turn over. So the set is named rather than assumed,
+   * and a kind this build does not implement renders the sentence and no
+   * control — §29's rule that the interface is never optimistic, applied to a
+   * payload rather than to a state.
+   */
+  const IMPLEMENTED = ['RECORD_MONEY', 'RELEASE_COMMITMENT'];
+  if (!IMPLEMENTED.includes(kind)) {
+    return (
+      <>
+        <p className="rs-item-meta">{item.answer.label}.</p>
+        {affects}
+      </>
+    );
+  }
+
   return (
     <div className="rs-cash-actions">
       {affects}
@@ -643,52 +668,18 @@ function DecisionAnswer({
         </button>
       ) : null}
 
-      {asking && kind === 'RESOLVE_NEED' ? (
-        <>
-          <label className="rs-field-label" htmlFor={`cash-answer-${item.key}`}>
-            What did you do? Brain reads this back against: {item.answer.completionCondition}
-          </label>
-          <input
-            id={`cash-answer-${item.key}`}
-            value={said}
-            onChange={(event) => setSaid(event.target.value)}
-          />
-          <label className="rs-field-label" htmlFor={`cash-instead-${item.key}`}>
-            If the integration is still missing and you are doing this another way, say how.
-            Brain records that rather than pretending the condition was met.
-          </label>
-          <input
-            id={`cash-instead-${item.key}`}
-            value={substitute}
-            onChange={(event) => setSubstitute(event.target.value)}
-          />
-          <button
-            type="button"
-            className="rs-button-quiet"
-            disabled={busy || said.trim().length === 0}
-            onClick={() =>
-              void run(async () => {
-                for (const needId of item.answer.targets) {
-                  await CashApi.closeNeed(
-                    needId,
-                    'RESOLVED',
-                    said,
-                    substitute.trim() || undefined,
-                  );
-                }
-                return `Recorded against ${item.answer.targets.length} need${
-                  item.answer.targets.length === 1 ? '' : 's'
-                }.`;
-              })
-            }
-          >
-            {busy ? 'Recording…' : 'Confirm'}
-          </button>
-          <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
-            Cancel
-          </button>
-        </>
-      ) : null}
+      {/*
+        * The `RESOLVE_NEED` branch was here, and it is deleted with the server
+        * section that produced it.
+        *
+        * It asked *"What did you do?"* against the need's completion
+        * condition, offered a second box for what you were doing instead if
+        * the integration was still missing, and recorded the answer with a
+        * **Confirm** — on a row whose own stored reason says Brain looks the
+        * fact up rather than asking. Every need is Brain-owned, so there was
+        * no narrower version of this form that was correct, and the rows it
+        * stood for are on this page already under *What Brain needs*.
+        */}
 
       {/*
         * The `FILL_CARD_FIELD` branch was here and is deleted with the review
@@ -2039,18 +2030,29 @@ function EngineCard({
                   <>
                     <p className="rs-item-meta">{entry.task}</p>
                     {/*
-                      * The one place a person can answer a question the card
-                      * asks.
+                      * A person answers a question that is *theirs*, and no
+                      * card field is.
                       *
-                      * Twelve of these have no column — they are
-                      * `cash_card_facts` rows — so until this existed the
-                      * bounded deep dive was the only thing that could answer
-                      * one, and the tier requires them. A person who knows
-                      * what a job pays had nowhere to say so. `fillCard`
-                      * records it as a `PERSON` fact, so `mayReplace` keeps
-                      * it above anything automatic.
+                      * This rendered a text box and a **Confirm** under every
+                      * blank on the card, because the entry carried no owner
+                      * and the screen had nothing to decide on. So the payer,
+                      * the price, the delivery method, the economics and the
+                      * contact channel — every one of them a fact about the
+                      * world that §33's `owner` correction had already given
+                      * to Brain — asked the person to type one in, and
+                      * `fillCard` recorded whatever they typed as a `PERSON`
+                      * fact that `mayReplace` then keeps above anything Brain
+                      * later establishes. A blank is Brain's work, and its
+                      * task is printed above; what is gone is the box.
+                      *
+                      * `fieldOwner` decides, on the server, and is carried
+                      * down on the entry. `PERSON_ONLY` is the whole of what
+                      * this renders for — today that is nothing, which is the
+                      * correct reading of a card whose every field is a fact
+                      * or a proposal rather than a decision, and the control
+                      * appears by itself if one is ever added.
                       */}
-                    {answering === entry.key ? (
+                    {entry.owner === 'PERSON_ONLY' && answering === entry.key ? (
                       <>
                         <label
                           className="rs-field-label"
@@ -2086,7 +2088,7 @@ function EngineCard({
                               .finally(() => setBusy(false));
                           }}
                         >
-                          {busy ? 'Saving…' : 'Confirm'}
+                          {busy ? 'Saving\u2026' : 'Confirm'}
                         </button>
                         <button
                           type="button"
@@ -2096,7 +2098,7 @@ function EngineCard({
                           Cancel
                         </button>
                       </>
-                    ) : (
+                    ) : entry.owner === 'PERSON_ONLY' ? (
                       <button
                         type="button"
                         className="rs-linklike"
@@ -2108,7 +2110,7 @@ function EngineCard({
                       >
                         Answer the {entry.label.toLowerCase()}
                       </button>
-                    )}
+                    ) : null}
                   </>
                 ) : (
                   <p className="rs-decision-why">{entry.value}</p>
@@ -2247,12 +2249,24 @@ function Actions({
       ) : null}
       {asks === 'ACTION' && asking ? (
         <>
+          {/*
+            * A person-only control, so it says what the answer authorizes.
+            *
+            * This is a genuine one — recording a commercial action somebody
+            * actually performed, chosen from the closed set their standing
+            * grant permits — and it is the *only* control on this page that
+            * asks a person what happened. It shared its opening words with
+            * the need form that is now gone, which made two different things
+            * look like one generic *"what did you do"* box, and the generic
+            * one was the one that should never have existed.
+            */}
           <p className="rs-hint">
-            Executing means the transaction is being pursued, so say what actually happened. The
-            list is what your standing authority permits.
+            You are recording an action you have already taken, under the spending limits you
+            granted. Brain performs nothing here: this writes the action to the record and moves
+            this piece to executing, so the plan stops counting it as waiting.
           </p>
           <label className="rs-field-label" htmlFor={`cash-did-${placement.opportunity.id}`}>
-            What did you do?
+            Which action did you take? Only what your standing authority permits is listed.
           </label>
           <select
             id={`cash-did-${placement.opportunity.id}`}
@@ -2266,7 +2280,8 @@ function Actions({
             ))}
           </select>
           <label className="rs-field-label" htmlFor={`cash-detail-${placement.opportunity.id}`}>
-            In your own words, and any reference it has outside Brain.
+            Who you contacted or what you sent, and any reference it has outside Brain. This is
+            the record of the action, not a description of work Brain should do.
           </label>
           <input
             id={`cash-detail-${placement.opportunity.id}`}
@@ -2310,6 +2325,19 @@ function Needs({ page }: { page: CashPage }): JSX.Element {
       ) : (
         <ul className="rs-list">
           {needs.map((need) => {
+            /*
+              * The owner's own row for the same need, where there is one.
+              *
+              * The need, its reason and its remedy are the **frontier's** — a
+              * capability gap is a fact about what Brain cannot currently do,
+              * and every member is owed it. Two fields are not on the shared
+              * projection and are read from here instead: `setupEffort`, which
+              * is a cost, and `researchStatus`, which is the sentence
+              * `assessResearch` derives about why the looking-up has not
+              * happened. Neither is added to the shared payload — that
+              * projection is built from the columns it names, and widening it
+              * is a separate decision with its own argument.
+              */
             const mine = view?.whatBrainNeeds.find((one) => one.id === need.id);
             return (
               <li key={need.id} className="rs-group">
@@ -2319,6 +2347,23 @@ function Needs({ page }: { page: CashPage }): JSX.Element {
                 <p className="rs-item-meta">
                   {mine ? `${mine.setupEffort} \u00b7 ` : ''}next step: {need.nextStep}
                 </p>
+                {/*
+                  * Where the research got to, when it did not get there.
+                  *
+                  * The server derives it and sends `null` for a need whose
+                  * research is simply running — so the absence of this line is
+                  * *in progress*, and a line saying so under work in progress
+                  * would tell a reader nothing they cannot already see.
+                  *
+                  * It used to be the explanation on a decision card asking the
+                  * person to mark the need done. The card is gone; the sentence
+                  * is the half of it that was worth keeping, and it belongs
+                  * here, under Brain's work, where it answers the only question
+                  * a reader of this list has.
+                  */}
+                {mine && mine.researchStatus !== null ? (
+                  <p className="rs-item-meta">{mine.researchStatus}</p>
+                ) : null}
               </li>
             );
           })}

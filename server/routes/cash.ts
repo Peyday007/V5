@@ -1031,7 +1031,6 @@ cashRouter.post(
       await getNeed(pathId(req, 'needId')),
       'No need with that id.',
     );
-
     const { value, message } = taken(
       await closeNeed({
         needId: need.id,

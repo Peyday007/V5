@@ -357,11 +357,9 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('names the one decision nothing can proceed without, first and unfolded', () => {
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position,
       placements: [],
-      needs: [],
       now: NOW,
     });
     expect(review.items[0]!.key).toBe('AUTHORITY');
@@ -376,7 +374,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     const missingPayer = [1, 2, 3, 4, 5].map(() => opportunity({ payer: null }));
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -385,7 +382,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
         maxConcurrent: 3,
         discoveryOpen: true,
       }),
-      needs: [],
       now: NOW,
     });
     expect(review.items.find((item) => item.key === 'MISSING_PAYER')).toBeUndefined();
@@ -407,7 +403,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     const missingPrice = [1, 2, 3, 4, 5].map(() => opportunity({ priceCents: null }));
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -416,7 +411,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
         maxConcurrent: 3,
         discoveryOpen: true,
       }),
-      needs: [],
       now: NOW,
     });
     expect(review.items.find((item) => item.key === 'MISSING_PRICE')).toBeUndefined();
@@ -426,286 +420,22 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     }
   });
 
-  it('turns two needs with one remedy into one decision', () => {
-    const need = (id: string) => ({
-      id,
-      projectId: 'prj_1',
-      opportunityId: null,
-      blockedAction: `Do ${id}`,
-      whyItMatters: 'It blocks a sale.',
-      recommendedPath: 'Buy the same small tool once.',
-      expectedCostCents: 5_000,
-      setupEffort: 'Minutes.',
-      nextStep: 'Buy it.',
-      completionCondition: 'The tool is bought and reachable from here.',
-      occurrence: 1,
-      verifiedBy: null,
-      continuationClaimedAt: null,
-      continuationAttempts: 0,
-      continuationNotBefore: null,
-      blocksState: null,
-      candidateId: null,
-      requestKey: null,
-      continuedAt: null,
-      continuationNote: null,
-      state: 'OPEN' as const,
-      resolution: null,
-      resolvedByUserId: null,
-      resolvedAt: null,
-      createdAt: NOW,
-      updatedAt: NOW,
-    });
-    const review = compressedReview({
-      mode,
-      stalled: [],
-      authority: null,
-      position,
-      placements: [],
-      needs: [need('cnd_1'), need('cnd_2')],
-      now: NOW,
-    });
-    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
-    expect(grouped.underlying).toEqual(['cnd_1', 'cnd_2']);
-    // One tool bought once. Adding the two expected costs reported twice the
-    // price of buying it — the direction that makes a cheap unblock look
-    // expensive enough to defer.
-    expect(grouped.costCents).toBe(5_000);
-    expect(grouped.recommendation).toContain('5000 cents');
-    expect(grouped.costNote).toContain('paid once');
-    expect(grouped.sharedRemedy).toBe(true);
-    expect(grouped.answer.kind).toBe('RESOLVE_NEED');
-    expect(grouped.answer.targets).toEqual(['cnd_1', 'cnd_2']);
-    expect(grouped.answer.completionCondition).toContain('tool');
-  });
-
-  /**
-   * The card production actually rendered, and the three ways it was wrong.
+  /*
+   * Two tests lived here and are gone rather than adapted, because adapting
+   * them would have made them assert nothing.
    *
-   * Twenty-nine discoverable-gap needs, grouped by one remedy, each raised by
-   * `reconcileDiscoverableGaps` with the identical explanation, the identical
-   * completion condition, and `recommendedPath === nextStep` — which is what
-   * that function writes, because for a researched blank they are one
-   * instruction. The screen read:
+   * Both passed open `cash_needs` rows to `compressedReview` and asserted no
+   * item came back from them. `ReviewInput` no longer takes needs at all —
+   * section 4 is deleted and nothing here reads one — so a test handing them
+   * over would pass whatever this module did with a field it never receives.
+   * A vacuous guard is worse than none: it reads as coverage.
    *
-   *   "…so Brain looks it up rather than asking you."
-   *   "Establish a channel… Next step: Establish a channel…"
-   *   "…reading: The access is recorded on this card." ×29
-   *
-   * A sentence saying Brain will not ask, above the control asking; the
-   * remedy twice; and one condition twenty-nine times, in two places.
+   * The property is real and is asserted where needs genuinely reach the
+   * review — over HTTP, on a project that has open ones, in
+   * `cashHttp.test.ts`.
    */
-  const discoverableNeed = (id: string) => ({
-    id,
-    projectId: 'prj_1',
-    opportunityId: 'cop_1',
-    blockedAction: `Access channel for "opening ${id}"`,
-    whyItMatters:
-      'This card cannot be tested without it, and it is a fact about the world rather than ' +
-      'a decision of yours — so Brain looks it up rather than asking you.',
-    recommendedPath: 'Establish a channel that actually reaches them.',
-    expectedCostCents: null,
-    setupEffort: 'One bounded look.',
-    // What `reconcileDiscoverableGaps` writes: the same string in both.
-    nextStep: 'Establish a channel that actually reaches them.',
-    completionCondition: 'The access is recorded on this card.',
-    occurrence: 1,
-    verifiedBy: null,
-    continuationClaimedAt: null,
-    continuationAttempts: 0,
-    continuationNotBefore: null,
-    blocksState: 'EXECUTING' as const,
-    candidateId: 'cnd_research',
-    requestKey: `question:cop_1:access`,
-    continuedAt: null,
-    continuationNote: null,
-    state: 'OPEN' as const,
-    resolution: null,
-    resolvedByUserId: null,
-    resolvedAt: null,
-    createdAt: NOW,
-    updatedAt: NOW,
-  });
 
-  const STALL = 'Brain captured the question and no mission has launched for it yet.';
 
-  it('says why it is asking, rather than that it would not ask', () => {
-    const needs = [1, 2, 3].map((n) => discoverableNeed(`cnd_${n}`));
-    const review = compressedReview({
-      mode,
-      stalled: needs.map((n) => ({ needId: n.id, detail: STALL })),
-      authority: null,
-      position,
-      placements: [],
-      needs,
-      now: NOW,
-    });
-    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
-    // The derived reason, not the one stored when the need was raised.
-    expect(grouped.why).toBe(STALL);
-    expect(grouped.why).not.toContain('rather than asking you');
-  });
-
-  it('keeps the stored reason for a need that never had research to stall', () => {
-    // A missing integration is not a question, never becomes a mission, and
-    // has no assessment — so its stored sentence is still the true one.
-    const need = { ...discoverableNeed('cnd_x'), candidateId: null, requestKey: null };
-    const review = compressedReview({
-      mode,
-      stalled: [],
-      authority: null,
-      position,
-      placements: [],
-      needs: [need],
-      now: NOW,
-    });
-    const item = review.items.find((one) => one.key === 'NEED_cnd_x')!;
-    expect(item.why).toBe(need.whyItMatters);
-  });
-
-  it('says one sentence once, however many rows the group stands for', () => {
-    const needs = Array.from({ length: 29 }, (_, n) => discoverableNeed(`cnd_${n}`));
-    const review = compressedReview({
-      mode,
-      stalled: needs.map((n) => ({ needId: n.id, detail: STALL })),
-      authority: null,
-      position,
-      placements: [],
-      needs,
-      now: NOW,
-    });
-    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
-    expect(grouped.underlying).toHaveLength(29);
-
-    const once = (haystack: string, needle: string): number =>
-      haystack.split(needle).length - 1;
-    // Both fields, because fixing one and leaving the other is exactly how
-    // this arrived: `why` was deduplicated and the condition beside it was not.
-    expect(once(grouped.why, STALL)).toBe(1);
-    expect(once(grouped.answer.completionCondition, 'The access is recorded on this card.')).toBe(1);
-  });
-
-  it('says the remedy once when the next step is the remedy', () => {
-    const needs = [discoverableNeed('cnd_1')];
-    const review = compressedReview({
-      mode,
-      stalled: needs.map((n) => ({ needId: n.id, detail: STALL })),
-      authority: null,
-      position,
-      placements: [],
-      needs,
-      now: NOW,
-    });
-    const item = review.items.find((one) => one.key === 'NEED_cnd_1')!;
-    const path = 'Establish a channel that actually reaches them.';
-    expect(item.recommendation.split(path).length - 1).toBe(1);
-    expect(item.recommendation).not.toContain('Next step:');
-  });
-
-  it('still says both when the next step is genuinely a different instruction', () => {
-    const need = {
-      ...discoverableNeed('cnd_1'),
-      recommendedPath: 'Buy the small tool.',
-      nextStep: 'Open an account with them first.',
-    };
-    const review = compressedReview({
-      mode,
-      stalled: [{ needId: need.id, detail: STALL }],
-      authority: null,
-      position,
-      placements: [],
-      needs: [need],
-      now: NOW,
-    });
-    const item = review.items.find((one) => one.key === 'NEED_cnd_1')!;
-    expect(item.recommendation).toContain('Buy the small tool.');
-    expect(item.recommendation).toContain('Next step: Open an account with them first.');
-  });
-
-  it('says the largest rather than a total when a shared remedy names two costs', () => {
-    const need = (id: string, cost: number) => ({
-      id,
-      projectId: 'prj_1',
-      opportunityId: null,
-      blockedAction: `Do ${id}`,
-      whyItMatters: 'It blocks a sale.',
-      recommendedPath: 'Open the same account once.',
-      expectedCostCents: cost,
-      setupEffort: 'Minutes.',
-      nextStep: 'Open it.',
-      completionCondition: 'The account is open.',
-      occurrence: 1,
-      verifiedBy: null,
-      continuationClaimedAt: null,
-      continuationAttempts: 0,
-      continuationNotBefore: null,
-      blocksState: null,
-      candidateId: null,
-      requestKey: null,
-      continuedAt: null,
-      continuationNote: null,
-      state: 'OPEN' as const,
-      resolution: null,
-      resolvedByUserId: null,
-      resolvedAt: null,
-      createdAt: NOW,
-      updatedAt: NOW,
-    });
-    const review = compressedReview({
-      mode,
-      stalled: [],
-      authority: null,
-      position,
-      placements: [],
-      needs: [need('cnd_1', 5_000), need('cnd_2', 9_000)],
-      now: NOW,
-    });
-    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
-    expect(grouped.costCents).toBe(9_000);
-    expect(grouped.costNote).toContain('rather than a total');
-  });
-
-  it('leaves a question Brain is already researching off the decision list', () => {
-    // It is work in progress, not something to answer. A review that asked
-    // about it would be asking somebody to do what Brain had already started.
-    const researching = {
-      id: 'cnd_9',
-      projectId: 'prj_1',
-      opportunityId: 'cop_1',
-      blockedAction: 'Payer for "A paid intake repair"',
-      whyItMatters: 'It is a fact about the world.',
-      recommendedPath: 'Read the organisation’s own pages.',
-      expectedCostCents: null,
-      setupEffort: 'One bounded look.',
-      nextStep: 'Name the role that signs.',
-      completionCondition: 'A payer is recorded.',
-      occurrence: 1,
-      verifiedBy: null,
-      continuationClaimedAt: null,
-      continuationAttempts: 0,
-      continuationNotBefore: null,
-      blocksState: 'EXECUTING' as const,
-      candidateId: 'rcn_1',
-      requestKey: 'question:cop_1:payer',
-      continuedAt: null,
-      continuationNote: null,
-      state: 'OPEN' as const,
-      resolution: null,
-      resolvedByUserId: null,
-      resolvedAt: null,
-      createdAt: NOW,
-      updatedAt: NOW,
-    };
-    const review = compressedReview({
-      mode,
-      stalled: [],
-      authority: null,
-      position,
-      placements: [],
-      needs: [researching],
-      now: NOW,
-    });
-    expect(review.items.some((item) => item.key.startsWith('NEED_'))).toBe(false);
-  });
 
   it('agrees with the card about which blanks Brain looks up', () => {
     // Two readers of one fact. Drift here would put a question Brain already
@@ -729,7 +459,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     // each of these, and the second one is always the one that forgets a guard.
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -738,7 +467,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
         maxConcurrent: 3,
         discoveryOpen: true,
       }),
-      needs: [],
       now: NOW,
     });
     expect(review.items.length).toBeGreaterThan(0);
@@ -760,7 +488,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     });
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: {
         id: 'cau_1',
         projectId: 'prj_1',
@@ -790,7 +517,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
         maxConcurrent: 3,
         discoveryOpen: true,
       }),
-      needs: [],
       now: NOW,
     });
     expect(review.items[0]!.key).toBe('EXPIRING');
@@ -800,11 +526,9 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('says plainly when nothing needs a person', () => {
     const review = compressedReview({
       mode: null,
-      stalled: [],
       authority: null,
       position,
       placements: [],
-      needs: [],
       now: NOW,
     });
     expect(review.items).toEqual([]);
@@ -814,11 +538,9 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('tells a person about a shortfall rather than only refusing later', () => {
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position: { ...position, deployableCents: -5_000, shortfall: true },
       placements: [],
-      needs: [],
       now: NOW,
     });
     expect(review.items.some((item) => item.key === 'SHORTFALL')).toBe(true);
