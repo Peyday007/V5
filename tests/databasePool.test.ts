@@ -52,8 +52,34 @@ describe('a pool timeout names its condition', () => {
 
 const postgres = postgresTestConnection();
 
+/** Let whatever was just started actually take the client before we reach for one. */
+async function settle(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+/**
+ * Check the pool's only client out and keep it out until told otherwise.
+ *
+ * Deliberately not awaited: the caller has to run at the top level, because a
+ * statement issued inside this transaction's async context would go to *its*
+ * client and never ask the pool for one.
+ */
+function holdTheOnlyClient(adapter: PostgresAdapter): {
+  release: () => void;
+  holding: Promise<void>;
+} {
+  let release = (): void => {};
+  const holding = adapter.transaction(
+    async () =>
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+  );
+  return { release: () => release(), holding };
+}
+
 describe.runIf(postgres)('a real saturated pool reports itself', () => {
-  it('names the pool rather than the driver, on both checkout paths', async () => {
+  it('names the pool rather than the driver when a checkout times out', async () => {
     if (!postgres) return;
     // One connection, so holding it is saturation by construction rather than
     // by timing: a race test that passes because the race did not happen is
@@ -66,25 +92,23 @@ describe.runIf(postgres)('a real saturated pool reports itself', () => {
     });
 
     try {
-      let queryError: unknown;
-      let transactionError: unknown;
+      const { release, holding } = holdTheOnlyClient(adapter);
+      await settle();
 
-      await adapter.transaction(async () => {
-        // Inside the transaction the pool's only client is checked out, so
-        // anything reaching for a second one must wait and then give up.
-        queryError = await adapter.all('SELECT 1 AS one').then(
-          () => undefined,
-          (error: unknown) => error,
-        );
-        transactionError = await adapter.transaction(async () => undefined).then(
-          () => undefined,
-          (error: unknown) => error,
-        );
-      });
+      // From OUTSIDE the transaction, so this reaches `#pool.query` and has to
+      // check a client out. An earlier version of this test asked from *inside*
+      // the transaction and asserted a timeout, which the adapter's own rule
+      // makes impossible — a statement issued inside a transaction goes to that
+      // transaction's client and never touches the pool. It never ran on
+      // SQLite, because the live half is skipped there.
+      const queryError = await adapter.all('SELECT 1 AS one').then(
+        () => undefined,
+        (error: unknown) => error,
+      );
 
-      // A nested transaction shares its parent's client on purpose, so it must
-      // NOT time out; the pool path must.
-      expect(transactionError).toBeUndefined();
+      release();
+      await holding;
+
       expect(queryError).toBeInstanceOf(Error);
       const message = (queryError as Error).message;
       expect(message).toContain('database pool');
@@ -95,6 +119,30 @@ describe.runIf(postgres)('a real saturated pool reports itself', () => {
       expect(((queryError as Error).cause as Error | undefined)?.message).toBe(
         'timeout exceeded when trying to connect',
       );
+    } finally {
+      await adapter.close();
+    }
+  });
+
+  it('leaves a statement inside a transaction alone, because it never asks the pool', async () => {
+    if (!postgres) return;
+    // The other half of the rule above, pinned rather than assumed: with the
+    // pool's only client checked out by this very transaction, a statement
+    // issued inside it still succeeds, and so does a nested transaction.
+    const adapter = new PostgresAdapter({
+      connectionString: postgres.connectionString,
+      schema: postgres.schema,
+      max: 1,
+      connectionTimeoutMillis: 300,
+    });
+
+    try {
+      const rows = await adapter.transaction(async () => {
+        const inner = await adapter.all<{ one: number }>('SELECT 1 AS one');
+        await adapter.transaction(async () => undefined);
+        return inner;
+      });
+      expect(rows[0]?.one).toBe(1);
     } finally {
       await adapter.close();
     }
@@ -114,14 +162,8 @@ describe.runIf(postgres)('a real saturated pool reports itself', () => {
       // level rather than inside this one's async context — otherwise it would
       // be a nested transaction sharing this client, which is correct and is
       // not the path under test.
-      let release = () => {};
-      const holding = adapter.transaction(
-        async () => await new Promise<void>((resolve) => {
-          release = resolve;
-        }),
-      );
-      // Let the holder actually take the client before reaching for a second.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      const { release, holding } = holdTheOnlyClient(adapter);
+      await settle();
 
       const error = await adapter.transaction(async () => undefined).then(
         () => undefined,

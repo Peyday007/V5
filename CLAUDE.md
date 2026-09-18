@@ -2705,6 +2705,34 @@ remote.
   seventh anecdote — and if that number says the pool was at its ceiling with
   callers queued, *then* the knob is the answer, from a reading rather than
   from a hunch.
+
+  **The gate that was meant to prove this timed out, I named the wrong
+  suspect, and the correction matters more than the delay.** The Postgres run
+  of that tree took its whole sixty-minute job bound while a run on its own
+  parent commit, started three minutes earlier, finished in 22.5. From that I
+  concluded the difference was mine and named `tests/databasePool.test.ts` —
+  the one addition that runs only on Postgres and deliberately starves a
+  pool — as the prime suspect, and said it was a hang rather than slowness.
+
+  **All three were wrong, and the log says so plainly: 83 of 152 files
+  completed, my three new files never executed at all, no test failed, and
+  nothing hung.** What the runner was actually doing is in the durations —
+  `step12bProduct` 770s, `packet` 551s, `russellNervousSystem` 522s, `fleet`
+  455s, `softwareRequestPhrasing` 381s — every one of them pre-existing and
+  every one of them green. The suite did not fit on that runner, and a 3x gap
+  against the same suite twenty minutes earlier is not something file content
+  can explain. **Why that runner was three times slower is not established**,
+  and recording it as "my tests were slow" would have sent the next person to
+  delete a file that never ran.
+
+  What the episode did produce is a defect found by *reading* rather than by
+  the run, which is the half worth keeping: the live test asked
+  `adapter.all()` from **inside** a transaction and asserted a pool timeout —
+  impossible by the adapter's own first rule, since a statement inside a
+  transaction goes to that transaction's client and never touches the pool. It
+  had never run, because the live half is skipped on SQLite. It now holds the
+  only client from the top level and asks from outside, and the rule it got
+  wrong is pinned as its own test rather than assumed.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first

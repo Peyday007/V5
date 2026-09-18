@@ -37,7 +37,7 @@ let layerId = '';
 beforeEach(async () => {
   const fixture = await freshProject();
   projectId = fixture.project.id;
-  layerId = listLayers(projectId) instanceof Promise ? (await listLayers(projectId))[0]!.id : '';
+  layerId = (await listLayers(projectId))[0]!.id;
 });
 
 /**
