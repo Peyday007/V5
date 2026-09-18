@@ -1020,6 +1020,42 @@ cashRouter.post(
       await getNeed(pathId(req, 'needId')),
       'No need with that id.',
     );
+    /*
+     * A person does not resolve a need, because every need is Brain's own.
+     *
+     * Both callers of `raiseNeed` pass `actorRef: BRAIN`: one for an
+     * integration Brain does not have, one for a `BRAIN_RESEARCH` field whose
+     * own recorded reason says Brain looks it up rather than asking. So a
+     * person answering *"what did you do"* here was attesting to work they had
+     * not done, and `closeNeed` recorded it as `PERSON_SUBSTITUTE` — a
+     * Brain-owned requirement marked satisfied on a sentence.
+     *
+     * Removing the form was not enough by itself: a control nothing renders is
+     * still reachable by anything that can post, and the rule is about what may
+     * be recorded rather than about what is drawn. Brain still resolves them
+     * from rows — `reconcileCapabilityNeeds` closes one the moment its
+     * capability reads `PRESENT`, having checked rather than been told — and
+     * that path does not come through here.
+     *
+     * `WITHDRAWN` stays open to a person: saying a thing is no longer required
+     * is a decision about what to want, not a claim about what happened.
+     *
+     * **After the need is resolved, not before, and the parity test caught
+     * that.** Refusing first answered `400` for an id nobody owns while a
+     * missing one still answered `404` — so the pair told a caller which
+     * ids exist, which is invariant 23's oracle arriving through a guard
+     * written to close a different hole. A guessed id and an invented one
+     * are still one answer; this refusal is only ever reached by somebody
+     * who could already read the need.
+     */
+    if (to === 'RESOLVED') {
+      throw badRequest(
+        'A need is resolved by Brain, from the rows its capability is made of, rather than by ' +
+          'a person saying it is done. If an integration or connection is what is missing, the ' +
+          'named action for it is on People & capacity. Withdrawing a need that is no longer ' +
+          'required is still yours.',
+      );
+    }
 
     const { value, message } = taken(
       await closeNeed({

@@ -643,10 +643,21 @@ describe('Brain researches facts and a person decides person-only things', () =>
       needs: [need('cnd_1'), need('cnd_2'), need('cnd_3')] as never,
       now: '2026-09-15T12:00:00.000Z',
     });
-    const item = review.items.find((one) => one.key.startsWith('NEED_'))!;
-    const sentence = 'Reaching a buyer needs a way to send a message.';
-    expect(item.why).toBe(sentence);
-    expect(item.why.split(sentence).length - 1).toBe(1);
+    /*
+     * **This asserted the deduplicated sentence inside a grouped need card,
+     * and there is no such card now.** The dedup was right — three needs
+     * sharing one reason printed it three times, and a card that repeats
+     * itself is one nobody finishes reading — and it applied to a control
+     * that asked a person to mark three Brain-owned requirements done.
+     *
+     * The three rows still exist and still say the same thing; they are under
+     * *What Brain needs*, one entry each with its own blocked action, so
+     * there is no single card for a sentence to repeat inside.
+     */
+    expect(review.items.find((one) => one.key.startsWith('NEED_'))).toBeUndefined();
+    for (const one of review.items) {
+      expect(one.answer.kind).not.toBe('RESOLVE_NEED');
+    }
   });
 });
 

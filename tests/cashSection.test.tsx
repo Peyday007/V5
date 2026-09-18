@@ -938,13 +938,27 @@ describe('the decision nothing can proceed without', () => {
     ).toBe(true);
   });
 
-  it('answers a grouped need through the operation that already exists', async () => {
+  it('shows a grouped need as work, with no control that would close it', async () => {
     /*
-     * The review rendered items and needs as paragraphs with no answer
-     * controls, while its own summary claimed answering a group released the
-     * underlying work. This is the control, and it calls `closeNeed` — the
-     * operation that already exists — rather than a second apply endpoint that
-     * would be one forgotten guard away from doing less.
+     * **This test asserted the opposite, and the behaviour it pinned was the
+     * defect.** It drove *Mark all 2 done*, typed into *what did you do*,
+     * pressed **Confirm**, and checked that two `closeNeed` calls went out
+     * with `to: 'RESOLVED'` — a person marking two Brain-owned requirements
+     * satisfied on a sentence.
+     *
+     * Both callers of `raiseNeed` pass `actorRef: BRAIN`, and the one for a
+     * card blank writes the reason on the row in these words: *a fact about
+     * the world rather than a decision of yours — so Brain looks it up rather
+     * than asking you*. The form asked that person to say they had looked it
+     * up. What is kept from the original is the half that was always right:
+     * the grouped cost is the remedy's, once, and the summary still says what
+     * the group stands for.
+     *
+     * The payload still carries the retired kind on purpose. Nothing typed can
+     * produce one any more, but this body arrives over `fetch` and a rolling
+     * deploy serves an old one to a new bundle until the last instance turns
+     * over — so what is pinned is that such an item reads as a sentence and
+     * draws no dead button.
      */
     const answerable = view({
       decisionsForMe: {
@@ -985,32 +999,17 @@ describe('the decision nothing can proceed without', () => {
     );
     expect(screen.getByText(/One answer covers 2 items\./)).toBeTruthy();
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /mark all 2 done/i }));
-    });
-    // Brain says what it will read back, rather than trusting the button. It
-    // appears before the control as well as on it, because what an answer
-    // *affects* is named before somebody gives it.
-    expect(screen.getAllByText(/The tool is reachable from here/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/This answer applies to 2 records/i)).toBeTruthy();
+    // No trigger, so no form, so nothing to confirm.
+    expect(screen.queryByRole('button', { name: /mark all 2 done/i })).toBeNull();
+    expect(screen.queryByLabelText(/what did you do/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
 
-    fireEvent.change(screen.getByLabelText(/what did you do/i), {
-      target: { value: 'Bought it on the team card.' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-    });
-
-    expect(bodies['POST /api/cash/needs/cnd_1/close']).toMatchObject({
-      to: 'RESOLVED',
-      resolution: 'Bought it on the team card.',
-    });
-    expect(bodies['POST /api/cash/needs/cnd_2/close']).toMatchObject({ to: 'RESOLVED' });
-    // Never optimistic: the page goes back to the server for what is true now.
-    expect(calls.filter((call) => call === VIEW).length).toBe(2);
+    // And nothing was closed, by this render or by anything it offered.
+    expect(calls).not.toContain('POST /api/cash/needs/cnd_1/close');
+    expect(calls).not.toContain('POST /api/cash/needs/cnd_2/close');
   });
 
-  it('answers a card question on the card itself, and says it is the person’s now', async () => {
+  it('shows a Brain-owned card blank as Brain’s task, with no box to answer it in', async () => {
     /*
      * This drove the review's `FILL_CARD_FIELD` control, which is gone with
      * the section that produced it: every field it could have offered is a
@@ -1078,26 +1077,31 @@ describe('the decision nothing can proceed without', () => {
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: /show the full card/i })[0]!);
     });
-    await act(async () => {
-      fireEvent.click(
-        screen.getAllByRole('button', { name: /answer the eligibility and permission/i })[0]!,
-      );
-    });
-    fireEvent.change(screen.getAllByLabelText(/^Eligibility and permission$/)[0]!, {
-      target: { value: 'No licence applies to work this size.' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: 'Confirm' })[0]!);
-    });
 
-    // The same guarded route the card editor uses, under the field's own key —
-    // an engine field has no column, so its name is what `fillCard` matches.
-    expect(bodies['PATCH /api/cash/opportunities/cop_1']).toMatchObject({
-      eligibility: 'No licence applies to work this size.',
-    });
+    /*
+     * **This test drove the opposite and the behaviour it pinned was the
+     * defect.** It pressed *Answer the eligibility and permission*, typed a
+     * sentence, confirmed, and asserted the `PATCH` — a person filling in a
+     * blank that §33's own `owner` correction had already assigned to Brain,
+     * recorded as a `PERSON` fact that `mayReplace` then keeps above anything
+     * Brain later establishes.
+     *
+     * `eligibility` is `BRAIN_RESEARCH`, and this entry carries no `owner` at
+     * all — which is the shape the server sent before it said whose question
+     * each one is, and the shape a rolling deploy still serves. Absent is not
+     * `PERSON_ONLY`, so it draws no control: the unknown fails closed, which
+     * is the direction that costs a question rather than a false fact.
+     */
     await waitFor(() =>
-      expect(screen.getByText(/It is yours now, so Brain will not propose over it/i)).toBeTruthy(),
+      expect(screen.getAllByText(/Find what published rule decides/i).length).toBeGreaterThan(0),
     );
+    expect(
+      screen.queryByRole('button', { name: /answer the eligibility and permission/i }),
+    ).toBeNull();
+    expect(screen.queryByLabelText(/^Eligibility and permission$/)).toBeNull();
+
+    // And nothing was written, by the render or by anything it offered.
+    expect(calls).not.toContain('PATCH /api/cash/opportunities/cop_1');
   });
 
   it('never renders a control for a review item the server cannot produce', async () => {
@@ -1230,7 +1234,7 @@ describe('the decision nothing can proceed without', () => {
     expect(screen.getByText(/Nothing was spent, and the record stays/i)).toBeTruthy();
   });
 
-  it('offers a substitute rather than pretending a condition was met', async () => {
+  it('offers no way to record a substitute for an integration Brain still lacks', async () => {
     const needDecision = view({
       decisionsForMe: {
         items: [
@@ -1263,26 +1267,26 @@ describe('the decision nothing can proceed without', () => {
     });
     await mount();
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /mark this done/i }));
-    });
-    fireEvent.change(screen.getByLabelText(/what did you do/i), {
-      target: { value: 'The buyer paid us.' },
-    });
-    fireEvent.change(screen.getByLabelText(/doing this another way/i), {
-      target: { value: 'Bank transfer outside Brain for now.' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
-    });
-
-    // The integration is still missing, and Brain records that rather than the
-    // condition having been met.
-    expect(bodies['POST /api/cash/needs/cnd_1/close']).toMatchObject({
-      to: 'RESOLVED',
-      resolution: 'The buyer paid us.',
-      substitute: 'Bank transfer outside Brain for now.',
-    });
+    /*
+     * **The substitute was the most defensible part of the old form and is
+     * still gone, which is the part worth explaining.** It existed so that a
+     * resolution whose completion condition fails is not recorded as the
+     * condition having been met: Brain wrote `PERSON_SUBSTITUTE`, a different
+     * fact that read as one, and the capability went on reading MISSING.
+     *
+     * That is honest bookkeeping for a dishonest question. The need here is
+     * *connect a payment processor* — an integration, raised by Brain, whose
+     * remedy is the named connection action on People & capacity. Asking a
+     * person to type what they are doing instead makes a Cash card the place
+     * a missing integration gets narrated, and the narration is what closes
+     * the card. So the whole prompt goes, and what is left is the need stated
+     * as work, under *What Brain needs*, with its recommended path.
+     */
+    await waitFor(() => expect(screen.getByText(/Connect a payment processor/i)).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /mark this done/i })).toBeNull();
+    expect(screen.queryByLabelText(/what did you do/i)).toBeNull();
+    expect(screen.queryByLabelText(/doing this another way/i)).toBeNull();
+    expect(calls).not.toContain('POST /api/cash/needs/cnd_1/close');
   });
 
   it('offers no button for a decision no control on this page answers', async () => {
@@ -1563,5 +1567,156 @@ describe('winding down', () => {
     await mount();
     await waitFor(() => expect(screen.getByRole('button', { name: /wind it down/i })).toBeTruthy());
     expect(screen.queryByRole('button', { name: /make it active/i })).toBeNull();
+  });
+});
+
+describe('no Cash card asks a person to narrate Brain-owned work', () => {
+  /*
+   * The form this pins the absence of asked, word for word:
+   *
+   *   WHAT DID YOU DO? Brain reads this back against: <completion condition>
+   *   IF THE INTEGRATION IS STILL MISSING… say how
+   *   [ ] [ ]  Confirm  Cancel
+   *
+   * Every row it could be offered for is Brain's own — both callers of
+   * `raiseNeed` pass `actorRef: BRAIN`, and the one for a card blank filters
+   * on `owner === 'BRAIN_RESEARCH'` and writes the reason on the row saying
+   * Brain looks it up *rather than asking you*. So the card rendered a form
+   * asking that same person to say they had looked it up, and a Confirm that
+   * closed it on their word.
+   */
+  it('shows no "what did you do" prompt anywhere on the page', async () => {
+    base();
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    expect(screen.queryByText(/what did you do/i)).toBeNull();
+    expect(screen.queryByLabelText(/what did you do/i)).toBeNull();
+    expect(screen.queryByText(/if the integration is still missing/i)).toBeNull();
+    expect(screen.queryByLabelText(/if the integration is still missing/i)).toBeNull();
+  });
+
+  /*
+   * Driven rather than read: the trigger is what opened the form, so a page
+   * that merely hid the fields would still pass a text search.
+   */
+  it('offers no control that would mark a Brain-owned need done', async () => {
+    base();
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    expect(screen.queryByRole('button', { name: /mark this done/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /mark all \d+ done/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /say what you did/i })).toBeNull();
+  });
+
+  /*
+   * A blank Brain owns prints Brain's task and no box.
+   *
+   * This is the broadest of the three sites and the one a text search misses:
+   * the entry carried no owner, so the card rendered an *Answer the …* trigger
+   * under every unknown — the payer, the price, the delivery method, the
+   * economics — and `fillCard` recorded whatever was typed as a `PERSON` fact
+   * that `mayReplace` then keeps above anything Brain later establishes.
+   */
+  it('renders no answer control under a BRAIN_RESEARCH blank, and still shows its task', async () => {
+    const view_ = view() as Record<string, unknown>;
+    const work = (view_['myCurrentWork'] ?? {}) as Record<string, unknown>;
+    work['engineCards'] = {
+      cop_1: {
+        opportunityId: 'cop_1',
+        validationState: null,
+        recommendation: null,
+        unknowns: ['payer'],
+        entries: [
+          {
+            key: 'payer',
+            label: 'Who pays',
+            value: null,
+            kind: 'UNKNOWN',
+            task: 'Find the named buyer who would pay for this.',
+            owner: 'BRAIN_RESEARCH',
+            claimId: null,
+            basis: null,
+            assumptions: null,
+            uncertainty: null,
+          },
+        ],
+      },
+    };
+    base({ [VIEW]: { body: view_ } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    const opened = screen.queryAllByRole('button', { name: /show the full card/i });
+    for (const one of opened) fireEvent.click(one);
+
+    // Brain's task is still printed: the blank is work, not a hole.
+    await waitFor(() =>
+      expect(screen.getAllByText(/find the named buyer/i).length).toBeGreaterThan(0),
+    );
+    // And nothing invites a person to type the answer.
+    expect(screen.queryByRole('button', { name: /answer the who pays/i })).toBeNull();
+    expect(screen.queryByLabelText(/who pays/i)).toBeNull();
+  });
+
+  /*
+   * The same card, with the same blank, owned by a person instead.
+   *
+   * Without this the suite would pass on a page that rendered no control for
+   * anything, which is a different product rather than a corrected one — and
+   * it would not notice if the gate were inverted.
+   */
+  it('renders the control for a genuinely PERSON_ONLY entry', async () => {
+    const view_ = view() as Record<string, unknown>;
+    const work = (view_['myCurrentWork'] ?? {}) as Record<string, unknown>;
+    work['engineCards'] = {
+      cop_1: {
+        opportunityId: 'cop_1',
+        validationState: null,
+        recommendation: null,
+        unknowns: ['payer'],
+        entries: [
+          {
+            key: 'payer',
+            label: 'Who pays',
+            value: null,
+            kind: 'UNKNOWN',
+            task: 'Only you can settle this one.',
+            owner: 'PERSON_ONLY',
+            claimId: null,
+            basis: null,
+            assumptions: null,
+            uncertainty: null,
+          },
+        ],
+      },
+    };
+    base({ [VIEW]: { body: view_ } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    const opened = screen.queryAllByRole('button', { name: /show the full card/i });
+    for (const one of opened) fireEvent.click(one);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /answer the who pays/i })).toBeTruthy(),
+    );
+  });
+
+  /*
+   * Reading the page performs nothing.
+   *
+   * The removal is a rendering change, so the thing worth pinning is that it
+   * stayed one: no close, no resolve, no patch, no transition.
+   */
+  it('performs no write while the page is read', async () => {
+    base();
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    const wrote = calls.filter((one) => !one.startsWith('GET '));
+    expect(wrote).toEqual([]);
+    expect(calls.some((one) => one.includes('/needs/'))).toBe(false);
   });
 });

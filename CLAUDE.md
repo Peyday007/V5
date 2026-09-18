@@ -4515,6 +4515,68 @@ and a suite that exercises the stage cannot see that.**
   settled. Checking that before changing anything is why the fix is three
   display sites and no logic.
 
+- **A card asked a person to attest to work Brain had said it would do, and
+  the row it closed said so in its own words.** The form read *"WHAT DID YOU
+  DO? Brain reads this back against: <completion condition>"*, then *"IF THE
+  INTEGRATION IS STILL MISSING, say how"*, two boxes and a **Confirm**. Every
+  `cash_needs` row it could be offered for is Brain's own: both callers of
+  `raiseNeed` pass `actorRef: BRAIN`, and the one for a card blank filters on
+  `owner === 'BRAIN_RESEARCH'` and writes the reason on the row as *"a fact
+  about the world rather than a decision of yours — so Brain looks it up rather
+  than asking you"*. The card then asked that same person to say they had
+  looked it up, and **`closeNeed` recorded the sentence as
+  `PERSON_SUBSTITUTE`** — a Brain-owned requirement marked satisfied on prose.
+  §29's contradicting-control defect, with a write on the end of it.
+
+  Deleted rather than relabelled, for the reason the grouped-blank section
+  above it was deleted: every row it could group on is Brain-owned, so no
+  narrower version of it is correct. **Nothing is hidden** — the identical rows
+  are on the same page under *What Brain needs*, with the blocked action, why
+  it matters, the recommended path and the next step. A missing integration is
+  answered by the named connection action on People & capacity, which is a
+  control that does the thing, rather than by a sentence typed into a Cash card.
+
+  **Three sites, and the one a text search misses was the broadest.**
+  `EngineCardEntry` carried no owner, so the card rendered an *Answer the …*
+  box under **every** blank — the payer, the price, the delivery method, the
+  economics — and `fillCard` recorded whatever was typed as a `PERSON` fact
+  that `mayReplace` then keeps above anything Brain later establishes. The
+  entry carries `fieldOwner`'s answer now, derived on the server so the one
+  module that decides ownership stays the only one, and the control renders for
+  `PERSON_ONLY` and nothing else. **No card field is `PERSON_ONLY`**, so today
+  it renders for nothing — the correct reading of a card whose every field is a
+  fact or a proposal, and the control appears by itself if one is ever added.
+  The third site is a genuine person-only control — recording a commercial
+  action taken under a standing grant, chosen from the closed set that grant
+  permits — and it kept the generic opening words of the form that was wrong.
+  It says what the answer authorizes now.
+
+  **Removing the form was not the whole correction, and two further defects
+  came out of proving that.** A control nothing renders is still reachable by
+  anything that can post, so the route refuses a person resolving a need at
+  all; `WITHDRAWN` stays theirs, because saying a thing is no longer required
+  is a decision about what to *want* and claims nothing about what happened.
+  That guard went in **before** the need was resolved, so an invented id
+  answered `400` while a missing one still answered `404` — invariant 23's
+  oracle arriving through a guard written to close a different hole, caught by
+  the parity test that already existed. And `DecisionAnswer` drew its trigger
+  from `answer.label` for *any* kind, which was harmless only while every kind
+  had a branch: with the branch gone the button still drew itself and opened
+  nothing. A dead control is worse than the wrong form it replaced, because a
+  person presses it twice and concludes the page is broken — and the payload is
+  untyped at runtime, so a rolling deploy serves an old body to a new bundle
+  until the last instance turns over. The implemented kinds are named.
+
+  **`remedyCost` went with it rather than being left unused.** It answered a
+  real question — two opportunities blocked on the same tool are one purchase,
+  so the group costs that figure once rather than the sum, because an
+  over-stated cost makes a cheap unblock look expensive enough to defer — and
+  it existed only to label the card that is gone. Nothing inherited the defect
+  it guarded: *What Brain needs* lists each need with its own path and shows no
+  total, so there is no sum anywhere to be wrong. Kept as an absence with its
+  reasoning, because a helper with no caller is the *mechanism nothing calls*
+  this file keeps correcting, and a later reader would wire it back.
+
 **None of the existing work was rewritten to make any of this come out right.**
 Every orchestration, fragment, claim, report, audit, round and parked candidate
 keeps its id, its reason and its lineage; the two migrations are additive; the

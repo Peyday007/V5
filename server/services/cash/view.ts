@@ -80,8 +80,9 @@ export interface CashView {
     /**
      * The actions this grant actually permits.
      *
-     * Sent so the screen that asks "what did you do" offers the things this
-     * person authorized rather than the whole vocabulary — a control offering
+     * Sent so the control that records an action somebody took offers the
+     * things this person authorized rather than the whole vocabulary — one
+     * offering
      * an action the grant refuses is one that teaches somebody the refusal is
      * arbitrary. It decides nothing: `checkCommercialAuthority` is still asked
      * server-side about whatever arrives.

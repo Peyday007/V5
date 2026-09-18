@@ -426,15 +426,29 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     }
   });
 
-  it('turns two needs with one remedy into one decision', () => {
-    const need = (id: string) => ({
+  it('turns no need into a decision, however many share one remedy', () => {
+    /*
+     * **These two tests asserted the grouped-need decision and its cost
+     * arithmetic, and the card they described is gone.** They pinned a real
+     * rule — two opportunities blocked on the same small tool are one
+     * purchase, so the group costs that figure once rather than the sum — and
+     * the rule only ever existed to label a control that asked a person to
+     * mark Brain's own requirements done.
+     *
+     * Every `cash_needs` row is raised with `actorRef: BRAIN`, so there is no
+     * subset of them a person answers. The rows are not hidden: they are on
+     * the same page under *What Brain needs*, each with its own recommended
+     * path, and that surface shows no total — so nothing inherited the
+     * double-counting the deleted arithmetic guarded against.
+     */
+    const need = (id: string, cost: number) => ({
       id,
       projectId: 'prj_1',
       opportunityId: null,
       blockedAction: `Do ${id}`,
       whyItMatters: 'It blocks a sale.',
       recommendedPath: 'Buy the same small tool once.',
-      expectedCostCents: 5_000,
+      expectedCostCents: cost,
       setupEffort: 'Minutes.',
       nextStep: 'Buy it.',
       completionCondition: 'The tool is bought and reachable from here.',
@@ -461,65 +475,17 @@ describe('the review groups by shared remedy and counts what it stands for', () 
       authority: null,
       position,
       placements: [],
-      needs: [need('cnd_1'), need('cnd_2')],
-      now: NOW,
-    });
-    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
-    expect(grouped.underlying).toEqual(['cnd_1', 'cnd_2']);
-    // One tool bought once. Adding the two expected costs reported twice the
-    // price of buying it — the direction that makes a cheap unblock look
-    // expensive enough to defer.
-    expect(grouped.costCents).toBe(5_000);
-    expect(grouped.recommendation).toContain('5000 cents');
-    expect(grouped.costNote).toContain('paid once');
-    expect(grouped.sharedRemedy).toBe(true);
-    expect(grouped.answer.kind).toBe('RESOLVE_NEED');
-    expect(grouped.answer.targets).toEqual(['cnd_1', 'cnd_2']);
-    expect(grouped.answer.completionCondition).toContain('tool');
-  });
-
-  it('says the largest rather than a total when a shared remedy names two costs', () => {
-    const need = (id: string, cost: number) => ({
-      id,
-      projectId: 'prj_1',
-      opportunityId: null,
-      blockedAction: `Do ${id}`,
-      whyItMatters: 'It blocks a sale.',
-      recommendedPath: 'Open the same account once.',
-      expectedCostCents: cost,
-      setupEffort: 'Minutes.',
-      nextStep: 'Open it.',
-      completionCondition: 'The account is open.',
-      occurrence: 1,
-      verifiedBy: null,
-      continuationClaimedAt: null,
-      continuationAttempts: 0,
-      continuationNotBefore: null,
-      blocksState: null,
-      candidateId: null,
-      requestKey: null,
-      continuedAt: null,
-      continuationNote: null,
-      state: 'OPEN' as const,
-      resolution: null,
-      resolvedByUserId: null,
-      resolvedAt: null,
-      createdAt: NOW,
-      updatedAt: NOW,
-    });
-    const review = compressedReview({
-      mode,
-      stalled: [],
-      authority: null,
-      position,
-      placements: [],
+      // Two sharing a remedy, and two naming different costs: the exact pair
+      // the deleted arithmetic existed to tell apart.
       needs: [need('cnd_1', 5_000), need('cnd_2', 9_000)],
       now: NOW,
     });
-    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
-    expect(grouped.costCents).toBe(9_000);
-    expect(grouped.costNote).toContain('rather than a total');
+
+    expect(review.items.find((item) => item.title.includes('one remedy'))).toBeUndefined();
+    expect(review.items.some((item) => item.underlying.includes('cnd_1'))).toBe(false);
+    expect(review.items.some((item) => item.answer.label.match(/say what you did/i))).toBe(false);
   });
+
 
   it('leaves a question Brain is already researching off the decision list', () => {
     // It is work in progress, not something to answer. A review that asked

@@ -50,7 +50,6 @@ import type { CashPosition } from './money.ts';
  */
 export type ReviewAnswerKind =
   | 'GRANT_AUTHORITY'
-  | 'RESOLVE_NEED'
   | 'RELEASE_COMMITMENT'
   | 'RECORD_MONEY'
   | 'NOTHING_TO_PRESS';
@@ -266,79 +265,36 @@ export function compressedReview(input: ReviewInput): CompressedReview {
   }
 
   /*
-   * 4. Needs, grouped by the remedy they recommend.
+   * 4. Needs are **not** decisions, and offering them as one asked a person to
+   *    attest to work they had not done.
    *
-   * Two opportunities blocked on the same missing tool are one purchase, not
-   * two decisions.
+   * This section grouped every open `cash_needs` row by its recommended path
+   * and offered *"Mark all N done, and say what you did"* — a free-text box
+   * asking what the person did, a second box for what they were doing instead
+   * if the integration was still missing, and a **Confirm** that recorded the
+   * sentence and closed the need.
+   *
+   * Every row it could offer is Brain's own. Both callers of `raiseNeed` pass
+   * `actorRef: BRAIN`; `reconcileCapabilityNeeds` raises one for an
+   * integration Brain does not have, and `reconcileDiscoverableGaps` filters
+   * on `field.owner === 'BRAIN_RESEARCH'` and writes the reason on the row in
+   * these words: *"it is a fact about the world rather than a decision of
+   * yours — so Brain looks it up rather than asking you."* The card then
+   * rendered a form asking that same person to say they had looked it up. §29's
+   * own defect — a control that contradicts the sentence beside it — and worse
+   * than the usual case, because answering it wrote `PERSON_SUBSTITUTE` and
+   * marked a Brain-owned requirement satisfied on a person's word.
+   *
+   * Deleted rather than relabelled, for the reason the grouped-blank section
+   * above it was deleted: every row it could group on is Brain-owned, so there
+   * is no narrower version of it that is correct. **Nothing is hidden** — the
+   * identical rows are already on this same page under *What Brain needs*,
+   * with their blocked action, why it matters, the recommended path and the
+   * next step, and `whatBrainNeeds` is the projection that carries them. What
+   * is gone is the false control, and a missing integration is answered by the
+   * named connection action on People & capacity rather than by a sentence
+   * typed into a Cash card.
    */
-  const byPath = new Map<string, CashNeed[]>();
-  for (const need of input.needs) {
-    if (need.state !== 'OPEN') continue;
-    /*
-     * A question Brain is *actually* researching is not a decision for a
-     * person, and one whose research is going nowhere is.
-     *
-     * This skipped every need with a candidate id, which hid it for ever —
-     * whether the research had completed, failed, or never launched at all. So
-     * the case that most needed a person's attention was the case guaranteed
-     * never to reach them. `input.stalled` is what the loop found when it
-     * looked; a need in it is shown, and one that is genuinely running is not.
-     */
-    if (need.candidateId && !input.stalled.includes(need.id)) continue;
-    const bucket = byPath.get(need.recommendedPath) ?? [];
-    bucket.push(need);
-    byPath.set(need.recommendedPath, bucket);
-  }
-  for (const [path, needs] of byPath) {
-    const { cents, note } = remedyCost(needs);
-    items.push({
-      key: `NEED_${needs[0]!.id}`,
-      title:
-        needs.length === 1
-          ? `Brain needs: ${needs[0]!.blockedAction}`
-          : `${needs.length} blocked actions, one remedy`,
-      /*
-       * One sentence per distinct reason, not one per row.
-       *
-       * These needs were grouped because they recommend the identical path,
-       * and identical paths routinely carry identical explanations — so the
-       * join printed the same sentence thirty times inside one card. A card
-       * that repeats itself is one nobody finishes reading.
-       */
-      why: [...new Set(needs.map((n) => n.whyItMatters.trim()))].join(' '),
-      recommendation: `${path}${cents === null ? '' : ` (about ${cents} cents)`}. Next step: ${needs[0]!.nextStep}`,
-      consequence: `Resolving this unblocks ${needs.length} action${needs.length === 1 ? '' : 's'}. Independent work is running meanwhile.`,
-      urgency: 'WHENEVER',
-      underlying: needs.map((n) => n.id),
-      // These *are* one remedy: they were grouped because they recommend the
-      // identical path, which is one tool bought once or one account opened
-      // once. That is the case the field exists to distinguish from the one
-      // above it.
-      sharedRemedy: true,
-      costCents: cents,
-      costNote: note,
-      answer: {
-        kind: 'RESOLVE_NEED',
-        targets: needs.map((n) => n.id),
-        /*
-         * The plural control only where one act genuinely answers all of them.
-         *
-         * `byPath` groups by the recommended path, which is one tool bought
-         * once or one account opened once — so *mark all N done* is true here
-         * and was never true of the card-blank section above, which is why
-         * that section is gone rather than relabelled.
-         */
-        label:
-          needs.length === 1
-            ? 'Mark this done, and say what you did'
-            : `Mark all ${needs.length} done, and say what you did`,
-        completionCondition: needs
-          .map((n) => n.completionCondition)
-          .filter((one): one is string => !!one)
-          .join(' ') || 'The recommended path was taken.',
-      },
-    });
-  }
 
   /*
    * 5. Openings that are about to close.
@@ -452,40 +408,23 @@ export const RESEARCHED_FIELDS = new Set([
   'exposure',
 ]);
 
-/**
- * What a shared remedy costs, which is not the sum of what it unblocks.
+/*
+ * `remedyCost` was here and is deleted with its only caller.
  *
- * Two opportunities blocked on the same small tool are one purchase. Adding
- * their expected costs reported twice the price of buying it once — and the
- * direction matters, because an over-stated cost makes a cheap unblock look
- * expensive enough to defer. Where the group's members declare the same figure
- * it is that figure, once. Where they differ Brain cannot tell whether that is
- * one remedy priced inconsistently or several, so it says the range rather than
- * inventing a total.
+ * It answered a real question — two opportunities blocked on the same small
+ * tool are one purchase, so the group's cost is that figure once rather than
+ * the sum, because an over-stated cost makes a cheap unblock look expensive
+ * enough to defer. That arithmetic existed only to label the grouped *needs*
+ * decision, and there is no longer one: every need is Brain's own, so offering
+ * it as something a person answers was the defect above.
+ *
+ * Kept as an absence rather than as an unused function, because a helper with
+ * no caller is the *mechanism nothing calls* this file keeps having to correct,
+ * and a later reader would reasonably wire it back to something. Nothing
+ * inherited the defect it guarded: *What Brain needs* lists each need with its
+ * own recommended path and shows no total at all, so there is no sum on any
+ * surface to be wrong. Restoring the grouping means restoring this with it.
  */
-function remedyCost(needs: CashNeed[]): { cents: number | null; note: string | null } {
-  const stated = needs
-    .map((one) => one.expectedCostCents)
-    .filter((one): one is number => one !== null && one > 0);
-  if (stated.length === 0) return { cents: null, note: null };
-  const distinct = [...new Set(stated)].sort((a, b) => a - b);
-  if (distinct.length === 1) {
-    return {
-      cents: distinct[0]!,
-      note:
-        needs.length === 1
-          ? null
-          : `One remedy at ${distinct[0]} cents, paid once — not ${needs.length} times.`,
-    };
-  }
-  return {
-    cents: distinct[distinct.length - 1]!,
-    note:
-      `These name different costs — ${distinct.join(' and ')} cents — so this is the largest of ` +
-      'them rather than a total. Adding them would assume they are separate purchases, and ' +
-      'nothing here knows that.',
-  };
-}
 
 
 function plusDays(iso: string, days: number): string {

@@ -674,6 +674,91 @@ describe('one account’s whole journey', () => {
     expect(bare.status).toBe(400);
   });
 
+  it('refuses a person resolving a need, and leaves it open for Brain', async () => {
+    /*
+     * The form that posted here is gone, and this is why removing it was not
+     * the whole correction: a control nothing renders is still reachable by
+     * anything that can post, and the rule is about what may be **recorded**
+     * rather than about what is drawn.
+     *
+     * Every `cash_needs` row is Brain's own — both callers of `raiseNeed` pass
+     * `actorRef: BRAIN`, and the one for a card blank writes the reason on the
+     * row saying Brain looks it up *rather than asking you*. So a person
+     * answering *"what did you do"* was attesting to work they had not done,
+     * and `closeNeed` recorded it as `PERSON_SUBSTITUTE` — a Brain-owned
+     * requirement marked satisfied on a sentence.
+     */
+    const before = await call<{ whatBrainNeeds: { id: string; state: string }[] }>('GET', CASH(), {
+      cookie: adminCookie,
+    });
+    const needId = before.body.whatBrainNeeds[0]!.id;
+    expect(before.body.whatBrainNeeds[0]!.state).toBe('OPEN');
+
+    const refused = await call<{ error: string }>(
+      'POST',
+      `/api/cash/needs/${needId}/close`,
+      {
+        cookie: adminCookie,
+        body: { to: 'RESOLVED', resolution: 'I connected it, honestly.' },
+      },
+    );
+    expect(refused.status).toBe(400);
+    // It names where the remedy actually is rather than only refusing.
+    expect(refused.body.error).toMatch(/People & capacity/i);
+
+    // A substitute does not buy the way past it either: that was the most
+    // defensible half of the old form and it is the same attestation.
+    const withSubstitute = await call(
+      'POST',
+      `/api/cash/needs/${needId}/close`,
+      {
+        cookie: adminCookie,
+        body: {
+          to: 'RESOLVED',
+          resolution: 'Doing it by hand.',
+          substitute: 'Bank transfer outside Brain for now.',
+        },
+      },
+    );
+    expect(withSubstitute.status).toBe(400);
+
+    // And the need is untouched, so Brain's own path still reaches it.
+    const after = await call<{ whatBrainNeeds: { id: string; state: string }[] }>('GET', CASH(), {
+      cookie: adminCookie,
+    });
+    expect(after.body.whatBrainNeeds.find((one) => one.id === needId)?.state).toBe('OPEN');
+  });
+
+  it('still lets a person withdraw a need that is no longer wanted', async () => {
+    /*
+     * The narrower half of the same guard, and the reason it is a guard rather
+     * than a deleted route: saying a thing is no longer required is a decision
+     * about what to *want*, which is a person's, and it claims nothing about
+     * what happened. Refusing both would have made an escalation with no
+     * answering transition out of a rule about honesty.
+     */
+    // Its own need rather than the journey's: this is the one assertion here
+    // that consumes what it acts on, and the steps after it read the same list.
+    const made = await call<{ need: { id: string } }>('POST', `${CASH()}/needs`, {
+      cookie: adminCookie,
+      body: {
+        blockedAction: 'Advertise this opening',
+        whyItMatters: 'It would reach more buyers.',
+        recommendedPath: 'Buy a listing on the trade board.',
+        setupEffort: 'Minutes.',
+        nextStep: 'Buy the listing.',
+        completionCondition: 'The listing is live.',
+      },
+    });
+    expect(made.status).toBe(200);
+
+    const withdrawn = await call('POST', `/api/cash/needs/${made.body.need.id}/close`, {
+      cookie: adminCookie,
+      body: { to: 'WITHDRAWN', resolution: 'We are not selling this after all.' },
+    });
+    expect(withdrawn.status).toBe(200);
+  });
+
   it('shows the whole private section in one read', async () => {
     const view = await call<{
       objective: string;
