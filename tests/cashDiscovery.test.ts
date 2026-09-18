@@ -368,6 +368,25 @@ describe('discovery keeps going while the sprint is active', () => {
     await activated();
     const [opened] = await openDiscovery({ projectId });
 
+    /*
+     * A millisecond between the opening event and the noise, so the precondition
+     * below is a fact rather than a coin toss.
+     *
+     * `listCashEvents` orders `created_at DESC, id DESC`, and an id is a random
+     * uuid rather than a time — so among events sharing one millisecond the
+     * order is arbitrary. A tight loop writes tens of these per millisecond, and
+     * when enough of them land in the opening event's own millisecond with
+     * smaller ids, that event sorts *into* the newest five hundred and the
+     * precondition fails. It did, twice, under full-suite load, on trees either
+     * side of this change.
+     *
+     * The assertion this scaffolds is about a display window not being an index,
+     * and it is right. What was wrong was proving the precondition by racing the
+     * clock. One sleep makes every note strictly newer, so the ordering is
+     * decided by the column that means time rather than by the one that does
+     * not.
+     */
+    await new Promise((resolve) => setTimeout(resolve, 5));
     for (let i = 0; i < 520; i += 1) {
       await recordCashEvent({
         projectId,
