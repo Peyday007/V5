@@ -183,7 +183,13 @@ import { execFileSync } from 'node:child_process';
 import { BRAIN_REVISION } from '../server/env.ts';
 import { initStorage } from '../server/services/storage/index.ts';
 import { seedDealDispatch } from '../server/seed.ts';
-import { createGoal, reserve } from '../server/repos/russellAuthority.ts';
+import {
+  authorityNow,
+  createGoal,
+  listReservations,
+  releaseReservation,
+  reserve,
+} from '../server/repos/russellAuthority.ts';
 import { launch } from '../server/services/russell/launch.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import { NEEDS_HUMAN_CHOICES, choicesFor } from '../server/services/russell/needsHuman.ts';
@@ -773,6 +779,27 @@ function unchangedSince(revision: string, paths: string[]): boolean {
 /** The whole product: what a browser renders and what answers it. */
 function productUnchangedSince(revision: string): boolean {
   return unchangedSince(revision, ['client', 'server']);
+}
+
+/**
+ * Everything a journey record is a reading *of*.
+ *
+ * The product is two thirds of it. The other third is the harness: a journey
+ * says 23 steps arrived, nothing was clipped and every chrome control answered
+ * `elementFromPoint` — and which steps, which controls and what counts as
+ * arriving are all `scripts/visual-qa.ts`. A record taken before that file
+ * changed describes a run of a different instrument against the same product,
+ * and `productUnchangedSince` would have called it current.
+ *
+ * It is the defect this reporter was already corrected for once, one file
+ * along: `deployedUnchangedSince` left `scripts/` out of the inputs to an
+ * image and was deleted for it. The same omission had survived here, where it
+ * is worse — because extending `MUST_REACH` to three destinations production
+ * shipped is exactly the kind of change that makes an old reading wrong while
+ * leaving it looking right.
+ */
+function journeyInputsUnchangedSince(revision: string): boolean {
+  return unchangedSince(revision, ['client', 'server', 'scripts/visual-qa.ts']);
 }
 
 /**
@@ -2302,21 +2329,82 @@ async function runMissionChain(): Promise<ChainResult> {
     );
 
     /*
-     * And the ceiling refusing a third, asked of `reserve` itself.
+     * And the ceiling refusing the next one, asked of `reserve` itself — while
+     * the slots are genuinely in use, which is the half that changed underneath
+     * this check.
      *
-     * Nothing is created by this: an over-ceiling reservation releases its own
-     * row before returning, which is why the probe is safe to make and why the
-     * refusal names `AT_ONCE` rather than a sentence somebody has to match.
+     * **It used to launch two missions and probe for a third, and that stopped
+     * being a fair question.** Production diagnosed a live deadlock from the
+     * sprint's own rows: two missions parked at `NEEDS_HUMAN` held both slots
+     * for ever, `renewLiveMissionReservations` renewed the hold on every tick
+     * so it could never age out either, and fifty-two queued ideas could never
+     * launch — none of them broken, simply no slot and never going to be one.
+     * Concurrency is real provider capacity, and a mission waiting on a person
+     * is using none of it, so a parked mission's hold is expired rather than
+     * renewed. `missionA` parks during the launch above, so by the time this
+     * line runs one of the two slots is legitimately free and the old probe was
+     * asserting behaviour the product had deliberately stopped having.
+     *
+     * So the ceiling is filled to its declared number first, from the rows
+     * rather than from an assumption about how many missions happen to be
+     * parked, and *then* the next one is probed. That is strictly the stronger
+     * question: it establishes the refusal is the ceiling doing its job rather
+     * than an accident of how the chain happened to leave the world.
+     */
+    const heldNow = await listReservations(goal.id);
+    const activeMissions = heldNow.filter(
+      (row) =>
+        row.kind === 'MISSION' &&
+        row.state === 'HELD' &&
+        (row.expiresAt ?? '') > authorityNow(),
+    ).length;
+    const fillers: string[] = [];
+    for (let taken = activeMissions; taken < goal.maxConcurrent; taken += 1) {
+      const filler = await reserve({
+        goalId: goal.id,
+        kind: 'MISSION',
+        idempotencyKey: `step12b:acceptance:ceiling-filler:${randomUUID()}`,
+      });
+      if (filler.ok && filler.reservation) fillers.push(filler.reservation.id);
+    }
+    /*
+     * Nothing is created by the probe itself: an over-ceiling reservation
+     * releases its own row before returning, which is why it is safe to make
+     * and why the refusal names `AT_ONCE` rather than a sentence somebody has
+     * to match. The fillers are released immediately afterwards, so the world
+     * this chain hands to its next link is the one it found.
      */
     const overCeiling = await reserve({
       goalId: goal.id,
       kind: 'MISSION',
       idempotencyKey: `step12b:acceptance:ceiling-probe:${randomUUID()}`,
     });
+    for (const id of fillers) {
+      await releaseReservation({ reservationId: id, reason: 'acceptance ceiling probe' });
+    }
     check(
-      'L5 · while both are live, `reserve` refuses the next one as a wait, not a wall',
+      'L5 · with every slot in use, `reserve` refuses the next one as a wait, not a wall',
       !overCeiling.ok && overCeiling.refusedBy === 'AT_ONCE',
-      `refusedBy=${overCeiling.refusedBy ?? 'none'} — "${overCeiling.reason}"`,
+      `${goal.maxConcurrent} slot(s), ${activeMissions} already live, ${fillers.length} filled: ` +
+        `refusedBy=${overCeiling.refusedBy ?? 'none'} — "${overCeiling.reason}"`,
+    );
+    /*
+     * And the other half of that production fix, which is what freed the slot:
+     * a parked mission's hold stops counting without being destroyed. The row
+     * stays `HELD` and stays on the audit (§5); what moved is its expiry.
+     */
+    const parkedHold = heldNow.find(
+      (row) =>
+        row.kind === 'MISSION' &&
+        row.state === 'HELD' &&
+        (row.expiresAt ?? '') <= authorityNow(),
+    );
+    check(
+      'L5 · a mission waiting on a person stops holding capacity, and keeps its row',
+      parkedHold !== undefined,
+      parkedHold
+        ? `reservation ${parkedHold.id} is still HELD with its hold expired at ${parkedHold.expiresAt}`
+        : `no expired HELD mission reservation exists; ${heldNow.length} reservation(s) read`,
     );
 
     /* -- The readings the rerank is measured against ----------------------- */
@@ -2326,10 +2414,6 @@ async function runMissionChain(): Promise<ChainResult> {
       projectId,
       projectName: seeded.project.name,
     });
-    const ordinalsBefore = await getDb().all<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM russell_candidates WHERE project_id = ? AND ordinal IS NOT NULL`,
-      [projectId],
-    );
 
     /* -- Link 3: the decision, derived by Brain and answered by a person ---- */
     const packetA = missionA?.orchestrationId
@@ -2485,22 +2569,43 @@ async function runMissionChain(): Promise<ChainResult> {
      * And the half that makes it a *derivation*: there is nowhere to store it.
      *
      * §29's rule is "a collection is a row; a rank is not". The check is the
-     * schema itself — a column that does not exist cannot have been written —
-     * plus the one column that *could* pin an order staying untouched, because
-     * `ordinal` is a person's manual pin and nothing in this chain is one.
+     * schema itself — a column that does not exist cannot have been written.
+     *
+     * **It also required `russell_candidates.ordinal` to be null everywhere,
+     * and that stopped being the right question.** The comment beside it said
+     * `ordinal` was "a person's manual pin", which was true when it was
+     * written. Production changed what the column means: `judgeCandidate`
+     * writes a **launch rank** into it from the compiler profile the
+     * candidate's own recorded judgment names, and a later pass fills it in for
+     * ideas judged before the rank existed — rows reaching what a hook cannot,
+     * which is this repository's own recurring repair. That is a derivation
+     * too, and one the product needs, so an acceptance gate that failed
+     * whenever the queue was correctly ranked would be refusing the fix.
+     *
+     * The two are different ranks and only one of them is §29's. §29 is about
+     * what a *person is shown* — the backlog order and a thread's standing —
+     * and those still have nowhere to live, which is what `noRankColumn` says.
+     * `ordinal` orders what launches next, and what makes it a derivation
+     * rather than a pin is that it follows a judgment: so that is what is
+     * asked, of rows. A candidate carrying an ordinal and no recorded
+     * judgment would be somebody's thumb on the queue.
      */
     const noRankColumn =
       !(await columnExists('russell_candidates', 'rank')) &&
       !(await columnExists('russell_candidates', 'standing')) &&
       !(await columnExists('russell_conversations', 'rank')) &&
       !(await columnExists('russell_conversations', 'standing'));
+    const pinnedWithoutJudgment = await getDb().all<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM russell_candidates
+        WHERE project_id = ? AND ordinal IS NOT NULL AND priority IS NULL`,
+      [projectId],
+    );
     check(
       'L4 · and it is derived, because no table in this schema could have stored it',
-      noRankColumn &&
-        Number(ordinalsBefore[0]?.n ?? -1) === 0 &&
-        Number(ordinalsAfter[0]?.n ?? -1) === 0,
+      noRankColumn && Number(pinnedWithoutJudgment[0]?.n ?? -1) === 0,
       `no rank/standing column on russell_candidates or russell_conversations; ` +
-        `${Number(ordinalsAfter[0]?.n ?? -1)} candidate(s) carry a manual ordinal`,
+        `${Number(ordinalsAfter[0]?.n ?? -1)} candidate(s) carry a launch ordinal and ` +
+        `${Number(pinnedWithoutJudgment[0]?.n ?? -1)} of them carry one without a judgment behind it`,
     );
 
     /* -- Link 3b: the knowledge writeback, and the guard that stops it here - */
@@ -5910,7 +6015,8 @@ async function main(): Promise<void> {
   if (journeyRaw) {
     try {
       journey = JSON.parse(journeyRaw) as JourneyRecord;
-      journeyStillDescribesThisTree = journey.revision !== null && productUnchangedSince(journey.revision);
+      journeyStillDescribesThisTree =
+        journey.revision !== null && journeyInputsUnchangedSince(journey.revision);
     } catch {
       journey = null;
     }
@@ -6169,13 +6275,13 @@ async function main(): Promise<void> {
         : 'not read',
     ),
     fromCheckout(
-      'the reading still describes this tree — no product code has moved since',
+      'the reading still describes this tree — neither the product nor the harness has moved',
       journeyStillDescribesThisTree,
       journey
         ? `taken at ${journey.revision?.slice(0, 8) ?? 'unknown'}; ` +
           (journeyStillDescribesThisTree
-            ? 'client/ and server/ are byte-identical at HEAD'
-            : 'the product has changed since — re-run scripts/visual-qa.ts')
+            ? 'client/, server/ and scripts/visual-qa.ts are byte-identical at HEAD'
+            : 'an input has changed since — re-run scripts/visual-qa.ts')
         : 'not read',
     ),
     fromCheckout(
