@@ -37,9 +37,11 @@ import {
   bindRoutineWorker,
   createAccount,
   createRoutine,
+  credentialDigest,
   getRoutineByRef,
   listRoutines,
   recordWorkerSession,
+  routineRegistrationCollision,
   setPolicy,
   setRoutineState,
 } from '../server/repos/fleet.ts';
@@ -63,6 +65,8 @@ import { createProbeBin } from '../server/services/fleet/probe.ts';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
 
 const REPOSITORY = 'peyday007/v5';
+/** The same repository as a remote, which is how a manifest names one. */
+const REMOTE = 'https://github.com/Peyday007/V5';
 
 /** One Claude account: its fleet account, its Routine, its own secret name. */
 interface Surface {
@@ -166,6 +170,9 @@ beforeEach(async () => {
       routineRef: `trig_pool_${label}`,
       name: `Factory Brain ${label.toUpperCase()}`,
       tokenSecretName: secretName,
+      // As `register-routine` stores it: the name, and a digest of the value
+      // taken once. Nothing recovers a value from either.
+      tokenDigest: credentialDigest(`token-${label}`),
       capabilities: ['repository', 'repository-write'],
     });
     await bindRoutineWorker(routine.id, factory.id);
@@ -543,6 +550,39 @@ describe('registration and replay', () => {
     expect(fired).toHaveLength(1);
   });
 
+  it('refuses a second Routine on a secret — or a token — another one already holds', async () => {
+    /*
+     * Two Routines on one trigger token is one surface wearing two rows, and the
+     * damage runs both ways: the pool reports capacity that does not exist, and
+     * one stale token quarantines two surfaces. The name catches the
+     * copy-paste; the digest catches the same value stored twice under two
+     * names, which the name check cannot see.
+     */
+    const registered = await listRoutines();
+    const mine = registered.find((r) => r.routineRef === surfaces[0]!.routineRef)!;
+
+    const byName = routineRegistrationCollision(registered, {
+      tokenSecretName: mine.tokenSecretName,
+      tokenDigest: credentialDigest('a-completely-different-token'),
+    });
+    expect(byName).toContain('is already the deployment secret for');
+
+    const byToken = routineRegistrationCollision(registered, {
+      tokenSecretName: 'AN_UNUSED_SECRET_NAME',
+      tokenDigest: credentialDigest(process.env[surfaces[0]!.secretName]!),
+    });
+    expect(byToken).toContain('Two names for one token is still one token');
+
+    // A genuinely new account with its own name and its own token is the case
+    // this whole arrangement exists for, and it is not refused.
+    expect(
+      routineRegistrationCollision(registered, {
+        tokenSecretName: 'POOL_TEST_TOKEN_D',
+        tokenDigest: credentialDigest('a-brand-new-token'),
+      }),
+    ).toBeNull();
+  });
+
   it('drops only the surface whose own secret is missing', async () => {
     delete process.env[surfaces[1]!.secretName];
     const snapshot = await fleetSnapshot();
@@ -666,6 +706,105 @@ describe('proving each surface, one at a time', () => {
     expect(accounts.size).toBe(3);
     const sessions = new Set(report.surfaces.map((s) => s.chain?.sessionRef));
     expect(sessions.size).toBe(3);
+  });
+
+  it('still refuses a review to the session that wrote the code, whichever account it came from',
+    async () => {
+    /*
+     * The floor is a **session**, and pooling must not let an account stand in
+     * for one. A worker that implemented a unit from a session on one account
+     * and then arrives again — same identity, different account, different
+     * activation — is a different session, and is admitted; the session that
+     * actually wrote the code is refused wherever it turns up.
+     *
+     * That is the property pooling had to preserve rather than acquire, so it is
+     * asked of the production admission hook every entrance already calls, with
+     * the pooled fleet from this file's fixture underneath it.
+     */
+    const { ensureChangeRequest, approveChangeRequest, ensureCampaign } = await import(
+      '../server/repos/factory.ts'
+    );
+    const { recordFactoryEvent } = await import('../server/repos/factoryFleet.ts');
+    const { FACTORY_EVENT_KINDS } = await import('../server/services/factory/metrics.ts');
+    const { createReviewBin } = await import('../server/services/factory/remote.ts');
+    const { binAdmission } = await import('../server/services/bins/service.ts');
+    const { createUser } = await import('../server/repos/identity.ts');
+
+    const approver = (
+      await createUser({
+        email: `pool-approver-${Math.random().toString(36).slice(2)}@example.invalid`,
+        displayName: 'Approver',
+        password: 'a-long-enough-test-password',
+        isBrainAdmin: true,
+        createdByType: 'SYSTEM',
+        createdById: 'test',
+      })
+    ).id;
+    const base = 'a'.repeat(40);
+    const { changeRequest } = await ensureChangeRequest({
+      projectId,
+      submissionKey: `pool-independence-${Math.random()}`,
+      objective: 'Change something in the pooled repository.',
+      expectedOutcome: 'It is changed.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'asserted', verification: 'npm test', mandatory: true },
+      ],
+      repository: REMOTE,
+      repositoryRoot: '',
+      baseBranch: 'production',
+      baseSha: base,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approver,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId,
+      baseSha: base,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const reviewBin = await createReviewBin(campaign, changeRequest, base, 1);
+
+    // The unit was implemented by a session that arrived on the first account.
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      kind: FACTORY_EVENT_KINDS.unitImplemented,
+      evidenceClass: 'MEASURED',
+      sessionId: `cse_${surfaces[0]!.routineRef}`,
+      detail: { unitKey: 'u', binId: 'bin_x' },
+    });
+
+    const principal = principalFor(factoryWorkerId, ['queue:claim', 'queue:complete']);
+    const bin = (await getBin(reviewBin.id))!;
+
+    const itself = await binAdmission({
+      workerId: factoryWorkerId,
+      principal,
+      sessionRef: `cse_${surfaces[0]!.routineRef}`,
+    });
+    const refusal = await itself(bin);
+    expect(refusal.ok).toBe(false);
+    expect(refusal.reason).toContain('implemented part of this campaign');
+
+    // The same logical worker, arriving from a second account's surface.
+    const elsewhere = await binAdmission({
+      workerId: factoryWorkerId,
+      principal,
+      sessionRef: `cse_${surfaces[1]!.routineRef}`,
+    });
+    expect((await elsewhere(bin)).ok).toBe(true);
   });
 
   it('judges from rows it is handed, so a verdict can be argued with afterwards', () => {

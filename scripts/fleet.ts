@@ -29,6 +29,7 @@ import {
   renameRoutine,
   policyHistory,
   repointRoutineWorker,
+  routineRegistrationCollision,
   setRoutineCapabilities,
   setAccountState,
   setPolicy,
@@ -180,23 +181,11 @@ async function main(): Promise<void> {
      * and the refusal names the Routine rather than either secret's contents.
      */
     const digest = credentialDigest(value);
-    const registered = await listRoutines();
-    const sameName = registered.find((other) => other.tokenSecretName === secret);
-    if (sameName) {
-      return refuse(
-        `${secret} is already the deployment secret for ${sameName.name} (${sameName.routineRef}). ` +
-          'Each Routine holds its own trigger token under its own secret name — sharing one ' +
-          'would make two surfaces one trigger fired twice.',
-      );
-    }
-    const sameToken = registered.find((other) => other.tokenDigest === digest);
-    if (sameToken) {
-      return refuse(
-        `the value in ${secret} is the same trigger token already registered for ${sameToken.name} ` +
-          `(${sameToken.routineRef}) under ${sameToken.tokenSecretName}. Two names for one token ` +
-          'is still one token; create a trigger for this Routine and store its own.',
-      );
-    }
+    const collision = routineRegistrationCollision(await listRoutines(), {
+      tokenSecretName: secret,
+      tokenDigest: digest,
+    });
+    if (collision) return refuse(collision);
     if (flag('dry-run')) return ok(`dry-run register-routine ref=${ref} secret=${secret} (nothing written)`);
     const routine = await createRoutine({
       accountId: account.id,
