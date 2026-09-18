@@ -10,7 +10,7 @@ flag that once let a condition excuse itself from scoring was removed.
 Reconciled with production at **3a73bb1** — 118 commits over two merges — and
 read at the head of that reconciliation.
 
-    242 conditions · 216 held · 0 failing · 26 open · 0 unanswerable · 0 deferred
+    243 conditions · 217 held · 0 failing · 26 open · 0 unanswerable · 0 deferred
 
 Every condition carries what **kind** of evidence answered it, on the record
 rather than in the prose beside it, because *"the runner exists"* and *"the
@@ -19,7 +19,7 @@ mean opposite things:
 
 | kind | held | open | what it means |
 | --- | --- | --- | --- |
-| `EXERCISED` | 191 | 0 | this run drove it, through the real services against a scratch database it made and deleted |
+| `EXERCISED` | 192 | 0 | this run drove it, through the real services against a scratch database it made and deleted |
 | `TREE` | 25 | 0 | the mechanism is implemented, read out of the repository |
 | `FLEET` | 0 | 24 | only a real Brain's rows can answer it |
 | `PERSON` | 0 | 2 | a decision somebody has to take |
