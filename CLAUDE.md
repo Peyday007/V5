@@ -4568,6 +4568,22 @@ eligible now*.
   names differently. Unknown reads as the *machinery* value in both mappers,
   because the two mistakes do not cost the same: leaving a real person off a list
   is a complaint, and counting a fixture as a person is the defect silently back.
+- **The fourth identity the correction named is the owner, and it stays — the
+  reading was wrong about it rather than the row.** Traced live, it is
+  `bootstrap.ts`'s administrator: `kind = PERSON`, `is_brain_admin = 1`, a scrypt
+  verifier and no device. Hiding it would leave the owner's own roster showing no
+  administrator, and typing it `SYSTEM` would be a declared lie. Two things about
+  it *were* wrong. It read `NOT_INVITED` — *a slot nobody has filled* — because
+  the reading counted live passkeys and this account signs in with a password:
+  **the member count wrong in the under-stating direction, which is the same
+  class of defect as the fixtures overstating it.** So `READY` is *holds a live
+  credential* and `signsInWith` says which — `DEVICE`, `PASSWORD` or `NONE` —
+  because the enrollment journey only ever produces a device and that is the row
+  a lost-device recovery applies to. And its display name *was* the owner's
+  inbox, on a page every member reads, against this module's own stated contract
+  that no contact detail crosses it; the domain is dropped. That is a redaction
+  rather than a classification — what a row *is* is declared by `users.kind`, and
+  the worst a false positive costs here is a shortened name.
 - **Nothing was deleted to clear a screen.** Every verification identity keeps
   its row, its memberships and its audit trail; the two retired `V1-oak`
   Routines and the quarantined `V2` keep theirs. What a screen asking for
@@ -4633,6 +4649,32 @@ from rows the moment it is set, with neither person repeating anything.
   operator-depth block on every capacity surface. `withoutDiagnostics` removes
   the fields rather than asking a screen not to render them — §29's rule that
   technical detail is what a caller is *owed*, applied by not sending it.
+
+**The boundary is proved from the wrong side of it, on the released image.**
+Everything in `tests/` drives a server this process started, and the
+demonstrated defect was that the owner could see Cash and a member could not —
+so an administrator's screenshot settles nothing, because the administrator was
+never refused. `scripts/verify-hosted.ts` already signs in as
+`verification-member@brain.invalid`, which is exactly the party that was being
+refused: a real authenticated person with no membership on the cash root and no
+Brain administrator rights. `sharedCashBoundary` asserts, in that session, that
+the frontier answers `200` with `scope: 'SHARED'`; that `/api/projects` does
+**not** list the root, read from Brain's own answer rather than assumed, so the
+check cannot silently degrade into testing the ordinary member path; that
+fifteen named private fields are absent **as JSON keys at any depth**, because a
+figure nested inside an opportunity is the same disclosure and because those
+money keys are what the first version of this projection actually leaked; that
+another operation's Cash is `404` with a byte-identical body to a project that
+does not exist; and that activating a sprint or granting commercial authority is
+refused. It creates nothing, and a Brain with no sprint records that there was
+no frontier to read rather than passing silently. Matching keys rather than bare
+words is deliberate: `entries`, `commitments` and `provenance` are ordinary
+English, and a false finding in a release gate costs somebody an hour and
+teaches them to stop believing it — §29's defect, in the place it would do most
+damage. `sharedCashAccess` asserts the check exists **and is called**, reading
+the script rather than running it, because nothing in the suite executes it —
+which is precisely how §33's `geography_basis` defect reached production with
+the whole suite green.
 
 **Reading either page performs no effect at all** — no enqueue, claim, replay,
 cancellation, registration, fire or credential mutation — and that is asserted

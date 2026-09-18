@@ -106,6 +106,23 @@ unknown address does.
 Turning password sign-in off entirely is the owner's decision and needs the
 owner to hold a safe secondary passkey first.
 
+**So `Joined` on the People page means *holds a live credential*, and the row
+says which.** An earlier reading counted live passkeys only, which reported the
+owner's own administrator account — a password and no device — as a slot nobody
+had filled, beside the people who had enrolled. A row reads `Joined ·
+password` or plain `Joined`, and the difference is not cosmetic: a recovery
+link retires *devices*, so it is the plain one that journey applies to. A slot
+with neither reads `Link sent` or `No link yet`, which are kept apart because
+*nobody has been asked yet* and *somebody was asked and has not finished* have
+different remedies.
+
+**An address never appears as a name.** `bootstrap.ts` names the first
+administrator after the address it was created with, so the owner's inbox was
+the label every member read — and the same name is what Brain derives a
+connector name, a Routine name and a **deployment secret's name** from, which
+would have put an address into the app's own configuration. The domain is
+dropped in both places.
+
 ---
 
 ## 2. Connecting a Claude account

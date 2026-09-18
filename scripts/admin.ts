@@ -472,15 +472,21 @@ async function main(): Promise<void> {
       for (const user of await listUsers()) {
         const state = user.disabledAt ? 'DISABLED' : user.isBrainAdmin ? 'ADMIN' : 'MEMBER';
         const passkeys = await countLivePasskeys(user.id);
+        // What the page derives `READY` from, printed the same way it derives
+        // it: a device, or a password, or neither. A timestamp is evidence a
+        // password exists and says nothing about it.
+        const signIn =
+          passkeys > 0 ? 'device' : user.passwordUpdatedAt !== null ? 'password' : 'none';
         console.log(
           `  ${user.id}  ${user.kind.padEnd(7)} ${state.padEnd(8)} ` +
-            `passkeys=${passkeys}  ${user.displayName}` +
+            `passkeys=${passkeys} signs-in=${signIn.padEnd(8)} ${user.displayName}` +
             (user.email ? `  <${user.email}>` : '  <no address — passkey only>'),
         );
       }
       console.log('');
       console.log('  kind=PERSON is somebody; kind=SYSTEM is machinery proving itself.');
       console.log('  Only PERSON rows, not disabled, reach the People & capacity page.');
+      console.log('  signs-in=none is a slot nobody has filled; device and password both count.');
       break;
     }
     case 'projects list': {

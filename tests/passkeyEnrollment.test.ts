@@ -272,12 +272,26 @@ describe('a passkey-only account', () => {
 });
 
 describe('the readiness gate', () => {
-  it('counts a member only once they hold a live passkey', async () => {
+  it('counts a member once they hold a credential, and says which one', async () => {
     const before = await cashReadiness();
-    // The owner has a password rather than a passkey, so they are not READY here
-    // either: the count is "can this person sign in with a passkey", not "does
-    // an account exist".
-    expect(before.members.rows.find((row) => row.userId === adminId)?.state).toBe('NOT_INVITED');
+    /*
+     * The owner has a password rather than a device, and that is a real way in.
+     *
+     * An earlier version of this test asserted `NOT_INVITED` here, with a
+     * comment defending it — the count is "can this person sign in with a
+     * passkey". The live Brain showed what that costs: `bootstrap.ts` writes
+     * the only account that can administer it with a password and no device, so
+     * the administrator was rendered on the People page as a slot nobody had
+     * filled, next to two people who had enrolled. The count was wrong in the
+     * under-stating direction, which is the direction §29 cares about.
+     *
+     * So `READY` is *holds a live credential* and `signsInWith` says which.
+     * Nothing about the enrollment journey moved: it still only ever produces a
+     * `DEVICE`, and the three transitions below are unchanged.
+     */
+    const admin = before.members.rows.find((row) => row.userId === adminId);
+    expect(admin?.state).toBe('READY');
+    expect(admin?.signsInWith).toBe('PASSWORD');
 
     const link = await createMemberSlot({ displayName: 'Second person', issuedByUserId: adminId });
     const invited = await cashReadiness();
@@ -286,7 +300,10 @@ describe('the readiness gate', () => {
 
     await enrol(link.token);
     const after = await cashReadiness();
-    expect(after.members.rows.find((row) => row.userId === link.userId)?.state).toBe('READY');
+    const enrolled = after.members.rows.find((row) => row.userId === link.userId);
+    expect(enrolled?.state).toBe('READY');
+    // Enrolling produces a device, which is the fact a recovery acts on.
+    expect(enrolled?.signsInWith).toBe('DEVICE');
     expect(after.members.ready).toBe(before.members.ready + 1);
   });
 
@@ -320,8 +337,16 @@ describe('the readiness gate', () => {
     await enrol(link.token);
     const reading = await cashReadiness();
     const row = reading.members.rows.find((one) => one.userId === link.userId)!;
-    // A name and a state. No address, no credential, no device label, no count
-    // of what they can reach.
-    expect(Object.keys(row).sort()).toEqual(['displayName', 'state', 'userId']);
+    /*
+     * A name, a state, and which *kind* of credential — never the credential.
+     *
+     * `signsInWith` is one of three words and is the field this assertion
+     * exists to interrogate: it says a device exists, and nothing about it. No
+     * address, no credential id, no device label, no count of what they can
+     * reach. An exhaustive key list is the point, so the next field added has
+     * to be argued for here.
+     */
+    expect(Object.keys(row).sort()).toEqual(['displayName', 'signsInWith', 'state', 'userId']);
+    expect(row.signsInWith).toBe('DEVICE');
   });
 });

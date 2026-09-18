@@ -311,6 +311,16 @@ function People({
             </span>
             <span className="rs-ready-state" data-state={one.state}>
               {MEMBER_STATE_LABEL[one.state]}
+              {/*
+                * How, not only whether.
+                *
+                * `Joined` over a password account and `Joined` over a device
+                * are the same word about two different facts, and the second
+                * is the one a lost-device recovery applies to.
+                */}
+              {one.signsInWith === 'PASSWORD' ? (
+                <span className="rs-hint"> &middot; password</span>
+              ) : null}
             </span>
             {page.you.isBrainAdmin && one.state === 'READY' ? (
               <ConnectorLink person={one} />

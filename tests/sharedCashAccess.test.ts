@@ -773,3 +773,54 @@ describe('the active sprint keeps running throughout', () => {
     expect(view.body.myCash.position.customerPaymentsCents).toBe(41_700);
   });
 });
+
+/**
+ * The release gate proves the boundary from the wrong side of it.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this reads the repository rather than behaviour
+ * ---------------------------------------------------------------------------
+ *
+ * Everything above drives a real server over a real socket and is the right
+ * instrument for the seam itself. It cannot answer the question the correction
+ * actually asked, which is whether the *deployed* Brain serves the frontier to
+ * a real member — and §11 was explicit that an administrator's screenshot does
+ * not settle it, because the administrator was never refused.
+ *
+ * `scripts/verify-hosted.ts` is the one caller that runs against the released
+ * image, signed in as `verification-member@brain.invalid`: a real authenticated
+ * person holding no membership on the cash root and no administrator rights.
+ * So the live proof belongs there, and this asserts it is still there — because
+ * nothing in the suite executes that script, which is exactly how §33's
+ * `geography_basis` defect reached production with the whole suite green.
+ */
+describe('the live proof is in the gate that runs on the deployed image', () => {
+  const script = fs.readFileSync(
+    fileURLToPath(new URL('../scripts/verify-hosted.ts', import.meta.url)),
+    'utf8',
+  );
+
+  it('reads the shared frontier as the member, and is actually called', () => {
+    expect(script).toContain('async function sharedCashBoundary(');
+    // Declared and never called is the failure mode this file keeps meeting.
+    expect(script).toContain('await sharedCashBoundary(fixtures, cookie);');
+    expect(script).toContain("call('/api/cash/mode'");
+    expect(script).toMatch(/projects\/\$\{rootId\}\/cash/);
+  });
+
+  it('asserts the private half did not cross, by name', () => {
+    // The money keys are the ones the first version of the projection leaked,
+    // by passing `deployableCents` into a function that composes a sentence
+    // out of it. A shape assertion that named no field would not have caught it.
+    for (const forbidden of ['myCash', 'deployableCents', 'commitments', 'decisionsForMe']) {
+      expect(script, forbidden).toContain(`'${forbidden}'`);
+    }
+  });
+
+  it('proves the refusals are still refusals, and the decisions still the owner’s', () => {
+    expect(script).toContain('the member holds no membership on the cash root');
+    expect(script).toContain("another operation's Cash is refused exactly as a missing one is");
+    expect(script).toContain('a member cannot activate or wind down the sprint');
+    expect(script).toContain('a member cannot grant commercial authority');
+  });
+});

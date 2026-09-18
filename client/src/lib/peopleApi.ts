@@ -15,10 +15,22 @@ import type { MemberState } from '../../../server/services/identity/people.ts';
 
 export type { CapacityReading, SurfaceReading, ConnectionStep, ConnectionView, MemberState };
 
+/** A live passkey, the bootstrap password account, or neither. */
+export type SignsInWith = 'DEVICE' | 'PASSWORD' | 'NONE';
+
 export interface PersonRow {
   userId: string;
   displayName: string;
   state: MemberState;
+  /**
+   * Which credential lets them in.
+   *
+   * Sent because `READY` alone does not say whether the enrollment journey
+   * applies: the administrator account signs in with a password and has no
+   * device, so offering it a connector link is right and offering it an
+   * enrollment link is not.
+   */
+  signsInWith: SignsInWith;
   isYou: boolean;
   isBrainAdmin: boolean;
   /** Administrator only, and only while a link is outstanding. */

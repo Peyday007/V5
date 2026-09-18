@@ -107,9 +107,11 @@ const PAGE = (over: Record<string, unknown> = {}): unknown => ({
   you: { userId: 'usr_airyn', isBrainAdmin: false },
   people: {
     rows: [
-      { userId: 'usr_airyn', displayName: 'Airyn', state: 'READY', isYou: true, isBrainAdmin: false },
-      { userId: 'usr_caleb', displayName: 'Caleb', state: 'INVITED', isYou: false, isBrainAdmin: false },
-      { userId: 'usr_root', displayName: 'Owner', state: 'READY', isYou: false, isBrainAdmin: true },
+      // The three shapes the live Brain actually holds: a device, an
+      // outstanding link, and the bootstrap administrator's password account.
+      { userId: 'usr_airyn', displayName: 'Airyn', state: 'READY', signsInWith: 'DEVICE', isYou: true, isBrainAdmin: false },
+      { userId: 'usr_caleb', displayName: 'Caleb', state: 'INVITED', signsInWith: 'NONE', isYou: false, isBrainAdmin: false },
+      { userId: 'usr_root', displayName: 'Owner', state: 'READY', signsInWith: 'PASSWORD', isYou: false, isBrainAdmin: true },
     ],
     joined: 2,
     invited: 1,
@@ -197,6 +199,26 @@ describe('the default view answers four questions', () => {
     // as a constant, and it made a working Brain read as half missing.
     expect(screen.getByText('2 of 3')).toBeTruthy();
     expect(screen.queryByText(/\/ 4/)).toBeNull();
+  });
+
+  /**
+   * `Joined` is one word about two different facts, and the page says which.
+   *
+   * The administrator signs in with a password and holds no device, which the
+   * reading used to report as a slot nobody had filled. It is `Joined` now —
+   * they can sign in — and the row says `password`, because that is the row a
+   * lost-device recovery does *not* apply to.
+   */
+  it('distinguishes a password account from a registered device', async () => {
+    await mountPeople();
+    await waitFor(() => expect(screen.getByText('Owner')).toBeTruthy());
+    const owner = screen.getByText('Owner').closest('li');
+    expect(owner?.textContent).toMatch(/Joined/);
+    expect(owner?.textContent).toMatch(/password/);
+    // Exact, because the connector names on the same page contain "Airyn".
+    const airyn = screen.getByText('Airyn').closest('li');
+    expect(airyn?.textContent).toMatch(/Joined/);
+    expect(airyn?.textContent).not.toMatch(/password/);
   });
 
   it('says how much capacity can be fired, and labels the readings apart', async () => {
