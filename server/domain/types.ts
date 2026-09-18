@@ -3032,6 +3032,8 @@ export interface UserRow {
    */
   email: string | null;
   display_name: string;
+  /** See `UserKind`. Declared at creation, never inferred from a name. */
+  kind: string;
   /** Null together with the verifier: a passkey-only account has no password. */
   password_algorithm: string | null;
   password_verifier: string | null;
@@ -3222,11 +3224,25 @@ export interface IdentityEventRow {
  * view type without them is what keeps a verifier from being accidentally
  * serialized into an API response.
  */
+/**
+ * Whether an identity is somebody, or machinery proving itself.
+ *
+ * `projects.purpose` settled the same question in migration 028 and for the
+ * same reason: a screen that asks for *people* must not be handed the two
+ * accounts `scripts/verify-hosted.ts` creates to prove authorization works, and
+ * deciding that from a display name is a string comparison standing in for a
+ * fact. It is declared at creation and read by projections; it grants nothing,
+ * refuses nothing, and no authorization decision consults it.
+ */
+export const USER_KINDS = ['PERSON', 'SYSTEM'] as const;
+export type UserKind = (typeof USER_KINDS)[number];
+
 export interface User {
   id: string;
   /** Null for a passkey-only member; see `UserRow.email`. */
   email: string | null;
   displayName: string;
+  kind: UserKind;
   isBrainAdmin: boolean;
   mustChangePassword: boolean;
   disabled: boolean;
@@ -3939,6 +3955,7 @@ export interface FleetAccountRow {
   id: string;
   provider: string;
   name: string;
+  kind: string;
   plan_label: string | null;
   declared_plan_power: string | null;
   state: string;
@@ -3950,10 +3967,23 @@ export interface FleetAccountRow {
   updated_at: string;
 }
 
+/**
+ * Whether an account is capacity somebody bought, or a verification fixture.
+ *
+ * `verify-hosted-account-a` and `-b` expect the sentinel secret
+ * `VERIFY_HOSTED_NEVER_SET`, which is never deployed, so the dispatcher already
+ * leaves them out of routing and reports them under `missingSecrets`. This is
+ * the same fact said once, in a column, instead of by every reader comparing
+ * the name against a prefix.
+ */
+export const FLEET_ACCOUNT_KINDS = ['CAPACITY', 'VERIFICATION'] as const;
+export type FleetAccountKind = (typeof FLEET_ACCOUNT_KINDS)[number];
+
 export interface FleetAccount {
   id: string;
   provider: string;
   name: string;
+  kind: FleetAccountKind;
   planLabel: string | null;
   /** What the operator says they bought. A label, never arithmetic. */
   declaredPlanPower: string | null;
@@ -6397,6 +6427,72 @@ export interface SharedFinding {
   revokedByUserId: string | null;
   revokedReason: string | null;
   promotedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// CONNECTING A CLAUDE ACCOUNT
+//
+// A member contributing a Routine does six things in Claude; Brain does three;
+// and one of Brain's three is a privileged operation Brain structurally cannot
+// perform. `resolveToken` reads `process.env[secretName]`, and nothing in this
+// repository can write a deployment secret — so the trigger's bearer reaches
+// the environment and never the database, and the journey has to survive being
+// half-finished for as long as the administrator takes.
+//
+// So it is rows. Every state below is one somebody can be *in* rather than a
+// message about a failure, and each names either the next thing its owner can
+// do or the one thing they are waiting for.
+// ---------------------------------------------------------------------------
+
+export const CAPACITY_CONNECTION_STATES = [
+  'NOT_STARTED',
+  'CONNECTOR_AUTHORIZED',
+  'ROUTINE_DETAILS_NEEDED',
+  'WAITING_FOR_ADMIN',
+  'CONFIGURED',
+  'PROBE_SENT',
+  'ARRIVED',
+  'HEALTHY',
+  'FAILED',
+] as const;
+export type CapacityConnectionState = (typeof CAPACITY_CONNECTION_STATES)[number];
+
+export interface CapacityConnectionRow {
+  id: string;
+  user_id: string;
+  connector_name: string;
+  routine_name: string;
+  secret_name: string;
+  trigger_ref: string | null;
+  account_id: string | null;
+  routine_id: string | null;
+  state: string;
+  failure_reason: string | null;
+  probe_bin_id: string | null;
+  probe_sent_at: string | null;
+  healthy_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapacityConnection {
+  id: string;
+  userId: string;
+  /** The three names Brain assigned. Nobody invents one and no two collide. */
+  connectorName: string;
+  routineName: string;
+  secretName: string;
+  /** The trig_… id the member read out of Claude. Never a credential. */
+  triggerRef: string | null;
+  accountId: string | null;
+  routineId: string | null;
+  state: CapacityConnectionState;
+  failureReason: string | null;
+  probeBinId: string | null;
+  probeSentAt: string | null;
+  healthyAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

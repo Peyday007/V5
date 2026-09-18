@@ -1,20 +1,42 @@
-# Getting four people in, and four surfaces proven
+# Getting people in, and surfaces proven
 
-Cash Mode starts when two counts are full and not before:
+Both counts live on **People & capacity** (`/people`), reachable from
+**More → People & capacity** and from **Who**. Neither of them is on the Cash
+page and neither of them gates anything.
 
 ```
-Human members            4 / 4 READY
-Claude capacity accounts 4 / 4 HEALTHY
+Members who can sign in          2 of 3
+Surfaces Brain can fire right now  4
+  proven by a completed session    4
+  waiting on an administrator      1
 ```
 
-Both are derived from rows by `server/services/cash/readiness.ts`. The screen
-renders that reading and forms no opinion of its own; `POST /api/cash/activate`
-re-reads it and refuses with both figures in the sentence, so the disabled
-button is a hint and the route is the control.
+They used to be at the bottom of Cash, and two things were wrong with that.
 
-**Being ready is not being authorized.** Four READY and four HEALTHY lets the
-sprint *start*. What Brain may spend is the standing commercial grant of §30,
-which is a separate decision and stays the owner's.
+**They are not about Cash.** A person joins a *Brain* and a Routine serves every
+project in it; §32 removed the last count on that surface that gated anything,
+so what was left was Brain-wide account infrastructure administered from a
+section §30 says is meant to be wound down in a month or two.
+
+**Both counts were wrong.** The member list included the two identities
+`scripts/verify-hosted.ts` creates on every deploy, so it reported more of the
+team as present than were. And the capacity count reported `1 / 4 HEALTHY`
+while `fleet show`, reading the dispatcher's own snapshot at the same instant,
+reported *four eligible* — because it counted **accounts** and the dispatcher
+fires **Routines**, and production runs four research Routines under one
+account. Both are declared facts now: `users.kind` and `fleet_accounts.kind`
+(migration 066), and one authoritative eligibility definition read straight from
+`fleetSnapshot()`.
+
+The denominator went too. `4` was the intended topology written down as a
+constant; it was never a measurement, and a working Brain with two members read
+as half missing. Members are counted against the slots that exist, and capacity
+is reported as three labelled readings — eligible now, proven, waiting — beside
+a *target* if somebody configured one.
+
+**Being ready is not being authorized.** Neither count starts or stops anything.
+What Brain may spend is the standing commercial grant of §30, which is a
+separate decision and stays the owner's.
 
 ---
 
@@ -27,7 +49,7 @@ recover a password, and there is no password here to recover.
 
 Signed in as a Brain administrator, in the browser:
 
-**Cash → Invite somebody**, or **More → Your devices → People and capacity**.
+**More → People & capacity → Invite somebody**.
 
 Type the name they should be shown as, press **Make a private link**, and send
 it to them privately — a message, not a shared document. The link is shown
@@ -86,57 +108,78 @@ owner to hold a safe secondary passkey first.
 
 ---
 
-## 2. The four capacity accounts
+## 2. Connecting a Claude account
 
 A capacity account is a **surface Brain fires**. It is not a person, not a Cash
-owner, and not a lane: all four pull from the same shared queue, and there is no
-project-coloured or person-coloured research. `V1` and `V2` are the **sites** and
-those names are reserved for them; a capacity account is `Brain Research A`
-through `D`.
+owner, and not a lane: all of them pull from the same shared queue, and there is
+no project-coloured or person-coloured research. `V1` and `V2` are the **sites**
+and those names are reserved for them.
 
 **HEALTHY is not CONFIGURED.** A registered Routine with a secret and a bound
 worker is *configured*. It becomes HEALTHY only once a session Brain fired has
 arrived and finished a piece of work — §23's rule that a perfect configured
 block over an empty observed one is a refusal rather than a pass.
 
-### Per account, once
+### The member's journey, on their own page
 
-In the Claude account:
+**More → People & capacity → My Claude connection.** Every value they have to
+paste is in its own copy box, and the page names the step they are on. Nobody has
+to invent a name, infer one from prose, read a chat log, open a terminal or
+understand anything about the fleet.
 
-1. **One custom connector**, pointing at `https://northline-brain.fly.dev/mcp`.
-   One per account: Claude refuses a second connector on the same URL inside one
-   account, and a connector is one Brain worker however it is labelled.
-2. Approve it on Brain's consent screen, as the **pooled shared-research
-   worker**. Not a new worker per account — the routing boundary is keyed on the
-   authenticated worker, and four workers would be four scopes to keep in step.
-3. **A Routine** named `Brain Research <letter>`, which:
-   - attaches `Peyday007/brain-worker-bootstrap` — this is what lets a fired
-     worker read `.claude/settings.json` and call the connector's tools without
-     stopping at a permission prompt;
-   - enables **only** its own Brain connector;
-   - has **no cron**. Brain fires it on demand.
-4. Copy its **API trigger id** (`trig_…`).
+| Step | What Brain shows | What they do |
+| --- | --- | --- |
+| 1 | The connector name and the MCP URL | Add the custom connector in Claude and approve it on Brain's consent screen |
+| 2 | The Routine name, the bootstrap repository, the connector to enable, and *schedule: off* | Create the Routine in Claude |
+| 3 | A field | Paste the Routine's trigger id (`trig_…`) |
+| 4 | The name of the deployment variable | Send the trigger's **bearer** to a Brain administrator privately |
+| 5 | A button | Send the bounded self-test |
+| 6 | The session, the bin and when it finished | Nothing — it is proven |
 
-Then, on the deployment:
+**The friend never opens Fly and never gets access to the owner's
+organisation.** `services/dispatch/fire.ts` resolves a Routine's bearer with
+`process.env[secretName]`, so the credential is a deployment secret and nothing
+in this repository can write one. That is a fact about the credential model
+rather than a gap, and the design is arranged around it instead of inventing a
+second, weaker registration route beside it. The connection sits at **Waiting
+for administrator** — not at a vague failure — and resumes from its own rows the
+moment the variable is set. Neither person repeats a step.
 
-5. Set the Routine's fire token as a Fly secret under its own name —
-   `BRAIN_ROUTINE_TOKEN_B`, `_C`, `_D`. Brain stores the secret's **name** and a
-   digest of the value taken once at registration, never the value.
+Every state is durable. Refreshing does not lose progress, a restart does not,
+re-submitting the same trigger id registers one surface, and a failed probe is
+retried against the same connection, the same account and the same Routine.
 
-Then, through the **Fleet** workflow:
+### The administrator's one action
+
+**More → People & capacity → Diagnostics → Connections** lists every member's
+connection and the exact variable each is waiting on. It carries the name of an
+environment variable, a trigger id and a state — no value of any kind.
+
+```
+flyctl secrets set BRAIN_ROUTINE_TOKEN_<MEMBER>=<the bearer Claude showed once> --app northline-brain
+```
+
+Brain stores the variable's **name** and a digest of the value taken once at
+registration, never the value. It appears in no log, no URL, no API response and
+no other member's screen.
+
+### Doing it from a terminal instead
+
+The Fleet workflow still does all of it, and is the path for a surface nobody is
+setting up through the product:
 
 ```
 fleet register-account  --name Brain_Research_B
 fleet register-routine  --account Brain_Research_B --ref trig_… --secret BRAIN_ROUTINE_TOKEN_B
-fleet bind-worker       --ref trig_… --worker <the pooled research worker>
+fleet bind-worker       --ref trig_… --worker <the research worker>
 fleet verify-surface    --ref trig_… --probe
 ```
 
-`verify-surface --probe` is what turns CONFIGURED into HEALTHY, and it is the
-only thing that does: it fires one bounded probe bin that belongs to no
-campaign, forbids every repository operation, and exists to be answered and
-finished. Four rows Brain wrote itself — fired, arrived, assigned, completed —
-are the proof. A registered row is not.
+`verify-surface --probe` and the page's **Send the self-test** create the same
+bin, from the same module (`server/services/fleet/probe.ts`): one bounded
+`DETERMINISTIC_CHECK` that belongs to no campaign, forbids every repository
+operation, and exists to be answered and finished. Four rows Brain wrote itself
+— fired, arrived, assigned, completed — are the proof. A registered row is not.
 
 ### Renaming a surface
 
@@ -158,8 +201,16 @@ against the surface that is in the middle of a packet.
 fleet show
 ```
 
-and, in the browser, the two counts on the Cash card. When both read `4 / 4`,
-**Start Cash Mode** becomes pressable, and one owner click starts the one shared
-Cash Mode for everybody. The other three do not activate anything of their own —
-there is one frontier, one objective and one queue, and privacy begins where a
-validated opportunity becomes an execution job.
+and, in the browser, **People & capacity**. The two readings there are the same
+ones `fleet show` prints, from the same snapshot, so they cannot disagree.
+
+Neither of them gates **Start Cash Mode**, which is a Brain administrator's
+click and starts the one shared Cash Mode for everybody. Nobody else activates
+anything of their own — there is one frontier, one objective and one queue.
+
+**Every member reads that frontier.** Discovery is shared: the machine's status,
+the signals and candidates, the qualified opportunities, the accepted evidence,
+the roadmap and whether a piece is already claimed. Privacy begins where a
+validated opportunity becomes an **execution job** — the money, the spending
+authority, the commercial terms and each job's own working state belong to
+whoever owns that job, and are not sent to anybody else's page.

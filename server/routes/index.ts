@@ -24,6 +24,7 @@ import { connectRouter } from './connect.ts';
 import { cashRouter } from './cash.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
+import { peopleRouter } from './people.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -50,6 +51,12 @@ export function createApiRouter(): Router {
   // reason: its routes carry their own prefixes (/enroll/..., /auth/passkey/...,
   // /me/passkeys, /members) and none of them is addressed by a project.
   router.use(passkeyRouter);
+
+  // People & Capacity: who has joined this Brain, and what can run in it. Both
+  // are Brain-wide account infrastructure rather than anything about one
+  // project, so these routes are addressed by no project and mount at the root
+  // beside the identity ones. Every one of them refuses a worker by type.
+  router.use(peopleRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),

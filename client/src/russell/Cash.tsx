@@ -29,14 +29,14 @@ import { useAsync } from './useAsync.ts';
 import {
   CashApi,
   type CashModeState,
-  type CashReadiness,
   type CashView,
+  type CashViewReading,
+  type SharedCashView,
   type DerivedFigureView,
   type EngineCardView,
   type Placement,
   type ReviewItem,
 } from '../lib/cashApi.ts';
-import { ReadinessPanel } from './Readiness.tsx';
 
 /**
  * What a round is really doing, in the words a person reads.
@@ -125,7 +125,7 @@ export function CashView_({
   const rootId = known?.root?.projectId ?? null;
 
   const view = useAsync(
-    () => (rootId ? CashApi.view(rootId) : Promise.resolve(null as CashView | null)),
+    () => (rootId ? CashApi.view(rootId) : Promise.resolve(null as CashViewReading | null)),
     [rootId],
   );
 
@@ -147,7 +147,6 @@ export function CashView_({
       <Activate
         objective={known.objective}
         currencies={known.currencies}
-        readiness={known.readiness}
         isBrainAdmin={isBrainAdmin}
         onActivated={() => {
           reading.reload();
@@ -200,6 +199,23 @@ export function CashView_({
     );
   }
 
+  /*
+   * The shared frontier, for every member of this Brain who is not the owner.
+   *
+   * The branch is on the server's own `scope` rather than on anything this page
+   * inferred: the private blocks are **absent from the payload**, so there is
+   * no arrangement of this component that could render one, and the two views
+   * cannot drift into showing the same person two different answers.
+   *
+   * An ordinary member used to reach the 404 branch above and be told there was
+   * nothing here to see, while the owner saw the frontier — which is the shape
+   * of defect that survives longest, because it is invisible from the only
+   * screen anybody is looking at.
+   */
+  if (data.scope === 'SHARED') {
+    return <SharedFrontier view={data} objective={known.objective} />;
+  }
+
   return (
     <section className="rs-view rs-view-cash">
       <h2>Cash</h2>
@@ -234,33 +250,25 @@ export function CashView_({
       <MoneyRow view={data} />
       <Details view={data} onChanged={view.reload} />
       {/*
-        * People and capacity, on the running sprint.
+        * People and capacity used to render here, inline: a member list, an
+        * invite control, the outstanding links and every Claude capacity
+        * account. None of it was about Cash.
         *
-        * It used to render only on the not-started card, so activating removed
-        * the one entrance to inviting somebody — which made an activation state
-        * decide an enrollment question it has nothing to do with. The two are
-        * independent: people join a Brain whether or not a sprint is running,
-        * and the counts stop nothing either way (§32). This is the *same*
-        * component the activation card mounts, with the same routes behind it;
-        * there is no second invitation path and nothing about enrollment
-        * changed.
+        * A person joins a **Brain** and a Routine serves every project in it.
+        * §32 removed the last count on this surface that gated anything, so
+        * what was left was Brain-wide account infrastructure administered from
+        * a section that is meant to be wound down in a month or two — §30's own
+        * first sentence failing in the navigation. It is a destination now, and
+        * what stays here is one link to it.
         */}
-      <details className="rs-card rs-cash-people">
-        <summary>
-          <h3>People and capacity</h3>
-          <span className="rs-hint">
-            {known.readiness.members.ready} of {known.readiness.members.rows.length} people can
-            sign in · {known.readiness.capacity.eligibleSurfaces} execution{' '}
-            {known.readiness.capacity.eligibleSurfaces === 1 ? 'surface' : 'surfaces'} Brain can
-            fire
-          </span>
-        </summary>
-        <p className="rs-hint">
-          Counts, not gates. Anybody can be invited while the sprint runs, and a capacity
-          account can be registered at any time; neither stops or starts the work below.
-        </p>
-        <ReadinessPanel readiness={known.readiness} isBrainAdmin={isBrainAdmin} />
-      </details>
+      <p className="rs-hint">
+        Who has joined this Brain and how much Claude research capacity it can fire are the
+        same in every project, so they live on{' '}
+        <a className="rs-link" href="/people">
+          People &amp; capacity
+        </a>
+        . Neither starts or stops the work above.
+      </p>
       <Lifecycle projectId={rootId} state={data.mode.state} onChanged={view.reload} />
     </section>
   );
@@ -290,13 +298,18 @@ export function CashView_({
 function Activate({
   objective,
   currencies,
-  readiness,
   isBrainAdmin,
   onActivated,
 }: {
   objective: { summary: string; full: string };
   currencies: string[];
-  readiness: CashReadiness;
+  /**
+   * Whether to offer the Start control at all.
+   *
+   * A convenience and never the control: `POST /api/cash/activate` is
+   * `requirePerson` plus `requireBrainAdmin`, so the worst an ordinary member
+   * sees is a card that explains what Cash Mode is and no button.
+   */
   isBrainAdmin: boolean;
   onActivated(): void;
 }): JSX.Element {
@@ -335,11 +348,9 @@ function Activate({
           separate decision, and it is yours.
         </p>
 
-        <ReadinessPanel readiness={readiness} isBrainAdmin={isBrainAdmin} />
-
         {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
         {/*
-          * Readiness is reported above and does not gate this button.
+          * Readiness is reported on People & capacity and does not gate this button.
           *
           * The four-of-four count was the owner's decision to wait for
           * everybody rather than a property of the system, and it has been
@@ -350,9 +361,22 @@ function Activate({
           * nothing. The "not ready to start" sentence went with the lock: a
           * status contradicting the control beside it is §29's own defect.
           */}
-        <button type="button" className="rs-button" disabled={busy} onClick={submit}>
-          {busy ? 'Starting\u2026' : 'Start Cash Mode'}
-        </button>
+        {isBrainAdmin ? (
+          <button type="button" className="rs-button" disabled={busy} onClick={submit}>
+            {busy ? 'Starting\u2026' : 'Start Cash Mode'}
+          </button>
+        ) : (
+          /*
+            * Not a refusal dressed as an absence: the sentence says whose
+            * decision it is. The route refuses anybody else with the same 404 a
+            * missing one gives whatever this renders, so the button's absence
+            * is a convenience and the guard is somewhere a page cannot reach.
+            */
+          <p className="rs-hint">
+            Starting Cash Mode is a Brain administrator&rsquo;s decision. Nothing is running yet,
+            and nothing here is hidden from you — there is simply nothing to show until it is.
+          </p>
+        )}
 
         <button
           type="button"
@@ -406,6 +430,184 @@ function Activate({
           </div>
         ) : null}
       </div>
+    </section>
+  );
+}
+
+/**
+ * The shared frontier, as every member of this Brain sees it.
+ *
+ * Cash discovery is one shared frontier belonging to Brain — `services/cash/root.ts`
+ * says so in its own opening paragraph, and §31 settled the same question one
+ * boundary out: a validated finding belongs to the Brain. Separation begins when
+ * a validated opportunity becomes an **execution job**, because that is the
+ * first moment there is anything private to separate.
+ *
+ * So this shows what the machine has found and how far it has got, and shows no
+ * money, no grant, no commercial term and no decision belonging to one person.
+ * It cannot: the payload the server sent does not contain them.
+ *
+ * A taken opportunity is **redacted rather than hidden**. Another member needs
+ * to know a piece is claimed — otherwise two of them research the same opening —
+ * and does not need to know whose job it is or what they are charging.
+ */
+function SharedFrontier({
+  view,
+  objective,
+}: {
+  view: SharedCashView;
+  objective: { summary: string; full: string };
+}): JSX.Element {
+  const [showAll, setShowAll] = useState(false);
+  const AVAILABILITY_LABEL: Record<SharedCashView['opportunities'][number]['availability'], string> = {
+    OPEN: 'Open',
+    BEING_QUALIFIED: 'Being qualified',
+    CLAIMED: 'Claimed',
+    IN_EXECUTION: 'Being executed',
+    DELIVERED: 'Delivered',
+    CLOSED: 'Closed',
+  };
+  const shown = showAll ? view.opportunities : view.opportunities.slice(0, 12);
+
+  return (
+    <section className="rs-view rs-view-cash">
+      <h2>Cash</h2>
+      <p className="rs-lede" title={objective.full}>
+        {objective.summary}
+      </p>
+      <p className="rs-hint">{view.discovery.reason}</p>
+
+      <section className="rs-card">
+        <h3>The frontier</h3>
+        <ul className="rs-ready-list">
+          <li className="rs-ready-row">
+            <span>Opportunities found</span>
+            <strong>{view.counts.total}</strong>
+          </li>
+          <li className="rs-ready-row">
+            <span>Open</span>
+            <strong>{view.counts.open}</strong>
+          </li>
+          <li className="rs-ready-row">
+            <span>Being qualified</span>
+            <strong>{view.counts.beingQualified}</strong>
+          </li>
+          <li className="rs-ready-row">
+            <span>Claimed or being executed</span>
+            <strong>{view.counts.claimed + view.counts.inExecution}</strong>
+          </li>
+        </ul>
+        {/*
+          * Why nothing is executing, when nothing is.
+          *
+          * The presence of a commercial grant is shared and its ceilings are
+          * not: a member looking at a long list of open pieces is owed the
+          * reason, and the reason is not a number.
+          */}
+        {view.commercialGrant === 'ABSENT' ? (
+          <p className="rs-hint">
+            No commercial grant has been made yet, so nothing here can spend anything or contact
+            anybody. That decision is a Brain administrator&rsquo;s.
+          </p>
+        ) : null}
+      </section>
+
+      <section className="rs-card">
+        <h3>Where the research is</h3>
+        <p className="rs-hint">{view.roadmap.whatHappensNext}</p>
+        <ul className="rs-ready-list">
+          <li className="rs-ready-row">
+            <span>Discovery rounds</span>
+            <strong>
+              {view.roadmap.rounds.harvested} harvested of {view.roadmap.rounds.total}
+            </strong>
+          </li>
+          {view.roadmap.pipeline.map((stage) => (
+            <li key={stage.key} className="rs-ready-row">
+              <span>{stage.label}</span>
+              <strong>{stage.count}</strong>
+              <span className="rs-hint">{stage.note}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="rs-card">
+        <h3>Opportunities</h3>
+        <ul className="rs-ready-list">
+          {shown.length === 0 ? (
+            <li className="rs-ready-row">
+              <span>Nothing has been found yet.</span>
+            </li>
+          ) : (
+            shown.map((one) => (
+              <li key={one.id} className="rs-ready-row">
+                <span>{one.title}</span>
+                <span className="rs-ready-state" data-state={one.availability}>
+                  {AVAILABILITY_LABEL[one.availability]}
+                </span>
+                <span className="rs-hint">
+                  {one.qualification.summary}
+                  {one.signalObservedAt
+                    ? ` \u00b7 signal observed ${new Date(one.signalObservedAt).toLocaleDateString()}`
+                    : ''}
+                </span>
+              </li>
+            ))
+          )}
+        </ul>
+        {view.opportunities.length > shown.length || showAll ? (
+          <button
+            type="button"
+            className="rs-button-quiet"
+            aria-expanded={showAll}
+            onClick={() => setShowAll((was) => !was)}
+          >
+            {showAll ? 'Show fewer' : `Show all ${view.opportunities.length}`}
+          </button>
+        ) : null}
+      </section>
+
+      {view.needs.length > 0 ? (
+        <section className="rs-card">
+          <h3>What Brain needs</h3>
+          <ul className="rs-ready-list">
+            {view.needs.map((need) => (
+              <li key={need.id} className="rs-ready-row">
+                <span>{need.blockedAction}</span>
+                <span className="rs-hint">{need.nextStep}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className="rs-card">
+        <h3>What Brain has been doing</h3>
+        {/*
+          * Counted rather than quoted. An event's summary is free text composed
+          * by whatever wrote it and its detail is an untyped bag; deciding per
+          * sentence whether one of them names money would be a filter over
+          * prose, which is exactly what the shared projection refuses to be.
+          */}
+        <ul className="rs-ready-list">
+          {view.activity.map((one) => (
+            <li key={one.kind} className="rs-ready-row">
+              <span>{one.kind.replace(/^CASH_/, '').replace(/_/g, ' ').toLowerCase()}</span>
+              <strong>{one.count}</strong>
+              <span className="rs-hint">
+                most recently {new Date(one.mostRecentAt).toLocaleString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <p className="rs-hint">
+        This is the shared frontier: what Brain has found, and how far it has got. The money, the
+        spending authority and each execution job&rsquo;s own working state belong to whoever owns
+        that job, and are not sent to this page.
+      </p>
     </section>
   );
 }

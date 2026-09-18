@@ -37,6 +37,14 @@ export type Route =
   | { name: 'INVITE' }
   | { name: 'ENROL' }
   | { name: 'DEVICES' }
+  /**
+   * Who has joined, and what can run.
+   *
+   * Its own address rather than a panel at the bottom of Cash: both questions
+   * are true of the whole Brain and neither is about a sprint, so a temporary
+   * section was the wrong place to administer the permanent one.
+   */
+  | { name: 'PEOPLE' }
   | { name: 'LEGACY' }
   | { name: 'NOT_FOUND'; path: string };
 
@@ -76,6 +84,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'ENROL' };
     case 'devices':
       return { name: 'DEVICES' };
+    case 'people':
+      return { name: 'PEOPLE' };
     case 'legacy':
       return { name: 'LEGACY' };
     default:
@@ -113,6 +123,8 @@ export function pathFor(route: Route): string {
       return '/enrol';
     case 'DEVICES':
       return '/devices';
+    case 'PEOPLE':
+      return '/people';
     case 'LEGACY':
       return '/legacy';
     default:

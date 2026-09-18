@@ -823,14 +823,29 @@ describe('what this change was not allowed to touch', () => {
         workerId: worker.id,
       });
     }
-    const reading = await cashReadiness();
-    const mine = reading.capacity.rows.find((one) => one.name === 'Brain Research A')!;
-    expect(mine.surfaces).toHaveLength(4);
-    expect(mine.eligibleSurfaces).toBe(4);
-    expect(reading.capacity.eligibleSurfaces).toBe(4);
-    // One account, four surfaces. The two numbers are not meant to agree.
-    expect(reading.capacity.rows).toHaveLength(1);
-    expect(reading.capacity.eligibleSurfaces).not.toBe(reading.capacity.rows.length);
+    process.env['BRAIN_ROUTINE_TOKEN'] = 'a-bearer-that-is-present';
+    try {
+      const reading = await cashReadiness();
+      const mine = reading.capacity.surfaces.filter(
+        (one) => one.accountName === 'Brain Research A',
+      );
+      const accounts = new Set(reading.capacity.surfaces.map((one) => one.accountId));
+
+      expect(mine).toHaveLength(4);
+      expect(reading.capacity.eligibleNow).toBe(4);
+      // One account, four surfaces. The two numbers are not meant to agree.
+      expect(accounts.size).toBe(1);
+      expect(reading.capacity.eligibleNow).not.toBe(accounts.size);
+      /*
+       * And eligibility is the dispatcher's own, rather than a second reading of
+       * two columns: a Routine whose deployment secret is absent is skipped by
+       * `fleetSnapshot` and so is not counted here either.
+       */
+      delete process.env['BRAIN_ROUTINE_TOKEN'];
+      expect((await cashReadiness()).capacity.eligibleNow).toBe(0);
+    } finally {
+      delete process.env['BRAIN_ROUTINE_TOKEN'];
+    }
   });
 
   it('is derived, so the deployed version alone reclassifies what is already written', async () => {

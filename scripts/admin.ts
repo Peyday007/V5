@@ -87,6 +87,7 @@ import {
 } from '../server/repos/identity.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../server/repos/projects.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
+import { countLivePasskeys } from '../server/repos/passkeys.ts';
 import { listOrchestrationsByProject, currentFragments } from '../server/repos/research.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import { reissueMissingVerification, retryFragment } from '../server/services/research/reissue.ts';
@@ -452,6 +453,34 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
       });
       console.log(`  ${worker.name} is archived. Its rows and its audit history stay.`);
+      break;
+    }
+    /*
+     * Every identity this Brain holds, and what each one is.
+     *
+     * Read-only, and it exists because *"trace every row and explain what each
+     * represents"* had no answer that did not involve shipping a scratch query
+     * runner into the container — which is exactly the thing that is easy to get
+     * wrong. It prints the declared kind beside the display name, so the
+     * question "why is Hosted verification not on the People page" resolves to a
+     * column rather than to somebody's memory.
+     *
+     * It changes nothing: no disable, no archive, no membership. Those have
+     * their own commands or belong nowhere.
+     */
+    case 'people list': {
+      for (const user of await listUsers()) {
+        const state = user.disabledAt ? 'DISABLED' : user.isBrainAdmin ? 'ADMIN' : 'MEMBER';
+        const passkeys = await countLivePasskeys(user.id);
+        console.log(
+          `  ${user.id}  ${user.kind.padEnd(7)} ${state.padEnd(8)} ` +
+            `passkeys=${passkeys}  ${user.displayName}` +
+            (user.email ? `  <${user.email}>` : '  <no address — passkey only>'),
+        );
+      }
+      console.log('');
+      console.log('  kind=PERSON is somebody; kind=SYSTEM is machinery proving itself.');
+      console.log('  Only PERSON rows, not disabled, reach the People & capacity page.');
       break;
     }
     case 'projects list': {

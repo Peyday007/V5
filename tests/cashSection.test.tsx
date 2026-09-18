@@ -62,88 +62,6 @@ const PREVIEW = `POST /api/projects/${PROJECT}/cash/authority/preview`;
  * and a test that forgot it fails loudly rather than rendering a disabled
  * button nobody asserted on.
  */
-const READY = {
-  members: {
-    ready: 4,
-    required: 4,
-    rows: [
-      { userId: 'usr_1', displayName: 'One', state: 'READY' as const },
-      { userId: 'usr_2', displayName: 'Two', state: 'READY' as const },
-      { userId: 'usr_3', displayName: 'Three', state: 'READY' as const },
-      { userId: 'usr_4', displayName: 'Four', state: 'READY' as const },
-    ],
-  },
-  capacity: {
-    healthy: 4,
-    required: 4,
-    /*
-     * An account and a surface are two counts, and this fixture carries both.
-     *
-     * Production has one account carrying four Routines, which is how the page
-     * came to read `1 / 4 HEALTHY` beside a fleet reporting four eligible
-     * surfaces. A fixture with one Routine per account could never have shown
-     * that, so the shape is here and `cashPipelineRepair` holds the production
-     * shape against it.
-     */
-    eligibleSurfaces: 4,
-    totalSurfaces: 4,
-    rows: [
-      {
-        accountId: 'fac_a',
-        name: 'Brain Research A',
-        state: 'HEALTHY' as const,
-        eligibleSurfaces: 1,
-        surfaces: [
-          { routineId: 'rtn_a', name: 'Brain Research A', state: 'ENABLED', eligible: true },
-        ],
-      },
-      {
-        accountId: 'fac_b',
-        name: 'Brain Research B',
-        state: 'HEALTHY' as const,
-        eligibleSurfaces: 1,
-        surfaces: [
-          { routineId: 'rtn_b', name: 'Brain Research 1-B', state: 'ENABLED', eligible: true },
-        ],
-      },
-      {
-        accountId: 'fac_c',
-        name: 'Brain Research C',
-        state: 'HEALTHY' as const,
-        eligibleSurfaces: 1,
-        surfaces: [
-          { routineId: 'rtn_c', name: 'Brain Research 1-C', state: 'ENABLED', eligible: true },
-        ],
-      },
-      {
-        accountId: 'fac_d',
-        name: 'Brain Research D',
-        state: 'HEALTHY' as const,
-        eligibleSurfaces: 1,
-        surfaces: [
-          { routineId: 'rtn_d', name: 'Brain Research 1-D', state: 'ENABLED', eligible: true },
-        ],
-      },
-    ],
-  },
-  mayStart: true,
-  blockedBy: [],
-};
-
-/** The same reading with one person short, which is the ordinary state today. */
-const NOT_READY = {
-  ...READY,
-  members: {
-    ...READY.members,
-    ready: 3,
-    rows: READY.members.rows.map((row, index) =>
-      index === 3 ? { ...row, state: 'INVITED' as const } : row,
-    ),
-  },
-  mayStart: false,
-  blockedBy: ['1 more member(s) need a passkey registered.'],
-};
-
 const MINE = {
   root: { projectId: PROJECT, projectName: 'Cash Mode' },
   mode: {
@@ -158,7 +76,6 @@ const MINE = {
     full: 'The canonical mandate, in full.',
   },
   currencies: ['USD', 'GBP', 'EUR', 'CAD', 'AUD'],
-  readiness: READY,
 };
 
 const POSITION = {
@@ -474,43 +391,52 @@ async function mount(
   });
 }
 
-describe('activation does not take the invitation away', () => {
+describe('people and capacity are not on this page', () => {
   /*
-   * The People and capacity panel used to render only on the card that starts a
-   * sprint, so pressing Start removed the one entrance to inviting anybody —
-   * an *activation* state deciding an *enrollment* question it has nothing to
-   * do with. §32 already records that the readiness counts stop nothing; this
-   * is the other half of the same sentence, which is that they must still be
-   * reachable once the work is running.
+   * They used to be, inline: a member list, an invite control, the outstanding
+   * links and every Claude capacity account, rendered at the bottom of Cash.
+   *
+   * None of it is about Cash. A person joins a **Brain** and a Routine serves
+   * every project in it; §32 removed the last count on this surface that gated
+   * anything, so what was left was Brain-wide account infrastructure
+   * administered from a section that is meant to be wound down in a month or
+   * two — §30's own first sentence failing in the navigation.
+   *
+   * Asserted as an absence *and* as a link, because deleting the panel without
+   * leaving a way to reach what it did would be the disappearing control §29
+   * keeps having to correct.
    */
-  it('keeps the counts on the running sprint, where they used to disappear', async () => {
-    base();
-    await mount();
-    await waitFor(() => expect(screen.getByText('People and capacity')).toBeTruthy());
-    expect(screen.getByText('Human members')).toBeTruthy();
-    expect(screen.getByText('Claude capacity accounts, with a proven surface')).toBeTruthy();
-    // And says plainly that they are counts rather than a gate, because the
-    // last thing this screen did with them was refuse to start.
-    expect(screen.getByText(/Counts, not gates/)).toBeTruthy();
-  });
-
-  it('offers the same invitation control to an administrator, and no second one', async () => {
+  it('renders no member list, no capacity list and no invite control', async () => {
     base({ 'GET /api/members': { body: { links: [] } } });
     await mount(PROJECT, true);
-    await waitFor(() => expect(screen.getByLabelText(/invite somebody/i)).toBeTruthy());
-    // One entrance. A second invitation path is the thing this must not become.
-    expect(screen.getAllByLabelText(/invite somebody/i)).toHaveLength(1);
-    expect(screen.getByRole('button', { name: /make a private link/i })).toBeTruthy();
-    // The existing route, unchanged — not a Cash-specific one.
-    expect(calls).toContain('GET /api/members');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    expect(screen.queryByText('People and capacity')).toBeNull();
+    expect(screen.queryByText('Human members')).toBeNull();
+    expect(screen.queryByText('Claude capacity accounts')).toBeNull();
+    expect(screen.queryByLabelText(/invite somebody/i)).toBeNull();
   });
 
-  it('still refuses to offer it to somebody who is not an administrator', async () => {
+  /*
+   * And does not *ask* for them either.
+   *
+   * A page that still fetched the member list and threw it away would be one
+   * refactor from rendering it again, and would be reading a list of people on
+   * a screen that has no reason to hold one.
+   */
+  it('asks for neither the member list nor a readiness count', async () => {
+    base({ 'GET /api/members': { body: { links: [] } } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    expect(calls).not.toContain('GET /api/members');
+    expect(calls).not.toContain('GET /api/people');
+  });
+
+  it('carries one link to where they now live', async () => {
     base();
     await mount();
-    await waitFor(() => expect(screen.getByText('People and capacity')).toBeTruthy());
-    expect(screen.queryByLabelText(/invite somebody/i)).toBeNull();
-    expect(calls).not.toContain('GET /api/members');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const link = screen.getByRole('link', { name: /People & capacity/i });
+    expect(link.getAttribute('href')).toBe('/people');
   });
 });
 
@@ -610,7 +536,13 @@ describe('the first screen is a summary, not the database', () => {
       'Research detail',
       'Money detail and the spending authority',
       'Activity',
-      'People and capacity',
+      /*
+       * `People and capacity` was a seventh disclosure here and is not one any
+       * more: it is not about Cash at all, and collapsing it is what the
+       * instruction that removed it rules out by name. Its absence — and the one
+       * link that replaces it — is asserted in *people and capacity are not on
+       * this page*, so removing it from this list loses no coverage.
+       */
     ]) {
       const node = screen.getByText(heading);
       const disclosure = node.closest('details');
@@ -777,7 +709,7 @@ describe('the four states of a read are four screens', () => {
     base({
       [OPERATIONS]: { body: { ...MINE, root: null, mode: null } },
     });
-    await mount(null);
+    await mount(null, true);
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
     // No picker. There is one frontier, so there is nothing to choose between.
     expect(screen.queryByLabelText(/which operation/i)).toBeNull();
@@ -793,7 +725,7 @@ describe('Cash Mode is not running yet', () => {
 
   it('offers the one thing that starts it, and says starting it spends nothing', async () => {
     none();
-    await mount();
+    await mount(PROJECT, true);
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
     expect(screen.getByText(/separate decision, and it is yours/i)).toBeTruthy();
   });
@@ -807,61 +739,64 @@ describe('Cash Mode is not running yet', () => {
      * than solicited, and the button is live immediately.
      */
     none();
-    await mount();
+    await mount(PROJECT, true);
     const button = await screen.findByRole('button', { name: /start cash mode/i });
     expect((button as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByLabelText(/what is this account trying to produce/i)).toBeNull();
     expect(screen.getByText(new RegExp(MINE.objective.summary.slice(0, 40), 'i'))).toBeTruthy();
   });
 
-  it('offers the click below four of four, and still reports the counts', async () => {
+  it('counts nobody on this card, because the counts are not its question', async () => {
     /*
      * The four-of-four count was the owner's decision to wait for everybody
-     * rather than a property of the system, and it was withdrawn. What must
-     * hold now is both halves at once: the button is pressable, and the counts
-     * are still on the screen unchanged — a lock removed by hiding the reading
-     * would have taken the one thing that says who still cannot sign in.
+     * rather than a property of the system, and §32 withdrew the lock. What
+     * went next is the reading itself: who has joined is true of the whole
+     * Brain, so it is on its own page and this card neither renders it nor
+     * asks for it.
      *
-     * The sentence that explained the lock is gone with it, and that is
-     * asserted rather than left to chance: "not ready to start" beside a
-     * button that starts is §29's status contradicting the control beside it.
+     * Both halves are asserted at once. The button is pressable, and the
+     * sentence that explained the lock is not on the screen — "not ready to
+     * start" beside a button that starts is §29's status contradicting the
+     * control beside it.
      */
-    base({ [OPERATIONS]: { body: { ...MINE, root: null, mode: null, readiness: NOT_READY } } });
-    await mount();
+    none();
+    await mount(PROJECT, true);
     const button = await screen.findByRole('button', { name: /start cash mode/i });
     expect((button as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByText(/not ready to start/i)).toBeNull();
-    // The counters are untouched: still derived, still shown, still honest.
-    expect(screen.getByText(/3 \/ 4 READY/)).toBeTruthy();
-    expect(screen.getByText(/4 \/ 4 proven/)).toBeTruthy();
-    expect(screen.getByText('One')).toBeTruthy();
-    expect(screen.getByText(/Link sent/i)).toBeTruthy();
+    expect(screen.queryByText(/READY$/)).toBeNull();
+    expect(screen.queryByText(/HEALTHY/)).toBeNull();
   });
 
-  it('says nothing private about anybody while it counts them', async () => {
-    base({ [OPERATIONS]: { body: { ...MINE, root: null, mode: null, readiness: NOT_READY } } });
-    await mount();
+  it('says nothing about anybody at all', async () => {
+    none();
+    await mount(PROJECT, true);
     await screen.findByRole('button', { name: /start cash mode/i });
-    // A name and a state. The payload carries nothing else, and the screen
-    // invents nothing: no address, no device, no count of what they can reach.
-    expect(screen.getByText('One')).toBeTruthy();
-    expect(screen.getByText(/Link sent/i)).toBeTruthy();
+    // No name, no state, no address. The payload does not carry them and the
+    // screen invents nothing.
     expect(document.body.textContent ?? '').not.toMatch(/@/);
+    expect(screen.queryByLabelText(/invite somebody/i)).toBeNull();
   });
 
-  it('offers no invite control to somebody who is not a Brain administrator', async () => {
-    base({ [OPERATIONS]: { body: { ...MINE, root: null, mode: null, readiness: NOT_READY } } });
+  it('offers no Start control to somebody who is not a Brain administrator', async () => {
+    /*
+     * A convenience rather than the control: `POST /api/cash/activate` is
+     * `requirePerson` plus `requireBrainAdmin` whatever this renders. What
+     * matters on the screen is that the absence says whose decision it is
+     * rather than implying nothing exists.
+     */
+    none();
     await mount();
-    await screen.findByRole('button', { name: /start cash mode/i });
-    expect(screen.queryByLabelText(/invite somebody/i)).toBeNull();
-    // And it does not even ask: the route would refuse, and a refusal on a
-    // screen somebody is reading is noise about a control they do not have.
+    await waitFor(() =>
+      expect(screen.getByText(/Brain administrator.s decision/i)).toBeTruthy(),
+    );
+    expect(screen.queryByRole('button', { name: /start cash mode/i })).toBeNull();
     expect(calls).not.toContain('GET /api/members');
   });
 
   it('keeps the currency and constraints collapsed, so neither is a step', async () => {
     none();
-    await mount();
+    await mount(PROJECT, true);
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
     expect(screen.queryByLabelText(/one currency/i)).toBeNull();
 
@@ -875,7 +810,7 @@ describe('Cash Mode is not running yet', () => {
     routes['POST /api/cash/activate'] = {
       body: { mode: {}, changed: true, message: 'Cash Mode is active.' },
     };
-    await mount();
+    await mount(PROJECT, true);
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /start cash mode/i }));
@@ -893,7 +828,7 @@ describe('Cash Mode is not running yet', () => {
     routes['POST /api/cash/activate'] = {
       body: { mode: {}, changed: true, message: 'Cash Mode is active.' },
     };
-    await mount();
+    await mount(PROJECT, true);
     await waitFor(() => expect(screen.getByRole('button', { name: /start cash mode/i })).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: /add constraints/i }));
     fireEvent.change(screen.getByLabelText(/prioritise, rule out/i), {

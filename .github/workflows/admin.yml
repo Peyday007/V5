@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'projects list | projects create | workers list | workers create | access show | access grant | research start | packets list'
+        description: 'people list | projects list | projects create | workers list | workers create | access show | access grant | research start | packets list'
         required: true
         default: projects list
       subject:

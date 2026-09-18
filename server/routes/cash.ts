@@ -85,7 +85,8 @@ import {
 } from '../services/cash/opportunities.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
-import { cashReadiness } from '../services/cash/readiness.ts';
+import { decideCashRead } from '../services/cash/access.ts';
+import { sharedCashView } from '../services/cash/shared.ts';
 import {
   CANONICAL_CASH_OBJECTIVE,
   CANONICAL_CASH_SUMMARY,
@@ -241,12 +242,22 @@ cashRouter.get(
       objective: { summary: CANONICAL_CASH_SUMMARY, full: CANONICAL_CASH_OBJECTIVE },
       currencies: [...SPRINT_CURRENCIES],
       /*
-       * The gate, sent with the thing it gates so the page cannot render a
-       * live button against a stale count. Two screens deriving one fact
-       * separately is how they come to disagree — §29's rule, at the control
-       * that starts everything.
+       * Readiness used to be sent from here, and the reason it no longer is, is
+       * that it was never about Cash.
+       *
+       * Who has joined this Brain and how many Claude Routines it can fire are
+       * **account infrastructure**: both are true of the whole Brain, both are
+       * unchanged by a sprint starting or ending, and §32 already removed the
+       * last thing on this surface that made either of them a gate. Rendering
+       * them here made a temporary section the place a person went to
+       * administer the permanent Brain, which is §30's own first sentence
+       * failing — Cash Mode is a section, not the definition of Brain.
+       *
+       * They are on People & Capacity now, from `services/identity/people.ts`
+       * and `services/fleet/capacity.ts`, which are the modules that own those
+       * questions. This route sends neither, so there is no second reading of
+       * either fact to disagree with the first.
        */
-      readiness: await cashReadiness(),
     };
   }),
 );
@@ -336,9 +347,41 @@ cashRouter.get(
   '/projects/:projectId/cash',
   handler(async (req) => {
     requirePerson();
-    const project = await requireProject(pathId(req, 'projectId'));
+    const projectId = pathId(req, 'projectId');
+
+    /*
+     * Two readers of one section, and the seam is here rather than in the page.
+     *
+     * An ordinary enrolled member opening `/cash` was told *"there is nothing
+     * here for you to see"* — the §23 refusal, correct in its own terms and
+     * answering the wrong question. The shared frontier is a project, so
+     * `requireProject` asked whether this person was a member of it, and the
+     * answer for everybody but the owner and a Brain administrator was no.
+     *
+     * `decideCashRead` is the correction, and it is deliberately *not* a
+     * special case in the client: the payload changes, so there is no shape of
+     * this bug a screen could paper over. FULL is `decideProjectAccess` and
+     * nothing else; SHARED is a strictly smaller projection built by
+     * `services/cash/shared.ts`; NONE falls through to the identical refusal,
+     * in the identical words, that an outsider and a missing project both get.
+     */
+    const decision = await decideCashRead(projectId);
+    if (decision.scope === 'SHARED') {
+      return await sharedCashView({ projectId });
+    }
+    if (decision.scope === 'NONE') {
+      /*
+       * Through `requireProject` rather than by throwing here, so absent,
+       * forbidden and *not a person* are one refusal with one body and one
+       * audit row — the same one every other project-scoped route produces.
+       */
+      await requireProject(projectId);
+    }
+
+    const project = await requireProject(projectId);
     const view = await cashView({ projectId: project.id });
     return {
+      scope: 'FULL' as const,
       ...view,
       // The contract travels down with the view rather than being restated in
       // the client, so what a person is offered and what the server accepts are

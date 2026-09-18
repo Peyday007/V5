@@ -323,7 +323,7 @@ async function setUpAuditSurfaces(projectId: string): Promise<Fixtures['audit']>
   async function account(name: string): Promise<string> {
     const existing = await getAccountByName(name);
     if (existing) return existing.id;
-    return (await createAccount({ name, planLabel: 'verification', declaredPlanPower: 'unknown' })).id;
+    return (await createAccount({ name, kind: 'VERIFICATION', planLabel: 'verification', declaredPlanPower: 'unknown' })).id;
   }
   async function surface(
     accountName: string,
@@ -432,6 +432,9 @@ async function setUp(): Promise<Fixtures> {
       email: MEMBER_EMAIL,
       displayName: 'Hosted verification',
       password: memberPassword,
+      // Declared, for migration 066's reason: this is machinery proving
+      // itself, and a screen that asks for people must never be handed it.
+      kind: 'SYSTEM',
       isBrainAdmin: false,
       mustChangePassword: false,
     });
@@ -464,6 +467,7 @@ async function setUp(): Promise<Fixtures> {
         email: OWNER_EMAIL,
         displayName: 'Hosted verification owner',
         password: ownerPassword,
+        kind: 'SYSTEM',
         isBrainAdmin: false,
         mustChangePassword: false,
       })

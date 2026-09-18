@@ -4427,6 +4427,221 @@ had never run to the end.
 
 ---
 
+## 34. Discovery is shared. Execution is private. People and capacity are neither.
+
+Three production defects, demonstrated from a member's browser rather than
+inferred, and every row underneath all three read as healthy.
+
+**An ordinary enrolled member opening `/cash` was told there was nothing there
+to see.** Word for word: *"There is nothing here for you to see. That is the
+same answer a project that does not exist gives, on purpose."* The owner, at
+that instant, saw the active shared frontier.
+
+Nothing was broken. `GET /api/projects/:id/cash` resolves through
+`requireProject`, which asks `decideProjectAccess` whether the caller is a member
+of *that project*; the shared frontier is a project; a person who had joined the
+Brain held no membership row on it; and a Brain administrator reaches every
+project by design. So invariant 23 answered exactly as designed, at a door where
+absent-versus-forbidden was not the question — and the failure was **invisible
+from the only screen anybody was looking at**, which is the shape that survives
+longest.
+
+- **The boundary was already written down, and the code implemented its
+  opposite.** `services/cash/root.ts` opens by saying discovery is one shared
+  frontier and that *separation begins when a validated opportunity becomes an
+  execution job*, because that is the first moment there is anything private to
+  separate — an owner, a budget, a credential, a decision. §31 settled the same
+  question one boundary out: a validated finding belongs to the Brain. The
+  project membership made **discovery** private and left execution wherever the
+  project happened to put it, which is the boundary upside down.
+- **The seam is `services/cash/access.ts`, and it is three decisions.** The
+  subject is the **server-resolved** root and never a project id a caller chose —
+  a caller who could nominate the project this rule applies to would be choosing
+  which project to be granted a shared read of. A **genuine authenticated
+  person** may read it, which `requirePerson` already resolves from server rows:
+  a worker is refused by type, an anonymous caller has no principal, an invalid
+  session resolves to none, and a disabled account fails authentication before it
+  arrives. Everything else — any other project, any other level, every write —
+  falls through to `decideProjectAccess` with the same 404 and the same body.
+- **The payload changes, so there is no shape of this a screen could paper
+  over.** `services/cash/shared.ts` is a *second projection* rather than a filter
+  over the owner's view, and that is the whole safety argument: a read that
+  fetches broadly and strips fields afterwards is one forgotten line from a
+  disclosure, and its safety depends on somebody remembering that a new column is
+  private. The shared view is built from the columns it names, so a field added
+  next month is **absent until somebody writes it in** — the failure mode is a
+  missing fact rather than a leaked one.
+- **A signal is what a publisher said; a price is what this operation would
+  charge.** That pair is the line in one sentence. Shared: the opportunity's
+  identity, its accepted claim and dated signal, its packet, fragment and round,
+  how far qualification has got and which fields are still blank *by name*, the
+  roadmap, the capability gaps, and whether it is open, being qualified, claimed
+  or executing. Private: every commercial term's **value**, every money figure,
+  the ledger, the forecast, the grant's ceilings, the next action, and the
+  decisions review. A claimed piece is **redacted rather than hidden**, because
+  another member needs to know it is taken — otherwise two of them research the
+  same opening — and needs nothing else about it.
+- **Activity is counted rather than quoted.** `cash_events.summary` is free text
+  composed by whatever wrote the event and `detail` is an untyped bag; deciding
+  per sentence whether one of them names money would be a filter over prose,
+  which is the thing this module refuses to be. So shared activity is a count per
+  kind and the most recent timestamp for each, and no free text crosses at all.
+
+**People, invitations and Claude capacity were embedded at the bottom of Cash.**
+A person joins a *Brain* and a Routine serves every project in it; §32 removed
+the last count on that surface that gated anything, so what was left was
+Brain-wide account infrastructure administered from a section §30 says is meant
+to be wound down in a month or two. It is `/people` now, one destination, and
+Cash carries a link and renders none of it — asserted as an absence *and* as a
+link, because deleting a panel without leaving a way to reach what it did is the
+disappearing control §29 keeps correcting.
+
+**Both counts on it were wrong, in the same way.** The member list counted every
+`users` row that was not disabled, so *Hosted verification* and *Hosted
+verification owner* — the two accounts `scripts/verify-hosted.ts` creates on
+every deploy — were rendered as two of the four people the sprint was waiting
+for. The capacity list counted **accounts** while the dispatcher fires
+**Routines**, and production runs four research Routines under one account, so
+the page read `1 / 4 HEALTHY` at the same instant `fleet show` read *four
+eligible now*.
+
+- **Both are declared, never recognised by a name.** `users.kind` and
+  `fleet_accounts.kind`, migration 066, following `projects.purpose` from 028 and
+  its comment: *declared, not inferred*. The fleet half had already reached for
+  the fragile answer — `name.startsWith('verify-hosted')` — which is a string
+  comparison standing in for a fact and stops working on the first row somebody
+  names differently. Unknown reads as the *machinery* value in both mappers,
+  because the two mistakes do not cost the same: leaving a real person off a list
+  is a complaint, and counting a fixture as a person is the defect silently back.
+- **Nothing was deleted to clear a screen.** Every verification identity keeps
+  its row, its memberships and its audit trail; the two retired `V1-oak`
+  Routines and the quarantined `V2` keep theirs. What a screen asking for
+  *people* gets is different from what the table holds, and the administrator's
+  view says how many were left out and why.
+- **One authoritative eligibility definition.** `services/fleet/capacity.ts`
+  reads `fleetSnapshot()` — the same impure read `services/dispatch/loop.ts`
+  performs every tick — so the page and the loop cannot disagree about which
+  surfaces exist. It reads **every** Routine rather than only the candidates,
+  because the snapshot drops one whose secret is not deployed on purpose (§23:
+  do not spend a fire discovering it) and a surface waiting on its administrator
+  must read as *waiting* rather than vanish. That is the one thing this page
+  exists not to do.
+- **Three readings, labelled as three readings.** Eligible now, proven by a
+  completed session, waiting on an operator — genuinely different facts with
+  different remedies, and the last time they were collapsed into one fraction the
+  page said `1 / 4` about a healthy fleet. The configured target is named as a
+  *target* rather than used as a denominator. And `4` as a denominator went
+  entirely: it was the intended topology written down as a constant, never a
+  measurement of anything, and a working Brain with two members read as half
+  missing.
+
+**A member had no self-contained way to connect their Claude account.** Every
+piece existed — a worker invitation, an OAuth consent screen, `fleet
+register-account`, `register-routine`, `bind-worker`, a deployment secret,
+`verify-surface --probe` — and each lived on a terminal or in somebody's memory
+of a conversation. `services/capacity/connection.ts` is the journey, and its
+shape is decided by one fact that was traced before anything was built:
+
+**`fire.ts` resolves a Routine's bearer with `process.env[secretName]`, so it is
+a deployment secret and nothing in this repository can write one.** Not a route,
+not a tick, not an administrator's session. So one step of six belongs to a Brain
+administrator, and the design is arranged around that rather than against it —
+*no second, weaker registration route was invented beside the real one*. The
+friend does every non-privileged step, never opens Fly and is never given access
+to the owner's organisation; the connection sits at **Waiting for
+administrator** rather than at a vague failure; the administrator is shown one
+exact remaining action, the variable's name and nothing else; and Brain resumes
+from rows the moment it is set, with neither person repeating anything.
+
+- **There is no column that could hold a credential**, of any shape, and a
+  submission that looks like one is refused by name rather than stored and
+  ignored. What the table holds is a `trig_…` id — an address rather than a
+  secret — and three names Brain assigned so nobody has to invent one and two
+  members cannot choose the same.
+- **Every transition is a compare-and-swap naming the state it moves from, and
+  every derived state is re-read from rows.** A refresh resumes, a restart
+  resumes, two tabs produce one effect, and re-submitting the same trigger id
+  registers one surface and reports the state the first call produced —
+  idempotency means the effect is present after either call, not that the second
+  call does nothing. A failed probe is retried against the **same** connection,
+  account and Routine.
+- **HEALTHY is `proveSurface`'s four rows and nothing a member typed.** Brain
+  fired it, a session arrived and was attributed to the bound worker from that
+  same dispatch row, it was handed a bin, and the bin reached `COMPLETE`.
+  Registered-with-a-credential is CONFIGURED, which is a different word on
+  purpose — §23 and §32 both, at a new surface. The probe that creates something
+  to be fired for moved into `services/fleet/probe.ts` and is called by the page
+  *and* by `verify-surface --probe`, because two copies of it would be two
+  readers disagreeing about what "proven" costs.
+- **A member's own secret name is on their page and has to be**, since sending it
+  to an administrator is the step; what is absent is anybody else's, and the
+  operator-depth block on every capacity surface. `withoutDiagnostics` removes
+  the fields rather than asking a screen not to render them — §29's rule that
+  technical detail is what a caller is *owed*, applied by not sending it.
+
+**Reading either page performs no effect at all** — no enqueue, claim, replay,
+cancellation, registration, fire or credential mutation — and that is asserted
+against the queue, the bins and the fire counters rather than stated in a
+comment.
+
+**Two things are written on those read paths, and saying so precisely is the
+point.** The connection row that assigns a member their three names, because a
+name that changed between two reads would be a name somebody had already pasted
+into Claude; and the connection's own `state`, reconciled against what the rows
+say. The second is a derivation rather than a hook, for the reason this
+repository has needed four times: it reaches the connections already stranded,
+survives a tick that died halfway, and cannot be missed by a code path that
+forgot to call something. Every move is a compare-and-swap naming the state it
+came from, and nothing moves a proven surface backwards — the chain that proved
+it is history, and history does not stop having happened.
+
+**And one was found by the second backend and by nothing else, which is the
+third time that has happened and the clearest instance of it yet.** §25 makes
+the argument in one line — *a repository layer over two databases is true or
+merely compiling, and only one of the two can tell you which* — and it had
+applied to a missing column and a missing identity column. This time it applied
+to a **guard**.
+
+The probe claim was `UPDATE … SET state = 'PROBE_SENT' WHERE state = ?`, with
+`?` the state the caller had just read. On SQLite writers are serialized, so the
+second caller's read always saw `CONFIGURED` and its claim matched nothing once
+the first had moved the row. On Postgres the round trips are slow enough that
+the second caller reads `PROBE_SENT` — and then claims `WHERE state =
+'PROBE_SENT'`, which is the state it was claiming *into*. **A guard satisfied by
+the thing it guards against is not a guard**, and a suite that only ever
+serializes its writers cannot show you that.
+
+What is claimed now is `probe_bin_id IS NULL`: the one value that means nobody
+holds this yet and is never what a winner leaves behind. The bin is made as a
+**DRAFT**, which `DISPATCHABLE_SQL` does not select, so it cannot be fired; only
+the winner's is marked READY and the loser retires one that was never
+dispatchable. That closes the window rather than narrowing it, and it is §20's
+reconcilable-effect shape rather than claim-then-act — available here **only**
+because the effect is Brain's own row. A DRAFT bin can be given back; an
+external effect cannot, which is why this is not a general licence to act before
+claiming.
+
+Two things about how it was fixed are worth more than the fix. It was the
+**second** wrong answer at that one guard, so the third attempt was made against
+a real local cluster rather than against an argument — and the rejected version
+was run there first, to see it fail, before the replacement was run to see it
+pass. And the loser's bin is **retired rather than deleted** (§5), so the
+assertion had to move with it: it counts what is *dispatchable* and checks the
+retired one was never READY, because a row count would have been satisfied by
+destroying the evidence.
+
+**And one defect in this work was found by re-reading the diff rather than by a
+test, which is recorded rather than quietly fixed.** The shared projection first
+reused `placements()` and handed it `deployableCents: 0`, so a qualified piece
+needing funding would have been described to every member, in Brain's own voice,
+as waiting on cash the operation might well have had. **A false figure is a
+worse leak than a true one**, because nobody reading it can tell it is wrong.
+The shared reason is derived from the piece's own state, its dependency and its
+card, and has no branch that can name a figure at all; the ranking is shared
+because `rank` orders on properties of the piece rather than of the account; and
+the owner's *disposition* is absent entirely, being a recommendation to whoever
+owns the job rather than a fact about the frontier.
+
 ---
 
 ## Repository map
@@ -4470,6 +4685,7 @@ server/
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
+    capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
   services/
     storage.ts          document keys, confinement, and writing through the store
@@ -4494,6 +4710,7 @@ server/
     reconcile.ts        scan & reconcile
     identity/
         secrets.ts        scrypt for passwords, sha-256 for generated credentials
+      people.ts         who has actually joined, from a declared kind rather than a name
       webauthn.ts       a registration and an assertion, verified against Node crypto
       enrollment.ts     a member slot, its one link, and the recovery that retires first
       passkeyAuth.ts    the relying party, the challenge, and one refusal for everything
@@ -4545,13 +4762,19 @@ server/
       projection.ts     the six answers, derived from rows on the read path
       service.ts        registering a site's records, and its one typed command
       loop.ts           the tick that makes a state change visible to a poller
+    capacity/
+      connection.ts     connecting a Claude account, and the one step Brain cannot do
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
       shared.ts         what crosses between projects, and what may never
     fleet/
       view.ts           three capacity numbers that are not each other, and why it is slow
+      capacity.ts       what the dispatcher would fire, counted once and labelled honestly
+      probe.ts          the one bounded self-test that turns configured into proven
       lab.ts            the eight test modes, and the five this version refuses to run
     cash/
+      access.ts         where the shared frontier ends and a private job begins
+      shared.ts         what every member may read, built from the columns it names
       lifecycle.ts      activating a sprint, giving it somewhere to file, winding it down
       authority.ts      the closed set of commercial actions, and the check
       money.ts          the six figures, and the arithmetic that keeps them apart
@@ -4655,6 +4878,7 @@ server/
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     passkeys.ts         enrolling, signing in with a device, and your own devices
+    people.ts           who has joined, what can run, and connecting your Claude account
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
@@ -4667,7 +4891,7 @@ client/                 React UI
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
   src/russell/Cash.tsx  one person's private sprint, and nobody else's
-  src/russell/Readiness.tsx  who can get in and what can run, rendered not derived
+  src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
   src/russell/Devices.tsx    your own passkeys, and nobody else's
   src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate
   src/russell/Home.tsx  the command center: state, focus, maturity strip, collections
@@ -4707,6 +4931,9 @@ tests/                  Vitest suites
   webauthn.test.ts           a real P-256 credential, and every refusal that would not have been one
   passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits
   passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new
+  sharedCashAccess.test.ts   a member reads the frontier; nobody reads somebody's job
+  peopleAndCapacity.test.ts  a declared person, a counted Routine, a resumable setup
+  peopleSection.test.tsx     the two screens the defects were actually visible on
   migrationRebuild.test.ts   a rebuild over rows, and the cascade it must not fire
   cashConcurrency.test.ts    two commitments, forced to overlap, on both backends
   cashCurrencyHttp.test.ts   a sprint that is not in dollars, driven as a person does
