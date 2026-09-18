@@ -121,7 +121,7 @@ Against the real `Brain_Intelligence_Map.md`, on this branch, locally.
 | Audit verdicts | 13 FAITHFUL, 1 OVERREACHES, 1 INCOMPLETE |
 | Promoted | 13 |
 | Relationships recorded | 79 |
-| Self-model components | 571 |
+| Self-model components | 573 |
 
 Every promoted faculty reports the same way:
 
@@ -166,11 +166,12 @@ rows support and not one step further.
 
 ### The Research Intelligence packet
 
-`derivePacket` over 571 components produced 28 gaps: 1 `EXISTS_AND_LIVE`, 2
+`derivePacket` over 573 components produced 28 gaps: 1 `EXISTS_AND_LIVE`, 2
 `REQUIRES_PERSON_AUTHORITY`, **25 `NEEDS_A_READING` and zero `MUST_BE_BUILT`.**
 Brain refused to guess, which is the designed behaviour.
 
-A reader then classified the 25. After that:
+A reader then classified the 25, and authored the seven design sections Brain
+composes the question for and answers none of. After that:
 
 | Kind | Count |
 |---|---|
@@ -185,10 +186,22 @@ experiments or simulations, and the faculty's two own evaluation requirements.
 The two insufficient are a question that survives its packet, and a
 contradiction that re-enters research rather than only being classified.
 
-**The packet is one person-decision from a compiled change request.** Every
-clause of the stopping condition holds except *every authority this needs has
-been granted*, and the two are named exactly: "Available tools, workers, budgets
-and time" and "Permission and privacy boundaries".
+Read together they say one thing, which is in `docs/RESEARCH-INTELLIGENCE-V1.md`:
+**everything this faculty is missing sits after the packet's own terminal
+state**, and every input those seven requirements need is a row Brain already
+writes.
+
+**Twelve of the thirteen readiness conditions hold.** All ten sections are
+written, no gap is waiting on a reading, and there is something to build. The
+one that does not is *no gap is waiting on a person*, and the two are named
+exactly: "Available tools, workers, budgets and time" and "Permission and
+privacy boundaries". `compile` refuses on that clause alone, which is the design
+working rather than a blocker in the machinery — the last thing between a
+specified capability and a contract somebody approves is the person.
+
+`prove` reads the registry and reports that nothing the evidence supports has
+changed, because nothing has been built. Research Intelligence is still
+`ABSENT` and `UNTESTED`, and will stay there until code runs and is evaluated.
 
 ---
 
