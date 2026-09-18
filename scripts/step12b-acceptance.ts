@@ -513,6 +513,20 @@ interface GateCondition {
  */
 let READING_PRODUCTION = false;
 
+/*
+ * The revision each committed record names, remembered where it is read.
+ *
+ * Module-level because they are read inside the gates and reported in the
+ * emitted record's header, and a second read of the same file to answer the
+ * header would be two readers of one fact — the thing this repository keeps
+ * having to correct.
+ */
+let journeyRevisionForRecord: string | null = null;
+let manifestRevisionForRecord: string | null = null;
+let manifestDigestForRecord: string | null = null;
+let renderDigestOnDisk: string | null = null;
+let upgradeRevisionForRecord: string | null = null;
+
 /**
  * A condition whose evidence is a real Brain's rows.
  *
@@ -626,15 +640,32 @@ function recordConditions(
   lede: string,
 ): void {
   /*
-   * Anything a helper did not stamp is one of the two remaining kinds, and
-   * which one is decided by the condition itself rather than by a guess: a
-   * condition waiting on somebody is a decision, and everything else in this
-   * file is something this run drove against its own scratch database.
+   * Anything a helper did not stamp is derived from the condition itself.
+   *
+   * **The first version of this said `awaits ? 'PERSON' : 'EXERCISED'` and was
+   * wrong in the direction the field exists to prevent.** Thirteen conditions
+   * are written as plain literals carrying `needs: 'PRODUCTION'` by hand
+   * rather than through `fromProduction`, so they came out labelled as
+   * something this run had driven — which is precisely the "a runner exists,
+   * therefore it ran" reading the kind was added to make impossible. Found by
+   * reading the emitted record rather than by any test, because every count in
+   * it was still correct: only the word beside them was wrong.
+   *
+   * So `needs` decides first, since it names the environment that can answer:
+   * `PRODUCTION` is a real Brain's rows and `CHECKOUT` is the repository. A
+   * condition with neither and an `awaits` is a decision. What is left is what
+   * this run actually drove.
    */
   for (const condition of conditions) {
-    if (condition.evidence === undefined) {
-      condition.evidence = condition.awaits !== undefined ? 'PERSON' : 'EXERCISED';
-    }
+    if (condition.evidence !== undefined) continue;
+    condition.evidence =
+      condition.needs === 'PRODUCTION'
+        ? 'FLEET'
+        : condition.needs === 'CHECKOUT'
+          ? 'TREE'
+          : condition.awaits !== undefined
+            ? 'PERSON'
+            : 'EXERCISED';
   }
   const verdict = verdictOf(conditions);
   const broke = conditions.filter((c) => c.held === false);
@@ -1330,6 +1361,26 @@ async function readDesignDecision(revision: string | null): Promise<DesignReadin
   if (!fs.existsSync(indexPath)) {
     return empty('docs/evidence/step12b-renders/index.json does not exist');
   }
+  /*
+   * What the committed manifest claims, for the record's header.
+   *
+   * Read from the manifest rather than recomputed, because the digest below is
+   * taken from the bytes on disk and the two together are the claim: *this
+   * revision produced these bytes*. A header that named a revision the
+   * manifest does not would be a third opinion about the same fact.
+   */
+  try {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'),
+    ) as { revision?: unknown; renderSetDigest?: unknown };
+    manifestRevisionForRecord =
+      typeof manifest.revision === 'string' ? manifest.revision : null;
+    manifestDigestForRecord =
+      typeof manifest.renderSetDigest === 'string' ? manifest.renderSetDigest : null;
+  } catch {
+    manifestRevisionForRecord = null;
+    manifestDigestForRecord = null;
+  }
 
   let declared: { screen: string; width: number; file: string }[];
   try {
@@ -1356,6 +1407,7 @@ async function readDesignDecision(revision: string | null): Promise<DesignReadin
       bytes: fs.readFileSync(path.join(dir, entry.file)),
     })),
   );
+  renderDigestOnDisk = digest;
   const reading: DesignReading = {
     digest,
     count,
@@ -6015,6 +6067,7 @@ async function main(): Promise<void> {
   if (journeyRaw) {
     try {
       journey = JSON.parse(journeyRaw) as JourneyRecord;
+      journeyRevisionForRecord = journey.revision;
       journeyStillDescribesThisTree =
         journey.revision !== null && journeyInputsUnchangedSince(journey.revision);
     } catch {
@@ -7162,6 +7215,7 @@ async function main(): Promise<void> {
           : ' — but server/db has moved since it was taken');
   const sqliteUpgrade = upgradeRecord('sqlite');
   const postgresUpgrade = upgradeRecord('postgres');
+  upgradeRevisionForRecord = sqliteUpgrade?.revision ?? postgresUpgrade?.revision ?? null;
 
   /*
    * The hosted verification, which is the Deploy workflow's and belongs to a
@@ -7299,6 +7353,17 @@ async function main(): Promise<void> {
       ),
       {
         name: 'the hosted verification passes either side of a real restart of a real machine',
+        /*
+         * `FLEET` rather than `PERSON`, even though it carries an `awaits`.
+         *
+         * What answers it is a `Deploy` run of this revision leaving a record
+         * behind — a real machine restarted and re-proved. Nobody has to
+         * *decide* anything for that to happen; it is an action on the
+         * canonical path. The two conditions that genuinely wait on a decision
+         * are H and O, and calling this the same kind would have put a deploy
+         * and an approval in one column.
+         */
+        evidence: 'FLEET' as const,
         held:
           hostedAttachment.kind === 'ABSENT'
             ? null
@@ -7787,6 +7852,63 @@ async function main(): Promise<void> {
         revision: stamp.revision,
         revisionAttestedBy: stamp.attestedBy,
         treeDirty: stamp.dirty,
+        /*
+         * Which revision every committed record names, and whether its own
+         * inputs have moved since.
+         *
+         * A record cannot name the commit that contains it — its bytes are an
+         * input to that commit's hash — so a reading taken at the head will
+         * always name a revision at or behind it. That is fine and it is also
+         * exactly where a stale artifact hides, so the question is answered
+         * here rather than left to somebody comparing four files by eye: each
+         * one names a revision, and `inputsUnchanged` says whether anything it
+         * is a reading *of* has changed between then and now.
+         *
+         * `false` is the only interesting value. It means the record describes
+         * a tree this one is not, and the remedy is to re-take it rather than
+         * to relabel it.
+         */
+        evidenceRevisions: {
+          journey: {
+            revision: journeyRevisionForRecord,
+            inputsUnchanged: journeyRevisionForRecord
+              ? journeyInputsUnchangedSince(journeyRevisionForRecord)
+              : null,
+            inputs: ['client', 'server', 'scripts/visual-qa.ts'],
+          },
+          /*
+           * The renders are asked by **digest**, not by a path diff.
+           *
+           * The first version compared `docs/evidence/step12b-renders` against
+           * the revision the manifest names — and the manifest lives in that
+           * directory, so an artifacts-only commit that regenerated both made
+           * the record report its own renders as changed. The manifest's claim
+           * was never about a path: it is *this revision produced bytes with
+           * this digest*, and the digest is recomputed from disk on every run.
+           * So that is what is compared, which is also strictly stronger — a
+           * path can move without the bytes changing and bytes can change
+           * without git noticing a rename.
+           */
+          renders: {
+            revision: manifestRevisionForRecord,
+            inputsUnchanged:
+              manifestDigestForRecord === null || renderDigestOnDisk === null
+                ? null
+                : manifestDigestForRecord === renderDigestOnDisk,
+            inputs: ['the digest of the declared render set'],
+          },
+          upgrade: {
+            revision: upgradeRevisionForRecord,
+            inputsUnchanged: upgradeRevisionForRecord
+              ? unchangedSince(upgradeRevisionForRecord, [
+                  'server/db/migrations',
+                  'server/db/pg-migrations',
+                  'server/repos',
+                ])
+              : null,
+            inputs: ['server/db/migrations', 'server/db/pg-migrations', 'server/repos'],
+          },
+        },
         generatedAt: new Date().toISOString(),
         repositoryVisible: REPO_VISIBLE,
         operationalReading: fleet.unreadable

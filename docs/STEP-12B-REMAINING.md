@@ -5,6 +5,35 @@ from a run log. Every condition here is **in the denominator**: nothing is
 exempt, no code under `scripts/` writes a `deferredBy`, and the `standing: true`
 flag that once let a condition excuse itself from scoring was removed.
 
+## The reading, and what kind of thing each answer is
+
+Reconciled with production at **beafc06** — 116 commits — and read at the head
+of that merge.
+
+    242 conditions · 216 held · 0 failing · 26 open · 0 unanswerable · 0 deferred
+
+Every condition carries what **kind** of evidence answered it, on the record
+rather than in the prose beside it, because *"the runner exists"* and *"the
+measurement happened"* are the two sentences that read alike in a summary and
+mean opposite things:
+
+| kind | held | open | what it means |
+| --- | --- | --- | --- |
+| `EXERCISED` | 191 | 0 | this run drove it, through the real services against a scratch database it made and deleted |
+| `TREE` | 25 | 0 | the mechanism is implemented, read out of the repository |
+| `FLEET` | 0 | 24 | only a real Brain's rows can answer it |
+| `PERSON` | 0 | 2 | a decision somebody has to take |
+
+**Nothing is held on `FLEET` evidence and nothing is open on `TREE` or
+`EXERCISED`**, which is the shape to check at a glance: no condition is being
+counted as done because its reader exists, and no condition is sitting open
+that a run here could have answered.
+
+The two `PERSON` rows are O and H — one design decision. The 24 `FLEET` rows
+are answered by a deploy of this revision and then by the container reading,
+except J's three, which additionally need a person's browser session on the
+deployed Brain.
+
 ---
 
 ## 1 · Waiting on a person, and nothing else
