@@ -51,6 +51,7 @@ import { recoverDispatchAtBoot, startDispatcher } from './services/dispatch/loop
 import { startRussell } from './services/russell/loop.ts';
 import { startConnectRefresh } from './services/connect/loop.ts';
 import { startFactoryRemoteLoop } from './services/factory/remoteLoop.ts';
+import { scanIfStale } from './services/selfmodel/refresh.ts';
 import { repairLaunches } from './services/russell/launch.ts';
 import { describeFireTarget } from './services/dispatch/fire.ts';
 import { resumePulledPackets } from './services/research/packetRunner.ts';
@@ -586,6 +587,36 @@ async function main(): Promise<void> {
    * stage per firing.
    */
   startFactoryRemoteLoop();
+
+  /*
+   * One reading of Brain's own parts, if the last one is no longer about this
+   * system.
+   *
+   * Derived rather than hooked: `scanIfStale` compares the running revision and
+   * the applied schema against the last recorded reading, so a deployment and a
+   * migration both make it due without either of them having to remember to
+   * call anything. That is the correction §24, §27 and §30 all record — a hook
+   * fixes one entrance, and the rows reach every entrance plus the ones already
+   * stale.
+   *
+   * Deliberately not awaited and deliberately not fatal. It walks the source
+   * tree, which is fast and is not worth delaying the first request for, and a
+   * Brain whose self-model could not be read must still serve — a self-model is
+   * a reading *about* the system and never a precondition of it.
+   */
+  void scanIfStale()
+    .then((report) => {
+      if (report && report.drift.length > 0) {
+        console.log(`  Self-model      ${report.drift.length} level(s) moved since the last reading`);
+      }
+    })
+    .catch((error: unknown) => {
+      console.warn(
+        `  Self-model      could not be read: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
 
   /*
    * Russell's loop, beside the dispatcher and after recovery.

@@ -1048,6 +1048,20 @@ async function evaluateDeclaredSubmissions(
 }
 
 /**
+ * Whether a contract has an evaluator wired to it.
+ *
+ * Exported because a declared contract with no evaluator is a real and invisible
+ * state: `evaluateContract` refuses every bin under one, so it is declared and
+ * unreachable rather than broken in a way anything would notice. The self-model
+ * asks this to tell a mechanism from a name in a list — and it reads the same
+ * `EVALUATORS` map the evaluation uses, rather than a second list that would
+ * eventually disagree with it.
+ */
+export function hasEvaluator(contract: string): boolean {
+  return Object.hasOwn(EVALUATORS, contract);
+}
+
+/**
  * Evaluate a bin's contract.
  *
  * The only entry point, and the only thing allowed to conclude that a bin is
