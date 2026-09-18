@@ -2645,7 +2645,95 @@ remote.
   did not work" would send somebody to re-deploy a version that is already
   there.
 
-  **A sixth run failed at the same place in the workflow and for a different
+  **A sixth has happened, and this one named itself — so what is recorded here
+  is a narrowing, still not a cause.** Run 250, `8c75eb3`: release success, the
+  pre-restart hosted verification `PASS 174/174` on the released image, the
+  machine healthy and restarted, and then the packet section printed its heading
+  at 04:51:35 and **nothing at all** for forty-six seconds before
+  `timeout exceeded when trying to connect` and `ssh shell: Process exited with
+  status 1`. That is diagnostically unlike the other five: no `FENCE_LOST`, no
+  slow judge, and no check in that section even *started* — the first one, which
+  had taken nineteen seconds pre-restart on the same image, produced no line at
+  all. The eight words are `pg-pool`'s, emitted when a client checkout waits
+  past `connectionTimeoutMillis`, so what is established is that the pool was
+  saturated for more than ten seconds. Whether that is also what happened in the
+  five before it is **not** established, and stating it would be the comfortable
+  half-truth this file exists to refuse: four of those ended `FENCE_LOST` and one
+  a bare `fetch failed`, both of which a stalled checkout would produce and
+  neither of which proves one did. **`8c75eb3` is nonetheless live**, proved
+  independently of the run: `cash-report` executed the committed script inside
+  the released image and printed the tier column that exists only in that commit.
+
+  What that reading changed is the message rather than the ceiling.
+  `describePoolExhaustion` is pure, so both dialects test the branch it draws,
+  and it separates the two conditions `pg-pool` collapses — every connection
+  checked out, against a server that would not hand one over — because their
+  remedies are opposite and the driver's sentence names neither, carries no
+  numbers, does not mention the database, and does not name the knob. The counts
+  come from the pool at the instant of failure, so it is a **measurement** rather
+  than an account of what the pool was probably doing. **The ceiling was
+  deliberately not raised.** `BRAIN_DATABASE_POOL_SIZE` defaults to 10 by
+  omission, which makes it untuned rather than chosen — but raising it blind
+  could exhaust the server's own connection limit and turn a failed verification
+  into a failed boot, and this repository has no reading of that limit. §23's
+  rule holds: instrument first, size from the reading. A ceiling nobody has
+  observed is UNKNOWN, and so is the one behind it.
+
+  **A seventh happened twenty minutes later, on somebody else's tree, with the
+  identical message — so the reading is now a pattern and is still not a
+  cause.** Another workstream's deploy of `1f0d283`: guard passed, tests
+  passed, release success, pre-restart `PASS 174/174`, the restart completed,
+  and the post-restart verification ended `Hosted verification could not
+  complete` / `timeout exceeded when trying to connect` at 05:51:56. Two
+  consecutive deploys, two different branches, two different trees — the second
+  of them **without** the diagnostic above, since it had not been deployed yet —
+  and the same `pg-pool` checkout timeout both times.
+
+  Beside it there is one reading taken from outside the runner, which is the
+  part worth keeping: during that restart window `GET /healthz` answered **503
+  after 35 seconds**, then 200 after 31, then 200 after 0.27. A machine being
+  replaced returns 503; a machine that takes thirty-five seconds to say so is
+  answering, and something behind it is not. That is what a starved pool looks
+  like from the outside, and it is the first observation of this condition that
+  did not come from the verification script.
+
+  **The ceiling still was not raised, and reaching for it here would have been
+  the mistake.** Two observations of a symptom say nothing new about the
+  server's own connection limit, which is the fact that decides whether a
+  higher `max` is headroom or a failed boot. The diagnostic deployed with this
+  change is what turns the eighth occurrence into a number instead of a
+  seventh anecdote — and if that number says the pool was at its ceiling with
+  callers queued, *then* the knob is the answer, from a reading rather than
+  from a hunch.
+
+  **The gate that was meant to prove this timed out, I named the wrong
+  suspect, and the correction matters more than the delay.** The Postgres run
+  of that tree took its whole sixty-minute job bound while a run on its own
+  parent commit, started three minutes earlier, finished in 22.5. From that I
+  concluded the difference was mine and named `tests/databasePool.test.ts` —
+  the one addition that runs only on Postgres and deliberately starves a
+  pool — as the prime suspect, and said it was a hang rather than slowness.
+
+  **All three were wrong, and the log says so plainly: 83 of 152 files
+  completed, my three new files never executed at all, no test failed, and
+  nothing hung.** What the runner was actually doing is in the durations —
+  `step12bProduct` 770s, `packet` 551s, `russellNervousSystem` 522s, `fleet`
+  455s, `softwareRequestPhrasing` 381s — every one of them pre-existing and
+  every one of them green. The suite did not fit on that runner, and a 3x gap
+  against the same suite twenty minutes earlier is not something file content
+  can explain. **Why that runner was three times slower is not established**,
+  and recording it as "my tests were slow" would have sent the next person to
+  delete a file that never ran.
+
+  What the episode did produce is a defect found by *reading* rather than by
+  the run, which is the half worth keeping: the live test asked
+  `adapter.all()` from **inside** a transaction and asserted a pool timeout —
+  impossible by the adapter's own first rule, since a statement inside a
+  transaction goes to that transaction's client and never touches the pool. It
+  had never run, because the live half is skipped on SQLite. It now holds the
+  only client from the top level and asks from outside, and the rule it got
+  wrong is pinned as its own test rather than assumed.
+  **An eighth failed at the same place in the workflow and for a different
   reason, and calling it the same thing would have buried both.** Run 252,
   `a7e08fa`: release success, `HOSTED-VERIFICATION: PASS 198/198` on the
   released image, and then **the restart step itself** exited 126 —
@@ -2657,9 +2745,11 @@ remote.
   gave up first; the post-restart verification never ran at all, because the
   step before it had failed, and the verdict correctly refused a `skipped`.
 
-  The distinction is worth keeping. The five above are a *check* that ran and
-  failed late, always at the judge step, always consistent with a five-minute
-  work-item lease. This is a *restart command* whose health-check deadline is
+  The distinction is worth keeping, and it is now a three-way one. The five
+  earliest are a *check* that ran and failed late, always at the judge step,
+  always consistent with a five-minute work-item lease. The sixth and seventh
+  are that check failing *early*, on `pg-pool`'s own checkout timeout. This is
+  a *restart command* whose health-check deadline is
   shorter than this machine's cold start, with nothing wrong on either side of
   it. Reading the two as one condition would have somebody debugging a lease
   against a `flyctl` timeout. **And re-deploying is the wrong answer to both**,
@@ -4383,6 +4473,70 @@ and a suite that exercises the stage cannot see that.**
   correct the whole time. §27 already has the sentence: a warning that cries
   wolf is worse than no warning, because it teaches a reader to stop believing
   the one place that says something is genuinely wrong.
+
+- **A packet destroyed its own diagnosis and then blamed the worker for it.**
+  Four production Cash discovery rounds parked reading *"A synthesis work item
+  finished without recording anything. The packet cannot continue on its own:
+  re-plan it, or investigate why the worker completed without submitting."* The
+  first sentence was a fact. Everything after it was an assertion `faultedOut`
+  had established nothing about, and it named the wrong party — the workers had
+  submitted correctly, and it was **Brain** that could not store the bytes, for
+  §25's filename reason: Supabase refused the key of every staged cash report
+  whose title carried an em dash.
+
+  `fileResearchPacket` had recorded exactly that, on the row, in the provider's
+  own words. What destroyed it is a consequence of a *correct* earlier fix:
+  `NEEDS_HUMAN` was deliberately removed from the runner's terminal list,
+  because a decision being outstanding does not mean a packet is over — so a
+  packet carrying a filing failure is re-entered on the next tick, reaches the
+  synthesis branch with `documentId` still null, and had its reason overwritten.
+  **The cause was recorded and then overwritten by a guess**, which is why the
+  fault was untraceable for as long as it was: every reading of it sent somebody
+  to look at the worker. §33's own sentence, at a new altitude: the evidence was
+  right and the sentence about it was wrong.
+
+  The reason already on the row now wins, and the fallback says *nothing was
+  recorded about why* rather than naming a party — because those are two
+  conditions with two remedies, and a function that cannot tell them apart must
+  say so instead of choosing the one that reads like an explanation. A stale
+  comment two hundred lines up still said the runner short-circuits on
+  NEEDS_HUMAN; it is corrected in place rather than deleted, because a reader
+  who believes it concludes this path is unreachable.
+
+  **The tempting second half was refused, and the refusal is worth recording.**
+  A filing failure also *returns success* to the worker, so the item is
+  completed and the attempt is spent — which is §27's truncation lesson at a new
+  step, and the obvious fix is to make it a tool error so the work stays
+  retryable. It is not taken. `idempotentEffect` runs the effect inside one
+  transaction, so throwing would roll back `recordPass` as well, and the
+  worker's report text — the one thing in that transaction nothing else holds a
+  copy of — would be discarded to report a failure the row already records.
+  Preserving the diagnosis is strictly better than preserving the retry here,
+  and **the four parked packets are left exactly as they are**: reading them is
+  not repairing them, the documented reissue is a person's, and replaying live
+  Cash research was outside what was authorized.
+
+- **A default was published as a measurement, and its own comment said it was
+  not.** `RoadmapRound.found` carried *"Zero is a finding, not a blank"* —
+  true of a settled round and false of every other, because
+  `cash_discovery_rounds.found` is `NOT NULL DEFAULT 0` and is written by one
+  statement, `closeRound`, which is guarded on `state = 'OPEN'` and moves the
+  round out of it. The projection returns only **live** rounds, so every
+  `found` it ever published was that default: the Cash page said *"0 openings
+  found"* on rounds that had between them produced all thirty-one signals in
+  the portfolio, and `cash-report` printed `found=0` beside the round ids those
+  signals name. It is null while the round is OPEN now, and both readers say
+  *not counted yet* — §30's rule that an unknown is never an assumption, in the
+  direction nobody checks, because an understatement reads as modesty.
+
+  **The two readers of the row rather than the projection were already right,
+  and were left alone.** `nextRoundFor` decides whether a bucket is worth
+  asking again, and reading an unsettled zero there would retire a bucket whose
+  rounds were still running — the same defect with real consequences instead of
+  cosmetic ones. It cannot happen: the function returns before its barren check
+  whenever any round is OPEN, so everything it and `questionFor` see is
+  settled. Checking that before changing anything is why the fix is three
+  display sites and no logic.
 
 **None of the existing work was rewritten to make any of this come out right.**
 Every orchestration, fragment, claim, report, audit, round and parked candidate

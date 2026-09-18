@@ -26,7 +26,7 @@ import { createUser } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, currentFragments, updateFragment } from '../server/repos/research.ts';
 import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
-import { listRounds } from '../server/repos/cashDiscovery.ts';
+import { closeRound, listRounds } from '../server/repos/cashDiscovery.ts';
 import { createOpportunity, updateOpportunity, transitionOpportunity } from '../server/repos/cashPortfolio.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
@@ -257,6 +257,33 @@ describe('the Cash dashboard', () => {
     // The question is the fragment's own words, so a reader can see what is
     // being researched rather than a paraphrase of it.
     expect(withFive?.plan?.inFlight).toEqual(['Question number 0?']);
+  });
+
+  it('says a live round has not been counted rather than that it found nothing', async () => {
+    /*
+     * `cash_discovery_rounds.found` is NOT NULL DEFAULT 0 and is written by one
+     * statement — `closeRound`, guarded on OPEN. So on a live round the column
+     * is the default, meaning *not counted yet*, and this projection returns
+     * only live rounds. It used to publish that default as a count, and the
+     * Cash page rendered "0 openings found" against rounds that had between
+     * them produced every signal in the portfolio.
+     */
+    await activated();
+    await openDiscovery({ projectId, limit: 1 });
+
+    const map = await cashRoadmap(projectId);
+    expect(map.active).toHaveLength(1);
+    expect(map.active[0]!.state).toBe('OPEN');
+    // Null, not zero: a blank must not read as a measurement.
+    expect(map.active[0]!.found).toBeNull();
+
+    // And once it is settled, the count is a count again — the correction may
+    // not cost the reading it exists to protect.
+    const rounds = await listRounds(projectId);
+    await closeRound({ id: rounds[0]!.id, to: 'HARVESTED', found: 0 });
+    const settled = await listRounds(projectId);
+    expect(settled[0]!.state).toBe('HARVESTED');
+    expect(settled[0]!.found).toBe(0);
   });
 
   it('reports a round with no mission as having no plan, rather than as no work', async () => {

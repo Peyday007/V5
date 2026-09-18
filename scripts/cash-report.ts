@@ -174,7 +174,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   for (const round of roadmap.active) {
     console.log(
       `  ${round.bucketId.padEnd(26)} r${String(round.round).padEnd(3)}` +
-        ` ${round.activity.padEnd(16)} found=${round.found}` +
+        ` ${round.activity.padEnd(16)} found=${round.found ?? 'not counted yet'}` +
         (round.plan ? ` items=${round.plan.byStatus.ACCEPTED}/${round.plan.planned}` : ' items=—'),
     );
     if (round.blocker) console.log(`      not moving: ${trim(round.blocker)}`);
