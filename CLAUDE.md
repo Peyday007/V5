@@ -4497,6 +4497,32 @@ from rows the moment it is set, with neither person repeating anything.
   the fields rather than asking a screen not to render them — §29's rule that
   technical detail is what a caller is *owed*, applied by not sending it.
 
+**The boundary is proved from the wrong side of it, on the released image.**
+Everything in `tests/` drives a server this process started, and the
+demonstrated defect was that the owner could see Cash and a member could not —
+so an administrator's screenshot settles nothing, because the administrator was
+never refused. `scripts/verify-hosted.ts` already signs in as
+`verification-member@brain.invalid`, which is exactly the party that was being
+refused: a real authenticated person with no membership on the cash root and no
+Brain administrator rights. `sharedCashBoundary` asserts, in that session, that
+the frontier answers `200` with `scope: 'SHARED'`; that `/api/projects` does
+**not** list the root, read from Brain's own answer rather than assumed, so the
+check cannot silently degrade into testing the ordinary member path; that
+fifteen named private fields are absent **as JSON keys at any depth**, because a
+figure nested inside an opportunity is the same disclosure and because those
+money keys are what the first version of this projection actually leaked; that
+another operation's Cash is `404` with a byte-identical body to a project that
+does not exist; and that activating a sprint or granting commercial authority is
+refused. It creates nothing, and a Brain with no sprint records that there was
+no frontier to read rather than passing silently. Matching keys rather than bare
+words is deliberate: `entries`, `commitments` and `provenance` are ordinary
+English, and a false finding in a release gate costs somebody an hour and
+teaches them to stop believing it — §29's defect, in the place it would do most
+damage. `sharedCashAccess` asserts the check exists **and is called**, reading
+the script rather than running it, because nothing in the suite executes it —
+which is precisely how §33's `geography_basis` defect reached production with
+the whole suite green.
+
 **Reading either page performs no effect at all** — no enqueue, claim, replay,
 cancellation, registration, fire or credential mutation — and that is asserted
 against the queue, the bins and the fire counters rather than stated in a
