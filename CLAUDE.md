@@ -2775,6 +2775,29 @@ remote.
   to whoever is editing `deploy.yml` — §28's file is the one place two
   workstreams editing at once has already cost this repository twice, and a
   second opinion about a timeout is not worth a third.
+
+  **A third consecutive one puts a number on the gap, and the number is the
+  argument.** Run 35349935034, `33cd85d`: release success,
+  `HOSTED-VERIFICATION: PASS 198/198` on the released image at 13:41:57, then
+  five minutes of `Waiting for 811d651c26d948 to become healthy (started,
+  0/1)` and `failed to wait for health checks to pass: context deadline
+  exceeded` at 13:47:08 — and the very next step answering **`healthy again
+  after 1 attempt(s)`** at 13:47:32. **Twenty-four seconds.** The machine was
+  already back; `flyctl`'s deadline expired first and the step that proves the
+  restart never ran.
+
+  So the reading is unchanged and now rests on three runs rather than two, and
+  the erosion it names has happened: three deploys in a row ended
+  `after the restart: skipped`, which is the post-restart verification not
+  running rather than failing. Two things follow and neither is a re-deploy.
+  **The released commit is live and proved** — `release: success` plus a
+  full pre-restart pass on that image says so, and re-deploying would restart
+  a Brain holding leased work to re-prove it. And **the live reading has to
+  come from outside the runner** when the gate is the thing that is skipped:
+  here that was the served bundle, fetched before and after, with the two
+  strings this change removed present in the first and absent in the second.
+  The remedy is still `deploy.yml`'s own restart step and still deliberately
+  left to whoever is editing that file.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
