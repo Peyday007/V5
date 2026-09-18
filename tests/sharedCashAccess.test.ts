@@ -46,7 +46,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = pickPort(7300, 100);
+/*
+ * 7400, and not 7300, which was this suite's first choice.
+ *
+ * `tests/mcpConnectorPaths.test.ts` on an open pull request already holds
+ * 7300, and two suites on one range do not fail loudly: `/healthz` is
+ * deliberately unauthenticated, so the second suite's readiness probe finds the
+ * first suite's server, waits happily for it, and then signs in against a Brain
+ * with a different bootstrap administrator — which reports 401 and reads as a
+ * broken sign-in. `deploymentOwnership` refuses overlapping ranges at the
+ * merge, which is what caught the last one.
+ */
+const PORT = pickPort(7400, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 let server: ChildProcessByStdio<null, Readable, Readable> | null = null;
