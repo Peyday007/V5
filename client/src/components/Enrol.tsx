@@ -106,10 +106,26 @@ export function Enrol({ onEnrolled }: { onEnrolled: () => void }): JSX.Element {
           Your previous device has already been taken out of service. Registering here replaces it.
         </p>
       ) : (
-        <p className="rs-enrol-note">
-          Brain has no password and asks for no email address. You sign in with this device — its
-          fingerprint, face or screen lock — and you can add more devices later.
-        </p>
+        <>
+          <p className="rs-enrol-note">
+            Brain has no password and asks for no email address. You sign in with this device — its
+            fingerprint, face or screen lock — and you can add more devices later.
+          </p>
+          {/*
+            * What happens next, said here rather than discovered later.
+            *
+            * Connecting a Claude account is the second thing everybody does and
+            * it used to be the thing nobody was told about — so the journey is
+            * named at the moment somebody joins, and the setup itself is behind
+            * the one card waiting for them. This is a sentence, deliberately:
+            * a second copy of the instructions would be a second copy to drift.
+            */}
+          <p className="rs-enrol-note">
+            Once you are in, the first card on your home page is where you connect your Claude
+            account, so this Brain can run research on it. It takes a few minutes and you can stop
+            and come back to it.
+          </p>
+        </>
       )}
 
       <label className="rs-enrol-label" htmlFor="device-label">

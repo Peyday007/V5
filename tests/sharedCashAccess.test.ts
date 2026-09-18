@@ -626,7 +626,21 @@ describe('People & capacity is its own door', () => {
     );
     expect(mine.status).toBe(200);
     const keys = mine.body.steps.map((one) => one.key);
-    expect(keys).toEqual(['CONNECTOR', 'ROUTINE', 'TRIGGER', 'SECRET', 'PROBE', 'HEALTHY']);
+    /*
+     * `INVITATION` first. The journey used to start at the connector, and a
+     * member who followed it was refused at a consent screen that looks for an
+     * administrator before it looks for an invitation — so the step that was
+     * genuinely first was the one nobody was told about.
+     */
+    expect(keys).toEqual([
+      'INVITATION',
+      'CONNECTOR',
+      'ROUTINE',
+      'TRIGGER',
+      'SECRET',
+      'PROBE',
+      'HEALTHY',
+    ]);
     // Every value a person has to paste is carried as its own copyable string,
     // never as a sentence they have to select part of.
     const connector = mine.body.steps.find((one) => one.key === 'CONNECTOR')!;

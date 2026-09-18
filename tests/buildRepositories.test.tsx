@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act } from 'react';
 import { BuildView } from '../client/src/russell/Build.tsx';
+import type { RepositoryOnboarding } from '../client/src/lib/factoryApi.ts';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,7 +45,16 @@ const GRANT = 'brain-worker-bootstrap';
 const REPOSITORIES = `GET /api/projects/${PROJECT}/factory/repositories`;
 const ONBOARD = `POST /api/projects/${PROJECT}/factory/repositories/${GRANT}/onboard`;
 
-function grant(over: Record<string, unknown> = {}): Record<string, unknown> {
+/**
+ * Annotated `RepositoryOnboarding` on purpose.
+ *
+ * It was `Record<string, unknown>`, so TypeScript checked nothing about it —
+ * and when the server's card grew a field, every test here went on passing
+ * against a payload the real route can no longer produce, until the component
+ * read it and crashed at runtime. A fixture the compiler does not check is a
+ * fixture that tests itself.
+ */
+function grant(over: Partial<RepositoryOnboarding> = {}): RepositoryOnboarding {
   return {
     grantId: GRANT,
     remote: 'https://github.com/Peyday007/brain-worker-bootstrap',
@@ -58,6 +68,9 @@ function grant(over: Record<string, unknown> = {}): Record<string, unknown> {
     routedFamilies: [],
     routedRepositories: [],
     surfaces: [],
+    contributedSurfaces: [],
+    connectorPath: '/mcp/factory',
+    boundary: null,
     readiness: 'NOT_ONBOARDED',
     remaining: ['Onboard this repository, which registers a worker for it and issues one invitation.'],
     waiting: 0,

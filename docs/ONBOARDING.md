@@ -137,21 +137,85 @@ worker is *configured*. It becomes HEALTHY only once a session Brain fired has
 arrived and finished a piece of work — §23's rule that a perfect configured
 block over an empty observed one is a refusal rather than a pass.
 
+### Where a person finds it
+
+**One canonical screen, for every account**, on **More → People & capacity →
+Your Claude connection**. Three surfaces carry a compact card that opens it and
+never a second copy of it: the **home page**, whenever a connection is not
+proven — which is where somebody who registered their device five minutes ago
+actually is; **Your devices**, permanently, because a Claude connection is a
+credential of theirs like the devices above it; and the **enrolment screen**,
+which names the journey in one sentence as the next thing they will do.
+
+Every word on it is composed by the server, in
+`server/services/capacity/connection.ts`, and
+`client/src/russell/ClaudeConnection.tsx` renders what it is given. There is no
+administrator variant and no member variant — the component contains no role,
+no membership and no capability check at all, which is asserted by a test that
+reads the file. A control somebody may not use arrives **disabled with the
+server's reason beside it**, never removed, because "there is no button" and
+"the button is not for you yet" are answers a person reads very differently.
+
 ### The member's journey, on their own page
 
-**More → People & capacity → My Claude connection.** Every value they have to
-paste is in its own copy box, and the page names the step they are on. Nobody has
-to invent a name, infer one from prose, read a chat log, open a terminal or
-understand anything about the fleet.
+Every value they have to paste is in its own copy box, and the page names the
+step they are on. Nobody has to invent a name, infer one from prose, read a chat
+log, open a terminal or understand anything about the fleet.
 
 | Step | What Brain shows | What they do |
 | --- | --- | --- |
-| 1 | The connector name and the MCP URL | Add the custom connector in Claude and approve it on Brain's consent screen |
-| 2 | The Routine name, the bootstrap repository, the connector to enable, and *schedule: off* | Create the Routine in Claude |
-| 3 | A field | Paste the Routine's trigger id (`trig_…`) |
-| 4 | The name of the deployment variable | Send the trigger's **bearer** to a Brain administrator privately |
-| 5 | A button | Send the bounded self-test |
-| 6 | The session, the bin and when it finished | Nothing — it is proven |
+| 1 | A button | Ask for their one-time connector link |
+| 2 | The connector name and the MCP URL | Add the custom connector in Claude and approve it on Brain's consent screen, with that link |
+| 3 | The Routine name, the bootstrap repository, the connector to enable, and *schedule: off* | Create the Routine in Claude |
+| 4 | A field | Paste the Routine's trigger id (`trig_…`) |
+| 5 | The name of the deployment variable | Send the trigger's **bearer** to a Brain administrator privately |
+| 6 | A button | Send the bounded self-test |
+| 7 | The session, the bin and when it finished | Nothing — it is proven |
+
+**Step 1 is the one that used to be missing, and its absence was the whole
+reason an ordinary member could not start.** `/oauth/authorize` looks for a
+signed-in Brain administrator first and an invitation second, so a member
+holding neither is refused at Claude's approval screen — and the old step 1 told
+them to go there. The link is still a Brain administrator's to issue, because
+issuing it mints a worker identity and grants it a project membership; what is
+new is that a member can **ask**, which is §24's rule that every escalation
+needs an answering transition, at the first step of the journey rather than the
+last.
+
+### Checking it, and getting it back
+
+The same page carries three things that do not depend on being mid-setup:
+
+* **Check this connection** re-reads the rows — the worker identity, its project
+  membership, the OAuth tokens minted against it, the registered Routine and its
+  bound worker, whether the deployment variable is present, and the four-row
+  proof chain — and answers each one `PASS`, `FAIL` or *not yet*, with a remedy
+  on anything that is not a pass. It fires nothing and spends nothing, so it is
+  available in every state to every reader.
+* **Take this connection back** revokes every token minted against that worker,
+  revokes any outstanding link, and moves the surface to `UNAVAILABLE` so the
+  dispatcher stops firing it. It destroys nothing: the trigger, the capacity
+  account, the Routine and the proof that it once worked all stay.
+* **Reconnect** puts it back at the start of the journey with all of that
+  intact, so what is left is one approval rather than a second setup. It
+  re-enables the surface **only** if this member's own revoke is what took it
+  out; a surface an operator drained or quarantined stays where they put it.
+
+Two states are reported that nobody presses a button for. **Bound to the wrong
+surface** means the registered Routine no longer names this connection's trigger
+or answers as another worker — Brain would fire it and attribute its sessions to
+somebody else, so it is named rather than counted as capacity, and the remedy is
+`fleet repoint-worker`, an operator's. And an **authorization that has lapsed**
+is reported *beside* the state rather than instead of it: proof is history and
+does not stop having happened, so a surface that was proven stays proven and
+still says, in the same breath, that nothing Brain fires at it can authenticate
+now.
+
+**Brain holds nothing about the Claude account itself** — no password, no
+cookie, no session and no Anthropic token. There is no field on that screen
+that accepts one, and the server refuses a credential pasted into the trigger
+field. What Brain has is a worker it minted and a token it issued against that
+worker, on the authority of a person it authenticated.
 
 **The friend never opens Fly and never gets access to the owner's
 organisation.** `services/dispatch/fire.ts` resolves a Routine's bearer with
@@ -169,8 +233,12 @@ retried against the same connection, the same account and the same Routine.
 ### The administrator's one action
 
 **More → People & capacity → Diagnostics → Connections** lists every member's
-connection and the exact variable each is waiting on. It carries the name of an
-environment variable, a trigger id and a state — no value of any kind.
+connection and the exact variable each is waiting on, and names anybody who has
+asked for a connector link — which is the only channel that request travels
+down, since this Brain has no email and no notifications. The link itself is
+issued with the **Claude connector link** button beside that person in the
+member list, and is shown once. The list carries the name of an environment
+variable, a trigger id and a state — no value of any kind.
 
 ```
 flyctl secrets set BRAIN_ROUTINE_TOKEN_<MEMBER>=<the bearer Claude showed once> --app northline-brain
