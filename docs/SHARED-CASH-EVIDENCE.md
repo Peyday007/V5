@@ -496,3 +496,37 @@ back, `flyctl`'s wait gave up first, and the *post*-restart verification was
 skipped because the step before it had failed. The image was released and is
 serving; see CLAUDE.md §27, where this is recorded as a sixth and different
 shape rather than folded into the five that precede it.
+
+### And the image is serving after the restart
+
+`npm run admin -- people list` against the deployed Brain at
+2026-09-18T07:15:12Z — three minutes after the restart `flyctl` gave up waiting
+on:
+
+```
+usr_72e1236be8f04f4d9aa2  PERSON  MEMBER   passkeys=1 signs-in=device   Airyn                      <no address — passkey only>
+usr_0f24a326daaf4e2fbbfc  PERSON  MEMBER   passkeys=1 signs-in=device   Caleb                      <no address — passkey only>
+usr_b2dedd287be04b86853f  SYSTEM  DISABLED passkeys=0 signs-in=password Hosted verification        <verification-member@brain.invalid>
+usr_8d1de66ff2ef43809312  SYSTEM  DISABLED passkeys=0 signs-in=password Hosted verification owner  <verification-owner@brain.invalid>
+usr_14439966398243339341  PERSON  ADMIN    passkeys=0 signs-in=password rosserpeyton@gmail.com     <rosserpeyton@gmail.com>
+usr_4b69e3238341457a953d  PERSON  MEMBER   passkeys=0 signs-in=none     Vince                      <no address — passkey only>
+```
+
+Three facts at once, and the third is the one the run's own verdict could not
+give:
+
+- **The `signs-in` column exists**, and it exists only in this change — so the
+  machine is serving `a7e08fa` rather than the previous image.
+- **The reading is right about every row.** Airyn and Caleb hold devices; the
+  owner's administrator account signs in with a password and is therefore
+  `READY` rather than the unfilled slot it used to read as; Vince holds neither
+  and is the only row that is not joined. On the page the owner reads
+  `rosserpeyton`, because the domain is dropped.
+- **It answered from the live database after the restart.** The restart ran
+  07:07–07:12 and this is 07:15, so persistence survived it — which is the
+  question the skipped post-restart step existed to ask, answered from rows
+  instead of from a step that never ran.
+
+The two verification identities are excluded twice over: `kind = SYSTEM`, and
+`DISABLED`, because `verify-hosted.ts` disables them at the end of its own run.
+Neither row was deleted, and both keep their memberships and their history.
