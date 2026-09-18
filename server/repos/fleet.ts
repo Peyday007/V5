@@ -227,6 +227,48 @@ export async function recordAccountRefusal(input: {
 /* Routines                                                                   */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * Why a second Routine may not be registered, or null when it may.
+ *
+ * Pure, over rows the caller already has, and applied at the operator surface
+ * rather than in the INSERT — the reason is that the damage is a *registration*
+ * mistake rather than a data one, and it is only refusable while somebody is
+ * standing there to be told what to do instead.
+ *
+ * Both collisions are the same fact wearing two shapes: **two Routines on one
+ * trigger token is one surface wearing two rows.** A pool built on it reports
+ * capacity that does not exist, fires one surface twice believing it fired two,
+ * and quarantines both rows when that one token goes stale. The name catches the
+ * copy-paste; the digest catches the same value stored twice under two names,
+ * which the name check cannot see.
+ *
+ * The digest is `token_digest`, already stored at registration, so this costs
+ * one read and reveals nothing: a digest is not recoverable to a value, and the
+ * refusal names the Routine rather than either secret's contents.
+ */
+export function routineRegistrationCollision(
+  registered: FleetRoutine[],
+  candidate: { tokenSecretName: string; tokenDigest: string },
+): string | null {
+  const sameName = registered.find((other) => other.tokenSecretName === candidate.tokenSecretName);
+  if (sameName) {
+    return (
+      `${candidate.tokenSecretName} is already the deployment secret for ${sameName.name} ` +
+      `(${sameName.routineRef}). Each Routine holds its own trigger token under its own secret ` +
+      'name — sharing one would make two surfaces one trigger fired twice.'
+    );
+  }
+  const sameToken = registered.find((other) => other.tokenDigest === candidate.tokenDigest);
+  if (sameToken) {
+    return (
+      `the value in ${candidate.tokenSecretName} is the same trigger token already registered ` +
+      `for ${sameToken.name} (${sameToken.routineRef}) under ${sameToken.tokenSecretName}. Two ` +
+      'names for one token is still one token; create a trigger for this Routine and store its own.'
+    );
+  }
+  return null;
+}
+
 export async function createRoutine(input: {
   accountId: string;
   routineRef: string;

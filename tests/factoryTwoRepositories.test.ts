@@ -56,7 +56,7 @@ import {
 } from '../server/repos/bins.ts';
 import { dispatchTick, OPERATOR_RESOLVED_KINDS } from '../server/services/dispatch/loop.ts';
 import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
-import { REFUSAL_WAIT, routeBin } from '../server/services/dispatch/router.ts';
+import { REFUSAL_SCOPE, REFUSAL_WAIT, refusalEndsBurst, routeBin } from '../server/services/dispatch/router.ts';
 import { proveSurface } from '../server/services/dispatch/surfaceProof.ts';
 import type { WorkerSession } from '../server/repos/fleet.ts';
 import type { RoutingRefusal } from '../server/services/dispatch/router.ts';
@@ -428,10 +428,26 @@ describe('a temporary fleet condition is a wait, and a permanent refusal is not'
       'NO_SURFACE_SERVES_THIS_REPOSITORY',
       'NO_SURFACE_SERVES_THIS_PROJECT',
       'ACCOUNT_TARGETS_REACHED',
+      'PINNED_SURFACE_UNAVAILABLE',
     ];
     // Every member of the union, and nothing else.
     expect(Object.keys(REFUSAL_WAIT).sort()).toEqual([...ALL].sort());
     for (const refusal of ALL) expect(['CAPACITY', 'OPERATOR']).toContain(REFUSAL_WAIT[refusal]);
+    /*
+     * And the same union classified the other way. `REFUSAL_SCOPE` decides
+     * whether a refusal ends the burst or only this bin's turn in it, and it is
+     * a `Record` for the identical reason: a refusal nobody classified used to
+     * fall into the exhausting branch, and here it would fall into the branch
+     * that stops every other bin behind it.
+     */
+    expect(Object.keys(REFUSAL_SCOPE).sort()).toEqual([...ALL].sort());
+    for (const refusal of ALL) expect(['FLEET', 'BIN']).toContain(REFUSAL_SCOPE[refusal]);
+    // A fact about the fleet ends the burst; a fact about this bin does not.
+    expect(refusalEndsBurst('NO_ROUTINES_REGISTERED')).toBe(true);
+    expect(refusalEndsBurst('FLEET_PAUSED')).toBe(true);
+    expect(refusalEndsBurst('NO_CAPABLE_SURFACE')).toBe(false);
+    expect(refusalEndsBurst('NO_SURFACE_SERVES_THIS_REPOSITORY')).toBe(false);
+    expect(refusalEndsBurst('PINNED_SURFACE_UNAVAILABLE')).toBe(false);
     // The two an authorized action resolves are operator waits, which is what
     // makes them re-armable by the write that resolves them.
     expect(REFUSAL_WAIT['NO_ROUTINES_REGISTERED']).toBe('OPERATOR');

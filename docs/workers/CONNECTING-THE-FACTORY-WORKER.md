@@ -1,21 +1,59 @@
 # Connecting the Factory worker
 
-**This runbook connects one worker, for one repository: `Peyday007/V5` — Brain
-itself.** Every name, URL, branch and value is written out, because a runbook
-with a value left to invent produces a surface Brain refuses for a reason nobody
-can see.
+**This runbook connects the Factory to one repository — `Peyday007/V5`, Brain
+itself — across as many Claude accounts as you have.** Every name, URL, branch
+and value is written out, because a runbook with a value left to invent produces
+a surface Brain refuses for a reason nobody can see.
 
 | | |
 | --- | --- |
 | Envelope grant | `brain` |
 | Repository | `Peyday007/V5` |
 | Branch | `production` |
-| Brain worker it creates | `factory-brain` |
-| Connector name in Claude | `Factory Brain` |
-| Deployment secret | `BRAIN_ROUTINE_TOKEN_FACTORY` |
+| Brain worker it creates | `factory-brain` — **one**, however many accounts |
+| Connector name in each Claude account | `Factory Brain` |
+| Routine name in each Claude account | `Factory_surface_N` |
+| Deployment secret in each Claude account | `BRAIN_ROUTINE_TOKEN_FACTORY_N` |
 
-A different target later is these same seven steps with a different grant, a
-different repository and a different worker name. Nothing else changes.
+A different target later is these same steps with a different grant, a different
+repository and a different worker name. Nothing else changes.
+
+---
+
+## One logical worker, one repository, every account you have
+
+**`factory-brain` is not an account. It is an identity, and several Claude
+accounts can present it.** §23 draws the distinction this rests on: an account
+holds a subscription allowance, a Routine is a fire surface, and multiplying one
+never tells you anything about the other. So the arrangement is:
+
+* **one** Brain worker — `factory-brain`, created once by onboarding;
+* **one** `worker_routing` row on it, naming `FACTORY`, `peyday007/v5` and
+  `repository,repository-write`;
+* **one** `Factory Brain` connector **per Claude account**, each independently
+  authenticated and each resolving to that same worker;
+* **one** Factory Routine per Claude account, each with its own `trig_…` and its
+  own uniquely-named deployment secret;
+* every one of those Routines **bound to `factory-brain`**.
+
+What that buys is a pool. Brain routes each factory bin to whichever eligible
+surface has headroom, runs independent units on separate accounts at the same
+time, fails over when one refuses, and never fires an account past the target
+set for it. What it does **not** buy is more allowance per account, and nothing
+here multiplies one.
+
+**Every account is optional and additive.** One account is a complete, working
+Factory. A second raises how much can run at once and how much a stale token
+costs you, and needs no code change, no deployment and no re-onboarding —
+steps 3 to 7 again, with `N` one higher.
+
+**A trigger token is never reused across accounts.** Each Routine's token
+authorizes that Routine only, and `register-routine` refuses a secret name or a
+token value it has already registered, by name, rather than quietly producing two
+rows that fire one surface.
+
+**Steps 1 and 2 happen once. Steps 3 to 7 happen once per Claude account.**
+Step 8 verifies the whole pool.
 
 Read once before starting:
 
@@ -111,7 +149,16 @@ again. Brain's routing boundary is keyed on the authenticated worker, so it woul
 then have nothing to separate.
 
 Both connectors may live in **one Claude account**. A second subscription is not
-required and is not what this buys.
+required to have a working Factory at all; what a second account buys is a
+second *fire surface*, which is throughput rather than authority — see *One
+logical worker, one repository, every account you have* above.
+
+**In every account you connect, the connector is a separate connector.** Each
+one authenticates on its own and Brain issues each its own credential; what
+makes them one worker is that the same `factory-brain` is approved on each
+account's consent screen. Nothing about a second account's connector is copied
+from the first, and there is nothing to copy — the token never leaves the
+account it was minted in.
 
 | | Research | Software Factory |
 |---|---|---|
@@ -215,7 +262,11 @@ wrong** — see step 3.
 
 ---
 
-## 3. Add the connector in Claude
+## 3. Add the connector in Claude — *once per account*
+
+Sign in to the Claude account you are connecting, and do steps 3 to 7 entirely
+within it before moving to the next one. Two accounts half-connected is the state
+in which a `trig_…` and a secret name are easiest to cross.
 
 **Settings → Connectors → Add custom connector.**
 
@@ -264,7 +315,12 @@ this screen can make, and step 7's probe catches it from rows afterwards.
 
 ---
 
-## 4. Create the Routine, in Cowork
+## 4. Create the Routine, in Cowork — *once per account*
+
+Name it `Factory_surface_N`, where `N` is which account this is: `1` for the
+first, `2` for the second, and so on. The name is what you will read in
+`verify-pool` beside an account, so a name that does not say which account it is
+makes the one screen that answers *"which surface is stale"* useless.
 
 | Setting | Value |
 |---|---|
@@ -349,20 +405,34 @@ Copy two values out of the Routine when it is created:
 
 ---
 
-## 5. Put the trigger token where Brain can read it, and nowhere else
+## 5. Put the trigger token where Brain can read it, and nowhere else — *once per account*
 
 The token goes in the deployment secret store as a Fly secret on the Brain app,
-under this exact name:
+under a name that says which account it belongs to:
 
 ```
-BRAIN_ROUTINE_TOKEN_FACTORY
+BRAIN_ROUTINE_TOKEN_FACTORY_1     the first account
+BRAIN_ROUTINE_TOKEN_FACTORY_2     the second
+BRAIN_ROUTINE_TOKEN_FACTORY_3     …
 ```
 
 From a terminal with `flyctl` authenticated:
 
 ```
-fly secrets set BRAIN_ROUTINE_TOKEN_FACTORY=<the token> --app northline-brain
+fly secrets set BRAIN_ROUTINE_TOKEN_FACTORY_1=<the token> --app northline-brain
 ```
+
+**A name per Routine, never a shared one.** Brain stores the *name* and a
+sha-256 of the value, and `register-routine` refuses both a name and a value it
+has already registered — *"`BRAIN_ROUTINE_TOKEN_FACTORY_1` is already the
+deployment secret for …"*. That refusal is the mechanism: two Routines sharing a
+secret is one surface wearing two rows, and a pool built on it would report
+capacity that does not exist and quarantine two surfaces for one stale token.
+
+`BRAIN_ROUTINE_TOKEN_FACTORY`, with no number, is the first account's name in a
+Brain connected before this runbook was written. Leave it where it is — the
+number is a convention for reading a `fleet show`, not something Brain enforces
+— and start the next account at `_2`.
 
 Setting a secret restarts the machine, which is ordinary — every stage is a row,
 so nothing in flight is lost.
@@ -374,18 +444,35 @@ recovers a value from either — so the only copy that exists is the one in Fly.
 
 ---
 
-## 6. Register the surface, and bind it to the worker
+## 6. Register the account and the surface, and bind it to the worker — *once per account*
 
-Run the **Fleet** workflow (Actions → Fleet → Run workflow), twice.
+Run the **Fleet** workflow (Actions → Fleet → Run workflow). Up to three runs
+per account; the first is skipped for an account Brain already knows.
+
+**Register the account**, if it is a new one. `command: register-account`
+
+| Input | Value |
+|---|---|
+| `name` | `Brain_Research_A`, `Brain_Research_B`, … — the account's own name |
+
+Underscores fold to spaces, so `Brain_Research_B` registers as *Brain Research
+B*. A name that already exists is refused rather than duplicated; that is the
+answer for the first account, which is registered already.
+
+**One row per Claude account, and never a row per Routine.** A Routine's
+`account` is what the per-account target and the per-account headroom are
+counted against, so two Routines registered under one account name share that
+account's ceiling — which is correct when they really are one subscription, and
+silently halves two subscriptions when they are not.
 
 **Register the Routine.** `command: register-routine`
 
 | Input | Value |
 |---|---|
-| `account` | `primary` |
+| `account` | that account's name |
 | `ref` | the `trig_…` id from step 4 |
-| `secret` | `BRAIN_ROUTINE_TOKEN_FACTORY` |
-| `name` | `Factory_surface` |
+| `secret` | `BRAIN_ROUTINE_TOKEN_FACTORY_N` |
+| `name` | `Factory_surface_N` |
 | `capabilities` | `repository,repository-write` |
 
 The underscore in the name is not a typo: the workflow refuses a value with a
@@ -396,8 +483,14 @@ Both capabilities, not one. The stages that push are the ones that cannot be
 skipped, so a surface that can read but not push produces a campaign that plans
 and then reports an honest blocker for ever.
 
-If it refuses with *"the deployment has no secret named …"*, step 5 has not
-landed yet — wait for the restart and run it again.
+Two refusals here are worth recognising rather than working around:
+
+* *"the deployment has no secret named …"* — step 5 has not landed yet. Wait for
+  the restart and run it again.
+* *"… is already the deployment secret for …"*, or *"the value in … is the same
+  trigger token already registered for …"* — a name or a token has been reused
+  across two accounts. Mint a new trigger token in the account you are on and
+  store it under its own name; do **not** point two Routines at one secret.
 
 **Bind it to the worker.** `command: bind-worker`
 
@@ -407,10 +500,13 @@ landed yet — wait for the restart and run it again.
 | `extra` | `--worker factory-brain` |
 
 The worker **name**, which is the one onboarding gave you; you never need its id.
+**The same name for every account** — that is the whole point, and it is what
+makes these surfaces one pool rather than several workers that happen to look
+alike.
 
 ---
 
-## 7. Prove it is the worker you meant — with a fire, not with a row
+## 7. Prove it is the worker you meant — with a fire, not with a row — *once per account*
 
 `command: verify-surface`, `ref:` the `trig_…`.
 
@@ -419,10 +515,10 @@ It prints two blocks and they are not the same kind of fact.
 **CONFIGURED** is the rows you wrote. Expect:
 
 ```
-  routine     Factory_surface  ENABLED  ref=trig_…
-  account     primary  ENABLED
+  routine     Factory_surface_1  ENABLED  ref=trig_…
+  account     Brain Research A  ENABLED
   caps        [repository,repository-write]
-  secret      BRAIN_ROUTINE_TOKEN_FACTORY  present
+  secret      BRAIN_ROUTINE_TOKEN_FACTORY_1  present
   worker      factory-brain  wkr_…
   families    [FACTORY]
   repos       [peyday007/v5]
@@ -467,6 +563,70 @@ surface is bound to"*. That is a research connector selected in the factory
 Routine, and it is the one mistake a second connector *name* would have hidden.
 Fix it by editing the Routine's connector selection in Cowork and probing again.
 
+**Repeat steps 3 to 7 for the next account, or stop here.** One verified surface
+is a working Factory. Go on to step 8 either way — with one account it reads the
+same as step 7, and with several it is the only thing that reads them together.
+
+---
+
+## 8. Verify the pool — the one command that reads every surface at once
+
+`command: verify-pool`, `repository: Peyday007/V5`. Optionally
+`extra: --worker factory-brain`, which is the default.
+
+It is read-only, it spends nothing, and it prints one block per surface:
+
+```
+POOL  peyday007/v5  as factory-brain
+  surfaces   3
+
+  PROVEN   Factory_surface_1  (Brain Research A)
+    ref       trig_…
+    worker    factory-brain
+    eligible  yes
+    headroom  0/2 in flight
+    fires     last fire 2026-… ok
+    proven    fired 2026-…
+              arrived cse_… at 2026-…
+              assigned and completed bin_…
+
+  UNPROVEN Factory_surface_2  (Brain Research B)
+    ref       trig_…
+    worker    factory-brain
+    eligible  yes
+    headroom  0/2 in flight
+    fires     never fired
+    PROBLEM   no fire to this Routine has ever produced an authenticated arrival
+```
+
+Three verdicts, and they mean three different things:
+
+* **PROVEN** — the four-row chain exists for this surface: Brain fired it, a
+  session arrived and was attributed to `factory-brain` *from that dispatch row*,
+  it was handed a bin, and the bin reached `COMPLETE`.
+* **UNPROVEN** — nothing is wrong, nothing has happened. Probe it.
+* **FAULT** — a session arrived on this surface under a **different** worker.
+  That is the connector selection, and it is not fixed by probing again: change
+  the Routine's connectors in Cowork first. `verify-pool --probe` deliberately
+  skips a faulted surface rather than spending an activation to re-learn it.
+
+**It refuses unless every surface is PROVEN**, and it also refuses when a
+Routine declares a repository capability but is bound to some *other* worker —
+that is a surface somebody meant to put in this pool and did not, and a pool
+report that quietly left it out would be answering an easier question.
+
+**To make an unproven surface proven**, run it again with `extra: --probe`. Brain
+creates one bounded `DETERMINISTIC_CHECK` bin per unproven surface — belonging to
+no campaign, naming no objective, **forbidding every repository operation**, and
+**pinned to that surface** so the fire it causes reaches the Routine it is for
+rather than whichever one has the most headroom. Brain fires them on its own
+tick. Run `verify-pool` again with no `--probe` once they have been answered.
+
+**What a verified pool proves, exactly:** pooled dispatch and identity. Every
+registered surface can be fired, authenticates as `factory-brain`, is handed
+work and finishes it. **It proves nothing about repository access** — the probe
+forbids it — and that is the first real campaign's job.
+
 ---
 
 ## What the envelope does and does not settle
@@ -500,7 +660,7 @@ after it is rows and account setup.
 
 ## What happens next, and what each step has and has not proved
 
-When step 7 prints `VERIFIED`, three things are settled and a fourth is not.
+When step 8 prints `VERIFIED`, three things are settled and a fourth is not.
 Keeping them apart is the whole point of running the probe separately.
 
 | Proved | By what | Not proved by it |
@@ -519,10 +679,16 @@ What remains after `VERIFIED` is one decision: an objective — said to Russell 
 an ordinary thread, entered in Build, or committed under `objectives/` — and
 approved by a person. Nothing about the surface changes.
 
-A **second target later** — a site of yours — is: one reviewed entry in
-`services/factory/repositoryEnvelope.ts`, then steps 1 to 7 again with its grant,
-its repository, its default branch and its own connector. A connector is an
-identity, so it cannot be shared with this one.
+A **second account later** — more throughput on this same repository — is steps
+3 to 7 again in that account, with `N` one higher, and step 8 to read the pool.
+No code change, no deployment, no re-onboarding, and nothing about the surfaces
+already proven is touched.
+
+A **second target later** — a site of yours — is a different thing entirely: one
+reviewed entry in `services/factory/repositoryEnvelope.ts`, then steps 1 to 8
+again with its grant, its repository, its default branch and its own connector in
+each account. A connector is an identity, so it cannot be shared with this one,
+and its pool is a separate pool with its own worker.
 
 Brain will not fire the wrong surface for either: the fire router refuses a
 surface whose worker is not authorized for the repository the bin names, by

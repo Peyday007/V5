@@ -4300,6 +4300,13 @@ export interface BinRow {
    */
   required_capabilities: string | null;
   workload_class: string | null;
+  /**
+   * The one surface this bin may be fired at, or null for every ordinary bin.
+   *
+   * Restrictive only, written by Brain, and read by the fire router alone — see
+   * `067_routine_pin.sql` for why a pool cannot be verified without it.
+   */
+  pinned_routine_id: string | null;
   created_by_type: string;
   created_by_id: string | null;
   created_at: string;
@@ -4352,6 +4359,17 @@ export interface Bin {
   requiredCapabilities: string[];
   /** What kind of work this is, for capacity attribution. */
   workloadClass: string | null;
+  /**
+   * The only Routine this bin may be fired at, when it has one.
+   *
+   * Null on every ordinary bin. Set on a surface probe, because proving that
+   * *this* Routine runs as the worker it is bound to requires firing that
+   * Routine rather than whichever one the pool happened to favour. It narrows
+   * the candidate list and does nothing else: the pinned surface still has to
+   * pass every check, and admission is still decided on the authenticated
+   * worker.
+   */
+  pinnedRoutineId: string | null;
   lastRefusal: string | null;
   refusalCount: number;
   createdByType: string;

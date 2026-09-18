@@ -2805,6 +2805,93 @@ remote.
   reported `NO_SURFACE_SERVES_THIS_FAMILY`, sending an operator to write a
   routing row when the answer was `fleet set-state`. §23's rule about naming the
   right refusal, applied to the one condition that bypasses every test it names.
+- **One Factory worker is served by every account, and three things in the
+  dispatcher were true of one surface and false of a pool.** `factory-brain` is
+  an identity rather than an account: each Claude account holds its own `Factory
+  Brain` connector, its own Routine, its own `trig_…` and its own uniquely-named
+  deployment secret, and every one of those Routines is bound to that one
+  worker. Nothing about authorization changes — the routing row, the mutation
+  scope, the fencing, the independence floor and the review requirement are the
+  same rows they were — and nothing multiplies an allowance. What it adds is
+  surfaces. Three defects only a pool can show:
+
+  **A refusal about one bin ended the whole burst.** The loop `break`s on a
+  routing refusal, which is right for `NO_ROUTINES_REGISTERED` and wrong for
+  `NO_CAPABLE_SURFACE`: the first is a fact about the fleet and the second is a
+  fact about *this bin*, so one unroutable factory bin stopped the research bin
+  behind it. `REFUSAL_SCOPE` is a `Record` over the union, so a refusal added
+  later is a compile error until somebody says which it is — the same shape
+  `REFUSAL_WAIT` already has beside it, and for the same reason: two `Set`s that
+  must be total between them are not.
+
+  **A bin was charged for a surface's refusal.** `markDispatchFailed` spent an
+  attempt on an `AUTH 401` from a Routine Brain had just quarantined, so a pool
+  of five accounts with five stale tokens retired a perfectly good bin at
+  `max_attempts` for a condition that was never about the work. §23's *a refusal
+  is not misconduct*, one row along and about the bin rather than the surface.
+  `NOT_CONFIGURED` still charges: no trigger at all is not a fact about a surface
+  Brain chose.
+
+  **And the wait after that refusal was thirty seconds of nothing.** The comment
+  said the backoff was short "because the thing that refused has just been taken
+  out of routing" — which is the argument for *no* backoff, since the next
+  routing decision is a different surface. Failover that takes a tick per stale
+  token is failover on paper. It cannot spin: every arrival there removes one
+  surface from routing, so the sequence is bounded by the fleet and ends at
+  `ALL_SURFACES_INELIGIBLE`, which is fleet-wide.
+
+- **A probe that is not pinned proves a fleet, never a surface.** Several
+  Routines bound to one worker are interchangeable to the router, which is the
+  whole point of a pool and exactly what makes a per-surface proof impossible:
+  a probe made for B is fired at whichever has the most headroom, and
+  `proveSurface` then reports B unproven for ever while every fire it prompted
+  went to A. `bins.pinned_routine_id` narrows the candidate list to one and
+  changes nothing else — state, project, family, repository, capability, rate
+  limit and target are all still asked, admission is still decided on the
+  authenticated worker, and a pinned surface that cannot take it defers. It is
+  **restrictive only**, written by Brain from the surface under test and never by
+  a caller, so it can refuse a fire and can never authorize one.
+  `PINNED_SURFACE_UNAVAILABLE` is its refusal, named rather than reported as the
+  nearest available one.
+
+- **Registering a surface twice under one secret is one surface wearing two
+  rows.** `register-routine` took a secret name and a trigger token and asked
+  nothing about either, so two accounts pointed at one secret produced two
+  eligible-looking Routines that fire one surface — capacity that does not
+  exist, and two quarantines for one stale token. Both are refused by name now,
+  the second on the digest `fleet_routines` already stores, so the refusal costs
+  nothing and reads nothing back.
+
+- **`verify-pool` is the surface-proof read across a pool, and it refuses to
+  round anything up.** Per surface: the account, the Routine reference, the bound
+  worker, whether an arrival authenticated as the expected one, eligibility and
+  why not, headroom and cooldown, and the last fire's outcome. `PROVEN` is the
+  four-row chain; `UNPROVEN` is *nothing has happened*, which is not the same
+  fact; `FAULT` is an arrival under another identity, which is a connector
+  selection and is **skipped** by `--probe` rather than re-learned at the cost of
+  an activation. It refuses unless every surface is proven, and also when a
+  Routine declaring a repository capability is bound to some other worker — a
+  pool report that quietly left one out would be answering an easier question.
+  Its probe bin belongs to no campaign and forbids every repository operation, so
+  what it proves is **pooled dispatch and identity**; repository access is the
+  first real campaign's to prove, and reporting a green probe as a green campaign
+  would be the comfortable half-truth this file exists to refuse.
+
+  **Putting the Routine's reference in front of every project member was mine
+  and is corrected here rather than quietly.** A pool makes the *name*
+  ambiguous — three surfaces all reading `Factory Brain …` — so the Fleet page
+  gained the `trig_…` beside each, at ordinary depth. `/projects/:id/fleet`
+  admits any project member and reserves technical detail for ADMIN, and §34
+  had already decided the same identifier belongs behind that line on the
+  People surface: *"never the trigger ref and never the secret's name"*. It is
+  not a credential — the bearer is a deployment secret nothing in this
+  repository can read back — and that is exactly why it was easy to put in the
+  wrong place. **Two surfaces disagreeing about where one identifier belongs is
+  how the quieter of the two stops being a boundary.** Operator depth now, in
+  both, and `null` there says *you are not told* rather than *there is none*.
+  The binding, the headroom and the last outcome stay where a member can read
+  them, because those are what make a pool legible as a pool.
+
 - **A checkout is not a target, and noticing that a rule's reason is imprecise is
   not authority to reverse the rule.** A fired worker reads
   `.claude/settings.json` from the repository its Routine *attaches*, which is
@@ -5227,7 +5314,8 @@ server/
       fire.ts           one POST to the Routine, and what a refusal means
       loop.ts           the tick: supersede, ensure, route, claim a slot, send
       candidates.ts     the fleet as numbers, read once per tick
-      router.ts         a pure decision, and seven named refusals
+      router.ts         a pure decision, and its named refusals: which wait, which end a burst
+      pool.ts           every surface serving one logical worker, and what each has proved
       scaler.ts         raise, lower, quarantine — proposals, never actions
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
@@ -5418,7 +5506,7 @@ scripts/
   connect-report.ts         what a connected site has done, read from inside
   admin.ts                  emergency administration, on a terminal rather than a page
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
-  fleet.ts                  the operator's fleet surface: register, target, explain
+  fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
@@ -5443,6 +5531,7 @@ tests/                  Vitest suites
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker
+  factoryPool.test.ts        one Factory worker, three accounts, and the failover between them
   sharedKnowledge.test.ts    one finding, two operations, and the wall between them
   webauthn.test.ts           a real P-256 credential, and every refusal that would not have been one
   passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits

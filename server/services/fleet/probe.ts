@@ -140,6 +140,20 @@ export async function createProbeBin(
      */
     workloadClass: input.family === 'FACTORY' ? 'FACTORY_SURFACE_PROBE' : 'SURFACE_PROBE_RESEARCH_V1',
     requiredCapabilities: [...input.routine.capabilities],
+    /*
+     * Pinned to the surface it is proving, which is the difference between a
+     * probe and a sample.
+     *
+     * Without this the bin is routed like any other, so with several Routines
+     * bound to one worker — the whole point of a pool — a probe made for B is
+     * very likely fired at A, and `proveSurface` then reports B unproven for
+     * ever while every fire it prompted went somewhere else. Pinning narrows the
+     * candidate list to one and changes nothing else: the surface still has to
+     * pass state, project, family, repository, capability, rate limit and
+     * target, and admission is still decided on the authenticated worker. A
+     * pinned surface that cannot take it defers, which is the honest answer.
+     */
+    pinnedRoutineId: input.routine.id,
     createdByType: input.createdByType ?? 'SYSTEM',
     createdById: input.createdById ?? 'capacity-probe',
     ready: input.ready ?? true,
