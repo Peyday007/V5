@@ -98,10 +98,10 @@ export async function createMemberSlot(input: {
    * compare, so there is no password login to disable later.
    */
   await getDb().run(
-    `INSERT INTO users (id, email, display_name, password_algorithm, password_verifier,
+    `INSERT INTO users (id, email, display_name, kind, password_algorithm, password_verifier,
                         password_updated_at, must_change_password, is_brain_admin, disabled_at,
                         created_by_type, created_by_id, created_at, updated_at)
-     VALUES (?, NULL, ?, NULL, NULL, NULL, 0, 0, NULL, 'HUMAN', ?, ?, ?)`,
+     VALUES (?, NULL, ?, 'PERSON', NULL, NULL, NULL, 0, 0, NULL, 'HUMAN', ?, ?, ?)`,
     [id, displayName, input.issuedByUserId, at, at],
   );
 

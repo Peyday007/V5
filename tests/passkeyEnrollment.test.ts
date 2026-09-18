@@ -45,7 +45,7 @@ import {
   getUser,
   listIdentityEvents,
 } from '../server/repos/identity.ts';
-import { cashReadiness, REQUIRED_MEMBERS } from '../server/services/cash/readiness.ts';
+import { cashReadiness } from '../server/services/cash/readiness.ts';
 import { verifyRegistration } from '../server/services/identity/webauthn.ts';
 
 const RP_ID = 'brain.test.invalid';
@@ -290,20 +290,29 @@ describe('the readiness gate', () => {
     expect(after.members.ready).toBe(before.members.ready + 1);
   });
 
-  it('refuses to start while anybody is missing, and says how many', async () => {
+  /*
+   * The denominator is how many member slots exist, not a constant.
+   *
+   * `REQUIRED_MEMBERS` was four, written when the intended topology was four
+   * people with one account each, and it was never a measurement of anything. A
+   * page rendering `1 / 4` invited a reader to conclude three quarters of the
+   * team was missing from a Brain that had two members. It gates nothing either
+   * way — §32 withdrew the lock — so what is left is a count that has to be
+   * true.
+   */
+  it('counts members against the slots that exist rather than a constant', async () => {
     const reading = await cashReadiness();
-    expect(reading.members.required).toBe(REQUIRED_MEMBERS);
-    expect(reading.mayStart).toBe(false);
-    expect(reading.blockedBy.join(' ')).toMatch(/member\(s\) need a passkey/);
+    expect(reading.members.total).toBe(reading.members.rows.length);
+    expect(reading.members.ready).toBeLessThanOrEqual(reading.members.total);
   });
 
-  it('never reports a capacity account as healthy on configuration alone', async () => {
+  it('never reports a capacity surface as healthy on configuration alone', async () => {
     const reading = await cashReadiness();
     // No fleet rows at all in a fresh Brain, so the honest answer is zero — not
     // a count of what could be registered.
-    expect(reading.capacity.healthy).toBe(0);
-    expect(reading.capacity.rows.every((row) => row.state !== 'HEALTHY')).toBe(true);
-    expect(reading.mayStart).toBe(false);
+    expect(reading.capacity.proven).toBe(0);
+    expect(reading.capacity.eligibleNow).toBe(0);
+    expect(reading.capacity.surfaces.every((row) => row.health !== 'HEALTHY')).toBe(true);
   });
 
   it('says nothing private about anybody', async () => {

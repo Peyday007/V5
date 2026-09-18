@@ -19,8 +19,20 @@ import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
  */
 import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
+import type { SharedCashView } from '../../../server/services/cash/shared.ts';
 
-export type { CashReadiness, CashRoadmap, CashForecast };
+export type { CashReadiness, CashRoadmap, CashForecast, SharedCashView };
+
+/**
+ * Two readers of one section, told apart by the server rather than by the page.
+ *
+ * `FULL` is the owner's view — money, the grant, the decisions, the private
+ * execution state. `SHARED` is the frontier every member of this Brain may
+ * read, and it is a *strictly smaller payload* rather than the same one with
+ * fields blanked: there is no shape of the access defect a screen could paper
+ * over, because the private fields are absent from the wire.
+ */
+export type CashViewReading = ({ scope: 'FULL' } & CashView) | SharedCashView;
 
 export type CashModeState = 'ACTIVE' | 'WINDING_DOWN' | 'ARCHIVED';
 
@@ -289,8 +301,6 @@ export interface CashModeReading {
   /** Brain's own mandate: a short reading, and the text itself. */
   objective: { summary: string; full: string };
   currencies: string[];
-  /** Whether anybody can get in, and whether anything can run. Derived. */
-  readiness: CashReadiness;
 }
 
 export interface MemberSlotLink {
@@ -364,7 +374,8 @@ export const CashApi = {
   }): Promise<{ mode: CashMode; changed: boolean; message: string }> =>
     api('/api/cash/activate', { method: 'POST', body: JSON.stringify(body) }),
 
-  view: (projectId: string): Promise<CashView> => api(`/api/projects/${p(projectId)}/cash`),
+  view: (projectId: string): Promise<CashViewReading> =>
+    api(`/api/projects/${p(projectId)}/cash`),
 
   activate: (
     projectId: string,

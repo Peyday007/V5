@@ -19,6 +19,7 @@ import type {
   DenialReason,
   IdentityEvent,
   IdentityEventRow,
+  UserKind,
   IdentityResult,
   PrincipalType,
   ProjectMembership,
@@ -57,6 +58,17 @@ function mapUser(row: UserRow): User {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
+    /*
+     * Unknown reads as SYSTEM rather than PERSON.
+     *
+     * The column is NOT NULL with a default, so an unrecognised value means a
+     * row somebody wrote outside this repository — and the cost of the two
+     * mistakes is not symmetric. Calling a real person machinery leaves them
+     * off a list, which they will say something about; calling machinery a
+     * person puts a fixture back on the screen this column exists to clear,
+     * silently. "We could not tell" must never read the same as "we checked".
+     */
+    kind: row.kind === 'PERSON' ? 'PERSON' : 'SYSTEM',
     isBrainAdmin: row.is_brain_admin === 1,
     mustChangePassword: row.must_change_password === 1,
     disabled: row.disabled_at !== null,
@@ -178,6 +190,16 @@ export interface CreateUserInput {
   email: string;
   displayName: string;
   password: string;
+  /**
+   * Declared by the caller, defaulting to a person.
+   *
+   * The default is the safe one for the *only* caller that matters: a route an
+   * administrator uses to create somebody. A script creating machinery has to
+   * say so, which is one line in `verify-hosted.ts` and is visible in review —
+   * where a default of SYSTEM would silently hide a real account the day
+   * somebody forgot to pass it.
+   */
+  kind?: UserKind;
   isBrainAdmin?: boolean;
   mustChangePassword?: boolean;
   createdByType?: ActorType;
@@ -190,14 +212,15 @@ export async function createUser(input: CreateUserInput): Promise<User> {
   const email = normalizeEmail(input.email);
   const verifier = await hashPassword(input.password);
   await getDb().run(
-    `INSERT INTO users (id, email, display_name, password_algorithm, password_verifier,
+    `INSERT INTO users (id, email, display_name, kind, password_algorithm, password_verifier,
                         password_updated_at, must_change_password, is_brain_admin, disabled_at,
                         created_by_type, created_by_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
     [
       id,
       email,
       input.displayName.trim(),
+      input.kind ?? 'PERSON',
       'scrypt',
       verifier,
       at,

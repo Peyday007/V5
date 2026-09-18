@@ -39,6 +39,7 @@ import type {
   CapacityEvidence,
   FleetAccount,
   FleetAccountRow,
+  FleetAccountKind,
   FleetPolicy,
   FleetPolicyRow,
   FleetRoutine,
@@ -56,6 +57,12 @@ function mapAccount(row: FleetAccountRow): FleetAccount {
     id: row.id,
     provider: row.provider,
     name: row.name,
+    /*
+     * Unknown reads as VERIFICATION, for `mapUser`'s reason: leaving a real
+     * account out of a capacity count is a complaint, and counting a fixture as
+     * capacity is the defect this column was added to end.
+     */
+    kind: row.kind === 'CAPACITY' ? 'CAPACITY' : 'VERIFICATION',
     planLabel: row.plan_label,
     declaredPlanPower: row.declared_plan_power,
     state: row.state as FleetState,
@@ -135,16 +142,18 @@ export function credentialDigest(value: string): string {
 export async function createAccount(input: {
   provider?: string;
   name: string;
+  /** Capacity unless a caller says otherwise; see `FleetAccountKind`. */
+  kind?: FleetAccountKind;
   planLabel?: string | null;
   declaredPlanPower?: string | null;
 }): Promise<FleetAccount> {
   const id = newId('acct');
   const at = nowIso();
   await getDb().run(
-    `INSERT INTO fleet_accounts (id, provider, name, plan_label, declared_plan_power,
+    `INSERT INTO fleet_accounts (id, provider, name, kind, plan_label, declared_plan_power,
        state, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'ENABLED', ?, ?)`,
-    [id, input.provider ?? 'claude', input.name, input.planLabel ?? null,
+     VALUES (?, ?, ?, ?, ?, ?, 'ENABLED', ?, ?)`,
+    [id, input.provider ?? 'claude', input.name, input.kind ?? 'CAPACITY', input.planLabel ?? null,
       input.declaredPlanPower ?? null, at, at],
   );
   return (await getAccount(id))!;

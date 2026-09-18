@@ -48,6 +48,7 @@ import {
 import { parseRoute, type Navigation, type Route } from '../lib/router.ts';
 import { CashSection } from './Cash.tsx';
 import { Devices } from './Devices.tsx';
+import { PeopleAndCapacityView } from './People.tsx';
 
 /**
  * The six, and then the two.
@@ -409,6 +410,23 @@ export function RussellShell({
                     </div>
                   </li>
                 ) : null}
+                {/* People & capacity is in More rather than the rail because
+                    it is set up once and then read occasionally. It is a
+                    destination all the same: it used to be a panel at the
+                    bottom of Cash, which made a temporary section the place a
+                    person went to administer the permanent Brain. */}
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      go({ name: 'PEOPLE' });
+                    }}
+                  >
+                    People &amp; capacity
+                  </button>
+                </li>
                 <li role="none">
                   <button
                     type="button"
@@ -471,12 +489,23 @@ export function RussellShell({
                 stays underneath because it is the one thing that carries its
                 own freshness, which the role-gated view deliberately does not. */}
             <WhoView projectId={projectId} />
+            {/* Who answers "who is on this project"; People & capacity answers
+                "who is in this Brain, and what can run in it". Two questions
+                one word apart, so the link is here rather than the page being
+                folded into this one. */}
+            <p className="rs-hint">
+              <button type="button" className="rs-link" onClick={() => go({ name: 'PEOPLE' })}>
+                People &amp; capacity
+              </button>{' '}
+              is who has joined this Brain and how much Claude research capacity it can fire.
+            </p>
             <FleetView />
             <FleetCentre projectId={projectId} />
           </>
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
+        {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (
           <CashSection projectId={projectId} isBrainAdmin={user.isBrainAdmin} />
         ) : null}

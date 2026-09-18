@@ -646,105 +646,27 @@ async function main(): Promise<void> {
  * for the only kind of surface the documented topology has. A check that
  * refuses every healthy thing it is pointed at is not a check.
  *
- * The controlled fire `verify-surface --probe` needs, and deliberately the
- * smallest thing that can produce the whole chain. It is a `DETERMINISTIC_CHECK`
- * — the shape §22 already describes as exercising claiming, the lease,
- * heartbeats, fencing and completion without touching a document or spending
- * anything — so a worker answers it by hashing a value that travelled inside the
- * bin.
- *
- * It names the repository the worker is authorized for, because that is the
- * dimension being verified and because a repository family with no repository
- * named is refused at admission. It is not work on that repository: the manifest
- * says so, it belongs to no campaign, and nothing reads its result but this
- * command.
+ * The bin itself now lives in `server/services/fleet/probe.ts`. The People &
+ * Capacity page needs the identical fire for the identical reason, and a second
+ * copy of it would be the fourth time in this repository that one rule applied
+ * by one of two readers turned out to be worse than none — here the two would
+ * disagree about what "proven" costs and what a probe may touch.
  */
 async function probeBin(input: {
   worker: { id: string; name: string };
   routing: { repositories: string[] };
   routine: { id: string; name: string; capabilities: string[] };
-  /** FACTORY names a repository and must; anything else must not. */
   family: 'FACTORY' | 'RESEARCH';
 }): Promise<string> {
-  const { createBin } = await import('../server/repos/bins.ts');
-  const { listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
-  const memberships = (await listMembershipsForPrincipal('WORKER', input.worker.id)).filter(
-    (membership) => membership.active,
-  );
-  const projectId = memberships[0]?.projectId;
-  if (!projectId) throw new Error('this worker is a member of no project, so it can be handed nothing');
-  const repository = input.routing.repositories[0];
-  if (input.family === 'FACTORY' && !repository) {
-    throw new Error('this worker is authorized for no repository');
-  }
-  const nonce = new Date().toISOString();
-  const bin = await createBin({
-    projectId,
-    kind: 'DETERMINISTIC_CHECK',
-    title: `Surface self-test for ${input.routine.name}`,
-    objective:
-      'Prove this surface can be fired, can authenticate, can be handed a bin and can finish one. ' +
-      'Submit the sha-256 of the value below as the unit result. Change nothing anywhere.',
-    rationale: 'verify-surface --probe',
-    manifest: {
-      objective: 'Return the sha-256 of one value carried in this manifest.',
-      why: 'a bounded proof that this Routine runs as the worker it is bound to',
-      lineage: { projectId, layerId: null, goal: null, orchestrationId: null },
-      units: [{ key: 'echo', establishes: 'the surface answered', input: nonce, transform: 'sha256', dependsOn: [] }],
-      /*
-       * Named so the bin routes to this surface and is admitted — a repository
-       * family with no repository named is refused — and explicitly not work on
-       * it. A probe pins no commit and integrates nothing, so both of those are
-       * empty rather than plausible: an invented sha in a row is a lie whoever
-       * reads it next has no way to detect.
-       */
-      /*
-       * Only for a factory surface, and its absence is load-bearing rather than
-       * cosmetic. `familyOf` reads a manifest that names a repository as
-       * repository work *whatever its class says*, so a research probe carrying
-       * an empty repository block would be routed as FACTORY and refused by the
-       * very worker it is trying to prove.
-       */
-      ...(input.family === 'FACTORY' && repository
-        ? {
-            repository: {
-              remote: `https://github.com/${repository}`,
-              ref: 'main',
-              baseSha: '',
-              integrationBranch: '',
-              pullRequest: null,
-            },
-          }
-        : {}),
-      acceptableSources: [],
-      excludedSources: [],
-      evidence: ['one unit result'],
-      outputs: ['the sha-256 of the value in this manifest'],
-      authorizedActions: ['submit the unit result', 'complete this bin'],
-      prohibitedActions: [
-        'cloning, reading, writing, branching or pushing to any repository',
-        'creating or claiming any other work',
-        'anything with an external effect',
-      ],
-      budgetUnits: 1,
-      retry: { maxAttempts: 2, backoffSeconds: 30 },
-      stoppingConditions: ['the declared unit has a result'],
-    },
-    completionContract: 'DETERMINISTIC_UNITS_V1',
-    /*
-     * `familyOf` keys on the prefix: `FACTORY…` is repository work and
-     * `SURFACE_PROBE…` is research. The probe must classify as the family it is
-     * proving, or it routes to a surface other than the one under test and
-     * proves nothing about it.
-     */
-    workloadClass: input.family === 'FACTORY' ? 'FACTORY_SURFACE_PROBE' : 'SURFACE_PROBE_RESEARCH_V1',
-    requiredCapabilities: [...input.routine.capabilities],
+  const { createProbeBin } = await import('../server/services/fleet/probe.ts');
+  return createProbeBin({
+    worker: input.worker,
+    repositories: input.routing.repositories,
+    routine: input.routine,
+    family: input.family,
     createdByType: 'SYSTEM',
     createdById: 'fleet-cli:verify-surface',
-    ready: true,
-    maxAttempts: 2,
   });
-  return bin.id;
 }
 
   /*

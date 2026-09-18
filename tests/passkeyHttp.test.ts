@@ -432,15 +432,24 @@ describe('starting Cash Mode below four of four', () => {
     expect(after.body.mode).toBeNull();
   });
 
-  it('lets a Brain administrator start it while the counts are short, and still reports them', async () => {
-    const before = await call<{ readiness: { mayStart: boolean; members: { ready: number } } }>(
-      'GET',
-      '/api/cash/mode',
-      { cookie: adminCookie },
-    );
+  it('lets a Brain administrator start it while the counts are short', async () => {
+    /*
+     * The four-of-four count was the owner's decision to wait for everybody
+     * rather than a property of the system, and §32 withdrew the lock. What
+     * went with it, one change later, is the *reading* from this route: who has
+     * joined and how many surfaces can be fired are true of the whole Brain
+     * rather than of a sprint, so they are on People & capacity and this
+     * payload no longer carries them.
+     *
+     * That absence is asserted, because a route that still sent a count nothing
+     * reads is a count that would eventually be believed by something.
+     */
+    const before = await call<{ mode: unknown; readiness?: unknown }>('GET', '/api/cash/mode', {
+      cookie: adminCookie,
+    });
     expect(before.status).toBe(200);
-    // The precondition this test exists for: genuinely below four of four.
-    expect(before.body.readiness.mayStart).toBe(false);
+    expect(before.body.mode).toBeNull();
+    expect(before.body.readiness).toBeUndefined();
 
     const started = await call<{ mode: { projectId: string } | null; changed: boolean }>(
       'POST',
@@ -451,19 +460,11 @@ describe('starting Cash Mode below four of four', () => {
     expect(started.body.changed).toBe(true);
     expect(started.body.mode).not.toBeNull();
 
-    /*
-     * The counters survive activation unchanged. Removing what they gated is
-     * not removing them: the remaining members and Routines still have to join,
-     * and this is where somebody looks to see who has not.
-     */
-    const after = await call<{
-      mode: unknown;
-      readiness: { mayStart: boolean; members: { ready: number; required: number } };
-    }>('GET', '/api/cash/mode', { cookie: adminCookie });
+    const after = await call<{ mode: unknown; readiness?: unknown }>('GET', '/api/cash/mode', {
+      cookie: adminCookie,
+    });
     expect(after.body.mode).not.toBeNull();
-    expect(after.body.readiness.mayStart).toBe(false);
-    expect(after.body.readiness.members.required).toBe(4);
-    expect(after.body.readiness.members.ready).toBe(before.body.readiness.members.ready);
+    expect(after.body.readiness).toBeUndefined();
   });
 
   it('still starts exactly one, so a second press changes nothing', async () => {
