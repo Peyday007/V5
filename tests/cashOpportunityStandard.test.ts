@@ -47,7 +47,7 @@ import {
   listOpportunities,
   updateOpportunity,
 } from '../server/repos/cashPortfolio.ts';
-import { recordCardFact } from '../server/repos/cashCardFacts.ts';
+import { cardFact, recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { evidenceCard, fieldOwner, readyToTest } from '../server/services/cash/card.ts';
 import {
@@ -60,7 +60,7 @@ import {
 import { assemble, rank } from '../server/services/cash/portfolio.ts';
 import { compressedReview, RESEARCHED_FIELDS } from '../server/services/cash/review.ts';
 import { cashView } from '../server/services/cash/view.ts';
-import { markReady } from '../server/services/cash/opportunities.ts';
+import { fillCard, markReady } from '../server/services/cash/opportunities.ts';
 import { reconcileOpportunitySignals } from '../server/services/cash/discovery.ts';
 import {
   createFragments,
@@ -71,6 +71,7 @@ import { createRun } from '../server/repos/runs.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import { cashPosition } from '../server/services/cash/money.ts';
 import { FIELD_BY_LANE } from '../server/services/cash/validation.ts';
+import { COLUMN } from '../server/services/cash/answers.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import { cashReadiness } from '../server/services/cash/readiness.ts';
 import { createAccount, createRoutine } from '../server/repos/fleet.ts';
@@ -324,6 +325,85 @@ describe('a job that pays is not yet an opportunity', () => {
     for (const one of pieces) tiers[one.id] = await tierOf(one.id);
     const order = rank(pieces, tiers).map((one) => one.id);
     expect(order.indexOf(machinery.id)).toBeLessThan(order.indexOf(byHand.id));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A bar has to have a way over it
+// ---------------------------------------------------------------------------
+
+describe('every question the tier asks has something that can answer it', () => {
+  it('leaves no qualification question that nothing in the product can fill', async () => {
+    /*
+     * The defect this exists for: `recommendation` was required for
+     * `QUALIFIED` and written by nothing — no lane mapped to it and
+     * `proposeEngineTerms` did not propose it — so no piece could ever reach
+     * the tier, whatever research found. A bar with no way over it is a park
+     * rather than a standard, which this repository records at four other
+     * altitudes, and the end-to-end deployment suite is what found it by
+     * timing out waiting for a piece to become ready.
+     *
+     * So every key is held against the three things that can write one: a
+     * validation lane, an opportunity column, or one of Brain's own proposals.
+     * A key answered by none of those is unreachable by construction.
+     */
+    const byLane = new Set(Object.values(FIELD_BY_LANE));
+    const byColumn = new Set(Object.keys(COLUMN));
+    const proposed = new Set([
+      'captureMechanism',
+      'fulfilmentModel',
+      'requiredCapital',
+      'firstSteps',
+      'bottleneck',
+      'scalingLever',
+      'confidence',
+      'recommendation',
+    ]);
+    const unreachable = [CAPTURE_KEY, ...qualificationKeys(null)].filter(
+      (key) => !byLane.has(key) && !byColumn.has(key) && !proposed.has(key),
+    );
+    expect(unreachable).toEqual([]);
+
+    // And the list of proposals is the real one rather than a second copy: a
+    // key named here that `proposeEngineTerms` never writes would make this
+    // assertion true and the product still stuck.
+    const source = await readFile('server/services/cash/validation.ts', 'utf8');
+    for (const key of proposed) {
+      expect(source).toContain(`field: '${key}'`);
+    }
+  });
+
+  it('lets a person answer a question that has no column, and moves the tier', async () => {
+    /*
+     * `ENGINE_FIELDS` are `cash_card_facts` rows and nothing else, so before
+     * the tier required them the bounded deep dive was the only writer — which
+     * was fine while they were commentary and a dead end the moment they
+     * became a gate. A person who knows what a job pays could not say so.
+     */
+    const piece = await harvested('ACTIVE_BUYER_DEMAND', 'A named buyer published a request.');
+    expect((await tierOf(piece.id)).tier).toBe('SIGNAL');
+
+    const filled = await fillCard({
+      opportunityId: piece.id,
+      actorRef: userId,
+      patch: { captureMechanism: 'Supply the repair to the buyer who asked, and be paid.' },
+    });
+    expect(filled.ok).toBe(true);
+    expect((await tierOf(piece.id)).tier).toBe('CANDIDATE');
+
+    // A person's answer is a PERSON fact, so nothing automatic writes over it.
+    const recorded = await cardFact(piece.id, CAPTURE_KEY);
+    expect(recorded!.kind).toBe('PERSON');
+    expect(recorded!.decidedBy).toBe(userId);
+
+    // A blank is refused rather than recorded as an answer, because an empty
+    // string would satisfy the tier while saying nothing.
+    const blank = await fillCard({
+      opportunityId: piece.id,
+      actorRef: userId,
+      patch: { eligibility: '   ' },
+    });
+    expect(blank.ok).toBe(false);
   });
 });
 

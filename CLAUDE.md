@@ -4188,6 +4188,29 @@ and a suite that exercises the stage cannot see that.**
   the research table, the needs, the money detail, the authority form and the
   whole activity history are all still there, one click away.
 
+- **The bar I put up had no way over it, and only driving the product found
+  it.** `recommendation` was required for `QUALIFIED` and written by nothing —
+  no lane mapped to it and `proposeEngineTerms` did not propose it — so no
+  piece could ever reach the tier whatever research established. Beside it,
+  `ENGINE_FIELDS` are `cash_card_facts` rows with no column, so the bounded
+  deep dive was the only thing that could answer one: a person who knew
+  perfectly well what a job pays, what it costs and whether it needs a phone
+  call had no way to say so, and their piece could never leave `CANDIDATE`.
+  **§24's *waiting nobody can resolve*, arriving through a gate this very
+  change put up**, and the fifth time this file has had to write that an
+  escalation needs an answering transition.
+
+  Nothing in the unit suites could see either one: every fixture wrote its own
+  card facts, so every one of them cleared a bar the product could not.
+  `cashDeploymentSmoke` found it by driving a sprint the way a person does and
+  **timing out waiting for a piece to become ready** — which is the same
+  argument §30 already makes for why that suite exists. Brain proposes the
+  recommendation where it has a price and a cost to reason from and withholds
+  it otherwise, `fillCard` takes an engine field as a `PERSON` fact, and a test
+  holds every qualification key against the three things that can write one, so
+  a key answered by none of them is a compile-time-visible absence rather than
+  a park somebody finds in production.
+
 - **The production guard cried wolf, and the remedy it named was wrong.** Vite
   hashes are base64url, the guard matched `[A-Za-z0-9]+`, and the day
   production shipped `index-C5-52qux.js` the `grep` found nothing — which under

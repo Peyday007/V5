@@ -672,6 +672,43 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
     }
 
     /*
+     * Brain's own answer to "would you do this", and only with a basis.
+     *
+     * It is the last question a decision turns on and **nothing wrote it**,
+     * which made `QUALIFIED` unreachable — a bar with no way over it, which is
+     * the defect this file records at four other altitudes. The deployment
+     * smoke test is what found it: it drives a sprint the way a person does
+     * and timed out waiting for a piece to become ready.
+     *
+     * It needs a price and a cost, because that is when `derivedEconomics`
+     * can state a margin and there is something to recommend *from*; with
+     * either missing the field stays unknown and says what would settle it.
+     * A recommendation composed out of blanks would be the invented judgment
+     * §30 refuses, and it would be worse here than anywhere else on the card,
+     * because this is the line a person reads last.
+     */
+    if (price?.value && costs?.value) {
+      proposals.push({
+        field: 'recommendation',
+        value:
+          `Worth testing if the published price (${clampText(price.value, 120)}) less the ` +
+          `published costs (${clampText(costs.value, 120)}) is a margin you would work for, ` +
+          `and nothing in the disqualifiers rules it out` +
+          `${disqualifiers?.value ? `: ${clampText(disqualifiers.value, 160)}` : '.'}`,
+        basis:
+          'The published price and the published direct costs on this card' +
+          `${price.claimId ? ` (claims ${price.claimId}` : ''}` +
+          `${price.claimId && costs.claimId ? `, ${costs.claimId})` : price.claimId ? ')' : ''}.`,
+        assumptions:
+          'That comparable work is a fair comparison for this one, and that nothing has to be ' +
+          'bought that no source publishes a price for.',
+        uncertainty:
+          'Whether this buyer would choose us at that price. Nothing published settles that, ' +
+          'and only making the offer does.',
+      });
+    }
+
+    /*
      * Confidence, derived from what is actually answered rather than felt.
      *
      * The count is of gated evidence on the card, which is a row. A sentence
