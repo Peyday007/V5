@@ -171,8 +171,23 @@ export async function startValidations(input: {
   let room = Math.max(0, MAX_VALIDATIONS_IN_FLIGHT - inFlight);
   const limit = Math.max(1, input.limit ?? 2);
 
+  /*
+   * A piece nobody has looked at yet, before a second look at one.
+   *
+   * `all` is arrival order, and a re-dive candidate sitting earlier in it
+   * would take the slot from an opening that has never been qualified at all.
+   * A second dive is worth having and is worth less than a first, so the
+   * ordering is explicit rather than an accident of `created_at`. Within each
+   * group arrival order is kept, so which of two never-dived pieces goes first
+   * is still a property of when they were found.
+   */
+  const ordered = [
+    ...all.filter((one) => one.validationState === null),
+    ...all.filter((one) => one.validationState !== null),
+  ];
+
   const out: StartedValidation[] = [];
-  for (const opportunity of all) {
+  for (const opportunity of ordered) {
     if (room <= 0 || out.length >= limit) break;
     if (opportunity.validationState !== null && !(await mayDiveAgain(opportunity))) continue;
     // A piece somebody has already declined, archived or finished is not worth
