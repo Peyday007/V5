@@ -44,6 +44,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EXECUTION_THESIS } from './helpers/cashTier.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 /*
@@ -256,12 +257,21 @@ beforeAll(async () => {
       deliveryMethod: 'One afternoon of configuration',
       fulfillmentOwner: 'Us',
       peakFundingCents: 0,
+      /*
+       * And the execution thesis, because `markReady` asks for both: the short
+       * card is what a bounded *test* turns on and these are what a *decision*
+       * turns on. Without them the piece stays at `EVIDENCE_CARD`, which the
+       * shared view reports as `BEING_QUALIFIED` — correctly, and it would have
+       * left the redaction assertions below exercising an unclaimed piece.
+       */
+      ...EXECUTION_THESIS,
     },
   });
-  await call('POST', `/api/cash/opportunities/${opportunityId}/ready`, {
+  const ready = await call('POST', `/api/cash/opportunities/${opportunityId}/ready`, {
     cookie: adminCookie,
     body: {},
   });
+  expect(ready.status, ready.text).toBe(200);
   /*
    * A commercial grant, because a money entry needs one — and because the
    * shared view has to be able to say a grant *exists* without saying anything
