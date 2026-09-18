@@ -2678,6 +2678,33 @@ remote.
   into a failed boot, and this repository has no reading of that limit. §23's
   rule holds: instrument first, size from the reading. A ceiling nobody has
   observed is UNKNOWN, and so is the one behind it.
+
+  **A seventh happened twenty minutes later, on somebody else's tree, with the
+  identical message — so the reading is now a pattern and is still not a
+  cause.** Another workstream's deploy of `1f0d283`: guard passed, tests
+  passed, release success, pre-restart `PASS 174/174`, the restart completed,
+  and the post-restart verification ended `Hosted verification could not
+  complete` / `timeout exceeded when trying to connect` at 05:51:56. Two
+  consecutive deploys, two different branches, two different trees — the second
+  of them **without** the diagnostic above, since it had not been deployed yet —
+  and the same `pg-pool` checkout timeout both times.
+
+  Beside it there is one reading taken from outside the runner, which is the
+  part worth keeping: during that restart window `GET /healthz` answered **503
+  after 35 seconds**, then 200 after 31, then 200 after 0.27. A machine being
+  replaced returns 503; a machine that takes thirty-five seconds to say so is
+  answering, and something behind it is not. That is what a starved pool looks
+  like from the outside, and it is the first observation of this condition that
+  did not come from the verification script.
+
+  **The ceiling still was not raised, and reaching for it here would have been
+  the mistake.** Two observations of a symptom say nothing new about the
+  server's own connection limit, which is the fact that decides whether a
+  higher `max` is headroom or a failed boot. The diagnostic deployed with this
+  change is what turns the eighth occurrence into a number instead of a
+  seventh anecdote — and if that number says the pool was at its ceiling with
+  callers queued, *then* the knob is the answer, from a reading rather than
+  from a hunch.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
