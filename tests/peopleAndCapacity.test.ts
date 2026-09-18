@@ -575,13 +575,29 @@ describe('connecting a Claude account is durable and resumable', () => {
         sendProbe({ user, actor: user, origin: ORIGIN }),
       ]);
       expect(a.ok && b.ok).toBe(true);
-      const bins = await listBins({ limit: 100 });
-      expect(bins.filter((bin) => bin.kind === 'DETERMINISTIC_CHECK').length).toBe(1);
-      // And the one bin that exists is the one the connection names.
-      const after = await connectionForUser(user.id);
-      expect(after?.probeBinId).toBe(
-        bins.find((bin) => bin.kind === 'DETERMINISTIC_CHECK')!.id,
+
+      /*
+       * One bin that could ever be fired, and it is the one the connection
+       * names. The loser's is retired rather than deleted — §5 — so it is still
+       * in the table with its reason, and the assertion is about what is
+       * *dispatchable* rather than about a row count. A count would have been
+       * satisfied by deleting the evidence.
+       */
+      const probes = (await listBins({ limit: 100 })).filter(
+        (bin) => bin.kind === 'DETERMINISTIC_CHECK',
       );
+      const live = probes.filter((bin) => bin.state !== 'CANCELLED');
+      expect(live.length).toBe(1);
+
+      const after = await connectionForUser(user.id);
+      expect(after?.probeBinId).toBe(live[0]!.id);
+
+      // The loser's bin was never READY, so there was no instant at which two
+      // probes for one surface could both have been dispatched.
+      for (const retired of probes.filter((bin) => bin.state === 'CANCELLED')) {
+        expect(retired.readyAt).toBeNull();
+        expect(retired.terminalReason).toMatch(/concurrent request/i);
+      }
     } finally {
       delete process.env[connection!.secretName];
     }

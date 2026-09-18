@@ -68,11 +68,10 @@
  */
 import {
   attachProbe,
-  claimProbe,
   connectionForUser,
   ensureConnection,
   moveConnection,
-  releaseProbeClaim,
+  releaseProbe,
   setRegistration,
   setTrigger,
 } from '../../repos/capacityConnections.ts';
@@ -94,7 +93,7 @@ import {
 import { listTokensForWorker } from '../../repos/oauth.ts';
 import { createInvitation, revokeInvitationsForWorker } from '../../repos/invitations.ts';
 import { generateInvitationToken } from '../identity/secrets.ts';
-import { getBin, listDispatchesForBin } from '../../repos/bins.ts';
+import { getBin, listDispatchesForBin, markBinReady, retireBin } from '../../repos/bins.ts';
 import { resolveToken } from '../dispatch/fire.ts';
 import { proveSurface } from '../dispatch/surfaceProof.ts';
 import { createProbeBin, ProbeRefused } from '../fleet/probe.ts';
@@ -777,35 +776,49 @@ export async function sendProbe(input: {
     };
   }
 
+  const answer = async (): Promise<ConnectionOutcome> => ({
+    ok: true,
+    view: await connectionView({ user: input.user, origin: input.origin }),
+  });
+
   /*
-   * A live probe is not replaced.
+   * A probe that is still live is not replaced, and a spent one is let go of
+   * before another is offered.
    *
-   * Pressing the button twice must make one bin: a second would be a second
-   * activation against the same surface for the same question, which is exactly
-   * the double fire the whole dispatch design exists to prevent.
+   * The release is guarded on the bin this caller read, so two readers of a
+   * spent probe produce one release — and it is what makes retrying after a
+   * failure create no second account and no second Routine.
    */
   if (connection.probeBinId) {
     const bin = await getBin(connection.probeBinId);
     if (bin && bin.state !== 'CANCELLED' && bin.state !== 'FAILED' && bin.state !== 'NEEDS_HUMAN') {
-      return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
+      return await answer();
     }
+    await releaseProbe({
+      connectionId: connection.id,
+      binId: connection.probeBinId,
+      to: 'CONFIGURED',
+    });
   }
 
   /*
-   * **Claim, then act.** §24's own rule, and the check above is not a substitute
-   * for it: two concurrent presses both read a connection with no live probe,
-   * and a version that created the bin first would build two and then discover
-   * that one of them had lost the swap. The bin is the effect, so the guard has
-   * to be on the far side of nothing.
+   * The bin is made as a **DRAFT**, offered, and only the winner's is marked
+   * READY.
    *
-   * The window this opens loses a *claim* rather than an effect — `PROBE_SENT`
-   * with no bin derives straight back to `CONFIGURED` on the next read, because
-   * the read path maps the bin's presence rather than remembering a state.
+   * `DISPATCHABLE_SQL` does not select a DRAFT, so a bin that loses the race
+   * was never dispatchable and cancelling it closes no window — there is no
+   * instant at which two probes for one surface could both be fired. The
+   * alternative, claiming the state first, was tried and was wrong: the claim
+   * had to be guarded on the state the caller had just read, and on Postgres the
+   * second caller reads `PROBE_SENT` and then claims `WHERE state =
+   * 'PROBE_SENT'`, which is the state it was claiming into. A guard satisfied by
+   * the thing it guards against is not a guard, and only the second backend
+   * showed it.
+   *
+   * This is §20's reconcilable-effect shape rather than claim-then-act, and it
+   * is available here because the effect is Brain's own row: a DRAFT bin can be
+   * given back. An external effect could not be.
    */
-  if (!(await claimProbe({ connectionId: connection.id, from: connection.state }))) {
-    return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
-  }
-
   let binId: string;
   try {
     binId = await createProbeBin({
@@ -815,13 +828,34 @@ export async function sendProbe(input: {
       family: 'RESEARCH',
       createdByType: 'HUMAN',
       createdById: input.actor.id,
+      ready: false,
     });
   } catch (error: unknown) {
-    await releaseProbeClaim({ connectionId: connection.id, to: connection.state });
     if (error instanceof ProbeRefused) return { ok: false, reason: error.message };
     throw error;
   }
 
-  await attachProbe({ connectionId: connection.id, binId });
-  return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
+  if (!(await attachProbe({ connectionId: connection.id, binId }))) {
+    /*
+     * Somebody else's bin is the one this connection holds, so give ours back.
+     *
+     * `retireBin` is the guarded retirement rather than a delete: the DRAFT
+     * keeps its row, its reason and its events, which is §5 — a bin that
+     * stopped for a reason nobody wrote down is one somebody reopens by
+     * mistake. It was never READY, so nothing could have been fired for it.
+     */
+    const draft = await getBin(binId);
+    if (draft) {
+      await retireBin({
+        binId,
+        leaseGeneration: draft.leaseGeneration,
+        operator: `capacity-probe:${input.actor.id}`,
+        reason: 'a concurrent request had already sent this surface a self-test',
+      });
+    }
+    return await answer();
+  }
+
+  await markBinReady(binId);
+  return await answer();
 }

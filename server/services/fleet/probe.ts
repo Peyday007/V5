@@ -53,7 +53,20 @@ export class ProbeRefused extends Error {}
  * probe with no repository would be refused at admission for naming none.
  */
 export async function createProbeBin(
-  input: ProbeTarget & { createdByType?: ActorType; createdById?: string },
+  input: ProbeTarget & {
+    createdByType?: ActorType;
+    createdById?: string;
+    /**
+     * Whether the bin is dispatchable the moment it exists.
+     *
+     * `false` makes it a **DRAFT**, which `DISPATCHABLE_SQL` does not select —
+     * so a caller that has to win a race before its bin may be fired can make
+     * one speculatively, offer it, and cancel it if it loses, with no window in
+     * which a losing bin could be dispatched. The caller then marks the winner
+     * READY. Defaults to true, which is what the terminal command wants.
+     */
+    ready?: boolean;
+  },
 ): Promise<string> {
   const memberships = (await listMembershipsForPrincipal('WORKER', input.worker.id)).filter(
     (membership) => membership.active,
@@ -129,7 +142,7 @@ export async function createProbeBin(
     requiredCapabilities: [...input.routine.capabilities],
     createdByType: input.createdByType ?? 'SYSTEM',
     createdById: input.createdById ?? 'capacity-probe',
-    ready: true,
+    ready: input.ready ?? true,
     maxAttempts: 2,
   });
   return bin.id;

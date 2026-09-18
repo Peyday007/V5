@@ -182,37 +182,40 @@ export async function moveConnection(input: {
 }
 
 /**
- * Claim the right to send a probe, before one exists.
+ * Attach a probe bin, and refuse if this connection already has one.
  *
- * **The claim comes first and the bin second**, which is §24's own rule: the
- * queue is at-least-once and an effect performed before the guard is an effect
- * that repeats. The first version created the bin and *then* compare-and-swapped
- * the state, so two concurrent presses both built a bin and one of them lost the
- * swap — two activations against one surface for one question, which is exactly
- * the double fire the whole dispatch design exists to prevent. The sequential
- * case was caught by an early return and the concurrent one was not.
+ * ---------------------------------------------------------------------------
+ * Two wrong answers, and the Postgres suite found the second
+ * ---------------------------------------------------------------------------
  *
- * The window this opens loses a *claim* rather than an effect: a caller that
- * claims and then fails to create the bin leaves `PROBE_SENT` with no
- * `probe_bin_id`, and the read path derives that straight back to `CONFIGURED`
- * because it maps the bin's presence rather than remembering the state. Visibly
- * retryable beats silently doubled.
+ * The first version created the bin and swapped the state afterwards, so two
+ * concurrent presses both passed the no-live-probe check and both built one.
+ *
+ * The second version claimed first — `UPDATE … SET state = 'PROBE_SENT' WHERE
+ * state = ?`, with `?` being the state the caller had just read. It passed on
+ * SQLite, where writers are serialized and the second caller's read always saw
+ * the first caller's `CONFIGURED`, so its claim matched nothing. On Postgres the
+ * round trips are slow enough that the second caller reads `PROBE_SENT` — and
+ * then **claims `WHERE state = 'PROBE_SENT'`, which is exactly the state it was
+ * supposed to be claiming into.** A guard satisfied by the thing it is guarding
+ * against is not a guard. `expected 2 to be 1`, on the backend production runs.
+ *
+ * ---------------------------------------------------------------------------
+ * What is actually claimed
+ * ---------------------------------------------------------------------------
+ *
+ * `probe_bin_id IS NULL`, which is the one value that means *nobody holds this
+ * yet* and is not also the value a winner writes. A caller makes its bin as a
+ * **DRAFT** — which `DISPATCHABLE_SQL` does not select, so it cannot be fired —
+ * offers it here, and only the winner's bin is then marked READY. The loser
+ * cancels a bin that was never dispatchable, so there is no window for a double
+ * fire to live in and no orphan left behind.
+ *
+ * This is §20's reconcilable-effect shape rather than claim-then-act, and the
+ * difference is that the effect here is *Brain's own row*: a DRAFT bin can be
+ * cancelled, so making one speculatively costs nothing that cannot be given
+ * back. An external effect could not be treated this way.
  */
-export async function claimProbe(input: {
-  connectionId: string;
-  from: CapacityConnectionState;
-}): Promise<boolean> {
-  const result = await getDb().run(
-    `UPDATE capacity_connections
-        SET state = 'PROBE_SENT', probe_bin_id = NULL, probe_sent_at = NULL,
-            failure_reason = NULL, updated_at = ?
-      WHERE id = ? AND state = ?`,
-    [nowIso(), input.connectionId, input.from],
-  );
-  return result.changes === 1;
-}
-
-/** Attach the bin the claim above authorized. Guarded on there being none. */
 export async function attachProbe(input: {
   connectionId: string;
   binId: string;
@@ -220,23 +223,33 @@ export async function attachProbe(input: {
   const at = nowIso();
   const result = await getDb().run(
     `UPDATE capacity_connections
-        SET probe_bin_id = ?, probe_sent_at = ?, updated_at = ?
-      WHERE id = ? AND state = 'PROBE_SENT' AND probe_bin_id IS NULL`,
+        SET probe_bin_id = ?, probe_sent_at = ?, state = 'PROBE_SENT',
+            failure_reason = NULL, updated_at = ?
+      WHERE id = ? AND probe_bin_id IS NULL`,
     [input.binId, at, at, input.connectionId],
   );
   return result.changes === 1;
 }
 
-/** Give the claim back when the bin could not be made. */
-export async function releaseProbeClaim(input: {
+/**
+ * Let go of a probe that has been answered or abandoned, so another may be sent.
+ *
+ * Guarded on the bin the caller believes is there, so two readers of a spent
+ * probe produce one release. Retrying is what this is for: `sendProbe` clears a
+ * cancelled, failed or escalated probe before offering a new one, and that is
+ * what makes "a failed probe can be retried without creating another account or
+ * Routine" true of the rows.
+ */
+export async function releaseProbe(input: {
   connectionId: string;
+  binId: string;
   to: CapacityConnectionState;
 }): Promise<boolean> {
   const result = await getDb().run(
     `UPDATE capacity_connections
-        SET state = ?, updated_at = ?
-      WHERE id = ? AND state = 'PROBE_SENT' AND probe_bin_id IS NULL`,
-    [input.to, nowIso(), input.connectionId],
+        SET probe_bin_id = NULL, probe_sent_at = NULL, state = ?, updated_at = ?
+      WHERE id = ? AND probe_bin_id = ?`,
+    [input.to, nowIso(), input.connectionId, input.binId],
   );
   return result.changes === 1;
 }
