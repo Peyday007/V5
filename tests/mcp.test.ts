@@ -361,7 +361,15 @@ afterAll(async () => {
 /* ------------------------------------------------------------------------ */
 
 describe('the endpoint', () => {
-  it('answers POST at exactly one path', async () => {
+  /*
+   * Renamed from *"answers POST at exactly one path"*, which stopped being true
+   * when `MCP_PATHS` gained `/mcp/factory` — a second **name** for this same
+   * endpoint, because Claude will not hold two connectors at one URL. Nothing
+   * this test asserts changed; the title was the only false part of it, and the
+   * properties that make the second name safe are pinned in
+   * `tests/mcpConnectorPaths.test.ts` rather than here.
+   */
+  it('answers POST at the canonical path', async () => {
     const response = await mcp('server/discover');
     expect(response.status).toBe(200);
     expect(response.body.result?.['supportedVersions']).toEqual([MODERN, LEGACY]);
