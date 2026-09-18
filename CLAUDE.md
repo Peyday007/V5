@@ -2756,6 +2756,54 @@ remote.
   for the reason directly above: the image is live, and a re-deploy restarts a
   Brain holding leased work to re-prove something the pre-restart run already
   proved.
+  **A ninth happened, and it is the first reading that separates two of the
+  shapes above rather than adding to them.** Run 254, `3a73bb1`: release
+  success, the pre-restart hosted verification success on the released image,
+  the restart itself success — and then the post-restart run recorded the
+  PRIMARY pass at 10:46:46, the ADVERSARIAL at 10:46:49, three seconds apart,
+  and nothing at all for **five minutes and twenty-three seconds** before
+  `HOSTED-VERIFICATION: FAIL could-not-complete` / `fetch failed`. The verdict
+  step then printed `release: success`, `hosted verification: success`, `after
+  the restart: failure`, which is the shape recorded above and is **not** a
+  failed release.
+
+  What is new is two facts about the client, both checkable by reading and one
+  of them measured. **Neither `scripts/verify-hosted.ts` nor
+  `scripts/mcpModernClient.ts` passes an `AbortSignal` anywhere**, so no
+  timeout in that path is one this repository chose. And measured on the
+  runtime the container runs, against a server that accepts a connection and
+  never answers:
+
+      node v22.22.2
+      elapsed_ms=300885
+      outer=TypeError: fetch failed
+      cause=HeadersTimeoutError: Headers Timeout Error [UND_ERR_HEADERS_TIMEOUT]
+
+  `undici`'s default `headersTimeout` is 300 000ms and it surfaces as
+  *precisely* the string two of these runs printed. **The work item lease is
+  also five minutes.** Two unrelated clocks of the same length, and the
+  paragraphs above read every one of these as the lease — which conflates two
+  signatures that share a boundary for two different reasons. A run ending
+  `brain_complete_work: FENCE_LOST` reached a server that answered, so its
+  lease had genuinely lapsed; a run ending in a bare `fetch failed` at ~300s
+  may never have been told anything at all. **Which one a given run was is not
+  established for any of them**, because the field that says so was thrown
+  away: the top-level handler printed `error.message` and discarded
+  `error.cause`, where `undici` puts `UND_ERR_HEADERS_TIMEOUT`, `ECONNRESET`
+  and `ECONNREFUSED` — three faults with three remedies, collapsed into one
+  word. §33's sentence at a `catch`.
+
+  So the change is instrumentation and nothing else: each audit role's claim,
+  submit and complete is timed and announced **before** it is made, so the next
+  occurrence names a call instead of a gap between two lines, and the two calls
+  that do succeed give the baseline a failure alone can never supply. **No
+  timeout was added, no retry, no lease change and no pool change.** A retry is
+  refused by §20 — an unknown outcome is never automatically resent — and the
+  ceiling is refused by §27's own rule two paragraphs up: instrument first,
+  size from the reading. Nothing here claims a cause. What made the server take
+  that long, if it did, is still unknown, and the next person to look at this
+  now gets a duration per call instead of a silence.
+
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first

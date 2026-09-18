@@ -184,6 +184,98 @@ function record(name: string, ok: boolean, detail: string): void {
   console.log(`${ok ? '  PASS' : '  FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 }
 
+/*
+ * Where a step went, and how long it took, printed before it starts.
+ *
+ * **A five-minute silence is not a diagnosis, and this has now produced eight
+ * of them.** §27 records the shapes honestly — `FENCE_LOST` four times, a bare
+ * `fetch failed` twice, a `pg-pool` checkout timeout twice — and says, equally
+ * honestly, that nothing about them establishes a cause and that the next
+ * person to look should *measure how long the judge pass actually takes*
+ * before assuming the lease is what is wrong. Run 254 is the clearest instance
+ * yet: the PRIMARY pass recorded at 10:46:46, the ADVERSARIAL at 10:46:49 —
+ * three seconds apart — and then nothing at all for five minutes and
+ * twenty-three seconds before `fetch failed`.
+ *
+ * This changes no product behaviour, adds no timeout and adds no retry. It
+ * prints which call is in flight *before* it is made and how many milliseconds
+ * it took afterwards, so the next occurrence names a call rather than a gap
+ * between two lines. The two calls that do succeed are the half a failure
+ * alone can never supply: without a baseline, a slow step and a stuck one look
+ * identical.
+ */
+async function timed<T>(what: string, run: () => Promise<T>): Promise<T> {
+  const started = Date.now();
+  console.log(`  ....  ${what} — started`);
+  try {
+    const value = await run();
+    console.log(`  ....  ${what} — ${Date.now() - started}ms`);
+    return value;
+  } catch (error) {
+    console.log(`  ....  ${what} — threw after ${Date.now() - started}ms`);
+    throw error;
+  }
+}
+
+/*
+ * What actually went wrong, rather than the outermost word for it.
+ *
+ * `fetch failed` is what `undici` throws for every transport fault there is,
+ * and the distinction is entirely in `error.cause`: `UND_ERR_HEADERS_TIMEOUT`
+ * is the client giving up, `ECONNRESET` is the connection being dropped under
+ * it, `ECONNREFUSED` is nothing listening. Those are three different faults
+ * with three different remedies, and this harness printed `error.message` and
+ * threw the rest away — which is why six of the eight recorded occurrences
+ * could not be told apart afterwards. §33's sentence, at a `catch`: the cause
+ * was recorded and then discarded in favour of a word.
+ *
+ * It matters especially here because **neither this file nor
+ * `mcpModernClient.ts` passes an `AbortSignal` anywhere**, so a five-minute
+ * failure is not a timeout either of them chose. Measured on this Node rather
+ * than recalled — a server that accepts the connection and never answers:
+ *
+ *     node v22.22.2
+ *     elapsed_ms=300885
+ *     outer=TypeError: fetch failed
+ *     cause=HeadersTimeoutError: Headers Timeout Error [UND_ERR_HEADERS_TIMEOUT]
+ *
+ * So `undici`'s default `headersTimeout` is 300 000ms and it surfaces as
+ * *precisely* the string these runs printed. The work item lease is also five
+ * minutes. **Two unrelated clocks of the same length** is exactly the pair a
+ * bare `fetch failed` cannot distinguish, and §27 has been reading every one
+ * of these as the lease. That grouping may be right and is not established:
+ * the four `FENCE_LOST` runs are a different signature entirely, since a
+ * server that answers `FENCE_LOST` was reachable and the lease had genuinely
+ * lapsed. What this field settles is which of the two a given run was.
+ *
+ * Nothing sensitive travels in these fields: the credential is an
+ * `Authorization` header and never a URL, and a stack frame carries file
+ * positions rather than values.
+ */
+function describeFailure(error: unknown): string {
+  const lines: string[] = [];
+  let current: unknown = error;
+  let depth = 0;
+  while (current !== undefined && current !== null && depth < 5) {
+    if (current instanceof Error) {
+      const code = (current as Error & { code?: unknown }).code;
+      lines.push(
+        `${depth === 0 ? '' : 'caused by: '}${current.name}: ${current.message}` +
+          (code === undefined ? '' : ` [${String(code)}]`),
+      );
+      if (depth === 0 && typeof current.stack === 'string') {
+        for (const frame of current.stack.split('\n').slice(1, 6)) lines.push(frame.trim());
+      }
+      current = (current as Error & { cause?: unknown }).cause;
+    } else {
+      lines.push(`${depth === 0 ? '' : 'caused by: '}${String(current)}`);
+      current = undefined;
+    }
+    depth += 1;
+  }
+  return lines.join('\n');
+}
+
 /** An expectation about one response, stated as the status it must have. */
 function expectStatus(name: string, actual: number, expected: number, note = ''): void {
   record(name, actual === expected, `${actual}${actual === expected ? '' : ` (wanted ${expected})`}${note ? ` · ${note}` : ''}`);
@@ -1488,7 +1580,9 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
   for (const role of ['PRIMARY', 'ADVERSARIAL', 'JUDGE'] as const) {
     const surface = auditSurface[role];
     const roleWorker = auditClient(surface.credential);
-    const auditClaim = await claimResearch(fixtures, 'RESEARCH_AUDIT', orchestrationId, surface);
+    const auditClaim = await timed(`${role} claim`, () =>
+      claimResearch(fixtures, 'RESEARCH_AUDIT', orchestrationId, surface),
+    );
     if (!auditClaim) break;
     const body =
       role === 'PRIMARY'
@@ -1519,7 +1613,9 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
                 confidence: 0.5,
               },
             };
-    const result = await roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body });
+    const result = await timed(`${role} brain_submit_audit`, () =>
+      roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body }),
+    );
     if (result['role'] === role) auditRolesRun += 1;
     if (role !== 'JUDGE') {
       record(
@@ -1534,7 +1630,9 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
         `verdict ${String(result['verdict'])}`,
       );
     }
-    await roleWorker.call('brain_complete_work', { ...proofOf(auditClaim), summary: `${role} in` });
+    await timed(`${role} brain_complete_work`, () =>
+      roleWorker.call('brain_complete_work', { ...proofOf(auditClaim), summary: `${role} in` }),
+    );
   }
   record(
     'all three audit roles ran, strictly in order',
@@ -3710,7 +3808,7 @@ async function main(): Promise<void> {
   } catch (error) {
     failed = true;
     console.error('\nHosted verification could not complete.');
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(describeFailure(error));
     console.log('HOSTED-VERIFICATION: FAIL could-not-complete');
   } finally {
     await closeDatabase();
