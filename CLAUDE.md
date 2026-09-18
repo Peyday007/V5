@@ -5193,3 +5193,40 @@ compiling:
 ```
 BRAIN_TEST_DATABASE_URL=postgresql://... npm test
 ```
+
+**That run leaks a schema per test file, and the database it leaves behind
+eventually fails an unrelated test.** `tests/helpers.ts` derives its schema name
+in `schemaForThisFile()` from `path.basename(DATA_ROOT)`, and vitest hands out a
+**per-run random** data root — so the names look like
+`brain_t_brain_test_03atu2` and differ every run. `openTestDatabase()` drops and
+recreates *that* schema at the start of each file, which cleans this run's and
+can never touch the previous run's, and nothing drops it afterwards.
+
+What that costs is measured rather than guessed, because it is not obvious.
+`storageHealth()`'s `measure()` has a Postgres-only branch —
+`SELECT pg_database_size(current_database())`, where SQLite gets one
+`fs.statSync` — and `pg_database_size()` stats every file in the database
+directory, so it grows with the leak:
+
+| test database | `pg_database_size()` | `connectContract` storage test |
+| --- | --- | --- |
+| 5363 MB, 464 043 relations, 511 leaked schemas | 12.0 s | 34 204 ms — FAIL at 30 s |
+| 60 MB, 5 801 relations, none leaked | 1.7 s | 3 871 ms — pass |
+
+Every timing in that `describe` scaled exactly with its `storageHealth()` call
+count — 1 call ≈ 12 s, 2 ≈ 22 s, 4 ≈ 34 s — which is what identified the query,
+and `psql`'s own connection baseline is 0.07 s, so the 1.7 s is real filesystem
+work rather than client overhead. **CI never sees it**, because its Postgres
+starts empty; only the local run this section asks for degrades, which is the
+worst place for it — a suite that gets slower every time you run it until
+something unrelated times out is one people stop running.
+
+Until the harness drops its schema on the way out, clean up between runs. One
+statement per schema: dropping five hundred in a transaction exhausts
+`max_locks_per_transaction`.
+
+```
+psql "$BRAIN_TEST_DATABASE_URL" -tAc \
+  "SELECT nspname FROM pg_namespace WHERE nspname LIKE 'brain\_t\_%'" \
+  | while read -r s; do psql "$BRAIN_TEST_DATABASE_URL" -qc "DROP SCHEMA IF EXISTS $s CASCADE"; done
+```
