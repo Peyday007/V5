@@ -142,7 +142,6 @@ export interface CashNeed {
 
 export type ReviewAnswerKind =
   | 'GRANT_AUTHORITY'
-  | 'RESOLVE_NEED'
   | 'RELEASE_COMMITMENT'
   | 'RECORD_MONEY'
   | 'FILL_CARD_FIELD'
@@ -202,6 +201,12 @@ export interface EngineCardEntryView {
   value: string | null;
   kind: 'FACT' | 'ESTIMATE' | 'DECISION' | 'UNKNOWN';
   task: string;
+  /**
+   * Whose question this is. The screen renders a person-answer control for
+   * `PERSON_ONLY` and for nothing else — a blank Brain owns is Brain's work,
+   * and its task is what gets shown instead.
+   */
+  owner: 'BRAIN_RESEARCH' | 'BRAIN_PROPOSES' | 'PERSON_ONLY';
   claimId: string | null;
   basis: string | null;
   assumptions: string | null;
@@ -290,7 +295,7 @@ export interface CashView {
     economics: Record<string, DerivedFigureView[]>;
   };
   whatBrainHasDone: CashEvent[];
-  whatBrainNeeds: CashNeed[];
+  whatBrainNeeds: (CashNeed & { researchStatus: string | null })[];
   /** Where the research is up to, counted from rows. Never mutated by reading it. */
   roadmap: CashRoadmap;
   /** What the evidence supports saying about money, and what it does not. */

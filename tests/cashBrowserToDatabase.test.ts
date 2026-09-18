@@ -14,13 +14,18 @@
  * items come from `cashView`, the labels come from the server, the requests are
  * real HTTP, and what is asserted afterwards is the row and then the screen.
  *
- * Three answers, which is what the acceptance asks for and no more — this is a
- * seam check, not a second end-to-end framework:
+ * Three presses, which is what the acceptance asks for and no more — this is a
+ * seam check, not a second end-to-end framework. Two of them are now
+ * **absences**, which is the same seam read the other way: a control gated on
+ * a field the server does not actually send would pass a scripted-`fetch`
+ * suite and still draw a box in production, so the gate is asserted where the
+ * value comes off the real card through the real route.
  *
- *   * a card answer, which is a person's decision landing in a column,
- *   * funding, which is a money entry the ledger derives from,
- *   * and a need resolution, which is the one that has to be verified rather
- *     than taken on the word of whoever pressed it.
+ *   * the card's blanks, which are Brain's work and offer nobody a text box,
+ *   * funding, which is a money entry the ledger derives from and is the one
+ *     genuine person control left on this page,
+ *   * and a Brain-owned need, which stays open because nothing here may close
+ *     it on somebody's word.
  *
  * Nothing here contacts a buyer, takes a live payment, or fires a worker.
  */
@@ -298,60 +303,45 @@ async function openingMissingItsOffer(): Promise<string> {
 }
 
 describe('the screen, the route and the row', () => {
-  it('lands a card answer in the column, and the page stops asking for it', async () => {
+  it('shows a blank on the card as Brain’s work, with nothing for a person to fill in', async () => {
     /*
-     * This used to drive the review's `FILL_CARD_FIELD` control, and that
-     * control is gone with the section that produced it: every field it could
-     * have offered is a fact Brain researches or a proposal Brain composes, so
-     * the server emits no such item any more.
+     * The form this replaces asked the person to type an answer under every
+     * blank on the card, and there were two of them worth separating: `offer`
+     * has a column on the opportunity, and `eligibility` has none at all. Both
+     * are `BRAIN_PROPOSES` or `BRAIN_RESEARCH`, so neither is a person's to
+     * answer, and the screen must offer no way to.
      *
-     * What it tested is not gone and matters more than it did — a person's own
-     * answer reaching the row, and the page then agreeing with it. It moved to
-     * where the question is actually asked. The offer has a column; the one
-     * below it has none, which is the case that could not be answered at all
-     * until the card grew this control.
+     * It is asserted here rather than only in `cashSection` because that suite
+     * scripts `fetch`: a control gated on a field the server does not actually
+     * send would pass there and render a box in production. Here the `owner`
+     * comes off the real `evidenceCard` through the real route.
      */
     const id = await openingMissingItsOffer();
     await mount();
 
     await press(/Show the full card/i);
-    await press(/Answer the offer/i);
-    await type(/^Offer$/i, 'One fixed-scope repair of the published intake form');
-    await confirm();
 
-    // The row, first: this is the assertion the UI suite cannot make.
-    await waitFor(async () =>
-      expect((await getOpportunity(id))!.offerScope).toBe(
-        'One fixed-scope repair of the published intake form',
-      ),
-    );
+    // Both blanks are still shown, and still say what would answer them —
+    // what went is the box, not the question.
     await waitFor(() =>
-      expect(
-        screen.getAllByText(/It is yours now, so Brain will not propose over it/i).length,
-      ).toBeGreaterThan(0),
+      expect(screen.getAllByText(/State one outcome, one scope/i).length).toBeGreaterThan(0),
     );
-  });
+    expect(
+      screen.getAllByText(/what published rule decides whether a supplier/i).length,
+    ).toBeGreaterThan(0);
 
-  it('lands an answer to a question that has no column, as the person’s own', async () => {
-    const id = await openingMissingItsOffer();
-    await mount();
+    expect(screen.queryAllByRole('button', { name: /Answer the/i })).toEqual([]);
+    expect(screen.queryAllByLabelText(/^Offer$/i)).toEqual([]);
+    expect(screen.queryAllByLabelText(/^Eligibility and permission$/i)).toEqual([]);
+    // By the id the removed control used, rather than by counting every text
+    // box on the page: the authority form legitimately has several, and an
+    // assertion that broke when one was added there would be the wrong test.
+    expect(document.querySelectorAll('[id^="cash-engine-"]').length).toBe(0);
 
-    await press(/Show the full card/i);
-    await press(/Answer the eligibility and permission/i);
-    await type(/^Eligibility and permission$/i, 'No licence applies to work this size.');
-    await confirm();
-
-    /*
-     * There is no column to look in, so the row this lands in is a
-     * `cash_card_facts` one — and its kind is what makes the answer stick:
-     * `mayReplace` is about authority rather than recency, so nothing
-     * automatic proposes over a person's answer afterwards.
-     */
-    await waitFor(async () => {
-      const fact = await cardFact(id, 'eligibility');
-      expect(fact?.value).toBe('No licence applies to work this size.');
-      expect(fact?.kind).toBe('PERSON');
-    });
+    // And reading the page moved nothing: both are still unanswered, in the
+    // column and in the facts table.
+    expect((await getOpportunity(id))!.offerScope).toBeNull();
+    expect(await cardFact(id, 'eligibility')).toBeNull();
   });
 
   it('records funding as a ledger entry, and the position is recomputed from it', async () => {
@@ -397,7 +387,19 @@ describe('the screen, the route and the row', () => {
     await waitFor(() => expect(screen.queryAllByText(/Deployable cash is negative/i)).toEqual([]));
   });
 
-  it('refuses a need answer that claims a condition which does not hold, in the browser', async () => {
+  it('leaves a Brain-owned need open, with no way for a person to close it', async () => {
+    /*
+     * This is the form the correction was named for. It asked *"what did you
+     * do?"* under a need whose own row says Brain raised it — both callers of
+     * `raiseNeed` pass `actorRef: BRAIN` — so a person answering it was
+     * attesting to work they had not done.
+     *
+     * The need stays exactly where it was: shown as Brain's work, open, and
+     * still reached by `reconcileCapabilityNeeds`, which closes it the moment
+     * the capability reads `PRESENT` — having checked, rather than been told.
+     * Removing the control resolves nothing and advances nothing, which is the
+     * half of this worth asserting against the row.
+     */
     const id = await openingMissingItsOffer();
     const raised = await raiseNeed({
       projectId,
@@ -413,35 +415,25 @@ describe('the screen, the route and the row', () => {
       requestKey: `capability:${id}:TAKE_A_PAYMENT`,
     });
     expect(raised.ok).toBe(true);
+    const needId = raised.ok ? raised.value.id : '';
 
     await mount();
+
+    // It is on the page, under Brain's work, with the remedy it carries.
     await waitFor(() =>
       expect(screen.getAllByText(/Take the payment for this/i).length).toBeGreaterThan(0),
     );
+    expect(screen.getAllByText(/Open a payment processor account/i).length).toBeGreaterThan(0);
 
-    await press(/Mark this done, and say what you did/i);
-    await type(/What did you do\?/i, 'Done.');
-    await confirm();
+    // And nothing anywhere offers to mark it done.
+    expect(screen.queryAllByRole('button', { name: /Mark this done/i })).toEqual([]);
+    expect(screen.queryAllByText(/What did you do\?/i)).toEqual([]);
+    expect(screen.queryAllByText(/If the integration is still missing/i)).toEqual([]);
 
-    // A written explanation is not a working integration, and the refusal
-    // reaches the person rather than the server log.
-    await waitFor(() =>
-      expect(screen.getAllByText(/still reads MISSING/i).length).toBeGreaterThan(0),
-    );
-    expect((await getNeed(raised.ok ? raised.value.id : ''))!.state).toBe('OPEN');
-
-    // Saying what is actually being done instead is the honest route, and it
-    // is recorded as that rather than as the condition having been met.
-    await type(
-      /If the integration is still missing/i,
-      'Taking payment by bank transfer outside Brain for now',
-    );
-    await confirm();
-
-    await waitFor(async () => {
-      const settled = (await listNeeds({ projectId, states: ['RESOLVED'] }))[0];
-      expect(settled?.verifiedBy).toBe('PERSON_SUBSTITUTE');
-    });
+    // The row is untouched, so Brain's own path still reaches it.
+    expect((await getNeed(needId))!.state).toBe('OPEN');
+    expect((await getNeed(needId))!.verifiedBy).toBeNull();
+    expect(await listNeeds({ projectId, states: ['RESOLVED'] })).toEqual([]);
   });
 });
 
