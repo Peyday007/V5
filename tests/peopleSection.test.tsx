@@ -236,6 +236,51 @@ describe('the default view answers four questions', () => {
     expect(calls).not.toContain(CONNECTIONS);
   });
 
+  /**
+   * The control that starts somebody else's journey.
+   *
+   * A member cannot authorize a connector without the one-time link, and the
+   * link is a Brain administrator's to issue — so a route with no control is a
+   * journey nobody can begin. The route existed and nothing called it, which is
+   * this repository's recurring defect and was very nearly shipped here.
+   */
+  it('offers an administrator the connector link beside each member who has joined', async () => {
+    routes[PEOPLE] = {
+      body: PAGE({ you: { userId: 'usr_root', isBrainAdmin: true } }),
+    };
+    routes[CONNECTIONS] = { body: { connections: [] } };
+    routes['GET /api/members'] = { body: { links: [] } };
+    routes['POST /api/people/usr_airyn/claude/invitation'] = {
+      body: {
+        ...CONNECTION,
+        invitationUrl: 'https://brain.example/oauth/invite/inv_abc.def',
+        invitationExpiresAt: '2026-09-20T00:00:00.000Z',
+      },
+    };
+    await mountPeople();
+    await waitFor(() => expect(screen.getByText('People')).toBeTruthy());
+
+    // One per member who can actually sign in, and none for a slot that has not
+    // been filled: a connector for somebody who cannot reach Brain is a link
+    // nobody can approve.
+    const buttons = screen.getAllByRole('button', { name: /claude connector link/i });
+    expect(buttons.length).toBe(2);
+
+    await act(async () => {
+      fireEvent.click(buttons[0]!);
+    });
+    await waitFor(() =>
+      expect(screen.getByText('https://brain.example/oauth/invite/inv_abc.def')).toBeTruthy(),
+    );
+    expect(calls).toContain('POST /api/people/usr_airyn/claude/invitation');
+  });
+
+  it('offers it to nobody who is not an administrator', async () => {
+    await mountPeople();
+    await waitFor(() => expect(screen.getByText('People')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /claude connector link/i })).toBeNull();
+  });
+
   it('opens the administrator’s controls for an administrator, collapsed', async () => {
     routes[PEOPLE] = {
       body: PAGE({
@@ -287,6 +332,37 @@ describe('every pasted value is its own box', () => {
 });
 
 describe('the journey resumes where it was', () => {
+  /**
+   * Answering a step has to change the page, not only the card.
+   *
+   * Recording a trigger id registers a surface, so the capacity list underneath
+   * is stale the instant it succeeds. §29's own defect, twice recorded: a status
+   * that does not agree with the control beside it teaches a person to stop
+   * reading it.
+   */
+  it('re-reads the whole page when a step is answered', async () => {
+    routes['POST /api/people/me/claude/trigger'] = {
+      body: {
+        ...CONNECTION,
+        state: 'WAITING_FOR_ADMIN',
+        nextAction: null,
+        connection: { ...CONNECTION.connection, triggerRef: 'trig_01ABCDEFGHIJKLMNOPQR', routineId: 'rtn_x' },
+      },
+    };
+    await mountPeople();
+    await waitFor(() => expect(screen.getByLabelText(/trigger id/i)).toBeTruthy());
+    const before = calls.filter((one) => one === PEOPLE).length;
+    fireEvent.change(screen.getByLabelText(/trigger id/i), {
+      target: { value: 'trig_01ABCDEFGHIJKLMNOPQR' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /record this trigger/i }));
+    });
+    await waitFor(() =>
+      expect(calls.filter((one) => one === PEOPLE).length).toBeGreaterThan(before),
+    );
+  });
+
   it('asks for a trigger id when that is the step, and posts it', async () => {
     routes['POST /api/people/me/claude/trigger'] = {
       body: {

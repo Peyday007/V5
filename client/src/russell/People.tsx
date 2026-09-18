@@ -223,6 +223,67 @@ function Invite({ onChanged }: { onChanged(): void }): JSX.Element {
   );
 }
 
+/**
+ * Issuing somebody their Claude connector link.
+ *
+ * A Brain administrator's, because it mints a **worker identity** and grants it
+ * a project membership — the level `/api/projects/:id/members` already carries
+ * for exactly that reason. The route refuses anybody else with the same 404 a
+ * missing route gives, whatever this renders.
+ *
+ * It has to be *here*, beside the person, and that is the correction this
+ * component exists for: the route was built and nothing called it, which is the
+ * defect this repository has recorded five times — a mechanism nothing calls is
+ * not a mechanism. A member cannot authorize a connector without this link, so
+ * a route with no control is a journey nobody can start.
+ *
+ * The link is shown once. It confers nothing on its own: holding it, a client
+ * cannot read anything, call a tool or obtain a token until a person approves it
+ * on Brain's own consent screen.
+ */
+function ConnectorLink({ person }: { person: PersonRow }): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [issued, setIssued] = useState<ConnectionView | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="rs-button-quiet"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setProblem(null);
+          PeopleApi.issueConnectorInvitation(person.userId).then(
+            (view) => {
+              setIssued(view);
+              setBusy(false);
+            },
+            (error: unknown) => {
+              setProblem(describe(error));
+              setBusy(false);
+            },
+          );
+        }}
+      >
+        {busy ? 'Making a link\u2026' : 'Claude connector link'}
+      </button>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      {issued?.invitationUrl ? (
+        <div className="rs-ready-link">
+          <p className="rs-item-title">A connector link for {person.displayName}</p>
+          <CopyBox label="Send it to them privately" value={issued.invitationUrl} />
+          <p className="rs-hint">
+            Shown once. They open it, approve the connector, and the rest of their setup is on
+            their own page. Their surface is called {issued.connection.routineName}.
+          </p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function People({
   page,
   onChanged,
@@ -251,6 +312,9 @@ function People({
             <span className="rs-ready-state" data-state={one.state}>
               {MEMBER_STATE_LABEL[one.state]}
             </span>
+            {page.you.isBrainAdmin && one.state === 'READY' ? (
+              <ConnectorLink person={one} />
+            ) : null}
           </li>
         ))}
       </ul>
@@ -656,7 +720,26 @@ export function PeopleAndCapacityView(): JSX.Element {
       </p>
 
       <People page={page} onChanged={reading.reload} />
-      <MyClaude view={connection} onChanged={setMe} />
+      {/*
+        * Answering a step changes the page, not only the card.
+        *
+        * Recording a trigger id **registers a surface**, so the capacity list
+        * underneath is stale the instant it succeeds — §29's defect at this
+        * surface, and the one it records twice already: a status that does not
+        * agree with the control beside it teaches a person to stop reading it.
+        *
+        * The card's own answer is kept as well as re-read, because it is the
+        * newer of the two and because a one-time connector link lives on it:
+        * throwing it away on the reload that follows issuing one is how Build
+        * lost an invitation that was shown once.
+        */}
+      <MyClaude
+        view={connection}
+        onChanged={(next) => {
+          setMe(next);
+          reading.reload();
+        }}
+      />
       <Capacity page={page} />
       {page.you.isBrainAdmin ? <Connections /> : null}
     </section>
