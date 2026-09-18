@@ -2756,6 +2756,38 @@ remote.
   for the reason directly above: the image is live, and a re-deploy restarts a
   Brain holding leased work to re-prove something the pre-restart run already
   proved.
+  **The measurement §27 asked for has been taken, and it refutes the lease
+  reading for this shape.** Run 254, `3a73bb1`: the ADVERSARIAL pass at
+  10:46:49, then silence, then `fetch failed` at **10:52:12** — **5m23s**,
+  against run 235's **5m18s**. Two commits, five seconds apart. *A
+  variable-length operation outrunning a fixed lease fails at variable times*,
+  and this does not, so the consistency itself is the evidence.
+
+  `scripts/verify-hosted.ts`'s `call()` passes no `signal` and no timeout, so
+  every request it makes carries Node's default — and that default, **measured
+  here rather than recalled** (a server that accepts a connection and never
+  answers, Node 22.22.2), is **300.8 seconds, throwing `fetch failed` with
+  cause `UND_ERR_HEADERS_TIMEOUT`**. 300s plus the surrounding logging is
+  5m18s and 5m23s. The client gave up; the lease had nothing to do with it.
+
+  **What that does and does not settle.** It settles the two `fetch failed`
+  runs. It does **not** settle the four that ended `brain_complete_work:
+  FENCE_LOST` — a different error, unmeasured, and the tempting story (the
+  client aborts, the server carries on, a later call finds the fence advanced)
+  is a mechanism rather than a reading. And it does not explain **why the judge
+  pass takes over five minutes**, which is now the actual question and was
+  invisible while the number looked like a lease. Nobody knows the pass's true
+  duration, because the gate has never waited long enough to see it.
+
+  So the change is to *learn* it rather than to hide it. `call()` takes an
+  explicit bound with a named failure — which request, and how long it
+  waited — because an unattributable `fetch failed` is what made six runs read
+  as one unexplained condition. **The bound is not a fix and must not be read
+  as one**: raising a timeout past a genuine slowness is how a slow thing
+  becomes a permanent slow thing nobody measures. It is set where the next
+  occurrence either completes, and the timestamps say what the pass costs, or
+  fails saying so in words.
+
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
