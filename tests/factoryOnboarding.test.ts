@@ -474,6 +474,24 @@ describe('the dispatcher waits for an operator rather than exhausting the stage'
       createdByType: 'SYSTEM',
       createdById: 't',
     });
+    /*
+     * A member of this project, so the *family* is the thing that refuses it.
+     *
+     * The fire asks about the project before the family, and a worker that is a
+     * member of nothing is refused on the project — true, and not the
+     * distinction this test is drawing. Granting it makes the fleet "genuinely
+     * healthy and genuinely wrong for this family", which is what the comment
+     * below already claims.
+     */
+    await grantMembership({
+      projectId: fixture.project.id,
+      principalType: 'WORKER',
+      principalId: researcher.id,
+      role: 'MEMBER',
+      scopes: ['project:read', 'research:read', 'research:write', 'queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
     await setWorkerRouting({
       workerId: researcher.id,
       families: ['RESEARCH', 'GENERAL'],

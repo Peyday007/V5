@@ -22,9 +22,15 @@
  * **Expiry is the Brain's clock.** Never a worker's, never a caller's. The
  * assumption is written down here and nowhere else.
  *
- * **Nothing here creates a grant on Russell's behalf.** `createGoal` takes the
- * human who authorized it and stores them; there is no code path by which
- * Russell, a worker, or a migration can mint or widen one.
+ * **Nothing here creates a grant on Russell's behalf.** `createGoal` and
+ * `ensureGoal` both take the human who authorized it and store them; there is
+ * no code path by which Russell, a worker, or a migration can mint or widen
+ * one. `ensureGoal` exists because one authorization a person gives — pressing
+ * Start Cash Mode — implies exactly one grant whose terms are fixed in code,
+ * and asking them to fill that grant in afterwards would be a second
+ * authorization for a decision they already made. The human is still named,
+ * from the row their own press wrote, and the terms are still not theirs to
+ * widen.
  */
 import { getDb } from '../db/database.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
@@ -164,6 +170,94 @@ export async function createGoal(input: {
   const created = await getGoal(id);
   if (!created) throw new Error('The goal disappeared immediately after being written.');
   return created;
+}
+
+/**
+ * The one live grant of a fixed name for one project, created if it is absent.
+ *
+ * The arbiter is `idx_russell_goals_one_live_<name>`, a partial unique index on
+ * `(project_id)` for that name and `state = 'ACTIVE'`, so two ticks that both
+ * read "there is none here" produce one grant between them and the loser reads
+ * back the winner's row. That is `reserve`'s primitive one table along, and it
+ * is the reason this is an insert rather than a check followed by a write: a
+ * check-then-write has a window, and a tick runs every few seconds on more than
+ * one instance.
+ *
+ * `created` says which happened, because "authorized when you pressed Start"
+ * and "already authorized since Tuesday" are different sentences to show a
+ * person, and because a caller that records an event wants to record it once.
+ *
+ * The terms are the caller's constants and never a caller's *input*: this
+ * writes whatever it is given, and the module that gives it is the one holding
+ * the fixed grant. Widening is therefore a code change somebody reviews, which
+ * is where "does this authorize an effect?" gets asked.
+ */
+export async function ensureGoal(input: {
+  projectId: string;
+  ownerUserId: string;
+  createdByUserId: string;
+  name: string;
+  allowedWork: string[];
+  prohibitions?: string[];
+  maxMissions: number;
+  maxFragments: number;
+  maxConcurrent: number;
+  maxProbes: number;
+  workPolicy?: WorkPolicy;
+  startsAt?: string;
+  expiresAt?: string | null;
+}): Promise<{ goal: RussellGoal; created: boolean }> {
+  const id = newId('rgl');
+  const at = authorityNow();
+  const prohibitions = [...new Set([...ALWAYS_PROHIBITED, ...(input.prohibitions ?? [])])];
+  const result = await getDb().run(
+    `INSERT INTO russell_goals
+       (id, project_id, owner_user_id, name, policy_version, allowed_work, prohibitions,
+        max_missions, max_fragments, max_concurrent, max_probes, max_external_spend,
+        work_policy,
+        starts_at, expires_at, state, revoked_at, revoked_by_user_id, revoked_reason,
+        created_by_user_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'ACTIVE', NULL, NULL, NULL, ?, ?, ?)
+     ON CONFLICT DO NOTHING`,
+    [
+      id,
+      input.projectId,
+      input.ownerUserId,
+      input.name,
+      toJson(input.allowedWork),
+      toJson(prohibitions),
+      Math.max(0, input.maxMissions),
+      Math.max(0, input.maxFragments),
+      Math.max(0, input.maxConcurrent),
+      Math.max(0, input.maxProbes),
+      input.workPolicy ?? 'UNCAPPED',
+      input.startsAt ?? at,
+      input.expiresAt ?? null,
+      input.createdByUserId,
+      at,
+      at,
+    ],
+  );
+  if (result.changes === 1) {
+    const created = await getGoal(id);
+    if (created) return { goal: created, created: true };
+  }
+  const existing = await liveGoalNamed(input.projectId, input.name);
+  if (!existing) {
+    throw new Error('The grant was neither inserted nor found, which the unique index makes impossible.');
+  }
+  return { goal: existing, created: false };
+}
+
+/** The live grant of one fixed name, or null. The index makes "the" honest. */
+export async function liveGoalNamed(projectId: string, name: string): Promise<RussellGoal | null> {
+  const rows = await getDb().all<RussellGoalRow>(
+    `SELECT * FROM russell_goals
+      WHERE project_id = ? AND name = ? AND state = 'ACTIVE'
+      ORDER BY created_at DESC, rowid DESC`,
+    [projectId, name],
+  );
+  return rows[0] ? mapGoal(rows[0]) : null;
 }
 
 export async function getGoal(id: string): Promise<RussellGoal | null> {
@@ -769,6 +863,26 @@ export async function settleReservation(reservationId: string): Promise<boolean>
         SET state = 'SETTLED', settled_at = ?
       WHERE id = ? AND state = 'HELD'`,
     [authorityNow(), reservationId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Move a live grant's concurrency, and nothing else about it.
+ *
+ * Concurrency is provider capacity rather than an allowance (§24), so it is the
+ * one term of a standing authority that can be corrected without re-deciding
+ * what was authorized: the work class, the prohibitions, the spend ceiling and
+ * the owner are all untouched, and a grant that is not ACTIVE is refused.
+ *
+ * Narrow by construction — one column, guarded on the row still being live —
+ * because a general "update a grant" would be a way to widen one.
+ */
+export async function setGoalConcurrency(goalId: string, maxConcurrent: number): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE russell_goals SET max_concurrent = ?, updated_at = ?
+      WHERE id = ? AND state = 'ACTIVE'`,
+    [Math.max(0, Math.trunc(maxConcurrent)), nowIso(), goalId],
   );
   return result.changes === 1;
 }

@@ -223,6 +223,56 @@ describe('a research worker cannot claim factory repository work', () => {
     const admit = await binAdmission({ workerId, principal, sessionRef: 'cse_r2' });
     expect((await admit(bin)).ok).toBe(false);
   });
+
+  /*
+   * The two shapes `fleet verify-surface --probe` builds, pinned by the one
+   * property that decides whether the probe proves anything.
+   *
+   * The probe exists to fire the surface under test. It only can if it
+   * classifies as that surface's family, and the failure is silent in the
+   * expensive direction: `familyOf` reads *any* manifest naming a repository as
+   * FACTORY whatever the class says, so a research probe that carried a
+   * repository block — even an empty one, which is what a shared code path
+   * produces by accident — would be refused by the very research worker it was
+   * built to verify, and the operator would read that as a broken surface.
+   */
+  it('classifies each surface probe as the family whose surface it is proving', async () => {
+    const research = await createBin({
+      projectId: fixture.project.id,
+      kind: 'DETERMINISTIC_CHECK',
+      title: 'Surface self-test for a research Routine',
+      objective: 'Return the sha-256 of one value carried in this manifest.',
+      manifest: manifest({}),
+      completionContract: 'DETERMINISTIC_UNITS_V1',
+      workloadClass: 'SURFACE_PROBE_RESEARCH_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    expect(familyOf((await getBin(research.id))!)).toBe('RESEARCH');
+
+    const factory = await createBin({
+      projectId: fixture.project.id,
+      kind: 'DETERMINISTIC_CHECK',
+      title: 'Surface self-test for a factory Routine',
+      objective: 'Return the sha-256 of one value carried in this manifest.',
+      manifest: manifest({
+        repository: {
+          remote: OAKWOOD,
+          ref: 'main',
+          baseSha: '',
+          integrationBranch: '',
+          pullRequest: null,
+        },
+      }),
+      completionContract: 'DETERMINISTIC_UNITS_V1',
+      workloadClass: 'FACTORY_SURFACE_PROBE',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    expect(familyOf((await getBin(factory.id))!)).toBe('FACTORY');
+  });
 });
 
 describe('an unauthorized repository does not cross a scope', () => {
@@ -458,6 +508,7 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
           account,
           servesFamilies: ['RESEARCH', 'GENERAL'],
           servesRepositories: [],
+          servesProjects: [bin.projectId],
           routineInFlight: 0,
           accountInFlight: 0,
           routineTarget: null,
@@ -485,6 +536,7 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
           account,
           servesFamilies: ['FACTORY'],
           servesRepositories: ['peyday007/oakwood-junk-removal'],
+          servesProjects: [bin.projectId],
           routineInFlight: 0,
           accountInFlight: 0,
           routineTarget: null,
@@ -495,6 +547,7 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
           account,
           servesFamilies: ['RESEARCH', 'GENERAL'],
           servesRepositories: [],
+          servesProjects: [bin.projectId],
           routineInFlight: 0,
           accountInFlight: 0,
           routineTarget: null,
@@ -509,7 +562,20 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
     if (decision.ok) expect(decision.routine.id).toBe('rtn_research');
   });
 
-  it('treats a Routine bound to no worker as eligible, because the fire is not the boundary', async () => {
+  /*
+   * The title used to say "a Routine bound to no worker is eligible", and that
+   * claim is now too broad to leave standing. What is still true — and what
+   * this proves — is that an **unknown family or repository scope** is eligible,
+   * because the fire is not the boundary for those two.
+   *
+   * The project is a different dimension and fails closed, so a candidate that
+   * genuinely resolves to no worker now carries `servesProjects: []` from the
+   * snapshot and is refused. That is asserted from real rows in
+   * `tests/projectRouting.test.ts`, where the snapshot builds the candidate,
+   * rather than here, where the fixture would have to describe a shape
+   * `fleetSnapshot` cannot produce.
+   */
+  it('treats an unknown family and repository scope as eligible, because the fire is not the boundary for those', async () => {
     const bin = await factoryBin();
     const decision = routeBin({
       bin,
@@ -519,6 +585,7 @@ describe('the dispatcher does not send work to a surface that cannot be handed i
           account,
           servesFamilies: null,
           servesRepositories: null,
+          servesProjects: [bin.projectId],
           routineInFlight: 0,
           accountInFlight: 0,
           routineTarget: null,

@@ -281,6 +281,45 @@ export async function setRoutineState(input: {
 }
 
 /**
+ * Change what a surface is *called*, and nothing else.
+ *
+ * A label, not an identity. The Routine is addressed by its `routine_ref` —
+ * the trigger Brain actually fires — and the account by its own id, so a rename
+ * cannot move either of them. Every column that decides anything is left
+ * exactly as it was: the reference, the deployment secret's name, the digest
+ * taken at registration, the bound worker, the state, the counters. A rename
+ * that could touch one of those would be a re-registration wearing a friendlier
+ * word, and the credential it disturbed would be the one already doing the work.
+ *
+ * Guarded on the current name so two people renaming the same row produce one
+ * rename and one ordinary refusal rather than a last-writer-wins.
+ */
+export async function renameRoutine(input: {
+  routineId: string;
+  from: string;
+  to: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE fleet_routines SET name = ?, updated_at = ? WHERE id = ? AND name = ?',
+    [input.to, nowIso(), input.routineId, input.from],
+  );
+  return result.changes === 1;
+}
+
+/** The same, for an account. See `renameRoutine`. */
+export async function renameAccount(input: {
+  accountId: string;
+  from: string;
+  to: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    'UPDATE fleet_accounts SET name = ?, updated_at = ? WHERE id = ? AND name = ?',
+    [input.to, nowIso(), input.accountId, input.from],
+  );
+  return result.changes === 1;
+}
+
+/**
  * Bind a Routine to the worker identity its sessions authenticate as.
  *
  * Observed rather than declared. A Routine is registered before it has ever

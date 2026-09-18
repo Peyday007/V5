@@ -178,6 +178,75 @@ async function backupDatabase(db: Database, databasePath: string): Promise<strin
   }
 }
 
+
+/**
+ * The one marker a migration file may carry, and what it costs.
+ *
+ * SQLite cannot relax a `NOT NULL`, so a column that has to become nullable
+ * means rebuilding the table — and the documented recipe for that begins
+ * `PRAGMA foreign_keys=OFF` **outside** a transaction, because that pragma is a
+ * no-op inside one. Without it the rebuild is silently destructive rather than
+ * refused: `DROP TABLE` performs an implicit DELETE, every `ON DELETE CASCADE`
+ * aimed at the table fires, and the migration reports success having deleted
+ * the rows those cascades reached. Renaming instead of dropping does not save
+ * it either — with foreign keys on, a rename rewrites the other tables'
+ * `REFERENCES` clauses to follow it.
+ *
+ * So the file says so, in its first line, and the runner honours it: pragma
+ * off, its own transaction, the ledger row inside that transaction, pragma back
+ * on, and `PRAGMA foreign_key_check` afterwards — which is the half that makes
+ * this safe rather than merely permitted, because a rebuild that lost a
+ * reference must not be allowed to commit quietly.
+ *
+ * It is deliberately narrow: no other capability, no way to opt out of the
+ * transaction for an ordinary migration, and nothing on the Postgres chain,
+ * which has `ALTER COLUMN ... DROP NOT NULL` and needs none of this.
+ */
+const REBUILD_MARKER = '-- brain:rebuild-without-foreign-keys';
+
+function rebuildsWithoutForeignKeys(file: MigrationFile): boolean {
+  return file.sql.startsWith(REBUILD_MARKER);
+}
+
+async function recordApplied(db: Database, file: MigrationFile): Promise<void> {
+  await db.run(
+    'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
+    [file.version, file.name, file.checksum, new Date().toISOString()],
+  );
+}
+
+async function applyWithForeignKeysOff(db: Database, file: MigrationFile): Promise<void> {
+  await db.exec('PRAGMA foreign_keys=OFF');
+  try {
+    await db.exec('BEGIN');
+    try {
+      await db.exec(file.sql);
+      await recordApplied(db, file);
+      /*
+       * Checked before the commit, so a rebuild that stranded a reference is
+       * rolled back rather than recorded. With foreign keys off nothing else
+       * would have noticed, which is exactly why this is here and not left to
+       * the next write that happens to trip over it.
+       */
+      const broken = await db.all<Record<string, unknown>>('PRAGMA foreign_key_check');
+      if (broken.length > 0) {
+        throw new Error(
+          `left ${broken.length} dangling foreign key reference(s) behind; nothing was applied`,
+        );
+      }
+      await db.exec('COMMIT');
+    } catch (error) {
+      await db.exec('ROLLBACK');
+      throw error;
+    }
+  } finally {
+    // Always, including on the failure path: a connection that carried on with
+    // foreign keys off would be a Brain whose constraints had quietly stopped
+    // applying, which is worse than the failed migration that caused it.
+    await db.exec('PRAGMA foreign_keys=ON');
+  }
+}
+
 /**
  * Apply every unapplied migration, in order, each inside its own transaction.
  * Throws with a precise message if any migration fails — the caller surfaces
@@ -258,16 +327,17 @@ export async function runMigrations(
   for (const file of pending) {
     const startedAt = Date.now();
     try {
-      // One transaction per file, so a failure leaves the schema exactly where
-      // it was. Postgres runs DDL transactionally, which is what makes this
-      // promise true on both backends rather than only on one.
-      await db.transaction(async () => {
-        await db.exec(file.sql);
-        await db.run(
-          'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
-          [file.version, file.name, file.checksum, new Date().toISOString()],
-        );
-      });
+      if (rebuildsWithoutForeignKeys(file) && db.kind !== 'postgres') {
+        await applyWithForeignKeysOff(db, file);
+      } else {
+        // One transaction per file, so a failure leaves the schema exactly where
+        // it was. Postgres runs DDL transactionally, which is what makes this
+        // promise true on both backends rather than only on one.
+        await db.transaction(async () => {
+          await db.exec(file.sql);
+          await recordApplied(db, file);
+        });
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       throw new Error(`Migration ${file.filename} failed and was rolled back: ${reason}`);

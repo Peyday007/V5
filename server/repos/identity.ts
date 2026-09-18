@@ -238,11 +238,21 @@ export async function getPasswordVerifierByEmail(
   const row = await getDb().get<UserRow>('SELECT * FROM users WHERE email = ?', [
     normalizeEmail(email),
   ]);
-  return row ? { user: mapUser(row), verifier: row.password_verifier } : null;
+  // A passkey-only account has no verifier, so there is nothing here to compare
+  // a password against. Answering `null` puts it on exactly the same path as an
+  // unknown address — one sentence, one status — rather than inventing a
+  // verifier that could never match and telling the caller the account exists.
+  if (!row || row.password_verifier === null) return null;
+  return { user: mapUser(row), verifier: row.password_verifier };
 }
 
 export async function listUsers(): Promise<User[]> {
-  return (await getDb().all<UserRow>('SELECT * FROM users ORDER BY email')).map(mapUser);
+  // Ordered by the one column every account has. `email` is nullable now, and
+  // the two backends disagree about where a NULL sorts — SQLite puts it first,
+  // Postgres last — so ordering by it would list the same Brain in two orders.
+  return (
+    await getDb().all<UserRow>('SELECT * FROM users ORDER BY display_name, id')
+  ).map(mapUser);
 }
 
 export async function countUsers(): Promise<number> {

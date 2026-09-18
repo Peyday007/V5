@@ -1535,7 +1535,7 @@ async function runMissionChain(): Promise<ChainResult> {
       evidence: ['official_source'],
       startedBy: { kind: 'PERSON', id: person.id },
       envelopeId: 'RUSSELL_PUBLIC_RECORDS_V1',
-      authorizedBy: person.email,
+      authorizedBy: person.email ?? person.id,
     });
     check(
       'L2 · checkAuthority is the gate: no standing authority, no mission',

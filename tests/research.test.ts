@@ -208,6 +208,15 @@ function verification(count: number, overrides: Record<number, VerdictInput> = {
           population: override.scope?.population ?? 'MATCH',
           definitions: override.scope?.definitions ?? 'MATCH',
         },
+        // Every dimension the fragment declares needs the value it was judged
+        // against. The submission is refused without it, which is the whole
+        // point: a blank used to be storable and it destroyed good claims.
+        scopeBasis: {
+          geography: 'Judged against the geography this fragment declares.',
+          timeframe: 'Judged against the timeframe this fragment declares.',
+          population: 'Judged against the population this fragment declares.',
+          definitions: 'Judged against the definitions this fragment declares.',
+        },
         contradictionState: override.contradiction ?? 'UNCHALLENGED',
         note: override.note ?? 'The table states this directly.',
       };

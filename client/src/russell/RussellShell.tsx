@@ -46,6 +46,8 @@ import {
   WorkView,
 } from './Views.tsx';
 import { parseRoute, type Navigation, type Route } from '../lib/router.ts';
+import { CashSection } from './Cash.tsx';
+import { Devices } from './Devices.tsx';
 
 /**
  * The six, and then the two.
@@ -63,6 +65,17 @@ const SECTIONS = [
   { name: 'NEEDS_YOU' as const, label: 'Needs you', primary: true },
   { name: 'BUILD' as const, label: 'Build', primary: false },
   { name: 'SITES' as const, label: 'Connected sites', primary: false },
+  /*
+   * Cash is secondary, and that is a decision rather than a ranking.
+   *
+   * It is the destination the people running a sprint use most, and it is still
+   * a *temporary* section inside a Brain that does research, software and
+   * everything else. Promoting it would make the six primary destinations seven
+   * and rebuild the thumb bar around work that is meant to be wound down in a
+   * month or two — §30's rule that Cash Mode must not become the global
+   * definition of what Brain is allowed to pursue, applied to the navigation.
+   */
+  { name: 'CASH' as const, label: 'Cash', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -397,6 +410,18 @@ export function RussellShell({
                   </li>
                 ) : null}
                 <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      go({ name: 'DEVICES' });
+                    }}
+                  >
+                    Your devices
+                  </button>
+                </li>
+                <li role="none">
                   <button type="button" role="menuitem" onClick={() => go({ name: 'LEGACY' })}>
                     Full console
                   </button>
@@ -451,6 +476,10 @@ export function RussellShell({
           </>
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
+        {route.name === 'DEVICES' ? <Devices /> : null}
+        {route.name === 'CASH' ? (
+          <CashSection projectId={projectId} isBrainAdmin={user.isBrainAdmin} />
+        ) : null}
         {route.name === 'SEARCH' ? (
           <Search
             onOpen={(href) => {

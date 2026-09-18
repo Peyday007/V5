@@ -72,6 +72,13 @@ export interface ImportFileInput {
   version?: string | null;
   documentType?: DocumentType | null;
   notes?: string | null;
+  /**
+   * What distinguishes this artifact from another filed into the same layer
+   * version at the same time. See `buildCanonicalName`; absent everywhere a
+   * layer holds one document per version, which is every path but concurrent
+   * staged research.
+   */
+  variant?: string | null;
 }
 
 export interface ResolveImportInput {
@@ -751,7 +758,7 @@ export async function importFile(input: ImportFileInput): Promise<ImportResult> 
     });
   }
 
-  const names = buildNames(layer.name, version, extensionFor(originalFilename));
+  const names = buildNames(layer.name, version, extensionFor(originalFilename), input.variant);
 
   // A frozen canonical artifact is never replaced behind the user's back (invariant 6).
   const previous = await findDocumentByCanonicalName(project.id, names.canonicalName);

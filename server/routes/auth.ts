@@ -96,7 +96,7 @@ export function resetLoginThrottle(): void {
 
 function publicUser(user: {
   id: string;
-  email: string;
+  email: string | null;
   displayName: string;
   isBrainAdmin: boolean;
   mustChangePassword: boolean;
@@ -338,7 +338,13 @@ authRouter.post(
     const currentPassword = requiredString(body['currentPassword'], 'currentPassword');
     const newPassword = requiredString(body['newPassword'], 'newPassword');
 
-    const found = await getPasswordVerifierByEmail(principal.handle);
+    // A passkey-only account has no address and no password, so there is
+    // nothing here to change. It takes the same refusal a wrong current
+    // password takes, for this file's own reason: the differences between the
+    // ways of failing are what somebody probing would like to learn.
+    const found = principal.handle
+      ? await getPasswordVerifierByEmail(principal.handle)
+      : null;
     if (!found || !(await verifyPassword(currentPassword, found.verifier))) {
       await audit(req, {
         action: 'CHANGE_PASSWORD',

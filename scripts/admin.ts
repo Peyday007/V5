@@ -26,10 +26,12 @@
  * fewer witnesses.
  *
  *   npm run admin -- workers list
+ *   npm run admin -- workers create <name> [display name] --admin someone@example.com
  *   npm run admin -- routing show
  *   npm run admin -- routing check <worker> <bin>
  *   npm run admin -- workers disable <name> --admin someone@example.com
  *   npm run admin -- workers archive <name> --admin someone@example.com
+ *   npm run admin -- research start <project> --admin someone@example.com
  *   npm run admin -- projects list
  *   npm run admin -- projects create "A name" --admin someone@example.com
  *   npm run admin -- access grant <worker> <project> --admin someone@example.com
@@ -43,6 +45,12 @@
  *   npm run admin -- packets scope [project]
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
  */
+import { startPacket } from '../server/services/research/startPacket.ts';
+import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
+import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
+import { CASH_LAYER_NAME } from '../server/services/cash/lifecycle.ts';
+import { createLayer, listLayers } from '../server/repos/layers.ts';
+import { binForOrchestration, createBin } from '../server/repos/bins.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -67,6 +75,7 @@ import {
   getWorkerRouting,
   listWorkerRouting,
   setWorkerRouting,
+  createWorker,
   getWorkerByName,
   grantMembership,
   listMembershipsForPrincipal,
@@ -466,6 +475,311 @@ async function main(): Promise<void> {
       });
       console.log(`  ${project.id}  ${project.slug}  ${project.name}`);
       break;
+    }
+    /*
+     * Creating a worker identity, which had no terminal path at all.
+     *
+     * `POST /api/admin/workers` was the only one, and
+     * `docs/workers/CONNECTING-A-WORKER.md` step 1 said to use `npm run admin`
+     * while describing the form fields of the operator console §26 deleted. So
+     * the documented first step of connecting a worker named a command that did
+     * not exist and a screen that no longer did, and the real path was a raw
+     * HTTP POST with an administrator's session cookie. A four-project fleet
+     * needs four of these before anything else can be set up.
+     *
+     * **It issues no credential**, which is why it belongs here at all. §26
+     * keeps site credentials off the terminal because the secret is shown once
+     * in a browser to somebody signed in. Nothing of that kind happens here: a
+     * worker identity is a row, and the credential that later speaks for it is
+     * minted by the OAuth consent screen, in a browser, on a human's approval.
+     * A worker created here and never connected can do nothing whatsoever.
+     *
+     * The name rule is the route's, character for character, because two
+     * entrances disagreeing about what a valid name is would be discovered by
+     * whichever one somebody used second.
+     */
+    case 'workers create': {
+      const actor = await administrator();
+      const name = (rest[0] ?? fail('Name the worker.')).trim();
+      if (!/^[a-z0-9][a-z0-9._-]{1,63}$/.test(name)) {
+        fail('A worker name is 2-64 characters of lowercase letters, digits, dot, dash or underscore.');
+      }
+      if (await getWorkerByName(name)) fail(`A worker called "${name}" already exists.`);
+      const displayName = rest.slice(1).join(' ').trim() || name;
+      const worker = await createWorker({
+        name,
+        displayName,
+        workerType: 'GENERIC',
+        description: null,
+        createdByType: 'HUMAN',
+        createdById: actor.id,
+      });
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'CREATE_WORKER',
+        targetType: 'WORKER',
+        targetId: worker.id,
+        projectId: null,
+        result: 'SUCCESS',
+        metadata: { name: worker.name },
+      });
+      console.log(`  ${worker.id}  ${worker.name}  ${worker.displayName}`);
+      console.log('  It is a member of no project and holds no credential yet.');
+      break;
+    }
+    /*
+     * Starting the sprint's discovery research by hand.
+     *
+     * §26 already lists "starting a packet by hand" as an `npm run admin`
+     * operation, and it was the one item on that list with no command behind
+     * it: `startPacket` had exactly two callers, Russell's mission launcher and
+     * a Step 10 command hardcoded to one project and one Michigan licensing
+     * question. So the operation the architecture says belongs on a terminal
+     * could not be performed from one.
+     *
+     * **It authorizes nothing that was not already authorized.** The envelope is
+     * named, never supplied — `RUSSELL_CASH_DISCOVERY_V1` lives in code, was
+     * reviewed, and `startPacket` refuses an id nothing defines rather than
+     * treating "no rules matched" as "everything is allowed". That is §16's
+     * whole property: nobody supplies the limits their own plan is judged
+     * against. The envelope permits published sources only, across any market,
+     * with no spending, no paid API, no contact with any person or
+     * organisation, no advertising and no publishing. Acting on what is found
+     * is a commercial grant a person makes, and this cannot make one.
+     *
+     * **It invents no questions.** The assignments are `SEARCH_BUCKETS`, the
+     * same reviewed in-code table the sprint's own discovery opens, so a
+     * terminal start and an activated sprint ask the identical things. A
+     * command that composed its own research questions would be the second
+     * orchestration system this repository keeps refusing to grow.
+     *
+     * **It is not activation and does not pretend to be.** A cash sprint's
+     * `ACTIVE` row, and the commercial authority beside it, are the two
+     * decisions §30 reserves to a person, and neither is reachable from here.
+     * What this does is start the research those decisions would have started,
+     * under limits a person already set, so the archive is being filled while
+     * the two decisions are outstanding. Activating later reuses this layer
+     * rather than creating a second, because it is named from the same
+     * constant.
+     */
+    case 'research start': {
+      const actor = await administrator();
+      const project = await projectFrom(rest[0] ?? fail('Name a project.'));
+
+      const layers = await listLayers(project.id);
+      const layer =
+        layers.find((one) => one.name === CASH_LAYER_NAME) ??
+        (await createLayer({
+          projectId: project.id,
+          name: CASH_LAYER_NAME,
+          orderIndex: layers.length,
+        }));
+      console.log(`  layer      ${layer.name}  ${layer.id}`);
+
+      /*
+       * Idempotent by the packet's own title on this project, so re-running
+       * after a crash, a timeout or a lost response starts nothing twice. A
+       * flag would be set by a tick that then died; rows cannot be.
+       */
+      /*
+       * One bin shape, built by both paths.
+       *
+       * A repaired bin and a fresh one must be the same thing or the repair is
+       * a second, subtly different kind of work item — the "rule applied by one
+       * of two readers" this repository keeps recording. So the construction
+       * lives here and both callers go through it.
+       */
+      /*
+       * Read once, from the envelope, before anything is started. An envelope
+       * that has lost its template is a refusal rather than a guess: filling a
+       * template that is not there would produce an assignment nothing
+       * authorizes.
+       */
+      const cashEnvelope = getApprovalEnvelope('RUSSELL_CASH_DISCOVERY_V1');
+      if (!cashEnvelope?.assignmentTemplate) {
+        fail('RUSSELL_CASH_DISCOVERY_V1 defines no assignment template in this build.');
+      }
+      const cashAssignment = cashEnvelope.assignmentTemplate.replace(
+        '{JURISDICTION}',
+        cashEnvelope.jurisdiction,
+      );
+
+      const binFor = async (orchestrationId: string, bucket: (typeof SEARCH_BUCKETS)[number]) =>
+        createBin({
+          projectId: project.id,
+          layerId: layer.id,
+          kind: 'RESEARCH_PACKET',
+          title: bucket.title,
+          objective:
+            'Carry this bounded discovery question from an approved plan to gated, sourced ' +
+            'claims, and stop. Read published sources only.',
+          rationale: `Cash Mode discovery bucket ${bucket.id}, started from a terminal.`,
+          manifest: {
+            objective: 'Drain this research packet to its own terminal state.',
+            why:
+              'One bounded question about where money is currently available, answered from ' +
+              'published sources. Every control it passes through is the existing one.',
+            lineage: {
+              projectId: project.id,
+              layerId: layer.id,
+              goal: bucket.question,
+              orchestrationId,
+            },
+            units: [],
+            /*
+             * Left to the fragment rather than restated here. The envelope
+             * already bounds the source types and `planFitsEnvelope` refuses a
+             * fragment that declares none, so a narrower list here would be a
+             * second set of limits nobody reviewed.
+             */
+            acceptableSources: [],
+            excludedSources: [],
+            evidence: [
+              'Each claim carrying its canonical source URL, its publisher and the date it was ' +
+                'published or observed, or recorded as unresolved with the search that failed',
+            ],
+            outputs: ['Gated, sourced claims against this question'],
+            authorizedActions: [
+              'brain_claim_work and the research tools, for work items belonging to this packet',
+            ],
+            prohibitedActions: [
+              'buying anything, or paying for access to any source',
+              'contacting any person or organisation',
+              'advertising, publishing or listing anything',
+              'any work item outside this orchestration',
+              'enabling paid overage',
+            ],
+            budgetUnits: 1,
+            retry: { maxAttempts: 3, backoffSeconds: 60 },
+            stoppingConditions: ['The packet reaches its own terminal state'],
+          },
+          completionContract: 'RESEARCH_PACKET_V1',
+          orchestrationId,
+          createdByType: 'SYSTEM',
+          createdById: `admin:${actor.email}`,
+          ready: true,
+          priority: 8,
+          maxAttempts: 5,
+        });
+
+      /*
+       * Only a packet that is still *live* blocks a restart.
+       *
+       * A packet parked at NEEDS_HUMAN because its plan fell outside the
+       * envelope is a recorded refusal, not work in progress: it will never
+       * move on its own, and treating it as "already started" would make the
+       * first malformed attempt permanent. It keeps its row, its fragments and
+       * the reason it stopped — §5, nothing is destroyed — and a corrected
+       * packet starts beside it.
+       *
+       * `FAILED` and `CANCELLED` are here for the same reason. `COMPLETE` is
+       * deliberately not: a question that has been answered is answered.
+       */
+      const DEAD = new Set(['NEEDS_HUMAN', 'FAILED', 'CANCELLED']);
+      const existing = new Map(
+        (await listOrchestrationsByProject(project.id))
+          .filter((one: { status: string }) => !DEAD.has(one.status))
+          .map((one: { title: string; id: string }) => [one.title, one.id] as const),
+      );
+
+      let started = 0;
+      let repaired = 0;
+      for (const bucket of SEARCH_BUCKETS) {
+        /*
+         * Idempotent by the *effect*, not by whether this ran before.
+         *
+         * A per-bucket skip is the shape §27 already had to correct once: it
+         * reads "this was started" and concludes there is nothing to do, which
+         * is only true while the two artefacts are made together. The first
+         * version of this command made the packet and not the bin, so ten
+         * packets exist in production with no bin — and a skip keyed on the
+         * bucket would step over exactly the rows that need repairing, for
+         * ever, while reporting success.
+         *
+         * So each artefact is asked about separately: a packet that exists is
+         * reused, and a bin is built for it if it has none.
+         */
+        const alreadyId = existing.get(bucket.title);
+        if (alreadyId) {
+          if (await binForOrchestration(alreadyId)) {
+            console.log(`  skipped    ${bucket.id} — packet and bin already there`);
+            continue;
+          }
+          const bin = await binFor(alreadyId, bucket);
+          repaired += 1;
+          console.log(`  repaired   ${bucket.id}  ${alreadyId}  bin ${bin.id}`);
+          continue;
+        }
+        const packet = await startPacket({
+          projectId: project.id,
+          layerId: layer.id,
+          title: bucket.title,
+          /*
+           * The envelope's own authorized assignment with the question filled
+           * in — never the bare question.
+           *
+           * `planFitsEnvelope` compares the assignment against
+           * `assignmentTemplate` and refuses anything else, in those words:
+           * *everything except the question is fixed in code — the scope, the
+           * evidence standard, the completion standard and the exclusions — and
+           * changing any of it needs a person.* Passing the bare question meant
+           * ten packets planned correctly and then parked at NEEDS_HUMAN,
+           * because a plan whose assignment is not the authorized one cannot be
+           * auto-approved however reasonable it looks. That is the envelope
+           * doing its job, and the defect was mine.
+           *
+           * Filled here from the envelope rather than restated, so this command
+           * cannot drift from the text it is judged against.
+           */
+          assignment: cashAssignment.replace('{QUESTION}', bucket.question),
+          approval: {
+            mode: 'AUTO_WITHIN_ENVELOPE',
+            envelopeId: 'RUSSELL_CASH_DISCOVERY_V1',
+            authorizedBy: `admin:${actor.email}`,
+          },
+          startedBy: { kind: 'PERSON', id: actor.id },
+        });
+        /*
+         * And the bin, in the same breath.
+         *
+         * `startPacket` queues the planning work; it does not make Brain *fire*
+         * anybody for it. A packet's work reaches a worker inside a bin, so a
+         * packet with queued items and no bin is work nothing will ever be sent
+         * for — the rows all read healthy and the fleet stays idle. §23 records
+         * this exact defect on the reopened audit round: a transition that
+         * creates work must also enqueue it, and that one did not.
+         *
+         * Ahead of nothing and behind the packet, so there is no window where a
+         * fire exists and the work does not. Idempotent for the same reason the
+         * packet is: the title check above skips a bucket already started, so
+         * neither is made twice.
+         */
+        const bin = await binFor(packet.orchestration.id, bucket);
+        started += 1;
+        console.log(`  started    ${bucket.id}  ${packet.orchestration.id}  bin ${bin.id}`);
+      }
+
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'START_RESEARCH',
+        targetType: 'PROJECT',
+        targetId: project.id,
+        projectId: project.id,
+        result: 'SUCCESS',
+        metadata: {
+          started: String(started),
+          repaired: String(repaired),
+          envelope: 'RUSSELL_CASH_DISCOVERY_V1',
+        },
+      });
+      console.log(
+        `  ${started} started, ${repaired} bin(s) repaired, ` +
+          `${SEARCH_BUCKETS.length - started - repaired} already complete.`,
+      );
+      break;
+
     }
     case 'access show': {
       const worker = await workerFrom(rest[0] ?? fail('Name a worker.'));

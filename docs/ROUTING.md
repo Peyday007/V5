@@ -137,7 +137,7 @@ authenticated worker, and is still where an unknown fails closed.
 it.** The MCP credential is issued per connector, so a Routine that selects an
 existing connector runs as the *same* Brain worker whatever it is called — and
 every routing boundary above would then pass while separating nothing.
-`npm run fleet -- verify-surface --ref <trig_…>` is the check, and what it
+`fleet verify-surface --ref <trig_…>` is the check, and what it
 requires is a chain rather than a row: Brain **fired** this Routine, a session
 **arrived** and was attributed to a worker from that same dispatch row, it was
 **assigned** the bin, and the bin reached **COMPLETE**. `--probe` creates the

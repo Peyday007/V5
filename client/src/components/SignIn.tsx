@@ -37,6 +37,7 @@
  */
 import { useState } from 'react';
 import { Api, ApiError, type SessionUser } from '../lib/api.ts';
+import { PASSKEY_UNSUPPORTED, Passkeys, passkeysAvailable } from '../lib/passkeys.ts';
 
 interface Props {
   /** Set once the person is signed in and their password is their own. */
@@ -72,6 +73,27 @@ export function SignIn({ onSignedIn, pendingUser }: Props): JSX.Element {
   const mustChange = pendingUser?.mustChangePassword ?? false;
   /** After a reload there is no remembered password, so it has to be asked for. */
   const needsCurrentPassword = mustChange && knownPassword.length === 0;
+
+  /**
+   * Sign in with a device.
+   *
+   * Nothing is typed and nothing is looked up first: a resident key names its
+   * own account, which is what lets somebody who holds no address sign in at
+   * all. Every failure is the server's one sentence.
+   */
+  async function signInWithDevice(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      await Passkeys.signIn();
+      const session = await Api.session();
+      if (session.user) onSignedIn(session.user);
+    } catch (err) {
+      setError(describe(err));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submitSignIn(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -191,6 +213,31 @@ export function SignIn({ onSignedIn, pendingUser }: Props): JSX.Element {
         ) : (
           <form key="sign-in" onSubmit={(event) => void submitSignIn(event)}>
             <p className="signin__lede">This Brain is private.</p>
+            {/*
+              * The passkey is the way in; the password form below it is what the
+              * owner's own account still uses and what an account made before
+              * passkeys existed needs. It is deliberately not hidden behind a
+              * link: a fallback somebody cannot find is a lockout.
+              */}
+            {passkeysAvailable() ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn--primary signin__submit"
+                  disabled={busy}
+                  onClick={() => void signInWithDevice()}
+                >
+                  {busy ? 'WAITING FOR YOUR DEVICE…' : 'SIGN IN WITH YOUR DEVICE'}
+                </button>
+                <p className="signin__hint">
+                  No password and no email address. Your device asks you for your fingerprint,
+                  your face or your screen lock.
+                </p>
+              </>
+            ) : (
+              <p className="signin__hint">{PASSKEY_UNSUPPORTED}</p>
+            )}
+            <p className="signin__label">OR WITH A PASSWORD</p>
             <label className="signin__label" htmlFor="email">
               EMAIL
             </label>

@@ -2673,7 +2673,33 @@ export async function rearmSurfaceDeferredIntents(input: {
   const routing = await getDb().get<{ at: string | null }>(
     'SELECT MAX(updated_at) AS at FROM worker_routing',
   );
-  const marks = [routines?.at ?? null, routing?.at ?? null].filter(
+  /*
+   * And memberships, because the project dimension is authorized by them.
+   *
+   * `NO_SURFACE_SERVES_THIS_PROJECT` is answered by granting a worker the
+   * project — an `INSERT`/`UPDATE` on `project_memberships` and on neither
+   * table above. Without this row the intent would sit out its whole
+   * operator-scale backoff while the very write that fixed it went unnoticed,
+   * which is the defect this watermark exists to prevent, one table along.
+   * Both `grantMembership` and `revokeMembership` set `updated_at`, so a
+   * revocation moves it too — and the recheck below is `routeBin` itself, so a
+   * revocation simply re-defers rather than waking anything wrongly.
+   *
+   * **The comparison below is strict, and a write in the same millisecond as a
+   * deferral is therefore missed by that write.** Measured while building
+   * `tests/projectRouting.test.ts`: a deferral at `…350` against a membership
+   * grant at `…350`, about one run in three on a machine where the two were
+   * 0.3ms apart. It is left strict on purpose — `<=` is what reintroduces the
+   * unbounded rescan described below, where a candidate this pass stamps
+   * matches its own stamp for ever — and the cost is bounded rather than
+   * silent: the intent keeps its own `next_attempt_at`, so it retries by
+   * itself, and any later fleet or membership write re-arms it. In production
+   * the two events are a dispatch tick and a person typing a command.
+   */
+  const memberships = await getDb().get<{ at: string | null }>(
+    'SELECT MAX(updated_at) AS at FROM project_memberships',
+  );
+  const marks = [routines?.at ?? null, routing?.at ?? null, memberships?.at ?? null].filter(
     (value): value is string => typeof value === 'string' && value.length > 0,
   );
   if (marks.length === 0) return 0;

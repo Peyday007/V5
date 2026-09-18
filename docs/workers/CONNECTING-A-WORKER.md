@@ -30,22 +30,35 @@ it at any time without changing your own password or anything else.
 
 ## 1. Create the worker
 
-Sign in to the Brain. Everything below is `npm run admin`, run where the Brain
-runs — there is no administration page, and there has not been one since
-connecting a site moved into Russell.
+Everything below is the `admin` CLI, run where the Brain runs — there is no
+administration page, and there has not been one since connecting a site moved
+into Russell. On the deployed Brain that means
+`flyctl ssh console --app <app> -C "sh /app/scripts/admin.sh <command>"`;
+against a local database it is `npm run admin -- <command>`.
 
+**This section used to describe a screen with form fields, and that screen does
+not exist.** It was the operator console §26 deleted, and the paragraph survived
+the deletion — so the documented first step of connecting a worker named a
+command that had no such subcommand *and* a page that answered 404. The only
+real path was a raw `POST /api/admin/workers` with an administrator's session
+cookie, which is not something a runbook can reasonably ask for.
 
-This screen is only reachable by a Brain administrator. To anyone else — signed
-out, an ordinary member, or a worker holding a token — it answers *404*, because
-a console that announces itself to whoever guesses the path is a map of what to
-attack.
+```
+admin workers create <name> [display name] --admin someone@example.com
+```
 
-**Create a worker:**
-
-| Field | Value |
+| Argument | Value |
 |---|---|
-| Canonical name | lower case, digits and hyphens — e.g. `worker-01` |
-| Display name | anything readable — e.g. `Worker 01` |
+| `<name>` | 2–64 characters of lower case letters, digits, dot, dash or underscore — e.g. `worker-01` |
+| `[display name]` | anything readable — e.g. `Worker 01`. Defaults to the name |
+
+Reaching the shell is the authentication; `--admin` is the attribution,
+resolved against the database rather than trusted.
+
+**It issues no credential**, and that is why it may live on a terminal at all. A
+worker created here is a row: a member of no project, holding no secret, able to
+do precisely nothing. The credential that later speaks for it is minted by the
+OAuth consent screen below, in a browser, on a human's approval.
 
 A worker is not a person and not your Claude account. It is an identity the
 Brain owns. Number them rather than naming them after whoever lent the account:
@@ -56,8 +69,17 @@ Below, `<worker>` means whatever canonical name you chose here.
 
 ## 2. Give it a project
 
-In **Grant access** on the same screen, choose the worker and the project, and
-click **Grant**. There is nothing else to fill in.
+```
+admin access grant <worker> <project> --admin someone@example.com
+```
+
+There is nothing else to fill in, and that is the point — see below.
+
+**One project per worker, and it is not a preference.** Routing is project-first:
+a Routine is fired for a bin only if its bound worker holds a live membership in
+that bin's project. So a worker granted two projects is one identity that can be
+handed work from both, and every Routine bound to it inherits that reach
+(invariant 41). Grant exactly one.
 
 Point a new worker at a throwaway project rather than the one holding real
 research. A worker's first run writing into work you depend on is what an
@@ -77,7 +99,7 @@ composes the set.
 
 **What actually constrains a worker is what has no scope at all.** It cannot
 create work, cancel work, or administer anything — that is decided in the
-policy, not on this screen, and no grant here can change it.
+policy, not here, and no grant can change it.
 
 ## 2a. If the account is not yours — send an invitation
 
@@ -158,6 +180,33 @@ superseded.
 Claude asking your permission to run a tool is *its* safety check. It is not the
 Brain's. A tool the Brain refuses stays refused however many times you click
 Allow.
+
+## 5a. If it will run unattended — attach the bootstrap checkout
+
+Steps 1 to 5 connect a worker you drive by hand. A **Routine** fires one with
+nobody there, and a session with nobody there cannot answer a permission prompt.
+
+A fired worker reads `.claude/settings.json` from the repository its Routine
+attaches, and calls the connector's tools without stopping only if
+`permissions.allow` already names them. With no repository attached there is no
+settings file, so the session starts, reaches its first `mcp__…` call, waits for
+an approval nobody will give, and ends — **having authenticated and never
+checked in.** Brain sees a fire, an arrival, and no work claimed.
+
+That is not hypothetical. It is the recorded quarantine reason on this fleet's
+second Routine: *"sessions complete without checking in operator hold"*, twelve
+fires, zero refusals. The token was valid the whole time.
+
+So on every Routine that runs unattended, attach
+[`Peyday007/brain-worker-bootstrap`](https://github.com/Peyday007/brain-worker-bootstrap)
+as a source. Its settings file already allows the connector's tools, and it
+needs no commit of yours.
+
+**Brain cannot check this and never will.** Nothing here reads or records which
+repository a Routine attaches — it is not a Brain field, and §22's split is that
+Brain owns dispatch while the surface owns whether a worker may act. What Brain
+can do is notice the shape afterwards: a Routine with fires, arrivals and no
+completions is this, every time.
 
 ## 6. Give the worker its contract
 

@@ -164,7 +164,9 @@ export function buildGoalPlanPrompt(input: {
         {
           "id": "operative_authority",
           "description": "what kind of evidence would establish it",
-          "necessity": "REQUIRED"
+          "necessity": "REQUIRED",
+          "evidenceKind": "SPECIFIC_INSTANCE | MARKET_PATTERN | GENERALIZED_ECONOMICS",
+          "minDistinctExamples": 1
         }
       ],
       "completionCriteria": ["how you know it is established"],
@@ -466,7 +468,16 @@ export function buildVerificationPrompt(input: {
     'For each claim, answer two things from the source itself:',
     '  - does the source directly support this exact claim, or only something adjacent to it?',
     '  - does its geography, timeframe, population and definitions match this fragment\'s?',
-    '    MATCH, MISMATCH, or UNSTATED if the source does not say.',
+    '    MATCH        the claim is inside the value this fragment declares.',
+    '    MISMATCH     it is outside it.',
+    '    NOT_APPLICABLE  this fragment\'s declaration does not bear on this claim.',
+    '    UNKNOWN      the source does not settle it. Say so rather than guessing.',
+    '',
+    'For every dimension this fragment declares, also put the fragment value you judged against',
+    'into scopeBasis — quoted or named. A verdict with no basis cannot be told apart from one',
+    'nobody formed, and the submission is refused without it. "UNSTATED" is not an answer any',
+    'more: it was the blank a verifier fell into when it had not looked, and because the gate',
+    'fails closed it quietly destroyed good claims.',
     '',
     'A source that supports a weaker or broader statement does not support this one. A number',
     'measured on a different population, in a different year, or under a different definition is a',
@@ -482,10 +493,16 @@ export function buildVerificationPrompt(input: {
       "claimIndex": 0,
       "supportsClaim": true,
       "scopeMatch": {
-        "geography": "MATCH | MISMATCH | UNSTATED",
-        "timeframe": "MATCH | MISMATCH | UNSTATED",
-        "population": "MATCH | MISMATCH | UNSTATED",
-        "definitions": "MATCH | MISMATCH | UNSTATED"
+        "geography": "MATCH | MISMATCH | NOT_APPLICABLE | UNKNOWN",
+        "timeframe": "MATCH | MISMATCH | NOT_APPLICABLE | UNKNOWN",
+        "population": "MATCH | MISMATCH | NOT_APPLICABLE | UNKNOWN",
+        "definitions": "MATCH | MISMATCH | NOT_APPLICABLE | UNKNOWN"
+      },
+      "scopeBasis": {
+        "geography": "the fragment value you judged this against, quoted or named",
+        "timeframe": "required for every dimension this fragment declares",
+        "population": "",
+        "definitions": ""
       },
       "contradictionState": "UNCHALLENGED | SUPPORTED | CONTESTED | REFUTED",
       "note": "what you found, in one sentence"

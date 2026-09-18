@@ -140,6 +140,7 @@ function claim(input: {
     retrievedAt: null,
     confidence: 0.9,
     evidenceLane: input.lane ?? null,
+    opportunitySignal: null,
     derived: false,
     derivedFrom: [],
   };

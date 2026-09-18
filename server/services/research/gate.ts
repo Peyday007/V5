@@ -23,8 +23,14 @@
  * reappearing in a later attempt's synthesis: acceptance is decided once, at the
  * gate, against the evidence as it stood.
  */
-import type { LaneNecessity, ResearchClaim, ResearchFragment } from '../../domain/types.ts';
-import type { ClaimScopeMatch } from './schema.ts';
+import type {
+  EvidenceLane,
+  LaneEvidenceKind,
+  LaneNecessity,
+  ResearchClaim,
+  ResearchFragment,
+} from '../../domain/types.ts';
+import type { ClaimScopeBasis, ClaimScopeMatch } from './schema.ts';
 import { countIndependentSources, duplicateGroups, effectiveStandard } from './standards.ts';
 
 /** Which of the seven a claim or fragment fell at. */
@@ -38,6 +44,7 @@ export const GATE_CONDITIONS = {
   DERIVATIONS: 'Unsupported calculations and assumptions are rejected',
   CLAIM_STANDARD: 'The claim meets the evidence standard for its own type',
   INDEPENDENCE: 'Corroborating sources are genuinely independent',
+  DATED: 'A time-sensitive claim carries a date its source actually gives',
 } as const;
 
 export type GateCondition = keyof typeof GATE_CONDITIONS;
@@ -55,9 +62,44 @@ export interface LaneCoverage {
   /** The question in full, so a reader is not left holding an identifier. */
   description: string;
   necessity: LaneNecessity;
+  evidenceKind: LaneEvidenceKind;
   acceptedClaims: number;
+  /** Distinct source URLs. Three postings on one board are three. */
+  distinctExamples: number;
+  /** Distinct publishers. Three postings on one board are one. */
   independentSources: number;
+  /** What this lane's own declaration asks for, so a refusal can say it. */
+  requiredExamples: number;
+  requiredIndependentSources: number;
   meetsThreshold: boolean;
+}
+
+/**
+ * What a lane of each kind needs, before the fragment's own declaration.
+ *
+ * The declaration may only ever *raise* these: a fragment asking for three
+ * distinct postings gets three, and one asking for one gets whatever its kind
+ * requires. That direction is the same one `requiredSources` already takes
+ * below, and for the same reason — each of the two can raise the bar and
+ * neither can lower it.
+ */
+export function laneFloor(lane: EvidenceLane): {
+  kind: LaneEvidenceKind;
+  examples: number;
+  independentSources: number;
+} {
+  const kind: LaneEvidenceKind = lane.evidenceKind ?? 'SPECIFIC_INSTANCE';
+  const base =
+    kind === 'MARKET_PATTERN'
+      ? { examples: 2, independentSources: 1 }
+      : kind === 'GENERALIZED_ECONOMICS'
+        ? { examples: 2, independentSources: 2 }
+        : { examples: 1, independentSources: 1 };
+  return {
+    kind,
+    examples: Math.max(base.examples, Math.trunc(lane.minDistinctExamples ?? 0)),
+    independentSources: base.independentSources,
+  };
 }
 
 export interface GateResult {
@@ -84,7 +126,16 @@ export interface GateResult {
 
 export interface VerificationInput {
   /** Per-claim verdicts from the verification pass, keyed by claim id. */
-  verdicts: Map<string, { supportsClaim: boolean; scopeMatch: ClaimScopeMatch; note: string }>;
+  verdicts: Map<
+    string,
+    {
+      supportsClaim: boolean;
+      scopeMatch: ClaimScopeMatch;
+      /** What the verifier judged each declared dimension against. */
+      scopeBasis?: ClaimScopeBasis;
+      note: string;
+    }
+  >;
   sufficiency: 'SUFFICIENT' | 'INSUFFICIENT';
   missingLanes: string[];
   unresolvedGaps: string[];
@@ -106,23 +157,85 @@ export function sourceIdentity(url: string | null): string | null {
   }
 }
 
+/**
+ * Verdicts that do not fail a claim.
+ *
+ * `MATCH` is the claim being inside the fragment's declared value.
+ * `NOT_APPLICABLE` is the verifier saying the declaration does not bear on this
+ * claim — a listing with no stated population against a fragment whose
+ * population is an exclusion rule, say — and it is an *answer* rather than a
+ * blank, which is exactly what `UNSTATED` was not.
+ *
+ * `UNKNOWN` deliberately still fails. The source did not settle it, so nothing
+ * establishes the claim is in scope. What changed is where that is caught: the
+ * submission is now refused unless the verifier says what it evaluated, so a
+ * worker corrects the verdict instead of silently losing the claim.
+ */
+const SCOPE_PASSES: ReadonlySet<string> = new Set(['MATCH', 'NOT_APPLICABLE']);
+
 function scopeFailures(scope: ClaimScopeMatch, fragment: ResearchFragment): string[] {
   const failures: string[] = [];
   // Only dimensions the fragment actually declared are enforced. A fragment that
   // named no timeframe cannot fail a claim for not matching one.
-  if (fragment.geography && scope.geography !== 'MATCH') {
+  if (fragment.geography && !SCOPE_PASSES.has(scope.geography)) {
     failures.push(`geography (${scope.geography.toLowerCase()} vs "${fragment.geography}")`);
   }
-  if (fragment.timeframe && scope.timeframe !== 'MATCH') {
+  if (fragment.timeframe && !SCOPE_PASSES.has(scope.timeframe)) {
     failures.push(`timeframe (${scope.timeframe.toLowerCase()} vs "${fragment.timeframe}")`);
   }
-  if (fragment.population && scope.population !== 'MATCH') {
+  if (fragment.population && !SCOPE_PASSES.has(scope.population)) {
     failures.push(`population (${scope.population.toLowerCase()} vs "${fragment.population}")`);
   }
-  if (fragment.definitions && scope.definitions !== 'MATCH') {
+  if (fragment.definitions && !SCOPE_PASSES.has(scope.definitions)) {
     failures.push(`definitions (${scope.definitions.toLowerCase()})`);
   }
   return failures;
+}
+
+/**
+ * A distinct *example*, which is not the same thing as a distinct *source*.
+ *
+ * Three separately-posted listings on one marketplace are three examples of a
+ * repeated pattern and one independent publisher. Both facts matter and they
+ * answer different questions: "is this a pattern or a one-off" is counted here,
+ * "could this all be one party's say-so" is `countIndependentSources`. Counting
+ * one with the other is how a fragment whose own completion criteria asked for
+ * three distinct postings was satisfied by one.
+ *
+ * The identity is the full source URL less its fragment and trailing slash,
+ * because that is what distinguishes two postings on one board. Where a claim
+ * has no URL it is not evidence at all and never reaches here.
+ */
+export function exampleIdentity(claim: { sourceUrl: string | null }): string | null {
+  if (!claim.sourceUrl) return null;
+  let base: string;
+  try {
+    const url = new URL(claim.sourceUrl);
+    url.hash = '';
+    base = url.toString().replace(/\/$/, '');
+  } catch {
+    base = claim.sourceUrl.trim();
+  }
+  // The locator is deliberately not part of it: two claims quoting different
+  // rows of one fee schedule are one example of that schedule, and counting
+  // them as two would let a single page satisfy a lane asking for a pattern.
+  return base.length > 0 ? base : null;
+}
+
+/**
+ * Does this claim say when its source said it?
+ *
+ * Any real date a source gives: the publication or posting date it prints, or
+ * the date the page was read. Both are honest observations about time and
+ * either answers "as of when". Neither is invented, which is the line: a
+ * worker asked to produce a publication date for a page that prints none will
+ * produce one.
+ */
+export function hasObservationDate(claim: {
+  sourceDate: string | null;
+  retrievedAt: string | null;
+}): boolean {
+  return (claim.sourceDate ?? '').trim().length > 0 || (claim.retrievedAt ?? '').trim().length > 0;
 }
 
 /**
@@ -212,6 +325,34 @@ export function applyGate(input: {
     const mismatches = scopeFailures(verdict.scopeMatch, fragment);
     if (mismatches.length > 0) {
       reject(claim, 'SCOPE_MATCH', `Scope does not match on ${mismatches.join(', ')}.`);
+      continue;
+    }
+
+    /*
+     * A time-sensitive claim has to carry a date.
+     *
+     * Only where the fragment declared a timeframe, because that is the
+     * fragment saying its answer goes stale. Any of the dates a real source
+     * gives will do — published, posted, closing, last observed — and the
+     * retrieval date counts, because "this is what the page said when it was
+     * read" is an honest observation date and is often the only one a listing
+     * has. What is refused is *neither*: a claim about what is open now,
+     * carrying nothing that says when now was.
+     *
+     * Production had 52 of 82 claims with no publication date against an
+     * assignment whose own evidence standard demanded one. Nothing checked.
+     *
+     * It deliberately does not ask a worker to supply a publication date a
+     * source does not print. Inventing one is worse than having none.
+     */
+    if (fragment.timeframe && !hasObservationDate(claim)) {
+      reject(
+        claim,
+        'DATED',
+        'This fragment declares a timeframe, so a claim has to say when its source said it. ' +
+          'Record the published, posted or closing date the source gives, or the date the page ' +
+          'was read. Do not supply a publication date the source does not print.',
+      );
       continue;
     }
 
@@ -331,13 +472,33 @@ export function applyGate(input: {
     const sources = new Set(
       inLane.map((claim) => sourceIdentity(claim.sourceUrl)).filter((id): id is string => id !== null),
     );
+    const examples = new Set(
+      inLane.map((claim) => exampleIdentity(claim)).filter((id): id is string => id !== null),
+    );
+    /*
+     * The lane's own bar, which used to be "one accepted claim" for every lane
+     * of every kind.
+     *
+     * That is right for one listing proving its own deadline and wrong for a
+     * fragment whose completion criteria said "at least 3 independently-posted
+     * listings … for materially the same task". Those criteria were prose that
+     * nothing read, so the gate accepted one posting as a repeated pattern.
+     */
+    const floor = laneFloor(lane);
     return {
       lane: lane.id,
       description: lane.description,
       necessity: lane.necessity,
+      evidenceKind: floor.kind,
       acceptedClaims: inLane.length,
+      distinctExamples: examples.size,
       independentSources: sources.size,
-      meetsThreshold: inLane.length > 0,
+      requiredExamples: floor.examples,
+      requiredIndependentSources: floor.independentSources,
+      meetsThreshold:
+        inLane.length > 0 &&
+        examples.size >= floor.examples &&
+        sources.size >= floor.independentSources,
     };
   });
 

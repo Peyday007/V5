@@ -21,7 +21,9 @@ import { runsRouter } from './runs.ts';
 import { russellRouter } from './russell.ts';
 import { factoryRouter } from './factory.ts';
 import { connectRouter } from './connect.ts';
+import { cashRouter } from './cash.ts';
 import { invitationsRouter } from './invitations.ts';
+import { passkeyRouter } from './passkeys.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -42,6 +44,12 @@ export function createApiRouter(): Router {
   // the project comes from, and a caller who could name one would be choosing
   // which project they are being invited to.
   router.use(invitationsRouter);
+
+  // Passkey enrollment, passkey sign-in, a member's own devices, and the member
+  // slots an administrator issues links for. Mounted at the root for the same
+  // reason: its routes carry their own prefixes (/enroll/..., /auth/passkey/...,
+  // /me/passkeys, /members) and none of them is addressed by a project.
+  router.use(passkeyRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),
@@ -71,6 +79,11 @@ export function createApiRouter(): Router {
   // the projects router so its own `/:projectId/...` routes do not swallow
   // them.
   router.use(connectRouter);
+  // Cash Mode (§30). Mounted at the root because its routes carry their own
+  // prefixes: some are project-scoped (/projects/:id/cash/...) and some address
+  // an opportunity, a commitment or a need directly. Before the projects router
+  // so its own `/:projectId/...` routes do not swallow them.
+  router.use(cashRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

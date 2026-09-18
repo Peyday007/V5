@@ -113,6 +113,7 @@ import {
   parseGoalPlan,
   type ResearchPassOutput,
   parseSynthesisPass,
+  declaredScopeOf,
   parseVerificationPass,
   type ParseResult,
 } from './schema.ts';
@@ -833,7 +834,9 @@ async function judgeFragment(input: {
       expectedTitle: `${orchestration.title} — ${fragment.fragmentKey} verification`,
       expectedFilename: `${fragment.fragmentKey}-verification.json`,
     },
-    parseVerificationPass,
+    // The fragment's declared dimensions, so an omitted or unstated answer is
+    // refused here rather than stored and applied as a rejection.
+    (text) => parseVerificationPass(text, declaredScopeOf(fragment)),
   );
 
   // The verification pass answers per claim *index*; the gate works in claim
@@ -848,6 +851,7 @@ async function judgeFragment(input: {
       claimId: claim.id,
       supportsClaim: verdict.supportsClaim,
       scopeMatch: verdict.scopeMatch,
+      scopeBasis: verdict.scopeBasis,
       note: verdict.note,
       contradictionState: verdict.contradictionState,
     });

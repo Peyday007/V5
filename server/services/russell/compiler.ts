@@ -70,6 +70,10 @@ import {
   type ApprovalEnvelope,
 } from '../research/approvalEnvelope.ts';
 import { properName, statesNamedIn } from '../../domain/jurisdiction.ts';
+import { opportunityForOwnCandidate } from '../../repos/cashPortfolio.ts';
+import { getCashMode } from '../../repos/cashMode.ts';
+import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
+import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
   EvidenceLane,
@@ -85,8 +89,15 @@ import type { MissionSpec, PlanObservations } from './planning.ts';
  * specification as researchable once, so a compiler change is what legitimately
  * produces a second attempt at an idea. That makes the version a reviewed code
  * change rather than a counter anything can advance.
+ *
+ * What does the relaunching is the *specification* — `specificationKey` is the
+ * objective and the why-now, and this constant is not in it — so bumping this
+ * alone re-researches nothing. `2026-09-17.1` is exactly that case: the cash
+ * discovery profile's lanes gained an evidence kind, which changes the bar a
+ * fragment is judged at and leaves every compiled sentence byte for byte as it
+ * was.
  */
-export const MISSION_COMPILER_VERSION = '2026-09-09.1';
+export const MISSION_COMPILER_VERSION = '2026-09-17.1';
 
 /**
  * Which envelope a project's compiled missions run under.
@@ -105,6 +116,59 @@ export const MISSION_COMPILER_VERSION = '2026-09-09.1';
 const ENVELOPE_BY_PROJECT: Readonly<Record<string, string>> = Object.freeze({
   'deal-dispatch': 'RUSSELL_PUBLIC_RECORDS_V1',
 });
+
+/**
+ * Which envelope a project compiles under, after the map above says nothing.
+ *
+ * The map is a slug frozen in this repository, which works exactly while the
+ * projects that do research are ones this repository knows about. Cash Mode's
+ * private operations are projects an operator creates — four of them, named by
+ * whoever set them up — so a constant here could never have an entry for them,
+ * and the compiler's deny-by-default would refuse every idea in every one of
+ * them for ever. Appendix C of the Cash Mode plan records exactly that: four
+ * new project names plus a prompt activate nothing.
+ *
+ * So a second source is read, and the safety property is kept rather than
+ * traded away. `cash_modes.envelope_id` is written when a person with ADMIN on
+ * that project activates the section, and `services/cash/lifecycle.ts` refuses
+ * anything outside `SELECTABLE_CASH_ENVELOPES`. A project may therefore
+ * *choose* which reviewed limits apply to it and may not write any: §16's
+ * sentence — nobody supplies the limits their own plan is judged against —
+ * holds unchanged, because the envelope is still code somebody reviewed and the
+ * row only names one.
+ *
+ * The in-code map wins where it has an entry, so nothing about an existing
+ * project's authorization can be changed by activating a cash mode on it.
+ */
+async function envelopeIdFor(
+  project: Project,
+  candidate: RussellCandidate,
+): Promise<string | null> {
+  const declared = ENVELOPE_BY_PROJECT[project.slug];
+  if (declared) return declared;
+  const mode = await getCashMode(project.id);
+  if (!mode) return null;
+  /*
+   * A deep dive on one opening is a different question from the bucket that
+   * found it, so it is judged against a different assignment.
+   *
+   * Decided from a row Brain wrote, never from the idea's prose: an
+   * opportunity's `candidate_id` is "the idea this opportunity *is*" — what
+   * Brain is researching on that opportunity's own behalf — and a bucket's
+   * broad question is recorded as `discovered_by_candidate_id` precisely so
+   * the two cannot be confused.
+   *
+   * It widens nothing. `RUSSELL_CASH_VALIDATION_V1` takes its source classes
+   * and its forbidden actions verbatim from the discovery envelope; what
+   * differs is the assignment template, because asking a market a broad
+   * question and asking one opening what it pays are not the same question and
+   * must not be judged by the same completion standard.
+   */
+  if (await opportunityForOwnCandidate(project.id, candidate.id)) {
+    return 'RUSSELL_CASH_VALIDATION_V1';
+  }
+  return isSelectableCashEnvelope(mode.envelopeId) ? mode.envelopeId : null;
+}
 
 
 /** One fragment, fully specified, ready for `createFragments` to place. */
@@ -160,6 +224,12 @@ export interface CompiledMission {
    * says in those terms rather than asserting it about the subject.
    */
   jurisdiction: { value: string; from: 'SUBJECT' | 'QUESTION' | 'ENVELOPE' };
+  /**
+   * Where this question sits in the launch queue within its priority, declared
+   * by the profile. Forwarded rather than decided here — see
+   * `CompilerProfile.launchOrdinal`.
+   */
+  launchOrdinal: number;
   compilerVersion: string;
 }
 
@@ -218,16 +288,30 @@ function jurisdictionFor(
   question: string,
   envelope: ApprovalEnvelope,
   subject: SubjectContext,
+  profile: CompilerProfile,
 ): { value: string; from: 'SUBJECT' | 'QUESTION' | 'ENVELOPE' } | { refusal: string } {
   const named = statesNamedIn(question).map(properName);
-  if (named.length > 1) {
+  if (named.length > 1 && profile.multipleJurisdictions === 'REFUSE') {
     return {
       refusal:
         `this question names more than one jurisdiction (${named.join(', ')}), and splitting ` +
         'it into one question per jurisdiction is a decision Brain does not take on its own',
     };
   }
-  const fromQuestion = named[0] ?? null;
+  /*
+   * Several jurisdictions, described rather than refused.
+   *
+   * Refusing is right for a statutory question — "which county's rule applies"
+   * is a decomposition decision and guessing would be the compiler inventing
+   * scope. It is wrong for market discovery, where two states are genuinely one
+   * market, and refusing there would refuse the work the envelope exists to
+   * permit. Which of the two applies is the profile's, and is not inferred from
+   * the words.
+   */
+  const fromQuestion =
+    named.length > 1
+      ? `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}`
+      : (named[0] ?? null);
   const fromSubject = subject.jurisdiction?.value ?? null;
 
   if (fromSubject && fromQuestion && fromSubject !== fromQuestion) {
@@ -277,24 +361,9 @@ function jurisdictionFor(
  * rather than proposed and refused later. The check is the envelope's; this is
  * only the vocabulary the envelope's own words describe.
  */
-function sourceClassesFor(envelope: ApprovalEnvelope): string[] {
-  const proposed = [
-    'county register of deeds or recording office',
-    'county clerk, assessor, equalization or treasurer office',
-    'municipal or township clerk office',
-    'state of michigan department or bureau guidance',
-    'michigan statute or administrative rule',
-    'official county or state open-data portal or fee schedule',
-  ];
-  return proposed.filter((entry) => envelope.allowedSourceTypes.test(entry));
+function sourceClassesFor(envelope: ApprovalEnvelope, profile: CompilerProfile): string[] {
+  return profile.proposedSources.filter((entry) => envelope.allowedSourceTypes.test(entry));
 }
-
-const EXCLUDED_SOURCES = [
-  'vendor or software marketing pages',
-  'title-company or law-firm articles as sole support',
-  'news summaries as sole support',
-  'forum posts, blogs and social media',
-];
 
 /**
  * Compile one candidate into a mission specification.
@@ -310,7 +379,7 @@ export async function compileMission(input: {
 }): Promise<CompileResult> {
   const { candidate, project } = input;
 
-  const envelopeId = ENVELOPE_BY_PROJECT[project.slug];
+  const envelopeId = await envelopeIdFor(project, candidate);
   if (!envelopeId) {
     return refuse(
       `no standing research authorization is defined for the project "${project.slug}", so ` +
@@ -331,6 +400,25 @@ export async function compileMission(input: {
     return refuse(
       `the envelope "${envelopeId}" authorizes work in "${envelope.projectSlug}" and this idea ` +
         `is in "${project.slug}"`,
+    );
+  }
+
+  /*
+   * What kind of question this envelope's work actually is.
+   *
+   * Widening what a fragment may cite changed nothing about what the compiler
+   * wrote, so a marketplace request compiled into a public-records task: every
+   * objective said "from official Michigan public records", every source class
+   * was a county office, and forums, blogs and social media — where a demand
+   * signal lives — were banned outright. An envelope with no profile compiles
+   * nothing, because falling back to *some* profile is how the wrong kind of
+   * question gets written for an authorization nobody matched it to.
+   */
+  const profile = profileFor(envelopeId);
+  if (!profile) {
+    return refuse(
+      `the envelope "${envelopeId}" has no compiler profile in this build, so Brain does not ` +
+        'know what kind of question it authorizes',
     );
   }
 
@@ -357,10 +445,10 @@ export async function compileMission(input: {
    * pure and directly testable.
    */
   const subject = await subjectContextFor(candidate);
-  const jurisdiction = jurisdictionFor(question, envelope, subject);
+  const jurisdiction = jurisdictionFor(question, envelope, subject, profile);
   if ('refusal' in jurisdiction) return refuse(jurisdiction.refusal);
 
-  const sources = sourceClassesFor(envelope);
+  const sources = sourceClassesFor(envelope, profile);
   if (sources.length === 0) {
     return refuse(
       `the envelope "${envelopeId}" accepts none of the source classes this compiler knows how ` +
@@ -395,12 +483,11 @@ export async function compileMission(input: {
    * a question about Michigan records, which a worker would then research
    * correctly and answer wrongly.
    */
-  const objective =
-    jurisdiction.from === 'ENVELOPE'
-      ? `Establish, from the official ${jurisdiction.value} public records this project is ` +
-        `authorized to search — nothing about this names a jurisdiction of its own — ` +
-        lowerFirst(question)
-      : `Establish, from official ${jurisdiction.value} public records, ${lowerFirst(question)}`;
+  const objective = profile.objective({
+    question,
+    scope: jurisdiction.value,
+    from: jurisdiction.from,
+  });
   /*
    * Stable over time, and that is load-bearing rather than stylistic.
    *
@@ -420,23 +507,7 @@ export async function compileMission(input: {
   const whyNow =
     "The project's own archive does not answer this, so the answer has to come from outside it.";
 
-  const lanes: EvidenceLane[] = [
-    {
-      id: 'official_source',
-      description:
-        'The official office, statute, rule or portal that states the answer, quoted, with ' +
-        'its URL and the date it was published or last updated.',
-      necessity: 'REQUIRED',
-    },
-    {
-      id: 'office_variation',
-      description:
-        'Where the answer differs between offices or counties, the differing official ' +
-        'sources named per office — and an explicit statement that it does not differ, if ' +
-        'the sources show that.',
-      necessity: 'CONDITIONAL',
-    },
-  ];
+  const lanes: EvidenceLane[] = profile.lanes;
 
   /*
    * What "done" means, and — since 2026-09-11 — what a claim without a source
@@ -456,23 +527,10 @@ export async function compileMission(input: {
    * majority rule and the evidence standard are untouched, and the escape for
    * a source found but unreadable is the one the method already describes.
    */
-  const completionCriteria = [
-    'Every part of the question is answered from a quoted official source, or recorded as ' +
-      'unresolved naming the offices searched and what was not found.',
-    'Every source carries its URL, the office or authority that publishes it, and the date ' +
-      'it was published or last updated.',
-    'Every claim carries the URL of the source it came from. A claim submitted without one ' +
-      'is rejected, and a fragment whose claims are mostly rejected is blocked outright — ' +
-      'which discards the well-sourced claims beside them. If you found the source but could ' +
-      'not read it, submit the claim with that URL and its retrieval state, which is recorded ' +
-      'as unresolved rather than rejected. If you have no source at all, it is not a claim: ' +
-      'report it instead of submitting it.',
-    `Every finding is about ${jurisdiction.value}; anything found about anywhere else is ` +
-      'reported as out of scope rather than used.',
-  ];
+  const completionCriteria = profile.completionCriteria(jurisdiction.value);
 
   const fragment: PlannedFragment = {
-    fragmentKey: 'official-record',
+    fragmentKey: profile.fragmentKey,
     question,
     geography: jurisdiction.value,
     timeframe: null,
@@ -480,7 +538,7 @@ export async function compileMission(input: {
     definitions: null,
     requiredEvidence: lanes,
     acceptableSourceTypes: sources,
-    excludedSourceTypes: EXCLUDED_SOURCES,
+    excludedSourceTypes: profile.excludedSources,
     completionCriteria,
     dependsOn: [],
     minIndependentSources: Math.max(1, envelope.minIndependentSourcesFloor),
@@ -489,12 +547,9 @@ export async function compileMission(input: {
       `Checked against ${input.archive.claimsConsidered} accepted claim(s) in this project's ` +
       `archive, ${input.archive.contradicting.length} of which argue against it; none of them ` +
       'settles the question.',
-    expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
-    prohibitedEvidence: EXCLUDED_SOURCES,
-    failureConditions: [
-      'No official source can be located for a part of the question.',
-      'The only sources found are secondary, so nothing primary supports the answer.',
-    ],
+    expectedClaimTypes: profile.expectedClaimTypes,
+    prohibitedEvidence: profile.excludedSources,
+    failureConditions: profile.failureConditions,
   };
 
   return {
@@ -502,6 +557,8 @@ export async function compileMission(input: {
     mission: {
       envelopeId,
       compilerVersion: MISSION_COMPILER_VERSION,
+      // The profile's own declaration, forwarded. Nothing here decides it.
+      launchOrdinal: profile.launchOrdinal,
       jurisdiction,
       fragments: [fragment],
       /*
@@ -519,7 +576,7 @@ export async function compileMission(input: {
         assignment,
         whyNow: clamp(whyNow, 900),
         acceptableSources: sources,
-        excludedSources: EXCLUDED_SOURCES,
+        excludedSources: profile.excludedSources,
         evidence: lanes.map((lane) => `${lane.id}: ${lane.description}`),
         /*
          * No follow-on is declared.

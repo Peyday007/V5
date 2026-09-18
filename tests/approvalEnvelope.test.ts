@@ -135,7 +135,12 @@ describe('the source classes the authorized assignment actually names', () => {
         fragments: [fragment({ acceptableSourceTypes: [source] })],
       });
       expect(verdict.fits, source).toBe(false);
-      expect(verdict.reasons.join(' ')).toMatch(/not a primary statute, regulation or regulator/);
+      // The refusal quotes *this* envelope's own rule. It used to quote a
+      // constant that was true of this envelope and a lie about the cash
+      // discovery one, which refused six correct plans in production with a
+      // sentence sending the operator to look for statutes.
+      expect(verdict.reasons.join(' ')).toMatch(/this envelope does not admit/);
+      expect(verdict.reasons.join(' ')).toMatch(/It admits a Michigan statute/);
     }
   });
 
@@ -159,7 +164,7 @@ describe('the source classes the authorized assignment actually names', () => {
     // Bumped when the checks changed meaning, so an approval recorded before
     // the correction and one recorded after are distinguishable in the audit.
     expect(verdict.validatorVersion).toBe(ENVELOPE_VALIDATOR_VERSION);
-    expect(verdict.validatorVersion).toBe('2026-09-09.1');
+    expect(verdict.validatorVersion).toBe('2026-09-17.1');
   });
 });
 
@@ -213,7 +218,8 @@ describe('a plan outside the envelope goes to a person', () => {
       fragments: [fragment({ acceptableSourceTypes: ['a law-firm client alert'] })],
     });
     expect(verdict.fits).toBe(false);
-    expect(verdict.reasons.join(' ')).toMatch(/not a primary statute, regulation or regulator source/);
+    expect(verdict.reasons.join(' ')).toMatch(/this envelope does not admit/);
+    expect(verdict.reasons.join(' ')).toMatch(/It admits a Michigan statute/);
   });
 
   it('refuses a fragment that would spend money or act on the world', () => {
@@ -228,7 +234,9 @@ describe('a plan outside the envelope goes to a person', () => {
         fragments: [fragment({ question })],
       });
       expect(verdict.fits).toBe(false);
-      expect(verdict.reasons.join(' ')).toMatch(/outside reading published sources/);
+      expect(verdict.reasons.join(' ')).toMatch(
+        /an action on the world rather than reading a published source/,
+      );
     }
   });
 

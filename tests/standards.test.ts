@@ -38,6 +38,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     evidenceExcerpt: 'Employment: 81,580',
     evidenceLocator: 'National estimates, row 1',
     evidenceLane: 'official statistics',
+    opportunitySignal: null,
     retrievedAt: '2026-01-05',
     confidence: 0.8,
     contradictionState: 'UNCHALLENGED',
@@ -343,8 +344,8 @@ describe('a fragment that is really several', () => {
       rejectedClaims: 0,
       independentSources: 2,
       coverage: [
-        { lane: 'statutory text', description: 'statutory text', necessity: 'REQUIRED', acceptedClaims: 2, independentSources: 2, meetsThreshold: true },
-        { lane: 'regulator guidance', description: 'regulator guidance', necessity: 'REQUIRED', acceptedClaims: 0, independentSources: 0, meetsThreshold: false },
+        { lane: 'statutory text', description: 'statutory text', necessity: 'REQUIRED', evidenceKind: 'SPECIFIC_INSTANCE', acceptedClaims: 2, distinctExamples: 2, independentSources: 2, requiredExamples: 1, requiredIndependentSources: 1, meetsThreshold: true },
+        { lane: 'regulator guidance', description: 'regulator guidance', necessity: 'REQUIRED', evidenceKind: 'SPECIFIC_INSTANCE', acceptedClaims: 0, distinctExamples: 0, independentSources: 0, requiredExamples: 1, requiredIndependentSources: 1, meetsThreshold: false },
       ],
       duplicateSourceGroups: [],
       failedConditions: ['COVERAGE'],

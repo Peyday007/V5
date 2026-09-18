@@ -24,6 +24,7 @@ import { getProject } from '../../repos/projects.ts';
 import { getRun } from '../../repos/runs.ts';
 import { citableClaimCoverage, citableClaims, updateOrchestration } from '../../repos/research.ts';
 import { registerRunArtifact, targetVersionForRun } from '../runArtifacts.ts';
+import { getCashMode } from '../../repos/cashMode.ts';
 import { enqueueExtraction } from '../documents/queue.ts';
 import { isAuditable } from '../documents/quality.ts';
 
@@ -215,10 +216,32 @@ export async function fileResearchPacket(input: {
     await citableClaimCoverage(orchestration.id),
   );
 
+  /*
+   * What separates this packet's report from another filed into the same layer
+   * at the same time.
+   *
+   * Only in a cash project, and that narrowness is deliberate. Deal Dispatch
+   * runs one packet per layer version, so its names are byte-identical to what
+   * they have always been — and `launch()` treats one specification as
+   * researchable once, so a changed name there would relaunch work already
+   * done. A cash sprint runs ten discovery buckets and a deep dive per opening
+   * concurrently into one layer, and in production four of them filed as
+   * "Opportunity Research v1" with three immediately marked superseded.
+   * Supersession is keyed on the canonical name, so identical names meant each
+   * packet buried the one before it: the layer kept one report and three
+   * tombstones, and the three that lost were not worse, only earlier.
+   *
+   * The packet's own title, which is the bucket's question or the opening
+   * being qualified. It is a row Brain wrote, never the model's report title —
+   * `buildNames` still owns the name, and this is one of its inputs.
+   */
+  const variant = (await getCashMode(project.id)) ? orchestration.title : null;
+
   const filed = await registerRunArtifact({
     run,
     layer,
     project,
+    variant,
     // A hint, not the name. `buildNames` decides what this document is called;
     // passing the report's own title here is how a model would end up naming a
     // canonical artifact.

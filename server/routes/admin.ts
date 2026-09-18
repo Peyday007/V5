@@ -55,7 +55,13 @@ import {
   setUserPassword,
   setWorkerStatus,
 } from '../repos/identity.ts';
-import { WeakPasswordError } from '../services/identity/secrets.ts';
+import {
+  createInvitation,
+  INVITATION_TTL_MS,
+  revokeInvitationsForWorker,
+} from '../repos/invitations.ts';
+import { listMembershipsForPrincipal } from '../repos/identity.ts';
+import { generateInvitationToken, WeakPasswordError } from '../services/identity/secrets.ts';
 import { currentContext, currentPrincipal } from '../services/identity/context.ts';
 import { recordEvent } from '../repos/events.ts';
 import {
@@ -436,6 +442,119 @@ adminRouter.post(
       secret: issued.plaintext,
       warning:
         'This is the only time this credential is shown. Store it now; it cannot be recovered.',
+    };
+  }),
+);
+
+/**
+ * Where this Brain is, from the request that reached it.
+ *
+ * `x-forwarded-proto` is honoured because the deployment terminates TLS in
+ * front of the app, so `req.protocol` alone would compose an `http://` link
+ * for an `https://` Brain and the invitation would not open.
+ */
+function originOf(req: { protocol: string; get(name: string): string | undefined }): string {
+  const host = req.get('host') ?? '';
+  const forwarded = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const scheme = forwarded === 'http' || forwarded === 'https' ? forwarded : req.protocol;
+  return `${scheme}://${host}`;
+}
+
+/**
+ * A link that lets one Claude account connect **one** named worker, once.
+ *
+ * The consent screen requires a Brain administrator, so connecting an account
+ * that is not yours would otherwise mean standing at somebody's keyboard or
+ * making them an administrator — and an administrator can create workers, grant
+ * any project and issue credentials. The people lending an account hold no
+ * research here and need no login, so the approval moves earlier instead of the
+ * machine moving.
+ *
+ * Every security property is the factory onboarding flow's, reused rather than
+ * restated: the token is shown once and stored as a prefix plus a sha-256
+ * digest, any live invitation for this worker is revoked first so there is
+ * never more than one outstanding, and `/oauth/authorize/approve` refuses a
+ * `worker_id` that does not match the one the invitation names. Unknown,
+ * revoked, redeemed and expired are already one answer there.
+ *
+ * **It grants nothing.** The invitation carries a worker id and no scopes, no
+ * role and no project: what the connected worker may reach is the membership
+ * somebody granted it separately, read live on every request. So this cannot
+ * widen access, cannot confer administrator authority, and cannot reach a
+ * second project — the most it can do is let a connector be approved as an
+ * identity whose reach was already decided.
+ *
+ * The project is named anyway, and is **verified rather than applied**: the
+ * worker must already hold an active membership on it. That is what makes the
+ * link checkable by the person issuing it — "this connects the identity that
+ * can see exactly that project" — and it is why naming the wrong project is a
+ * refusal rather than a quiet success.
+ */
+adminRouter.post(
+  '/workers/:workerId/invitations',
+  handler(async (req) => {
+    const workerId = pathId(req, 'workerId');
+    const worker = await getWorker(workerId);
+    if (!worker) throw notFound('No worker with that id.');
+    if (worker.disabled) {
+      throw conflict(
+        `"${worker.name}" is disabled, so connecting it would connect something that cannot act. ` +
+          'Enable it first.',
+      );
+    }
+
+    const body = bodyOf(req);
+    const projectId = requiredString(body['projectId'], 'projectId');
+    const memberships = (await listMembershipsForPrincipal('WORKER', workerId)).filter(
+      (membership) => membership.active,
+    );
+    const onProject = memberships.find((membership) => membership.projectId === projectId);
+    if (!onProject) {
+      // Named so the issuer can fix it, because this is their own worker and
+      // their own project — there is nothing here they do not already hold.
+      throw badRequest(
+        `"${worker.name}" holds no active membership on that project, so a connector approved as ` +
+          'it would reach nothing. Grant the project first — an invitation connects an identity ' +
+          'rather than granting one.',
+      );
+    }
+
+    // At most one live invitation per worker, so a link somebody mislaid stops
+    // working the moment a new one is issued.
+    const revoked = await revokeInvitationsForWorker(workerId);
+    const token = generateInvitationToken();
+    const invitation = await createInvitation({
+      workerId,
+      tokenPrefix: token.prefix,
+      tokenDigest: token.digest,
+      createdByUserId: actor().id,
+      note: optionalString(body['note'], 'note') ?? `Connecting ${worker.name}.`,
+    });
+
+    await audit(req, {
+      action: 'ISSUE_WORKER_INVITATION',
+      targetType: 'WORKER',
+      targetId: workerId,
+      projectId,
+      result: 'SUCCESS',
+      // The invitation's *id*, never its token and nothing it could be rebuilt
+      // from — the same rule the factory's own audit row follows.
+      metadata: { invitationId: invitation.id, revokedInvitations: revoked },
+    });
+
+    return {
+      invitation: {
+        id: invitation.id,
+        workerId,
+        workerName: worker.name,
+        projectId,
+        expiresAt: invitation.expiresAt,
+        ttlMs: INVITATION_TTL_MS,
+      },
+      // Shown once. There is no route that returns it again, because the digest
+      // is all that is stored.
+      invitationUrl: `${originOf(req)}/oauth/invite/${token.plaintext}`,
+      revokedInvitations: revoked,
     };
   }),
 );

@@ -43,6 +43,7 @@ import {
 } from '../../repos/reconciliation.ts';
 import { getCurrentExtractionRun } from '../../repos/extraction.ts';
 import { claimsForDocument } from './claims.ts';
+import { sharedClaimsForProject } from '../knowledge/shared.ts';
 import { buildCoverageMatrix, type CoverageAssessment } from './coverage.ts';
 
 /**
@@ -137,7 +138,18 @@ export async function inventoryProject(projectId: string): Promise<{
 export interface ReconciliationResult {
   contract: BoundaryContract;
   requirements: Requirement[];
+  /** The project's own archive. */
   claims: ExistingClaim[];
+  /**
+   * Validated findings the rest of the Brain has already established.
+   *
+   * Kept apart from `claims` because they are a different fact — one is what
+   * this project holds, the other is what the Brain holds — and because
+   * `documentsRead` is a count of this project's documents and must not quietly
+   * start meaning something else. Both sets are judged together; only this one
+   * came from somewhere else.
+   */
+  sharedClaims: ExistingClaim[];
   assessments: CoverageAssessment[];
   coverage: RequirementCoverage[];
   documentsRead: number;
@@ -158,10 +170,20 @@ export async function reconcile(input: {
   contract: BoundaryContract | null;
 }): Promise<ReconciliationResult> {
   const inventory = await inventoryProject(input.projectId);
+  /*
+   * The second entrance to the one coverage classifier.
+   *
+   * `coverBeforeWork` is the first, behind Russell's pre-mission check. A rule
+   * applied by one of two readers is worse than none, because the two disagree
+   * about the same question and only one of them is ever read — so a worker's
+   * proposed fragments are judged against exactly the same shared evidence a
+   * conversation's idea is.
+   */
+  const shared = await sharedClaimsForProject(input.projectId);
   const { assessments, coverage } = await buildCoverageMatrix({
     orchestrationId: input.orchestrationId,
     requirements: input.requirements,
-    claims: inventory.claims,
+    claims: [...inventory.claims, ...shared],
     contract: input.contract,
   });
 
@@ -169,6 +191,7 @@ export async function reconcile(input: {
     contract: input.contract!,
     requirements: input.requirements,
     claims: inventory.claims,
+    sharedClaims: shared,
     assessments,
     coverage,
     documentsRead: inventory.documentsRead,

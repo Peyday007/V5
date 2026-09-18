@@ -42,6 +42,7 @@ export type RoutingRefusal =
   | 'NO_CAPABLE_SURFACE'
   | 'NO_SURFACE_SERVES_THIS_FAMILY'
   | 'NO_SURFACE_SERVES_THIS_REPOSITORY'
+  | 'NO_SURFACE_SERVES_THIS_PROJECT'
   | 'ACCOUNT_TARGETS_REACHED';
 
 /**
@@ -77,6 +78,10 @@ export const REFUSAL_WAIT: Record<RoutingRefusal, RefusalWait> = {
   FLEET_PAUSED: 'CAPACITY',
   NO_SURFACE_SERVES_THIS_FAMILY: 'OPERATOR',
   NO_SURFACE_SERVES_THIS_REPOSITORY: 'OPERATOR',
+  // Answered by granting a worker the project, binding a Routine to that
+  // worker, or registering a surface for it — all of them operator writes, none
+  // of them anything a clock resolves.
+  NO_SURFACE_SERVES_THIS_PROJECT: 'OPERATOR',
   NO_CAPABLE_SURFACE: 'OPERATOR',
   NO_ROUTINES_REGISTERED: 'OPERATOR',
   ALL_SURFACES_INELIGIBLE: 'OPERATOR',
@@ -143,6 +148,32 @@ export interface RoutingCandidate {
    * repository family at all.
    */
   servesRepositories: string[] | null;
+  /**
+   * The projects the worker this Routine is bound to holds a live membership
+   * on. Empty when it is bound to no worker, or to one that is a member of
+   * nothing.
+   *
+   * **This dimension fails closed, and it is the only one here that does.** The
+   * two above treat an unanswerable question as eligible, on the rule this
+   * module states in full: fail closed where the unknown could record something
+   * false, fail open where it could only waste a fire. Project is where that
+   * second clause stops being true.
+   *
+   * With one worker per private project — which is what invariant 41 requires
+   * of four private operations — a router blind to the project picks between
+   * four surfaces on headroom alone, and three of the four cannot be handed the
+   * bin. The assigner refuses them correctly, so nothing false is recorded and
+   * no bin attempt is spent; what is spent is an activation each time, and a
+   * 30-minute in-flight window before the intent can be re-armed. That is not
+   * the occasional waste the fail-open rule trades for. It is the common case.
+   *
+   * It is also not an unknown. `fleet_routines.worker_id` names the worker and
+   * `project_memberships` says what that worker may be handed — both rows Brain
+   * wrote, neither supplied by any caller. This is the same correction §27
+   * already records for repositories, at the dimension that correction did not
+   * reach.
+   */
+  servesProjects: string[];
   /** In-flight activations attributed to this Routine and its account. */
   routineInFlight: number;
   accountInFlight: number;
@@ -219,6 +250,25 @@ function servesRepository(candidate: RoutingCandidate, repository: string | null
   if (repository === null) return true;
   if (!Array.isArray(candidate.servesRepositories)) return true;
   return candidate.servesRepositories.includes(repository);
+}
+
+/**
+ * May this surface's worker be handed work in this bin's project at all?
+ *
+ * The authorization comes from `project_memberships` through the snapshot, and
+ * from nothing the caller sent — not a body field, not an id in a path, not an
+ * eligible-scope list. `routeBin` stays a pure function over rows somebody else
+ * read, which is what keeps a decision replayable.
+ *
+ * Absence is refused rather than waved through, unlike `servesFamily` and
+ * `servesRepository` above. A snapshot that cannot say which projects a surface
+ * serves cannot be used to pick one, and the field is required on
+ * `RoutingCandidate` precisely so omitting it is a compile error rather than a
+ * fleet that silently goes back to firing at random.
+ */
+function servesProject(candidate: RoutingCandidate, projectId: string): boolean {
+  if (!Array.isArray(candidate.servesProjects)) return false;
+  return candidate.servesProjects.includes(projectId);
 }
 
 function capable(routine: FleetRoutine, required: string[]): boolean {
@@ -301,6 +351,7 @@ export function routeBin(input: RoutingInput): RoutingResult {
   const repository = repositoryIdOf(bin);
   let sawRoutable = false;
   let sawCapable = false;
+  let sawServesProject = false;
   let sawServesFamily = false;
   let sawServesRepository = false;
   let sawRateLimited: string | null = null;
@@ -319,6 +370,21 @@ export function routeBin(input: RoutingInput): RoutingResult {
       continue;
     }
     sawRoutable = true;
+    /*
+     * The project first, because it is the outermost question and the one whose
+     * answer is an authorization rather than a preference.
+     *
+     * `services/bins/routing.ts` orders its dimensions project, family,
+     * repository, capabilities, scope — and the assigner applies them in that
+     * order. The fire asks the same questions in the same order so the two
+     * cannot report different reasons for the same refusal, which is the whole
+     * argument for one routing decision with three readers.
+     */
+    if (!servesProject(candidate, bin.projectId)) {
+      considered.push({ routineId: routine.id, verdict: 'serves no work in this project' });
+      continue;
+    }
+    sawServesProject = true;
     /*
      * Whether its worker may be handed this family at all, asked **before**
      * capabilities.
@@ -406,6 +472,20 @@ export function routeBin(input: RoutingInput): RoutingResult {
           'Every registered Routine or its account is disabled, draining or quarantined, so ' +
           'none of them was asked whether it could take this work. Fix the surface and put it ' +
           'back with `fleet set-state`; the recorded reason on each says what took it out.',
+        considered,
+        retryAt: null,
+      };
+    }
+    if (!sawServesProject) {
+      return {
+        ok: false,
+        refusal: 'NO_SURFACE_SERVES_THIS_PROJECT',
+        reason:
+          'No enabled Routine is bound to a worker holding a live membership on this bin\'s ' +
+          'project. That is an authorization an operator grants, not a capacity problem: give a ' +
+          'worker the project with `npm run admin -- access grant`, and bind a Routine to it ' +
+          'with `fleet bind-worker` — a Routine bound to no worker serves no project at all. ' +
+          'The work waits and is put back by that write.',
         considered,
         retryAt: null,
       };

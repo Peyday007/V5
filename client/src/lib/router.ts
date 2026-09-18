@@ -24,6 +24,7 @@ export type Route =
   | { name: 'FLEET' }
   | { name: 'NEEDS_YOU' }
   | { name: 'SITES' }
+  | { name: 'CASH' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -34,6 +35,8 @@ export type Route =
    * written to any access log — so this route carries no parameter at all.
    */
   | { name: 'INVITE' }
+  | { name: 'ENROL' }
+  | { name: 'DEVICES' }
   | { name: 'LEGACY' }
   | { name: 'NOT_FOUND'; path: string };
 
@@ -63,10 +66,16 @@ export function parseRoute(pathname: string): Route {
       return { name: 'NEEDS_YOU' };
     case 'sites':
       return { name: 'SITES' };
+    case 'cash':
+      return { name: 'CASH' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
       return { name: 'INVITE' };
+    case 'enrol':
+      return { name: 'ENROL' };
+    case 'devices':
+      return { name: 'DEVICES' };
     case 'legacy':
       return { name: 'LEGACY' };
     default:
@@ -94,10 +103,16 @@ export function pathFor(route: Route): string {
       return '/needs-you';
     case 'SITES':
       return '/sites';
+    case 'CASH':
+      return '/cash';
     case 'SEARCH':
       return '/search';
     case 'INVITE':
       return '/invite';
+    case 'ENROL':
+      return '/enrol';
+    case 'DEVICES':
+      return '/devices';
     case 'LEGACY':
       return '/legacy';
     default:
