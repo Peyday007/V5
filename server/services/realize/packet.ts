@@ -89,6 +89,8 @@ export interface RealizationPacket {
   blocker: string | null;
   scanId: string | null;
   campaignId: string | null;
+  /** The change request `handOff` submitted for this packet, once one exists. */
+  changeRequestId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -130,6 +132,7 @@ function mapPacket(row: Row): RealizationPacket {
     blocker: nullable(row, 'blocker'),
     scanId: nullable(row, 'scan_id'),
     campaignId: nullable(row, 'campaign_id'),
+    changeRequestId: nullable(row, 'change_request_id'),
     createdAt: text(row, 'created_at'),
     updatedAt: text(row, 'updated_at'),
   };
@@ -593,14 +596,37 @@ export async function judgeGap(input: {
   kind: GapKind;
   derivedBy: 'WORKER' | 'PERSON';
   evidence: string;
+  /**
+   * The component the reader matched this requirement against, when they
+   * matched one.
+   *
+   * The column existed and only `classify` ever wrote it, so a reader who
+   * answered `EXISTS_AND_LIVE` recorded that something serves the requirement
+   * and could not say what. That is the half of the answer every later reading
+   * needs: `realized.ts` asks the self-model whether the serving component is
+   * actually reached, and with no key there is nothing to ask about. Omitting
+   * it stays legitimate — `MUST_BE_BUILT` matches nothing by definition — and
+   * `COALESCE` keeps whatever the derivation already found rather than erasing
+   * it, because a reader confirming a derived match is the common case.
+   */
+  componentKey?: string | null;
 }): Promise<void> {
   if (input.evidence.trim().length === 0) {
     throw new Error('A judged gap must say what it was judged from.');
   }
   await getDb().run(
-    `UPDATE realization_gaps SET kind = ?, derived_by = ?, evidence = ?, updated_at = ?
+    `UPDATE realization_gaps
+        SET kind = ?, derived_by = ?, evidence = ?,
+            component_key = COALESCE(?, component_key), updated_at = ?
       WHERE id = ?`,
-    [input.kind, input.derivedBy, input.evidence, nowIso(), input.gapId] as never[],
+    [
+      input.kind,
+      input.derivedBy,
+      input.evidence,
+      input.componentKey ?? null,
+      nowIso(),
+      input.gapId,
+    ] as never[],
   );
 }
 

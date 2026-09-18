@@ -46,6 +46,8 @@ import {
 } from '../server/services/realize/packet.ts';
 import { decisionReadiness, directorPass } from '../server/services/realize/director.ts';
 import { compile } from '../server/services/realize/compile.ts';
+import { handOff } from '../server/services/realize/handoff.ts';
+import { applyRealization, readRealization } from '../server/services/realize/realized.ts';
 
 function out(line = ''): void {
   console.log(line);
@@ -473,8 +475,73 @@ async function packet(argv: string[]): Promise<void> {
       out('');
       break;
     }
+    case 'handoff': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet handoff <packetId> [--project <id>] [--remote <url>]');
+      const scope = await ensureArchitectureScope();
+      const outcome = await handOff({
+        packetId: id as string,
+        projectId: flag(rest, 'project') ?? scope.id,
+        repositoryRemote: flag(rest, 'remote') ?? undefined,
+        baseBranch: flag(rest, 'base') ?? undefined,
+      });
+      out('');
+      if (!outcome.ok) {
+        out(`  Refused: ${outcome.reason}`);
+        for (const line of outcome.unresolved) out(`    ${line}`);
+        out('');
+        fail('Nothing was handed off.');
+      }
+      out(`  Change request  ${outcome.changeRequest.id}`);
+      out(`  State           ${outcome.changeRequest.state}`);
+      out(`  ${outcome.created ? 'Recorded now.' : 'This ask already existed; the packet points at it.'}`);
+      out(`  Objective`);
+      out(`    ${outcome.compiled.submission.objective}`);
+      out(`  Acceptance conditions`);
+      for (const entry of outcome.compiled.provenance) {
+        out(`    ${entry.condition}`);
+        out(`      from gap ${entry.gapId} (${entry.aspect})`);
+      }
+      out('');
+      out('  Nothing has started. Approving this and starting a campaign is a person\'s');
+      out('  decision, through the same approve-and-start every other entrance uses.');
+      out('');
+      break;
+    }
+    case 'realize': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet realize <packetId> [--apply]');
+      const reading = await readRealization(id as string);
+      out('');
+      out(`  ${reading.facultySlug}`);
+      for (const row of reading.readings) {
+        out(`    ${row.dimension.padEnd(16)} ${row.to ?? 'no reading'}`);
+        out(`      ${row.reason}`);
+        for (const line of row.basis) out(`      - ${line}`);
+        if (row.withheld) out(`      withheld: ${row.withheld}`);
+      }
+      if (rest.includes('--apply')) {
+        const applied = await applyRealization({
+          packetId: id as string,
+          actorType: 'OPERATOR',
+          actorId: flag(rest, 'admin'),
+        });
+        out('');
+        for (const row of applied.moved) out(`  moved ${row.dimension} -> ${row.to}`);
+        for (const row of applied.unchanged) out(`  kept  ${row.dimension}: ${row.why}`);
+        if (applied.moved.length === 0) {
+          out('');
+          fail('Nothing moved.');
+        }
+      } else {
+        out('');
+        out('  Reading only. Pass --apply to record the moves this supports.');
+      }
+      out('');
+      break;
+    }
     default:
-      fail('Usage: packet <open|derive|show|research|compile> …');
+      fail('Usage: packet <open|derive|show|research|compile|handoff|realize> …');
   }
 }
 
