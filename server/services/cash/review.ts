@@ -115,20 +115,25 @@ export interface CompressedReview {
 
 export interface ReviewInput {
   mode: CashMode | null;
-  /**
-   * The needs whose research is not going to answer them without help.
+  /*
+   * Needs no longer reach this review at all, in either field.
    *
-   * Failed, finished without support, or never launched — from
-   * `applyResearchAnswers`, which is the pass that actually reads the missions.
-   * A need that is merely *running* is deliberately absent: it is work in
-   * progress rather than a decision, and putting it here would fill the review
-   * with things nobody can do anything about.
+   * `stalled` carried the sentence `assessResearch` derived — *why is Brain
+   * asking me about something it said it would look up?* — and `needs` carried
+   * the rows it qualified. Both existed for the grouped-need card, and every
+   * row that card could group on is Brain's own, so it is gone rather than
+   * reworded: see section 4 below.
+   *
+   * The derived sentence is **not** discarded with it. It moved to
+   * `whatBrainNeeds`, as `researchStatus`, which is where §33's rule puts a
+   * Brain-owned requirement — under Brain's work with its research status,
+   * rather than under a decision somebody is being asked to make. Re-deriving
+   * it here would have been the two-readers defect; dropping it would have
+   * left the same blank the caller had already filled.
    */
-  stalled: string[];
   authority: CashAuthority | null;
   position: CashPosition;
   placements: Placement[];
-  needs: CashNeed[];
   /** The Brain's clock, so a test can ask about an expiry without waiting. */
   now: string;
 }

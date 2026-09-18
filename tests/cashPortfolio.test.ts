@@ -357,11 +357,9 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('names the one decision nothing can proceed without, first and unfolded', () => {
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position,
       placements: [],
-      needs: [],
       now: NOW,
     });
     expect(review.items[0]!.key).toBe('AUTHORITY');
@@ -376,7 +374,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     const missingPayer = [1, 2, 3, 4, 5].map(() => opportunity({ payer: null }));
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -385,7 +382,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
         maxConcurrent: 3,
         discoveryOpen: true,
       }),
-      needs: [],
       now: NOW,
     });
     expect(review.items.find((item) => item.key === 'MISSING_PAYER')).toBeUndefined();
@@ -407,7 +403,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     const missingPrice = [1, 2, 3, 4, 5].map(() => opportunity({ priceCents: null }));
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -416,7 +411,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
         maxConcurrent: 3,
         discoveryOpen: true,
       }),
-      needs: [],
       now: NOW,
     });
     expect(review.items.find((item) => item.key === 'MISSING_PRICE')).toBeUndefined();
@@ -426,109 +420,22 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     }
   });
 
-  it('turns no need into a decision, however many share one remedy', () => {
-    /*
-     * **These two tests asserted the grouped-need decision and its cost
-     * arithmetic, and the card they described is gone.** They pinned a real
-     * rule — two opportunities blocked on the same small tool are one
-     * purchase, so the group costs that figure once rather than the sum — and
-     * the rule only ever existed to label a control that asked a person to
-     * mark Brain's own requirements done.
-     *
-     * Every `cash_needs` row is raised with `actorRef: BRAIN`, so there is no
-     * subset of them a person answers. The rows are not hidden: they are on
-     * the same page under *What Brain needs*, each with its own recommended
-     * path, and that surface shows no total — so nothing inherited the
-     * double-counting the deleted arithmetic guarded against.
-     */
-    const need = (id: string, cost: number) => ({
-      id,
-      projectId: 'prj_1',
-      opportunityId: null,
-      blockedAction: `Do ${id}`,
-      whyItMatters: 'It blocks a sale.',
-      recommendedPath: 'Buy the same small tool once.',
-      expectedCostCents: cost,
-      setupEffort: 'Minutes.',
-      nextStep: 'Buy it.',
-      completionCondition: 'The tool is bought and reachable from here.',
-      occurrence: 1,
-      verifiedBy: null,
-      continuationClaimedAt: null,
-      continuationAttempts: 0,
-      continuationNotBefore: null,
-      blocksState: null,
-      candidateId: null,
-      requestKey: null,
-      continuedAt: null,
-      continuationNote: null,
-      state: 'OPEN' as const,
-      resolution: null,
-      resolvedByUserId: null,
-      resolvedAt: null,
-      createdAt: NOW,
-      updatedAt: NOW,
-    });
-    const review = compressedReview({
-      mode,
-      stalled: [],
-      authority: null,
-      position,
-      placements: [],
-      // Two sharing a remedy, and two naming different costs: the exact pair
-      // the deleted arithmetic existed to tell apart.
-      needs: [need('cnd_1', 5_000), need('cnd_2', 9_000)],
-      now: NOW,
-    });
-
-    expect(review.items.find((item) => item.title.includes('one remedy'))).toBeUndefined();
-    expect(review.items.some((item) => item.underlying.includes('cnd_1'))).toBe(false);
-    expect(review.items.some((item) => item.answer.label.match(/say what you did/i))).toBe(false);
-  });
+  /*
+   * Two tests lived here and are gone rather than adapted, because adapting
+   * them would have made them assert nothing.
+   *
+   * Both passed open `cash_needs` rows to `compressedReview` and asserted no
+   * item came back from them. `ReviewInput` no longer takes needs at all —
+   * section 4 is deleted and nothing here reads one — so a test handing them
+   * over would pass whatever this module did with a field it never receives.
+   * A vacuous guard is worse than none: it reads as coverage.
+   *
+   * The property is real and is asserted where needs genuinely reach the
+   * review — over HTTP, on a project that has open ones, in
+   * `cashHttp.test.ts`.
+   */
 
 
-  it('leaves a question Brain is already researching off the decision list', () => {
-    // It is work in progress, not something to answer. A review that asked
-    // about it would be asking somebody to do what Brain had already started.
-    const researching = {
-      id: 'cnd_9',
-      projectId: 'prj_1',
-      opportunityId: 'cop_1',
-      blockedAction: 'Payer for "A paid intake repair"',
-      whyItMatters: 'It is a fact about the world.',
-      recommendedPath: 'Read the organisation’s own pages.',
-      expectedCostCents: null,
-      setupEffort: 'One bounded look.',
-      nextStep: 'Name the role that signs.',
-      completionCondition: 'A payer is recorded.',
-      occurrence: 1,
-      verifiedBy: null,
-      continuationClaimedAt: null,
-      continuationAttempts: 0,
-      continuationNotBefore: null,
-      blocksState: 'EXECUTING' as const,
-      candidateId: 'rcn_1',
-      requestKey: 'question:cop_1:payer',
-      continuedAt: null,
-      continuationNote: null,
-      state: 'OPEN' as const,
-      resolution: null,
-      resolvedByUserId: null,
-      resolvedAt: null,
-      createdAt: NOW,
-      updatedAt: NOW,
-    };
-    const review = compressedReview({
-      mode,
-      stalled: [],
-      authority: null,
-      position,
-      placements: [],
-      needs: [researching],
-      now: NOW,
-    });
-    expect(review.items.some((item) => item.key.startsWith('NEED_'))).toBe(false);
-  });
 
   it('agrees with the card about which blanks Brain looks up', () => {
     // Two readers of one fact. Drift here would put a question Brain already
@@ -552,7 +459,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     // each of these, and the second one is always the one that forgets a guard.
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position,
       placements: placements({
@@ -561,7 +467,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
         maxConcurrent: 3,
         discoveryOpen: true,
       }),
-      needs: [],
       now: NOW,
     });
     expect(review.items.length).toBeGreaterThan(0);
@@ -583,7 +488,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     });
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: {
         id: 'cau_1',
         projectId: 'prj_1',
@@ -613,7 +517,6 @@ describe('the review groups by shared remedy and counts what it stands for', () 
         maxConcurrent: 3,
         discoveryOpen: true,
       }),
-      needs: [],
       now: NOW,
     });
     expect(review.items[0]!.key).toBe('EXPIRING');
@@ -623,11 +526,9 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('says plainly when nothing needs a person', () => {
     const review = compressedReview({
       mode: null,
-      stalled: [],
       authority: null,
       position,
       placements: [],
-      needs: [],
       now: NOW,
     });
     expect(review.items).toEqual([]);
@@ -637,11 +538,9 @@ describe('the review groups by shared remedy and counts what it stands for', () 
   it('tells a person about a shortfall rather than only refusing later', () => {
     const review = compressedReview({
       mode,
-      stalled: [],
       authority: null,
       position: { ...position, deployableCents: -5_000, shortfall: true },
       placements: [],
-      needs: [],
       now: NOW,
     });
     expect(review.items.some((item) => item.key === 'SHORTFALL')).toBe(true);

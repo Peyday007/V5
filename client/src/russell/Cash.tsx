@@ -2260,6 +2260,23 @@ function Needs({ view }: { view: CashView }): JSX.Element {
               <p className="rs-item-meta">
                 {need.setupEffort} &middot; next step: {need.nextStep}
               </p>
+              {/*
+                * Where the research got to, when it did not get there.
+                *
+                * The server derives it and sends `null` for a need whose
+                * research is simply running — so the absence of this line is
+                * *in progress*, and a line saying so under work in progress
+                * would tell a reader nothing they cannot already see.
+                *
+                * It used to be the explanation on a decision card asking the
+                * person to mark the need done. The card is gone; the sentence
+                * is the half of it that was worth keeping, and it belongs
+                * here, under Brain's work, where it answers the only question
+                * a reader of this list has.
+                */}
+              {need.researchStatus === null ? null : (
+                <p className="rs-item-meta">{need.researchStatus}</p>
+              )}
             </li>
           ))}
         </ul>

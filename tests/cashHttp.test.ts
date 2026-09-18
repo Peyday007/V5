@@ -754,9 +754,12 @@ describe('one account’s whole journey', () => {
       objective: string;
       discovery: { open: boolean };
       myCurrentWork: { placements: { disposition: string }[] };
-      whatBrainNeeds: unknown[];
+      whatBrainNeeds: { id: string; researchStatus: string | null }[];
       whatBrainHasDone: unknown[];
-      decisionsForMe: { items: unknown[]; underlyingCount: number };
+      decisionsForMe: {
+        items: { key: string; underlying: string[]; answer: { kind: string } }[];
+        underlyingCount: number;
+      };
       vocabulary: { neverAuthorizable: string[] };
     }>('GET', CASH(), { cookie: adminCookie });
 
@@ -766,6 +769,25 @@ describe('one account’s whole journey', () => {
     expect(view.body.whatBrainNeeds.length).toBe(1);
     expect(view.body.whatBrainHasDone.length).toBeGreaterThan(3);
     expect(view.body.vocabulary.neverAuthorizable).toContain('PAID_OVERAGE');
+
+    /*
+     * And the open need is under Brain's work rather than under the person's
+     * decisions, which is the property two unit tests used to assert against a
+     * field `ReviewInput` no longer has.
+     *
+     * It is asserted here because here it is not vacuous: this project has an
+     * open need, `cashView` loads it, and a review section that started
+     * emitting items for one again would fail this without anything having to
+     * remember to hand it over. `researchStatus` is the derived sentence
+     * travelling with it — `null` here, because nothing has assessed this
+     * fixture's research, and null is *running* rather than an omission.
+     */
+    const needId = view.body.whatBrainNeeds[0]!.id;
+    expect(view.body.whatBrainNeeds[0]).toHaveProperty('researchStatus');
+    for (const item of view.body.decisionsForMe.items) {
+      expect(item.key.startsWith('NEED_')).toBe(false);
+      expect(item.underlying).not.toContain(needId);
+    }
   });
 
   it('refuses an opportunity id somebody guessed, in the same words as a missing one', async () => {

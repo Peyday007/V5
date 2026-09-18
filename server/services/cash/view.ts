@@ -138,7 +138,21 @@ export interface CashView {
     economics: Record<string, DerivedFigure[]>;
   };
   whatBrainHasDone: CashEvent[];
-  whatBrainNeeds: CashNeed[];
+  /**
+   * What Brain is blocked on, with where its research has got to.
+   *
+   * `researchStatus` is derived on the read path and stored nowhere: the
+   * sentence `assessResearch` writes for a need whose research failed, ended
+   * unsupported or never launched, and `null` for one that is simply running —
+   * because a status line saying *in progress* under work in progress tells a
+   * reader nothing they cannot see.
+   *
+   * It is here rather than on the decisions review because the need is Brain's
+   * own. Offering it as a decision asked a person to attest to work they had
+   * not done; showing it with its research status asks nothing and answers the
+   * only question a reader of this list has.
+   */
+  whatBrainNeeds: (CashNeed & { researchStatus: string | null })[];
   decisionsForMe: CompressedReview;
   /**
    * Where the research is up to, counted from rows. See `roadmap.ts`.
@@ -224,16 +238,31 @@ export async function cashView(input: {
 
   const needs = await listNeeds({ projectId: input.projectId, states: ['OPEN'] });
   /*
-   * Which needs the research is not going to answer on its own.
+   * Where each open need's research has actually got to, **and why** — carried
+   * onto the need itself rather than derived twice.
    *
    * A projection: it re-reads the missions and writes nothing, so the read path
-   * says what is true now rather than what the last tick happened to record. A
-   * need whose research is merely running stays out of the review, because that
-   * is work in progress rather than a decision.
+   * says what is true now rather than what the last tick happened to record.
+   *
+   * `detail` travels with the id, and that is the whole correction. This line
+   * used to end `.map((one) => one.need.id)` — deriving the one sentence that
+   * answers *"Brain said it would look this up, so why am I being asked?"* and
+   * then dropping it on the floor. Re-fetching it downstream was the other
+   * option and is the one this repository keeps refusing: two readers of one
+   * fact disagree eventually.
+   *
+   * **It used to feed the review, and the review is the wrong place for it.**
+   * Every `cash_needs` row is Brain's own, so a need is not a decision
+   * somebody is being asked to make; it belongs under Brain's work with its
+   * research status beside it, which is where this now goes. A need whose
+   * research is merely running carries no status line, because *in progress*
+   * is what the absence of one already says.
    */
-  const stalled = (await assessResearch(input.projectId))
-    .filter((one) => one.state !== 'ANSWERED' && one.state !== 'RUNNING')
-    .map((one) => one.need.id);
+  const stalled = new Map(
+    (await assessResearch(input.projectId))
+      .filter((one) => one.state !== 'ANSWERED' && one.state !== 'RUNNING')
+      .map((one) => [one.need.id, one.detail] as const),
+  );
 
   const discovery =
     mode === null
@@ -302,7 +331,10 @@ export async function cashView(input: {
     },
     myCurrentWork: { ...plan, cards, provenance, engineCards, economics, executionPaths },
     whatBrainHasDone: await listCashEvents(input.projectId, 40),
-    whatBrainNeeds: needs,
+    whatBrainNeeds: needs.map((one) => ({
+      ...one,
+      researchStatus: stalled.get(one.id) ?? null,
+    })),
     /*
      * Both are pure reads over rows that already existed. Neither enqueues,
      * transitions, claims or cancels anything, which is what makes adding them
@@ -312,11 +344,9 @@ export async function cashView(input: {
     forecast: await cashForecast({ projectId: input.projectId, currency }),
     decisionsForMe: compressedReview({
       mode,
-      stalled,
       authority,
       position,
       placements: plan.placements,
-      needs,
       now,
     }),
   };

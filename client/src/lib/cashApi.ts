@@ -295,7 +295,7 @@ export interface CashView {
     economics: Record<string, DerivedFigureView[]>;
   };
   whatBrainHasDone: CashEvent[];
-  whatBrainNeeds: CashNeed[];
+  whatBrainNeeds: (CashNeed & { researchStatus: string | null })[];
   /** Where the research is up to, counted from rows. Never mutated by reading it. */
   roadmap: CashRoadmap;
   /** What the evidence supports saying about money, and what it does not. */
