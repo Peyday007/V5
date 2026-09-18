@@ -4333,6 +4333,48 @@ and a suite that exercises the stage cannot see that.**
   the production constant, because a test sharing that constant would pass
   whatever it became.
 
+- **A card told a person Brain would not be asking them, directly above the
+  control asking them.** Production rendered *"29 blocked actions, one
+  remedy"* whose explanation read *"it is a fact about the world rather than a
+  decision of yours — so Brain looks it up rather than asking you."* That
+  sentence is `whyItMatters`, written by `reconcileDiscoverableGaps` when the
+  need is raised, and it is **true then and false at the only moment this card
+  exists** — a need reaches the review precisely when the looking-up has
+  stopped. §29's status-contradicting-the-control defect, in the worst
+  available place: the sentence that explains the card denies the card.
+
+  The reason it had nothing better to say is that the reason **was derived and
+  then discarded**. `assessResearch` answers exactly this — `NEVER_STARTED`
+  with *"no mission has launched for it yet — most often because the project
+  has no standing research authority, or the sprint has wound down"*, `FAILED`
+  with the mission's own terminal reason — and `cashView` ended the line
+  `.map((one) => one.need.id)`, keeping the ids and dropping the sentences. So
+  `stalled` carries `{ needId, detail }` and the card prints the derived
+  reason; the stored one is still used, and only reachable, for a need that
+  never becomes a mission at all — a missing integration, whose stored
+  sentence stays true. Re-fetching it inside the review was the other option
+  and is the one this repository keeps refusing: **two readers of one fact
+  disagree eventually.** The card is now a diagnosis rather than a
+  contradiction, which matters more than the wording: fifty-nine of these at
+  once is one upstream condition, and the card finally names it.
+
+- **The same card said one sentence twenty-nine times, in two places, and the
+  fix for that was already sitting one field above it.** `why` had been
+  deduplicated for exactly this reason — *"identical paths routinely carry
+  identical explanations"* — and `answer.completionCondition`, grouped by the
+  same remedy from the same rows, still joined all twenty-nine. **A rule
+  applied by one of two readers is worse than none**, and the second reader
+  here was four lines below the first. It is one `sentences()` helper now,
+  called by both, so the next field cannot be missed the same way.
+
+  And the remedy printed twice — *"Establish a channel that actually reaches
+  them. Next step: Establish a channel that actually reaches them."* —
+  because `reconcileDiscoverableGaps` writes `field.task` into both
+  `recommendedPath` and `nextStep`, correctly: for a researched blank they are
+  one instruction. The template assumed two. It says the second only when it
+  differs from the first, so a need that genuinely distinguishes them still
+  says both.
+
 - **The production guard cried wolf, and the remedy it named was wrong.** Vite
   hashes are base64url, the guard matched `[A-Za-z0-9]+`, and the day
   production shipped `index-C5-52qux.js` the `grep` found nothing — which under

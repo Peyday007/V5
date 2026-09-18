@@ -478,6 +478,149 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     expect(grouped.answer.completionCondition).toContain('tool');
   });
 
+  /**
+   * The card production actually rendered, and the three ways it was wrong.
+   *
+   * Twenty-nine discoverable-gap needs, grouped by one remedy, each raised by
+   * `reconcileDiscoverableGaps` with the identical explanation, the identical
+   * completion condition, and `recommendedPath === nextStep` — which is what
+   * that function writes, because for a researched blank they are one
+   * instruction. The screen read:
+   *
+   *   "…so Brain looks it up rather than asking you."
+   *   "Establish a channel… Next step: Establish a channel…"
+   *   "…reading: The access is recorded on this card." ×29
+   *
+   * A sentence saying Brain will not ask, above the control asking; the
+   * remedy twice; and one condition twenty-nine times, in two places.
+   */
+  const discoverableNeed = (id: string) => ({
+    id,
+    projectId: 'prj_1',
+    opportunityId: 'cop_1',
+    blockedAction: `Access channel for "opening ${id}"`,
+    whyItMatters:
+      'This card cannot be tested without it, and it is a fact about the world rather than ' +
+      'a decision of yours — so Brain looks it up rather than asking you.',
+    recommendedPath: 'Establish a channel that actually reaches them.',
+    expectedCostCents: null,
+    setupEffort: 'One bounded look.',
+    // What `reconcileDiscoverableGaps` writes: the same string in both.
+    nextStep: 'Establish a channel that actually reaches them.',
+    completionCondition: 'The access is recorded on this card.',
+    occurrence: 1,
+    verifiedBy: null,
+    continuationClaimedAt: null,
+    continuationAttempts: 0,
+    continuationNotBefore: null,
+    blocksState: 'EXECUTING' as const,
+    candidateId: 'cnd_research',
+    requestKey: `question:cop_1:access`,
+    continuedAt: null,
+    continuationNote: null,
+    state: 'OPEN' as const,
+    resolution: null,
+    resolvedByUserId: null,
+    resolvedAt: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  });
+
+  const STALL = 'Brain captured the question and no mission has launched for it yet.';
+
+  it('says why it is asking, rather than that it would not ask', () => {
+    const needs = [1, 2, 3].map((n) => discoverableNeed(`cnd_${n}`));
+    const review = compressedReview({
+      mode,
+      stalled: needs.map((n) => ({ needId: n.id, detail: STALL })),
+      authority: null,
+      position,
+      placements: [],
+      needs,
+      now: NOW,
+    });
+    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
+    // The derived reason, not the one stored when the need was raised.
+    expect(grouped.why).toBe(STALL);
+    expect(grouped.why).not.toContain('rather than asking you');
+  });
+
+  it('keeps the stored reason for a need that never had research to stall', () => {
+    // A missing integration is not a question, never becomes a mission, and
+    // has no assessment — so its stored sentence is still the true one.
+    const need = { ...discoverableNeed('cnd_x'), candidateId: null, requestKey: null };
+    const review = compressedReview({
+      mode,
+      stalled: [],
+      authority: null,
+      position,
+      placements: [],
+      needs: [need],
+      now: NOW,
+    });
+    const item = review.items.find((one) => one.key === 'NEED_cnd_x')!;
+    expect(item.why).toBe(need.whyItMatters);
+  });
+
+  it('says one sentence once, however many rows the group stands for', () => {
+    const needs = Array.from({ length: 29 }, (_, n) => discoverableNeed(`cnd_${n}`));
+    const review = compressedReview({
+      mode,
+      stalled: needs.map((n) => ({ needId: n.id, detail: STALL })),
+      authority: null,
+      position,
+      placements: [],
+      needs,
+      now: NOW,
+    });
+    const grouped = review.items.find((item) => item.title.includes('one remedy'))!;
+    expect(grouped.underlying).toHaveLength(29);
+
+    const once = (haystack: string, needle: string): number =>
+      haystack.split(needle).length - 1;
+    // Both fields, because fixing one and leaving the other is exactly how
+    // this arrived: `why` was deduplicated and the condition beside it was not.
+    expect(once(grouped.why, STALL)).toBe(1);
+    expect(once(grouped.answer.completionCondition, 'The access is recorded on this card.')).toBe(1);
+  });
+
+  it('says the remedy once when the next step is the remedy', () => {
+    const needs = [discoverableNeed('cnd_1')];
+    const review = compressedReview({
+      mode,
+      stalled: needs.map((n) => ({ needId: n.id, detail: STALL })),
+      authority: null,
+      position,
+      placements: [],
+      needs,
+      now: NOW,
+    });
+    const item = review.items.find((one) => one.key === 'NEED_cnd_1')!;
+    const path = 'Establish a channel that actually reaches them.';
+    expect(item.recommendation.split(path).length - 1).toBe(1);
+    expect(item.recommendation).not.toContain('Next step:');
+  });
+
+  it('still says both when the next step is genuinely a different instruction', () => {
+    const need = {
+      ...discoverableNeed('cnd_1'),
+      recommendedPath: 'Buy the small tool.',
+      nextStep: 'Open an account with them first.',
+    };
+    const review = compressedReview({
+      mode,
+      stalled: [{ needId: need.id, detail: STALL }],
+      authority: null,
+      position,
+      placements: [],
+      needs: [need],
+      now: NOW,
+    });
+    const item = review.items.find((one) => one.key === 'NEED_cnd_1')!;
+    expect(item.recommendation).toContain('Buy the small tool.');
+    expect(item.recommendation).toContain('Next step: Open an account with them first.');
+  });
+
   it('says the largest rather than a total when a shared remedy names two costs', () => {
     const need = (id: string, cost: number) => ({
       id,

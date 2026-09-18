@@ -117,21 +117,59 @@ export interface CompressedReview {
 export interface ReviewInput {
   mode: CashMode | null;
   /**
-   * The needs whose research is not going to answer them without help.
+   * The needs whose research is not going to answer them without help, **and
+   * the sentence that says why** — never the id alone.
    *
    * Failed, finished without support, or never launched — from
-   * `applyResearchAnswers`, which is the pass that actually reads the missions.
-   * A need that is merely *running* is deliberately absent: it is work in
+   * `assessResearch`, which is the pass that actually reads the missions. A
+   * need that is merely *running* is deliberately absent: it is work in
    * progress rather than a decision, and putting it here would fill the review
    * with things nobody can do anything about.
+   *
+   * **It carries `detail` because the first version carried ids and the card
+   * then had to fall back on the need's stored `whyItMatters` — which says
+   * *"it is a fact about the world rather than a decision of yours — so Brain
+   * looks it up rather than asking you."*** That sentence is true at the
+   * moment the need is raised and false at the only moment this card is ever
+   * rendered, because a need reaches this review precisely when the looking-up
+   * has stopped. So production showed a person a card that told them, in
+   * Brain's own voice, that Brain would not be asking them — directly above
+   * the control asking them. §29's defect at a new surface, and the reason a
+   * *derived* reason must travel rather than be re-fetched or assumed: the
+   * caller already computed it and threw it away.
    */
-  stalled: string[];
+  stalled: { needId: string; detail: string }[];
   authority: CashAuthority | null;
   position: CashPosition;
   placements: Placement[];
   needs: CashNeed[];
   /** The Brain's clock, so a test can ask about an expiry without waiting. */
   now: string;
+}
+
+/**
+ * The distinct sentences among these, in the order they first appear.
+ *
+ * Grouping is by *shared remedy*, so the members of a group routinely carry
+ * word-for-word identical explanations and word-for-word identical completion
+ * conditions — and a naive join prints one of them once per member. Production
+ * showed a card whose single completion condition appeared twenty-nine times
+ * consecutively, in two separate places on the same card.
+ *
+ * It is a function rather than two expressions because it was fixed once, for
+ * `why`, and the field beside it kept the defect: **a rule applied by one of
+ * two readers is worse than none**, for the fifth time in this file's history.
+ * Blank and absent entries drop out, and the order is first-seen rather than
+ * sorted, so a group of genuinely different sentences still reads in the order
+ * its rows are in.
+ */
+function sentences(values: (string | null | undefined)[]): string {
+  const seen = new Set<string>();
+  for (const value of values) {
+    const one = (value ?? '').trim();
+    if (one.length > 0) seen.add(one);
+  }
+  return [...seen].join(' ');
 }
 
 export function compressedReview(input: ReviewInput): CompressedReview {
@@ -271,6 +309,7 @@ export function compressedReview(input: ReviewInput): CompressedReview {
    * Two opportunities blocked on the same missing tool are one purchase, not
    * two decisions.
    */
+  const stalledBy = new Map(input.stalled.map((one) => [one.needId, one.detail]));
   const byPath = new Map<string, CashNeed[]>();
   for (const need of input.needs) {
     if (need.state !== 'OPEN') continue;
@@ -284,7 +323,7 @@ export function compressedReview(input: ReviewInput): CompressedReview {
      * never to reach them. `input.stalled` is what the loop found when it
      * looked; a need in it is shown, and one that is genuinely running is not.
      */
-    if (need.candidateId && !input.stalled.includes(need.id)) continue;
+    if (need.candidateId && !stalledBy.has(need.id)) continue;
     const bucket = byPath.get(need.recommendedPath) ?? [];
     bucket.push(need);
     byPath.set(need.recommendedPath, bucket);
@@ -298,15 +337,35 @@ export function compressedReview(input: ReviewInput): CompressedReview {
           ? `Brain needs: ${needs[0]!.blockedAction}`
           : `${needs.length} blocked actions, one remedy`,
       /*
-       * One sentence per distinct reason, not one per row.
+       * One sentence per distinct reason, not one per row — and the reason
+       * that is true *now* rather than the one stored when the need was
+       * raised.
        *
        * These needs were grouped because they recommend the identical path,
-       * and identical paths routinely carry identical explanations — so the
+       * and identical paths routinely carry identical explanations, so the
        * join printed the same sentence thirty times inside one card. A card
        * that repeats itself is one nobody finishes reading.
+       *
+       * `whyItMatters` is the stored sentence and is only reached by a need
+       * that has no assessment — a missing integration, which never becomes a
+       * mission and whose stored reason stays true. A need whose research
+       * stalled prints what `assessResearch` derived, because that is the
+       * answer to the only question a person reading this card has: Brain was
+       * going to look this up, so why am I being asked?
        */
-      why: [...new Set(needs.map((n) => n.whyItMatters.trim()))].join(' '),
-      recommendation: `${path}${cents === null ? '' : ` (about ${cents} cents)`}. Next step: ${needs[0]!.nextStep}`,
+      why: sentences(needs.map((n) => stalledBy.get(n.id) ?? n.whyItMatters)),
+      /*
+       * The path once.
+       *
+       * `reconcileDiscoverableGaps` writes `field.task` into both
+       * `recommendedPath` and `nextStep`, because for a researched blank they
+       * genuinely are one instruction — so the template printed it twice with
+       * *"Next step:"* wedged between the halves. Where a need distinguishes
+       * them, both are still said.
+       */
+      recommendation:
+        `${path}${cents === null ? '' : ` (about ${cents} cents)`}.` +
+        (needs[0]!.nextStep.trim() === path.trim() ? '' : ` Next step: ${needs[0]!.nextStep}`),
       consequence: `Resolving this unblocks ${needs.length} action${needs.length === 1 ? '' : 's'}. Independent work is running meanwhile.`,
       urgency: 'WHENEVER',
       underlying: needs.map((n) => n.id),
@@ -332,10 +391,16 @@ export function compressedReview(input: ReviewInput): CompressedReview {
           needs.length === 1
             ? 'Mark this done, and say what you did'
             : `Mark all ${needs.length} done, and say what you did`,
-        completionCondition: needs
-          .map((n) => n.completionCondition)
-          .filter((one): one is string => !!one)
-          .join(' ') || 'The recommended path was taken.',
+        /*
+         * Deduplicated for the reason `why` directly above it is, which is the
+         * same defect one field along and was missed when that one was fixed.
+         * Thirty needs grouped by an identical remedy carry an identical
+         * condition, and production printed *"The access is recorded on this
+         * card."* twenty-nine times in a row, twice — once as what Brain will
+         * check and once as what it reads the answer back against.
+         */
+        completionCondition:
+          sentences(needs.map((n) => n.completionCondition)) || 'The recommended path was taken.',
       },
     });
   }
