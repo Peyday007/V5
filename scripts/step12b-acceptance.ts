@@ -2369,15 +2369,66 @@ async function runMissionChain(): Promise<ChainResult> {
       `packet ${missionA?.orchestrationId ?? 'none'}, bin ${missionA?.binId ?? 'none'}, ` +
         `${missionA ? (await currentFragments(missionA.orchestrationId!)).length : 0} fragment(s)`,
     );
-    const heldReservations = await getDb().all<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM russell_budget_reservations
-        WHERE goal_id = ? AND kind = 'MISSION' AND state = 'HELD'`,
+    /*
+     * A slot for each, and each for the length of that mission's live span.
+     *
+     * **This asked for a raw count of two and that was a number rather than a
+     * property — the correction is recorded rather than quietly applied.** Two
+     * is what the table holds only while exactly two missions exist and neither
+     * has parked, and neither half of that is fixed: the missions are launched
+     * by the tick inside `settle(8)`, one per cycle, and `missionA` parks when
+     * its packet falls outside the envelope. A parked mission is waiting on a
+     * person and is using no provider capacity, so its hold is expired rather
+     * than renewed (§24) — which frees a slot, so the loop launches the third
+     * idea, so the table holds three rows. Measured at the failing instant:
+     * three missions, two NEEDS_HUMAN with holds already lapsed and one RUNNING
+     * with a live one. The product was doing exactly what the next check's own
+     * comment describes; the count was asserting a stage of the loop.
+     *
+     * So the two things the title actually claims are asked instead, and both
+     * are stronger than the count was: **one reservation per mission, keyed to
+     * the mission it belongs to** — a count of two could be satisfied by two
+     * rows belonging to nothing — and **no more live holds than the ceiling**,
+     * which is the invariant the reservation exists for and which the count
+     * never looked at, since `state = 'HELD'` says nothing about expiry.
+     */
+    const missionSlots = await getDb().all<{
+      idempotency_key: string;
+      expires_at: string;
+    }>(
+      `SELECT idempotency_key, expires_at FROM russell_budget_reservations
+        WHERE goal_id = ? AND kind = 'MISSION' AND state = 'HELD'
+        ORDER BY created_at`,
       [goal.id],
+    );
+    const missionsWithSlots = await listMissions({ projectId });
+    const slotNow = authorityNow();
+    const live = missionSlots.filter((row) => row.expires_at > slotNow);
+    const everyMissionHasItsOwn = missionsWithSlots.every((mission) =>
+      missionSlots.some((row) => row.idempotency_key.includes(mission.candidateId ?? '\u0000')),
     );
     check(
       'L2 · `reserve` held a slot for each, for the length of its live span',
-      Number(heldReservations[0]?.n ?? 0) === 2,
-      `${Number(heldReservations[0]?.n ?? 0)} HELD mission reservation(s)`,
+      missionsWithSlots.length > 0 &&
+        missionSlots.length === missionsWithSlots.length &&
+        everyMissionHasItsOwn &&
+        live.length <= goal.maxConcurrent,
+      `${missionsWithSlots.length} mission(s), ${missionSlots.length} held slot(s), ` +
+        `one per mission keyed to it: ${everyMissionHasItsOwn}; ` +
+        `${live.length} of them still live against a ceiling of ${goal.maxConcurrent} — ` +
+        missionsWithSlots
+          .map((mission) => {
+            const row = missionSlots.find((slot) =>
+              slot.idempotency_key.includes(mission.candidateId ?? '\u0000'),
+            );
+            return (
+              `${mission.id}/${mission.state}: ` +
+              (row === undefined
+                ? 'NO SLOT'
+                : `${(row.expires_at > slotNow ? 'live until ' : 'lapsed at ') + row.expires_at}`)
+            );
+          })
+          .join(' | '),
     );
 
     /*
@@ -6577,6 +6628,34 @@ async function main(): Promise<void> {
     'Always-on loop',
     [
       ...autoNext.map((entry) => ({ name: entry.name, held: entry.held, saw: entry.saw })),
+      /*
+       * And every other condition the chain drove, as one scored row.
+       *
+       * **The chain can fail and say so while every count reads zero failing,
+       * and it did — the correction is recorded rather than quietly applied.**
+       * `L2 ·` (launch) and `L3 ·` (writeback) are exercised here and promoted
+       * to no gate: `L1 ·` goes to B, `F ·` to F, `L4/L5/L6 ·` here. So a
+       * reservation condition that did not hold appeared in the evidence
+       * block's heading as FAILED, in its own line as DID NOT HOLD, and in the
+       * summary as `0 failing` — which is §29's status contradicting the
+       * control beside it, at the one place a reader checks first.
+       *
+       * Promoting all eight was the other answer and is the wrong shape: they
+       * belong to links this gate does not score, and seventeen scenarios is
+       * the contract. One row carrying *whether the exercise this gate cites
+       * held at all* puts the failure in the denominator without moving the
+       * matrix, and it names which condition, because a bare false is the
+       * thing this whole repair is about.
+       */
+      {
+        name: 'every condition the mission chain drove held, including the links this gate does not score',
+        held: chainFailed.length === 0,
+        saw:
+          chainFailed.length === 0
+            ? `${chain.checks.length} condition(s) driven, all held`
+            : `${chainFailed.length} of ${chain.checks.length} did not hold: ` +
+              chainFailed.map((entry) => `${entry.name} — ${entry.saw}`).join('; '),
+      },
       /*
        * The first link, from production, because it is the one a checkout
        * cannot reach: a mission that *finished* and a project that believes
