@@ -2644,6 +2644,40 @@ remote.
   deployment and failed its own scripted packet, and reading it as "the deploy
   did not work" would send somebody to re-deploy a version that is already
   there.
+
+  **A sixth has happened, and this one named itself — so what is recorded here
+  is a narrowing, still not a cause.** Run 250, `8c75eb3`: release success, the
+  pre-restart hosted verification `PASS 174/174` on the released image, the
+  machine healthy and restarted, and then the packet section printed its heading
+  at 04:51:35 and **nothing at all** for forty-six seconds before
+  `timeout exceeded when trying to connect` and `ssh shell: Process exited with
+  status 1`. That is diagnostically unlike the other five: no `FENCE_LOST`, no
+  slow judge, and no check in that section even *started* — the first one, which
+  had taken nineteen seconds pre-restart on the same image, produced no line at
+  all. The eight words are `pg-pool`'s, emitted when a client checkout waits
+  past `connectionTimeoutMillis`, so what is established is that the pool was
+  saturated for more than ten seconds. Whether that is also what happened in the
+  five before it is **not** established, and stating it would be the comfortable
+  half-truth this file exists to refuse: four of those ended `FENCE_LOST` and one
+  a bare `fetch failed`, both of which a stalled checkout would produce and
+  neither of which proves one did. **`8c75eb3` is nonetheless live**, proved
+  independently of the run: `cash-report` executed the committed script inside
+  the released image and printed the tier column that exists only in that commit.
+
+  What that reading changed is the message rather than the ceiling.
+  `describePoolExhaustion` is pure, so both dialects test the branch it draws,
+  and it separates the two conditions `pg-pool` collapses — every connection
+  checked out, against a server that would not hand one over — because their
+  remedies are opposite and the driver's sentence names neither, carries no
+  numbers, does not mention the database, and does not name the knob. The counts
+  come from the pool at the instant of failure, so it is a **measurement** rather
+  than an account of what the pool was probably doing. **The ceiling was
+  deliberately not raised.** `BRAIN_DATABASE_POOL_SIZE` defaults to 10 by
+  omission, which makes it untuned rather than chosen — but raising it blind
+  could exhaust the server's own connection limit and turn a failed verification
+  into a failed boot, and this repository has no reading of that limit. §23's
+  rule holds: instrument first, size from the reading. A ceiling nobody has
+  observed is UNKNOWN, and so is the one behind it.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
@@ -4319,6 +4353,48 @@ and a suite that exercises the stage cannot see that.**
   correct the whole time. §27 already has the sentence: a warning that cries
   wolf is worse than no warning, because it teaches a reader to stop believing
   the one place that says something is genuinely wrong.
+
+- **A packet destroyed its own diagnosis and then blamed the worker for it.**
+  Four production Cash discovery rounds parked reading *"A synthesis work item
+  finished without recording anything. The packet cannot continue on its own:
+  re-plan it, or investigate why the worker completed without submitting."* The
+  first sentence was a fact. Everything after it was an assertion `faultedOut`
+  had established nothing about, and it named the wrong party — the workers had
+  submitted correctly, and it was **Brain** that could not store the bytes, for
+  §25's filename reason: Supabase refused the key of every staged cash report
+  whose title carried an em dash.
+
+  `fileResearchPacket` had recorded exactly that, on the row, in the provider's
+  own words. What destroyed it is a consequence of a *correct* earlier fix:
+  `NEEDS_HUMAN` was deliberately removed from the runner's terminal list,
+  because a decision being outstanding does not mean a packet is over — so a
+  packet carrying a filing failure is re-entered on the next tick, reaches the
+  synthesis branch with `documentId` still null, and had its reason overwritten.
+  **The cause was recorded and then overwritten by a guess**, which is why the
+  fault was untraceable for as long as it was: every reading of it sent somebody
+  to look at the worker. §33's own sentence, at a new altitude: the evidence was
+  right and the sentence about it was wrong.
+
+  The reason already on the row now wins, and the fallback says *nothing was
+  recorded about why* rather than naming a party — because those are two
+  conditions with two remedies, and a function that cannot tell them apart must
+  say so instead of choosing the one that reads like an explanation. A stale
+  comment two hundred lines up still said the runner short-circuits on
+  NEEDS_HUMAN; it is corrected in place rather than deleted, because a reader
+  who believes it concludes this path is unreachable.
+
+  **The tempting second half was refused, and the refusal is worth recording.**
+  A filing failure also *returns success* to the worker, so the item is
+  completed and the attempt is spent — which is §27's truncation lesson at a new
+  step, and the obvious fix is to make it a tool error so the work stays
+  retryable. It is not taken. `idempotentEffect` runs the effect inside one
+  transaction, so throwing would roll back `recordPass` as well, and the
+  worker's report text — the one thing in that transaction nothing else holds a
+  copy of — would be discarded to report a failure the row already records.
+  Preserving the diagnosis is strictly better than preserving the retry here,
+  and **the four parked packets are left exactly as they are**: reading them is
+  not repairing them, the documented reissue is a person's, and replaying live
+  Cash research was outside what was authorized.
 
 **None of the existing work was rewritten to make any of this come out right.**
 Every orchestration, fragment, claim, report, audit, round and parked candidate

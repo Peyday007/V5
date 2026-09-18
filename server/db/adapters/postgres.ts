@@ -46,6 +46,65 @@ types.setTypeParser(20, (value: string) => Number(value)); // int8
 types.setTypeParser(1700, (value: string) => Number(value)); // numeric
 types.setTypeParser(701, (value: string) => Number(value)); // float8
 
+/**
+ * The sentence `pg-pool` throws when a checkout waits past its timeout.
+ *
+ * Matched on the message because the driver attaches no code to it, so there is
+ * nothing else to match on. A miss degrades to the original error rather than
+ * to a wrong diagnosis.
+ */
+const POOL_TIMEOUT_MESSAGE = 'timeout exceeded when trying to connect';
+
+/** What the pool was holding at the instant a checkout gave up. */
+export interface PoolReading {
+  /** Connections the pool currently owns, checked out or idle. */
+  total: number;
+  /** Of those, the ones sitting unused. */
+  idle: number;
+  /** Callers queued behind them. */
+  waiting: number;
+  /** The ceiling this pool was opened with. */
+  max: number;
+  /** How long a checkout was allowed to wait. */
+  timeoutMs: number;
+}
+
+/**
+ * Say which condition a pool timeout actually was, with the numbers.
+ *
+ * `pg-pool` throws one sentence for two conditions that have nothing in common:
+ * a pool whose clients are every one of them checked out, and a server that
+ * would not hand out a new connection. The remedies are opposite — the first is
+ * a ceiling or a slow query holding a client, the second is the database or the
+ * network — and the message distinguishes neither, names no numbers, says
+ * nothing about the database at all, and names no knob. Six production deploys
+ * have now failed their post-restart verification on those eight words, and the
+ * first five were debugged as something else.
+ *
+ * The counts are read at the moment of failure, so this is a measurement rather
+ * than an account of what the pool was probably doing. It is pure so that both
+ * dialects can test the branch it draws; §23's own rule, one module along — a
+ * reading is worth more than a ceiling nobody has observed.
+ */
+export function describePoolExhaustion(reading: PoolReading): string {
+  const { total, idle, waiting, max, timeoutMs } = reading;
+  const held = total - idle;
+  const saturated = total >= max && idle === 0;
+  const state = `${held}/${total} connection(s) in use, ${idle} idle, ${waiting} caller(s) waiting, ceiling ${max}`;
+  if (saturated) {
+    return (
+      `The database pool had no free connection within ${timeoutMs}ms: ${state}. ` +
+      'Every connection was checked out, so this is the ceiling or something holding one too long, ' +
+      'not an unreachable database. BRAIN_DATABASE_POOL_SIZE sets the ceiling.'
+    );
+  }
+  return (
+    `The database would not give this pool a connection within ${timeoutMs}ms: ${state}. ` +
+    'The pool was below its ceiling, so this is the database or the network rather than the ceiling: ' +
+    'raising BRAIN_DATABASE_POOL_SIZE would not help.'
+  );
+}
+
 interface TransactionContext extends TransactionFrame {
   client: PoolClient;
 }
@@ -78,6 +137,10 @@ export class PostgresAdapter implements Database {
   #pool: pg.Pool;
   #transactions = new AsyncLocalStorage<TransactionContext>();
   #closed = false;
+  // Kept because `pg.Pool` does not expose the options it was opened with, and a
+  // reading without its ceiling cannot say whether the ceiling was the problem.
+  #max: number;
+  #connectionTimeoutMs: number;
 
   constructor(options: PostgresOptions) {
     const config: PoolConfig = {
@@ -104,10 +167,35 @@ export class PostgresAdapter implements Database {
     if (options.ssl !== false && !/sslmode=/i.test(options.connectionString)) {
       config.ssl = { rejectUnauthorized: false };
     }
+    this.#max = config.max ?? 10;
+    this.#connectionTimeoutMs = config.connectionTimeoutMillis ?? 10_000;
     this.#pool = new Pool(config);
     // A pool that emits an error with no listener takes the process down. An
     // idle client dropped by the far end is ordinary; the pool replaces it.
     this.#pool.on('error', () => undefined);
+  }
+
+  /**
+   * Replace `pg-pool`'s eight words with the condition and the numbers.
+   *
+   * Anything that is not a checkout timeout is returned untouched: a wrong
+   * diagnosis costs more than the bare message it replaced.
+   */
+  #namePoolTimeout(error: unknown): unknown {
+    if (!(error instanceof Error) || error.message !== POOL_TIMEOUT_MESSAGE) return error;
+    if ('brainPool' in error) return error;
+    const named = new DatabaseConfigurationError(
+      describePoolExhaustion({
+        total: this.#pool.totalCount,
+        idle: this.#pool.idleCount,
+        waiting: this.#pool.waitingCount,
+        max: this.#max,
+        timeoutMs: this.#connectionTimeoutMs,
+      }),
+    );
+    Object.defineProperty(named, 'brainPool', { value: true, enumerable: false });
+    Object.defineProperty(named, 'cause', { value: error, enumerable: false });
+    return named;
   }
 
   /** The client this statement belongs on: the transaction's, or the pool's. */
@@ -127,6 +215,8 @@ export class PostgresAdapter implements Database {
       }
       return (await this.#pool.query<T>(translated.sql, values)) as pg.QueryResult<T>;
     } catch (error) {
+      const pooled = this.#namePoolTimeout(error);
+      if (pooled !== error) throw pooled;
       // Name the statement. A dialect problem otherwise surfaces as `syntax
       // error at or near "$3"` with nothing to say which of two hundred queries
       // produced it. The parameters are deliberately not included: they are the
@@ -168,7 +258,12 @@ export class PostgresAdapter implements Database {
     const existing = this.#transactions.getStore();
     if (existing) return await this.#nested(existing, fn);
 
-    const client = await this.#pool.connect();
+    let client: PoolClient;
+    try {
+      client = await this.#pool.connect();
+    } catch (error) {
+      throw this.#namePoolTimeout(error);
+    }
     const context: TransactionContext = { client, ...rootFrame() };
     try {
       await client.query('BEGIN');
