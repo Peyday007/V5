@@ -26,12 +26,13 @@
  */
 import { useState } from 'react';
 import { useAsync } from './useAsync.ts';
+import { cashPage, modeState, type CashPage } from './cashPage.ts';
 import {
   CashApi,
   type CashModeState,
+  type CashRoadmap,
   type CashView,
   type CashViewReading,
-  type SharedCashView,
   type DerivedFigureView,
   type EngineCardView,
   type Placement,
@@ -200,21 +201,22 @@ export function CashView_({
   }
 
   /*
-   * The shared frontier, for every member of this Brain who is not the owner.
+   * One page, both roles.
    *
-   * The branch is on the server's own `scope` rather than on anything this page
-   * inferred: the private blocks are **absent from the payload**, so there is
-   * no arrangement of this component that could render one, and the two views
-   * cannot drift into showing the same person two different answers.
+   * There used to be an early `return <SharedFrontier/>` here, and it was a
+   * **second page**: nine sections against five, no heading in common and not
+   * one section identifier in common. The privacy boundary it protected was
+   * right; selecting a different layout to protect it was not, and it meant a
+   * defect on one of the two pages was invisible to anybody looking at the
+   * other.
    *
-   * An ordinary member used to reach the 404 branch above and be told there was
-   * nothing here to see, while the owner saw the frontier — which is the shape
-   * of defect that survives longest, because it is invisible from the only
-   * screen anybody is looking at.
+   * So the role no longer chooses which sections exist. It chooses what is
+   * *inside* one, through `page.capabilities` — and the private blocks are
+   * still **absent from the payload** for a member, so there is no arrangement
+   * of this component that could render one and nothing hidden in the bundle
+   * to find.
    */
-  if (data.scope === 'SHARED') {
-    return <SharedFrontier view={data} objective={known.objective} />;
-  }
+  const page = cashPage({ reading: data });
 
   return (
     <section className="rs-view rs-view-cash">
@@ -227,7 +229,7 @@ export function CashView_({
       <p className="rs-lede" title={known.objective.full}>
         {known.objective.summary}
       </p>
-      <p className="rs-hint">{data.discovery.reason}</p>
+      <p className="rs-hint">{page.frontier.discovery.reason}</p>
 
       {/*
         * The order is the order a person reads in, and it is a correction.
@@ -244,11 +246,11 @@ export function CashView_({
         * click away and still complete. Nothing was deleted; the first screen
         * stopped being all of it.
         */}
-      <Status view={data} />
-      <Decisions view={data} projectId={rootId} onChanged={view.reload} />
-      <BestOpportunities view={data} onChanged={view.reload} />
-      <MoneyRow view={data} />
-      <Details view={data} onChanged={view.reload} />
+      <Status page={page} />
+      <Decisions page={page} projectId={rootId} onChanged={view.reload} />
+      <BestOpportunities page={page} onChanged={view.reload} />
+      <MoneyRow page={page} />
+      <Details page={page} onChanged={view.reload} />
       {/*
         * People and capacity used to render here, inline: a member list, an
         * invite control, the outstanding links and every Claude capacity
@@ -269,7 +271,12 @@ export function CashView_({
         </a>
         . Neither starts or stops the work above.
       </p>
-      <Lifecycle projectId={rootId} state={data.mode.state} onChanged={view.reload} />
+      <Lifecycle
+        projectId={rootId}
+        state={modeState(page) ?? 'ACTIVE'}
+        mayAdminister={page.capabilities.mayAdminister}
+        onChanged={view.reload}
+      />
     </section>
   );
 }
@@ -435,184 +442,6 @@ function Activate({
 }
 
 /**
- * The shared frontier, as every member of this Brain sees it.
- *
- * Cash discovery is one shared frontier belonging to Brain — `services/cash/root.ts`
- * says so in its own opening paragraph, and §31 settled the same question one
- * boundary out: a validated finding belongs to the Brain. Separation begins when
- * a validated opportunity becomes an **execution job**, because that is the
- * first moment there is anything private to separate.
- *
- * So this shows what the machine has found and how far it has got, and shows no
- * money, no grant, no commercial term and no decision belonging to one person.
- * It cannot: the payload the server sent does not contain them.
- *
- * A taken opportunity is **redacted rather than hidden**. Another member needs
- * to know a piece is claimed — otherwise two of them research the same opening —
- * and does not need to know whose job it is or what they are charging.
- */
-function SharedFrontier({
-  view,
-  objective,
-}: {
-  view: SharedCashView;
-  objective: { summary: string; full: string };
-}): JSX.Element {
-  const [showAll, setShowAll] = useState(false);
-  const AVAILABILITY_LABEL: Record<SharedCashView['opportunities'][number]['availability'], string> = {
-    OPEN: 'Open',
-    BEING_QUALIFIED: 'Being qualified',
-    CLAIMED: 'Claimed',
-    IN_EXECUTION: 'Being executed',
-    DELIVERED: 'Delivered',
-    CLOSED: 'Closed',
-  };
-  const shown = showAll ? view.opportunities : view.opportunities.slice(0, 12);
-
-  return (
-    <section className="rs-view rs-view-cash">
-      <h2>Cash</h2>
-      <p className="rs-lede" title={objective.full}>
-        {objective.summary}
-      </p>
-      <p className="rs-hint">{view.discovery.reason}</p>
-
-      <section className="rs-card">
-        <h3>The frontier</h3>
-        <ul className="rs-ready-list">
-          <li className="rs-ready-row">
-            <span>Opportunities found</span>
-            <strong>{view.counts.total}</strong>
-          </li>
-          <li className="rs-ready-row">
-            <span>Open</span>
-            <strong>{view.counts.open}</strong>
-          </li>
-          <li className="rs-ready-row">
-            <span>Being qualified</span>
-            <strong>{view.counts.beingQualified}</strong>
-          </li>
-          <li className="rs-ready-row">
-            <span>Claimed or being executed</span>
-            <strong>{view.counts.claimed + view.counts.inExecution}</strong>
-          </li>
-        </ul>
-        {/*
-          * Why nothing is executing, when nothing is.
-          *
-          * The presence of a commercial grant is shared and its ceilings are
-          * not: a member looking at a long list of open pieces is owed the
-          * reason, and the reason is not a number.
-          */}
-        {view.commercialGrant === 'ABSENT' ? (
-          <p className="rs-hint">
-            No commercial grant has been made yet, so nothing here can spend anything or contact
-            anybody. That decision is a Brain administrator&rsquo;s.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="rs-card">
-        <h3>Where the research is</h3>
-        <p className="rs-hint">{view.roadmap.whatHappensNext}</p>
-        <ul className="rs-ready-list">
-          <li className="rs-ready-row">
-            <span>Discovery rounds</span>
-            <strong>
-              {view.roadmap.rounds.harvested} harvested of {view.roadmap.rounds.total}
-            </strong>
-          </li>
-          {view.roadmap.pipeline.map((stage) => (
-            <li key={stage.key} className="rs-ready-row">
-              <span>{stage.label}</span>
-              <strong>{stage.count}</strong>
-              <span className="rs-hint">{stage.note}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="rs-card">
-        <h3>Opportunities</h3>
-        <ul className="rs-ready-list">
-          {shown.length === 0 ? (
-            <li className="rs-ready-row">
-              <span>Nothing has been found yet.</span>
-            </li>
-          ) : (
-            shown.map((one) => (
-              <li key={one.id} className="rs-ready-row">
-                <span>{one.title}</span>
-                <span className="rs-ready-state" data-state={one.availability}>
-                  {AVAILABILITY_LABEL[one.availability]}
-                </span>
-                <span className="rs-hint">
-                  {one.qualification.summary}
-                  {one.signalObservedAt
-                    ? ` \u00b7 signal observed ${new Date(one.signalObservedAt).toLocaleDateString()}`
-                    : ''}
-                </span>
-              </li>
-            ))
-          )}
-        </ul>
-        {view.opportunities.length > shown.length || showAll ? (
-          <button
-            type="button"
-            className="rs-button-quiet"
-            aria-expanded={showAll}
-            onClick={() => setShowAll((was) => !was)}
-          >
-            {showAll ? 'Show fewer' : `Show all ${view.opportunities.length}`}
-          </button>
-        ) : null}
-      </section>
-
-      {view.needs.length > 0 ? (
-        <section className="rs-card">
-          <h3>What Brain needs</h3>
-          <ul className="rs-ready-list">
-            {view.needs.map((need) => (
-              <li key={need.id} className="rs-ready-row">
-                <span>{need.blockedAction}</span>
-                <span className="rs-hint">{need.nextStep}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="rs-card">
-        <h3>What Brain has been doing</h3>
-        {/*
-          * Counted rather than quoted. An event's summary is free text composed
-          * by whatever wrote it and its detail is an untyped bag; deciding per
-          * sentence whether one of them names money would be a filter over
-          * prose, which is exactly what the shared projection refuses to be.
-          */}
-        <ul className="rs-ready-list">
-          {view.activity.map((one) => (
-            <li key={one.kind} className="rs-ready-row">
-              <span>{one.kind.replace(/^CASH_/, '').replace(/_/g, ' ').toLowerCase()}</span>
-              <strong>{one.count}</strong>
-              <span className="rs-hint">
-                most recently {new Date(one.mostRecentAt).toLocaleString()}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <p className="rs-hint">
-        This is the shared frontier: what Brain has found, and how far it has got. The money, the
-        spending authority and each execution job&rsquo;s own working state belong to whoever owns
-        that job, and are not sent to this page.
-      </p>
-    </section>
-  );
-}
-
-/**
  * Decisions for me.
  *
  * Named first because the first of them is usually the one nothing can proceed
@@ -620,14 +449,39 @@ function SharedFrontier({
  * underlying items each group stands for is on the screen.
  */
 function Decisions({
-  view,
+  page,
   projectId,
   onChanged,
 }: {
-  view: CashView;
+  page: CashPage;
   projectId: string;
   onChanged(): void;
 }): JSX.Element {
+  const view = page.full;
+
+  /*
+   * The section exists for both roles and is empty for one of them.
+   *
+   * A decisions review is a list of things for **one person** to answer, so it
+   * is not on the shared frontier and never will be. What the section must not
+   * do is disappear: removing it would take the heading and the identifier off
+   * the member's page and put the sections after it at different positions,
+   * which is the divergence this whole change exists to remove. So it renders,
+   * and says the true thing.
+   */
+  if (!view) {
+    return (
+      <section className="rs-card rs-cash-decisions">
+        <h3>Decisions for you</h3>
+        <p className="rs-hint">
+          Nothing here is waiting on you. Decisions about an execution job &mdash; what it charges,
+          what it commits and when it goes ahead &mdash; belong to whoever owns that job, and are
+          not sent to this page.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="rs-card rs-cash-decisions">
       <h3>Decisions for you</h3>
@@ -673,7 +527,12 @@ function Decisions({
             ))}
         </ul>
       )}
-      <Authority view={view} projectId={projectId} onChanged={onChanged} />
+      <Authority
+        view={view}
+        projectId={projectId}
+        mayGrant={page.capabilities.mayGrantAuthority}
+        onChanged={onChanged}
+      />
     </section>
   );
 }
@@ -994,10 +853,21 @@ const CARD_PATCH_KEY: Record<string, string> = {
 function Authority({
   view,
   projectId,
+  mayGrant,
   onChanged,
 }: {
   view: CashView;
   projectId: string;
+  /**
+   * Whether to offer making or withdrawing a grant. Project `ADMIN`, decided by
+   * the server and decided again on the call.
+   *
+   * **Reading is not gated by it.** A grant that exists bounds what this sprint
+   * may spend, and a member of the project who cannot change it is still owed
+   * the answer to *what is Brain allowed to do here* — the sentences below are
+   * the server's own, composed for exactly that reading.
+   */
+  mayGrant: boolean;
   onChanged(): void;
 }): JSX.Element {
   const [busy, setBusy] = useState(false);
@@ -1024,6 +894,11 @@ function Authority({
           Committed right now: {money(view.authority.heldCents, view.myCash.position.currency)}.
           Used so far is evidence, not an allowance.
         </p>
+        {!mayGrant ? (
+          <p className="rs-hint">
+            Changing or withdrawing this is a decision for whoever administers the project.
+          </p>
+        ) : (
         <details>
           <summary className="rs-linklike">Withdraw this</summary>
           <label className="rs-field-label" htmlFor="cash-withdraw">
@@ -1060,6 +935,26 @@ function Authority({
           </button>
           {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
         </details>
+        )}
+      </div>
+    );
+  }
+
+  /*
+   * No grant, and nobody here who may make one.
+   *
+   * The sentence is what a person needs — nothing may be spent, and who would
+   * decide otherwise — rather than a form that would be refused on submit.
+   */
+  if (!mayGrant) {
+    return (
+      <div className="rs-authority">
+        <p className="rs-authority-headline">Spending limits &mdash; what Brain may spend here</p>
+        <p className="rs-hint">
+          Nothing is authorized to be spent. Setting that limit is a decision for whoever
+          administers this project. Discovery and qualification cost nothing and are not waiting on
+          it.
+        </p>
       </div>
     );
   }
@@ -1567,30 +1462,42 @@ function MyCash({ view }: { view: CashView }): JSX.Element {
  * against — and calling all four an opening is the defect this whole change
  * is about.
  */
-function Status({ view }: { view: CashView }): JSX.Element {
-  const plan = view.myCurrentWork;
-  const tiers = plan.byTier ?? { SIGNAL: 0, CANDIDATE: 0, QUALIFIED: 0, READY_TO_TEST: 0 };
-  const inState = (states: string[]): number =>
-    plan.placements.filter((one) => states.includes(one.opportunity.state)).length;
+function Status({ page }: { page: CashPage }): JSX.Element {
+  const frontier = page.frontier;
+  const tiers = frontier.byTier;
 
   /*
    * The blocker, and only a real one.
    *
    * A decision the server marked BLOCKING is one nothing can proceed without.
-   * Anything else — work in progress, a question Brain is out researching —
-   * is not a blocker, and a screen that called it one would be asking somebody
-   * to act on something that is already moving.
+   * Anything else — work in progress, a question Brain is out researching — is
+   * not a blocker, and a screen that called it one would be asking somebody to
+   * act on something that is already moving.
+   *
+   * A member has no decisions review at all — it is a list of things for one
+   * person to answer — so the count is empty for them and the sentence below
+   * says what is true of the frontier rather than pretending nothing is waiting
+   * on anybody.
    */
-  const blocking = view.decisionsForMe.items.filter(
+  const blocking = (page.full?.decisionsForMe.items ?? []).filter(
     (item) => item.urgency === 'BLOCKING' || item.urgency === 'URGENT',
   );
 
   return (
     <section className="rs-card rs-cash-status">
       <h3>The cash machine</h3>
+      {/*
+        * Every figure here is the shared frontier's, for both roles. The tiers
+        * are counted by the server from the same opportunities the list below
+        * renders, so the summary and the list cannot disagree — and the owner
+        * and a member are reading one set of numbers rather than two that
+        * happen to match.
+        */}
       <ul className="rs-cash-tiers">
         <li>
-          <strong>{view.mode?.state === 'ACTIVE' ? 'Active' : (view.mode?.state ?? 'Not started')}</strong>
+          <strong>
+            {frontier.mode?.state === 'ACTIVE' ? 'Active' : (frontier.mode?.state ?? 'Not started')}
+          </strong>
           <span>Discovery</span>
         </li>
         <li>
@@ -1610,16 +1517,28 @@ function Status({ view }: { view: CashView }): JSX.Element {
           <span>Ready to test</span>
         </li>
         <li>
-          <strong>{inState(['EXECUTING', 'DELIVERING'])}</strong>
+          {/*
+            * The raw states, not the availability words. `availability`
+            * collapses DELIVERING into DELIVERED so a member cannot read how
+            * far somebody else's job has got, which is right for *is this
+            * taken* and wrong for *how many are executing*.
+            */}
+          <strong>{frontier.byState.EXECUTING + frontier.byState.DELIVERING}</strong>
           <span>Executing</span>
         </li>
         <li>
-          <strong>{inState(['COLLECTED'])}</strong>
+          <strong>{frontier.byState.COLLECTED}</strong>
           <span>Collected</span>
         </li>
       </ul>
-      <p className="rs-decision-why">{view.roadmap.whatHappensNext}</p>
-      {blocking.length === 0 ? (
+      <p className="rs-decision-why">{frontier.roadmap.whatHappensNext}</p>
+      {!page.capabilities.mayViewPrivateJob ? (
+        <p className="rs-hint">
+          This is the shared frontier: what Brain has found, and how far it has got. A signal is
+          evidence Brain found and is still working out how money would be made from it; it is not
+          work for you. Decisions about an execution job belong to whoever owns that job.
+        </p>
+      ) : blocking.length === 0 ? (
         <p className="rs-hint">
           Nothing is waiting on you. A signal is evidence Brain found and is still working out how
           money would be made from it; it is not work for you.
@@ -1655,14 +1574,24 @@ const TIER_LABEL: Record<string, string> = {
  * with every claim, source and packet on it.
  */
 function BestOpportunities({
-  view,
+  page,
   onChanged,
 }: {
-  view: CashView;
+  page: CashPage;
   onChanged(): void;
 }): JSX.Element {
-  const plan = view.myCurrentWork;
-  const best = plan.best ?? [];
+  const view = page.full;
+  /*
+   * The same openings, chosen by the same rule, for both roles.
+   *
+   * `frontier.best` is picked server-side by `chooseBest`, which is the very
+   * function the owner's `assemble` calls, over tiers derived by the one
+   * `cashTier`. So this section names the same pieces in the same order
+   * whoever is reading — rather than two client branches that agree until one
+   * of them is edited.
+   */
+  const best = page.frontier.best;
+  const byTier = page.frontier.byTier;
 
   return (
     <section className="rs-card rs-cash-best">
@@ -1670,61 +1599,79 @@ function BestOpportunities({
       {best.length === 0 ? (
         <p className="rs-hint">
           Nothing is qualified yet, and nothing is being padded out to fill this space.{' '}
-          {(plan.byTier?.CANDIDATE ?? 0) > 0
-            ? `${plan.byTier?.CANDIDATE} ${plan.byTier?.CANDIDATE === 1 ? 'idea has' : 'ideas have'} a capture thesis and ${plan.byTier?.CANDIDATE === 1 ? 'is' : 'are'} being qualified.`
-            : `Brain is working out how money would be made from ${plan.byTier?.SIGNAL ?? 0} ${(plan.byTier?.SIGNAL ?? 0) === 1 ? 'signal' : 'signals'} it has found.`}
+          {byTier.CANDIDATE > 0
+            ? `${byTier.CANDIDATE} ${byTier.CANDIDATE === 1 ? 'idea has' : 'ideas have'} a capture thesis and ${byTier.CANDIDATE === 1 ? 'is' : 'are'} being qualified.`
+            : `Brain is working out how money would be made from ${byTier.SIGNAL} ${byTier.SIGNAL === 1 ? 'signal' : 'signals'} it has found.`}
         </p>
       ) : (
         <>
-          {plan.bestAreNearlyQualified ? (
+          {page.frontier.bestAreNearlyQualified ? (
             <p className="rs-hint">
               None of these is qualified yet. They are the ones closest to it, with the fewest
               questions left.
             </p>
           ) : null}
           <ul className="rs-list">
-            {best.map((placement) => {
-              const tier = placement.tier;
+            {best.map((one) => {
+              const tier = one.tier;
+              /*
+                * The owner's placement for the same piece, where there is one.
+                *
+                * It carries the *disposition* — execute now, wait on a named
+                * dependency, test a decisive unknown — which is a recommendation
+                * to whoever owns the job rather than a fact about the frontier,
+                * and composing it needs the deployable balance. So a member sees
+                * the piece and what is holding it, and not what somebody should
+                * do about it.
+                */
+              const placement = view?.myCurrentWork.placements.find(
+                (p) => p.opportunity.id === one.id,
+              );
               return (
-              <li key={placement.opportunity.id} className="rs-group">
-                <p className="rs-item-title">{placement.opportunity.title}</p>
-                {tier ? (
-                  <>
-                    <p className="rs-badge">{TIER_LABEL[tier.tier] ?? tier.tier}</p>
-                    <p className="rs-decision-why">{tier.summary}</p>
+                <li key={one.id} className="rs-group">
+                  <p className="rs-item-title">{one.title}</p>
+                  <p className="rs-badge">{TIER_LABEL[tier.tier] ?? tier.tier}</p>
+                  <p className="rs-decision-why">{tier.summary}</p>
+                  <p className="rs-item-meta">
+                    {tier.answered} of {tier.required} decision questions answered.
+                    {placement
+                      ? ` Next: ${DISPOSITION_LABEL[placement.disposition]} \u2014 ${placement.because}`
+                      : ` ${one.because}`}
+                  </p>
+                  {tier.toAdvance.length > 0 ? (
                     <p className="rs-item-meta">
-                      {tier.answered} of {tier.required} decision questions answered. Next:{' '}
-                      {DISPOSITION_LABEL[placement.disposition]} &mdash; {placement.because}
+                      Brain is establishing:{' '}
+                      {tier.toAdvance
+                        .slice(0, 4)
+                        .map((entry) => entry.label.toLowerCase())
+                        .join(', ')}
+                      {tier.toAdvance.length > 4 ? `, and ${tier.toAdvance.length - 4} more` : ''}.
                     </p>
-                    {tier.toAdvance.length > 0 ? (
-                      <p className="rs-item-meta">
-                        Brain is establishing:{' '}
-                        {tier.toAdvance
-                          .slice(0, 4)
-                          .map((one) => one.label.toLowerCase())
-                          .join(', ')}
-                        {tier.toAdvance.length > 4
-                          ? `, and ${tier.toAdvance.length - 4} more`
-                          : ''}
-                        .
-                      </p>
-                    ) : null}
-                  </>
-                ) : (
-                  <p className="rs-decision-why">{placement.because}</p>
-                )}
-                <EngineCard
-                  opportunityId={placement.opportunity.id}
-                  card={plan.engineCards?.[placement.opportunity.id]}
-                  economics={plan.economics?.[placement.opportunity.id] ?? []}
-                  onChanged={onChanged}
-                />
-                <Actions
-                  placement={placement}
-                  allowedActions={view.authority.allowedActions}
-                  onChanged={onChanged}
-                />
-              </li>
+                  ) : null}
+                  {/*
+                    * The decision brief and the controls are the job's, so they
+                    * render only where the payload carries them. The section,
+                    * its heading, its identifier and every piece above are the
+                    * same for both roles — which is requirement 2's line: a
+                    * permission changes what is inside a section, never which
+                    * sections there are.
+                    */}
+                  {view && page.capabilities.mayViewPrivateJob ? (
+                    <EngineCard
+                      opportunityId={one.id}
+                      card={view.myCurrentWork.engineCards?.[one.id]}
+                      economics={view.myCurrentWork.economics?.[one.id] ?? []}
+                      onChanged={onChanged}
+                    />
+                  ) : null}
+                  {view && placement && page.capabilities.mayActOnJob ? (
+                    <Actions
+                      placement={placement}
+                      allowedActions={view.authority.allowedActions}
+                      onChanged={onChanged}
+                    />
+                  ) : null}
+                </li>
               );
             })}
           </ul>
@@ -1744,33 +1691,55 @@ function BestOpportunities({
  * §33's discovery authorization is what pressing Start gave, and this grant is
  * for an entirely different thing.
  */
-function MoneyRow({ view }: { view: CashView }): JSX.Element {
-  const currency = view.myCash.position.currency;
-  const qualified =
-    (view.myCurrentWork.byTier?.QUALIFIED ?? 0) + (view.myCurrentWork.byTier?.READY_TO_TEST ?? 0);
+function MoneyRow({ page }: { page: CashPage }): JSX.Element {
+  const view = page.full;
+  const qualified = page.frontier.byTier.QUALIFIED + page.frontier.byTier.READY_TO_TEST;
+  const grantIsLive =
+    view?.authority.exists ?? page.frontier.commercialGrant === 'PRESENT';
+
+  /*
+   * The figures are the job's; the *sentence* is the frontier's.
+   *
+   * Whether a commercial grant exists at all is shared, and deliberately so:
+   * it is the reason nothing in the portfolio is executing, and a member
+   * looking at a long list of open pieces is owed that answer. Its ceilings,
+   * what has been committed and what has been spent are not, so a member sees
+   * the section, the heading and the explanation with no numbers in it — which
+   * is a permission changing what is inside a section rather than which
+   * sections there are.
+   */
   return (
     <section className="rs-card rs-cash-money-row">
       <h3>Money</h3>
-      <ul className="rs-cash-tiers">
-        <li>
-          <strong>{money(view.authority.maxCommittedCents, currency)}</strong>
-          <span>Authorized</span>
-        </li>
-        <li>
-          <strong>{money(view.authority.committedCents, currency)}</strong>
-          <span>Committed</span>
-        </li>
-        <li>
-          <strong>{money(view.authority.spentCents, currency)}</strong>
-          <span>Spent</span>
-        </li>
-        <li>
-          <strong>{money(view.myCash.position.deployableCents, currency)}</strong>
-          <span>Remaining capacity</span>
-        </li>
-      </ul>
+      {view ? (
+        <ul className="rs-cash-tiers">
+          <li>
+            <strong>{money(view.authority.maxCommittedCents, view.myCash.position.currency)}</strong>
+            <span>Authorized</span>
+          </li>
+          <li>
+            <strong>{money(view.authority.committedCents, view.myCash.position.currency)}</strong>
+            <span>Committed</span>
+          </li>
+          <li>
+            <strong>{money(view.authority.spentCents, view.myCash.position.currency)}</strong>
+            <span>Spent</span>
+          </li>
+          <li>
+            <strong>
+              {money(view.myCash.position.deployableCents, view.myCash.position.currency)}
+            </strong>
+            <span>Remaining capacity</span>
+          </li>
+        </ul>
+      ) : (
+        <p className="rs-hint">
+          The money belongs to whoever owns an execution job, and no figure of it is sent to this
+          page &mdash; not a balance, not a ceiling, not what has been spent.
+        </p>
+      )}
       <p className="rs-hint">
-        {view.authority.exists
+        {grantIsLive
           ? 'A standing commercial authority is live. It bounds what may be committed; it commits nothing.'
           : qualified > 0
             ? 'Nothing is authorized to be spent. Something is qualified now, so this is the decision it is waiting on.'
@@ -1788,127 +1757,221 @@ function MoneyRow({ view }: { view: CashView }): JSX.Element {
  * its own count in the summary, so a person can tell whether opening it is
  * worth it without opening it.
  */
-function Details({ view, onChanged }: { view: CashView; onChanged(): void }): JSX.Element {
-  const plan = view.myCurrentWork;
+function Details({ page, onChanged }: { page: CashPage; onChanged(): void }): JSX.Element {
+  const view = page.full;
+  const frontier = page.frontier;
+
+  /*
+   * All five disclosures exist for both roles, in one order.
+   *
+   * Dropping one for a member would take its heading and its identifier off the
+   * page and move every section after it, which is the divergence this change
+   * exists to remove. So the money disclosure is here for a member too, saying
+   * what is true — that the figures belong to whoever owns a job and are not
+   * sent — rather than vanishing and leaving them to wonder whether Cash has a
+   * money section at all.
+   */
   return (
     <>
       <details className="rs-card rs-cash-portfolio">
         <summary>
           <h3>Everything Brain has found</h3>
           <span className="rs-hint">
-            {plan.placements.length}{' '}
-            {plan.placements.length === 1 ? 'record' : 'records'}, with their claims and sources
+            {frontier.opportunities.length}{' '}
+            {frontier.opportunities.length === 1 ? 'record' : 'records'}, with their claims and
+            sources
           </span>
         </summary>
-        <CurrentWork view={view} onChanged={onChanged} />
+        <CurrentWork page={page} onChanged={onChanged} />
       </details>
       <details className="rs-card rs-cash-needs-detail">
         <summary>
           <h3>What Brain is working on</h3>
           <span className="rs-hint">
-            {view.whatBrainNeeds.length} open {view.whatBrainNeeds.length === 1 ? 'question' : 'questions'} in
+            {frontier.needs.length} open {frontier.needs.length === 1 ? 'question' : 'questions'} in
             Brain&rsquo;s own queue
           </span>
         </summary>
         <p className="rs-hint">
           These are facts about the world, so Brain looks them up. None of them is a task for you.
         </p>
-        <Needs view={view} />
+        <Needs page={page} />
       </details>
       <details className="rs-card rs-cash-research">
         <summary>
           <h3>Research detail</h3>
           <span className="rs-hint">
-            {view.roadmap.rounds.total} discovery {view.roadmap.rounds.total === 1 ? 'round' : 'rounds'},{' '}
-            {view.roadmap.research.planned} planned items
+            {frontier.roadmap.rounds.total} discovery{' '}
+            {frontier.roadmap.rounds.total === 1 ? 'round' : 'rounds'},{' '}
+            {frontier.roadmap.research.planned} planned items
           </span>
         </summary>
-        <Roadmap view={view} />
+        <Roadmap roadmap={frontier.roadmap} discoveryReason={frontier.discovery.reason} />
       </details>
       <details className="rs-card rs-cash-money-detail">
         <summary>
           <h3>Money detail and the spending authority</h3>
           <span className="rs-hint">
-            {view.myCash.entries.length} recorded{' '}
-            {view.myCash.entries.length === 1 ? 'entry' : 'entries'} ·{' '}
-            {view.authority.exists ? 'a grant is live' : 'no grant'}
+            {view
+              ? `${view.myCash.entries.length} recorded ${
+                  view.myCash.entries.length === 1 ? 'entry' : 'entries'
+                } \u00b7 ${view.authority.exists ? 'a grant is live' : 'no grant'}`
+              : frontier.commercialGrant === 'PRESENT'
+                ? 'A grant is live. Its limits and the ledger belong to the job.'
+                : 'No grant. The ledger belongs to the job.'}
           </span>
         </summary>
-        <MoneyPicture view={view} />
-        <MyCash view={view} />
+        {view ? (
+          <>
+            <MoneyPicture view={view} />
+            <MyCash view={view} />
+          </>
+        ) : (
+          <p className="rs-hint">
+            Whether a commercial grant exists is shared, because it is why nothing here is
+            executing. Its ceilings, what has been committed, what has been spent and every entry in
+            the ledger belong to whoever owns the job, and none of it is sent to this page.
+          </p>
+        )}
       </details>
       <details className="rs-card rs-cash-history">
         <summary>
           <h3>Activity</h3>
           <span className="rs-hint">
-            {view.whatBrainHasDone.length} recent{' '}
-            {view.whatBrainHasDone.length === 1 ? 'event' : 'events'}
+            {view
+              ? `${view.whatBrainHasDone.length} recent ${
+                  view.whatBrainHasDone.length === 1 ? 'event' : 'events'
+                }`
+              : `${frontier.activity.reduce((total, one) => total + one.count, 0)} events in ${
+                  frontier.activity.length
+                } ${frontier.activity.length === 1 ? 'kind' : 'kinds'}`}
           </span>
         </summary>
-        <Done view={view} />
+        <Done page={page} />
       </details>
     </>
   );
 }
 
 function CurrentWork({
-  view,
+  page,
   onChanged,
 }: {
-  view: CashView;
+  page: CashPage;
   onChanged(): void;
 }): JSX.Element {
-  const plan = view.myCurrentWork;
+  const view = page.full;
+  const frontier = page.frontier;
+
+  /*
+   * One list, in one order, for both roles.
+   *
+   * The records are the frontier's — already `rank`-ordered by the server, the
+   * same ranking the owner's placements carry, because `rank` reads properties
+   * of the piece rather than of the account. What an owner additionally sees on
+   * each row is the disposition, the decision brief and the controls; what
+   * nobody sees here is a figure a member is not entitled to, because the
+   * figures are not in their payload at all.
+   */
+  /*
+   * `rs-cash-portfolio-body`, not `rs-cash-portfolio`.
+   *
+   * The disclosure around this already carries that identifier, and two nested
+   * elements sharing one name make `querySelector` answer whichever comes
+   * first — which is a structural problem rather than a style one: a parity
+   * check reading the section tree would have been comparing an ambiguous
+   * name. The stylesheet targets `.rs-cash-portfolio .rs-group`, so the
+   * descendant rules still apply from the disclosure. The same is true of
+   * `rs-cash-history-body` below.
+   */
   return (
-    <section className="rs-card rs-cash-portfolio">
+    <section className="rs-card rs-cash-portfolio-body">
       <h3>Your current work</h3>
-      {plan.placements.length === 0 ? (
-        <p className="rs-hint">
-          Nothing in the portfolio yet. {view.discovery.reason}
-        </p>
+      {frontier.opportunities.length === 0 ? (
+        <p className="rs-hint">Nothing in the portfolio yet. {frontier.discovery.reason}</p>
       ) : (
         <>
-          <p className="rs-item-meta">
-            {plan.executeNow.length} to act on now, {plan.waiting.length} waiting. Combined
-            conservative contribution of the live pieces:{' '}
-            {money(plan.combinedContributionCents, view.myCash.position.currency)} &mdash; an
-            arithmetic illustration from quoted prices, not a bank balance.
-          </p>
+          {view ? (
+            <p className="rs-item-meta">
+              {view.myCurrentWork.executeNow.length} to act on now,{' '}
+              {view.myCurrentWork.waiting.length} waiting. Combined conservative contribution of the
+              live pieces:{' '}
+              {money(
+                view.myCurrentWork.combinedContributionCents,
+                view.myCash.position.currency,
+              )}{' '}
+              &mdash; an arithmetic illustration from quoted prices, not a bank balance.
+            </p>
+          ) : (
+            <p className="rs-item-meta">
+              {frontier.counts.open} open, {frontier.counts.beingQualified} being qualified,{' '}
+              {frontier.counts.claimed + frontier.counts.inExecution} taken. What each piece would
+              earn belongs to whoever takes it on.
+            </p>
+          )}
           <ul className="rs-list">
-            {plan.placements.map((placement) => (
-              <li key={placement.opportunity.id} className="rs-group">
-                <p className="rs-item-title">{placement.opportunity.title}</p>
-                <p className="rs-badge">{DISPOSITION_LABEL[placement.disposition]}</p>
-                <p className="rs-decision-why">{placement.because}</p>
-                {placement.opportunity.exhaustedAt ? (
-                  <p className="rs-item-meta">
-                    This opening is finished: {placement.opportunity.exhaustedReason}. Whatever it
-                    earned still counts.
+            {frontier.opportunities.map((one) => {
+              const placement = view?.myCurrentWork.placements.find(
+                (p) => p.opportunity.id === one.id,
+              );
+              return (
+                <li key={one.id} className="rs-group">
+                  <p className="rs-item-title">{one.title}</p>
+                  <p className="rs-badge">
+                    {placement
+                      ? DISPOSITION_LABEL[placement.disposition]
+                      : (TIER_LABEL[one.tier.tier] ?? one.tier.tier)}
                   </p>
-                ) : null}
-                {/*
-                  * Optional access on purpose.
-                  *
-                  * The server always sends both, but a deploy replaces the
-                  * server and the browser tab separately — so for the minutes
-                  * between, a client built after the field existed can be
-                  * holding a view fetched before it did. Rendering nothing is
-                  * the right answer there; throwing would take the whole
-                  * portfolio down over a card.
-                  */}
-                <EngineCard
-                  opportunityId={placement.opportunity.id}
-                  card={plan.engineCards?.[placement.opportunity.id]}
-                  economics={plan.economics?.[placement.opportunity.id] ?? []}
-                  onChanged={onChanged}
-                />
-                <Actions
-                  placement={placement}
-                  allowedActions={view.authority.allowedActions}
-                  onChanged={onChanged}
-                />
-              </li>
-            ))}
+                  <p className="rs-decision-why">{placement ? placement.because : one.because}</p>
+                  {placement?.opportunity.exhaustedAt ? (
+                    <p className="rs-item-meta">
+                      This opening is finished: {placement.opportunity.exhaustedReason}. Whatever it
+                      earned still counts.
+                    </p>
+                  ) : null}
+                  {/*
+                    * The publisher's own dated signal and the claim it resolves
+                    * to, for both roles. It is accepted evidence carrying a
+                    * source and a passage, so a member can check it rather than
+                    * take Brain's word for it — §10 at a new reader.
+                    */}
+                  {one.buyingSignal ? (
+                    <p className="rs-item-meta">
+                      {one.buyingSignal}
+                      {one.signalObservedAt
+                        ? ` \u00b7 observed ${new Date(one.signalObservedAt).toLocaleDateString()}`
+                        : ''}
+                      {one.sourceClaimId ? ` \u00b7 claim ${one.sourceClaimId}` : ''}
+                    </p>
+                  ) : null}
+                  {/*
+                    * Optional access on purpose.
+                    *
+                    * The server always sends both, but a deploy replaces the
+                    * server and the browser tab separately — so for the minutes
+                    * between, a client built after the field existed can be
+                    * holding a view fetched before it did. Rendering nothing is
+                    * the right answer there; throwing would take the whole
+                    * portfolio down over a card.
+                    */}
+                  {view && page.capabilities.mayViewPrivateJob ? (
+                    <EngineCard
+                      opportunityId={one.id}
+                      card={view.myCurrentWork.engineCards?.[one.id]}
+                      economics={view.myCurrentWork.economics?.[one.id] ?? []}
+                      onChanged={onChanged}
+                    />
+                  ) : null}
+                  {view && placement && page.capabilities.mayActOnJob ? (
+                    <Actions
+                      placement={placement}
+                      allowedActions={view.authority.allowedActions}
+                      onChanged={onChanged}
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </>
       )}
@@ -2229,24 +2292,36 @@ function Actions({
 }
 
 /** What Brain needs: a blocked action with a recommended way forward. */
-function Needs({ view }: { view: CashView }): JSX.Element {
+function Needs({ page }: { page: CashPage }): JSX.Element {
+  const view = page.full;
+  const needs = page.frontier.needs;
+
+  /*
+   * The need, its reason and its remedy are the frontier's — a capability gap
+   * is a fact about what Brain cannot currently do, and every member is owed
+   * it. What is the owner's is `setupEffort`, which is a **cost**, so it
+   * renders only where the payload carries one.
+   */
   return (
     <section className="rs-card rs-cash-needs">
       <h3>What Brain needs</h3>
-      {view.whatBrainNeeds.length === 0 ? (
+      {needs.length === 0 ? (
         <p className="rs-hint">Nothing is missing that Brain knows about.</p>
       ) : (
         <ul className="rs-list">
-          {view.whatBrainNeeds.map((need) => (
-            <li key={need.id} className="rs-group">
-              <p className="rs-item-title">{need.blockedAction}</p>
-              <p className="rs-decision-why">{need.whyItMatters}</p>
-              <p className="rs-decision-what">{need.recommendedPath}</p>
-              <p className="rs-item-meta">
-                {need.setupEffort} &middot; next step: {need.nextStep}
-              </p>
-            </li>
-          ))}
+          {needs.map((need) => {
+            const mine = view?.whatBrainNeeds.find((one) => one.id === need.id);
+            return (
+              <li key={need.id} className="rs-group">
+                <p className="rs-item-title">{need.blockedAction}</p>
+                <p className="rs-decision-why">{need.whyItMatters}</p>
+                <p className="rs-decision-what">{need.recommendedPath}</p>
+                <p className="rs-item-meta">
+                  {mine ? `${mine.setupEffort} \u00b7 ` : ''}next step: {need.nextStep}
+                </p>
+              </li>
+            );
+          })}
         </ul>
       )}
       <p className="rs-hint">
@@ -2274,8 +2349,20 @@ function Needs({ view }: { view: CashView }): JSX.Element {
  *
  * It renders a projection and presses nothing. There is no control on it.
  */
-function Roadmap({ view }: { view: CashView }): JSX.Element {
-  const map = view.roadmap;
+function Roadmap({
+  roadmap,
+  discoveryReason,
+}: {
+  roadmap: CashRoadmap;
+  discoveryReason: string;
+}): JSX.Element {
+  /*
+   * Takes the roadmap rather than a view, because it is **identical** for both
+   * roles: `CashRoadmap` is carried whole on the shared frontier, so there is
+   * nothing here for a permission to change and no reason for this component to
+   * know who is reading.
+   */
+  const map = roadmap;
   const research = map.research;
   const queued = research.byStatus.PLANNED + research.byStatus.QUEUED;
   const running = research.byStatus.RUNNING + research.byStatus.VALIDATING;
@@ -2351,7 +2438,7 @@ function Roadmap({ view }: { view: CashView }): JSX.Element {
       </p>
 
       {map.active.length === 0 ? (
-        <p className="rs-hint">No round is open right now. {view.discovery.reason}</p>
+        <p className="rs-hint">No round is open right now. {discoveryReason}</p>
       ) : (
         <ul className="rs-list">
           {map.active.map((round) => (
@@ -2480,19 +2567,63 @@ function plainEvent(kind: string): string {
 /** How many events the history shows before somebody asks for more. */
 const EVENTS_PER_PAGE = 10;
 
-function Done({ view }: { view: CashView }): JSX.Element {
+function Done({ page }: { page: CashPage }): JSX.Element {
   const [shown, setShown] = useState(EVENTS_PER_PAGE);
+  const view = page.full;
+
+  /*
+   * Counted for a member, quoted for the owner — and the same section either
+   * way.
+   *
+   * `cash_events.summary` is free text composed by whatever wrote the event and
+   * `detail` is an untyped bag, so deciding per sentence whether one of them
+   * names money would be a filter over prose, which is exactly what the shared
+   * projection refuses to be. A count per kind carries no prose at all, so a
+   * member gets the shape of the activity and none of its words.
+   */
+  if (!view) {
+    const activity = page.frontier.activity;
+    return (
+      <section className="rs-card rs-cash-history-body">
+        <h3>Everything that has happened</h3>
+        {activity.length === 0 ? (
+          <p className="rs-hint">Nothing has happened here yet.</p>
+        ) : (
+          <ul className="rs-list">
+            {activity.map((one) => (
+              <li key={one.kind} className="rs-row">
+                <span className="rs-item-title">{plainEvent(one.kind)}</span>
+                <span className="rs-item-meta">
+                  {one.count} {one.count === 1 ? 'time' : 'times'} &middot; most recently{' '}
+                  {new Date(one.mostRecentAt).toLocaleString()}
+                </span>
+                <details className="rs-cash-event-raw">
+                  <summary>What Brain called it</summary>
+                  <code>{one.kind}</code>
+                </details>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="rs-hint">
+          Counted rather than quoted: what each event *said* belongs to whoever owns the job it was
+          about, so the shared frontier carries the kinds and the counts and no free text at all.
+        </p>
+      </section>
+    );
+  }
+
   const all = view.whatBrainHasDone;
-  const page = all.slice(0, shown);
+  const page_ = all.slice(0, shown);
   return (
-    <section className="rs-card rs-cash-history">
+    <section className="rs-card rs-cash-history-body">
       <h3>Everything that has happened</h3>
       {all.length === 0 ? (
         <p className="rs-hint">Nothing has happened here yet.</p>
       ) : (
         <>
           <ul className="rs-list">
-            {page.map((event) => (
+            {page_.map((event) => (
               <li key={event.id} className="rs-row">
                 <span className="rs-item-title">{event.summary}</span>
                 <span className="rs-item-meta">
@@ -2545,10 +2676,17 @@ function Done({ view }: { view: CashView }): JSX.Element {
 function Lifecycle({
   projectId,
   state,
+  mayAdminister,
   onChanged,
 }: {
   projectId: string;
   state: CashModeState;
+  /**
+   * Whether to *offer* the transitions. The server decided it, at project
+   * `ADMIN`, and decides it again on the call — this only stops offering a
+   * control that would be refused.
+   */
+  mayAdminister: boolean;
   onChanged(): void;
 }): JSX.Element {
   const [busy, setBusy] = useState(false);
@@ -2564,6 +2702,19 @@ function Lifecycle({
     <section className="rs-card rs-cash-lifecycle">
       <h3>The sprint</h3>
       <p className="rs-item-meta">It is {state.toLowerCase().replace('_', ' ')}.</p>
+      {/*
+        * The state is a fact about the sprint and is shown to everybody; the
+        * transitions are a decision and are offered to whoever may take it.
+        * The section itself stays either way, because removing it would move
+        * every heading above it on one of the two pages.
+        */}
+      {!mayAdminister ? (
+        <p className="rs-hint">
+          Starting, winding down and archiving the sprint are decisions for whoever administers this
+          project. Winding it down would stop new discovery and nothing else.
+        </p>
+      ) : (
+      <>
       <label className="rs-field-label" htmlFor="cash-lifecycle-reason">
         Why
       </label>
@@ -2603,6 +2754,8 @@ function Lifecycle({
       </div>
       {message ? <p className="rs-hint">{message}</p> : null}
       {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      </>
+      )}
     </section>
   );
 }

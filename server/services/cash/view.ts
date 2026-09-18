@@ -31,6 +31,7 @@ import { assemble } from './portfolio.ts';
 import { executionPath, type ExecutionPath } from './execution.ts';
 import { compressedReview } from './review.ts';
 import { authorityFor } from './opportunities.ts';
+import { sharedFrontier, type SharedFrontier } from './shared.ts';
 import type {
   CashCardFact,
   CashCommitment,
@@ -149,6 +150,24 @@ export interface CashView {
   roadmap: CashRoadmap;
   /** What the evidence supports saying about money, and what it does not. */
   forecast: CashForecast;
+  /**
+   * The same shared frontier every member of this Brain is sent.
+   *
+   * Carried here so the owner's page and a member's page render their shared
+   * sections — the stage counts, the opportunity list, the roadmap, the
+   * capability gaps, the aggregated activity — from **one object produced by
+   * one function**, rather than from two shapes a client had to reconcile into
+   * agreement. Two readers of one fact disagree eventually; that has been true
+   * of a column, a status line, a review card and a projection in this
+   * repository already, and a page is no different.
+   *
+   * It widens nothing. Every field in here already leaves the server for every
+   * authenticated person, so an owner receiving it receives what they could
+   * have read anyway. The private blocks above are what an ordinary member is
+   * not sent, and that is unchanged — the direction of this addition is the
+   * safe one.
+   */
+  frontier: SharedFrontier;
 }
 
 export async function cashView(input: {
@@ -318,6 +337,14 @@ export async function cashView(input: {
      */
     roadmap: await cashRoadmap(input.projectId),
     forecast: await cashForecast({ projectId: input.projectId, currency }),
+    /*
+     * The same function every member's read calls, on the same rows. Reading
+     * them twice on this one path is the deliberate cost of the two roles'
+     * shared sections being one object rather than two that agree by
+     * inspection. It writes nothing and moves nothing, exactly as the two
+     * reads above do not.
+     */
+    frontier: await sharedFrontier({ projectId: input.projectId }),
     decisionsForMe: compressedReview({
       mode,
       stalled,

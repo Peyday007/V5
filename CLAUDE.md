@@ -4838,6 +4838,101 @@ owns the job rather than a fact about the frontier.
 
 ---
 
+## 35. A permission decides what is inside a section. It never decides which sections there are.
+
+The boundary §34 drew was right and the way the page expressed it was not. A
+member's Cash read answered `SHARED`, and `Cash.tsx` turned that into an early
+`return <SharedFrontier/>` — a **second page**. Nine sections against five. Not
+one heading in common. Not one section identifier in common, because every
+member card was a bare `.rs-card` with no `rs-cash-*` class at all, so nothing
+on the member's page was even addressable by the name the owner's page used for
+the same subject.
+
+Nothing was insecure about it. That is the point worth keeping: **the failure
+mode of a correct privacy boundary can be a layout.** Two people looking at one
+Brain saw two products, and a defect on either page was invisible from the
+other — which for one of the two is every person who could have reported it,
+since nobody holding the owner's view ever opens the member's.
+
+- **The role no longer chooses a tree.** One skeleton — the owner's, unchanged
+  in order and in name: the cash machine, the decisions, the best openings, the
+  money, five disclosures, the sprint. Ten sections, and a member gets all ten.
+  A section whose contents are entirely private renders and **says what is
+  true** rather than vanishing, because removing one takes its heading off the
+  page and moves every section after it. `tests/cashSection.test.tsx` reads the
+  two trees out of the document and holds them against each other; it was run
+  against a restored branch, and four of its assertions fail there.
+- **The shared sections are one object, not two that agree.** `sharedFrontier`
+  is embedded in the owner's payload as `CashView.frontier`, so both roles'
+  stage counts, opportunity list, roadmap, capability gaps and activity come
+  from the identical derivation. The alternative — the owner's page deriving its
+  own counts from `myCurrentWork` while a member's read `counts` — is the shape
+  this repository has been burned by at a column, a status line, a review card
+  and a projection: **two readers of one fact disagree eventually.** The
+  boundary test asserts the owner's `frontier` block is byte-identical to a
+  member's whole payload, which is a property no component test could reach.
+- **Reading it cost one honest widening, and one honest refusal.** The tier
+  crosses now, because the tier is what separates *evidence Brain found* from
+  *work somebody could do* (§33) and a member reading the frontier without it
+  cannot tell those apart. It is safe not by promise but by shape: a
+  `TierReading` is a tier, two static sentences, the open requirements as
+  `{ key, label, task, owner }` — every one a constant looked up per field — and
+  two counts, and **no branch of it interpolates a value**, which is asserted
+  against the live payload rather than against a reading of the source. What was
+  refused is the disposition, the economics and every figure, unchanged.
+- **`counts` and `byState` are two questions and were nearly one answer.**
+  `availability` deliberately collapses `DELIVERING` into `DELIVERED` so a
+  member cannot read how far somebody else's job has got. Reusing it for *how
+  many are executing* would have silently changed the owner's own numbers —
+  right for the first question, wrong for the second, and nobody choosing it.
+  Both are sent, and the page reads the one that answers what it is asking.
+- **The capabilities are the server's, and deriving them in the client was the
+  tempting mistake.** The browser holds one role flag: Brain administrator.
+  Administering the sprint, moving its lifecycle and granting commercial
+  authority are all project `ADMIN` — so a client deriving them would have
+  hidden a lifecycle control from the project administrator entitled to press
+  it, which is §24's *waiting nobody can resolve* wearing a permission, and
+  offered one where the level was the real question. `cashCapabilities` answers
+  with the same `decideProjectAccess` every route applies. There is no Cash
+  capability module and there must never be one. A payload carrying none is
+  **deny by default**, and a test asserts the model contains no `isBrainAdmin`
+  at all.
+- **A hidden control is still not authorization.** All four are re-decided at
+  the moment anything happens. What they are for is that a control which cannot
+  succeed should not be offered, because a refusal somebody could not have
+  predicted teaches them the refusal is arbitrary.
+- **`Authority` reads for everyone who has it and writes for whoever may.**
+  Gating the whole component on the grant permission was the first version and
+  was wrong: a project member who cannot change a grant is still owed the answer
+  to *what is Brain allowed to do here*, and the sentences are the server's, for
+  exactly that reading.
+- **Two nested elements shared one identifier, which is a structural problem
+  rather than a style one.** `rs-cash-portfolio` and `rs-cash-history` each sat
+  on a disclosure *and* on the card inside it, so `querySelector` answered
+  whichever came first and a parity check would have been comparing an ambiguous
+  name. The inner ones are `-body` now; the stylesheet's descendant rules are
+  unaffected.
+- **Theme is colour, and it was never a Brain decision.** Nothing in this
+  repository sets `data-theme`: there is no theme control, no theme preference —
+  `PREFERENCES` is four presentational keys and adding one is a code change
+  somebody reviews — and nothing stored to migrate. A viewer gets their own
+  browser's `prefers-color-scheme`, honoured identically whoever they are. So
+  the friend's dark screen is neither accidental nor selected in Brain, and
+  there is nothing to correct. What *could* have made the two structural is a
+  theme block declaring a layout property, or a rule keyed on a theme hiding a
+  section; `tests/step12bResponsive.test.tsx` now refuses both, and refuses any
+  rule that takes an `rs-cash-*` section off the page at any width — which is
+  the mobile More-menu defect (§29) asked of Cash before it happens rather than
+  after.
+
+**Nothing about Cash itself moved.** Not the research, the tiers, the jobs, the
+authority, the spending, the dispatch or any external action. `chooseBest` is
+the owner's own selection rule extracted so that one function serves both pages
+instead of two that agree today, and `assemble` calls it with the identical
+inputs it used inline. Every route, guard and refusal is where it was.
+
+---
+
 ## Repository map
 
 ```
@@ -5084,7 +5179,8 @@ client/                 React UI
   src/Root.tsx          which shell this address wants, and who is signed in
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
-  src/russell/Cash.tsx  one person's private sprint, and nobody else's
+  src/russell/Cash.tsx  one Cash page: one skeleton, and a role decides what is in it
+  src/russell/cashPage.ts  both payloads, normalized; the capabilities the server sent
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
   src/russell/Devices.tsx    your own passkeys, and nobody else's
   src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate

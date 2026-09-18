@@ -402,6 +402,37 @@ export interface AssembledPlan {
  */
 export const BEST_SHOWN = 5;
 
+/**
+ * The few worth putting in front of somebody, and whether they are the real
+ * thing or the closest to it.
+ *
+ * Extracted so the owner's `assemble` and the shared frontier apply **one**
+ * rule rather than two that happen to agree today. It is generic over the item
+ * because the two callers hold different shapes of the same piece — a
+ * `Placement` and a `SharedOpportunity` — and the rule reads nothing but the
+ * tier, which both carry and which is derived by one function either way.
+ *
+ * Nearly qualified is a count, not a feeling: the candidates with the fewest
+ * questions left. `answered` and `required` are both counts of rows, so the
+ * ordering is a measurement rather than a view about which looks promising.
+ */
+export function chooseBest<T>(
+  live: readonly T[],
+  tierOf: (one: T) => TierReading,
+): { best: T[]; bestAreNearlyQualified: boolean } {
+  const qualified = live.filter(
+    (one) => tierOf(one).tier === 'QUALIFIED' || tierOf(one).tier === 'READY_TO_TEST',
+  );
+  const nearly = live
+    .filter((one) => tierOf(one).tier === 'CANDIDATE')
+    .sort((a, b) => tierOf(a).toAdvance.length - tierOf(b).toAdvance.length);
+  const best = qualified.length > 0 ? qualified : nearly;
+  return {
+    best: best.slice(0, BEST_SHOWN),
+    bestAreNearlyQualified: qualified.length === 0 && nearly.length > 0,
+  };
+}
+
 export function assemble(input: PortfolioInput): AssembledPlan {
   const all = placements(input);
   const live = all.filter((p) => p.disposition !== 'ARCHIVED');
@@ -414,24 +445,13 @@ export function assemble(input: PortfolioInput): AssembledPlan {
   };
   for (const placement of live) byTier[placement.tier.tier] += 1;
 
-  const qualified = live.filter(
-    (p) => p.tier.tier === 'QUALIFIED' || p.tier.tier === 'READY_TO_TEST',
-  );
-  /*
-   * Nearly qualified is a count, not a feeling: the candidates with the fewest
-   * questions left. `answered` and `required` are both counts of rows, so the
-   * ordering is a measurement rather than a view about which looks promising.
-   */
-  const nearly = live
-    .filter((p) => p.tier.tier === 'CANDIDATE')
-    .sort((a, b) => a.tier.toAdvance.length - b.tier.toAdvance.length);
-  const best = qualified.length > 0 ? qualified : nearly;
+  const chosen = chooseBest(live, (p) => p.tier);
 
   return {
     placements: all,
     byTier,
-    best: best.slice(0, BEST_SHOWN),
-    bestAreNearlyQualified: qualified.length === 0 && nearly.length > 0,
+    best: chosen.best,
+    bestAreNearlyQualified: chosen.bestAreNearlyQualified,
     executeNow: live.filter(
       (p) => p.disposition === 'EXECUTE_NOW' || p.disposition === 'RUN_IN_PARALLEL',
     ),

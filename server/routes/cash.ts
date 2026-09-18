@@ -85,7 +85,7 @@ import {
 } from '../services/cash/opportunities.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
-import { decideCashRead } from '../services/cash/access.ts';
+import { cashCapabilities, decideCashRead } from '../services/cash/access.ts';
 import { sharedCashView } from '../services/cash/shared.ts';
 import {
   CANONICAL_CASH_OBJECTIVE,
@@ -367,7 +367,10 @@ cashRouter.get(
      */
     const decision = await decideCashRead(projectId);
     if (decision.scope === 'SHARED') {
-      return await sharedCashView({ projectId });
+      return {
+        ...(await sharedCashView({ projectId })),
+        capabilities: cashCapabilities({ scope: 'SHARED', projectId }),
+      };
     }
     if (decision.scope === 'NONE') {
       /*
@@ -383,6 +386,14 @@ cashRouter.get(
     return {
       scope: 'FULL' as const,
       ...view,
+      /*
+       * What may be *offered*, decided by the same `decideProjectAccess` this
+       * route already ran. The client holds only a Brain-administrator flag,
+       * and these three decisions are project `ADMIN` — so a client deriving
+       * them would hide a lifecycle control from the project administrator
+       * entitled to press it.
+       */
+      capabilities: cashCapabilities({ scope: 'FULL', projectId: project.id }),
       // The contract travels down with the view rather than being restated in
       // the client, so what a person is offered and what the server accepts are
       // one object — §24's manifest lesson.

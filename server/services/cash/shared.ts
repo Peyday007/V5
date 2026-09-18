@@ -66,7 +66,10 @@
 import { listCashEvents } from '../../repos/cashMode.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { evidenceCard } from './card.ts';
-import { rank } from './portfolio.ts';
+import { cashEngineCard } from './engineCard.ts';
+import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
+import { CASH_TIERS, cashTier, type CashTier, type TierReading } from './tier.ts';
+import { chooseBest, rank } from './portfolio.ts';
 import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { authorityFor } from './opportunities.ts';
 import type {
@@ -198,10 +201,44 @@ export interface SharedOpportunity {
    * the machine's progress; the values are the job's, and none of them crosses.
    */
   qualification: { ready: boolean; missing: string[]; summary: string };
+  /**
+   * Where this piece stands: a signal, a candidate, a qualified opening, or
+   * something ready to test.
+   *
+   * **This is not a widening of the boundary**, and it is worth saying why
+   * rather than leaving it to be re-argued. A `TierReading` is `tier`, what the
+   * underlying evidence establishes and does not establish, the requirements
+   * still open as `{ key, label, task, owner }`, and two counts. Every one of
+   * those is a *name* or a *count*; not one is the value of a commercial term.
+   * It is exactly the "how far qualification has got, counted, and which fields
+   * are still blank **by name** rather than by value" this file's own header
+   * already declares shared — and `qualification.missing` has carried the same
+   * kind of fact since the first version.
+   *
+   * It is here because the tier is what separates *evidence Brain found* from
+   * *work somebody could do*, and a member reading the frontier without it is
+   * reading thirty-one records with no way to tell those two apart. That is the
+   * distinction §33 built `tier.ts` for; withholding it from the shared page
+   * would leave the shared page with the defect that module exists to fix.
+   */
+  tier: TierReading;
 }
 
-export interface SharedCashView {
-  scope: 'SHARED';
+/**
+ * The shared frontier itself, without the envelope that says how it was asked for.
+ *
+ * Split out from `SharedCashView` so that the **owner's** view can carry the
+ * identical block (`CashView.frontier`), produced by the identical function.
+ * The two roles' shared sections then render from one object built by one
+ * server derivation rather than from two shapes a client had to reconcile —
+ * which is this repository's own recurring rule about two readers of one fact,
+ * applied to a page instead of to a row.
+ *
+ * It is the narrow projection in both cases, so embedding it in the owner's
+ * payload widens nothing: everything in here was already leaving the server for
+ * every member of this Brain.
+ */
+export interface SharedFrontier {
   /** The sprint itself, minus anything a person decided about spending. */
   mode: {
     projectId: string;
@@ -221,6 +258,31 @@ export interface SharedCashView {
    */
   commercialGrant: 'PRESENT' | 'ABSENT';
   opportunities: SharedOpportunity[];
+  /**
+   * How many pieces are at each tier.
+   *
+   * Counted from the same `opportunities` the page renders, so the summary and
+   * the list can never disagree — §29's rule, and the same reason
+   * `AssembledPlan.byTier` is counted from its own placements rather than
+   * queried separately.
+   */
+  byTier: Record<CashTier, number>;
+  /**
+   * How many pieces are in each raw state.
+   *
+   * Beside `counts` rather than instead of it, because the two answer different
+   * questions. `counts` is keyed on **availability**, which deliberately
+   * collapses `DELIVERING` and `COLLECTED` into one word so that a member
+   * cannot read how far somebody else's job has got. That collapse is right for
+   * *is this taken* and wrong for *how many are executing*, and a page that
+   * used one for the other would report a different number than it did before
+   * without anybody choosing to change it.
+   *
+   * The state itself already crosses, uncollapsed, on every `SharedOpportunity`
+   * — so counting them adds no fact, it only saves every reader deriving the
+   * same tally and eventually deriving it differently.
+   */
+  byState: Record<CashOpportunityState, number>;
   counts: {
     total: number;
     open: number;
@@ -241,14 +303,47 @@ export interface SharedCashView {
     nextStep: string;
     occurrence: number;
   }[];
+  /**
+   * The few worth putting in front of somebody, in rank order, and whether they
+   * are qualified or only the closest to it.
+   *
+   * Chosen by `chooseBest`, which is the **same function** the owner's
+   * `assemble` uses, over the same tiers derived by the same `cashTier`. So the
+   * two pages name the same openings as best, and a reader comparing them is
+   * not comparing two rules. Nothing about the choice consults a balance: it
+   * reads the tier and nothing else.
+   */
+  best: SharedOpportunity[];
+  bestAreNearlyQualified: boolean;
   /** Brain's own activity, counted. No free text and no detail bag. */
   activity: { kind: string; count: number; mostRecentAt: string }[];
 }
 
+export type SharedCashView = { scope: 'SHARED' } & SharedFrontier;
+
 export async function sharedCashView(input: { projectId: string }): Promise<SharedCashView> {
+  return { scope: 'SHARED', ...(await sharedFrontier(input)) };
+}
+
+export async function sharedFrontier(input: { projectId: string }): Promise<SharedFrontier> {
   const { mode, authority } = await authorityFor(input.projectId);
   const opportunities = await listOpportunities({ projectId: input.projectId });
   const byId = new Map(opportunities.map((one) => [one.id, one]));
+
+  /*
+   * The recorded facts, read once, exactly as `cashView` reads them.
+   *
+   * The tier is derived from the engine card, and the engine card is composed
+   * from these rows. Deriving it here rather than accepting a tier from
+   * anywhere else is what keeps the two pages' answer to "is this an
+   * opportunity" one answer — the whole reason `tier.ts` is a pure function
+   * over a row and its card. **None of the values read here crosses**: what
+   * leaves this function is the `TierReading`, which is names and counts.
+   */
+  const facts = new Map<string, Awaited<ReturnType<typeof cardFactsForProject>>>();
+  for (const fact of await cardFactsForProject(input.projectId)) {
+    facts.set(fact.opportunityId, [...(facts.get(fact.opportunityId) ?? []), fact]);
+  }
 
   /*
    * The owner's own ranking, which is money-free: `rank` orders on buying
@@ -259,6 +354,11 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
    */
   const shared: SharedOpportunity[] = rank(opportunities).map((opportunity: CashOpportunity) => {
     const card = evidenceCard(opportunity);
+    const tier = cashTier({
+      opportunity,
+      card: cashEngineCard({ opportunity, facts: facts.get(opportunity.id) ?? [] }),
+      readiness: card.readiness,
+    });
     return {
       id: opportunity.id,
       title: opportunity.title,
@@ -281,6 +381,7 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
         missing: card.readiness.missing.map(String),
         summary: card.readiness.summary,
       },
+      tier,
     };
   });
 
@@ -317,7 +418,6 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
           };
 
   return {
-    scope: 'SHARED',
     mode: mode
       ? {
           projectId: mode.projectId,
@@ -330,6 +430,27 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
     discovery,
     commercialGrant: authority !== null ? 'PRESENT' : 'ABSENT',
     opportunities: shared,
+    ...chooseBest(
+      shared.filter((one) => one.state !== 'ARCHIVED' && one.state !== 'DECLINED'),
+      (one) => one.tier,
+    ),
+    byState: shared.reduce(
+      (out, one) => ({ ...out, [one.state]: (out[one.state] ?? 0) + 1 }),
+      {
+        DISCOVERED: 0,
+        EVIDENCE_CARD: 0,
+        READY: 0,
+        EXECUTING: 0,
+        DELIVERING: 0,
+        COLLECTED: 0,
+        DECLINED: 0,
+        ARCHIVED: 0,
+      } as Record<CashOpportunityState, number>,
+    ),
+    byTier: CASH_TIERS.reduce(
+      (out, which) => ({ ...out, [which]: shared.filter((one) => one.tier.tier === which).length }),
+      {} as Record<CashTier, number>,
+    ),
     counts: {
       total: shared.length,
       open: count('OPEN'),
