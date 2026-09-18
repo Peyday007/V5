@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 065. See that file for why a person and
+-- The Postgres half of SQLite migration 066. See that file for why a person and
 -- a capacity account are declared rather than recognised by their name, and why
 -- connecting a Claude account is a durable row rather than a conversation.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'PERSON';

@@ -33,6 +33,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { freshProject } from './helpers.ts';
+import { EXECUTION_THESIS } from './helpers/cashTier.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
@@ -184,6 +185,13 @@ async function readyOpening(account: Account, title: string): Promise<string> {
       deliveryMethod: 'One afternoon',
       fulfillmentOwner: 'Us',
       peakFundingCents: 0,
+      /*
+       * And the execution thesis. `markReady` asks for both now: the twelve
+       * short-card fields are what a bounded *test* turns on, and these are
+       * what a *decision* turns on. They have no column, so a person
+       * answering one is a `PERSON` row in `cash_card_facts`.
+       */
+      ...EXECUTION_THESIS,
     },
   });
   if (!filled.ok) throw new Error(filled.reason);

@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { freshProject } from './helpers.ts';
+import { EXECUTION_THESIS } from './helpers/cashTier.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { getCashMode, listCashEvents } from '../server/repos/cashMode.ts';
@@ -93,6 +94,13 @@ async function completeCard(opportunityId: string): Promise<void> {
       deliveryMethod: 'One afternoon of configuration',
       fulfillmentOwner: 'Us',
       peakFundingCents: 0,
+      /*
+       * And the execution thesis. `markReady` asks for both now: the twelve
+       * short-card fields are what a bounded *test* turns on, and these are
+       * what a *decision* turns on. They have no column, so a person
+       * answering one is a `PERSON` row in `cash_card_facts`.
+       */
+      ...EXECUTION_THESIS,
     },
   });
   expect(filled.ok).toBe(true);

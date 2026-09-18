@@ -20,6 +20,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { LocalStorageProvider } from '../server/services/storage/local.ts';
 import { SupabaseStorageProvider } from '../server/services/storage/supabase.ts';
+import { buildNames } from '../server/domain/naming.ts';
 import {
   ObjectNotFoundError,
   StorageConfigurationError,
@@ -557,5 +558,69 @@ describe('choosing where documents are kept', () => {
     expect(store.kind).toBe('supabase');
     // A real request was made. Having the variables set is not the same fact.
     expect(fake.calls.some((c) => c.url.includes('/object/list/brain'))).toBe(true);
+  });
+});
+
+/**
+ * The key the bucket will actually accept.
+ *
+ * `sanitizeFilename` answers a filesystem question and `safeSegment` answers a
+ * storage one, and production is where the difference showed. §33 added a
+ * variant to the canonical name so that four cash packets answering four
+ * different questions stopped filing under one name — separated by an em-dash,
+ * which a local disk is perfectly happy with and the bucket refuses outright:
+ *
+ *     400 InvalidKey
+ *     projects/cash-mode-1/documents/opportunity-research/
+ *       Opportunity Research v1B — Where the same deliverable has two published prices.md
+ *
+ * So **every staged research report in a cash project failed to file in cloud
+ * mode** while the whole local suite passed, and the packet's own work item
+ * finished having recorded nothing. Two halves of one repair, written at two
+ * layers, with nothing holding them against each other.
+ */
+describe('an object key is an address, and both stores have to accept it', () => {
+  /*
+   * The character class object storage validates against. Kept here as the
+   * external contract rather than imported, because a test that shared the
+   * production constant would pass whatever that constant became.
+   */
+  const ACCEPTED = /^(\w|\/|!|-|\.|\*|'|\(|\)| |&|\$|@|=|;|:|\+|,|\?)*$/;
+
+  it('accepts the canonical name that production could not store', () => {
+    const segment = safeSegment(
+      'Opportunity Research v1B — Where the same deliverable has two published prices.md',
+    );
+    expect(ACCEPTED.test(segment)).toBe(true);
+    expect(segment).not.toContain('—');
+    // The extension survives, because `contentTypeFor` reads it.
+    expect(segment.endsWith('.md')).toBe(true);
+  });
+
+  it('accepts every name the naming engine can produce, variant or not', () => {
+    for (const variant of [
+      null,
+      'Where the same deliverable has two published prices',
+      'Who is publicly asking to pay for work right now',
+      'Which assets have published demand and a favourable spread',
+    ]) {
+      const { filename } = buildNames('Opportunity Research', 'v1B', '.md', variant);
+      const segment = safeSegment(filename);
+      expect(ACCEPTED.test(segment)).toBe(true);
+    }
+  });
+
+  it('refuses nothing into nothing, and never climbs', () => {
+    // A name that is entirely unacceptable characters is a fallback rather
+    // than an empty segment, because an empty one would address the folder.
+    expect(safeSegment('———')).toBe('file');
+    expect(safeSegment('../../etc/passwd')).not.toContain('/');
+    expect(ACCEPTED.test(safeSegment('../../etc/passwd'))).toBe(true);
+  });
+
+  it('keeps the punctuation that carries meaning', () => {
+    // Lossy where it has to be and not where it does not: a version, a dot and
+    // a space are all inside the accepted set and stay exactly as they are.
+    expect(safeSegment('Qualification Logic v3.1.pdf')).toBe('Qualification Logic v3.1.pdf');
   });
 });

@@ -18,11 +18,35 @@
  */
 import { describe, expect, it } from 'vitest';
 import { evidenceCard, readyToTest } from '../server/services/cash/card.ts';
-import { assemble, placements, rank } from '../server/services/cash/portfolio.ts';
-import { DISCOVERABLE_FIELDS, compressedReview } from '../server/services/cash/review.ts';
+import {
+  assemble as assembleRaw,
+  placements as placementsRaw,
+  rank as rankRaw,
+} from '../server/services/cash/portfolio.ts';
+import { tiersFor } from './helpers/cashTier.ts';
+import type { PortfolioInput } from '../server/services/cash/portfolio.ts';
+import { RESEARCHED_FIELDS, compressedReview } from '../server/services/cash/review.ts';
 import type { CashOpportunity } from '../server/domain/types.ts';
 
 const NOW = '2026-09-15T12:00:00.000Z';
+
+/*
+ * The tier composed the way `cashView` composes it, from the real engine card.
+ *
+ * These suites predate the Signal / Candidate / Qualified boundary and are
+ * about dispositions, ranking and compression — so their fixtures are given
+ * every qualification answer, which is what "a complete opening" meant when
+ * they were written. A suite that wants an unqualified one passes its own
+ * facts; `cashPipelineRepair` is where that boundary is actually tested.
+ */
+type PlanInput = Omit<PortfolioInput, 'tiers'> & { tiers?: PortfolioInput['tiers'] };
+const withTiers = (input: PlanInput): PortfolioInput => ({
+  ...input,
+  tiers: input.tiers ?? tiersFor(input.opportunities),
+});
+const placements = (input: PlanInput) => placementsRaw(withTiers(input));
+const assemble = (input: PlanInput) => assembleRaw(withTiers(input));
+const rank = (opportunities: CashOpportunity[]) => rankRaw(opportunities, tiersFor(opportunities));
 
 function opportunity(overrides: Partial<CashOpportunity> = {}): CashOpportunity {
   return {
@@ -45,6 +69,8 @@ function opportunity(overrides: Partial<CashOpportunity> = {}): CashOpportunity 
     validationState: null,
     validationStartedAt: null,
     validationSettledAt: null,
+    validationRounds: 0,
+    opportunitySignal: null,
     payer: null,
     reachableChannel: null,
     buyingSignal: null,
@@ -131,7 +157,9 @@ describe('the card says what is unknown, and what would answer it', () => {
     const access = card.fields.find((f) => f.key === 'access')!;
     const price = card.fields.find((f) => f.key === 'price')!;
     expect(access.task).toContain('access task');
-    expect(price.task).toContain('quoting task');
+    // A published price is something Brain reads from a source, so its task is
+    // a research task now. §30's correction, at the sentence a person reads.
+    expect(price.task).toContain('research task');
   });
 
   it('treats a whitespace answer as no answer', () => {
@@ -363,12 +391,18 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     expect(review.items.find((item) => item.key === 'MISSING_PAYER')).toBeUndefined();
   });
 
-  it('groups the owner’s own decisions, and does not call them one decision', () => {
+  it('never turns a blank Brain is researching into a decision for a person', () => {
     /*
-     * Five cards with no price are five prices. They are the same *kind* of
-     * work and not one answer, and the review used to claim otherwise for
-     * every group it made — a screen that says "answering this releases five"
-     * and then releases one teaches a person to stop believing the counts.
+     * Five cards with no price are five prices — and none of them is a
+     * question for a person at all. A published price is a fact about the
+     * world, so Brain raises a need and looks it up.
+     *
+     * This test used to assert the opposite: that the review produced a
+     * `MISSING_PRICE` item standing for five cards with a *mark these done*
+     * control on it. Production ran that to its conclusion — five "decisions"
+     * standing for ninety-eight items, every one of them a fact Brain was at
+     * that moment out researching — so the section is deleted rather than
+     * narrowed, and what is asserted here is its absence.
      */
     const missingPrice = [1, 2, 3, 4, 5].map(() => opportunity({ priceCents: null }));
     const review = compressedReview({
@@ -385,15 +419,11 @@ describe('the review groups by shared remedy and counts what it stands for', () 
       needs: [],
       now: NOW,
     });
-    const priceItem = review.items.find((item) => item.key === 'MISSING_PRICE')!;
-    expect(priceItem.underlying.length).toBe(5);
-    expect(priceItem.sharedRemedy).toBe(false);
-    expect(priceItem.consequence).toContain('separate answers of the same kind');
-    expect(priceItem.answer.kind).toBe('FILL_CARD_FIELD');
-    expect(priceItem.answer.targets).toHaveLength(5);
-    expect(review.underlyingCount).toBeGreaterThanOrEqual(5);
-    // The compression itself is measured rather than claimed.
-    expect(review.summary).toContain('underlying');
+    expect(review.items.find((item) => item.key === 'MISSING_PRICE')).toBeUndefined();
+    for (const item of review.items) {
+      expect(item.key.startsWith('MISSING_')).toBe(false);
+      expect(item.answer.label).not.toMatch(/Mark all \d+ done/);
+    }
   });
 
   it('turns two needs with one remedy into one decision', () => {
@@ -539,12 +569,15 @@ describe('the review groups by shared remedy and counts what it stands for', () 
     // researches back on a person's review, or take one off it that Brain
     // never looks up — and the second is the silent half.
     const card = evidenceCard(opportunity());
-    const marked = card.fields.filter((field) => field.discoverable).map((field) => field.key);
-    expect([...DISCOVERABLE_FIELDS].sort()).toEqual(marked.sort());
-    // And every one of them is load-bearing, or excluding it from the review
-    // would hide something the readiness check still refuses on.
+    const marked = card.fields
+      .filter((field) => field.owner === 'BRAIN_RESEARCH')
+      .map((field) => field.key);
+    expect([...RESEARCHED_FIELDS].sort()).toEqual(marked.sort());
+    // Nothing on this card is a person's to supply from nothing. The two that
+    // are not researched are Brain's proposals, which a person may overrule
+    // and is never *asked* for.
     for (const field of card.fields) {
-      if (field.discoverable) expect(field.loadBearing).toBe(true);
+      expect(field.owner).not.toBe('PERSON_ONLY');
     }
   });
 

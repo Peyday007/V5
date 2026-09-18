@@ -25,7 +25,7 @@ while `fleet show`, reading the dispatcher's own snapshot at the same instant,
 reported *four eligible* — because it counted **accounts** and the dispatcher
 fires **Routines**, and production runs four research Routines under one
 account. Both are declared facts now: `users.kind` and `fleet_accounts.kind`
-(migration 065), and one authoritative eligibility definition read straight from
+(migration 066), and one authoritative eligibility definition read straight from
 `fleetSnapshot()`.
 
 The denominator went too. `4` was the intended topology written down as a

@@ -31,10 +31,28 @@
  * "run in parallel" to "wait" rather than removing it from the portfolio.
  */
 import { evidenceCard } from './card.ts';
+import { tierRank, type CashTier, type TierReading } from './tier.ts';
 import type { CashDisposition, CashOpportunity } from '../../domain/types.ts';
 
 /** The states in which an opportunity is occupying real fulfilment capacity. */
 const IN_FLIGHT = new Set(['EXECUTING', 'DELIVERING']);
+
+/**
+ * What a piece reads as when the caller supplied no tier for it.
+ *
+ * The weakest one, deliberately. A caller that forgot to compose a tier must
+ * not have its pieces treated as qualified by default — deny by default, at a
+ * projection.
+ */
+const UNREAD_TIER: TierReading = Object.freeze({
+  tier: 'SIGNAL' as const,
+  establishes: 'something was recorded here',
+  doesNotEstablish: 'anything about it, because no reading was composed',
+  toAdvance: [],
+  answered: 0,
+  required: 0,
+  summary: 'Nothing has been read about this piece yet.',
+});
 
 export interface Placement {
   opportunity: CashOpportunity;
@@ -43,10 +61,23 @@ export interface Placement {
   because: string;
   /** The load-bearing card fields still unknown, if any. */
   missing: string[];
+  /**
+   * Whether this is evidence, a capture thesis, a qualified opportunity or
+   * something ready to test — and what is still open before the next one.
+   *
+   * Passed in rather than derived here because it reads the engine card, which
+   * needs the recorded facts; `cashView` composes those once for the whole
+   * project. Everything that shows a piece to a person reads this one answer,
+   * which is what stops the page, the review and the ranking disagreeing about
+   * whether something is an opportunity at all.
+   */
+  tier: TierReading;
 }
 
 export interface PortfolioInput {
   opportunities: CashOpportunity[];
+  /** The tier reading per opportunity id, composed once by the caller. */
+  tiers: Record<string, TierReading>;
   /** Cash that may actually be committed, in cents. Negative is a shortfall. */
   deployableCents: number;
   /** How many may execute at once, from the live commercial grant. */
@@ -69,7 +100,7 @@ export function placements(input: PortfolioInput): Placement[] {
 
   // Ready pieces compete for the headroom in rank order, so which of them is
   // told to wait is a property of the ranking rather than of insertion order.
-  const ranked = rank(input.opportunities);
+  const ranked = rank(input.opportunities, input.tiers);
   const startable = new Set<string>();
   let remaining = headroom;
   for (const candidate of ranked) {
@@ -82,6 +113,7 @@ export function placements(input: PortfolioInput): Placement[] {
   return ranked.map((opportunity) => {
     const card = evidenceCard(opportunity);
     const missing = card.readiness.missing.map(String);
+    const tier = input.tiers[opportunity.id] ?? UNREAD_TIER;
 
     if (opportunity.state === 'ARCHIVED') {
       return {
@@ -89,6 +121,7 @@ export function placements(input: PortfolioInput): Placement[] {
         disposition: 'ARCHIVED' as const,
         because: opportunity.archivedReason ?? 'This was stopped.',
         missing,
+        tier,
       };
     }
     if (opportunity.state === 'DECLINED') {
@@ -99,6 +132,7 @@ export function placements(input: PortfolioInput): Placement[] {
           opportunity.declinedReason ??
           'This owner passed on it. It can be offered privately to somebody else.',
         missing,
+        tier,
       };
     }
 
@@ -111,20 +145,41 @@ export function placements(input: PortfolioInput): Placement[] {
             ? 'The money is in. What is left is recording the settlement and the contribution.'
             : 'This is already under way.',
         missing,
+        tier,
       };
     }
 
     const blocker = dependencyBlocker(opportunity, byId);
     if (blocker) {
-      return { opportunity, disposition: 'WAIT_FOR_DEPENDENCY' as const, because: blocker, missing };
+      return {
+        opportunity,
+        disposition: 'WAIT_FOR_DEPENDENCY' as const,
+        because: blocker,
+        missing,
+        tier,
+      };
     }
 
     if (!card.readiness.ready) {
       return {
         opportunity,
         disposition: 'TEST_A_DECISIVE_UNKNOWN' as const,
-        because: card.readiness.summary,
+        /*
+         * The tier's sentence below qualified, and the card's above it.
+         *
+         * A piece with no capture thesis is not a test waiting on an unknown;
+         * it is evidence, and saying "four things on this card are unknown"
+         * about a published price list invites somebody to go and fill them in
+         * — which is the homework this whole correction exists to stop
+         * handing out. The disposition vocabulary is closed and is stored
+         * nowhere, so what changes is the sentence rather than the enum.
+         */
+        because:
+          tier.tier === 'SIGNAL' || tier.tier === 'CANDIDATE'
+            ? tier.summary
+            : card.readiness.summary,
         missing,
+        tier,
       };
     }
 
@@ -139,6 +194,7 @@ export function placements(input: PortfolioInput): Placement[] {
           `This needs ${needed} cents before the money comes back and ${input.deployableCents} ` +
           'is deployable, so it waits on cash rather than on evidence.',
         missing,
+        tier,
       };
     }
     if (!startable.has(opportunity.id)) {
@@ -149,6 +205,7 @@ export function placements(input: PortfolioInput): Placement[] {
           `${inFlight.length} of ${input.maxConcurrent} execution slots are taken, so this waits ` +
           'on fulfilment capacity. Nothing about the opportunity itself is unresolved.',
         missing,
+        tier,
       };
     }
     return {
@@ -163,6 +220,7 @@ export function placements(input: PortfolioInput): Placement[] {
             : 'Payer, offer, delivery and exposure are all answered. Discovery is wound down; ' +
               'this piece is already in the portfolio and keeps running.',
       missing,
+      tier,
     };
   });
 }
@@ -196,8 +254,39 @@ function dependencyBlocker(
  * an unchanged portfolio produce the same order. A ranking that shuffled
  * equivalents would make "why did this move" unanswerable.
  */
-export function rank(opportunities: CashOpportunity[]): CashOpportunity[] {
+export function rank(
+  opportunities: CashOpportunity[],
+  tiers: Record<string, TierReading> = {},
+): CashOpportunity[] {
+  const tierOf = (o: CashOpportunity): CashTier => tiers[o.id]?.tier ?? 'SIGNAL';
   return [...opportunities].sort((a, b) => {
+    /*
+     * How far it has actually got, first.
+     *
+     * Ahead of every other criterion because the criteria below are about
+     * *which* opportunity to take, and a signal is not one: ranking a vendor's
+     * published price list against a qualified opening on time-to-cash is
+     * comparing two different kinds of thing and letting the one with fewer
+     * facts on it win whenever a blank happens to sort well.
+     */
+    const stage = tierRank(tierOf(b)) - tierRank(tierOf(a));
+    if (stage !== 0) return stage;
+
+    /*
+     * Among qualified pieces, what an hour of somebody's time is worth here.
+     *
+     * §30 asks for manual gig work not to rank among the best merely because
+     * it pays, and refuses a hard-coded automation percentage. This is the
+     * honest form of that: contribution divided by the hours comparable work
+     * is published as taking. Work that a person does by hand carries its
+     * hours and falls; work that software or a subcontractor does carries few
+     * and rises. Nothing is read from anybody's prose, no automation is
+     * scored, and an unknown never helps — a missing contribution is zero and
+     * missing hours make this incomparable, so both sort last.
+     */
+    const perHour = contributionPerHour(b) - contributionPerHour(a);
+    if (perHour !== 0) return perHour;
+
     const evidence = evidenceStrength(b) - evidenceStrength(a);
     if (evidence !== 0) return evidence;
 
@@ -253,6 +342,19 @@ function compareDates(a: string | null, b: string | null): number {
   return a < b ? -1 : 1;
 }
 
+/**
+ * Contribution per published hour, and zero wherever either side is unknown.
+ *
+ * Zero rather than a small number, so a piece with no hours recorded cannot
+ * out-rank one that has them: an unknown is never the reason something rises.
+ */
+function contributionPerHour(o: CashOpportunity): number {
+  const contribution = conservativeContribution(o);
+  if (contribution <= 0) return 0;
+  if (o.humanHours === null || o.humanHours <= 0) return 0;
+  return contribution / o.humanHours;
+}
+
 /** An unknown number is the worst value, never the best. */
 function worstIfUnknown(value: number | null): number {
   return value === null ? Number.MAX_SAFE_INTEGER : value;
@@ -260,6 +362,26 @@ function worstIfUnknown(value: number | null): number {
 
 export interface AssembledPlan {
   placements: Placement[];
+  /**
+   * How many pieces are at each tier, for the one line a first screen shows.
+   *
+   * Counted from the same placements the rest of the page renders, so the
+   * summary and the list can never disagree — §29's rule that a status
+   * contradicting the control beside it is worse than no status.
+   */
+  byTier: Record<CashTier, number>;
+  /**
+   * The few worth putting in front of a person, in rank order.
+   *
+   * Qualified first, and where there are none, the candidates closest to it —
+   * which is the honest answer to "show me the best" on a sprint that has not
+   * qualified anything yet. It is never filled up with signals: a page that
+   * pads a best-opportunities section with raw market evidence is the defect
+   * this whole correction is about.
+   */
+  best: Placement[];
+  /** True when `best` holds candidates rather than qualified openings. */
+  bestAreNearlyQualified: boolean;
   /** The pieces a person should act on now, in rank order. */
   executeNow: Placement[];
   /** What is waiting, and on what. */
@@ -278,11 +400,38 @@ export interface AssembledPlan {
  * what the live pieces would produce — an illustration built from quoted
  * prices, kept apart from the bank balance, and never added to it.
  */
+export const BEST_SHOWN = 5;
+
 export function assemble(input: PortfolioInput): AssembledPlan {
   const all = placements(input);
   const live = all.filter((p) => p.disposition !== 'ARCHIVED');
+
+  const byTier: Record<CashTier, number> = {
+    SIGNAL: 0,
+    CANDIDATE: 0,
+    QUALIFIED: 0,
+    READY_TO_TEST: 0,
+  };
+  for (const placement of live) byTier[placement.tier.tier] += 1;
+
+  const qualified = live.filter(
+    (p) => p.tier.tier === 'QUALIFIED' || p.tier.tier === 'READY_TO_TEST',
+  );
+  /*
+   * Nearly qualified is a count, not a feeling: the candidates with the fewest
+   * questions left. `answered` and `required` are both counts of rows, so the
+   * ordering is a measurement rather than a view about which looks promising.
+   */
+  const nearly = live
+    .filter((p) => p.tier.tier === 'CANDIDATE')
+    .sort((a, b) => a.tier.toAdvance.length - b.tier.toAdvance.length);
+  const best = qualified.length > 0 ? qualified : nearly;
+
   return {
     placements: all,
+    byTier,
+    best: best.slice(0, BEST_SHOWN),
+    bestAreNearlyQualified: qualified.length === 0 && nearly.length > 0,
     executeNow: live.filter(
       (p) => p.disposition === 'EXECUTE_NOW' || p.disposition === 'RUN_IN_PARALLEL',
     ),

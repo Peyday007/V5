@@ -19,6 +19,7 @@
  * press.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { freshProject } from './helpers.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
@@ -157,6 +158,27 @@ async function readyPiece(
     },
   });
   expect(filled.ok).toBe(true);
+  /*
+   * And the rest of the execution thesis, answered by the person.
+   *
+   * `markReady` asks for more than the short card now: whether we are
+   * eligible, how the work actually gets done, whether calling is required,
+   * what it costs, when the money arrives. Those are facts Brain researches
+   * and they are not *only* Brain's — `mayReplace` is about authority rather
+   * than recency, so somebody who knows the answer may give it, and a person's
+   * answer then stands against anything automatic. This fixture is a piece
+   * somebody captured and filled by hand, so it answers them by hand.
+   */
+  for (const field of [CAPTURE_KEY, ...qualificationKeys(null)]) {
+    await recordCardFact({
+      projectId,
+      opportunityId: captured.value.id,
+      field,
+      kind: 'PERSON',
+      value: `The owner's own answer to ${field}.`,
+      decidedBy: userId,
+    });
+  }
   expect((await markReady({ opportunityId: captured.value.id, actorRef: userId })).ok).toBe(true);
   return captured.value.id;
 }
@@ -543,8 +565,20 @@ describe('answering a need resumes what was waiting, exactly once', () => {
 });
 
 describe('a fact Brain could look up is Brain’s work, not a person’s', () => {
-  it('raises a question for each discoverable blank and none for a decision', async () => {
-    // Nothing filled in: every load-bearing field is blank.
+  it('asks a record that is still only evidence the three questions that could move it', async () => {
+    /*
+     * A bare record is a *signal*: something was found and nothing says who
+     * would pay us for it. The only questions worth spending on are the ones
+     * that could stop it being one — a payer, a route to them, and dated
+     * evidence they asked. `captureMechanism` is composed from exactly those.
+     *
+     * The rest of the card asks what a *decision* turns on, and there is no
+     * decision to make about a published price list. The set of researchable
+     * fields went from three to seven with this change, so on the production
+     * sprint — thirty-one price lists, appraisals and listing pages — asking
+     * all seven of each would have been two hundred needs about what to charge
+     * for somebody else's product.
+     */
     const captured = await capture({
       projectId,
       actorRef: userId,
@@ -556,15 +590,55 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
     if (!captured.ok) throw new Error(captured.reason);
 
     const gaps = await reconcileDiscoverableGaps(projectId);
-    // Payer, access and buying evidence are facts about the world. The offer,
-    // the acceptance condition, the price, the delivery path, who does the
-    // work and the exposure are the owner's own calls, and a researched answer
-    // to "what should we charge" is invented judgment wearing a citation.
     expect(gaps.map((one) => one.field).sort()).toEqual(['access', 'buyingEvidence', 'payer']);
+    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(3);
+  });
+
+  it('raises a question for each researchable blank once there is a capture thesis', async () => {
+    const captured = await capture({
+      projectId,
+      actorRef: userId,
+      ownerUserId: userId,
+      title: 'An opening somebody would pay for',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    if (!captured.ok) throw new Error(captured.reason);
+    // A named payer and something to supply them is what makes it worth
+    // spending more on. It is the only thing that separates the two cases.
+    await recordCardFact({
+      projectId,
+      opportunityId: captured.value.id,
+      field: CAPTURE_KEY,
+      kind: 'RECOMMENDATION',
+      value: 'Supply the repair to the owner who asked, and be paid for it.',
+      basis: 'A payer and an offer on this card.',
+      assumptions: 'That they are still buying.',
+      uncertainty: 'Whether they would choose us.',
+      decidedBy: 'BRAIN',
+    });
+
+    const gaps = await reconcileDiscoverableGaps(projectId);
+    /*
+     * Seven, not three. A price, a delivery path, who does the work and the
+     * exposure are facts about the world that Brain looks up — §30 had already
+     * said so and the boolean that decided it had not moved. The offer and the
+     * acceptance condition stay off this list: Brain proposes those and a
+     * person may overrule them, and neither is ever *asked* for.
+     */
+    expect(gaps.map((one) => one.field).sort()).toEqual([
+      'access',
+      'buyingEvidence',
+      'delivery',
+      'exposure',
+      'fulfillment',
+      'payer',
+      'price',
+    ]);
 
     // And once, however many ticks read it.
     expect(await reconcileDiscoverableGaps(projectId)).toEqual([]);
-    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(3);
+    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(7);
   });
 
   it('settles one the moment the card carries the answer, whoever put it there', async () => {
@@ -577,7 +651,20 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
       currency: 'USD',
     });
     if (!captured.ok) throw new Error(captured.reason);
-    expect(await reconcileDiscoverableGaps(projectId)).toHaveLength(3);
+    await recordCardFact({
+      projectId,
+      opportunityId: captured.value.id,
+      field: CAPTURE_KEY,
+      kind: 'RECOMMENDATION',
+      value: 'Supply the repair to the owner who asked, and be paid for it.',
+      basis: 'A payer and an offer on this card.',
+      assumptions: 'That they are still buying.',
+      uncertainty: 'Whether they would choose us.',
+      decidedBy: 'BRAIN',
+    });
+    // Seven, not three: a capture thesis is what makes the other four worth
+    // spending on, and the three above were raised for the signal already.
+    expect((await reconcileDiscoverableGaps(projectId)).length).toBe(7);
 
     await fillCard({
       opportunityId: captured.value.id,
@@ -589,7 +676,7 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
     const resolved = await listNeeds({ projectId, states: ['RESOLVED'] });
     expect(resolved).toHaveLength(1);
     expect(resolved[0]!.requestKey).toContain(':payer');
-    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(2);
+    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(6);
   });
 
   it('asks nothing about a piece already past the card', async () => {
@@ -752,6 +839,26 @@ describe('what the research established reaches the card', () => {
     await updateOpportunity(captured.value.id, {
       buying_signal: 'A county published a request for eight parcel searches.',
       signal_observed_at: '2026-09-10',
+    });
+    /*
+     * A capture thesis, because `reconcileDiscoverableGaps` is gated on one.
+     *
+     * A record with nothing saying who would pay us is a signal, and Brain
+     * does not raise research needs against signals — it qualifies them with
+     * the bounded deep dive instead. These suites are about what happens to a
+     * *need* once one exists, so the fixture gets past that gate rather than
+     * around it.
+     */
+    await recordCardFact({
+      projectId,
+      opportunityId: captured.value.id,
+      field: CAPTURE_KEY,
+      kind: 'RECOMMENDATION',
+      value: 'Supply the parcel searches to the county that asked, and be paid for them.',
+      basis: 'The published request names its own buyer.',
+      assumptions: 'That the request is still open.',
+      uncertainty: 'Whether they would choose us.',
+      decidedBy: 'BRAIN',
     });
     return captured.value.id;
   }

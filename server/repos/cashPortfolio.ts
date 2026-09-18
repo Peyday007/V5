@@ -17,6 +17,7 @@ import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { buildUpdate, newId, nowIso, parseJson, toJson } from './util.ts';
 import { OPPORTUNITY_VALIDATION_STATES } from '../domain/types.ts';
+import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
 import type {
   CashMechanism,
   CashNeed,
@@ -25,6 +26,7 @@ import type {
   CashOpportunity,
   CashOpportunityRow,
   CashOpportunityState,
+  OpportunitySignal,
   OpportunityValidationState,
 } from '../domain/types.ts';
 
@@ -61,6 +63,8 @@ function mapOpportunity(row: CashOpportunityRow): CashOpportunity {
     validationState: isValidationState(row.validation_state) ? row.validation_state : null,
     validationStartedAt: row.validation_started_at ?? null,
     validationSettledAt: row.validation_settled_at ?? null,
+    validationRounds: row.validation_rounds ?? (row.validation_state ? 1 : 0),
+    opportunitySignal: isOpportunitySignal(row.opportunity_signal) ? row.opportunity_signal : null,
     payer: row.payer,
     reachableChannel: row.reachable_channel,
     buyingSignal: row.buying_signal,
@@ -124,6 +128,14 @@ export interface NewOpportunity {
   orchestrationId?: string | null;
   fragmentId?: string | null;
   discoveryRoundId?: string | null;
+  /**
+   * What kind of opening the claim established.
+   *
+   * Carried rather than re-derived from `mechanism`, which is the lossy
+   * projection of it: `ACTIVE_BUYER_DEMAND` and `PAID_TASK_OR_CONTRACT` are one
+   * mechanism and are two entirely different things to qualify.
+   */
+  opportunitySignal?: OpportunitySignal | null;
   expiresAt?: string | null;
   expiryReason?: string | null;
   dependsOnId?: string | null;
@@ -144,7 +156,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
     `INSERT INTO cash_opportunities
        (id, project_id, cash_mode_id, owner_user_id, title, mechanism, industry, source,
         candidate_id, external_record_id, source_claim_id, discovered_by_candidate_id,
-        orchestration_id, fragment_id, discovery_round_id,
+        orchestration_id, fragment_id, discovery_round_id, opportunity_signal,
         payer, reachable_channel, buying_signal, signal_observed_at,
         offer_scope, acceptance_condition, price_cents, currency, payment_terms,
         fulfillment_owner, delivery_method, required_inputs, deadline, economics_note,
@@ -155,7 +167,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
         declined_by_user_id, declined_reason, reoffered_from_id, archived_reason,
         created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-             ?, ?, ?,
+             ?, ?, ?, ?,
              NULL, NULL, NULL, NULL,
              NULL, NULL, NULL, ?, NULL,
              NULL, NULL, NULL, NULL, NULL,
@@ -182,6 +194,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
       input.orchestrationId ?? null,
       input.fragmentId ?? null,
       input.discoveryRoundId ?? null,
+      input.opportunitySignal ?? null,
       input.currency,
       input.expiresAt ?? null,
       input.expiryReason ?? null,
@@ -357,6 +370,8 @@ export async function updateOpportunity(
     validation_state: OpportunityValidationState | null;
     validation_started_at: string | null;
     validation_settled_at: string | null;
+    validation_rounds: number | null;
+    opportunity_signal: string | null;
   }>,
 ): Promise<CashOpportunity | null> {
   const { clause, values } = buildUpdate(patch);
@@ -367,6 +382,26 @@ export async function updateOpportunity(
     id,
   ]);
   return getOpportunity(id);
+}
+
+/**
+ * Record what kind of opening a piece rests on, and only where nothing does.
+ *
+ * Guarded on the column still being null in the statement that writes it, so
+ * two ticks reconciling one piece produce one write and a value recorded at
+ * promotion is never overwritten by a value read back afterwards. §5's rule at
+ * a column: a recovered value may never replace a recorded one.
+ */
+export async function fillOpportunitySignal(
+  id: string,
+  signal: OpportunitySignal,
+): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE cash_opportunities SET opportunity_signal = ?, updated_at = ?
+      WHERE id = ? AND opportunity_signal IS NULL`,
+    [signal, portfolioNow(), id],
+  );
+  return (result.changes ?? 0) > 0;
 }
 
 /**

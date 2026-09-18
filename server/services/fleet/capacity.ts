@@ -183,7 +183,7 @@ async function provenChain(routine: FleetRoutine): Promise<{
  * `verify-hosted-account-*` accounts expect the sentinel `VERIFY_HOSTED_NEVER_SET`,
  * which is never deployed, so they are already skipped by the dispatcher — and
  * they are excluded here by `fleet_accounts.kind` rather than by comparing a
- * name against a prefix, which is what migration 065 is for.
+ * name against a prefix, which is what migration 066 is for.
  */
 export async function capacityReading(
   options: { includeVerification?: boolean } = {},

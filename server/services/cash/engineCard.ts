@@ -54,12 +54,33 @@ import type { CashCardFact, CashOpportunity } from '../../domain/types.ts';
  * what it costs, what it takes, what could stop it, and what Brain makes of it.
  */
 export const ENGINE_FIELDS = [
+  /*
+   * The capture thesis, first, because everything below it is only worth
+   * asking once there is one. It is the single question that separates market
+   * evidence from a piece of work — see `tier.ts` — and Brain proposes it from
+   * what is already on the card rather than researching it, because "how would
+   * *we* be paid" is a reading of a payer, an offer and a route rather than
+   * something anybody publishes.
+   */
+  'captureMechanism',
   'revenueRange',
   'directCosts',
   'requiredCapital',
   'timeToFirstCash',
   'hours',
   'laborNeeds',
+  /*
+   * The five the production audit found were never asked at all.
+   *
+   * Four are facts about the world and are lanes on the validation profile.
+   * The fifth, the fulfilment model, is a reading of the other four and is
+   * proposed rather than researched.
+   */
+  'fulfilmentModel',
+  'phoneDependency',
+  'eligibility',
+  'acquisitionAccess',
+  'exitEvidence',
   'firstSteps',
   'bottleneck',
   'disqualifiers',
@@ -117,9 +138,53 @@ const LABELS: Record<EngineFieldKey, { label: string; task: string }> = {
       'Find published prices for what delivering this needs: tools, data, subcontracted ' +
       'labour, platform fees. A cost nobody publishes is unknown, not zero.',
   },
+  captureMechanism: {
+    label: 'How we would be paid',
+    task:
+      'Name who would pay us, what we would supply them, and through what route — from the ' +
+      'payer, the offer and the access already on this card. A published price somebody else ' +
+      'charges is not an answer to this, and neither is an asking price, an appraisal or a ' +
+      'marketplace that exists.',
+  },
   requiredCapital: {
     label: 'Required capital',
     task: 'State the maximum cash out before any of it comes back.',
+  },
+  fulfilmentModel: {
+    label: 'How the work actually gets done',
+    task:
+      'Say which of these it is — done by AI, done by software, delegated, subcontracted or ' +
+      'manual — what human work is left after that, and who performs it. Judged from the ' +
+      'published delivery requirements and hours rather than from how the work sounds.',
+  },
+  phoneDependency: {
+    label: 'Whether calling is required',
+    task:
+      'Say whether the published route to the buyer requires a phone call, and if it does, ' +
+      'what the offshore-calling or non-phone alternative would be. Nobody here is going to ' +
+      'make the calls, so a phone-dependent model with no route is a disqualifier rather than ' +
+      'a detail.',
+  },
+  eligibility: {
+    label: 'Eligibility and permission',
+    task:
+      'Find what published rule decides whether a supplier like this one may take it at all — ' +
+      'a licence, a registration, a platform term, a procurement qualification, a residency or ' +
+      'insurance condition. A documented absence of one is a real finding.',
+  },
+  acquisitionAccess: {
+    label: 'How we would acquire it',
+    task:
+      'Find what is published about obtaining the thing itself now: from whom, at what price, ' +
+      'on what terms, and what registration, membership or licence standing in the way. A ' +
+      'spread nobody can buy into is a fact about a market rather than an opening.',
+  },
+  exitEvidence: {
+    label: 'Evidence it actually sells',
+    task:
+      'Find published evidence of completed sales at the higher figure — sold prices, ' +
+      'sell-through, settled auctions — and what is left after the platform fees. An asking ' +
+      'price, a listing and an appraisal are none of those.',
   },
   timeToFirstCash: {
     label: 'Time to first cash',
@@ -155,7 +220,9 @@ const LABELS: Record<EngineFieldKey, { label: string; task: string }> = {
   },
   scalingLever: {
     label: 'Scaling lever',
-    task: 'If this works once, what would make the second one cheaper or faster?',
+    task:
+      'If this works once, what would make the second one cheaper or faster — and would the ' +
+      'same machinery serve a different customer, or is each one a job done by hand?',
   },
   confidence: {
     label: 'Confidence',

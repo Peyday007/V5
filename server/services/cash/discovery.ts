@@ -70,6 +70,8 @@
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   createOpportunity,
+  fillOpportunitySignal,
+  listOpportunities,
   opportunityForClaim,
   updateOpportunity,
 } from '../../repos/cashPortfolio.ts';
@@ -80,7 +82,7 @@ import {
   openRound,
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
-import { signalledClaims } from '../../repos/research.ts';
+import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
 import { discoveryAllowed } from './lifecycle.ts';
@@ -550,6 +552,9 @@ export async function harvest(input: {
       // One broad question turns up openings of several kinds, and filing all
       // of them under the bucket's heading is wrong for most of them.
       mechanism: mechanismForSignal(signal),
+      // The signal itself as well as the mechanism it maps to. The mapping is
+      // lossy on purpose and the tier turns on the signal — see `tier.ts`.
+      opportunitySignal: signal,
       currency: mode.currency,
       source: claim.sourcePublisher ?? claim.sourceTitle ?? claim.sourceUrl,
       discoveredByCandidateId: context ? context.round.candidateId : null,
@@ -655,12 +660,14 @@ export async function runDiscovery(projectId: string): Promise<{
   authorized: boolean;
   /** Ideas that had parked for want of it and are back in the queue. */
   resumed: string[];
+  /** Pieces whose kind of opening was read back from their own source claim. */
+  signalled: string[];
 }> {
   // One read answers both halves for the many projects that hold no sprint at
   // all, which is what makes this cheap enough to run for every project on
   // every tick.
   if (!(await getCashMode(projectId))) {
-    return { opened: [], harvested: [], authorized: false, resumed: [] };
+    return { opened: [], harvested: [], authorized: false, resumed: [], signalled: [] };
   }
 
   /*
@@ -679,10 +686,61 @@ export async function runDiscovery(projectId: string): Promise<{
   const authorized = await ensureDiscoveryAuthority(projectId);
   const resumed = authorized ? await resumeAuthorityParkedCandidates({ projectId }) : [];
 
+  /*
+   * And the signal on anything promoted before the column existed.
+   *
+   * Here rather than only at promotion, for the fifth time in this file: a
+   * hook fixes one entrance and rows reach every entrance plus everything
+   * already written. It is guarded on the column still being null, so it fills
+   * blanks and never overwrites, and a piece whose claim carries no signal is
+   * left exactly as it is.
+   */
+  const signalled = await reconcileOpportunitySignals(projectId);
+
   return {
     opened: await openDiscovery({ projectId, limit: 1 }),
     harvested: await harvest({ projectId, limit: 10 }),
     authorized: authorized?.created ?? false,
     resumed: resumed.map((one) => one.candidateId),
+    signalled,
   };
+}
+
+/**
+ * Fill in the signal on pieces promoted before the column existed.
+ *
+ * Thirty-one production rows were promoted by a `harvest` that mapped the
+ * claim's signal to a mechanism and threw the signal away. The mechanism
+ * cannot be un-mapped — two signals share one — so the answer is read back
+ * from each piece's own `source_claim_id`, which is exactly where `harvest`
+ * got it.
+ *
+ * Three properties, and each of them is why this is a derivation on the tick
+ * rather than an `UPDATE` inside a migration.
+ *
+ * **It never replaces a recorded value.** The write is guarded on the column
+ * still being null, so a signal written at promotion always wins and a
+ * recovery can only ever fill a blank. `lineageRecovery` at a new column.
+ *
+ * **It reaches what a migration could not.** A migration runs once; a piece
+ * promoted a minute later by an instance still running the previous image
+ * would have missed it, and nothing would ever have come back for it.
+ *
+ * **It writes nothing else.** No state moves, no attempt is charged, no work
+ * is enqueued, and a piece whose claim is gone or carries no signal is left
+ * exactly as it is — which reads as "nothing said what kind this is", and that
+ * is an answer rather than a gap.
+ */
+export async function reconcileOpportunitySignals(projectId: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const opportunity of await listOpportunities({ projectId })) {
+    if (opportunity.opportunitySignal !== null) continue;
+    if (!opportunity.sourceClaimId) continue;
+    const claim = await getClaim(opportunity.sourceClaimId);
+    const signal = claim?.opportunitySignal ?? null;
+    if (!signal) continue;
+    const filled = await fillOpportunitySignal(opportunity.id, signal);
+    if (filled) out.push(opportunity.id);
+  }
+  return out;
 }

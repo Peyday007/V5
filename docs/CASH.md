@@ -329,10 +329,54 @@ compiler, the approval envelope, the seven evidence conditions, all three audit
 roles. No grant is manufactured: a project with no standing research authority
 compiles no specification and the idea parks.
 
-**A lane is a row, so a signal is not a judgement.** `harvest` reads
-`evidence_lane`, not prose. What it files is an opportunity with a **blank
+**A lane is a row, so a signal is not a judgement.** `harvest` reads the claim's
+typed `opportunity_signal`, not prose. What it files is a record with a **blank
 card**, because a published request is evidence somebody asked and is not a
 payer, a price, an acceptance condition or a delivery path.
+
+**And a record with a blank card is not an opportunity.** That sentence was
+missing, and production ran it to its conclusion: thirty-one filed "openings",
+every one of them a fact about a market. Published vendor prices, resale asking
+prices, domain appraisals, a bug-bounty programme, auction-broker access, a
+marketplace listing page, procurement notices. All gated, all well sourced, and
+none of them saying anybody would pay *us*.
+
+`services/cash/tier.ts` is the distinction and it is **derived on the read
+path**, never stored, for `placements`' own reason — and because deriving it is
+what reclassified every record already written, with nothing deleted,
+duplicated or rewritten.
+
+| tier | what it means |
+| --- | --- |
+| `SIGNAL` | evidence. Kept whole, with its claim, source, packet and round. Not current work. |
+| `CANDIDATE` | Brain can say who would pay us and for what. The rest is named. |
+| `QUALIFIED` | the whole execution thesis is supported from rows. |
+| `READY_TO_TEST` | that, plus the short card a bounded test runs against. |
+
+**It is keyed on the signal, not on the words.** Each of the seven
+`OPPORTUNITY_SIGNALS` declares what its evidence establishes, what it does not,
+and what its *kind* additionally needs before it could be acted on — a pricing
+asymmetry and a resalable asset need present acquisition access and an
+after-fee exit; a paid task and recurring outsourced work need something that
+serves the next customer. A list of forbidden phrases would have caught the ten
+records that were measured and nothing else; §27 records what happens to such a
+list.
+
+**A payer is what moves a signal.** `captureMechanism` is Brain's own proposal,
+composed from a payer and something to supply them — both already through the
+gate — and withheld entirely where there is no payer. So a vendor's published
+price stays a signal until research finds somebody who would buy from us, and
+the identical sentence qualifies the moment one lands.
+
+**Whose question each one is, is a column.** `CardField.owner` is
+`BRAIN_RESEARCH`, `BRAIN_PROPOSES` or `PERSON_ONLY`, and **no card field is
+`PERSON_ONLY`**. A price, a fee, a settlement date, an eligibility rule and a
+delivery requirement are facts about the world; Brain raises a need and looks
+them up. What is left for a person is the offer and the acceptance condition,
+which Brain proposes and a person may overrule, and the things that are not
+card fields at all: authorizing capital, accepting a risk the evidence cannot
+settle, an identity-bearing act, choosing between two qualified openings, and
+permitting an external action.
 
 **Executing means something happened.** `beginExecution` used to move an
 opportunity to `EXECUTING` and emit an event with no work enqueued and no action

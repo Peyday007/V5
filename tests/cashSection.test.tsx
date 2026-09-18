@@ -25,7 +25,8 @@
  *     redrawing.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFile } from 'node:fs/promises';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act } from 'react';
 import { CashSection } from '../client/src/russell/Cash.tsx';
 
@@ -309,22 +310,33 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
             completionCondition: 'A live commercial grant exists on this project.',
           },
         },
+        /*
+         * A second decision that is genuinely a person's.
+         *
+         * This used to be `MISSING_PAYER` — "3 cards with no payer", with a
+         * control offering to answer the payer on each — and the server does
+         * not produce that item any more, because a payer is a fact about the
+         * world that Brain researches. A client fixture modelling a shape the
+         * server can no longer emit tests nothing, so it is replaced by one it
+         * still does: several needs sharing one remedy, which is one tool
+         * bought once.
+         */
         {
-          key: 'MISSING_PAYER',
-          title: '3 cards with no payer',
-          why: 'An unknown is not a favourable assumption.',
-          recommendation: 'Establish who can approve payment.',
-          consequence: 'Each becomes ready to test the moment its answer exists.',
+          key: 'NEED_cnd_1',
+          title: '3 blocked actions, one remedy',
+          why: 'Reaching a buyer needs a way to send a message, and Brain has none.',
+          recommendation: 'Connect a way to send messages. Next step: pick one and connect it.',
+          consequence: 'Resolving this unblocks 3 actions. Independent work is running meanwhile.',
           urgency: 'WHENEVER',
-          underlying: ['cop_2', 'cop_3', 'cop_4'],
-          sharedRemedy: false,
+          underlying: ['cnd_1', 'cnd_2', 'cnd_3'],
+          sharedRemedy: true,
           costCents: null,
           costNote: null,
           answer: {
-            kind: 'FILL_CARD_FIELD',
-            targets: ['cop_2', 'cop_3', 'cop_4'],
-            label: 'Answer the payer on each card',
-            completionCondition: 'Every one of these cards records a payer.',
+            kind: 'RESOLVE_NEED',
+            targets: ['cnd_1', 'cnd_2', 'cnd_3'],
+            label: 'Mark all 3 done, and say what you did',
+            completionCondition: 'A way to send a message is connected.',
           },
         },
       ],
@@ -444,7 +456,9 @@ describe('the research roadmap', () => {
     await mount();
     await waitFor(() => expect(screen.getByText('What Brain is researching')).toBeTruthy());
 
-    expect(screen.getByText(ROADMAP.whatHappensNext)).toBeTruthy();
+    // The server's one sentence about where this is, in one place: the status
+    // screen. It used to be here too, which put it on the page twice.
+    expect(screen.getAllByText(ROADMAP.whatHappensNext).length).toBe(1);
     // The plan's own denominator. Five, because the plan holds five — not
     // twenty, and not a percentage of a number nobody knows.
     expect(screen.getByText('1 of 5 research items done', { exact: false })).toBeTruthy();
@@ -455,18 +469,92 @@ describe('the research roadmap', () => {
     expect(
       screen.getByText('Who is publicly asking to pay for work right now?'),
     ).toBeTruthy();
-    for (const stage of ROADMAP.pipeline) expect(screen.getByText(stage.label)).toBeTruthy();
+    /*
+     * Scoped to this section. The status screen above counts pieces *ready to
+     * test*, which is a tier of the portfolio and shares a label with a stage
+     * of the pipeline — two different facts that happen to be said the same
+     * way, so the query says which one it means.
+     */
+    const roadmap = document.querySelector('.rs-cash-roadmap') as HTMLElement;
+    for (const stage of ROADMAP.pipeline) {
+      expect(within(roadmap).getByText(stage.label)).toBeTruthy();
+    }
   });
 
   it('translates the event code and keeps it', async () => {
     base();
     await mount();
     await waitFor(() => expect(screen.getByText('Everything that has happened')).toBeTruthy());
-    const line = screen.getByText(/An opening was written down/);
-    // Translated for the person, and the underlying code is still on the row
-    // for somebody who needs it.
-    expect(line.getAttribute('title')).toBe('CASH_OPPORTUNITY_CAPTURED');
+    expect(screen.getByText(/An opening was written down/)).toBeTruthy();
+    /*
+     * Translated for the person, and the underlying code still on the row for
+     * somebody who needs it — in the document rather than in a `title`
+     * attribute, which is unreachable on a phone and unreachable by a screen
+     * reader on a span. The one reader it was there for could not get at it on
+     * either.
+     */
+    expect(screen.getByText('CASH_OPPORTUNITY_CAPTURED')).toBeTruthy();
     expect(screen.getByText('Captured "A paid intake repair".')).toBeTruthy();
+  });
+
+  it('pages the history rather than printing all of it', async () => {
+    const many = Array.from({ length: 24 }, (_, index) => ({
+      id: `evt_${index}`,
+      kind: 'CASH_OPPORTUNITY_CAPTURED',
+      summary: `Event number ${index}.`,
+      actorRef: 'BRAIN',
+      createdAt: '2026-09-15T00:00:00.000Z',
+    }));
+    base({ [VIEW]: { body: view({ whatBrainHasDone: many }) } });
+    await mount();
+    await waitFor(() => expect(screen.getByText('Everything that has happened')).toBeTruthy());
+
+    expect(screen.getByText('Event number 0.')).toBeTruthy();
+    expect(screen.queryByText('Event number 15.')).toBeNull();
+    const more = screen.getByText(/Show 10 more of 24/);
+    fireEvent.click(more);
+    expect(screen.getByText('Event number 15.')).toBeTruthy();
+    expect(screen.queryByText('Event number 23.')).toBeNull();
+  });
+});
+
+describe('the first screen is a summary, not the database', () => {
+  it('puts the whole portfolio, the needs, the research and the history behind a disclosure', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('The cash machine')).toBeTruthy());
+
+    /*
+     * Production met thirty-one raw signals and five "decisions" standing for
+     * ninety-eight items before anything said what state the sprint was in.
+     * Nothing is deleted — each of these is one click away and complete — but
+     * none of them is the first screen.
+     */
+    for (const heading of [
+      'Everything Brain has found',
+      'What Brain is working on',
+      'Research detail',
+      'Money detail and the spending authority',
+      'Activity',
+      /*
+       * `People and capacity` was a seventh disclosure here and is not one any
+       * more: it is not about Cash at all, and collapsing it is what the
+       * instruction that removed it rules out by name. Its absence — and the one
+       * link that replaces it — is asserted in *people and capacity are not on
+       * this page*, so removing it from this list loses no coverage.
+       */
+    ]) {
+      const node = screen.getByText(heading);
+      const disclosure = node.closest('details');
+      expect(disclosure).not.toBeNull();
+      expect(disclosure!.open).toBe(false);
+    }
+
+    // And what *is* on the first screen: the status, the decisions and the
+    // best openings, none of them folded.
+    for (const heading of ['The cash machine', 'Decisions for you', 'Best opportunities', 'Money']) {
+      expect(screen.getByText(heading).closest('details')).toBeNull();
+    }
   });
 });
 
@@ -476,10 +564,17 @@ describe('the money picture', () => {
     await mount();
     await waitFor(() => expect(screen.getByText('The money picture')).toBeTruthy());
 
-    expect(screen.getByText('Authorized')).toBeTruthy();
-    expect(screen.getByText('Committed')).toBeTruthy();
-    expect(screen.getByText('Spent')).toBeTruthy();
-    expect(screen.getByText('Remaining authorized capacity')).toBeTruthy();
+    /*
+     * Scoped to the detailed picture, because the compact money row above says
+     * the same four words about the same four figures. That is a summary of
+     * this rather than a second opinion — one server-derived source, rendered
+     * twice — so the query names which rendering it is asserting about.
+     */
+    const picture = document.querySelector('.rs-cash-picture') as HTMLElement;
+    expect(within(picture).getByText('Authorized')).toBeTruthy();
+    expect(within(picture).getByText('Committed')).toBeTruthy();
+    expect(within(picture).getByText('Spent')).toBeTruthy();
+    expect(within(picture).getByText('Remaining authorized capacity')).toBeTruthy();
     // Nothing authorized is something Brain knows. It must not read like a
     // figure that has not been worked out.
     expect(
@@ -758,7 +853,21 @@ describe('the decision nothing can proceed without', () => {
       expect(screen.getByText(/Spending limits .* what Brain may spend here/)).toBeTruthy(),
     );
     const headings = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
-    expect(headings[0]).toBe('Decisions for you');
+    /*
+     * The status screen is first and the decisions are second, and neither is
+     * folded.
+     *
+     * This asserted that the decisions were the very first thing. That was
+     * right while the page had no summary at all, and it is the wrong shape
+     * now: a person arriving needed to know what state the machine was in
+     * before being handed something to decide. What matters is unchanged — the
+     * decision nothing can proceed without is above everything it blocks, and
+     * is not inside a disclosure.
+     */
+    expect(headings[0]).toBe('The cash machine');
+    expect(headings[1]).toBe('Decisions for you');
+    const decisions = document.querySelector('.rs-cash-decisions');
+    expect(decisions?.closest('details')).toBeNull();
   });
 
   it('shows the outstanding approval once, as the control rather than twice', async () => {
@@ -771,7 +880,7 @@ describe('the decision nothing can proceed without', () => {
     // The server's own list titles it the old way; the card is the control, so
     // the list entry is the one that goes.
     expect(screen.queryByText('Decide what Brain may spend here')).toBeNull();
-    expect(screen.getByText('3 cards with no payer')).toBeTruthy();
+    expect(screen.getByText('3 blocked actions, one remedy')).toBeTruthy();
   });
 
 
@@ -784,11 +893,18 @@ describe('the decision nothing can proceed without', () => {
     );
     /*
      * "One answer covers" and "the same kind of work on" are different claims,
-     * and this group is the second: three cards with no payer are three
-     * different buyers. The screen used to say answering it released all three.
+     * and the screen still draws both. This group is the first: three needs
+     * recommending the identical path are one tool bought once, so answering
+     * it genuinely releases all three.
+     *
+     * The second branch used to be exercised here by three cards with no
+     * payer, and the server does not produce that group any more — a payer is
+     * a fact Brain researches rather than a question for a person. It is still
+     * drawn for an expiring opening, which is several pieces that share no
+     * remedy at all.
      */
-    expect(screen.getByText(/The same kind of work on 3 items\./)).toBeTruthy();
-    expect(screen.queryByText(/One answer covers 3 items\./)).toBeNull();
+    expect(screen.getByText(/One answer covers 3 items\./)).toBeTruthy();
+    expect(screen.queryByText(/The same kind of work on 3 items\./)).toBeNull();
   });
 
   it('shows what can never be authorized, before anybody approves', async () => {
@@ -894,62 +1010,103 @@ describe('the decision nothing can proceed without', () => {
     expect(calls.filter((call) => call === VIEW).length).toBe(2);
   });
 
-  it('answers a card field, and says it is the person’s now', async () => {
+  it('answers a card question on the card itself, and says it is the person’s now', async () => {
     /*
-     * Every answer but `RESOLVE_NEED` rendered as a paragraph, on the excuse
-     * that the funding and release controls existed elsewhere on the page. They
-     * did not: the money panel is a read-only table and the opportunity actions
-     * are ready/execute/deliver/collect/decline. So the screen was telling
-     * people to do things somewhere that had no way to do them.
+     * This drove the review's `FILL_CARD_FIELD` control, which is gone with
+     * the section that produced it: every field it could have offered is a
+     * fact Brain researches or a proposal Brain composes, so the server emits
+     * no such item any more.
+     *
+     * The capability moved rather than went, and it matters more than it did:
+     * twelve of the card's questions have no column at all, so until this
+     * control existed the bounded deep dive was the only thing that could
+     * answer one — and the tier requires them. A person who knew the answer
+     * had nowhere to put it.
      */
-    const cardDecision = view({
-      decisionsForMe: {
-        items: [
+    const withUnknown = view({
+      myCurrentWork: {
+        ...(view().myCurrentWork as Record<string, unknown>),
+        best: [
           {
-            key: 'MISSING_PRICE',
-            title: '1 card with no price',
-            why: 'An unknown is not a favourable assumption.',
-            recommendation: 'Quote one price.',
-            consequence: 'It becomes ready to test the moment its answer exists.',
-            urgency: 'WHENEVER',
-            underlying: ['cop_1'],
-            sharedRemedy: true,
-            costCents: null,
-            costNote: null,
-            answer: {
-              kind: 'FILL_CARD_FIELD',
-              targets: ['cop_1'],
-              label: 'Answer the price on this card',
-              completionCondition: 'Every one of these cards records a price.',
+            opportunity: opportunity(),
+            disposition: 'TEST_A_DECISIVE_UNKNOWN',
+            because: 'One thing on this card is unknown.',
+            missing: [],
+            tier: {
+              tier: 'QUALIFIED',
+              establishes: 'a named buyer published that they want something',
+              doesNotEstablish: 'that they would buy it from us',
+              toAdvance: [],
+              answered: 15,
+              required: 16,
+              summary: 'The execution thesis is supported.',
             },
           },
         ],
-        underlyingCount: 1,
-        summary: '1 thing to decide, standing for 1 underlying item.',
+        byTier: { SIGNAL: 0, CANDIDATE: 0, QUALIFIED: 1, READY_TO_TEST: 0 },
+        bestAreNearlyQualified: false,
+        engineCards: {
+          cop_1: {
+            opportunityId: 'cop_1',
+            validationState: 'COMPLETE',
+            recommendation: null,
+            unknowns: ['eligibility'],
+            entries: [
+              {
+                key: 'eligibility',
+                label: 'Eligibility and permission',
+                value: null,
+                kind: 'UNKNOWN',
+                task: 'Find what published rule decides whether we may take it at all.',
+                claimId: null,
+                basis: null,
+                assumptions: null,
+                uncertainty: null,
+              },
+            ],
+          },
+        },
+        economics: { cop_1: [] },
       },
     });
     base({
-      [VIEW]: { body: cardDecision },
+      [VIEW]: { body: withUnknown },
       'PATCH /api/cash/opportunities/cop_1': { body: { opportunity: opportunity() } },
     });
     await mount();
 
-    await waitFor(() => expect(screen.getByText(/This answer applies to 1 record/i)).toBeTruthy());
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /answer the price on this card/i }));
-    });
-    fireEvent.change(screen.getByLabelText(/1 card with no price/i), {
-      target: { value: '120000' },
+      fireEvent.click(screen.getAllByRole('button', { name: /show the full card/i })[0]!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+      fireEvent.click(
+        screen.getAllByRole('button', { name: /answer the eligibility and permission/i })[0]!,
+      );
+    });
+    fireEvent.change(screen.getAllByLabelText(/^Eligibility and permission$/)[0]!, {
+      target: { value: 'No licence applies to work this size.' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Confirm' })[0]!);
     });
 
-    // The same guarded route the card editor uses, so an answer given here and
-    // one given on the card are one operation.
-    expect(bodies['PATCH /api/cash/opportunities/cop_1']).toMatchObject({ price: '120000' });
-    expect(screen.getByText(/Brain will not propose over it/i)).toBeTruthy();
-    expect(calls.filter((call) => call === VIEW).length).toBe(2);
+    // The same guarded route the card editor uses, under the field's own key —
+    // an engine field has no column, so its name is what `fillCard` matches.
+    expect(bodies['PATCH /api/cash/opportunities/cop_1']).toMatchObject({
+      eligibility: 'No licence applies to work this size.',
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/It is yours now, so Brain will not propose over it/i)).toBeTruthy(),
+    );
+  });
+
+  it('never renders a control for a review item the server cannot produce', async () => {
+    // `FILL_CARD_FIELD` is still in the wire vocabulary because the type is
+    // shared; nothing composes one. The arm that rendered it is deleted, so a
+    // stale item would show its words and no control rather than a control
+    // posting to a path the section no longer has an opinion about.
+    const source = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    expect(source).not.toMatch(/kind === 'FILL_CARD_FIELD'/);
   });
 
   it('records money that actually arrived, and refuses to without a reference', async () => {
@@ -1292,7 +1449,10 @@ describe('the money, and the work', () => {
     expect(screen.getAllByText('USD 750.00').length).toBe(3);
     expect(screen.getAllByText('USD 0.00').length).toBeGreaterThan(0);
     // Deployable is negative and is printed as such rather than clamped to nil.
-    expect(screen.getByText('-USD 200.00')).toBeTruthy();
+    // Scoped, because the compact money row above reports the same figure as
+    // remaining capacity — a summary of this table rather than a second one.
+    const mine = document.querySelector('.rs-cash-money') as HTMLElement;
+    expect(within(mine).getByText('-USD 200.00')).toBeTruthy();
     expect(screen.getByText(/Deployable cash is negative/i)).toBeTruthy();
   });
 
