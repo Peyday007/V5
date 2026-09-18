@@ -2756,16 +2756,59 @@ remote.
   for the reason directly above: the image is live, and a re-deploy restarts a
   Brain holding leased work to re-prove something the pre-restart run already
   proved.
-  **A ninth happened, and it is the first reading that separates two of the
-  shapes above rather than adding to them.** Run 254, `3a73bb1`: release
-  success, the pre-restart hosted verification success on the released image,
-  the restart itself success — and then the post-restart run recorded the
-  PRIMARY pass at 10:46:46, the ADVERSARIAL at 10:46:49, three seconds apart,
-  and nothing at all for **five minutes and twenty-three seconds** before
-  `HOSTED-VERIFICATION: FAIL could-not-complete` / `fetch failed`. The verdict
-  step then printed `release: success`, `hosted verification: success`, `after
-  the restart: failure`, which is the shape recorded above and is **not** a
-  failed release.
+
+  **It happened again on the very next deploy, which makes it reproducible
+  rather than a bad minute.** Run 253, `beafc06`: release success,
+  `HOSTED-VERIFICATION: PASS 198/198` on the released image, then the same
+  `failed to wait for health checks to pass: context deadline exceeded` and
+  exit 126 at 07:41:57 — and the next step answering **`healthy again after 2
+  attempt(s)`** at 07:43:20, eighty-three seconds later. Twice in a row, on two
+  different trees, with the machine healthy both times shortly afterwards.
+
+  So this is no longer a reading about one run: **`flyctl apps restart`'s
+  health-check wait is shorter than this machine's cold start**, and every
+  deploy now ends `after the restart: skipped` — which means nobody is getting
+  the post-restart verification at all. That is the erosion worth naming: the
+  gate is not failing, it is not running, and a gate that never runs stops
+  being evidence long before anybody notices. The remedy is in the workflow's
+  own restart step rather than in the application, and it is deliberately left
+  to whoever is editing `deploy.yml` — §28's file is the one place two
+  workstreams editing at once has already cost this repository twice, and a
+  second opinion about a timeout is not worth a third.
+
+  **A third consecutive one puts a number on the gap, and the number is the
+  argument.** Run 35349935034, `33cd85d`: release success,
+  `HOSTED-VERIFICATION: PASS 198/198` on the released image at 13:41:57, then
+  five minutes of `Waiting for 811d651c26d948 to become healthy (started,
+  0/1)` and `failed to wait for health checks to pass: context deadline
+  exceeded` at 13:47:08 — and the very next step answering **`healthy again
+  after 1 attempt(s)`** at 13:47:32. **Twenty-four seconds.** The machine was
+  already back; `flyctl`'s deadline expired first and the step that proves the
+  restart never ran.
+
+  So the reading is unchanged and now rests on three runs rather than two, and
+  the erosion it names has happened: three deploys in a row ended
+  `after the restart: skipped`, which is the post-restart verification not
+  running rather than failing. Two things follow and neither is a re-deploy.
+  **The released commit is live and proved** — `release: success` plus a
+  full pre-restart pass on that image says so, and re-deploying would restart
+  a Brain holding leased work to re-prove it. And **the live reading has to
+  come from outside the runner** when the gate is the thing that is skipped:
+  here that was the served bundle, fetched before and after, with the two
+  strings this change removed present in the first and absent in the second.
+  The remedy is still `deploy.yml`'s own restart step and still deliberately
+  left to whoever is editing that file.
+
+  **Run 254 is a different condition from the three above, and counting it with
+  them would bury both.** Those three are `flyctl`'s restart wait expiring, so
+  the post-restart verification never ran. This one restarted cleanly and the
+  verification *did* run: `3a73bb1`, release success, pre-restart success, the
+  restart itself success — and then the PRIMARY pass at 10:46:46, the
+  ADVERSARIAL at 10:46:49, three seconds apart, and nothing at all for **five
+  minutes and twenty-three seconds** before
+  `HOSTED-VERIFICATION: FAIL could-not-complete` / `fetch failed`. It ends
+  `after the restart: failure` rather than `skipped`, which is the distinction
+  the paragraph above draws between a gate that fails and one that does not run.
 
   What is new is two facts about the client, both checkable by reading and one
   of them measured. **Neither `scripts/verify-hosted.ts` nor
@@ -4433,6 +4476,56 @@ and a suite that exercises the stage cannot see that.**
   a key answered by none of them is a compile-time-visible absence rather than
   a park somebody finds in production.
 
+- **Half of that answering transition was a form asking a person to narrate
+  Brain's own work, and the owner rejected it. The correction is recorded
+  rather than quietly applied.** What the bullet above added was a control
+  under every blank, and the entry it rendered from carried no `owner` — so the
+  screen had nothing to decide on and drew a text box and a **Confirm** under
+  the payer, the price, the delivery method, the economics and the contact
+  channel alike. Every one of those is a fact about the world that the `owner`
+  correction two bullets up had already given to Brain, and `fillCard` recorded
+  whatever was typed as a `PERSON` fact, which `mayReplace` then keeps *above*
+  anything Brain later establishes. One door along, the review's grouped-need
+  section offered *"Mark this done, and say what you did"* over a
+  `cash_needs` row — and every one of those is Brain's, because both callers of
+  `raiseNeed` pass `actorRef: BRAIN`, one of them writing the reason on the row
+  saying Brain looks it up *rather than asking you*.
+
+  So the rule is the one this file already had and the screen had stopped
+  obeying: **a `BRAIN_RESEARCH` or `BRAIN_PROPOSES` requirement never renders a
+  person-answer form.** `owner` travels down on the entry from `fieldOwner`,
+  which is the single place that decides it — a second copy in TypeScript would
+  be the two-readers-disagreeing defect at a new boundary — and `PERSON_ONLY`
+  is the whole of what the control renders for. Today that is **nothing**,
+  which is the correct reading of a card whose every field is a fact or a
+  proposal, and the control returns by itself the day one is added. The
+  grouped-need section is deleted rather than narrowed, for the reason the
+  grouped-blank one already was: every row it could group on was Brain's.
+
+  **The blanks did not go with the box.** Each one still prints the task that
+  would answer it, and each need still stands under *What Brain needs* with its
+  recommended path — what went is the attestation, never the question.
+
+  **And I over-reached at the route, which the acceptance walk caught.** I
+  refused `to: 'RESOLVED'` outright there, on the reasoning that a control
+  nothing renders is still reachable by anything that can post. The reasoning
+  is sound and the target was wrong: `closeNeed` already refuses to be told —
+  it re-reads the completion condition, writes `BRAIN_READ_THE_ROW` only when
+  it holds, and otherwise records `PERSON_SUBSTITUTE`, which says *somebody is
+  doing this by hand* with the capability still reading `MISSING`. That is the
+  **opposite** of marking a Brain-owned requirement satisfied, and it is the
+  only way out for a piece blocked on something Brain cannot do. Refusing it
+  turned a rule about honesty into §24's escalation with no answering
+  transition. **What was generic was the form, and the form is what went.**
+
+  Two of the three were invisible to every suite that could have seen them.
+  `cashSection` scripts `fetch`, so a control gated on a field the server does
+  not send passes there and still draws a box in production; the unit suites
+  write their own card facts. They are pinned in `cashBrowserToDatabase`, where
+  the `owner` comes off the real `evidenceCard` through the real route, and
+  **as absences** — the two assertions were run against a neutered gate to see
+  them fail before they were trusted to pass.
+
 - **An ordering that is true only sometimes is not an ordering, and the
   release gate is what found it.** `outstandingClarification` decided that a
   captured change answers an outstanding question with
@@ -4513,6 +4606,31 @@ and a suite that exercises the stage cannot see that.**
   differs from the first, so a need that genuinely distinguishes them still
   says both.
 
+  **That card no longer exists, and half of this repair outlived it.** The two
+  bullets above and the form-removal bullet further up were written in parallel
+  against the same card from opposite ends: one made its sentences true, the
+  other found that the card itself asks a person to attest to Brain's work and
+  deleted it. The deletion wins, because a correctly-worded card that must not
+  be shown is still one that must not be shown — and the diagnosis does not go
+  with it. `assessResearch`'s derived sentence travels onto `whatBrainNeeds` as
+  `researchStatus`, which is where a Brain-owned requirement belongs: under
+  Brain's own work, saying where its research got to, asking nothing. `null`
+  for a need whose research is merely running, because a line reading *in
+  progress* under work in progress tells a reader nothing.
+
+  What did go is what only the card had. `sentences()` deduplicated across
+  members of a *group*, and there are no groups now — the identical rows are
+  one entry each under *What Brain needs*, each with its own blocked action, so
+  there is nothing for a sentence to repeat inside. The remedy-printed-twice
+  template went the same way. Both were right about the card they were in, and
+  neither has a second reader to drift against. **Two unit tests and one more
+  in `cashOpportunityStandard` were deleted rather than adapted**: they handed
+  needs to `compressedReview`, which no longer takes them, so an adapted
+  version would have passed whatever the module did with a field it never
+  receives. A vacuous guard is worse than none, because it reads as coverage.
+  The property is asserted over HTTP instead, on a project that actually has an
+  open need.
+
 - **The production guard cried wolf, and the remedy it named was wrong.** Vite
   hashes are base64url, the guard matched `[A-Za-z0-9]+`, and the day
   production shipped `index-C5-52qux.js` the `grep` found nothing — which under
@@ -4585,6 +4703,68 @@ and a suite that exercises the stage cannot see that.**
   whenever any round is OPEN, so everything it and `questionFor` see is
   settled. Checking that before changing anything is why the fix is three
   display sites and no logic.
+
+- **A card asked a person to attest to work Brain had said it would do, and
+  the row it closed said so in its own words.** The form read *"WHAT DID YOU
+  DO? Brain reads this back against: <completion condition>"*, then *"IF THE
+  INTEGRATION IS STILL MISSING, say how"*, two boxes and a **Confirm**. Every
+  `cash_needs` row it could be offered for is Brain's own: both callers of
+  `raiseNeed` pass `actorRef: BRAIN`, and the one for a card blank filters on
+  `owner === 'BRAIN_RESEARCH'` and writes the reason on the row as *"a fact
+  about the world rather than a decision of yours — so Brain looks it up rather
+  than asking you"*. The card then asked that same person to say they had
+  looked it up, and **`closeNeed` recorded the sentence as
+  `PERSON_SUBSTITUTE`** — a Brain-owned requirement marked satisfied on prose.
+  §29's contradicting-control defect, with a write on the end of it.
+
+  Deleted rather than relabelled, for the reason the grouped-blank section
+  above it was deleted: every row it could group on is Brain-owned, so no
+  narrower version of it is correct. **Nothing is hidden** — the identical rows
+  are on the same page under *What Brain needs*, with the blocked action, why
+  it matters, the recommended path and the next step. A missing integration is
+  answered by the named connection action on People & capacity, which is a
+  control that does the thing, rather than by a sentence typed into a Cash card.
+
+  **Three sites, and the one a text search misses was the broadest.**
+  `EngineCardEntry` carried no owner, so the card rendered an *Answer the …*
+  box under **every** blank — the payer, the price, the delivery method, the
+  economics — and `fillCard` recorded whatever was typed as a `PERSON` fact
+  that `mayReplace` then keeps above anything Brain later establishes. The
+  entry carries `fieldOwner`'s answer now, derived on the server so the one
+  module that decides ownership stays the only one, and the control renders for
+  `PERSON_ONLY` and nothing else. **No card field is `PERSON_ONLY`**, so today
+  it renders for nothing — the correct reading of a card whose every field is a
+  fact or a proposal, and the control appears by itself if one is ever added.
+  The third site is a genuine person-only control — recording a commercial
+  action taken under a standing grant, chosen from the closed set that grant
+  permits — and it kept the generic opening words of the form that was wrong.
+  It says what the answer authorizes now.
+
+  **Removing the form was not the whole correction, and two further defects
+  came out of proving that.** A control nothing renders is still reachable by
+  anything that can post, so the route refuses a person resolving a need at
+  all; `WITHDRAWN` stays theirs, because saying a thing is no longer required
+  is a decision about what to *want* and claims nothing about what happened.
+  That guard went in **before** the need was resolved, so an invented id
+  answered `400` while a missing one still answered `404` — invariant 23's
+  oracle arriving through a guard written to close a different hole, caught by
+  the parity test that already existed. And `DecisionAnswer` drew its trigger
+  from `answer.label` for *any* kind, which was harmless only while every kind
+  had a branch: with the branch gone the button still drew itself and opened
+  nothing. A dead control is worse than the wrong form it replaced, because a
+  person presses it twice and concludes the page is broken — and the payload is
+  untyped at runtime, so a rolling deploy serves an old body to a new bundle
+  until the last instance turns over. The implemented kinds are named.
+
+  **`remedyCost` went with it rather than being left unused.** It answered a
+  real question — two opportunities blocked on the same tool are one purchase,
+  so the group costs that figure once rather than the sum, because an
+  over-stated cost makes a cheap unblock look expensive enough to defer — and
+  it existed only to label the card that is gone. Nothing inherited the defect
+  it guarded: *What Brain needs* lists each need with its own path and shows no
+  total, so there is no sum anywhere to be wrong. Kept as an absence with its
+  reasoning, because a helper with no caller is the *mechanism nothing calls*
+  this file keeps correcting, and a later reader would wire it back.
 
 **None of the existing work was rewritten to make any of this come out right.**
 Every orchestration, fragment, claim, report, audit, round and parked candidate
