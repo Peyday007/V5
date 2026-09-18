@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 067. See that file for why each column
+-- The Postgres half of SQLite migration 070. See that file for why each column
 -- exists; this one differs only in `seq`, which exists because `dialect.ts`
 -- rewrites `rowid` to `seq`, and a tiebreak on a column only one backend has is
 -- the easiest way to write an ORDER BY that is true in one dialect and throws
