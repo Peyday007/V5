@@ -21,6 +21,7 @@ import {
   passkeysAvailable,
   type MemberPasskey,
 } from '../lib/passkeys.ts';
+import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
 
 const ORIGIN_LABEL: Record<MemberPasskey['originKind'], string> = {
   ENROLLMENT: 'Registered when you joined',
@@ -164,6 +165,14 @@ export function Devices(): JSX.Element {
         </a>
         .
       </p>
+      {/*
+        * Your Claude connection is a credential of yours, like the devices
+        * above it, so this is where somebody looks for it — and `alwaysShow`
+        * because on this page it is a permanent entry point rather than a
+        * prompt. It opens the one canonical panel, which is on People &
+        * capacity; there is no second version of it here.
+        */}
+      <ClaudeConnectionCard alwaysShow />
     </section>
   );
 }

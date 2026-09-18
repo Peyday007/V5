@@ -69,14 +69,19 @@ import {
 import { getUser } from '../repos/identity.ts';
 import { peopleReading } from '../services/identity/people.ts';
 import { capacityReading, withoutDiagnostics } from '../services/fleet/capacity.ts';
+import { contributedCapacity } from '../services/capacity/contribution.ts';
 import { listConnections } from '../repos/capacityConnections.ts';
 import {
   BOOTSTRAP_REPOSITORY,
   connectionView,
   issueConnectorInvitation,
   mcpUrlFor,
+  reconnectOwnConnection,
+  requestConnectorInvitation,
+  revokeOwnConnection,
   sendProbe,
   submitTrigger,
+  verifyConnection,
 } from '../services/capacity/connection.ts';
 import { decideBrainAdmin } from '../services/identity/policy.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
@@ -148,6 +153,18 @@ peopleRouter.get(
         ...(admin ? { excluded: people.excluded } : {}),
       },
       capacity: admin ? capacity : withoutDiagnostics(capacity),
+      /*
+       * Which members' connections are usable capacity, and why not when they
+       * are not.
+       *
+       * It is a reading rather than a gate — nothing calls it to decide whether
+       * work may run — and it is here because "my surface is proven" and "my
+       * surface is being used" are two facts a member cannot otherwise tell
+       * apart. A connection that is not verified can never appear in it as
+       * usable: see `services/capacity/contribution.ts` for the five
+       * conditions, every one of them a row.
+       */
+      contributed: await contributedCapacity(),
       me,
       /*
        * The contract travels down with the view rather than being restated in
@@ -219,6 +236,134 @@ peopleRouter.post(
 );
 
 /**
+ * Ask for your own one-time connector link.
+ *
+ * The transition that was missing, and its absence is why an ordinary member
+ * could not start at all: Claude's approval screen needs to know which Brain
+ * worker it is connecting, the link is what tells it, and issuing one mints a
+ * worker identity — a Brain administrator's decision, correctly. What did not
+ * exist was any way to *ask*, so the member read "add a custom connector" as
+ * their next step and was refused at a screen that looks for an administrator
+ * first and an invitation second. §24: an escalation with no answering
+ * transition is stuck rather than waiting.
+ *
+ * Yours, by principal. It creates nothing, grants nothing and spends nothing —
+ * it writes one timestamp, which is what puts you in front of an administrator.
+ */
+peopleRouter.post(
+  '/people/me/claude/invitation-request',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const user = (await getUser(principal.id))!;
+    const outcome = await requestConnectorInvitation({ user, origin: originOf(req) });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome.view;
+  }),
+);
+
+/**
+ * Check your connection, for real.
+ *
+ * It re-reads the worker identity, its project membership, the OAuth tokens
+ * minted against it, the registered Routine and its bound worker, whether the
+ * deployment variable is present, and `proveSurface`'s four-row chain — and
+ * returns what each of those said. Nothing in the answer is a claim anybody
+ * made about themselves, which is the rule `brain_whoami` already answers
+ * under.
+ *
+ * A POST because it is an action a person takes, and it still fires nothing and
+ * spends nothing: the reconciliation it performs is the one every read of this
+ * page performs anyway. Available in every state to every reader, because a
+ * verification somebody could be refused is one they would stop trusting.
+ */
+peopleRouter.post(
+  '/people/me/claude/verify',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const user = (await getUser(principal.id))!;
+    const outcome = await verifyConnection({ user, origin: originOf(req) });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome.view;
+  }),
+);
+
+/**
+ * Take your own connection back.
+ *
+ * Yours, by principal: there is no id here anybody could substitute. It revokes
+ * every token minted against your worker, revokes any live invitation, and
+ * stops the dispatcher firing your surface — and destroys nothing, which is
+ * what makes reconnecting an approval rather than a second setup.
+ */
+peopleRouter.post(
+  '/people/me/claude/revoke',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const user = (await getUser(principal.id))!;
+    const reason = bodyOf(req)['reason'];
+    const outcome = await revokeOwnConnection({
+      user,
+      actor: user,
+      reason:
+        typeof reason === 'string' && reason.trim().length > 0
+          ? reason.trim().slice(0, 500)
+          : 'the member took it back from their own page',
+      origin: originOf(req),
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome.view;
+  }),
+);
+
+/** Put your own connection back into the journey. Yours, by principal. */
+peopleRouter.post(
+  '/people/me/claude/reconnect',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const user = (await getUser(principal.id))!;
+    const outcome = await reconnectOwnConnection({ user, actor: user, origin: originOf(req) });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome.view;
+  }),
+);
+
+/**
+ * Take somebody else's connection back.
+ *
+ * A Brain administrator's, at the level every other change to what a principal
+ * may reach already carries, and it exists for the case the member's own
+ * control cannot cover: somebody who has lost the device they sign in with
+ * cannot revoke a connector that is still authorized in their name.
+ *
+ * It is the same operation, recording who asked for it. A worker principal is
+ * refused at `requirePerson` before the level is even asked.
+ */
+peopleRouter.post(
+  '/people/:userId/claude/revoke',
+  handler(async (req) => {
+    const principal = requirePerson();
+    await requireBrainAdmin();
+    const subject = await getUser(requiredString(req.params['userId'], 'userId'));
+    // The same 404 a missing route gives. A user id is not an oracle.
+    if (!subject || subject.kind !== 'PERSON' || subject.disabledAt !== null) {
+      throw notFound('No such route.');
+    }
+    const reason = bodyOf(req)['reason'];
+    const outcome = await revokeOwnConnection({
+      user: subject,
+      actor: (await getUser(principal.id))!,
+      reason:
+        typeof reason === 'string' && reason.trim().length > 0
+          ? reason.trim().slice(0, 500)
+          : 'a Brain administrator took it back',
+      origin: originOf(req),
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return outcome.view;
+  }),
+);
+
+/**
  * Issue a member's connector invitation.
  *
  * A Brain administrator's, because it creates a **worker identity** and grants
@@ -275,6 +420,18 @@ peopleRouter.get(
           triggerRef: one.triggerRef,
           routineId: one.routineId,
           failureReason: one.failureReason,
+          /*
+           * The other half of the answering transition.
+           *
+           * A member asking for their connector link is a request that reaches
+           * an administrator through this column and through no other channel,
+           * so a list that carried the state and not the stamp would leave
+           * "asked an hour ago" and "asked in March" reading identically.
+           */
+          invitationRequestedAt: one.invitationRequestedAt,
+          invitationIssuedAt: one.invitationIssuedAt,
+          revokedAt: one.revokedAt,
+          revokedReason: one.revokedReason,
           updatedAt: one.updatedAt,
         })),
       ),
