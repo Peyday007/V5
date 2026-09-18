@@ -6466,6 +6466,16 @@ export interface SharedFinding {
 
 export const CAPACITY_CONNECTION_STATES = [
   'NOT_STARTED',
+  /**
+   * The member asked for their one-time connector link.
+   *
+   * It exists because the link is a Brain administrator's to issue — it mints a
+   * worker identity and grants it a project membership — and a member who could
+   * not *ask* for one was reading "add a custom connector in Claude" as their
+   * next step and being refused at a consent screen. An escalation with no
+   * answering transition is stuck rather than waiting; this is the transition.
+   */
+  'INVITATION_REQUESTED',
   'CONNECTOR_AUTHORIZED',
   'ROUTINE_DETAILS_NEEDED',
   'WAITING_FOR_ADMIN',
@@ -6473,6 +6483,24 @@ export const CAPACITY_CONNECTION_STATES = [
   'PROBE_SENT',
   'ARRIVED',
   'HEALTHY',
+  /**
+   * The registered Routine is not the one this row names, or is bound to
+   * another worker.
+   *
+   * Derived on the read path and **never acted on**. Brain firing a surface its
+   * own record does not name is what §27 records at length, so it has to have a
+   * word; repointing it is `fleet repoint-worker`, an operator's decision,
+   * because the Routine in question may well be somebody else's.
+   */
+  'MISBOUND',
+  /**
+   * Given back. The tokens are revoked and the surface is not fired.
+   *
+   * Reversible by its owner: `reconnect` puts the journey back at the start
+   * with the trigger, the account and the Routine intact, and the reason this
+   * one was revoked stays on the row as history.
+   */
+  'REVOKED',
   'FAILED',
 ] as const;
 export type CapacityConnectionState = (typeof CAPACITY_CONNECTION_STATES)[number];
@@ -6491,6 +6519,11 @@ export interface CapacityConnectionRow {
   probe_bin_id: string | null;
   probe_sent_at: string | null;
   healthy_at: string | null;
+  invitation_requested_at: string | null;
+  invitation_issued_at: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  revoked_by_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -6510,7 +6543,15 @@ export interface CapacityConnection {
   failureReason: string | null;
   probeBinId: string | null;
   probeSentAt: string | null;
+  /** When Brain last read the four-row chain and found it complete. */
   healthyAt: string | null;
+  /** When the member asked for their connector link, and when one was issued. */
+  invitationRequestedAt: string | null;
+  invitationIssuedAt: string | null;
+  /** Why it was given back, and by whom. Kept through a reconnect, as history. */
+  revokedAt: string | null;
+  revokedReason: string | null;
+  revokedByUserId: string | null;
   createdAt: string;
   updatedAt: string;
 }

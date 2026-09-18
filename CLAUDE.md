@@ -5104,7 +5104,129 @@ owns the job rather than a fact about the frontier.
 
 ---
 
-## 35. A permission decides what is inside a section. It never decides which sections there are.
+## 35. The setup is one screen, and a screen two accounts cannot compare is two screens.
+
+§34 gave a member a resumable way to connect their Claude account and stopped
+where it worked. Driving it from an ordinary member's browser rather than the
+owner's found that the half which is not the happy path was missing entirely,
+and — as usual — every row underneath read as healthy.
+
+**Nobody could start on their own, and the instructions did not say so.**
+`/oauth/authorize` looks for a signed-in Brain administrator *before* it looks
+for an invitation, which is correct: an invitation stands in for an
+administrator's approval, and folding them together would let a stale invitation
+approve anything. The consequence is that an ordinary member holding neither is
+refused at Claude's approval screen — and step one of the journey told them to
+go there. The link mints a worker identity and grants it a project membership,
+so issuing it stays an administrator's decision; what did not exist was any way
+to **ask**. §24's sentence at the first step rather than the last: an escalation
+with no answering transition is stuck rather than waiting.
+`INVITATION_REQUESTED` is that transition, idempotent by the stamp it writes,
+creating no identity, no membership and no surface — and the administrator's
+list carries it, because this Brain has no email and no notifications, so that
+row is the only channel a request travels down.
+
+**Nothing could be given back.** There was no revoke and no reconnect, so
+somebody who lost their Claude account had to find a person with a terminal.
+Revoking destroys nothing — the tokens go, the surface moves to `UNAVAILABLE`
+because *a person decided this* rather than health deciding it, and the trigger,
+the account, the Routine and the timestamp that says it was once proven all stay
+— which is what makes reconnecting one approval rather than a second setup. A
+reconnect re-enables the surface **only** when this member's own revoke is what
+took it out, compared against Brain's own marker string: a member undoing an
+operator's drain from a page that never mentions it is the same reach §34's
+shared projection already had to have taken out of it.
+
+**A surface answering as another worker had no name.** The refusal existed at
+submission and nowhere afterwards, so a Routine repointed later left the
+connection reading CONFIGURED while Brain fired a surface its own record no
+longer named — §27 records at length what that costs. `MISBOUND` is derived on
+the read path and **never acted on**: the Routine may be another member's, and
+disabling it from this page would be exactly that reach again. It is reported,
+it is refused as capacity, and the remedy named is `fleet repoint-worker`.
+
+**Proof is history; authorization is now.** A connector that authorized once and
+holds nothing live is reported *beside* the state rather than instead of it, so
+a proven surface stays proven and still says plainly that nothing fired at it
+can authenticate. Two facts, two fields — and the reading that separates them is
+*live* versus *ever used*, both from `oauth_tokens`, because a token that has
+been revoked still has a `last_used_at` and the first version of
+`connectorAuthenticated` read only that. A revoke the screen above it disagreed
+with would be §29's defect at the one place it would matter most.
+
+- **Parity is a property of the code, not a promise in a comment.** One
+  component, `client/src/russell/ClaudeConnection.tsx`, rendered by every
+  surface: the destination in full, and a compact card on Home, on Your devices
+  and named at enrolment that opens the same destination. It contains no role,
+  no membership and no capability check **at all** — asserted by a test that
+  reads the file, the way `operatorConsoleRemoved` reads the repository — so
+  there is nothing in it that *could* branch on a reader.
+- **A control somebody may not use is disabled with the server's reason, never
+  removed.** `ConnectionControl[]` is a fixed list in a fixed order and only
+  `enabled` and `disabledReason` move. A screen that removes a control has a
+  different shape per reader, and "there is no button" and "the button is not
+  for you yet" are answers a person reads very differently. The reason is
+  rendered rather than hidden in a `title`: an explanation only a mouse can
+  reach is no explanation on a phone, and this screen is read on a phone by
+  exactly the people who have just registered a device.
+- **The troubleshooting is a constant.** It describes the mechanism rather than
+  this connection, and a constant is the strongest parity there is. Deriving it
+  per state would mean two accounts at two steps reading two different documents
+  about one system.
+- **Verification is seven reads with three answers each.** *Not yet* is a third
+  answer on purpose, for §33's reason one altitude along: a check that reported
+  an unstarted setup as a failure would make a healthy half-finished journey
+  read as broken. Every one of the seven is a row Brain wrote — the worker, its
+  membership, the tokens minted against it, the registered Routine and its bound
+  worker, the deployment variable's presence, and the four-row chain — and none
+  is a claim a caller made about itself.
+- **A verified connection is visible to the Software Factory and is not usable
+  by it.** `services/capacity/contribution.ts` reports, per member, whether
+  their connection is usable capacity and names the refusal when it is not; the
+  factory's repository card reads it. It is a **projection and not a gate** —
+  nothing calls it to decide whether work may run, because a second place that
+  could authorize execution is the second security model §27 refuses. And it
+  reports `routing` exactly as `worker_routing` states it, `null` included: §27
+  is explicit that no worker without an explicit row may ever be handed
+  repository work, so a research connection is research capacity until somebody
+  authorizes a repository for it.
+
+**Three defects in this work were found by the tests rather than by reading, and
+all three are recorded rather than quietly fixed.**
+
+`reconcile` derived `WAITING_FOR_ADMIN` from a registered surface without asking
+whether the connector could authenticate — which was unreachable until
+`reconnect` existed, because `NOT_STARTED` had never before been a state a row
+with a Routine could be in. So the first read after a reconnect told somebody
+whose connector had just been de-authorized that Brain was waiting on an
+administrator, when the one outstanding thing was theirs.
+
+The headline for a lapsed authorization said *reconnect* — and `RECONNECT` is
+enabled only on a connection somebody took back, so every other state was
+telling a person to press the one button disabled beside it. §29's status
+contradicting the control, found by asserting the words rather than only the
+state.
+
+And the Postgres migration dropped `capacity_connections_check`, which is not
+what Postgres named it: the rule is the table **plus the column the constraint
+mentions**, so it is `capacity_connections_state_check`. It was written without
+`IF EXISTS` deliberately, so it failed the migration and failed the boot with
+the real name in the message — the tolerant form would have left the old
+constraint standing beside the new one and the first revoke in production would
+have been refused by a constraint nobody was looking at. **The fourth time this
+repository has been told something by the second backend and by nothing else.**
+
+**Two fixtures were typed, and that is the durable half of the repair.**
+`peopleSection`'s connection payload and `buildRepositories`' repository card
+were bare object literals, so TypeScript checked nothing about them: when the
+server's contract grew, both suites went on passing against payloads the real
+routes can no longer produce, until a component read a field that was not there
+and crashed. **A fixture the compiler does not check is a fixture that tests
+itself.**
+
+---
+
+## 36. A permission decides what is inside a section. It never decides which sections there are.
 
 The boundary §34 drew was right and the way the page expressed it was not. A
 member's Cash read answered `SHARED`, and `Cash.tsx` turned that into an early
@@ -5320,6 +5442,7 @@ server/
       loop.ts           the tick that makes a state change visible to a poller
     capacity/
       connection.ts     connecting a Claude account, and the one step Brain cannot do
+      contribution.ts   whose connection is usable capacity, and why not when it is not
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
       shared.ts         what crosses between projects, and what may never
@@ -5449,6 +5572,7 @@ client/                 React UI
   src/russell/Cash.tsx  one Cash page: one skeleton, and a role decides what is in it
   src/russell/cashPage.ts  both payloads, normalized; the capabilities the server sent
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
+  src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
   src/russell/Devices.tsx    your own passkeys, and nobody else's
   src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate
   src/russell/Home.tsx  the command center: state, focus, maturity strip, collections
@@ -5491,6 +5615,8 @@ tests/                  Vitest suites
   passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new
   sharedCashAccess.test.ts   a member reads the frontier; nobody reads somebody's job
   peopleAndCapacity.test.ts  a declared person, a counted Routine, a resumable setup
+  claudeConnectionLifecycle.test.ts  asking, checking, misbinding, lapsing, revoking, reconnecting
+  claudeConnectionParity.test.ts     three real accounts, one screen, compared field by field
   peopleSection.test.tsx     the two screens the defects were actually visible on
   migrationRebuild.test.ts   a rebuild over rows, and the cascade it must not fire
   cashConcurrency.test.ts    two commitments, forced to overlap, on both backends

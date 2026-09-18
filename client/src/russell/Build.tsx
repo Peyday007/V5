@@ -221,6 +221,24 @@ function Repositories({
                 {repo.surfaces.join(', ')}.
               </p>
             ) : null}
+            {/*
+              * Member-contributed Claude accounts this repository may use.
+              *
+              * Only the verified ones reach this list, and only once somebody
+              * has authorized that worker for this repository — the server
+              * decides both and this renders what it is given. Silence here
+              * means no member's connection is usable for this repository,
+              * which is a different fact from no member having connected one.
+              */}
+            {repo.contributedSurfaces.length > 0 ? (
+              <p className="rs-hint">
+                Member capacity authorized here:{' '}
+                {repo.contributedSurfaces
+                  .map((one) => `${one.displayName} (${one.workerName})`)
+                  .join(', ')}
+                .
+              </p>
+            ) : null}
             {repo.readiness === 'AWAITING_SURFACE' ? (
               /*
                * The exact URL, composed here rather than on the server.

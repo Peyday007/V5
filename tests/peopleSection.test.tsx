@@ -19,6 +19,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PeopleAndCapacityView } from '../client/src/russell/People.tsx';
 import { CashSection } from '../client/src/russell/Cash.tsx';
+import type { ConnectionView } from '../client/src/lib/peopleApi.ts';
 
 interface Reply {
   status?: number;
@@ -32,8 +33,17 @@ let bodies: Record<string, unknown> = {};
 const PEOPLE = 'GET /api/people';
 const CONNECTIONS = 'GET /api/people/connections';
 
-/** One member, mid-journey: connector authorized, no trigger recorded yet. */
-const CONNECTION = {
+/**
+ * One member, mid-journey: connector authorized, no trigger recorded yet.
+ *
+ * **Annotated `ConnectionView` on purpose.** The previous version of this
+ * fixture was a bare object literal, so TypeScript checked nothing about it —
+ * and when the server's contract grew, every test here went on passing against
+ * a payload the real route can no longer produce, until the component read a
+ * field that was not there and crashed at runtime. A fixture the compiler does
+ * not check is a fixture that tests itself.
+ */
+const CONNECTION: ConnectionView = {
   connection: {
     id: 'cxn_1',
     userId: 'usr_airyn',
@@ -48,6 +58,11 @@ const CONNECTION = {
     probeBinId: null,
     probeSentAt: null,
     healthyAt: null,
+    invitationRequestedAt: '2026-09-17T12:00:00.000Z',
+    invitationIssuedAt: '2026-09-17T12:30:00.000Z',
+    revokedAt: null,
+    revokedReason: null,
+    revokedByUserId: null,
     createdAt: '2026-09-18T00:00:00.000Z',
     updatedAt: '2026-09-18T00:00:00.000Z',
   },
@@ -56,8 +71,111 @@ const CONNECTION = {
   nextAction: 'Create the Routine in Claude and paste its trigger id here.',
   secretPresent: false,
   connectorAuthenticated: true,
+  authorizationExpired: false,
   proven: null,
+  identity: {
+    workerName: 'research-airyn-a1b2c3',
+    workerId: 'wkr_1',
+    connectorClientName: 'Claude',
+    membership: { projectId: 'prj_root', projectName: 'Cash Mode', scopes: ['project:read'] },
+    routineName: null,
+    accountName: null,
+    authorization: {
+      live: true,
+      everUsed: true,
+      lastUsedAt: '2026-09-18T00:30:00.000Z',
+      expiresAt: '2026-09-18T01:30:00.000Z',
+    },
+    lastVerifiedAt: null,
+  },
+  checks: [
+    {
+      key: 'IDENTITY',
+      title: 'Your worker identity',
+      state: 'PASS',
+      detail: 'Brain fires as research-airyn-a1b2c3.',
+      remedy: null,
+    },
+    {
+      key: 'MEMBERSHIP',
+      title: 'What it may reach',
+      state: 'PASS',
+      detail: 'A member of Cash Mode, carrying project:read.',
+      remedy: null,
+    },
+    {
+      key: 'AUTHORIZATION',
+      title: 'Your Claude connector',
+      state: 'PASS',
+      detail: 'A live authorization.',
+      remedy: null,
+    },
+    {
+      key: 'TRIGGER',
+      title: 'The Routine Brain fires',
+      state: 'PENDING',
+      detail: 'No trigger id has been recorded.',
+      remedy: 'Create the Routine in Claude and paste its trigger id here.',
+    },
+    {
+      key: 'CREDENTIAL',
+      title: 'The trigger credential',
+      state: 'PENDING',
+      detail: 'There is no registered surface for a credential to belong to yet.',
+      remedy: null,
+    },
+    {
+      key: 'BINDING',
+      title: 'Bound to you',
+      state: 'PENDING',
+      detail: 'Nothing is registered to be bound yet.',
+      remedy: null,
+    },
+    {
+      key: 'PROVEN',
+      title: 'Proven by a session Brain fired',
+      state: 'PENDING',
+      detail: 'Nothing Brain fired has come back yet.',
+      remedy: 'Send the bounded self-test.',
+    },
+  ],
+  controls: [
+    {
+      key: 'REQUEST_INVITATION',
+      label: 'Ask for a connector link',
+      enabled: false,
+      disabledReason: 'You have already asked.',
+    },
+    { key: 'SUBMIT_TRIGGER', label: 'Record your trigger id', enabled: true, disabledReason: null },
+    {
+      key: 'SEND_PROBE',
+      label: 'Send the self-test',
+      enabled: false,
+      disabledReason: 'There is no registered surface to test yet.',
+    },
+    { key: 'VERIFY', label: 'Check this connection', enabled: true, disabledReason: null },
+    { key: 'REVOKE', label: 'Take this connection back', enabled: true, disabledReason: null },
+    {
+      key: 'RECONNECT',
+      label: 'Reconnect',
+      enabled: false,
+      disabledReason: 'This connection has not been taken back, so there is nothing to restore.',
+    },
+  ],
+  troubleshooting: [
+    {
+      symptom: 'A self-test was sent and nothing came back.',
+      meaning: 'Brain fired your Routine and no session arrived.',
+      remedy: 'Check the Routine has the bootstrap repository attached.',
+    },
+  ],
   steps: [
+    {
+      key: 'INVITATION',
+      title: 'Ask for your one-time connector link',
+      detail: 'Claude’s approval screen has to know which Brain worker it is connecting.',
+      state: 'DONE',
+    },
     {
       key: 'CONNECTOR',
       title: 'Add Brain as a custom connector in Claude',
@@ -147,6 +265,23 @@ const PAGE = (over: Record<string, unknown> = {}): unknown => ({
       },
     ],
   },
+  contributed: {
+    surfaces: [
+      {
+        userId: 'usr_airyn',
+        displayName: 'Airyn',
+        workerName: 'research-airyn-a1b2c3',
+        routineId: null,
+        routineName: null,
+        accountName: null,
+        usable: false,
+        because: 'No surface is registered for this member yet.',
+        routing: null,
+      },
+    ],
+    usable: 0,
+    total: 1,
+  },
   me: CONNECTION,
   contract: { mcpUrl: 'https://brain.example/mcp', bootstrapRepository: 'brain-worker-bootstrap' },
   ...over,
@@ -193,7 +328,12 @@ describe('the default view answers four questions', () => {
   it('says who has joined, without inventing a denominator', async () => {
     await mountPeople();
     await waitFor(() => expect(screen.getByText('People')).toBeTruthy());
-    expect(screen.getByText('Airyn')).toBeTruthy();
+    /*
+     * `getAllByText`, because a name now legitimately appears twice: once in
+     * *who has joined* and once in *what their connection contributes*. Two
+     * questions about one person, on one page, and neither is the other.
+     */
+    expect(screen.getAllByText('Airyn').length).toBeGreaterThan(0);
     expect(screen.getByText('Caleb')).toBeTruthy();
     // Two of three. Never `2 / 4`: four was the intended topology written down
     // as a constant, and it made a working Brain read as half missing.
@@ -215,9 +355,17 @@ describe('the default view answers four questions', () => {
     const owner = screen.getByText('Owner').closest('li');
     expect(owner?.textContent).toMatch(/Joined/);
     expect(owner?.textContent).toMatch(/password/);
-    // Exact, because the connector names on the same page contain "Airyn".
-    const airyn = screen.getByText('Airyn').closest('li');
-    expect(airyn?.textContent).toMatch(/Joined/);
+    /*
+     * The row in the *people* list, picked by the state word beside it rather
+     * than by the name alone: the name now appears in two lists on this page —
+     * who has joined, and what their connection contributes — and the second
+     * one carries no sign-in method at all.
+     */
+    const airyn = screen
+      .getAllByText('Airyn')
+      .map((node) => node.closest('li'))
+      .find((row) => /Joined/.test(row?.textContent ?? ''));
+    expect(airyn).toBeTruthy();
     expect(airyn?.textContent).not.toMatch(/password/);
   });
 
@@ -235,9 +383,11 @@ describe('the default view answers four questions', () => {
 
   it('says what my Claude connection is waiting for, in the server’s words', async () => {
     await mountPeople();
-    await waitFor(() => expect(screen.getByText('My Claude connection')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Your Claude connection')).toBeTruthy());
     expect(screen.getByText(/Brain needs your Routine.s trigger id/)).toBeTruthy();
-    expect(screen.getByText(/Create the Routine in Claude and paste its trigger id/)).toBeTruthy();
+    expect(
+      screen.getAllByText(/Create the Routine in Claude and paste its trigger id/).length,
+    ).toBeGreaterThan(0);
   });
 
   it('keeps retired surfaces collapsed rather than deleted', async () => {
@@ -378,7 +528,7 @@ describe('the journey resumes where it was', () => {
       target: { value: 'trig_01ABCDEFGHIJKLMNOPQR' },
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /record this trigger/i }));
+      fireEvent.click(screen.getByRole('button', { name: /record your trigger id/i }));
     });
     await waitFor(() =>
       expect(calls.filter((one) => one === PEOPLE).length).toBeGreaterThan(before),
@@ -401,7 +551,7 @@ describe('the journey resumes where it was', () => {
       target: { value: 'trig_01ABCDEFGHIJKLMNOPQR' },
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /record this trigger/i }));
+      fireEvent.click(screen.getByRole('button', { name: /record your trigger id/i }));
     });
     expect(bodies['POST /api/people/me/claude/trigger']).toMatchObject({
       triggerRef: 'trig_01ABCDEFGHIJKLMNOPQR',
@@ -410,7 +560,7 @@ describe('the journey resumes where it was', () => {
     await waitFor(() => expect(screen.getByText('Waiting for administrator')).toBeTruthy());
   });
 
-  it('shows a waiting connection as waiting, with no control it cannot use', async () => {
+  it('shows a waiting connection as waiting, and disables rather than removes', async () => {
     routes[PEOPLE] = {
       body: PAGE({
         me: {
@@ -420,6 +570,16 @@ describe('the journey resumes where it was', () => {
             'Everything you can do is done. Brain is waiting for an administrator to add your trigger’s credential to the deployment.',
           nextAction: null,
           connection: { ...CONNECTION.connection, triggerRef: 'trig_01A', routineId: 'rtn_x' },
+          controls: CONNECTION.controls.map((one) =>
+            one.key === 'SUBMIT_TRIGGER'
+              ? {
+                  ...one,
+                  enabled: false,
+                  disabledReason:
+                    'A trigger is already recorded. A Brain administrator repoints a registered surface.',
+                }
+              : one,
+          ),
         },
       }),
     };
@@ -427,7 +587,17 @@ describe('the journey resumes where it was', () => {
     await waitFor(() => expect(screen.getByText('Waiting for administrator')).toBeTruthy());
     // §24: a state that says waiting has to name who it is waiting on.
     expect(screen.getByText(/waiting for an administrator/i)).toBeTruthy();
-    expect(screen.queryByLabelText(/trigger id/i)).toBeNull();
+    /*
+     * The control a person may not use is **present and disabled with the
+     * reason**, never removed. That is what makes two accounts comparable at
+     * all — a screen that drops a control has a different shape per reader, and
+     * "there is no button" and "the button is not for you yet" are answers a
+     * person reads very differently. It used to be removed; this is the
+     * correction, asserted rather than described.
+     */
+    const field = screen.getByLabelText(/trigger id/i) as HTMLInputElement;
+    expect(field.disabled).toBe(true);
+    expect(screen.getByText(/A Brain administrator repoints a registered surface/)).toBeTruthy();
   });
 
   it('folds itself away once it is proven, and says what proved it', async () => {
@@ -440,16 +610,33 @@ describe('the journey resumes where it was', () => {
           nextAction: null,
           secretPresent: true,
           proven: { sessionRef: 'cse_01X', binId: 'bin_01Y', observedAt: '2026-09-18T01:00:00.000Z' },
+          /*
+           * The proof is reported in exactly one place — the PROVEN check —
+           * rather than in a footer beside it. Two readers of one fact is how
+           * a screen comes to disagree with itself, and this page already had
+           * to be corrected for that once.
+           */
+          checks: CONNECTION.checks.map((one) =>
+            one.key === 'PROVEN'
+              ? {
+                  ...one,
+                  state: 'PASS' as const,
+                  detail:
+                    'Session cse_01X arrived at 2026-09-18T01:00:00.000Z, was handed bin_01Y and finished it.',
+                  remedy: null,
+                }
+              : one,
+          ),
           connection: { ...CONNECTION.connection, triggerRef: 'trig_01A', routineId: 'rtn_x' },
         },
       }),
     };
     await mountPeople();
-    await waitFor(() => expect(screen.getByText('Healthy')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Connected and verified')).toBeTruthy());
     // Collapsed: a person who has finished sees one line.
     expect(screen.queryByText('Create the Routine')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /show the steps/i }));
-    expect(screen.getByText(/session cse_01X arrived/)).toBeTruthy();
+    expect(screen.getByText(/Session cse_01X arrived/)).toBeTruthy();
   });
 });
 
@@ -687,5 +874,118 @@ describe('an ordinary member reading the shared frontier', () => {
       'rs-cash-history',
       'rs-cash-lifecycle',
     ]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The same component, rendered from two accounts' payloads.
+ *
+ * The server suite proves the two payloads have the same shape. This proves the
+ * screen built from them does — which is the half a contract test cannot see,
+ * because a component is free to render a field for one reader and not another.
+ *
+ * It is a structural snapshot rather than a pixel one: the headings in order,
+ * the control labels in order, the step titles in order. Those are what a
+ * person compares when two accounts are on a phone call about one setup, and
+ * they are what drifts first.
+ */
+describe('one screen, whoever is reading it', () => {
+  function outline(): { headings: string[]; buttons: string[]; steps: string[] } {
+    return {
+      headings: Array.from(document.querySelectorAll('.rs-claude-connection h3, .rs-claude-connection h4')).map(
+        (node) => node.textContent ?? '',
+      ),
+      buttons: Array.from(document.querySelectorAll('.rs-claude-connection .rs-controls button')).map(
+        (node) => node.textContent ?? '',
+      ),
+      steps: Array.from(document.querySelectorAll('.rs-claude-connection .rs-step .rs-item-title')).map(
+        (node) => (node.textContent ?? '').replace(/(Done|Do this now|Waiting for administrator|Later)$/, ''),
+      ),
+    };
+  }
+
+  it('draws the same outline for an administrator and an ordinary member', async () => {
+    routes[PEOPLE] = { body: PAGE() };
+    routes[CONNECTIONS] = { body: { connections: [] } };
+    await mountPeople();
+    await waitFor(() => expect(screen.getByText('Your Claude connection')).toBeTruthy());
+    const asMember = outline();
+
+    cleanup();
+    calls = [];
+    /*
+     * The administrator's payload: the same connection, and the two things the
+     * server sends only to an administrator. Neither of them may reach this
+     * component, and that is the point of rendering both.
+     */
+    routes[PEOPLE] = {
+      body: PAGE({
+        you: { userId: 'usr_root', isBrainAdmin: true },
+        me: { ...CONNECTION, connection: { ...CONNECTION.connection, userId: 'usr_root' } },
+      }),
+    };
+    await mountPeople();
+    await waitFor(() => expect(screen.getByText('Your Claude connection')).toBeTruthy());
+    const asAdmin = outline();
+
+    expect(asAdmin).toEqual(asMember);
+    // And it is a real outline rather than an empty one that trivially matches.
+    expect(asMember.headings.length).toBeGreaterThan(2);
+    expect(asMember.buttons.length).toBe(5);
+    expect(asMember.steps.length).toBe(7);
+  });
+
+  it('draws every control, and disables rather than removes the ones it cannot use', async () => {
+    routes[PEOPLE] = {
+      body: PAGE({
+        me: {
+          ...CONNECTION,
+          controls: CONNECTION.controls.map((one) => ({
+            ...one,
+            enabled: false,
+            disabledReason: `not now: ${one.key}`,
+          })),
+        },
+      }),
+    };
+    await mountPeople();
+    await waitFor(() => expect(screen.getByText('Your Claude connection')).toBeTruthy());
+
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.rs-claude-connection .rs-controls button'),
+    );
+    // Every one of them still drawn, every one of them disabled, and every one
+    // of them carrying the server's reason where a person can actually read it
+    // — a `title` only a mouse can reach is no explanation on a phone.
+    expect(buttons.length).toBe(5);
+    expect(buttons.every((one) => one.disabled)).toBe(true);
+    expect(screen.getByText('not now: REVOKE')).toBeTruthy();
+    expect(screen.getByText('not now: RECONNECT')).toBeTruthy();
+  });
+
+  /**
+   * The mechanism, asserted rather than described.
+   *
+   * Parity is guaranteed by there being nothing in the component that *could*
+   * branch on a reader. A comment saying so is a comment; this reads the file.
+   * It classifies rather than bans — the module's own documentation says the
+   * words — so it looks for the shapes a branch actually takes.
+   */
+  it('has no way to know who is reading it', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    // `process.cwd()` rather than `import.meta.url`: this suite runs under
+    // jsdom, where the module URL is not a file URL and `readFileSync` refuses
+    // it. Vitest's working directory is the repository root.
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'client/src/russell/ClaudeConnection.tsx'),
+      'utf8',
+    );
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    for (const forbidden of ['isBrainAdmin', 'isAdmin', 'requireBrainAdmin', 'role']) {
+      expect(code, `the canonical connection component reads ${forbidden}`).not.toContain(forbidden);
+    }
   });
 });

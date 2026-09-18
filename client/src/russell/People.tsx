@@ -44,17 +44,26 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAsync } from './useAsync.ts';
 import {
   PeopleApi,
-  type ConnectionStep,
   type ConnectionView,
   type PeopleAndCapacity,
   type PersonRow,
   type SurfaceReading,
 } from '../lib/peopleApi.ts';
 import { CashApi, type IssuedEnrollment, type MemberSlotLink } from '../lib/cashApi.ts';
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+/*
+ * The connection experience is imported, never re-implemented.
+ *
+ * One component and one source of instructions for every account — see
+ * `ClaudeConnection.tsx`. This page is where it is *mounted* in full; Home and
+ * Your devices mount the compact entry point that opens this one. A second copy
+ * here would be the drift this whole arrangement exists to prevent.
+ */
+import {
+  ClaudeConnectionPanel,
+  CONNECTION_LABEL,
+  CopyBox,
+  describeError as describe,
+} from './ClaudeConnection.tsx';
 
 const MEMBER_STATE_LABEL: Record<PersonRow['state'], string> = {
   READY: 'Joined',
@@ -62,51 +71,6 @@ const MEMBER_STATE_LABEL: Record<PersonRow['state'], string> = {
   NOT_INVITED: 'No link yet',
 };
 
-const CONNECTION_LABEL: Record<ConnectionView['state'], string> = {
-  NOT_STARTED: 'Not started',
-  CONNECTOR_AUTHORIZED: 'Connector authorized',
-  ROUTINE_DETAILS_NEEDED: 'Routine details needed',
-  WAITING_FOR_ADMIN: 'Waiting for administrator',
-  CONFIGURED: 'Configured',
-  PROBE_SENT: 'Probe sent',
-  ARRIVED: 'Arrived',
-  HEALTHY: 'Healthy',
-  FAILED: 'Failed — action required',
-};
-
-/**
- * One value, in its own box, with one button that copies it.
- *
- * The value is always rendered as text as well as copied, because a copy button
- * that silently failed — a browser without the clipboard API, a page not in a
- * secure context — would leave a person with nothing at all.
- */
-function CopyBox({ label, value }: { label: string; value: string }): JSX.Element {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="rs-copy">
-      <span className="rs-copy-label">{label}</span>
-      <code className="rs-copy-value">{value}</code>
-      <button
-        type="button"
-        className="rs-button-quiet"
-        onClick={() => {
-          void navigator.clipboard?.writeText(value).then(
-            () => {
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1500);
-            },
-            () => {
-              /* the value is on the screen either way */
-            },
-          );
-        }}
-      >
-        {copied ? 'Copied' : 'Copy'}
-      </button>
-    </div>
-  );
-}
 
 /* ------------------------------------------------------------------ people */
 
@@ -362,167 +326,6 @@ function People({
   );
 }
 
-/* --------------------------------------------------------- my connection */
-
-function Step({ step }: { step: ConnectionStep }): JSX.Element {
-  return (
-    <li className="rs-step" data-state={step.state}>
-      <p className="rs-item-title">
-        {step.title}
-        <span className="rs-ready-state" data-state={step.state}>
-          {step.state === 'DONE'
-            ? 'Done'
-            : step.state === 'NOW'
-              ? 'Do this now'
-              : step.state === 'ADMINISTRATOR'
-                ? 'Waiting for administrator'
-                : 'Later'}
-        </span>
-      </p>
-      <p className="rs-hint">{step.detail}</p>
-      {step.copy?.map((one) => (
-        <CopyBox key={one.label} label={one.label} value={one.value} />
-      ))}
-    </li>
-  );
-}
-
-/**
- * The member's own setup, resumable at whatever step they are on.
- *
- * It opens by itself while the connection is incomplete and collapses once it
- * is HEALTHY, which is the progressive disclosure the default view asks for: a
- * person who has finished should see one line, and a person who has not should
- * see the wizard without having to find it.
- */
-function MyClaude({
-  view,
-  onChanged,
-}: {
-  view: ConnectionView;
-  onChanged(next: ConnectionView): void;
-}): JSX.Element {
-  const finished = view.state === 'HEALTHY';
-  const [open, setOpen] = useState(!finished);
-  const [trigger, setTrigger] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  async function run(work: () => Promise<ConnectionView>): Promise<void> {
-    setBusy(true);
-    setProblem(null);
-    try {
-      onChanged(await work());
-    } catch (error) {
-      setProblem(describe(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="rs-card">
-      <h3>My Claude connection</h3>
-      <p className="rs-ready-count">
-        <span>{view.headline}</span>
-        <strong className="rs-ready-state" data-state={view.state}>
-          {CONNECTION_LABEL[view.state]}
-        </strong>
-      </p>
-      {/*
-        * The next action is the server's sentence, never one composed here. A
-        * state that says "waiting" which its own reader cannot resolve is §24's
-        * stuck rather than waiting, so every state either names something to do
-        * or says plainly that it is waiting on somebody else.
-        */}
-      {view.nextAction ? <p className="rs-hint">{view.nextAction}</p> : null}
-
-      {view.invitationUrl ? (
-        <div className="rs-ready-link">
-          <p className="rs-item-title">Your one-time connector link</p>
-          <CopyBox label="Open this to authorize the connector" value={view.invitationUrl} />
-          <p className="rs-hint">
-            Shown once. It works until{' '}
-            {view.invitationExpiresAt
-              ? new Date(view.invitationExpiresAt).toLocaleString()
-              : 'it expires'}
-            , and on its own it cannot read anything, call a tool or obtain a token — approving it
-            in a browser is what does that.
-          </p>
-        </div>
-      ) : null}
-
-      <button
-        type="button"
-        className="rs-button-quiet"
-        aria-expanded={open}
-        onClick={() => setOpen((was) => !was)}
-      >
-        {open ? 'Hide the steps' : 'Show the steps'}
-      </button>
-
-      {open ? (
-        <>
-          <ol className="rs-step-list">
-            {view.steps.map((step) => (
-              <Step key={step.key} step={step} />
-            ))}
-          </ol>
-
-          {view.connectorAuthenticated && view.connection.triggerRef === null ? (
-            <>
-              <label className="rs-field-label" htmlFor="trigger-ref">
-                Your Routine&rsquo;s trigger id
-              </label>
-              <input
-                id="trigger-ref"
-                value={trigger}
-                onChange={(event) => setTrigger(event.target.value)}
-                placeholder="trig_…"
-                disabled={busy}
-              />
-              <button
-                type="button"
-                className="rs-button"
-                disabled={busy || trigger.trim().length < 6}
-                onClick={() => void run(() => PeopleApi.submitTrigger(trigger.trim()))}
-              >
-                {busy ? 'Recording…' : 'Record this trigger'}
-              </button>
-              <p className="rs-hint">
-                Paste the trigger <em>id</em>, never the credential printed next to it. Brain
-                refuses to store a credential here — that one goes to an administrator, who puts it
-                into the deployment.
-              </p>
-            </>
-          ) : null}
-
-          {view.connection.routineId && view.state !== 'HEALTHY' ? (
-            <button
-              type="button"
-              className="rs-button"
-              disabled={busy}
-              onClick={() => void run(() => PeopleApi.sendProbe())}
-            >
-              {busy ? 'Sending…' : 'Send the self-test'}
-            </button>
-          ) : null}
-
-          {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
-
-          {view.proven ? (
-            <p className="rs-hint">
-              Proven: session {view.proven.sessionRef} arrived at{' '}
-              {new Date(view.proven.observedAt).toLocaleString()}, was handed {view.proven.binId}{' '}
-              and finished it.
-            </p>
-          ) : null}
-        </>
-      ) : null}
-    </section>
-  );
-}
-
 /* ------------------------------------------------------------- capacity */
 
 function Surface({ surface }: { surface: SurfaceReading }): JSX.Element {
@@ -602,6 +405,49 @@ function Capacity({ page }: { page: PeopleAndCapacity }): JSX.Element {
         purpose.
       </p>
 
+      {/*
+        * What each member's own connection contributes, and why not when it
+        * contributes nothing.
+        *
+        * The counts above are the fleet the dispatcher sees; this is the same
+        * fleet asked *per person*, which is the only way somebody can tell
+        * "my surface is proven" from "my surface is being used". Every sentence
+        * in it is the server's, and none of it gates anything.
+        */}
+      <h4>Contributed by members</h4>
+      <p className="rs-ready-count">
+        <span>Connections that are usable capacity</span>
+        <strong>
+          {page.contributed.usable} of {page.contributed.total}
+        </strong>
+      </p>
+      <ul className="rs-ready-list rs-contributed">
+        {page.contributed.surfaces.length === 0 ? (
+          <li className="rs-ready-row">
+            <span>Nobody has connected a Claude account yet.</span>
+          </li>
+        ) : (
+          page.contributed.surfaces.map((one) => (
+            <li key={one.userId} className="rs-ready-row">
+              <span>{one.displayName}</span>
+              <span className="rs-ready-state" data-state={one.usable ? 'HEALTHY' : 'WAITING'}>
+                {one.usable ? 'Usable' : 'Not yet'}
+              </span>
+              {one.because ? <span className="rs-hint">{one.because}</span> : null}
+              <span className="rs-hint">
+                {one.routing
+                  ? `Serves ${one.routing.families.join(', ')}${
+                      one.routing.repositories.length > 0
+                        ? ` · ${one.routing.repositories.join(', ')}`
+                        : ''
+                    }`
+                  : 'Research only — no repository has been authorized for this worker.'}
+              </span>
+            </li>
+          ))
+        )}
+      </ul>
+
       {capacity.historical.length > 0 ? (
         <>
           <button
@@ -643,9 +489,30 @@ function Connections(): JSX.Element | null {
   const [open, setOpen] = useState(false);
   if (reading.error || !reading.data) return null;
   const waiting = reading.data.connections.filter((one) => one.state === 'WAITING_FOR_ADMIN');
+  /*
+   * The other half of the answering transition, and the one that has to be
+   * visible first.
+   *
+   * A member asking for their connector link reaches an administrator through
+   * this row and through no other channel — there is no email in this Brain and
+   * no notification — so a list that buried the request behind a disclosure
+   * would be an escalation nobody is asked about. It is named above the
+   * disclosure, with the person, because the remedy is one button beside their
+   * name in the list above.
+   */
+  const asked = reading.data.connections.filter(
+    (one) => one.invitationRequestedAt !== null && one.invitationIssuedAt === null,
+  );
   return (
     <section className="rs-card">
       <h3>Diagnostics</h3>
+      {asked.length > 0 ? (
+        <p className="rs-hint">
+          {asked.map((one) => one.displayName).join(', ')} asked for a Claude connector link. Issue
+          it with the button beside their name above, and send it to them privately — it is shown
+          once.
+        </p>
+      ) : null}
       {waiting.length > 0 ? (
         <p className="rs-hint">
           {waiting.length} connection(s) are waiting for a deployment variable to be set. Each one
@@ -743,7 +610,7 @@ export function PeopleAndCapacityView(): JSX.Element {
         * throwing it away on the reload that follows issuing one is how Build
         * lost an invitation that was shown once.
         */}
-      <MyClaude
+      <ClaudeConnectionPanel
         view={connection}
         onChanged={(next) => {
           setMe(next);

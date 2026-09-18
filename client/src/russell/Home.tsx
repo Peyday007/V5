@@ -21,6 +21,7 @@ import type { CollectionView, HomeView, RankedThread } from '../lib/russellApi.t
 import type { Milestone } from '../../../server/services/russell/progress.ts';
 import { useAsync } from './useAsync.ts';
 import { foundationTone, humanWhen, listState } from './present.ts';
+import { ClaudeConnectionCard } from './ClaudeConnection.tsx';
 
 export function RussellHome({
   projectId,
@@ -44,8 +45,29 @@ export function RussellHome({
   );
   const collections = useAsync(() => RussellApi.collections(projectId), [projectId]);
 
+  /*
+   * The Claude connection card sits **above** every early return, and that
+   * placement is the whole point of it.
+   *
+   * Somebody who registered their device five minutes ago is, precisely, the
+   * person who is on a Brain with no project they can read — so a card rendered
+   * only on the healthy branch would be invisible to every reader who most
+   * needs it. It renders nothing at all once the connection is proven and its
+   * authorization is live, so a working Brain does not carry a permanent
+   * reminder about a thing that is working.
+   *
+   * It is an entry point and not a second copy: pressing it opens the one
+   * canonical panel on People & capacity. See `ClaudeConnection.tsx`.
+   */
+  const connection = <ClaudeConnectionCard />;
+
   if (home.loading) {
-    return <p className="rs-state rs-state-loading">Reading the project…</p>;
+    return (
+      <div className="rs-column rs-home">
+        {connection}
+        <p className="rs-state rs-state-loading">Reading the project…</p>
+      </div>
+    );
   }
   if (home.error) {
     // Four different screens, and this is not the empty one. The server cannot
@@ -56,11 +78,17 @@ export function RussellHome({
       items: null,
       noun: 'this project',
     });
-    return <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>{state.message}</p>;
+    return (
+      <div className="rs-column rs-home">
+        {connection}
+        <p className={`rs-state rs-state-${state.phase.toLowerCase()}`}>{state.message}</p>
+      </div>
+    );
   }
   if (!home.data) {
     return (
       <div className="rs-column">
+        {connection}
         <p className="rs-state rs-state-empty">
           There is no project here yet. Say what you are working on and Russell will make one.
         </p>
@@ -71,6 +99,7 @@ export function RussellHome({
   const view = home.data.home;
   return (
     <div className="rs-column rs-home">
+      {connection}
       <Hero view={view} />
       <Maturity view={view} />
       <Changes view={view} />
