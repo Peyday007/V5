@@ -4404,6 +4404,56 @@ and a suite that exercises the stage cannot see that.**
   a key answered by none of them is a compile-time-visible absence rather than
   a park somebody finds in production.
 
+- **Half of that answering transition was a form asking a person to narrate
+  Brain's own work, and the owner rejected it. The correction is recorded
+  rather than quietly applied.** What the bullet above added was a control
+  under every blank, and the entry it rendered from carried no `owner` — so the
+  screen had nothing to decide on and drew a text box and a **Confirm** under
+  the payer, the price, the delivery method, the economics and the contact
+  channel alike. Every one of those is a fact about the world that the `owner`
+  correction two bullets up had already given to Brain, and `fillCard` recorded
+  whatever was typed as a `PERSON` fact, which `mayReplace` then keeps *above*
+  anything Brain later establishes. One door along, the review's grouped-need
+  section offered *"Mark this done, and say what you did"* over a
+  `cash_needs` row — and every one of those is Brain's, because both callers of
+  `raiseNeed` pass `actorRef: BRAIN`, one of them writing the reason on the row
+  saying Brain looks it up *rather than asking you*.
+
+  So the rule is the one this file already had and the screen had stopped
+  obeying: **a `BRAIN_RESEARCH` or `BRAIN_PROPOSES` requirement never renders a
+  person-answer form.** `owner` travels down on the entry from `fieldOwner`,
+  which is the single place that decides it — a second copy in TypeScript would
+  be the two-readers-disagreeing defect at a new boundary — and `PERSON_ONLY`
+  is the whole of what the control renders for. Today that is **nothing**,
+  which is the correct reading of a card whose every field is a fact or a
+  proposal, and the control returns by itself the day one is added. The
+  grouped-need section is deleted rather than narrowed, for the reason the
+  grouped-blank one already was: every row it could group on was Brain's.
+
+  **The blanks did not go with the box.** Each one still prints the task that
+  would answer it, and each need still stands under *What Brain needs* with its
+  recommended path — what went is the attestation, never the question.
+
+  **And I over-reached at the route, which the acceptance walk caught.** I
+  refused `to: 'RESOLVED'` outright there, on the reasoning that a control
+  nothing renders is still reachable by anything that can post. The reasoning
+  is sound and the target was wrong: `closeNeed` already refuses to be told —
+  it re-reads the completion condition, writes `BRAIN_READ_THE_ROW` only when
+  it holds, and otherwise records `PERSON_SUBSTITUTE`, which says *somebody is
+  doing this by hand* with the capability still reading `MISSING`. That is the
+  **opposite** of marking a Brain-owned requirement satisfied, and it is the
+  only way out for a piece blocked on something Brain cannot do. Refusing it
+  turned a rule about honesty into §24's escalation with no answering
+  transition. **What was generic was the form, and the form is what went.**
+
+  Two of the three were invisible to every suite that could have seen them.
+  `cashSection` scripts `fetch`, so a control gated on a field the server does
+  not send passes there and still draws a box in production; the unit suites
+  write their own card facts. They are pinned in `cashBrowserToDatabase`, where
+  the `owner` comes off the real `evidenceCard` through the real route, and
+  **as absences** — the two assertions were run against a neutered gate to see
+  them fail before they were trusted to pass.
+
 - **An ordering that is true only sometimes is not an ordering, and the
   release gate is what found it.** `outstandingClarification` decided that a
   captured change answers an outstanding question with
