@@ -840,14 +840,28 @@ describe('what this change was not allowed to touch', () => {
      * column at all — the reading comes from the row and the card every time
      * it is asked.
      */
-    const source = await readFile('server/db/migrations/065_opportunity_tier.sql', 'utf8');
-    expect(source).not.toMatch(/\btier\b\s+TEXT/i);
-    expect(source).not.toMatch(/^\s*UPDATE /im);
-    const db = getDb();
-    const columns = await db.all<{ name: string }>(`PRAGMA table_info(cash_opportunities)`);
-    if (columns.length > 0) {
-      expect(columns.map((one) => one.name)).not.toContain('tier');
+    for (const file of [
+      'server/db/migrations/065_opportunity_tier.sql',
+      'server/db/pg-migrations/056_opportunity_tier.sql',
+    ]) {
+      const source = await readFile(file, 'utf8');
+      expect(source).not.toMatch(/\btier\b/i);
+      expect(source).not.toMatch(/^\s*UPDATE /im);
     }
+
+    /*
+     * And no row carries one either, asked in a way both backends can answer.
+     *
+     * This read `PRAGMA table_info`, which is SQLite's and throws on Postgres
+     * — the repository's own recurring lesson arriving in a test written to
+     * hold it. A row read back through the repository is the dialect-neutral
+     * form of the same question, and it is the stronger one: what matters is
+     * that nothing reading an opportunity finds a stored tier on it.
+     */
+    const piece = await harvested('ACTIVE_BUYER_DEMAND', 'A named buyer published a request.');
+    const row = (await getOpportunity(piece.id))!;
+    expect(Object.keys(row)).not.toContain('tier');
+    expect((row as unknown as Record<string, unknown>)['tier']).toBeUndefined();
   });
 
   it('assembles the same answer from the same rows, twice', async () => {
