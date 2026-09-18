@@ -104,6 +104,7 @@ import {
   reconcileArguedAuditRoles,
   reconcileTerminalPackets,
 } from '../research/packetRunner.ts';
+import { reconcileRetrospectives } from '../research/intelligence/retrospective.ts';
 import { recoverExecutionLineage } from '../dispatch/lineageRecovery.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
@@ -265,6 +266,8 @@ export interface TickReport {
    * a packet that had already finished, so nothing ever cleared it.
    */
   retiredPacketWork: { orchestrationId: string; retired: number }[];
+  /** Campaigns whose lessons were written this tick. See `retrospective.ts`. */
+  researchLessons: { orchestrationId: string; lessons: number }[];
   abandonedParks: { orchestrationId: string; missionId: string; missionState: string }[];
   /** Parks put back after being cancelled while a reopen was their asker. */
   restoredParks: { orchestrationId: string; reopenId: string }[];
@@ -410,6 +413,7 @@ const EMPTY: TickReport = {
   lineageRecovered: [],
   lineageUnresolved: [],
   retiredPacketWork: [],
+  researchLessons: [],
   abandonedParks: [],
   restoredParks: [],
   followOns: [],
@@ -464,6 +468,7 @@ export async function tick(owner: string): Promise<TickReport> {
     lineageUnresolved: [],
     linksUnreconciled: [],
     retiredPacketWork: [],
+  researchLessons: [],
     abandonedParks: [],
     restoredParks: [],
     followOns: [],
@@ -663,6 +668,20 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
       report.retiredPacketWork.push(entry);
+    }
+
+    /*
+     * 1a-iv-b. Write the lessons a finished campaign's rows already support.
+     *
+     * Derived on the tick rather than hooked to the moment a packet ends, for
+     * the reason every other reconciliation here is: a hook reaches only what
+     * finishes after it is deployed, and this reaches the packets that finished
+     * already. Idempotent by `lesson_key`, so a healthy Brain does the work once
+     * and then finds nothing, and no provider is called — every lesson is a
+     * count of rows.
+     */
+    for (const entry of await reconcileRetrospectives(cycle.maxEventsPerCycle)) {
+      report.researchLessons.push(entry);
     }
 
     /*

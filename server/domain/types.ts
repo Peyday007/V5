@@ -330,6 +330,26 @@ export const EVENT_TYPES = [
    * where it is and this says why the packet came back.
    */
   'RESEARCH_PARK_RESTORED',
+
+  /*
+   * A branch the evidence made pointless, closed with the finding that closed
+   * it.
+   *
+   * Its own type rather than a cancellation, because nothing failed: the
+   * question is still open and has stopped bearing on the decision, and those
+   * are different sentences in a report. The uncertainty keeps its row and its
+   * reason; this says which finding retired it.
+   */
+  'RESEARCH_BRANCH_RETIRED',
+
+  /*
+   * The plan grew or shrank while the campaign was running.
+   *
+   * Recorded on the project's history as well as on `research_plan_revisions`,
+   * because "what changed the plan" is a question a person asks from the
+   * project timeline rather than from a research table.
+   */
+  'RESEARCH_PLAN_REVISED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -6495,4 +6515,345 @@ export interface CapacityConnection {
   healthyAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Research Intelligence (migration 067)
+// ---------------------------------------------------------------------------
+//
+// The judgement layer above the research engine. None of these types carries
+// evidence, scope or ordering that another table already owns: the boundary
+// contract still says what the research is bounded by, `research_claims` still
+// says what was established, and `research_fragments.depends_on` still says what
+// runs before what. These say what the work is *for*, what is still unknown that
+// matters, and what a finding changed about the plan.
+
+/** How much rides on being right. Feeds depth; never feeds a gate. */
+export const RESEARCH_STAKES = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW'] as const;
+export type ResearchStakes = (typeof RESEARCH_STAKES)[number];
+
+/** What acting on a wrong answer would cost. */
+export const RESEARCH_REVERSIBILITY = ['REVERSIBLE', 'COSTLY', 'IRREVERSIBLE'] as const;
+export type ResearchReversibility = (typeof RESEARCH_REVERSIBILITY)[number];
+
+export const PROBLEM_MODEL_SOURCES = [
+  'COMPILED',
+  'CONTRACT',
+  'ASSIGNMENT',
+  'PROPOSAL',
+  'PERSON',
+] as const;
+export type ProblemModelSource = (typeof PROBLEM_MODEL_SOURCES)[number];
+
+/**
+ * A constraint or a preference, with the reason it exists.
+ *
+ * The reason is what lets Brain later ask whether it still applies. A
+ * constraint recorded without one can only ever be obeyed literally, for ever,
+ * which is how a temporary choice becomes policy.
+ */
+export interface StatedConstraint {
+  statement: string;
+  reason: string | null;
+}
+
+/**
+ * An example the person gave, and the property it was an example of.
+ *
+ * `property` is the whole reason this is not a list of strings. Three named
+ * industries are an illustration of *a kind of buyer*; stored without that,
+ * the only safe reading is a whitelist, and search never looks beyond them.
+ */
+export interface StatedExample {
+  statement: string;
+  property: string | null;
+}
+
+export interface ResearchProblemModelRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  boundary_contract_id: string | null;
+  version: number;
+  outcome_sought: string;
+  decision_supported: string | null;
+  why_it_matters: string | null;
+  stakes: string;
+  reversibility: string;
+  consequence_if_wrong: string | null;
+  time_horizon: string | null;
+  success_criteria: string;
+  constraints: string;
+  preferences: string;
+  examples: string;
+  assumptions: string;
+  non_goals: string;
+  useless_if: string;
+  authority_granted: string;
+  derived_from: string;
+  rationale: string | null;
+  revised_from_version: number | null;
+  revision_reason: string | null;
+  created_at: string;
+}
+
+export interface ResearchProblemModel {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  boundaryContractId: string | null;
+  version: number;
+  outcomeSought: string;
+  decisionSupported: string | null;
+  whyItMatters: string | null;
+  stakes: ResearchStakes;
+  reversibility: ResearchReversibility;
+  consequenceIfWrong: string | null;
+  timeHorizon: string | null;
+  successCriteria: string[];
+  constraints: StatedConstraint[];
+  preferences: StatedConstraint[];
+  examples: StatedExample[];
+  assumptions: string[];
+  nonGoals: string[];
+  uselessIf: string[];
+  authorityGranted: string[];
+  derivedFrom: ProblemModelSource;
+  rationale: string | null;
+  revisedFromVersion: number | null;
+  revisionReason: string | null;
+  createdAt: string;
+}
+
+export const UNCERTAINTY_CONSUMERS = [
+  'DECISION',
+  'CONCLUSION',
+  'CALCULATION',
+  'FRAGMENT',
+  'REQUIREMENT',
+] as const;
+export type UncertaintyConsumer = (typeof UNCERTAINTY_CONSUMERS)[number];
+
+export const BELIEF_BASES = ['UNKNOWN', 'ASSUMED', 'ARCHIVE', 'EVIDENCE', 'PERSON'] as const;
+export type BeliefBasis = (typeof BELIEF_BASES)[number];
+
+export const CHANGE_RATES = ['STABLE', 'SLOW', 'VOLATILE'] as const;
+export type ChangeRate = (typeof CHANGE_RATES)[number];
+
+/**
+ * Where an uncertainty stands.
+ *
+ * `RETIRED` is the one worth naming: it means the question is still open and no
+ * longer *bears on the decision*, which is a completely different fact from
+ * `UNRESOLVABLE` and leads to a different sentence in the report.
+ */
+export const UNCERTAINTY_DISPOSITIONS = [
+  'OPEN',
+  'INVESTIGATING',
+  'RESOLVED',
+  'REFUTED',
+  'UNRESOLVABLE',
+  'RETIRED',
+  'DEFERRED',
+  'PERSON_ONLY',
+] as const;
+export type UncertaintyDisposition = (typeof UNCERTAINTY_DISPOSITIONS)[number];
+
+/**
+ * How much looking a question deserves.
+ *
+ * Three rungs rather than a number, because a number invites arithmetic nobody
+ * justified. `SINGLE_PRIMARY` is a statutory or documentary fact one directly
+ * inspected source settles; `CORROBORATED` is the ordinary bar;
+ * `CONTESTED_DEEP` is what a consequential question with conflicting sources
+ * earns. `standards.ts` still decides the bar per *claim* — this decides how
+ * hard to look before stopping.
+ */
+export const RESEARCH_DEPTHS = ['SINGLE_PRIMARY', 'CORROBORATED', 'CONTESTED_DEEP'] as const;
+export type ResearchDepth = (typeof RESEARCH_DEPTHS)[number];
+
+export const UNCERTAINTY_ORIGINS = [
+  'PLAN',
+  'FINDING',
+  'CONTRADICTION',
+  'COVERAGE_GAP',
+  'ARCHIVE',
+  'PERSON',
+] as const;
+export type UncertaintyOrigin = (typeof UNCERTAINTY_ORIGINS)[number];
+
+export interface ResearchUncertaintyRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  problem_model_id: string | null;
+  uncertainty_key: string;
+  question: string;
+  why_it_matters: string;
+  consumer_kind: string;
+  consumer_ref: string | null;
+  current_belief: string | null;
+  belief_basis: string;
+  consequence: string;
+  reversibility: string;
+  change_rate: string;
+  uncertainty_level: number;
+  invalidating: number;
+  stopping_condition: string;
+  disposition: string;
+  disposition_reason: string | null;
+  resolved_by_fragment_id: string | null;
+  resolved_at: string | null;
+  depth: string;
+  depth_basis: string | null;
+  origin: string;
+  origin_ref: string | null;
+  plan_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResearchUncertainty {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  problemModelId: string | null;
+  uncertaintyKey: string;
+  question: string;
+  whyItMatters: string;
+  consumerKind: UncertaintyConsumer;
+  consumerRef: string | null;
+  currentBelief: string | null;
+  beliefBasis: BeliefBasis;
+  consequence: ResearchStakes;
+  reversibility: ResearchReversibility;
+  changeRate: ChangeRate;
+  uncertaintyLevel: number;
+  /** Could a bad answer here make the whole path pointless? */
+  invalidating: boolean;
+  stoppingCondition: string;
+  disposition: UncertaintyDisposition;
+  dispositionReason: string | null;
+  resolvedByFragmentId: string | null;
+  resolvedAt: string | null;
+  depth: ResearchDepth;
+  depthBasis: string | null;
+  origin: UncertaintyOrigin;
+  originRef: string | null;
+  planVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * How one uncertainty bears on another.
+ *
+ * Distinct from `FragmentDependency`, which is about execution order. These are
+ * about reasoning, and the difference decides what a failure costs:
+ * a HARD_PREREQUISITE failing strands its dependent, an EVIDENTIARY one failing
+ * costs nothing, and a COMPARATIVE one failing makes its sibling *more*
+ * decisive rather than less.
+ */
+export const UNCERTAINTY_LINK_KINDS = [
+  'HARD_PREREQUISITE',
+  'CONDITIONAL',
+  'EVIDENTIARY',
+  'COMPARATIVE',
+  'FOLLOW_UP',
+  'CHALLENGES',
+] as const;
+export type UncertaintyLinkKind = (typeof UNCERTAINTY_LINK_KINDS)[number];
+
+export interface ResearchUncertaintyLinkRow {
+  id: string;
+  orchestration_id: string;
+  from_key: string;
+  to_key: string;
+  kind: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface ResearchUncertaintyLink {
+  id: string;
+  orchestrationId: string;
+  fromKey: string;
+  toKey: string;
+  kind: UncertaintyLinkKind;
+  reason: string | null;
+  createdAt: string;
+}
+
+export const PLAN_REVISION_REASONS = [
+  'INITIAL_PLAN',
+  'EVIDENCE_ARRIVED',
+  'CONTRADICTION',
+  'BRANCH_RETIRED',
+  'COVERAGE_GAP',
+  'SUFFICIENCY',
+  'PERSON',
+] as const;
+export type PlanRevisionReason = (typeof PLAN_REVISION_REASONS)[number];
+
+export interface ResearchPlanRevisionRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  version: number;
+  reason: string;
+  summary: string;
+  decisions: string;
+  applied: string;
+  actor_kind: string;
+  actor_ref: string | null;
+  created_at: string;
+}
+
+export interface ResearchPlanRevision {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  version: number;
+  reason: PlanRevisionReason;
+  summary: string;
+  /** Everything the director proposed, refusals included. */
+  decisions: unknown[];
+  /** What the deterministic layer actually let through. */
+  applied: unknown[];
+  actorKind: 'BRAIN' | 'PERSON' | 'WORKER';
+  actorRef: string | null;
+  createdAt: string;
+}
+
+export const RETROSPECTIVE_SCOPES = ['CAMPAIGN_CLOSED', 'OUTCOME_OBSERVED'] as const;
+export type RetrospectiveScope = (typeof RETROSPECTIVE_SCOPES)[number];
+
+/** The level a lesson is actually true at. Only DOMAIN and GENERAL are reusable. */
+export const LESSON_ABSTRACTIONS = ['CAMPAIGN', 'DOMAIN', 'GENERAL'] as const;
+export type LessonAbstraction = (typeof LESSON_ABSTRACTIONS)[number];
+
+export interface ResearchRetrospectiveRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  lesson_key: string;
+  scope: string;
+  abstraction: string;
+  lesson: string;
+  evidence: string;
+  metrics: string;
+  created_at: string;
+}
+
+export interface ResearchRetrospective {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  lessonKey: string;
+  scope: RetrospectiveScope;
+  abstraction: LessonAbstraction;
+  lesson: string;
+  evidence: string[];
+  metrics: Record<string, number>;
+  createdAt: string;
 }

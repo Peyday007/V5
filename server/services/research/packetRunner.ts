@@ -56,6 +56,7 @@ import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './
 import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
   acceptedClaims,
+  listClaims,
   currentFragments,
   getFragment,
   getOrchestration,
@@ -67,7 +68,15 @@ import {
 } from '../../repos/research.ts';
 import { auditRoundFor, auditRoundStartedAt, earlierAuditRole } from './auditBrief.ts';
 import { assessPacket, MANDATORY_COVERAGE_CHECK } from './packet.ts';
-import { listCoverage, overrideCoverage, upsertCoverage } from '../../repos/reconciliation.ts';
+import { directResearch } from './intelligence/apply.ts';
+import { assessSufficiency, mayProceedToSynthesis } from './intelligence/sufficiency.ts';
+import { readGraph } from './intelligence/uncertainty.ts';
+import {
+  listCoverage,
+  listRequirements,
+  overrideCoverage,
+  upsertCoverage,
+} from '../../repos/reconciliation.ts';
 import { binForOrchestration, creditBinAttempt } from '../../repos/bins.ts';
 import {
   cancelWork,
@@ -1399,6 +1408,51 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
     if (repaired > 0) return await advancePacket(orchestrationId);
   }
 
+  /**
+   * The judgement layer, over the rows this pass is already holding.
+   *
+   * Placed after repairs deliberately. `mintRepairs` is §15's ladder — a
+   * *different search for the same question* — and it recurses when it creates
+   * one, so by the time this line is reached every question that could be tried
+   * again already has an attempt. What is left for the director is the set of
+   * decisions repair cannot make: which question the evidence settled, which
+   * branch has stopped bearing on the decision, which disagreement nobody has
+   * attacked, and what the goal still requires that nothing live is answering.
+   *
+   * `mayCreateWork` is this pass's own quiescence test, and the same one
+   * `mintRepairs` uses. Bookkeeping — resolving a question the gate just
+   * answered — runs on every advance, because it writes no work and a packet
+   * whose findings were only recorded when it happened to be idle would report
+   * a stale agenda for as long as anything was running. Opening a new question
+   * waits for the queue to be empty, because the result a worker is holding may
+   * be the very thing that makes it unnecessary.
+   *
+   * Anything it created is `PLANNED`, so the re-derive below lands on the
+   * approval branch and the packet's own approval decides — the envelope, or
+   * the person. No authorization exists in that faculty at all.
+   */
+  const directed = await directResearch({
+    orchestration,
+    fragments,
+    mayCreateWork: !items.some((item) => LIVE_ITEM.has(item.state)),
+  });
+  if (directed.created > 0) {
+    await recordEvent({
+      projectId: orchestration.projectId,
+      layerId: orchestration.layerId,
+      entityType: 'RUN',
+      entityId: orchestration.runId,
+      eventType: 'RESEARCH_PLAN_REVISED',
+      payload: {
+        orchestrationId: orchestration.id,
+        created: directed.created,
+        applied: directed.applied,
+        refused: directed.refused,
+      },
+    });
+    return await advancePacket(orchestrationId);
+  }
+
   if (
     orchestration.unresolvedGapPolicy === 'RECORD_GAPS' &&
     !items.some((item) => LIVE_ITEM.has(item.state)) &&
@@ -1782,6 +1836,69 @@ async function advanceOnce(orchestrationId: string): Promise<AdvanceResult> {
         waitingOn: 'a person: the packet does not cover the goal\'s mandatory part',
       };
     }
+    /**
+     * The one refusal the judgement layer adds at this boundary, and it is only
+     * ever a refusal.
+     *
+     * `assessPacket` has always computed a counterargument check — "every
+     * challenged claim carries what was done about the challenge" — and this
+     * function read `MANDATORY_COVERAGE_CHECK` and nothing else, so the answer
+     * was computed and discarded on every packet this Brain has ever run. A
+     * contradiction could therefore be reported, classified, marked on the
+     * claim, and synthesized straight over. **A column nothing reads is not an
+     * answer**, for the sixth time in this repository.
+     *
+     * It is stated here rather than by widening the `failed.find(...)` above,
+     * because the two refusals are not the same kind of thing. A mandatory
+     * coverage gap is about what the packet *did not cover*, and a person
+     * narrowing the goal is the remedy. A live disagreement is about what the
+     * packet *would have to choose between*, and the remedy is research — which
+     * the director has already opened by the time this runs, on the pass before
+     * this one. So this refuses while that work is outstanding and clears by
+     * itself when it finishes; it can never be the reason a packet stops for
+     * good.
+     *
+     * It cannot make a packet ready. `mayProceedToSynthesis` returns ok for
+     * every other reading, so nothing here can advance a packet the coverage
+     * check would have refused.
+     */
+    const graph = await readGraph(orchestration.id);
+    const sufficiency = assessSufficiency({
+      uncertainties: graph.uncertainties,
+      links: graph.links,
+      requirements: await listRequirements(orchestration.id),
+      coverage: await listCoverage(orchestration.id),
+      claims: await listClaims(orchestration.id),
+      fragments,
+      mayRecordGaps: orchestration.unresolvedGapPolicy === 'RECORD_GAPS',
+    });
+    const proceed = mayProceedToSynthesis(sufficiency);
+    if (!proceed.ok) {
+      /*
+       * `NEEDS_HUMAN`, and that choice is the whole difference between a
+       * refusal and a stall.
+       *
+       * This branch is reached only when every fragment is terminal, which
+       * means the director has already had its quiescent pass: either it opened
+       * the challenge — in which case that fragment is `PLANNED` and the
+       * approval branch above returns long before this line — or it refused to,
+       * for a reason it recorded. So reaching here means nothing is going to
+       * create the work, and a status saying "researching" over an empty queue
+       * is the absorbing state §27 is written against. A person decides, which
+       * is an answering transition: reissue, repair, or narrow.
+       */
+      await updateOrchestration(orchestration.id, {
+        status: 'NEEDS_HUMAN',
+        failureReason: proceed.because,
+      });
+      return {
+        orchestrationId,
+        status: 'NEEDS_HUMAN',
+        enqueued: [],
+        waitingOn: `a person: ${proceed.because}`,
+      };
+    }
+
     enqueued.push(
       await enqueueResearchItem({ orchestration, type: 'RESEARCH_SYNTHESIZE', priority: 8 }),
     );

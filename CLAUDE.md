@@ -171,6 +171,10 @@ There must be no workflow where the user has to remember "now go update the data
     a sprint down ends new discovery and never a customer's obligation.
 41. No identity shared between two private operations, and no credential that
     resolves a project its holder was not connected to.
+42. No research question without a decision that consumes its answer, no example
+    read as a boundary, and no depth allocation that lowers a bar — a question is
+    retired when it stops bearing on the decision and never when it stops being
+    convenient.
 
 ## 8. Model prose never mutates project state.
 
@@ -4804,6 +4808,226 @@ because `rank` orders on properties of the piece rather than of the account; and
 the owner's *disposition* is absent entirely, being a recommendation to whoever
 owns the job rather than a fact about the frontier.
 
+
+## 35. Research is a decision about what to learn, and Brain had no place to make it.
+
+Research Intelligence (`server/services/research/intelligence/`,
+`server/repos/researchIntelligence.ts`, `docs/RESEARCH-INTELLIGENCE.md`) is the
+judgement layer above an engine that was already complete. Steps 9 to 12 built
+everything needed to *run* research — packets, fragments, claims, the
+seven-condition gate, verification, three audit roles, synthesis, a durable queue
+with leases and fencing. What nothing owned was the decision above it: which
+question actually needs answering, what decision consumes the answer, which
+unknown could wreck the whole path, what a finding should change about the plan,
+and when to stop.
+
+Everything it adds is a new *entrance* to that machinery. There is no second
+orchestration universe, no second queue, no second policy module, and no
+authorization anywhere in it.
+
+- **A mechanism nothing calls is not a mechanism — twice more, and both were
+  invisible because the module they were wired to cannot run.**
+  `replan.planContradictionFragments` turns a reported disagreement into targeted
+  adversarial research and `packet.planCoverageFragments` fills a gap before
+  synthesis. Both existed, both were tested, and each had exactly one caller:
+  `orchestrator.ts`, the in-process push loop. The deployed Brain has no
+  `ANTHROPIC_API_KEY` and no `BRAIN_PROVIDER` (§24), so that module is
+  unreachable in production and always has been. Reading the code says the rule
+  is implemented; reading the *callers* says it has never once run.
+
+  So `brain_report_contradiction` classified a disagreement, marked the claim,
+  and created nothing — and `packetRunner` read only `MANDATORY_COVERAGE_CHECK`
+  out of `assessPacket`, which computes a counterargument check beside it. **A
+  column nothing reads is not an answer** (§29, at a sixth altitude): the check
+  ran on every packet this Brain has ever filed and its answer was discarded, so
+  two claims that cannot both be right could be synthesized straight over.
+
+- **A fragment is an execution container; an uncertainty is the reason the
+  question is worth asking, and they are not the same object.** They look alike
+  on the first pass of a campaign and stop being alike the moment evidence
+  arrives, because two things can only be said about the second: a fragment can
+  succeed completely and leave its question open, because what it established was
+  not the decisive part; and a finding can **retire** a question — still open, no
+  longer bearing on the decision — which cancels the fragments behind it as a
+  consequence rather than as a judgement about their evidence. With only
+  fragments there is nothing to say either of those about, which is why a
+  campaign built on fragments alone can repair a question and can never abandon
+  one.
+
+  `invalidating` is read from `depends_on` rather than from any prose: something
+  the plan itself declared a `HARD` dependency on is, by the plan's own
+  statement, a question the rest cannot be phrased without. That is the whole of
+  the ordering rule — the decisive prerequisite is investigated before the work
+  that rests on it, however interesting that work is.
+
+- **The link kinds are about reasoning, and flattening them is how a campaign
+  throws away work it should have continued.** `research_fragments.depends_on`
+  already carries `HARD | CONDITIONAL | SEQUENCING` and that is about execution
+  order. A `HARD_PREREQUISITE` failing strands its dependent and an
+  `EVIDENTIARY` one failing costs nothing; a `COMPARATIVE` sibling being ruled
+  out makes the other **more** decisive rather than less, so it is deepened
+  rather than retired. `SEQUENCING` maps to `EVIDENTIARY` rather than being
+  dropped, because it says exactly that: these bear on each other and a failure
+  blocks nothing.
+
+- **An example is not a boundary, and storing it as one is the Westbrook defect
+  a level up.** §25 records a compiler reading a jurisdiction out of prose and
+  producing *"official Michigan public records … in Westbrook, OH"* — every row
+  healthy, the mission running, a worker researching the specification correctly
+  and answering a different question. A person who names three industries as
+  illustrations of *the kind of buyer they mean* gets, from a single list of
+  sentences, a search restricted to three industries. It runs correctly and
+  answers a narrower question than the one they have.
+
+  So the problem model separates a CONSTRAINT (binds, and carries the reason it
+  exists, so Brain can later ask whether the reason still applies), a PREFERENCE,
+  an EXAMPLE (which carries **the property it was an example of**, and that
+  property is what search may generalise over) and an ASSUMPTION. An example
+  whose property nobody stated is kept verbatim and is never turned into one by
+  guessing — inferring intent from wording is precisely what `jurisdiction.ts`
+  refuses in the one place it already cost a wrong answer.
+
+- **Depth is a property of what rides on the answer; how many sources a claim
+  needs is a property of the claim.** §14 settled the second and
+  `standards.ts` is untouched. The first had no owner, so one
+  `minIndependentSourcesFloor` was applied to every fragment a compiled mission
+  produced — a question that could wreck the path and a question whose answer
+  changes nothing investigated to exactly the same depth. `allocateDepth` is
+  three rungs and a cascade rather than a score, so its recorded basis names a
+  real input a reader can check instead of a number they cannot. **It can raise a
+  bar and can never lower one**: the one downgrade is reachable only for a claim
+  type §14 already says one primary source settles, and `floorFor` is taken as a
+  maximum with the plan's own declaration. A depth allocator that could reduce an
+  evidence requirement would be a budget wearing an evidence bar's clothes, which
+  §16 already forbids.
+
+- **A model proposes; the server decides — and the wall is where it always is.**
+  Two things a campaign needs are genuinely semantic and no row can answer them:
+  what a finding *means*, and which new question it raises.
+  `brain_propose_plan_revision` carries those and
+  `services/research/intelligence/proposals.ts` validates them the way
+  `services/russell/proposal.ts` and `services/audit/schema.ts` do. An unknown
+  field refuses the **whole** proposal rather than the field; the action is
+  matched exactly against a closed set; every key is re-resolved inside this
+  packet; and the approval envelope, the evidence bar, the independent-source
+  minimum, the coverage decision and the audit verdict are unreachable by absence
+  of an import rather than by a check somebody could forget.
+
+- **A new question is not new research, and that separation is what keeps this
+  inside §16.** A directed fragment is created `PLANNED`, always — so
+  `advanceOnce`'s existing approval branch picks it up and the packet's *own*
+  approval decides: validated against the same envelope the original plan was, or
+  waiting for the same person. **No authorization exists in this faculty at
+  all.** A director that could queue its own research would be a second approval
+  path, and nobody supplies the limits their own plan is judged against.
+
+  `MAX_DIRECTED_FRAGMENTS` bounds how far one packet's plan may grow. Not a
+  budget: a bound on a *loop*, because planning that creates work from findings
+  can create work from the findings of the work it created. Reaching it is
+  reported rather than silent — §27's lesson that truncation is the one outcome a
+  caller cannot recover from, because it is delivered as success.
+
+- **I built a pass that would have overturned a rule the runner states with its
+  reason, and removed it rather than keeping it.** The first version opened a
+  question for any mandatory requirement nothing live was answering. §16's own
+  words ask for that — *"a failure produces fragments for exactly what is
+  missing"* — and `advanceOnce` deliberately declines it, because on this path
+  spending the allowance is a person's decision and fragments it created would be
+  researched with nobody having agreed to them. My answer to that objection was
+  real: a directed fragment lands `PLANNED` and is approved by the same
+  mechanism. It is still the director overturning a decision the runner argued
+  for, in service of a behaviour nothing required. What is added instead is the
+  **reading** — covered mandatory requirements against the total, on the surface
+  — so the person deciding sees what is missing rather than a bare refusal.
+
+- **Stopping was a statement about the queue rather than about the answer.**
+  "Every fragment reached a terminal status" is true of a packet with half its
+  mandatory requirements open and two claims that cannot both be right.
+  `assessSufficiency` asks the question in between — is this enough for the
+  decision the packet exists to support — and `readiness` is decisive-uncertainty
+  coverage with a named denominator, `null` when there is nothing to measure.
+  Never a fraction over fragments: §29's whole lesson is that *"0 of 8 settled"*
+  was accurate and read as failure.
+
+  **It only ever refuses**, on two readings, and both are conditions an audit
+  cannot repair after the fact because by then the report has already chosen: a
+  live disagreement, and a question that genuinely needs a person. Everything
+  else returns ok, so nothing here can advance a packet the mandatory-coverage
+  check would have refused.
+
+- **An unreadable source is a fact about the network, and recording it as a
+  finding is the expensive direction.** §12 draws this at the gate — a source
+  that could not be opened gets no verdict and is excluded from the rejection
+  rate — and it has to be drawn again one level up, because an uncertainty whose
+  only evidence was unreadable is **not refuted**. It stays exactly as open as it
+  was; what changes is the belief basis.
+
+- **A research system must not ask a person to do its research.**
+  `PERSON_ONLY_KINDS` is closed and every member is something no research
+  produces: a preference only they hold, a consent, a judgement that is theirs,
+  an irreversible decision, a secret, a credential, or an authorization to spend,
+  contact or publish. Anything else is refused **by name**, saying the question is
+  Brain's to answer — a price, a contact channel, a legal requirement, an
+  integration and a competitor are all research, and §30 had to correct exactly
+  this once when a card asked the owner for nine commercial facts Brain could
+  have looked up. An accepted escalation states one question, what the answer
+  authorizes, and exactly what is needed; *"what did you do?"* is refused,
+  because an escalation with no answering transition is stuck rather than
+  waiting.
+
+- **A lesson is stored at the level it is true at, or it is a cache of one
+  interaction pretending to be understanding.** The easy version of learning from
+  a campaign is to replay it, which learns *"always do exactly what the user said
+  last time"* and gets worse the more of them there are. So every lesson declares
+  `CAMPAIGN`, `DOMAIN` or `GENERAL`, `reusableLessons` returns only the last two,
+  and **no code path lets a stored lesson change a gate, a bar, a coverage
+  decision or a plan** — they are shown to a reader. Every one is read off a
+  count of rows and carries the rows, because a lesson with no evidence is an
+  opinion and this table must not store one as a finding. Derived on the tick
+  rather than hooked to the moment a packet ends, which is the fifth time that
+  distinction has been the difference between a mechanism that reaches production
+  and one that does not.
+
+- **Its own first measurement caught it doing the thing it was built to stop.**
+  `fragmentsResearched` counted `research_fragments.started_at`, whose only
+  writer is `orchestrator.ts` — so the number was structurally zero on every
+  campaign the deployed Brain can actually run, and the first measured campaign
+  reported seven fragments planned, six blocked, one accepted and none
+  researched. It reads the status now. Recorded rather than quietly fixed,
+  because reading the code said the metric was implemented and reading the
+  *writers* said it had never once been true, which is the whole of the first
+  bullet in this section.
+
+- **The faculty is additive by construction, and that is what makes running it
+  live honest rather than reckless.** No migration alters an existing table, no
+  code path cancels, resolves, reclassifies or re-enqueues an existing packet,
+  and a packet that predates it simply has its questions seeded on the next
+  advance. Deleting every row in the five tables returns Brain to exactly what it
+  did before, except for the two synthesis refusals — and with no uncertainties
+  there is nothing for either to refuse on, so they are inert.
+
+  **Both of those refusals stop the packet for a person rather than leaving it
+  reading "researching" over an empty queue**, and the first version did the
+  second. The branch is reached only when every fragment is terminal, so the
+  director has already had its quiescent pass: either it opened the challenge —
+  in which case that fragment is `PLANNED` and the approval branch returns long
+  before — or it refused to and said why. Reaching the refusal therefore means
+  nothing is going to create the work, and `NEEDS_HUMAN` is the state with an
+  answering transition. §27's absorbing state, avoided by naming it.
+
+**Proved across three domains rather than one.** The director decides on
+statuses, link kinds and claim states and reads no word of any subject, so
+`tests/researchIntelligence.test.ts` runs the same scenarios over a commercial
+opportunity, an operational reliability question and a film-history question — a
+rule that needed the subject fails on two of the three.
+`tests/researchIntelligencePass.test.ts` walks one campaign from `startPacket` to
+the lesson with only the outside world simulated: every submission goes through
+the tools under a lease, the runner is never called by hand to make a step
+happen, a restart happens mid-campaign, and the end state is asserted exactly
+rather than as a list of things it might be — `NEEDS_HUMAN` over a filed, audited
+report whose judge asked for more and whose repair ladder is spent, which is the
+honest outcome and not a packet that talked itself into "complete".
+
 ---
 
 ## Repository map
@@ -4845,6 +5069,7 @@ server/
     cashActions.ts    what was actually done, and under which grant
     cashLock.ts       where two cash decisions stop being concurrent
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
+    researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
     capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
@@ -4983,6 +5208,16 @@ server/
       dealDispatch.ts   the connected system, with its freshness in the type
       projections.ts    the briefing, and progress that may not be invented
     research/
+      intelligence/
+        model.ts        what Brain believes it was asked, versioned so it can be wrong
+        uncertainty.ts  the decision-relevant unknown, and the graph between them
+        depth.ts        how hard to look — raised by consequence, never lowered
+        director.ts     what a finding should change about the plan, as a pure decision
+        apply.ts        the guards that decision has to pass before it is a row
+        sufficiency.ts  whether the answer is ready for the decision it is for
+        proposals.ts    zero-trust validation of a worker's judgement about the plan
+        retrospective.ts what the campaign taught, at the level it is true at
+        view.ts         the mental state, derived on the read path
       schema.ts         zero-trust validation of every research pass
       sources.ts        what makes a claim sourced; structural URL validation
       standards.ts      the evidence standard per claim type, and independence
@@ -5074,6 +5309,8 @@ scripts/
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
+  researchIntelligence.test.ts   the judgement layer, in three unrelated domains
+  researchIntelligencePass.test.ts  one campaign, walked, with only the world simulated
   step12bProduct.test.ts     the product decisions, where they are decided
   step12bResponsive.test.ts  the widths that were clipping, and why they no longer do
   cashMode.test.ts           the lifecycle, and the off switch that is not the Brain's
