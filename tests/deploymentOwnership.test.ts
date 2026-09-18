@@ -160,6 +160,38 @@ describe('a dispatch surface offers the commands it actually accepts', () => {
       expect(script, command).toContain(`case '${command}'`);
     }
   });
+
+  /*
+   * `capability.yml` is the same surface one door along and is deliberately a
+   * different shape: it has no shell allowlist at all, because the closed set
+   * already exists in `scripts/capability.ts` and a second copy in YAML would be
+   * the drift above waiting to happen. So there is exactly one thing to assert,
+   * and it is the half that can still be wrong — the label a person reads must
+   * name commands the script on the other end actually implements. A label
+   * offering a command that does not exist sends somebody to dispatch a job that
+   * fails for a reason that is about the workflow rather than about their Brain.
+   */
+  const kernel = read('.github/workflows/capability.yml');
+
+  it('offers only kernel commands the deployed script implements', () => {
+    const described = /description: '([^']+)'\n\s+required: true/.exec(kernel);
+    expect(described).not.toBeNull();
+    const script = read('scripts/capability.ts');
+    const offeredHere = (described?.[1] ?? '')
+      .split('|')
+      .map((one) => one.trim().split(/\s+/)[0] as string);
+    expect(offeredHere.length).toBeGreaterThan(5);
+    for (const command of offeredHere) {
+      expect(script, command).toContain(`case '${command}'`);
+    }
+  });
+
+  it('cannot deploy, and says so by containing no deploy command', () => {
+    // The floor `leaves exactly one workflow able to deploy` already sets, said
+    // again at the surface most likely to grow one: the kernel's job is to read
+    // and advance rows, and building an image is not one of its commands.
+    expect(kernel).not.toContain('flyctl deploy');
+  });
 });
 
 describe('and the console it protects stays gone', () => {

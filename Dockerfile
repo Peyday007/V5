@@ -68,6 +68,15 @@ COPY scripts ./scripts
 # twice: once for living under `docs/` (excluded) and once for this COPY being
 # absent. Prose a person approved, no secrets, and no authority of its own.
 COPY objectives ./objectives
+# The capability blueprint and its amendments. `.dockerignore` excludes `docs/`
+# wholesale, which is right for everything else under it and wrong for these:
+# `registerBlueprint` reads a source *by path* and hashes the bytes it read, so
+# a blueprint that exists only in the repository is one the deployed Brain can
+# never ingest — verbatim the failure the `objectives/` comment above records.
+# Prose the owner supplied, no secrets, and no authority of its own; what it
+# can do to a faculty is bounded by `INGESTION_MAY_MOVE`, which is DEFINITION
+# and nothing else.
+COPY docs/capability ./docs/capability
 COPY --from=build /app/client/dist ./client/dist
 
 # Not root. The process needs no privilege: it opens a socket and talks to two

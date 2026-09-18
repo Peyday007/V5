@@ -41,7 +41,7 @@ import { liveAuthority } from '../server/repos/cashAuthority.ts';
 import { listGoals } from '../server/repos/russellAuthority.ts';
 import { getCandidate, listCandidates } from '../server/repos/russellCandidates.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
-import { listOrchestrationsByProject } from '../server/repos/research.ts';
+import { getOrchestration, listOrchestrationsByProject } from '../server/repos/research.ts';
 import { cashRoadmap } from '../server/services/cash/roadmap.ts';
 import { CASH_DISCOVERY_AUTHORITY_NAME } from '../server/services/cash/discoveryAuthority.ts';
 import { cashTier } from '../server/services/cash/tier.ts';
@@ -191,6 +191,48 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       WORK_ITEM_STATES.map((state) => `${state.toLowerCase()}=${shape.byState[state] ?? 0}`).join(' '),
   );
   console.log(`  by type     ${tally(items, (one) => one.workType)}`);
+
+  /*
+   * Every failed item, named, with the one fact that decides what may be done
+   * about it.
+   *
+   * The counts above say *how many* failed and nothing else, which is the
+   * reading that sends somebody to guess. A failed item is a question with
+   * exactly two answers — reissue it, or leave it — and what separates them is
+   * whether the packet it belongs to already filed a report: an item whose
+   * orchestration holds a `documentId` has already produced the thing a second
+   * attempt would produce, so reissuing it would duplicate accepted work.
+   *
+   * So the packet's own `documentId`, its status and its recorded
+   * `failureReason` are printed beside the item, rather than left to be
+   * inferred from the round's truncated blocker line. §33 is the reason that
+   * line cannot be trusted for this: a packet re-entered by the runner
+   * overwrote its real cause — the bucket refusing the storage key — with a
+   * guess about the worker, and every reading of that guess sent somebody to
+   * look in the wrong place.
+   *
+   * Read-only, like everything else here.
+   */
+  const failed = items.filter((one) => one.state === 'FAILED');
+  if (failed.length > 0) {
+    console.log('');
+    console.log(`FAILED WORK ITEMS (${failed.length})`);
+    for (const item of failed) {
+      const packet = item.orchestrationId ? await getOrchestration(item.orchestrationId) : null;
+      console.log(
+        `  ${item.id}  ${item.workType.padEnd(20)} attempts ${item.attemptCount}/${item.maxAttempts}` +
+          ` ${item.failureCategory ?? 'no category'}`,
+      );
+      console.log(`      packet     ${item.orchestrationId ?? '—'} ${packet ? packet.status : ''}`);
+      console.log(
+        `      filed      ${packet?.documentId ?? 'NOTHING FILED'}` +
+          (packet?.verdict ? ` verdict=${packet.verdict}` : ''),
+      );
+      if (item.resultSummary) console.log(`      said       ${trim(item.resultSummary)}`);
+      if (packet?.failureReason) console.log(`      packet says ${trim(packet.failureReason)}`);
+      console.log(`      updated    ${item.updatedAt}`);
+    }
+  }
 
   /*
    * What is holding the grant's concurrency.
