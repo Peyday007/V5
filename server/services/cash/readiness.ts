@@ -27,15 +27,28 @@
  * dispatcher would fire. Neither re-derives the other's answer, so the page and
  * the loop cannot disagree.
  */
-import { peopleReading, type MemberState, type PersonReading } from '../identity/people.ts';
+import {
+  peopleReading,
+  type MemberState,
+  type PersonReading,
+  type SignsInWith,
+} from '../identity/people.ts';
 import { capacityReading, type CapacityReading } from '../fleet/capacity.ts';
 
-export type { MemberState };
+export type { MemberState, SignsInWith };
 
 export interface MemberReadiness {
   userId: string;
   displayName: string;
   state: MemberState;
+  /**
+   * Which credential lets them in; see `identity/people.ts`.
+   *
+   * Carried rather than dropped, because `READY` on its own is the same word
+   * about a device and about the bootstrap password account, and only the first
+   * is what a lost-device recovery applies to.
+   */
+  signsInWith: SignsInWith;
   linkExpiresAt?: string;
 }
 
@@ -61,6 +74,7 @@ export async function cashReadiness(): Promise<CashReadiness> {
     userId: one.userId,
     displayName: one.displayName,
     state: one.state,
+    signsInWith: one.signsInWith,
     ...(one.linkExpiresAt ? { linkExpiresAt: one.linkExpiresAt } : {}),
   }));
   return {

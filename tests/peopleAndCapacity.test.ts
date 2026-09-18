@@ -29,6 +29,8 @@ import {
   setRoutineState,
 } from '../server/repos/fleet.ts';
 import { peopleReading } from '../server/services/identity/people.ts';
+import { createMemberSlot } from '../server/services/identity/enrollment.ts';
+import { addPasskey } from '../server/repos/passkeys.ts';
 import { capacityReading, withoutDiagnostics } from '../server/services/fleet/capacity.ts';
 import { cashReadiness } from '../server/services/cash/readiness.ts';
 import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
@@ -55,6 +57,19 @@ async function person(displayName: string, email: string): Promise<User> {
     displayName,
     password: 'a-password-that-is-long-enough',
     isBrainAdmin: false,
+  });
+}
+
+/** A live device on an existing account, which is what makes a row `DEVICE`. */
+async function enrolPasskey(userId: string): Promise<void> {
+  await addPasskey({
+    userId,
+    credentialId: `cred-${userId}`,
+    publicKey: 'a-public-key',
+    algorithm: -7,
+    signCount: 0,
+    label: 'a device',
+    originKind: 'ENROLLMENT',
   });
 }
 
@@ -132,11 +147,92 @@ describe('a person is declared, never recognised by their name', () => {
     expect(JSON.stringify(reading.people)).not.toMatch(/@/);
   });
 
-  it('counts nobody as ready without a live passkey', async () => {
-    await person('Airyn', 'airyn@example.invalid');
+  /**
+   * A slot nobody has filled, which is the only thing that is not READY.
+   *
+   * `createMemberSlot` is the row an invitation creates: no password, no
+   * device, nothing to sign in with. Everything else in this suite is created
+   * with a password, which is a real way in and is now counted as one.
+   */
+  it('counts a slot with no credential at all as not joined', async () => {
+    // `createMemberSlot` issues the link as well as the row, so the honest
+    // state is `INVITED` — asked and not finished. What matters here is that
+    // it is not `READY` and that nothing about it is a credential.
+    await createMemberSlot({ displayName: 'Vince', issuedByUserId: owner.id });
     const reading = await peopleReading(null);
-    expect(reading.joined).toBe(0);
-    expect(reading.people.every((one) => one.state === 'NOT_INVITED')).toBe(true);
+    const vince = reading.people.find((one) => one.displayName === 'Vince');
+    expect(vince?.state).toBe('INVITED');
+    expect(vince?.signsInWith).toBe('NONE');
+    expect(reading.joined).toBe(1); // the owner's password account, and not Vince
+  });
+
+  /**
+   * The defect the live Brain demonstrated.
+   *
+   * `bootstrap.ts` writes the first administrator with a password and no
+   * device, and this reading counted live passkeys only — so the one account
+   * that can administer the Brain read `NOT_INVITED`, beside two people who
+   * had enrolled. That is the member count wrong in the under-stating
+   * direction, and the remedy is to derive `READY` from whether a credential
+   * is live rather than from whether it is a device.
+   */
+  it('counts a password account as able to sign in, and says which credential', async () => {
+    const reading = await peopleReading(owner.id);
+    const row = reading.people.find((one) => one.displayName === 'Owner');
+    expect(row?.state).toBe('READY');
+    expect(row?.signsInWith).toBe('PASSWORD');
+    expect(reading.joined).toBe(1);
+  });
+
+  it('calls a device a device, so a recovery knows what it is recovering', async () => {
+    const airyn = await person('Airyn', 'airyn@example.invalid');
+    await enrolPasskey(airyn.id);
+    const reading = await peopleReading(null);
+    const row = reading.people.find((one) => one.displayName === 'Airyn');
+    expect(row?.state).toBe('READY');
+    expect(row?.signsInWith).toBe('DEVICE');
+  });
+
+  /**
+   * And a name Brain *mints* from a display name must not carry one either.
+   *
+   * `namesFor` derives a connector name, a Routine name and a **deployment
+   * secret's name** from it — and the third is visible to whoever sets it and
+   * ends up in the app's own configuration. `bootstrap.ts` names the first
+   * administrator after their address, so this was live: the secret would have
+   * been `BRAIN_ROUTINE_TOKEN_ROSSERPEYTON_GMAIL_COM_…`.
+   */
+  it('never mints a connector, Routine or secret name out of an address', async () => {
+    const owner = await createUser({
+      email: 'rosser@example.invalid',
+      displayName: 'rosser@example.invalid',
+      password: 'a-password-that-is-long-enough',
+      isBrainAdmin: true,
+    });
+    const names = namesFor(owner);
+    expect(JSON.stringify(names)).not.toMatch(/@/);
+    expect(names.secretName).not.toMatch(/EXAMPLE/);
+    expect(names.connectorName).toContain('rosser');
+  });
+
+  /**
+   * The owner's inbox was the label every member read.
+   *
+   * `bootstrap.ts` names the first administrator after the address it is
+   * created with, so the name on this page *was* a contact detail — against
+   * this module's own stated contract. The domain is dropped, which leaves the
+   * row recognisable and leaves nothing anybody can write to.
+   */
+  it('never lets an address cross as a display name', async () => {
+    await createUser({
+      email: 'rosser@example.invalid',
+      displayName: 'rosser@example.invalid',
+      password: 'a-password-that-is-long-enough',
+      isBrainAdmin: true,
+    });
+    const reading = await peopleReading(null);
+    expect(reading.people.map((one) => one.displayName)).toContain('rosser');
+    expect(JSON.stringify(reading.people)).not.toMatch(/@/);
   });
 });
 

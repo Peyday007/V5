@@ -93,6 +93,7 @@ import {
 import { listTokensForWorker } from '../../repos/oauth.ts';
 import { createInvitation, revokeInvitationsForWorker } from '../../repos/invitations.ts';
 import { generateInvitationToken } from '../identity/secrets.ts';
+import { withoutDomain } from '../identity/people.ts';
 import { getBin, listDispatchesForBin, markBinReady, retireBin } from '../../repos/bins.ts';
 import { resolveToken } from '../dispatch/fire.ts';
 import { proveSurface } from '../dispatch/surfaceProof.ts';
@@ -123,7 +124,20 @@ export function namesFor(user: Pick<User, 'id' | 'displayName'>): {
   secretName: string;
   workerName: string;
 } {
-  const slug = user.displayName
+  /*
+   * An address must not become a connector name, a Routine name or — worst of
+   * the three — a deployment secret's name, which is deliberately visible to
+   * whoever sets it and ends up in the app's own configuration. `bootstrap.ts`
+   * names the first administrator after the address it was created with, so
+   * this is not hypothetical: it would have produced
+   * `BRAIN_ROUTINE_TOKEN_ROSSERPEYTON_GMAIL_COM_…`. The same redaction the
+   * People reading applies, at the one place these names are minted.
+   *
+   * Existing rows keep the names they were written with — `ensureConnection`
+   * is `ON CONFLICT DO NOTHING` — so this changes nothing already registered.
+   */
+  const shown = withoutDomain(user.displayName);
+  const slug = shown
     .normalize('NFKD')
     .replace(/[^A-Za-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -134,8 +148,8 @@ export function namesFor(user: Pick<User, 'id' | 'displayName'>): {
   const tail = user.id.replace(/^usr_/, '').slice(0, 6);
   const base = slug.length > 0 ? `${slug}-${tail}` : tail;
   return {
-    connectorName: `Brain (${user.displayName})`,
-    routineName: `Brain Research — ${user.displayName}`,
+    connectorName: `Brain (${shown})`,
+    routineName: `Brain Research — ${shown}`,
     secretName: `BRAIN_ROUTINE_TOKEN_${base.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`,
     workerName: `research-${base}`,
   };

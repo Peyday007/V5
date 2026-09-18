@@ -126,10 +126,45 @@ measurement of anything.
 
 ### The real state of the four research Routines
 
+Read again from the deployed Brain after this change, 2026-09-18T06:05:59Z:
+
+```
+FLEET
+  accounts    4
+  routines    9
+  target      4
+  in flight   1
+  candidates  7 considered, 4 eligible now
+  MISSING SECRET  rtn_c301a1b995b54dbcb5fc expects VERIFY_HOSTED_NEVER_SET
+  MISSING SECRET  rtn_cbccb5cec3034959a3b3 expects VERIFY_HOSTED_NEVER_SET
+
+Brain Research A  ENABLED  declared=unknown plan=Max target=4  retry_at=2026-09-09T22:32:10.195Z
+    Brain Research A    ENABLED  ref=trig_01CBLu5oCZziEwznw5q9xU7g  worker=wkr_1cdd82cfb2a54faf8edd  secret=BRAIN_ROUTINE_TOKEN      fires=323 refusals=2 no-shows=0  in-flight=0
+    Brain Research 1-B  ENABLED  ref=trig_01TT7u3m4T6JW14vjwsK9qHm  worker=wkr_1cdd82cfb2a54faf8edd  secret=BRAIN_ROUTINE_TOKEN_1_B  fires=29  refusals=0 no-shows=0  in-flight=0
+    Brain Research 1-C  ENABLED  ref=trig_01QbxS8dWTcqV3zoEhx9wBen  worker=wkr_1cdd82cfb2a54faf8edd  secret=BRAIN_ROUTINE_TOKEN_1_C  fires=30  refusals=0 no-shows=0  in-flight=0
+    Brain Research 1-D  ENABLED  ref=trig_015aYoUwidycXymZ2xxWBC5B  worker=wkr_1cdd82cfb2a54faf8edd  secret=BRAIN_ROUTINE_TOKEN_1_D  fires=29  refusals=0 no-shows=0  in-flight=1
+    V1-oak  RETIRED  ref=trig_0137jBhBj9fwHCM13Aaf7DTN  fires=0
+    V1-oak  RETIRED  ref=trig_01YJpttXm67Nft6gcUUnXQAS  fires=21 refusals=21
+friend-2  ENABLED  declared=unknown plan=unknown target=2
+    V2  QUARANTINED  ref=trig_01HR74TmLtm8L21sh2Xryqhq  worker=wkr_1cdd82cfb2a54faf8edd  secret=BRAIN_ROUTINE_TOKEN_2  fires=12 refusals=0
+        "sessions complete without checking in operator hold"  (2026-09-05T17:15:23.485Z)
+verify-hosted-account-a  plan=verification  trig_verify_hosted_a  secret=VERIFY_HOSTED_NEVER_SET  (not routable)
+verify-hosted-account-b  plan=verification  trig_verify_hosted_b  secret=VERIFY_HOSTED_NEVER_SET  (not routable)
+```
+
 All four are **ENABLED**, all four are bound to `wkr_1cdd82cfb2a54faf8edd`, all
 four have their deployment secret present, and all four appear in the
-dispatcher's candidate list. `4 eligible now` is correct. Nothing was wrong with
-the fleet.
+dispatcher's candidate list. `4 eligible now` is correct, one of them was
+serving work at the moment of the read, and **nothing was wrong with the
+fleet.**
+
+`capacityReading()` over exactly these rows answers `eligibleNow = 4`,
+`unavailable = 1` (`V2`, with its recorded reason) and `historical = 2` (the two
+`V1-oak` rows), with `target = 4` labelled as a target. The two
+`verify-hosted-account-*` accounts are excluded by `fleet_accounts.kind`, so
+they do not read as two more surfaces *waiting on an administrator* — a sentinel
+secret that is deployed nowhere is machinery proving itself, and there is no
+outstanding action for anybody to take about it.
 
 ### `friend-2` — kept, not deleted
 
@@ -173,16 +208,63 @@ discovering it), and a surface waiting on its administrator must read as
 
 ### What each row is
 
-| Display name | What it is | Where it comes from |
-| --- | --- | --- |
-| `Hosted verification` | a member fixture for the hosted authorization checks | `scripts/verify-hosted.ts`, `verification-member@brain.invalid` |
-| `Hosted verification owner` | the OWNER of the verification-scope project, deliberately **not** a Brain administrator so the isolation checks have something to isolate | `scripts/verify-hosted.ts`, `verification-owner@brain.invalid` |
-| an older email identity | the account created before passkeys existed | the bootstrap administrator, or an account an administrator made |
-| `friend-2` | **not a person at all** — a `fleet_accounts` row, i.e. a capacity account | `fleet register-account` |
+This is the live `users` table, read from the deployed Brain with
+`npm run admin -- people list` at 2026-09-18T05:58:58Z — six rows, every one of
+them, with nothing deleted:
 
-The first two are recreated by every deploy. They were being counted as two of
-the four people the sprint was waiting for, which made the count wrong in the
-one direction that matters: it reported more of the team as present than were.
+```
+usr_72e1236be8f04f4d9aa2  PERSON  MEMBER  passkeys=1  Airyn                      <no address — passkey only>
+usr_0f24a326daaf4e2fbbfc  PERSON  MEMBER  passkeys=1  Caleb                      <no address — passkey only>
+usr_b2dedd287be04b86853f  SYSTEM  MEMBER  passkeys=0  Hosted verification        <verification-member@brain.invalid>
+usr_8d1de66ff2ef43809312  SYSTEM  MEMBER  passkeys=0  Hosted verification owner  <verification-owner@brain.invalid>
+usr_14439966398243339341  PERSON  ADMIN   passkeys=0  rosserpeyton@gmail.com     <rosserpeyton@gmail.com>
+usr_4b69e3238341457a953d  PERSON  MEMBER  passkeys=0  Vince                      <no address — passkey only>
+```
+
+| Row | What it is | Where it comes from | On the People page |
+| --- | --- | --- | --- |
+| `Airyn` | a real member, enrolled | `createMemberSlot` + a passkey | yes — **Joined** |
+| `Caleb` | a real member, enrolled | `createMemberSlot` + a passkey | yes — **Joined** |
+| `Vince` | a real member slot, not yet enrolled | `createMemberSlot` | yes — **Link sent** or **No link yet** |
+| `Hosted verification` | a member fixture for the hosted authorization checks | `scripts/verify-hosted.ts` | no — `kind = SYSTEM` |
+| `Hosted verification owner` | the OWNER of the verification-scope project, deliberately **not** a Brain administrator so the isolation checks have something to isolate | `scripts/verify-hosted.ts` | no — `kind = SYSTEM` |
+| `rosserpeyton@gmail.com` | **the owner's own administrator account** — `bootstrap.ts`, password, no device | `services/identity/bootstrap.ts` | yes — **Joined · password** |
+| `friend-2` | **not a person at all** — a `fleet_accounts` row, i.e. a capacity account | `fleet register-account` | not on this list; on the capacity list, with its real state |
+
+The two `SYSTEM` rows are recreated by every deploy. They were being counted as
+two of the four people the sprint was waiting for, which made the count wrong in
+the one direction that matters: it reported more of the team as present than
+were.
+
+### The fourth row named in the correction is the owner, and it stays
+
+The correction listed *"an old email identity"* beside the two fixtures and
+`friend-2`. Traced to its row it is `usr_1443…`: `kind = PERSON`,
+`is_brain_admin = 1`, a scrypt verifier, no passkey — **the only account that
+can administer this Brain**, written by `bootstrap.ts` from the address it was
+created with. It is not a fixture and not infrastructure. Hiding it would leave
+the owner's own roster showing no administrator, and typing it `SYSTEM` would be
+a declared lie about what it is.
+
+So it is reported, and the two things that were actually wrong about it are
+fixed:
+
+- **It read `NOT_INVITED`** — *a slot nobody has filled* — because the reading
+  counted live passkeys and this account signs in with a password. That is the
+  member count wrong in the **under**-stating direction, which is §29's own
+  concern, and it is the same class of defect as the fixtures overstating it.
+  `READY` is now *holds a live credential*, and `signsInWith` says which:
+  `DEVICE`, `PASSWORD`, or `NONE`. Nothing about the enrollment journey moved —
+  it still only ever produces a `DEVICE`, which is the row a lost-device
+  recovery applies to, so the distinction has to travel rather than be inferred
+  from a blank.
+- **Its display name was the owner's inbox**, on a page every member reads,
+  against `identity/people.ts`'s own stated contract that no contact detail
+  crosses it. The domain is dropped — `rosserpeyton` — which leaves the row
+  recognisable and leaves nothing anybody can write to. That is a redaction and
+  not a classification: §4's rule against name-matching is about deciding *what
+  a row is*, which `users.kind` declares, and the worst a false positive here
+  costs is a shortened name.
 
 `friend-2` was never on the People list — it was on the *capacity* list, which
 is a different question, and it is still there with its real state.

@@ -4415,6 +4415,22 @@ eligible now*.
   names differently. Unknown reads as the *machinery* value in both mappers,
   because the two mistakes do not cost the same: leaving a real person off a list
   is a complaint, and counting a fixture as a person is the defect silently back.
+- **The fourth identity the correction named is the owner, and it stays — the
+  reading was wrong about it rather than the row.** Traced live, it is
+  `bootstrap.ts`'s administrator: `kind = PERSON`, `is_brain_admin = 1`, a scrypt
+  verifier and no device. Hiding it would leave the owner's own roster showing no
+  administrator, and typing it `SYSTEM` would be a declared lie. Two things about
+  it *were* wrong. It read `NOT_INVITED` — *a slot nobody has filled* — because
+  the reading counted live passkeys and this account signs in with a password:
+  **the member count wrong in the under-stating direction, which is the same
+  class of defect as the fixtures overstating it.** So `READY` is *holds a live
+  credential* and `signsInWith` says which — `DEVICE`, `PASSWORD` or `NONE` —
+  because the enrollment journey only ever produces a device and that is the row
+  a lost-device recovery applies to. And its display name *was* the owner's
+  inbox, on a page every member reads, against this module's own stated contract
+  that no contact detail crosses it; the domain is dropped. That is a redaction
+  rather than a classification — what a row *is* is declared by `users.kind`, and
+  the worst a false positive costs here is a shortened name.
 - **Nothing was deleted to clear a screen.** Every verification identity keeps
   its row, its memberships and its audit trail; the two retired `V1-oak`
   Routines and the quarantined `V2` keep theirs. What a screen asking for
