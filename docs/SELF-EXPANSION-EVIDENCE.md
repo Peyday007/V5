@@ -56,8 +56,9 @@ the reading to a commit it cannot see — a local checkout legitimately has none
 | Gate | Result |
 |---|---|
 | `tsc --noEmit` | clean |
-| SQLite suite | **159 files, 3 486 passed, 41 skipped** |
+| SQLite suite | **159 files, 3 487 passed, 41 skipped** |
 | Postgres suite, merged tree | **159 files, 3 497 passed, 12 skipped** |
+| Postgres suite, with the three mechanisms | **160 files, 3 515 passed, 12 skipped** |
 | Migrate from empty | 71 migrations applied in order |
 | Restart against existing | clean; no reapplication, checksums verified |
 | `deploymentOwnership` | 18 passed — no chain gap, no collision, no port collision |
