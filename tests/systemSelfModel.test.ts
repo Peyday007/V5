@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
+import { loadMigrationFiles, migrationsDirFor } from '../server/db/migrate.ts';
 import {
   DOCS_ROOT,
   observeSystem,
@@ -76,7 +77,13 @@ describe('the system self-model', () => {
     it('reads a migration file and a migration applied as two different facts', async () => {
       const pass = await observeSystem();
       const migrations = pass.components.filter((c) => c.kind === 'MIGRATION');
-      expect(migrations.length).toBeGreaterThan(60);
+      // Against the chain this dialect actually has, rather than a number. The
+      // two chains are numbered independently and a magic number here passes on
+      // SQLite and fails on Postgres, which is the shape of brittleness §25
+      // keeps finding in the other direction.
+      const chain = loadMigrationFiles(migrationsDirFor(getDb().dialect));
+      expect(chain.length).toBeGreaterThan(0);
+      expect(migrations).toHaveLength(chain.length);
       // A fresh database has applied the whole chain, so every file is deployed.
       for (const migration of migrations) {
         expect(migration.readings.IN_SOURCE?.answer).toBe('YES');
