@@ -4218,6 +4218,26 @@ and a suite that exercises the stage cannot see that.**
   a key answered by none of them is a compile-time-visible absence rather than
   a park somebody finds in production.
 
+- **A key is not a filename, and production filed nothing for a day because
+  the two were answered by one function.** §33 gave the canonical name a
+  variant so that four cash packets answering four different questions stopped
+  filing under one name, separated by an em-dash. A local disk is perfectly
+  happy with one; the bucket answered `400 InvalidKey` on
+  `Opportunity Research v1B — Where the same deliverable has two published
+  prices.md`, so **every staged research report in a cash project failed to
+  file in cloud mode** while the whole local suite passed and the packet's own
+  work item finished having recorded nothing.
+
+  `sanitizeFilename` answers a filesystem question and `safeSegment` answers a
+  storage one — which is the reason that module exists beside this one, and
+  the two halves of that repair were written at two layers with nothing
+  holding them against each other. `safeSegment` now reduces a segment to the
+  intersection both stores accept, which is lossy on purpose: a key is an
+  address and the canonical name on the row is what a person reads. The test
+  holds it against object storage's own character class rather than against
+  the production constant, because a test sharing that constant would pass
+  whatever it became.
+
 - **The production guard cried wolf, and the remedy it named was wrong.** Vite
   hashes are base64url, the guard matched `[A-Za-z0-9]+`, and the day
   production shipped `index-C5-52qux.js` the `grep` found nothing — which under
