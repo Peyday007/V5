@@ -758,6 +758,9 @@ describe('harvesting what discovery found', () => {
       harvested: [],
       authorized: false,
       resumed: [],
+      // Nothing to read a signal back for either: one read of `cash_modes`
+      // answers the whole pass for a project holding no sprint at all.
+      signalled: [],
     });
   });
 });

@@ -4200,6 +4200,13 @@ and a suite that exercises the stage cannot see that.**
   change put up**, and the fifth time this file has had to write that an
   escalation needs an answering transition.
 
+  **And the first bound on it was one too many.** Raising a research need for
+  every researchable blank on every record would have been two hundred
+  questions asking what to charge for somebody else's product, so a signal was
+  skipped entirely — which left the *payer* unasked, and the payer is the one
+  question that could have stopped it being a signal. A signal is asked the
+  three questions `captureMechanism` is composed from and nothing else.
+
   Nothing in the unit suites could see either one: every fixture wrote its own
   card facts, so every one of them cleared a bar the product could not.
   `cashDeploymentSmoke` found it by driving a sprint the way a person does and

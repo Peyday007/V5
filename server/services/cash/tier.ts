@@ -82,6 +82,27 @@ export type QualificationKey = CardFieldKey | EngineFieldKey;
 export const CAPTURE_KEY: QualificationKey = 'captureMechanism';
 
 /**
+ * The researchable card fields that feed the capture thesis.
+ *
+ * `captureMechanism` is composed from a payer, something to supply them and a
+ * route to reach them, so these three are the only questions worth spending on
+ * while a piece is still a signal — they are the ones that could move it. The
+ * rest of the card asks what a *decision* turns on, and a decision about a
+ * published price list is a decision about nothing.
+ *
+ * It exists because the first version of this correction skipped a signal's
+ * questions entirely, which is one bound too many: 31 production signals
+ * raising seven needs each would have been 217 questions asking what to charge
+ * for somebody else's product, and skipping all of them leaves the payer — the
+ * one question that actually moves the piece — unasked as well.
+ */
+export const CAPTURE_INPUTS: readonly QualificationKey[] = Object.freeze([
+  'payer',
+  'access',
+  'buyingEvidence',
+]);
+
+/**
  * What every qualified opportunity has to answer, whatever kind it is.
  *
  * This is the plan's own list, in its own order: who pays, what they pay us

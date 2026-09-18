@@ -64,3 +64,39 @@ export function tiersFor(
   for (const one of opportunities) out[one.id] = tierFor(one, facts(one));
   return out;
 }
+
+/**
+ * The execution thesis, answered by a person.
+ *
+ * Spread into a `fillCard` patch or a `PATCH /api/cash/opportunities/:id`
+ * body beside the twelve short-card fields. It exists because those twelve
+ * stopped being the whole of what "ready to test" means: a piece can answer
+ * every readiness field and still have nothing saying whether we are
+ * eligible, how the work gets done, whether calling is required, what it
+ * costs or when the money arrives.
+ *
+ * These are `ENGINE_FIELDS`, which have no column — so a person answering one
+ * is a `PERSON` row in `cash_card_facts`, and `mayReplace` keeps it above
+ * anything automatic. Using it lowers no bar: the tier still requires every
+ * question to be answered, and this is somebody answering them.
+ */
+export const EXECUTION_THESIS: Readonly<Record<string, string>> = Object.freeze({
+  captureMechanism: 'Supply the repair to the buyer who asked, and be paid for it.',
+  revenueRange: 'Comparable work is published at USD 500 to 800.',
+  directCosts: 'Nothing to buy. One afternoon of our own time.',
+  requiredCapital: 'Nothing out before the invoice.',
+  timeToFirstCash: 'Their published terms are net 14 from acceptance.',
+  hours: 'Comparable work is published as taking four to six hours.',
+  laborNeeds: 'One person, for an afternoon. No selling and no subcontractor.',
+  fulfilmentModel: 'Manual, by us. Nothing here automates and nothing is subcontracted.',
+  phoneDependency: 'No call. They published an address and replied to it.',
+  eligibility: 'No licence, registration or platform rule applies to work this size.',
+  acquisitionAccess: 'Nothing has to be acquired. The work is the deliverable.',
+  exitEvidence: 'Not a resale. There is nothing to sell on.',
+  firstSteps: 'Re-read the request, write the one-page reply, send it.',
+  bottleneck: 'Reaching the buyer at all.',
+  scalingLever: 'The same deliverable for the next buyer in the same market.',
+  disqualifiers: 'Nothing published rules it out. The request is open.',
+  confidence: 'The payer and the price are from them; the costs are ours.',
+  recommendation: 'Worth testing. The margin is the afternoon, and nothing is at risk.',
+});

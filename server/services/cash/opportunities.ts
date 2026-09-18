@@ -268,6 +268,10 @@ export async function fillCard(input: {
   for (const field of ENGINE_FIELDS) {
     if (!(field in input.patch)) continue;
     const value = input.patch[field];
+    // `undefined` is the key not being mentioned, which JSON cannot express
+    // and an in-process caller can. Anything else that is not a sentence is a
+    // mistake worth refusing rather than swallowing.
+    if (value === undefined) continue;
     if (typeof value !== 'string') {
       return refuse(`${field} is a sentence, or leave it out.`);
     }

@@ -25,6 +25,7 @@
  *     redrawing.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act } from 'react';
 import { CashSection } from '../client/src/russell/Cash.tsx';
@@ -1074,62 +1075,103 @@ describe('the decision nothing can proceed without', () => {
     expect(calls.filter((call) => call === VIEW).length).toBe(2);
   });
 
-  it('answers a card field, and says it is the person’s now', async () => {
+  it('answers a card question on the card itself, and says it is the person’s now', async () => {
     /*
-     * Every answer but `RESOLVE_NEED` rendered as a paragraph, on the excuse
-     * that the funding and release controls existed elsewhere on the page. They
-     * did not: the money panel is a read-only table and the opportunity actions
-     * are ready/execute/deliver/collect/decline. So the screen was telling
-     * people to do things somewhere that had no way to do them.
+     * This drove the review's `FILL_CARD_FIELD` control, which is gone with
+     * the section that produced it: every field it could have offered is a
+     * fact Brain researches or a proposal Brain composes, so the server emits
+     * no such item any more.
+     *
+     * The capability moved rather than went, and it matters more than it did:
+     * twelve of the card's questions have no column at all, so until this
+     * control existed the bounded deep dive was the only thing that could
+     * answer one — and the tier requires them. A person who knew the answer
+     * had nowhere to put it.
      */
-    const cardDecision = view({
-      decisionsForMe: {
-        items: [
+    const withUnknown = view({
+      myCurrentWork: {
+        ...(view().myCurrentWork as Record<string, unknown>),
+        best: [
           {
-            key: 'MISSING_PRICE',
-            title: '1 card with no price',
-            why: 'An unknown is not a favourable assumption.',
-            recommendation: 'Quote one price.',
-            consequence: 'It becomes ready to test the moment its answer exists.',
-            urgency: 'WHENEVER',
-            underlying: ['cop_1'],
-            sharedRemedy: true,
-            costCents: null,
-            costNote: null,
-            answer: {
-              kind: 'FILL_CARD_FIELD',
-              targets: ['cop_1'],
-              label: 'Answer the price on this card',
-              completionCondition: 'Every one of these cards records a price.',
+            opportunity: opportunity(),
+            disposition: 'TEST_A_DECISIVE_UNKNOWN',
+            because: 'One thing on this card is unknown.',
+            missing: [],
+            tier: {
+              tier: 'QUALIFIED',
+              establishes: 'a named buyer published that they want something',
+              doesNotEstablish: 'that they would buy it from us',
+              toAdvance: [],
+              answered: 15,
+              required: 16,
+              summary: 'The execution thesis is supported.',
             },
           },
         ],
-        underlyingCount: 1,
-        summary: '1 thing to decide, standing for 1 underlying item.',
+        byTier: { SIGNAL: 0, CANDIDATE: 0, QUALIFIED: 1, READY_TO_TEST: 0 },
+        bestAreNearlyQualified: false,
+        engineCards: {
+          cop_1: {
+            opportunityId: 'cop_1',
+            validationState: 'COMPLETE',
+            recommendation: null,
+            unknowns: ['eligibility'],
+            entries: [
+              {
+                key: 'eligibility',
+                label: 'Eligibility and permission',
+                value: null,
+                kind: 'UNKNOWN',
+                task: 'Find what published rule decides whether we may take it at all.',
+                claimId: null,
+                basis: null,
+                assumptions: null,
+                uncertainty: null,
+              },
+            ],
+          },
+        },
+        economics: { cop_1: [] },
       },
     });
     base({
-      [VIEW]: { body: cardDecision },
+      [VIEW]: { body: withUnknown },
       'PATCH /api/cash/opportunities/cop_1': { body: { opportunity: opportunity() } },
     });
     await mount();
 
-    await waitFor(() => expect(screen.getByText(/This answer applies to 1 record/i)).toBeTruthy());
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /answer the price on this card/i }));
-    });
-    fireEvent.change(screen.getByLabelText(/1 card with no price/i), {
-      target: { value: '120000' },
+      fireEvent.click(screen.getAllByRole('button', { name: /show the full card/i })[0]!);
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+      fireEvent.click(
+        screen.getAllByRole('button', { name: /answer the eligibility and permission/i })[0]!,
+      );
+    });
+    fireEvent.change(screen.getAllByLabelText(/^Eligibility and permission$/)[0]!, {
+      target: { value: 'No licence applies to work this size.' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Confirm' })[0]!);
     });
 
-    // The same guarded route the card editor uses, so an answer given here and
-    // one given on the card are one operation.
-    expect(bodies['PATCH /api/cash/opportunities/cop_1']).toMatchObject({ price: '120000' });
-    expect(screen.getByText(/Brain will not propose over it/i)).toBeTruthy();
-    expect(calls.filter((call) => call === VIEW).length).toBe(2);
+    // The same guarded route the card editor uses, under the field's own key —
+    // an engine field has no column, so its name is what `fillCard` matches.
+    expect(bodies['PATCH /api/cash/opportunities/cop_1']).toMatchObject({
+      eligibility: 'No licence applies to work this size.',
+    });
+    await waitFor(() =>
+      expect(screen.getByText(/It is yours now, so Brain will not propose over it/i)).toBeTruthy(),
+    );
+  });
+
+  it('never renders a control for a review item the server cannot produce', async () => {
+    // `FILL_CARD_FIELD` is still in the wire vocabulary because the type is
+    // shared; nothing composes one. The arm that rendered it is deleted, so a
+    // stale item would show its words and no control rather than a control
+    // posting to a path the section no longer has an opinion about.
+    const source = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    expect(source).not.toMatch(/kind === 'FILL_CARD_FIELD'/);
   });
 
   it('records money that actually arrived, and refuses to without a reference', async () => {

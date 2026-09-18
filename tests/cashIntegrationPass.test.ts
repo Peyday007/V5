@@ -68,6 +68,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { freshProject } from './helpers.ts';
+import { EXECUTION_THESIS } from './helpers/cashTier.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { createGoal } from '../server/repos/russellAuthority.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
@@ -747,6 +748,13 @@ describe('one sprint, from activation to money in and winding down', () => {
         priceCents: 120_000,
         // The remaining blank the card still refuses on.
         peakFundingCents: 0,
+        /*
+         * And the execution thesis. `markReady` asks for both now: the twelve
+         * short-card fields are what a bounded *test* turns on, and these are
+         * what a *decision* turns on. They have no column, so a person
+         * answering one is a `PERSON` row in `cash_card_facts`.
+         */
+        ...EXECUTION_THESIS,
       });
       expect(priced.status).toBe(200);
     });

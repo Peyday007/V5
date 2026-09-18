@@ -565,18 +565,19 @@ describe('answering a need resumes what was waiting, exactly once', () => {
 });
 
 describe('a fact Brain could look up is Brain’s work, not a person’s', () => {
-  it('raises nothing at all for a record that is still only evidence', async () => {
+  it('asks a record that is still only evidence the three questions that could move it', async () => {
     /*
      * A bare record is a *signal*: something was found and nothing says who
-     * would pay us for it. The instrument that moves one is the bounded deep
-     * dive, capped at two in flight.
+     * would pay us for it. The only questions worth spending on are the ones
+     * that could stop it being one — a payer, a route to them, and dated
+     * evidence they asked. `captureMechanism` is composed from exactly those.
      *
-     * This used to raise three needs here, and the set of researchable fields
-     * has since gone from three to seven — so on the production sprint, which
-     * held thirty-one published price lists, this would have raised something
-     * like two hundred needs asking what to charge for somebody else's
-     * product. A need is Brain's own work item, and two hundred of them is the
-     * allowance spent qualifying things that are not opportunities.
+     * The rest of the card asks what a *decision* turns on, and there is no
+     * decision to make about a published price list. The set of researchable
+     * fields went from three to seven with this change, so on the production
+     * sprint — thirty-one price lists, appraisals and listing pages — asking
+     * all seven of each would have been two hundred needs about what to charge
+     * for somebody else's product.
      */
     const captured = await capture({
       projectId,
@@ -588,8 +589,9 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
     });
     if (!captured.ok) throw new Error(captured.reason);
 
-    expect(await reconcileDiscoverableGaps(projectId)).toEqual([]);
-    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(0);
+    const gaps = await reconcileDiscoverableGaps(projectId);
+    expect(gaps.map((one) => one.field).sort()).toEqual(['access', 'buyingEvidence', 'payer']);
+    expect(await listNeeds({ projectId, states: ['OPEN'] })).toHaveLength(3);
   });
 
   it('raises a question for each researchable blank once there is a capture thesis', async () => {
@@ -660,7 +662,9 @@ describe('a fact Brain could look up is Brain’s work, not a person’s', () =>
       uncertainty: 'Whether they would choose us.',
       decidedBy: 'BRAIN',
     });
-    expect(await reconcileDiscoverableGaps(projectId)).toHaveLength(7);
+    // Seven, not three: a capture thesis is what makes the other four worth
+    // spending on, and the three above were raised for the signal already.
+    expect((await reconcileDiscoverableGaps(projectId)).length).toBe(7);
 
     await fillCard({
       opportunityId: captured.value.id,

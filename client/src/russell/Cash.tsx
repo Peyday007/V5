@@ -629,41 +629,15 @@ function DecisionAnswer({
         </>
       ) : null}
 
-      {asking && kind === 'FILL_CARD_FIELD' && opportunityId ? (
-        <>
-          <p className="rs-hint">
-            {item.answer.targets.length === 1
-              ? 'One card, one answer.'
-              : `These are ${item.answer.targets.length} separate answers of the same kind. ` +
-                'This answers the first; the rest are on their own cards.'}
-          </p>
-          <label className="rs-field-label" htmlFor={`cash-field-${item.key}`}>
-            {item.title}
-          </label>
-          <input
-            id={`cash-field-${item.key}`}
-            value={said}
-            onChange={(event) => setSaid(event.target.value)}
-          />
-          <button
-            type="button"
-            className="rs-button-quiet"
-            disabled={busy || said.trim().length === 0}
-            onClick={() =>
-              void run(async () => {
-                const field = item.key.replace(/^MISSING_/, '').toLowerCase();
-                await CashApi.fillCard(opportunityId, { [CARD_PATCH_KEY[field] ?? field]: said });
-                return 'Answered. It is yours now, so Brain will not propose over it.';
-              })
-            }
-          >
-            {busy ? 'Saving…' : 'Confirm'}
-          </button>
-          <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
-            Cancel
-          </button>
-        </>
-      ) : null}
+      {/*
+        * The `FILL_CARD_FIELD` branch was here and is deleted with the review
+        * section that produced it. Every field it could have offered is a fact
+        * Brain researches or a proposal Brain composes, so the server emits no
+        * such item any more and this arm was reachable by nothing.
+        *
+        * A person answering a card question is not gone — it moved to where
+        * the question is actually asked, on the card itself. See `EngineCard`.
+        */}
 
       {asking && kind === 'RECORD_MONEY' ? (
         <>
@@ -778,23 +752,25 @@ function DecisionAnswer({
 }
 
 /**
- * The patch key each review group's field is written under.
+ * The patch key each card field is written under.
  *
- * The review names a field by the card's own key and `fillCard` takes the view
- * type's name for it; they differ for exactly the fields where the column and
- * the concept are not the same word. Anything absent falls through as itself,
- * so a new field reaches the card without a second place to remember.
+ * The card names a field by its own key and `fillCard` takes the view type's
+ * name for it; they differ for exactly the fields where the column and the
+ * concept are not the same word. Anything absent falls through as itself — an
+ * `ENGINE_FIELDS` key has no column at all and is written under its own name,
+ * so a new one reaches the card without a second place to remember.
  */
 const CARD_PATCH_KEY: Record<string, string> = {
   access: 'reachableChannel',
-  buyingevidence: 'buyingSignal',
+  buyingEvidence: 'buyingSignal',
   offer: 'offerScope',
   acceptance: 'acceptanceCondition',
   delivery: 'deliveryMethod',
   fulfillment: 'fulfillmentOwner',
   economics: 'economicsNote',
-  cashdates: 'deadline',
-  nextaction: 'nextAction',
+  cashDates: 'deadline',
+  exposure: 'peakFundingCents',
+  price: 'priceCents',
 };
 
 /**
@@ -1536,8 +1512,10 @@ function BestOpportunities({
                   <p className="rs-decision-why">{placement.because}</p>
                 )}
                 <EngineCard
+                  opportunityId={placement.opportunity.id}
                   card={plan.engineCards?.[placement.opportunity.id]}
                   economics={plan.economics?.[placement.opportunity.id] ?? []}
+                  onChanged={onChanged}
                 />
                 <Actions
                   placement={placement}
@@ -1717,8 +1695,10 @@ function CurrentWork({
                   * portfolio down over a card.
                   */}
                 <EngineCard
+                  opportunityId={placement.opportunity.id}
                   card={plan.engineCards?.[placement.opportunity.id]}
                   economics={plan.economics?.[placement.opportunity.id] ?? []}
+                  onChanged={onChanged}
                 />
                 <Actions
                   placement={placement}
@@ -1754,13 +1734,21 @@ const ENGINE_KIND_LABEL: Record<string, string> = {
 };
 
 function EngineCard({
+  opportunityId,
   card,
   economics,
+  onChanged,
 }: {
+  opportunityId: string;
   card: EngineCardView | undefined;
   economics: DerivedFigureView[];
+  onChanged(): void;
 }): JSX.Element | null {
   const [open, setOpen] = useState(false);
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [said, setSaid] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   if (!card) return null;
 
   const answered = card.entries.filter((entry) => entry.value !== null);
@@ -1773,6 +1761,7 @@ function EngineCard({
         {unknown.length} still unknown
         {card.validationState ? ` · deep dive ${card.validationState}` : ' · no deep dive yet'}
       </button>
+      {note ? <p className="rs-hint">{note}</p> : null}
       {open ? (
         <>
           <ul className="rs-list rs-sublist">
@@ -1782,7 +1771,80 @@ function EngineCard({
                   {entry.label} <span className="rs-badge">{ENGINE_KIND_LABEL[entry.kind]}</span>
                 </p>
                 {entry.value === null ? (
-                  <p className="rs-item-meta">{entry.task}</p>
+                  <>
+                    <p className="rs-item-meta">{entry.task}</p>
+                    {/*
+                      * The one place a person can answer a question the card
+                      * asks.
+                      *
+                      * Twelve of these have no column — they are
+                      * `cash_card_facts` rows — so until this existed the
+                      * bounded deep dive was the only thing that could answer
+                      * one, and the tier requires them. A person who knows
+                      * what a job pays had nowhere to say so. `fillCard`
+                      * records it as a `PERSON` fact, so `mayReplace` keeps
+                      * it above anything automatic.
+                      */}
+                    {answering === entry.key ? (
+                      <>
+                        <label
+                          className="rs-field-label"
+                          htmlFor={`cash-engine-${opportunityId}-${entry.key}`}
+                        >
+                          {entry.label}
+                        </label>
+                        <input
+                          id={`cash-engine-${opportunityId}-${entry.key}`}
+                          value={said}
+                          onChange={(event) => setSaid(event.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="rs-button-quiet"
+                          disabled={busy || said.trim().length === 0}
+                          onClick={() => {
+                            setBusy(true);
+                            setNote(null);
+                            const key = CARD_PATCH_KEY[entry.key] ?? entry.key;
+                            void CashApi.fillCard(opportunityId, { [key]: said.trim() })
+                              .then(() => {
+                                setNote(
+                                  'Answered. It is yours now, so Brain will not propose over it.',
+                                );
+                                setAnswering(null);
+                                setSaid('');
+                                onChanged();
+                              })
+                              .catch((error: unknown) => {
+                                setNote(error instanceof Error ? error.message : 'That did not save.');
+                              })
+                              .finally(() => setBusy(false));
+                          }}
+                        >
+                          {busy ? 'Saving…' : 'Confirm'}
+                        </button>
+                        <button
+                          type="button"
+                          className="rs-linklike"
+                          onClick={() => setAnswering(null)}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="rs-linklike"
+                        onClick={() => {
+                          setAnswering(entry.key);
+                          setSaid('');
+                          setNote(null);
+                        }}
+                      >
+                        Answer the {entry.label.toLowerCase()}
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <p className="rs-decision-why">{entry.value}</p>
                 )}

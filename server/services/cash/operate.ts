@@ -61,7 +61,7 @@ import { readCapability, needForCapability } from './capabilities.ts';
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
 import { evidenceCard } from './card.ts';
 import { cashEngineCard } from './engineCard.ts';
-import { cashTier } from './tier.ts';
+import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
@@ -235,15 +235,33 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * — a named payer and something to supply them — which is exactly the
      * point at which spending more on the piece is justified.
      */
+    const card = evidenceCard(opportunity);
     const reading = cashTier({
       opportunity,
       card: cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
-      readiness: evidenceCard(opportunity).readiness,
+      readiness: card.readiness,
     });
-    if (reading.tier === 'SIGNAL') continue;
+    /*
+     * A signal is asked only the questions that could stop it being one.
+     *
+     * `captureMechanism` is composed from a payer, an offer and a route, so
+     * those are the questions worth spending on while nothing says anybody
+     * would pay us. Everything else on the card asks what a *decision* turns
+     * on, and there is no decision to make about a published price list —
+     * production held thirty-one of them, and asking all seven of each would
+     * have been two hundred questions about what to charge for somebody
+     * else's product.
+     *
+     * Skipping a signal *entirely* was the first version and was one bound too
+     * many: it left the payer unasked, which is the single question that could
+     * have moved the piece.
+     */
+    const asking =
+      reading.tier === 'SIGNAL'
+        ? card.fields.filter((one) => (CAPTURE_INPUTS as readonly string[]).includes(one.key))
+        : card.fields;
 
-    const card = evidenceCard(opportunity);
-    for (const field of card.fields) {
+    for (const field of asking) {
       if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
       const key = questionKey(opportunity.id, field.key);
       if (keys.has(key)) continue;
