@@ -339,6 +339,45 @@ export async function binAdmission(input: {
       if (!lineage.ok) return { ok: false, reason: lineage.reason ?? 'not independent of the work' };
     }
 
+    /*
+     * A blueprint audit is refused to the session that produced the reading.
+     *
+     * The same guard as the factory review directly above, at the third kind of
+     * work that needs it, and deliberately written as its own branch rather than
+     * folded into that one: the two resolve *what the reviewer must be separate
+     * from* through entirely different rows — a campaign's implementing sessions
+     * there, a source's extraction bin here — and a shared branch would have to
+     * take the union of both, which is a wider refusal than either rule states.
+     *
+     * The session is preferred from what the worker reported and falls back to
+     * Brain's own dispatch row, exactly as the review does and for the same
+     * reason: `session_ref` is optional on `brain_check_in`, and a worker that
+     * omits it must not be silently refused every audit with nothing anywhere
+     * naming why.
+     */
+    if (bin.kind === 'CAPABILITY_AUDIT') {
+      const { capabilityAuditLineage, extractionBinForAudit } = await import(
+        '../capability/independence.ts'
+      );
+      const reportedSession =
+        input.sessionRef ?? (await dispatchedSessionForBin(bin.id, bin.leaseGeneration));
+      const lineage = await capabilityAuditLineage({
+        extractionBinId: await extractionBinForAudit(bin.id),
+        reviewer: { sessionId: reportedSession, workerId: input.workerId },
+      });
+      if (!lineage.ok) {
+        return {
+          ok: false,
+          reason: lineage.reason ?? 'not independent of the reading it would judge',
+          // The refusal is about *which session turned up*, and that has an
+          // expiry: the connector's access token bounds when a distinct session
+          // can first exist. The ladder is untouched and only clamped to it, so
+          // Brain stops waiting longer than the answer is true for.
+          retryNotLaterThan: await distinctSessionPossibleAt(input.principal.credentialId),
+        };
+      }
+    }
+
     const now = new Date().toISOString();
     const items = await listWorkItemsForBin(confinementFor(bin));
     const claimable = items.filter(

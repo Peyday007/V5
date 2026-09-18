@@ -5207,6 +5207,122 @@ rather than as a list of things it might be — `NEEDS_HUMAN` over a filed, audi
 report whose judge asked for more and whose repair ladder is spent, which is the
 honest outcome and not a packet that talked itself into "complete".
 
+## 36. A definition is not an implementation, and Brain must never say it is.
+
+The self-expansion kernel (`server/services/capability/`,
+`server/services/selfmodel/`, `server/services/realize/`,
+`docs/CAPABILITY-KERNEL.md`) lets Brain hold a capability blueprint, say
+honestly how far it has got with it, and tell a sentence in a document from a
+mechanism that runs. Everything it adds is a new *entrance* to machinery Steps 4
+to 12C already built — bins, leases, fencing, the dispatcher, the evidence gate,
+the Factory's own approve-and-start — and none of it is a second set of rules.
+
+- **Six dimensions and no seventh.** The tempting shape is one `status` column
+  walking from "we wrote it down" to "it works". It is wrong at every value in
+  between and nobody can say which part is wrong. So definition, contract,
+  implementation, evaluation, availability and freshness are independent, each
+  moved by a different kind of evidence, and there is **no aggregate anywhere** —
+  no percentage, no rollup, no `isComplete`. The moment one exists every reader
+  uses it and the six become decoration; `describeFaculty` composes a sentence
+  out of all six instead.
+- **Ingesting a document may move exactly one of them.** `assertIngestionScope`
+  refuses the rest and a test holds it. A Brain that read a document about
+  Research Intelligence and then reported Research Intelligence as implemented
+  would be lying in the most expensive available direction: it would stop the
+  very work the document exists to start.
+- **Nothing canonical arrives without passing through a candidate.** A worker
+  reads the source and proposes; deterministic validation and an independent
+  audit are what move one across. There is no `createFaculty` beside
+  `promoteCandidate`, so that is a property of there being no other function
+  rather than a convention somebody follows — §8 at a new artifact.
+- **Every canonical statement traces to a passage.** Brain declares the bin's
+  units from the document's own `HEADING` blocks, so coverage is a question
+  about rows rather than about a summary, and a definition's quote must be
+  locatable in the extracted text — the page comes from the block Brain found it
+  in, never from the model, exactly as `findings.ts` already does it. A
+  definition filed under the wrong section is refused rather than reconciled:
+  §25's Westbrook defect at a section number.
+- **An amendment is a source, not an edit, and it is carried rather than
+  extracted.** The original keeps its bytes and its hash. Running it found the
+  correction: the Faculty 14 clarification registered cleanly, extracted
+  cleanly, and was marked FAILED for "declaring no sections this kernel
+  recognises" — a correct statement about a blueprint and a category error about
+  an amendment. An amendment does not define faculties; it changes what one of
+  them means, and the document it changes is the one with the numbering.
+- **The audit is independent by recorded lineage, the third kind of work in this
+  codebase to need that sentence.** The session comes from Brain's own
+  `bin_dispatch` row, never from what a worker says about itself, and the
+  credential is deliberately *not* compared — it is per-connector rather than
+  per-session, so comparing it would make every reviewer identical to every
+  extractor and refuse every audit for ever. Unknown lineage fails closed.
+- **Do not infer deployment or live behaviour from code existence.** The
+  self-model answers seven levels with three answers each, because `NO` is a
+  reading and `UNKNOWN` is the absence of one (§30's distinction, at a new
+  table). A module on disk reads UNKNOWN-connected, because whether anything
+  imports it is a static fact a running process cannot establish about itself —
+  §24's `reconcileAcceptedFragment` and §27's `reconcileRepairs` were both
+  exactly that, and neither would have been visible to a runtime check. A
+  migration file and a migration applied are two facts. A contract with no
+  evaluator reads as declared and unreachable. A suite reads as existing and
+  says nothing about whether it passes. Evaluation coverage is unreadable from a
+  deployment at all, because the image copies `server` and `client` and nothing
+  else.
+- **A scan decides nothing.** Nothing in `services/selfmodel/` queues work,
+  promotes a faculty or fires a surface, and a test holds five other tables'
+  counts across one. A self-model that acted on what it saw would be a control
+  loop whose input is its own output, and the first wrong reading would become a
+  decision.
+- **"Nothing matched" never becomes "this must be built."** The gap calculus
+  derives four kinds and refuses four, and the two sets are constants a test
+  holds. The matcher is one long non-stopword token a component's own name
+  contains; everything else is `NEEDS_A_READING` with the reason. A matcher that
+  tried harder would produce confident wrong answers, and missing a match costs
+  a reading while inventing one tells somebody a thing exists. A requirement
+  naming permission, authority, approval, consent, a credential or spending goes
+  to a person **whatever machinery matched it**.
+- **Most gaps are not research.** Exactly one kind is a question about the
+  world. Implementation, a person's decision, wiring and a reading are all real
+  gaps with real remedies, and every kind has a named remedy so a gap can never
+  be reported as real with nothing to do about it. The archive is asked first
+  through `coverBeforeWork` **reused whole** — a second copy would eventually
+  disagree with the first about what counts as answered.
+- **A compiled contract carries its gap id in every clause**, so a reviewer
+  walks back from a condition to the requirement, the definition, the candidate,
+  the quote and the block. It refuses a packet that is not decision-ready, never
+  chooses the repository — which repository a project may change is an
+  authorization in rows a person wrote — and **starts nothing**: approving is a
+  person's decision through the same `approveAndStartCampaign` every other
+  entrance uses.
+- **Two non-goals are added to every compiled contract**, both refusals of ways
+  a campaign could look finished without being it: a registry dimension moves
+  because code ran and was evaluated, never because something merged; and a new
+  mechanism is an entrance to existing machinery rather than a parallel universe
+  beside it.
+
+**`GENERAL` was expressible only as the absence of a class, and running the
+kernel is what found it.** `classesForFamilies` gave the GENERAL family
+`{ prefixes: [], allowsNull: true }`, so a bin declaring `GENERAL_…` matched
+nothing and the assigner answered `NO_READY_BINS` with the bin READY, the worker
+scoped and every row correct. It is a prefix now as well as the absence of one;
+null still means GENERAL, because rows written before `workload_class` existed
+carry none.
+
+**And the architecture scope was created with no layer**, on the strength of the
+blueprint document's own layer-lessness — which is a fact about the *document*
+(§11: a project source has `layer_id = NULL` on purpose) and not about the
+project. §30 records the identical defect one section along: a project with no
+layer can open work and launch nothing, for ever, with every row reading
+healthy.
+
+**What is true of this kernel today, said plainly.** Thirteen faculties are
+canonically defined from the real blueprint, each anchored to a named block in
+its extracted text, after an audit that refused two of fifteen with its reasons
+kept. **No faculty is implemented**, every one reports `ABSENT` and `UNTESTED`,
+and nothing here can move either. Nothing has been deployed, so no fired Routine
+has read a blueprint. No change request has been compiled, because the Research
+Intelligence packet correctly refuses on its remaining person clause.
+
+
 ---
 
 ## Repository map
@@ -5249,6 +5365,7 @@ server/
     cashLock.ts       where two cash decisions stop being concurrent
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
+    faculties.ts      sources, candidates, faculties and their typed edges
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
     capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
@@ -5361,6 +5478,22 @@ server/
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
       readiness.ts      four people and four surfaces, counted from rows
+    capability/
+      ingest.ts         a blueprint becomes a registered, readable source
+      sections.ts       the sections a document declares, from its own headings
+      extraction.ts     the bin, the validation, the audit, the promotion
+      independence.ts   a reading is not audited by the session that produced it
+      reader.ts         the identity a reading is submitted under; it grants no tier
+    selfmodel/
+      levels.ts         seven kinds of evidence, three answers each
+      observe.ts        what Brain can honestly read about itself, from here
+      scan.ts           taking a reading, and noticing that one changed
+      refresh.ts        when the reading stopped being about this system
+    realize/
+      gaps.ts           what Brain derives, and the four kinds it refuses to
+      packet.ts         the ten-section packet, versioned, as living state
+      director.ts       what to research, and when to stop — with the reason
+      compile.ts        the change request a decision-ready packet implies
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning
@@ -5477,8 +5610,10 @@ client/                 React UI
   src/russell/Search.tsx one search over everything this person may see
   src/russell/design.css the Step 12B design system: tokens, container reflow, both themes
   src/App.tsx           the legacy console, at /legacy
+docs/capability/        the blueprint and its amendments, preserved with their hashes
 objectives/             software objectives a person approved, in the image by design
 scripts/
+  capability.ts             the kernel's operator surface: register, advance, derive
   factory.ts                the operator's factory surface: register, submit, run
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
@@ -5490,6 +5625,11 @@ scripts/
 tests/                  Vitest suites
   researchIntelligence.test.ts   the judgement layer, in three unrelated domains
   researchIntelligencePass.test.ts  one campaign, walked, with only the world simulated
+  capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
+  systemSelfModel.test.ts    what a reading may claim, and the seven it may not
+  realizationPacket.test.ts  derive what is readable; refuse to guess the rest
+  capabilityDirector.test.ts most gaps are not research, and the archive comes first
+  capabilityCompile.test.ts  every clause traces to a gap, and it starts nothing
   step12bProduct.test.ts     the product decisions, where they are decided
   step12bResponsive.test.ts  the widths that were clipping, and why they no longer do
   cashMode.test.ts           the lifecycle, and the off switch that is not the Brain's
