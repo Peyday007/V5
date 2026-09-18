@@ -2756,6 +2756,25 @@ remote.
   for the reason directly above: the image is live, and a re-deploy restarts a
   Brain holding leased work to re-prove something the pre-restart run already
   proved.
+
+  **It happened again on the very next deploy, which makes it reproducible
+  rather than a bad minute.** Run 253, `beafc06`: release success,
+  `HOSTED-VERIFICATION: PASS 198/198` on the released image, then the same
+  `failed to wait for health checks to pass: context deadline exceeded` and
+  exit 126 at 07:41:57 — and the next step answering **`healthy again after 2
+  attempt(s)`** at 07:43:20, eighty-three seconds later. Twice in a row, on two
+  different trees, with the machine healthy both times shortly afterwards.
+
+  So this is no longer a reading about one run: **`flyctl apps restart`'s
+  health-check wait is shorter than this machine's cold start**, and every
+  deploy now ends `after the restart: skipped` — which means nobody is getting
+  the post-restart verification at all. That is the erosion worth naming: the
+  gate is not failing, it is not running, and a gate that never runs stops
+  being evidence long before anybody notices. The remedy is in the workflow's
+  own restart step rather than in the application, and it is deliberately left
+  to whoever is editing `deploy.yml` — §28's file is the one place two
+  workstreams editing at once has already cost this repository twice, and a
+  second opinion about a timeout is not worth a third.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
