@@ -76,7 +76,7 @@ import {
 } from './fire.ts';
 import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
 import { routeBin } from './router.ts';
-import { OPERATOR_RESOLVED_ROUTING_REFUSALS, waitsForOperator } from './router.ts';
+import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator } from './router.ts';
 import { markDispatchRoutine } from '../../repos/bins.ts';
 import { claimRoutineFireSlot, recordAccountRefusal, recordRoutineFire, setRoutineState } from '../../repos/fleet.ts';
 
@@ -368,9 +368,24 @@ export async function dispatchTick(
           : retryAfterMs,
       });
       result.deferred += 1;
-      // Every intent in this burst faces the same fleet, so walking the rest of
-      // them into the same refusal spends nothing but time.
-      break;
+      /*
+       * Only a *fleet-wide* refusal ends the burst.
+       *
+       * This used to `break` on every one of them, justified as "every intent in
+       * this burst faces the same fleet". That holds for three refusals —
+       * nothing registered, the operator paused everything, the fleet ceiling is
+       * reached — and for none of the others, because the candidate list is
+       * filtered by **this bin's** project, family, repository, capabilities and
+       * pin before any of them is reached, and targets differ per account.
+       *
+       * The cost of getting it wrong is the thing a pool exists to prevent: one
+       * FACTORY bin whose surfaces are all busy ended the tick, so the research
+       * bins behind it were never considered — and the reverse. `refusalEndsBurst`
+       * is the classification, beside the union it classifies, for the reason
+       * `REFUSAL_WAIT` is.
+       */
+      if (refusalEndsBurst(decision.refusal)) break;
+      continue;
     }
 
     const target = decision?.ok
@@ -577,7 +592,38 @@ export async function dispatchTick(
       await markDispatchFailed(intent.id, {
         kind: outcome.kind,
         message: outcome.message,
-        retryAfterMs: surfaceSpecific ? 30_000 : 24 * 60 * 60 * 1000,
+        /*
+         * No wait at all for a surface's own refusal, and that is the
+         * difference between failover and a queue of thirty-second walls.
+         *
+         * The comment above says the backoff is short "because the thing that
+         * refused has just been taken out of routing". Thirty seconds was not
+         * short, it was arbitrary: there is nothing to wait *for*. The surface
+         * is quarantined in the statement above, so the very next routing
+         * decision for this intent is a different surface, and with a pool of
+         * five stale tokens the old value made a bin wait two and a half
+         * minutes to discover something Brain already knew.
+         *
+         * It cannot spin. Reaching here at all requires a surface Brain chose,
+         * and every arrival here removes one from routing, so the sequence is
+         * bounded by the fleet — and ends at `ALL_SURFACES_INELIGIBLE`, which
+         * is fleet-wide and stops the burst. The `burst` counter bounds it
+         * again either way.
+         */
+        retryAfterMs: surfaceSpecific ? 0 : 24 * 60 * 60 * 1000,
+        /*
+         * The bin is not charged for a surface's refusal.
+         *
+         * The Routine has just been quarantined two statements above, so it is
+         * out of routing and the next decision is a different surface. Charging
+         * the bin would mean a pool of five accounts can retire a perfectly good
+         * bin with five stale tokens — §23's "a refusal is not misconduct", one
+         * row along, about the bin rather than the surface.
+         *
+         * `NOT_CONFIGURED` still charges: it means there is no trigger at all,
+         * which is not a fact about a surface Brain chose.
+         */
+        refundAttempt: surfaceSpecific,
       });
       result.failed += 1;
       if (surfaceSpecific) continue;
@@ -591,6 +637,13 @@ export async function dispatchTick(
       kind: outcome.kind,
       message: outcome.message,
       retryAfterMs: outcome.retryAfterMs,
+      /*
+       * A retryable refusal from a surface Brain chose — a rate limit, a 5xx, a
+       * network error. The refusal is recorded against that Routine and the next
+       * routing decision skips it, so the bin has lost nothing but time and must
+       * not lose an attempt as well.
+       */
+      refundAttempt: decision?.ok === true,
     });
     result.failed += 1;
     /*
