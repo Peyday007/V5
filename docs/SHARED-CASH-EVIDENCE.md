@@ -291,8 +291,20 @@ Routine.
   `trigger_ref IS NULL` now, and a different id is refused before anything is
   written.
 - `sendProbe` created the bin and swapped the state afterwards, so two
-  concurrent presses built two bins. **Claim, then act**: the regression test
-  reports `expected 2 to be 1` against the old order.
+  concurrent presses built two bins.
+
+The replacement for the second one was **also wrong, and only Postgres could say
+so**. It claimed the state — `WHERE state = ?`, with `?` the state the caller
+had just read — which passes on SQLite because writers are serialized there, and
+fails on Postgres because the second caller reads `PROBE_SENT` and then claims
+`WHERE state = 'PROBE_SENT'`: the state it was claiming into. The CI Postgres
+suite reported `expected 2 to be 1` on a tree whose SQLite suite was green.
+
+What is claimed now is `probe_bin_id IS NULL` — the one value that means nobody
+holds this yet and is never what a winner leaves behind — and the bin is made as
+a **DRAFT** (`DISPATCHABLE_SQL` does not select one) so a loser retires a bin
+that was never dispatchable. Verified both directions on a real local cluster:
+the rejected version fails there, this one passes there and on SQLite.
 
 ---
 

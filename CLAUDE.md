@@ -4278,6 +4278,41 @@ forgot to call something. Every move is a compare-and-swap naming the state it
 came from, and nothing moves a proven surface backwards — the chain that proved
 it is history, and history does not stop having happened.
 
+**And one was found by the second backend and by nothing else, which is the
+third time that has happened and the clearest instance of it yet.** §25 makes
+the argument in one line — *a repository layer over two databases is true or
+merely compiling, and only one of the two can tell you which* — and it had
+applied to a missing column and a missing identity column. This time it applied
+to a **guard**.
+
+The probe claim was `UPDATE … SET state = 'PROBE_SENT' WHERE state = ?`, with
+`?` the state the caller had just read. On SQLite writers are serialized, so the
+second caller's read always saw `CONFIGURED` and its claim matched nothing once
+the first had moved the row. On Postgres the round trips are slow enough that
+the second caller reads `PROBE_SENT` — and then claims `WHERE state =
+'PROBE_SENT'`, which is the state it was claiming *into*. **A guard satisfied by
+the thing it guards against is not a guard**, and a suite that only ever
+serializes its writers cannot show you that.
+
+What is claimed now is `probe_bin_id IS NULL`: the one value that means nobody
+holds this yet and is never what a winner leaves behind. The bin is made as a
+**DRAFT**, which `DISPATCHABLE_SQL` does not select, so it cannot be fired; only
+the winner's is marked READY and the loser retires one that was never
+dispatchable. That closes the window rather than narrowing it, and it is §20's
+reconcilable-effect shape rather than claim-then-act — available here **only**
+because the effect is Brain's own row. A DRAFT bin can be given back; an
+external effect cannot, which is why this is not a general licence to act before
+claiming.
+
+Two things about how it was fixed are worth more than the fix. It was the
+**second** wrong answer at that one guard, so the third attempt was made against
+a real local cluster rather than against an argument — and the rejected version
+was run there first, to see it fail, before the replacement was run to see it
+pass. And the loser's bin is **retired rather than deleted** (§5), so the
+assertion had to move with it: it counts what is *dispatchable* and checks the
+retired one was never READY, because a row count would have been satisfied by
+destroying the evidence.
+
 **And one defect in this work was found by re-reading the diff rather than by a
 test, which is recorded rather than quietly fixed.** The shared projection first
 reused `placements()` and handed it `deployableCents: 0`, so a qualified piece
