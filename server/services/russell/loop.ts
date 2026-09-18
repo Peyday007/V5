@@ -142,6 +142,9 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 /** How often the loop wakes when nothing else has woken it. */
 export const RUSSELL_TICK_MS = 30_000;
 
+import { advanceSources } from '../capability/extraction.ts';
+import { scanIfStale } from '../selfmodel/refresh.ts';
+
 export interface TickReport {
   ran: boolean;
   /** Why it did not run, when it did not. An ordinary outcome, not an error. */
@@ -168,6 +171,24 @@ export interface TickReport {
    * about. Never the same outcome, because they do not mean the same thing.
    */
   integrityReopens: { resolved: string[]; superseded: string[] };
+  /**
+   * The self-expansion kernel's own advance, fleet-wide.
+   *
+   * Beside the other reconciliations here for the same reason they are: it is
+   * derived from rows, it reaches whatever is already stranded, and it survives
+   * a tick that died halfway. Without it `advanceSources` would run only when
+   * an operator typed a command — which is the *mechanism nothing calls* defect
+   * this file records five times, committed a sixth.
+   */
+  capability: {
+    dispatched: number;
+    settled: number;
+    audited: number;
+    promoted: number;
+    recovered: number;
+    /** Set when the self-model was re-read because the last one had gone stale. */
+    selfModelDrift: number | null;
+  };
   /**
    * Ideas the project's own archive already answered, judged and parked without
    * anything being dispatched. §13's default outcome, and the cheapest one.
@@ -392,6 +413,14 @@ const EMPTY: TickReport = {
   wroteBack: [],
   recovered: [],
   integrityReopens: { resolved: [], superseded: [] },
+  capability: {
+    dispatched: 0,
+    settled: 0,
+    audited: 0,
+    promoted: 0,
+    recovered: 0,
+    selfModelDrift: null,
+  },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -681,6 +710,55 @@ export async function tick(owner: string): Promise<TickReport> {
         await listOpenReopens(cycle.maxEventsPerCycle),
       );
       report.integrityReopens = settled;
+    }
+
+    /*
+     * 1a-iv-d. Advance the self-expansion kernel, fleet-wide.
+     *
+     * A registered blueprint waiting for its extraction bin, a finished bin
+     * waiting to be validated, a validated reading waiting for its audit and an
+     * audited one waiting to be promoted are four states nothing else moves.
+     * Every one of them is derived from rows — `advanceSources` reads states
+     * and bin outcomes and creates only what those imply — so it is safe here
+     * for the reason `reconcileTerminalPackets` is: it reaches what is already
+     * stranded, and a tick that dies halfway leaves nothing to clean up.
+     *
+     * It is deliberately fleet-wide rather than per-project. A capability
+     * blueprint describes Brain rather than somebody's work, which is why its
+     * registry is not project-scoped either.
+     *
+     * Failures are swallowed rather than allowed to end the tick. A kernel that
+     * could not advance must not stop Russell writing back a mission or
+     * reconciling a stranded lease — it is a reading about Brain, never a
+     * precondition of Brain.
+     */
+    try {
+      const advanced = await advanceSources();
+      report.capability.dispatched = advanced.dispatched;
+      report.capability.settled = advanced.settled;
+      report.capability.audited = advanced.audited;
+      report.capability.promoted = advanced.promoted;
+      report.capability.recovered = advanced.recovered;
+    } catch {
+      /* a kernel that could not advance is left exactly as it was */
+    }
+
+    /*
+     * And the self-model, when the last reading has stopped being about this
+     * system.
+     *
+     * `scanIfStale` answers null on nearly every tick, which is what makes it
+     * safe here: it compares the running revision and the applied schema
+     * against the last recorded reading and does nothing until one of them has
+     * moved or the floor has passed. Boot takes one too, a minute in; this is
+     * what keeps a long-running instance from carrying a reading taken before
+     * the last four migrations.
+     */
+    try {
+      const scan = await scanIfStale();
+      if (scan) report.capability.selfModelDrift = scan.drift.length;
+    } catch {
+      /* a reading that could not be taken is not a reason to stop the tick */
     }
 
     /*

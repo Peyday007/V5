@@ -33,6 +33,8 @@
  * it would stop the very work the document exists to start.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
@@ -1004,6 +1006,50 @@ describe('the capability kernel', () => {
       expect(report.recovered).toBe(1);
       // And it is handed out again in the same tick.
       expect(report.dispatched).toBe(1);
+    });
+  });
+
+  describe('something calls it', () => {
+    /*
+     * The correction this describe block exists for.
+     *
+     * `advanceSources` was written, tested and wired to nothing: the operator
+     * script called it and no tick did, so in a running Brain a registered
+     * blueprint would have sat at REGISTERED for ever with every row healthy.
+     * That is the *mechanism nothing calls* defect this repository records five
+     * times, committed a sixth — and the suite that proved the tick worked could
+     * not see it, because it called the tick directly.
+     *
+     * So this asserts the wiring rather than the function: the durable loop's
+     * own source has to reach it, and the report has to carry what it did.
+     */
+    it('is reached by the durable tick, and reports what it moved', () => {
+      const loop = fs.readFileSync(
+        path.join(process.cwd(), 'server/services/russell/loop.ts'),
+        'utf8',
+      );
+      expect(loop).toContain("from '../capability/extraction.ts'");
+      expect(loop).toContain('await advanceSources()');
+      // And the self-model beside it, so a long-running instance does not carry
+      // a reading taken before the last four migrations.
+      expect(loop).toContain("from '../selfmodel/refresh.ts'");
+      expect(loop).toContain('await scanIfStale()');
+      // Reported rather than silent: a tick that advanced the kernel and said
+      // nothing is one nobody can tell from a tick that did not.
+      expect(loop).toMatch(/report\.capability\.promoted/);
+    });
+
+    it('cannot stop the tick when it fails', () => {
+      const loop = fs.readFileSync(
+        path.join(process.cwd(), 'server/services/russell/loop.ts'),
+        'utf8',
+      );
+      // A kernel that could not advance must not stop Russell writing back a
+      // mission — it is a reading about Brain, never a precondition of Brain.
+      const advance = loop.slice(loop.indexOf('await advanceSources()'));
+      expect(advance.slice(0, 400)).toMatch(/} catch \{/);
+      const scan = loop.slice(loop.indexOf('await scanIfStale()'));
+      expect(scan.slice(0, 400)).toMatch(/} catch \{/);
     });
   });
 

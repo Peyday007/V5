@@ -5113,6 +5113,16 @@ healthy.
   one decision §27 reserves, and an absent line reads as *nothing to say about
   it* when the honest answer is *this is not mine to say*.
 
+**And the kernel was reachable by nothing but a shell command, which is the
+sixth time this file has had to write that sentence.** `advanceSources` was
+written, tested and called by the operator script alone, so in a running Brain a
+registered blueprint would have sat at `REGISTERED` for ever with every row
+healthy — and the suite that proved the tick worked could not see it, because it
+called the tick directly. It is on the durable loop now, fleet-wide beside the
+other reconciliations, with the self-model refresh next to it; a test asserts
+the loop's own source reaches both, and both are wrapped so a kernel that cannot
+advance never stops Russell writing back a mission.
+
 **What is true of this kernel today, said plainly.** Thirteen faculties are
 canonically defined from the real blueprint, each anchored to a named block in
 its extracted text, after an audit that refused two of fifteen with its reasons

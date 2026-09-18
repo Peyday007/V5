@@ -267,7 +267,25 @@ A command that changes nothing exits non-zero rather than printing success.
 
 ---
 
-## 9. What is not built, said plainly
+## 9. What calls it
+
+`services/russell/loop.ts` — Brain's own durable tick — advances the kernel
+fleet-wide on every pass, and re-reads the self-model when the last reading has
+stopped being about this system. Both are wrapped so a kernel that cannot
+advance never stops Russell writing back a mission: this is a reading *about*
+Brain, never a precondition of it.
+
+That wiring is a correction rather than a design. `advanceSources` was written,
+tested and reachable by nothing but the operator script — so in a running Brain
+a registered blueprint would have sat at `REGISTERED` for ever with every row
+healthy. It is the *mechanism nothing calls* defect this repository records five
+times, committed a sixth, and the suite that proved the tick worked could not
+see it because it called the tick directly. `capabilityKernel.test.ts` now
+asserts the loop's own source reaches it.
+
+---
+
+## 10. What is not built, said plainly
 
 - **No faculty is implemented.** Thirteen are canonically *defined*. Every one
   reports `implementation_state = ABSENT` and `evaluation_state = UNTESTED`, and
