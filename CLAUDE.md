@@ -4265,9 +4265,30 @@ from rows the moment it is set, with neither person repeating anything.
 **Reading either page performs no effect at all** — no enqueue, claim, replay,
 cancellation, registration, fire or credential mutation — and that is asserted
 against the queue, the bins and the fire counters rather than stated in a
-comment. The single write on a read path is the row that assigns a member their
-three names, which exists because a name that changed between two reads would be
-a name somebody had already pasted into Claude.
+comment.
+
+**Two things are written on those read paths, and saying so precisely is the
+point.** The connection row that assigns a member their three names, because a
+name that changed between two reads would be a name somebody had already pasted
+into Claude; and the connection's own `state`, reconciled against what the rows
+say. The second is a derivation rather than a hook, for the reason this
+repository has needed four times: it reaches the connections already stranded,
+survives a tick that died halfway, and cannot be missed by a code path that
+forgot to call something. Every move is a compare-and-swap naming the state it
+came from, and nothing moves a proven surface backwards — the chain that proved
+it is history, and history does not stop having happened.
+
+**And one defect in this work was found by re-reading the diff rather than by a
+test, which is recorded rather than quietly fixed.** The shared projection first
+reused `placements()` and handed it `deployableCents: 0`, so a qualified piece
+needing funding would have been described to every member, in Brain's own voice,
+as waiting on cash the operation might well have had. **A false figure is a
+worse leak than a true one**, because nobody reading it can tell it is wrong.
+The shared reason is derived from the piece's own state, its dependency and its
+card, and has no branch that can name a figure at all; the ranking is shared
+because `rank` orders on properties of the piece rather than of the account; and
+the owner's *disposition* is absent entirely, being a recommendation to whoever
+owns the job rather than a fact about the frontier.
 
 ---
 

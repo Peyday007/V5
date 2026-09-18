@@ -66,11 +66,10 @@
 import { listCashEvents } from '../../repos/cashMode.ts';
 import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { evidenceCard } from './card.ts';
-import { assemble } from './portfolio.ts';
+import { rank } from './portfolio.ts';
 import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { authorityFor } from './opportunities.ts';
 import type {
-  CashDisposition,
   CashMechanism,
   CashMode,
   CashOpportunity,
@@ -113,6 +112,53 @@ function availabilityOf(state: CashOpportunityState): SharedAvailability {
   }
 }
 
+/**
+ * Why a piece is where it is, in words that cannot mention money.
+ *
+ * `placements()` answers the same question for the owner and is deliberately
+ * **not** reused here, which is a correction worth recording rather than a
+ * preference. Its money branch composes a sentence out of `deployableCents`, so
+ * a shared caller would either have been handed the real balance or — as the
+ * first version of this file did — handed a zero, which is worse: the page
+ * would have stated, in Brain's own voice, that a qualified piece was waiting on
+ * cash the operation might well have. A false figure is a worse leak than a true
+ * one, because nobody can tell it is wrong.
+ *
+ * And a *disposition* is a recommendation to the job's owner rather than a fact
+ * about the frontier, so the shared view carries none at all. What crosses is
+ * where the piece is and what is holding it, and every branch below is derived
+ * from the piece's own state, its dependency and its card.
+ */
+function sharedBecause(
+  opportunity: CashOpportunity,
+  byId: Map<string, CashOpportunity>,
+  card: ReturnType<typeof evidenceCard>,
+): string {
+  if (opportunity.state === 'ARCHIVED') {
+    return opportunity.archivedReason ?? 'This was stopped.';
+  }
+  if (opportunity.state === 'DECLINED') {
+    return 'Somebody passed on this. It can be offered to somebody else.';
+  }
+  if (opportunity.state === 'COLLECTED') return 'The money for this is in.';
+  if (opportunity.state === 'EXECUTING' || opportunity.state === 'DELIVERING') {
+    return 'This is already under way.';
+  }
+  if (opportunity.dependsOnId) {
+    const parent = byId.get(opportunity.dependsOnId);
+    if (!parent) {
+      return 'This names a dependency that is not in this portfolio, so nothing can say whether it is settled.';
+    }
+    if (parent.state !== 'COLLECTED') {
+      return parent.state === 'ARCHIVED' || parent.state === 'DECLINED'
+        ? `"${parent.title}" is ${parent.state.toLowerCase()}, so what this waited on is not coming.`
+        : `This waits on "${parent.title}", which has not collected yet.`;
+    }
+  }
+  if (!card.readiness.ready) return card.readiness.summary;
+  return 'Every load-bearing question about this is answered. What happens to it next is a decision for whoever takes it on.';
+}
+
 export interface SharedOpportunity {
   id: string;
   title: string;
@@ -120,8 +166,13 @@ export interface SharedOpportunity {
   industry: string | null;
   state: CashOpportunityState;
   availability: SharedAvailability;
-  disposition: CashDisposition;
-  /** The server's own sentence for why it is where it is. Never composed here. */
+  /**
+   * What is holding it, in a sentence that cannot name a figure.
+   *
+   * See `sharedBecause`. The owner's `disposition` is deliberately absent: it is
+   * a recommendation to whoever owns the job rather than a fact about the
+   * frontier, and composing it needs the deployable balance.
+   */
   because: string;
   validationState: OpportunityValidationState | null;
   /**
@@ -197,29 +248,17 @@ export interface SharedCashView {
 export async function sharedCashView(input: { projectId: string }): Promise<SharedCashView> {
   const { mode, authority } = await authorityFor(input.projectId);
   const opportunities = await listOpportunities({ projectId: input.projectId });
+  const byId = new Map(opportunities.map((one) => [one.id, one]));
 
   /*
-   * The same assembly the owner's view uses, for its dispositions and its
-   * sentences.
-   *
-   * `deployableCents` is passed as zero and `maxConcurrent` from the grant,
-   * because neither number crosses: what is shared is *where each piece stands*
-   * and the reason, and `placements` composes both. Passing a real cash figure
-   * in would let a reader infer the balance from which pieces were said to be
-   * waiting on funding, which is the sort of leak a field-by-field review does
-   * not catch.
+   * The owner's own ranking, which is money-free: `rank` orders on buying
+   * evidence, time to cash, conservative contribution, funding *required*,
+   * effort and expiry — all properties of the piece rather than of the account.
+   * So the two screens agree about which openings matter most without the
+   * shared one being told what is in the bank.
    */
-  const plan = assemble({
-    opportunities,
-    deployableCents: 0,
-    maxConcurrent: authority?.maxConcurrent ?? 0,
-    discoveryOpen: mode?.state === 'ACTIVE',
-  });
-  const placementOf = new Map(plan.placements.map((one) => [one.opportunity.id, one]));
-
-  const shared: SharedOpportunity[] = opportunities.map((opportunity: CashOpportunity) => {
+  const shared: SharedOpportunity[] = rank(opportunities).map((opportunity: CashOpportunity) => {
     const card = evidenceCard(opportunity);
-    const placement = placementOf.get(opportunity.id);
     return {
       id: opportunity.id,
       title: opportunity.title,
@@ -227,8 +266,7 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
       industry: opportunity.industry,
       state: opportunity.state,
       availability: availabilityOf(opportunity.state),
-      disposition: placement?.disposition ?? 'ARCHIVED',
-      because: placement?.because ?? 'it is no longer part of the live portfolio.',
+      because: sharedBecause(opportunity, byId, card),
       validationState: opportunity.validationState,
       buyingSignal: opportunity.buyingSignal,
       signalObservedAt: opportunity.signalObservedAt,

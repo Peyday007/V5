@@ -496,6 +496,30 @@ describe('what a shared reader may never be handed', () => {
     expect(view.text).not.toMatch(/ownerUserId/);
   });
 
+  /**
+   * A false figure is a worse leak than a true one.
+   *
+   * The first version of the shared projection reused `placements()` and passed
+   * it `deployableCents: 0`, so a qualified piece needing funding would have
+   * been described — in Brain's own voice, to every member — as waiting on cash
+   * the operation might well have had. Nobody reading it could have told it was
+   * wrong. The shared reason is derived from the piece's own state, its
+   * dependency and its card, and has no branch that can name a figure.
+   */
+  it('never explains a piece by naming an amount it was not told', async () => {
+    const view = await call<{ opportunities: { because: string }[] }>('GET', CASH(), {
+      cookie: memberCookie,
+    });
+    for (const one of view.body.opportunities) {
+      expect(one.because, one.because).not.toMatch(/\bcents\b/);
+      expect(one.because, one.because).not.toMatch(/deployable/i);
+      expect(one.because, one.because).not.toMatch(/\d{3,}/);
+    }
+    // And no disposition at all: that is a recommendation to whoever owns the
+    // job rather than a fact about the frontier.
+    expect(view.text).not.toMatch(/"disposition"/);
+  });
+
   it('still resolves every claim to its own evidence', async () => {
     const view = await call<{
       opportunities: { sourceClaimId: string | null; qualification: { missing: string[] } }[];

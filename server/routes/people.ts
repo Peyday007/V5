@@ -44,12 +44,17 @@
  * What reading does
  * ---------------------------------------------------------------------------
  *
- * Nothing. No enqueue, no claim, no registration, no fire, no credential
- * mutation, no cancellation. `GET /api/people` is `listUsers`, `listEnrollments`,
- * `countLivePasskeys` and the dispatcher's own fleet snapshot, and the one thing
- * it writes is the row that assigns a member their three names — which is why
- * that is the only creation on a read path in this file and why it creates
- * nothing else.
+ * No enqueue, no claim, no registration, no fire, no credential mutation, no
+ * cancellation. `GET /api/people` is `listUsers`, `listEnrollments`,
+ * `countLivePasskeys` and the dispatcher's own fleet snapshot.
+ *
+ * Two things *are* written, and naming them exactly is better than a sentence
+ * that is nearly true. The connection row that assigns a member their three
+ * names, because a name that changed between two reads would be one somebody
+ * had already pasted into Claude. And that connection's `state`, reconciled
+ * against what the rows say — a derivation rather than a hook, so it reaches a
+ * connection already stranded and survives a tick that died halfway. Neither
+ * creates an account, a Routine, a worker, a credential or a bin.
  */
 import { Router } from 'express';
 import {
