@@ -4273,6 +4273,24 @@ and a suite that exercises the stage cannot see that.**
   a key answered by none of them is a compile-time-visible absence rather than
   a park somebody finds in production.
 
+- **An ordering that is true only sometimes is not an ordering, and the
+  release gate is what found it.** `outstandingClarification` decided that a
+  captured change answers an outstanding question with
+  `request.createdAt > refusal.at`, and both are ISO-8601 to the millisecond —
+  so a capture written in the *same* millisecond as the refusal it answers
+  compared as not-after, and the question stayed on screen after the person had
+  settled it. §29's status-contradicting-the-control defect, reached by nothing
+  but machine speed: it passed on two local full runs and failed in CI, which
+  is the whole tell.
+
+  The conversation's own order is the answer where both rows carry a message,
+  because `listTurns` is ordered and a request captured from a later turn is
+  unambiguously later. A capture with no message has only the clock, and there
+  `>=` is right rather than generous: **a refusal captured nothing**, so a
+  request at that same instant is necessarily a different and successful one.
+  The test forces the timestamps equal rather than racing for the collision,
+  because a test that hoped for it would be the same flake wearing a hat.
+
 - **A key is not a filename, and production filed nothing for a day because
   the two were answered by one function.** §33 gave the canonical name a
   variant so that four cash packets answering four different questions stopped
