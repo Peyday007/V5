@@ -50,6 +50,7 @@ import {
   settleAudit,
   settleExtraction,
 } from '../server/services/capability/extraction.ts';
+import { DEFINITION_KEYS, LIST_FIELDS } from '../server/domain/faculties.ts';
 import { scanSections, sectionUnitKey } from '../server/services/capability/sections.ts';
 import {
   getFacultyBySlug,
@@ -463,6 +464,32 @@ describe('the capability kernel', () => {
       // The worker is told what it may not do, and the list names the exact
       // over-reach this kernel exists to prevent.
       expect(bin?.manifest.prohibitedActions.join(' ')).toMatch(/implemented, evaluated/);
+    });
+
+    it('names every field the validator requires, so a worker is not guessing', async () => {
+      /*
+       * `validateFacultyDefinition` runs after the lease is gone, which is
+       * right: judging well-formedness inside the contract would charge an
+       * attempt against a worker whose *reading* was fine. The cost is that a
+       * worker which guesses the field names has its whole reading refused with
+       * nothing left to correct it with, having done the work — §27's own
+       * sentence, at a manifest: a contract that does not say what it takes
+       * refuses work and says nothing.
+       *
+       * So the assertion is against the validator's constants rather than
+       * against a copied list, because a copied list is the thing that drifts.
+       */
+      const { sourceId } = await registerFixture();
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      const bin = await getBin(binId);
+      const outputs = (bin?.manifest.outputs ?? []).join('\n');
+
+      for (const key of DEFINITION_KEYS) expect(outputs, key).toContain(key);
+      for (const field of LIST_FIELDS) expect(outputs, String(field)).toContain(String(field));
+      // And that the set is closed, because an unknown field refuses the whole
+      // candidate rather than being dropped.
+      expect(outputs).toMatch(/no others/);
+      expect(outputs).toMatch(/empty array/);
     });
 
     it('is handed out once, however many ticks read it', async () => {

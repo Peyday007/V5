@@ -215,7 +215,7 @@ const MAX_LIST_ITEM = 1_000;
 const MAX_CONNECTIONS = 40;
 
 /** The exact key set. Anything else refuses the candidate; see above. */
-const DEFINITION_KEYS: readonly string[] = [
+export const DEFINITION_KEYS: readonly string[] = [
   'slug',
   'ordinal',
   'canonicalName',
@@ -244,7 +244,7 @@ const CONNECTION_KEYS: readonly string[] = [
   'rationale',
 ];
 
-const LIST_FIELDS: readonly (keyof FacultyDefinition)[] = [
+export const LIST_FIELDS: readonly (keyof FacultyDefinition)[] = [
   'responsibilities',
   'boundaries',
   'inputs',

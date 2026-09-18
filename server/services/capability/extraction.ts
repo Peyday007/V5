@@ -61,8 +61,10 @@ import {
 } from '../../repos/faculties.ts';
 import {
   coverageProblems,
+  DEFINITION_KEYS,
   facultySlug,
   InvalidFacultyDefinition,
+  LIST_FIELDS,
   validateFacultyDefinition,
   type FacultyDefinition,
 } from '../../domain/faculties.ts';
@@ -314,6 +316,32 @@ export async function dispatchExtraction(sourceId: string): Promise<string | nul
       outputs: [
         'One unit result per declared unit key, whose value is a JSON object with a ' +
           '"definition" and a "quote".',
+        /*
+         * The definition's own shape, named.
+         *
+         * `validateFacultyDefinition` runs *after* the lease is gone — which is
+         * right, because judging well-formedness inside the contract would
+         * charge an attempt against a worker whose reading was fine. The cost
+         * of that is that a worker which guesses the field names has its whole
+         * reading refused with nothing left to correct it with, having done the
+         * work. §27 records the same shape one door along: a contract that does
+         * not say what it takes refuses work and says nothing.
+         *
+         * Composed from the constants the validator itself reads, so the
+         * instruction cannot drift from what judges it. An unknown field
+         * refuses the whole candidate, so the closed set is stated as closed.
+         */
+        'The "definition" object carries exactly these keys and no others, because an unknown ' +
+          `field refuses the whole candidate: ${DEFINITION_KEYS.join(', ')}.`,
+        '"canonicalName", "purpose" and "promisedPower" are required non-empty strings. ' +
+          '"centralQuestion" is a string or null. "ordinal" is the section number as a ' +
+          'non-negative integer, or null. "slug" is derived from the canonical name and is ' +
+          'ignored if you send one.',
+        `These are arrays of strings, each present even when the source gives it nothing, in ` +
+          `which case send an empty array rather than omitting it: ${LIST_FIELDS.join(', ')}.`,
+        '"connections" is an array of objects, each with "kind" and "faculty" — the related ' +
+          'faculty by its canonical name as the source writes it — and an optional "note". ' +
+          'Send an empty array when the section states none.',
       ],
       authorizedActions: [
         'reading the registered source document',
