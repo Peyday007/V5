@@ -1719,4 +1719,93 @@ describe('no Cash card asks a person to narrate Brain-owned work', () => {
     expect(wrote).toEqual([]);
     expect(calls.some((one) => one.includes('/needs/'))).toBe(false);
   });
+
+  /*
+   * Where the need went, and the sentence that went with it.
+   *
+   * The grouped-need card is deleted, so the only thing on this page that can
+   * say *why Brain is not simply looking this up* is the need's own entry
+   * under **What Brain needs**. `assessResearch` derives that sentence and
+   * `cashView` carries it as `researchStatus`; a projection nothing renders is
+   * the *mechanism nothing calls* defect one surface along, which is exactly
+   * how the sentence came to be derived and thrown away in the first place.
+   */
+  function need(over: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: 'cnd_1',
+      projectId: PROJECT,
+      opportunityId: 'cop_1',
+      blockedAction: 'Name the payer for "A paid intake repair"',
+      whyItMatters: 'It is a fact about the world rather than a decision of yours.',
+      recommendedPath: 'Read the organisation’s own pages.',
+      expectedCostCents: null,
+      setupEffort: 'One bounded look.',
+      nextStep: 'Name the role that signs.',
+      completionCondition: 'A payer is recorded.',
+      occurrence: 1,
+      verifiedBy: null,
+      blocksState: null,
+      candidateId: 'rcn_1',
+      requestKey: 'question:cop_1:payer',
+      continuedAt: null,
+      continuationNote: null,
+      state: 'OPEN',
+      resolution: null,
+      resolvedByUserId: null,
+      resolvedAt: null,
+      createdAt: '2026-09-15T00:00:00.000Z',
+      updatedAt: '2026-09-15T00:00:00.000Z',
+      researchStatus: null,
+      ...over,
+    };
+  }
+
+  it('prints the derived research status under a need whose research stalled', async () => {
+    const view_ = view() as Record<string, unknown>;
+    view_['whatBrainNeeds'] = [
+      need({
+        researchStatus:
+          'Brain captured the question and no mission has launched for it yet — most often ' +
+          'because the project has no standing research authority, or the sprint has wound down.',
+      }),
+    ];
+    base({ [VIEW]: { body: view_ } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    // The need is Brain's work, with the remedy it carries…
+    await waitFor(() =>
+      expect(screen.getAllByText(/Name the payer for/i).length).toBeGreaterThan(0),
+    );
+    // …and the reason that is true now rather than only the one stored when it
+    // was raised, which is what the deleted card had and this had not.
+    expect(
+      screen.getAllByText(/no mission has launched for it yet/i).length,
+    ).toBeGreaterThan(0);
+    // Still nothing to press: moving the sentence did not move a control.
+    expect(screen.queryByRole('button', { name: /mark this done/i })).toBeNull();
+  });
+
+  it('says nothing extra under a need whose research is simply running', async () => {
+    /*
+     * `null` is *running*, and a line reading "in progress" under work in
+     * progress tells a reader nothing — §30's rule that an unknown is never an
+     * assumption, in the direction where the honest answer is silence.
+     */
+    const view_ = view() as Record<string, unknown>;
+    view_['whatBrainNeeds'] = [need()];
+    base({ [VIEW]: { body: view_ } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    await waitFor(() =>
+      expect(screen.getAllByText(/Name the payer for/i).length).toBeGreaterThan(0),
+    );
+    expect(screen.queryByText(/no mission has launched/i)).toBeNull();
+    // The stored sentence is still the need's own and still shown; what is
+    // absent is a derived status that would have had to be invented.
+    expect(
+      screen.getAllByText(/a fact about the world rather than a decision of yours/i).length,
+    ).toBeGreaterThan(0);
+  });
 });
