@@ -22,6 +22,7 @@ import { listNeeds, listOpportunities } from '../../repos/cashPortfolio.ts';
 import { describeAuthority } from './authority.ts';
 import { evidenceCard } from './card.ts';
 import { cashEngineCard, derivedEconomics } from './engineCard.ts';
+import { cashTier, type TierReading } from './tier.ts';
 import type { DerivedFigure, EngineCard } from './engineCard.ts';
 import { assessResearch } from './answers.ts';
 import { cardFactsForProject } from '../../repos/cashCardFacts.ts';
@@ -169,8 +170,49 @@ export async function cashView(input: {
   const currency = mode?.currency ?? 'USD';
   const position = await cashPosition({ projectId: input.projectId, currency });
 
+  /*
+   * The tier per piece, composed once, here.
+   *
+   * It reads the engine card, which reads the recorded facts, so deriving it
+   * inside `placements` would make that pure function asynchronous and would
+   * read the same rows once per piece. The facts are loaded below for
+   * `provenance` anyway; this is the same rows read once and used by the
+   * ranking, the review, the placements and the page — which is what stops
+   * four readers disagreeing about whether something is an opportunity.
+   */
+  const provenance: CashView['myCurrentWork']['provenance'] = {};
+  for (const fact of await cardFactsForProject(input.projectId)) {
+    provenance[fact.opportunityId] = [...(provenance[fact.opportunityId] ?? []), fact];
+  }
+
+  const cards: CashView['myCurrentWork']['cards'] = {};
+  const engineCards: CashView['myCurrentWork']['engineCards'] = {};
+  const economics: CashView['myCurrentWork']['economics'] = {};
+  const tiers: Record<string, TierReading> = {};
+  for (const opportunity of opportunities) {
+    const card = evidenceCard(opportunity);
+    cards[opportunity.id] = {
+      ready: card.readiness.ready,
+      missing: card.readiness.missing.map(String),
+      summary: card.readiness.summary,
+    };
+    // The same facts `provenance` was built from, so this costs no query.
+    const engine = cashEngineCard({
+      opportunity,
+      facts: provenance[opportunity.id] ?? [],
+    });
+    engineCards[opportunity.id] = engine;
+    economics[opportunity.id] = derivedEconomics(engine);
+    tiers[opportunity.id] = cashTier({
+      opportunity,
+      card: engine,
+      readiness: card.readiness,
+    });
+  }
+
   const plan = assemble({
     opportunities,
+    tiers,
     deployableCents: position.deployableCents,
     // With no grant there is no authorized concurrency, which is the honest
     // answer rather than a default: the portfolio still assembles and every
@@ -191,30 +233,6 @@ export async function cashView(input: {
   const stalled = (await assessResearch(input.projectId))
     .filter((one) => one.state !== 'ANSWERED' && one.state !== 'RUNNING')
     .map((one) => one.need.id);
-
-  const provenance: CashView['myCurrentWork']['provenance'] = {};
-  for (const fact of await cardFactsForProject(input.projectId)) {
-    provenance[fact.opportunityId] = [...(provenance[fact.opportunityId] ?? []), fact];
-  }
-
-  const cards: CashView['myCurrentWork']['cards'] = {};
-  const engineCards: CashView['myCurrentWork']['engineCards'] = {};
-  const economics: CashView['myCurrentWork']['economics'] = {};
-  for (const opportunity of opportunities) {
-    const card = evidenceCard(opportunity);
-    cards[opportunity.id] = {
-      ready: card.readiness.ready,
-      missing: card.readiness.missing.map(String),
-      summary: card.readiness.summary,
-    };
-    // The same facts `provenance` was built from, so this costs no query.
-    const engine = cashEngineCard({
-      opportunity,
-      facts: provenance[opportunity.id] ?? [],
-    });
-    engineCards[opportunity.id] = engine;
-    economics[opportunity.id] = derivedEconomics(engine);
-  }
 
   const discovery =
     mode === null

@@ -21,6 +21,7 @@
  * every write, and by principal *type* at all of them including the reads.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { EXECUTION_THESIS } from './helpers/cashTier.ts';
 import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
@@ -377,6 +378,16 @@ describe('one account’s whole journey', () => {
           deliveryMethod: 'One afternoon of configuration',
           fulfillmentOwner: 'Us',
           peakFundingCents: 0,
+          /*
+           * And the execution thesis, in the same request.
+           *
+           * The twelve short-card fields are what a bounded *test* turns on;
+           * these are what a *decision* turns on, and `markReady` asks for
+           * both now. They have no column — they are `cash_card_facts` rows —
+           * so a person answering one over this route is the transition that
+           * keeps the bar from being a park.
+           */
+          ...EXECUTION_THESIS,
         },
       },
     );

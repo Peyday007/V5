@@ -5860,6 +5860,18 @@ export interface CashOpportunityRow {
   validation_state: string | null;
   validation_started_at: string | null;
   validation_settled_at: string | null;
+  /** How many bounded deep dives this piece has had. Null reads as one. */
+  validation_rounds: number | null;
+  /**
+   * What kind of opening the claim behind this established, kept on the piece.
+   *
+   * `mechanism` is derived from it and is lossy — two signals share one
+   * mechanism — and it is the *signal* that decides what this evidence proves
+   * and what it does not. See `services/cash/tier.ts`. Null for a piece
+   * captured by hand and for anything promoted before the column existed;
+   * `reconcileOpportunitySignals` fills the second case from the source claim.
+   */
+  opportunity_signal: string | null;
   payer: string | null;
   reachable_channel: string | null;
   buying_signal: string | null;
@@ -5955,6 +5967,10 @@ export interface CashOpportunity {
   validationState: OpportunityValidationState | null;
   validationStartedAt: string | null;
   validationSettledAt: string | null;
+  /** How many bounded deep dives this piece has had. One after the first. */
+  validationRounds: number;
+  /** What kind of opening its evidence establishes, or null where nothing said. */
+  opportunitySignal: OpportunitySignal | null;
   payer: string | null;
   reachableChannel: string | null;
   buyingSignal: string | null;

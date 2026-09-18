@@ -337,6 +337,8 @@ export interface TickReport {
     authorized: boolean;
     /** Ideas that had parked for want of it and are back in the ordinary queue. */
     resumed: string[];
+    /** Pieces whose kind of opening was read back from their own source claim. */
+    signalled: string[];
   }[];
   /**
    * What each sprint's operating pass did about what its pieces need.
@@ -941,7 +943,8 @@ export async function tick(owner: string): Promise<TickReport> {
           run.opened.length > 0 ||
           run.harvested.length > 0 ||
           run.authorized ||
-          run.resumed.length > 0
+          run.resumed.length > 0 ||
+          run.signalled.length > 0
         ) {
           report.cashDiscovery.push({
             projectId: project.id,
@@ -949,6 +952,7 @@ export async function tick(owner: string): Promise<TickReport> {
             harvested: run.harvested.map((one) => one.opportunity.id),
             authorized: run.authorized,
             resumed: run.resumed,
+            signalled: run.signalled,
           });
         }
       } catch {

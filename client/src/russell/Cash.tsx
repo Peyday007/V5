@@ -213,13 +213,26 @@ export function CashView_({
       </p>
       <p className="rs-hint">{data.discovery.reason}</p>
 
+      {/*
+        * The order is the order a person reads in, and it is a correction.
+        *
+        * It used to open with the decisions, then the whole money picture,
+        * then every money entry, then every piece in the portfolio with its
+        * full card, then every need, then the research table, then every
+        * event. In production that was thirty-one raw signals and five
+        * "decisions" standing for ninety-eight items before anything said what
+        * state the sprint was in.
+        *
+        * Now: where this stands, what to decide, what is worth doing, what the
+        * money is — and everything else behind a disclosure that is still one
+        * click away and still complete. Nothing was deleted; the first screen
+        * stopped being all of it.
+        */}
+      <Status view={data} />
       <Decisions view={data} projectId={rootId} onChanged={view.reload} />
-      <MoneyPicture view={data} />
-      <MyCash view={data} />
-      <CurrentWork view={data} onChanged={view.reload} />
-      <Needs view={data} />
-      <Roadmap view={data} />
-      <Done view={data} />
+      <BestOpportunities view={data} onChanged={view.reload} />
+      <MoneyRow view={data} />
+      <Details view={data} onChanged={view.reload} />
       {/*
         * People and capacity, on the running sprint.
         *
@@ -232,14 +245,22 @@ export function CashView_({
         * there is no second invitation path and nothing about enrollment
         * changed.
         */}
-      <section className="rs-card rs-cash-people">
-        <h3>People and capacity</h3>
+      <details className="rs-card rs-cash-people">
+        <summary>
+          <h3>People and capacity</h3>
+          <span className="rs-hint">
+            {known.readiness.members.ready} of {known.readiness.members.rows.length} people can
+            sign in · {known.readiness.capacity.eligibleSurfaces} execution{' '}
+            {known.readiness.capacity.eligibleSurfaces === 1 ? 'surface' : 'surfaces'} Brain can
+            fire
+          </span>
+        </summary>
         <p className="rs-hint">
           Counts, not gates. Anybody can be invited while the sprint runs, and a capacity
           account can be registered at any time; neither stops or starts the work below.
         </p>
         <ReadinessPanel readiness={known.readiness} isBrainAdmin={isBrainAdmin} />
-      </section>
+      </details>
       <Lifecycle projectId={rootId} state={data.mode.state} onChanged={view.reload} />
     </section>
   );
@@ -608,41 +629,15 @@ function DecisionAnswer({
         </>
       ) : null}
 
-      {asking && kind === 'FILL_CARD_FIELD' && opportunityId ? (
-        <>
-          <p className="rs-hint">
-            {item.answer.targets.length === 1
-              ? 'One card, one answer.'
-              : `These are ${item.answer.targets.length} separate answers of the same kind. ` +
-                'This answers the first; the rest are on their own cards.'}
-          </p>
-          <label className="rs-field-label" htmlFor={`cash-field-${item.key}`}>
-            {item.title}
-          </label>
-          <input
-            id={`cash-field-${item.key}`}
-            value={said}
-            onChange={(event) => setSaid(event.target.value)}
-          />
-          <button
-            type="button"
-            className="rs-button-quiet"
-            disabled={busy || said.trim().length === 0}
-            onClick={() =>
-              void run(async () => {
-                const field = item.key.replace(/^MISSING_/, '').toLowerCase();
-                await CashApi.fillCard(opportunityId, { [CARD_PATCH_KEY[field] ?? field]: said });
-                return 'Answered. It is yours now, so Brain will not propose over it.';
-              })
-            }
-          >
-            {busy ? 'Saving…' : 'Confirm'}
-          </button>
-          <button type="button" className="rs-linklike" onClick={() => setAsking(false)}>
-            Cancel
-          </button>
-        </>
-      ) : null}
+      {/*
+        * The `FILL_CARD_FIELD` branch was here and is deleted with the review
+        * section that produced it. Every field it could have offered is a fact
+        * Brain researches or a proposal Brain composes, so the server emits no
+        * such item any more and this arm was reachable by nothing.
+        *
+        * A person answering a card question is not gone — it moved to where
+        * the question is actually asked, on the card itself. See `EngineCard`.
+        */}
 
       {asking && kind === 'RECORD_MONEY' ? (
         <>
@@ -757,23 +752,25 @@ function DecisionAnswer({
 }
 
 /**
- * The patch key each review group's field is written under.
+ * The patch key each card field is written under.
  *
- * The review names a field by the card's own key and `fillCard` takes the view
- * type's name for it; they differ for exactly the fields where the column and
- * the concept are not the same word. Anything absent falls through as itself,
- * so a new field reaches the card without a second place to remember.
+ * The card names a field by its own key and `fillCard` takes the view type's
+ * name for it; they differ for exactly the fields where the column and the
+ * concept are not the same word. Anything absent falls through as itself — an
+ * `ENGINE_FIELDS` key has no column at all and is written under its own name,
+ * so a new one reaches the card without a second place to remember.
  */
 const CARD_PATCH_KEY: Record<string, string> = {
   access: 'reachableChannel',
-  buyingevidence: 'buyingSignal',
+  buyingEvidence: 'buyingSignal',
   offer: 'offerScope',
   acceptance: 'acceptanceCondition',
   delivery: 'deliveryMethod',
   fulfillment: 'fulfillmentOwner',
   economics: 'economicsNote',
-  cashdates: 'deadline',
-  nextaction: 'nextAction',
+  cashDates: 'deadline',
+  exposure: 'peakFundingCents',
+  price: 'priceCents',
 };
 
 /**
@@ -1354,6 +1351,304 @@ function MyCash({ view }: { view: CashView }): JSX.Element {
  * Every piece carries its disposition and the server's own sentence saying what
  * decided it, so "waiting" always names what it is waiting for.
  */
+/**
+ * Where this sprint stands, in one screen.
+ *
+ * Seven counts and two sentences, and every one of them is a row the server
+ * already derived. It exists because the page had no such screen: a person
+ * arriving at it met thirty-one raw signals and had to infer the state of the
+ * machine from the length of a list.
+ *
+ * The tiers are the honest version of the number that used to be here. "31
+ * openings" was one count over four different things — market evidence, a
+ * capture thesis, a supported case, and something a test could actually be run
+ * against — and calling all four an opening is the defect this whole change
+ * is about.
+ */
+function Status({ view }: { view: CashView }): JSX.Element {
+  const plan = view.myCurrentWork;
+  const tiers = plan.byTier ?? { SIGNAL: 0, CANDIDATE: 0, QUALIFIED: 0, READY_TO_TEST: 0 };
+  const inState = (states: string[]): number =>
+    plan.placements.filter((one) => states.includes(one.opportunity.state)).length;
+
+  /*
+   * The blocker, and only a real one.
+   *
+   * A decision the server marked BLOCKING is one nothing can proceed without.
+   * Anything else — work in progress, a question Brain is out researching —
+   * is not a blocker, and a screen that called it one would be asking somebody
+   * to act on something that is already moving.
+   */
+  const blocking = view.decisionsForMe.items.filter(
+    (item) => item.urgency === 'BLOCKING' || item.urgency === 'URGENT',
+  );
+
+  return (
+    <section className="rs-card rs-cash-status">
+      <h3>The cash machine</h3>
+      <ul className="rs-cash-tiers">
+        <li>
+          <strong>{view.mode?.state === 'ACTIVE' ? 'Active' : (view.mode?.state ?? 'Not started')}</strong>
+          <span>Discovery</span>
+        </li>
+        <li>
+          <strong>{tiers.SIGNAL}</strong>
+          <span>Signals found</span>
+        </li>
+        <li>
+          <strong>{tiers.CANDIDATE}</strong>
+          <span>Being qualified</span>
+        </li>
+        <li>
+          <strong>{tiers.QUALIFIED}</strong>
+          <span>Qualified</span>
+        </li>
+        <li>
+          <strong>{tiers.READY_TO_TEST}</strong>
+          <span>Ready to test</span>
+        </li>
+        <li>
+          <strong>{inState(['EXECUTING', 'DELIVERING'])}</strong>
+          <span>Executing</span>
+        </li>
+        <li>
+          <strong>{inState(['COLLECTED'])}</strong>
+          <span>Collected</span>
+        </li>
+      </ul>
+      <p className="rs-decision-why">{view.roadmap.whatHappensNext}</p>
+      {blocking.length === 0 ? (
+        <p className="rs-hint">
+          Nothing is waiting on you. A signal is evidence Brain found and is still working out how
+          money would be made from it; it is not work for you.
+        </p>
+      ) : (
+        <p className="rs-hint">
+          {blocking.length === 1
+            ? 'One thing is waiting on you, below.'
+            : `${blocking.length} things are waiting on you, below.`}
+        </p>
+      )}
+    </section>
+  );
+}
+
+const TIER_LABEL: Record<string, string> = {
+  SIGNAL: 'Signal — evidence, not yet work',
+  CANDIDATE: 'Being qualified',
+  QUALIFIED: 'Qualified',
+  READY_TO_TEST: 'Ready to test',
+};
+
+/**
+ * The few worth putting in front of somebody, and nothing else.
+ *
+ * Qualified first; where there are none, the candidates with the fewest
+ * questions left, said plainly to be that. It is never filled up with signals,
+ * which is the whole correction: a best-opportunities section padded with a
+ * vendor's published price list is worse than an empty one, because the empty
+ * one is true.
+ *
+ * The full portfolio is not hidden — it is under *Everything Brain has found*,
+ * with every claim, source and packet on it.
+ */
+function BestOpportunities({
+  view,
+  onChanged,
+}: {
+  view: CashView;
+  onChanged(): void;
+}): JSX.Element {
+  const plan = view.myCurrentWork;
+  const best = plan.best ?? [];
+
+  return (
+    <section className="rs-card rs-cash-best">
+      <h3>Best opportunities</h3>
+      {best.length === 0 ? (
+        <p className="rs-hint">
+          Nothing is qualified yet, and nothing is being padded out to fill this space.{' '}
+          {(plan.byTier?.CANDIDATE ?? 0) > 0
+            ? `${plan.byTier?.CANDIDATE} ${plan.byTier?.CANDIDATE === 1 ? 'idea has' : 'ideas have'} a capture thesis and ${plan.byTier?.CANDIDATE === 1 ? 'is' : 'are'} being qualified.`
+            : `Brain is working out how money would be made from ${plan.byTier?.SIGNAL ?? 0} ${(plan.byTier?.SIGNAL ?? 0) === 1 ? 'signal' : 'signals'} it has found.`}
+        </p>
+      ) : (
+        <>
+          {plan.bestAreNearlyQualified ? (
+            <p className="rs-hint">
+              None of these is qualified yet. They are the ones closest to it, with the fewest
+              questions left.
+            </p>
+          ) : null}
+          <ul className="rs-list">
+            {best.map((placement) => {
+              const tier = placement.tier;
+              return (
+              <li key={placement.opportunity.id} className="rs-group">
+                <p className="rs-item-title">{placement.opportunity.title}</p>
+                {tier ? (
+                  <>
+                    <p className="rs-badge">{TIER_LABEL[tier.tier] ?? tier.tier}</p>
+                    <p className="rs-decision-why">{tier.summary}</p>
+                    <p className="rs-item-meta">
+                      {tier.answered} of {tier.required} decision questions answered. Next:{' '}
+                      {DISPOSITION_LABEL[placement.disposition]} &mdash; {placement.because}
+                    </p>
+                    {tier.toAdvance.length > 0 ? (
+                      <p className="rs-item-meta">
+                        Brain is establishing:{' '}
+                        {tier.toAdvance
+                          .slice(0, 4)
+                          .map((one) => one.label.toLowerCase())
+                          .join(', ')}
+                        {tier.toAdvance.length > 4
+                          ? `, and ${tier.toAdvance.length - 4} more`
+                          : ''}
+                        .
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="rs-decision-why">{placement.because}</p>
+                )}
+                <EngineCard
+                  opportunityId={placement.opportunity.id}
+                  card={plan.engineCards?.[placement.opportunity.id]}
+                  economics={plan.economics?.[placement.opportunity.id] ?? []}
+                  onChanged={onChanged}
+                />
+                <Actions
+                  placement={placement}
+                  allowedActions={view.authority.allowedActions}
+                  onChanged={onChanged}
+                />
+              </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The money, in one row.
+ *
+ * Four figures and a disclosure. The detailed authority form is real and is
+ * still here; what changed is that it is no longer the second thing on the
+ * page on a sprint where nothing is qualified yet, because a screen that leads
+ * with *set a spending limit* implies discovery is waiting on one. It is not:
+ * §33's discovery authorization is what pressing Start gave, and this grant is
+ * for an entirely different thing.
+ */
+function MoneyRow({ view }: { view: CashView }): JSX.Element {
+  const currency = view.myCash.position.currency;
+  const qualified =
+    (view.myCurrentWork.byTier?.QUALIFIED ?? 0) + (view.myCurrentWork.byTier?.READY_TO_TEST ?? 0);
+  return (
+    <section className="rs-card rs-cash-money-row">
+      <h3>Money</h3>
+      <ul className="rs-cash-tiers">
+        <li>
+          <strong>{money(view.authority.maxCommittedCents, currency)}</strong>
+          <span>Authorized</span>
+        </li>
+        <li>
+          <strong>{money(view.authority.committedCents, currency)}</strong>
+          <span>Committed</span>
+        </li>
+        <li>
+          <strong>{money(view.authority.spentCents, currency)}</strong>
+          <span>Spent</span>
+        </li>
+        <li>
+          <strong>{money(view.myCash.position.deployableCents, currency)}</strong>
+          <span>Remaining capacity</span>
+        </li>
+      </ul>
+      <p className="rs-hint">
+        {view.authority.exists
+          ? 'A standing commercial authority is live. It bounds what may be committed; it commits nothing.'
+          : qualified > 0
+            ? 'Nothing is authorized to be spent. Something is qualified now, so this is the decision it is waiting on.'
+            : 'Nothing is authorized to be spent, and nothing needs it yet. Discovery and qualification cost nothing and are not waiting on this.'}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * Everything else, complete and one click away.
+ *
+ * §29's rule about `/legacy` applied inside a page: nothing is deleted and
+ * nothing is hidden, it stops being the first thing. Each disclosure carries
+ * its own count in the summary, so a person can tell whether opening it is
+ * worth it without opening it.
+ */
+function Details({ view, onChanged }: { view: CashView; onChanged(): void }): JSX.Element {
+  const plan = view.myCurrentWork;
+  return (
+    <>
+      <details className="rs-card rs-cash-portfolio">
+        <summary>
+          <h3>Everything Brain has found</h3>
+          <span className="rs-hint">
+            {plan.placements.length}{' '}
+            {plan.placements.length === 1 ? 'record' : 'records'}, with their claims and sources
+          </span>
+        </summary>
+        <CurrentWork view={view} onChanged={onChanged} />
+      </details>
+      <details className="rs-card rs-cash-needs-detail">
+        <summary>
+          <h3>What Brain is working on</h3>
+          <span className="rs-hint">
+            {view.whatBrainNeeds.length} open {view.whatBrainNeeds.length === 1 ? 'question' : 'questions'} in
+            Brain&rsquo;s own queue
+          </span>
+        </summary>
+        <p className="rs-hint">
+          These are facts about the world, so Brain looks them up. None of them is a task for you.
+        </p>
+        <Needs view={view} />
+      </details>
+      <details className="rs-card rs-cash-research">
+        <summary>
+          <h3>Research detail</h3>
+          <span className="rs-hint">
+            {view.roadmap.rounds.total} discovery {view.roadmap.rounds.total === 1 ? 'round' : 'rounds'},{' '}
+            {view.roadmap.research.planned} planned items
+          </span>
+        </summary>
+        <Roadmap view={view} />
+      </details>
+      <details className="rs-card rs-cash-money-detail">
+        <summary>
+          <h3>Money detail and the spending authority</h3>
+          <span className="rs-hint">
+            {view.myCash.entries.length} recorded{' '}
+            {view.myCash.entries.length === 1 ? 'entry' : 'entries'} ·{' '}
+            {view.authority.exists ? 'a grant is live' : 'no grant'}
+          </span>
+        </summary>
+        <MoneyPicture view={view} />
+        <MyCash view={view} />
+      </details>
+      <details className="rs-card rs-cash-history">
+        <summary>
+          <h3>Activity</h3>
+          <span className="rs-hint">
+            {view.whatBrainHasDone.length} recent{' '}
+            {view.whatBrainHasDone.length === 1 ? 'event' : 'events'}
+          </span>
+        </summary>
+        <Done view={view} />
+      </details>
+    </>
+  );
+}
+
 function CurrentWork({
   view,
   onChanged,
@@ -1400,8 +1695,10 @@ function CurrentWork({
                   * portfolio down over a card.
                   */}
                 <EngineCard
+                  opportunityId={placement.opportunity.id}
                   card={plan.engineCards?.[placement.opportunity.id]}
                   economics={plan.economics?.[placement.opportunity.id] ?? []}
+                  onChanged={onChanged}
                 />
                 <Actions
                   placement={placement}
@@ -1437,13 +1734,21 @@ const ENGINE_KIND_LABEL: Record<string, string> = {
 };
 
 function EngineCard({
+  opportunityId,
   card,
   economics,
+  onChanged,
 }: {
+  opportunityId: string;
   card: EngineCardView | undefined;
   economics: DerivedFigureView[];
+  onChanged(): void;
 }): JSX.Element | null {
   const [open, setOpen] = useState(false);
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [said, setSaid] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   if (!card) return null;
 
   const answered = card.entries.filter((entry) => entry.value !== null);
@@ -1456,6 +1761,7 @@ function EngineCard({
         {unknown.length} still unknown
         {card.validationState ? ` · deep dive ${card.validationState}` : ' · no deep dive yet'}
       </button>
+      {note ? <p className="rs-hint">{note}</p> : null}
       {open ? (
         <>
           <ul className="rs-list rs-sublist">
@@ -1465,7 +1771,80 @@ function EngineCard({
                   {entry.label} <span className="rs-badge">{ENGINE_KIND_LABEL[entry.kind]}</span>
                 </p>
                 {entry.value === null ? (
-                  <p className="rs-item-meta">{entry.task}</p>
+                  <>
+                    <p className="rs-item-meta">{entry.task}</p>
+                    {/*
+                      * The one place a person can answer a question the card
+                      * asks.
+                      *
+                      * Twelve of these have no column — they are
+                      * `cash_card_facts` rows — so until this existed the
+                      * bounded deep dive was the only thing that could answer
+                      * one, and the tier requires them. A person who knows
+                      * what a job pays had nowhere to say so. `fillCard`
+                      * records it as a `PERSON` fact, so `mayReplace` keeps
+                      * it above anything automatic.
+                      */}
+                    {answering === entry.key ? (
+                      <>
+                        <label
+                          className="rs-field-label"
+                          htmlFor={`cash-engine-${opportunityId}-${entry.key}`}
+                        >
+                          {entry.label}
+                        </label>
+                        <input
+                          id={`cash-engine-${opportunityId}-${entry.key}`}
+                          value={said}
+                          onChange={(event) => setSaid(event.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="rs-button-quiet"
+                          disabled={busy || said.trim().length === 0}
+                          onClick={() => {
+                            setBusy(true);
+                            setNote(null);
+                            const key = CARD_PATCH_KEY[entry.key] ?? entry.key;
+                            void CashApi.fillCard(opportunityId, { [key]: said.trim() })
+                              .then(() => {
+                                setNote(
+                                  'Answered. It is yours now, so Brain will not propose over it.',
+                                );
+                                setAnswering(null);
+                                setSaid('');
+                                onChanged();
+                              })
+                              .catch((error: unknown) => {
+                                setNote(error instanceof Error ? error.message : 'That did not save.');
+                              })
+                              .finally(() => setBusy(false));
+                          }}
+                        >
+                          {busy ? 'Saving…' : 'Confirm'}
+                        </button>
+                        <button
+                          type="button"
+                          className="rs-linklike"
+                          onClick={() => setAnswering(null)}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="rs-linklike"
+                        onClick={() => {
+                          setAnswering(entry.key);
+                          setSaid('');
+                          setNote(null);
+                        }}
+                      >
+                        Answer the {entry.label.toLowerCase()}
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <p className="rs-decision-why">{entry.value}</p>
                 )}
@@ -1710,7 +2089,14 @@ function Roadmap({ view }: { view: CashView }): JSX.Element {
   return (
     <section className="rs-card rs-cash-roadmap">
       <h3>What Brain is researching</h3>
-      <p className="rs-hint">{map.whatHappensNext}</p>
+      {/*
+        * `whatHappensNext` is on the status screen above, and only there.
+        *
+        * It was here too, which put the server's one sentence about where the
+        * sprint is on the page twice — and the second copy was inside a
+        * disclosure, so a person could read it, open this, and read it again.
+        * One fact, one place.
+        */}
 
       <div className="rs-table-wrap">
         <table>
@@ -1887,23 +2273,58 @@ function plainEvent(kind: string): string {
  * reading for progress is not decoding enum names and somebody debugging has
  * lost nothing.
  */
+/** How many events the history shows before somebody asks for more. */
+const EVENTS_PER_PAGE = 10;
+
 function Done({ view }: { view: CashView }): JSX.Element {
+  const [shown, setShown] = useState(EVENTS_PER_PAGE);
+  const all = view.whatBrainHasDone;
+  const page = all.slice(0, shown);
   return (
     <section className="rs-card rs-cash-history">
       <h3>Everything that has happened</h3>
-      {view.whatBrainHasDone.length === 0 ? (
+      {all.length === 0 ? (
         <p className="rs-hint">Nothing has happened here yet.</p>
       ) : (
-        <ul className="rs-list">
-          {view.whatBrainHasDone.map((event) => (
-            <li key={event.id} className="rs-row">
-              <span className="rs-item-title">{event.summary}</span>
-              <span className="rs-item-meta" title={event.kind}>
-                {plainEvent(event.kind)} &middot; {event.createdAt}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="rs-list">
+            {page.map((event) => (
+              <li key={event.id} className="rs-row">
+                <span className="rs-item-title">{event.summary}</span>
+                <span className="rs-item-meta">
+                  {plainEvent(event.kind)} &middot; {event.createdAt}
+                </span>
+                {/*
+                  * The internal code, kept and shown rather than hidden in a
+                  * tooltip. A title attribute is not reachable on a phone and
+                  * is not reachable by a screen reader on a span, so the one
+                  * person it was there for — somebody debugging — could not
+                  * get at it on either. It is translated *and* kept, which is
+                  * the whole reason `plainEvent` exists.
+                  */}
+                <details className="rs-cash-event-raw">
+                  <summary>What Brain called it</summary>
+                  <code>{event.kind}</code>
+                  {event.actorRef ? <span className="rs-hint"> · {event.actorRef}</span> : null}
+                </details>
+              </li>
+            ))}
+          </ul>
+          {shown < all.length ? (
+            <button
+              type="button"
+              className="rs-link-button"
+              onClick={() => setShown(shown + EVENTS_PER_PAGE)}
+            >
+              Show {Math.min(EVENTS_PER_PAGE, all.length - shown)} more of {all.length}
+            </button>
+          ) : (
+            <p className="rs-hint">
+              {all.length === 1 ? 'That is the one event' : `All ${all.length} events`} Brain keeps
+              on this page. The record itself is append-only and is never trimmed.
+            </p>
+          )}
+        </>
       )}
     </section>
   );

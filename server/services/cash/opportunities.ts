@@ -38,7 +38,7 @@ import {
   settleCommitment,
 } from '../../repos/cashAuthority.ts';
 import { countActions, recordAction } from '../../repos/cashActions.ts';
-import { recordCardFact } from '../../repos/cashCardFacts.ts';
+import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
 import { recordMoney } from '../../repos/cashLedger.ts';
@@ -49,6 +49,8 @@ import {
   isCommercialAction,
 } from './authority.ts';
 import { evidenceCard } from './card.ts';
+import { cashEngineCard, ENGINE_FIELDS } from './engineCard.ts';
+import { cashTier } from './tier.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition, checkMoneyEntry } from './money.ts';
 import { toJson } from '../../repos/util.ts';
@@ -245,12 +247,61 @@ export async function fillCard(input: {
     patch['required_capabilities'] = toJson(value);
   }
 
-  if (Object.keys(patch).length === 0) {
+  /*
+   * The questions a decision turns on, which have no column to be filled in.
+   *
+   * `ENGINE_FIELDS` are recorded as `cash_card_facts` rows and nothing else,
+   * so before this the only way any of them could be answered was the bounded
+   * deep dive. That was tolerable while they were commentary and became a
+   * dead end the moment `cashTier` started requiring them: a person who knows
+   * perfectly well what a job pays, what it costs and whether it needs a phone
+   * call had no way to say so, and their piece could never leave CANDIDATE.
+   * §24's *waiting nobody can resolve*, arriving through a gate this change
+   * put up.
+   *
+   * A person's answer is a `PERSON` fact, so `mayReplace` keeps it above
+   * anything automatic — which is the same order `fillCard` already applies to
+   * the twelve below. It lowers no bar: the tier still requires the question
+   * to be *answered*, and this is somebody answering it.
+   */
+  const engine: { field: string; value: string }[] = [];
+  for (const field of ENGINE_FIELDS) {
+    if (!(field in input.patch)) continue;
+    const value = input.patch[field];
+    // `undefined` is the key not being mentioned, which JSON cannot express
+    // and an in-process caller can. Anything else that is not a sentence is a
+    // mistake worth refusing rather than swallowing.
+    if (value === undefined) continue;
+    if (typeof value !== 'string') {
+      return refuse(`${field} is a sentence, or leave it out.`);
+    }
+    const tidy = value.trim();
+    if (tidy === '') return refuse(`${field} cannot be blank. Leave it out to say nothing.`);
+    engine.push({ field, value: tidy });
+  }
+
+  if (Object.keys(patch).length === 0 && engine.length === 0) {
     return refuse('Nothing in that changes the card.');
   }
 
-  const after = await updateOpportunity(input.opportunityId, patch);
+  const after =
+    Object.keys(patch).length === 0
+      ? before
+      : await updateOpportunity(input.opportunityId, patch);
   if (!after) return refuse('No opportunity with that id.');
+
+  for (const one of engine) {
+    const existing = await cardFact(after.id, one.field);
+    if (!mayReplace(existing, input.actorRef === 'BRAIN' ? 'RECOMMENDATION' : 'PERSON')) continue;
+    await recordCardFact({
+      projectId: after.projectId,
+      opportunityId: after.id,
+      field: one.field,
+      kind: input.actorRef === 'BRAIN' ? 'RECOMMENDATION' : 'PERSON',
+      value: one.value,
+      decidedBy: input.actorRef,
+    });
+  }
 
   /*
    * A person's own answer outranks everything, permanently.
@@ -295,7 +346,10 @@ export async function fillCard(input: {
     kind: 'CASH_CARD_UPDATED',
     actorRef: input.actorRef,
     summary: card.readiness.summary,
-    detail: { fields: Object.keys(patch), missing: card.readiness.missing },
+    detail: {
+      fields: [...Object.keys(patch), ...engine.map((one) => one.field)],
+      missing: card.readiness.missing,
+    },
   });
 
   const reread = await getOpportunity(after.id);
@@ -322,6 +376,34 @@ export async function markReady(input: {
   if (!opportunity) return refuse('No opportunity with that id.');
   const card = evidenceCard(opportunity);
   if (!card.readiness.ready) return refuse(card.readiness.summary);
+
+  /*
+   * And the execution thesis, not only the short card.
+   *
+   * `evidenceCard` asks what a bounded *test* turns on — a payer, an offer, a
+   * delivery path and a bounded exposure — and a piece can answer all four
+   * while nothing establishes whether we are eligible for it, whether we could
+   * acquire it, what it would leave after fees, or whether the only route to
+   * the buyer is a telephone call. Marking that ready is the favourable
+   * assumption arriving at the last transition before somebody spends money.
+   *
+   * It refuses nothing that was passing before: at the moment this shipped no
+   * production piece was READY, and every one of the thirty-one was short of
+   * the short card too.
+   */
+  const reading = cashTier({
+    opportunity,
+    card: cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
+    readiness: card.readiness,
+  });
+  if (reading.tier !== 'READY_TO_TEST' && reading.tier !== 'QUALIFIED') {
+    return refuse(
+      `${reading.summary} Ready to test means the execution thesis is supported, and ` +
+        `${reading.toAdvance.length} thing${reading.toAdvance.length === 1 ? '' : 's'} ` +
+        `still ${reading.toAdvance.length === 1 ? 'needs' : 'need'} establishing: ` +
+        `${reading.toAdvance.map((one) => one.label.toLowerCase()).join(', ')}.`,
+    );
+  }
 
   const moved = await transitionOpportunity({
     id: opportunity.id,

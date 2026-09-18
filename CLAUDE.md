@@ -4156,6 +4156,132 @@ and a suite that exercises the stage cannot see that.**
   strict contract and a broken one. The guard reads the repository rather than
   behaviour, because behaviour is exactly what the suite could not see.
 
+- **An accepted claim carrying an `opportunity_signal` became a user-facing
+  opportunity, and market evidence is not an opportunity.** The bridge §33 built
+  was right that the signal is a typed column rather than a lane id, and wrong
+  about what promotion *means*: it made thirty-one production records into
+  "openings", and every one of them was a fact about a market. Rev and
+  GoTranscript's published per-minute prices, WriterAccess and Verblio's
+  per-word rates, Adobe Stock and Depositphotos subscription tiers, FIFA and
+  Coachella resale *asking* prices, sneaker and trading-card spreads from
+  tracked historical sales, two domain appraisals above their asking price,
+  GitHub's bug-bounty programme, Copart and IAA broker access, Freelancer's
+  listing page, three government procurement notices. Every one gated,
+  well-sourced and real; not one of them says anybody would pay **us**.
+
+  `services/cash/tier.ts` is the distinction, and it is **derived on the read
+  path** for `placements`' own reason — a row is not a decision, a stored tier
+  is stale the moment the fact it waited on arrives, and deriving it is what
+  reclassified all thirty-one by deploying rather than by a backfill that
+  could not reach what a later tick promoted. **Signal** is evidence, kept
+  whole with its claim, source, packet and round. **Candidate** is a signal
+  Brain can say would be paid for. **Qualified** is a supported execution
+  thesis. **Ready to test** is that plus the short card a bounded test runs
+  against.
+
+  **The boundary is type-aware and is not a keyword filter**, and the ten
+  examples are regression cases rather than the rule. §27 records what happens
+  to a closed list that has to be complete over ordinary English: four
+  widenings, each adding the one word the last production message was declined
+  for. So each of the seven `OPPORTUNITY_SIGNALS` declares what its evidence
+  establishes, what it does not, and what else its *kind* needs — a pricing
+  asymmetry and a resalable asset need present acquisition access and an
+  after-fee exit before either is arbitrage; repeated outsourced work and a
+  paid task need something that serves the next customer too. None of it reads
+  a word of anybody's prose.
+
+  **What moves a signal is a payer**, and that is why the same sentence can be
+  either. `captureMechanism` is Brain's own proposal, composed from a payer and
+  something to supply them — both already gated — and **withheld entirely where
+  there is no payer**. Nothing about Rev charging $1.99 a minute names anybody
+  who would pay us, so no payer ever lands and no capture thesis is ever
+  proposed. The identical title qualifies the moment research finds a buyer.
+
+  **A bar with no way over it is a park rather than a standard.** The
+  eligibility, acquisition, exit-evidence and contact-mode lanes did not exist
+  when the first dives were compiled, so a piece that answered everything its
+  dive asked could have sat one answer short for ever. A piece below qualified
+  with a completed dive gets exactly one more, bounded by `validation_rounds`;
+  a third would be the same search twice, which `repair.ts` already refuses.
+
+- **Brain asked a person for the research Brain was at that moment doing.**
+  `CardField.discoverable` was a boolean splitting the twelve into *facts Brain
+  looks up* and *the owner's calls*, and the second half was nine of them — the
+  price, the delivery path, who does the work, the cash dates, the economics,
+  the exposure. §30 had already corrected the reasoning ("a commercial judgment
+  is not permanently a person's either") and `answers.ts` had already built the
+  machinery to propose them; the boolean never moved. So production showed five
+  "decisions" standing for ninety-eight items, with a **mark all thirty done**
+  control over facts nobody had established.
+
+  It is `owner` now — `BRAIN_RESEARCH`, `BRAIN_PROPOSES`, `PERSON_ONLY` — and
+  **no card field is `PERSON_ONLY`**. The grouped-blank section of
+  `compressedReview` is **deleted rather than narrowed**, because every field it
+  could group on was one or the other. What replaces it is the decision that is
+  genuinely a person's once the researching is over: several qualified openings
+  and not enough capacity to run them all, which cannot exist until something is
+  qualified — so the screen is correctly empty on a sprint that is still
+  qualifying. A card's grouped sentences are deduplicated, because a card that
+  says the same thing thirty times is one nobody finishes reading.
+
+- **`1 / 4 HEALTHY` and *four eligible Routines* were both true, and neither
+  said which it was counting.** Production holds two real accounts; one carries
+  all four research Routines and the other's single Routine is quarantined. §23
+  drew this distinction and warned about arithmetic that ignores it — **an
+  account holds a subscription allowance; a Routine is a fire surface** — and
+  the page had one number where there are two. Both are reported now, each
+  labelled as what it counts, and the quarantined surface prints
+  `fleet_routines.state_reason` beside it. Neither figure was changed to make
+  them agree.
+
+- **The page leads with where the sprint stands rather than with every row in
+  it.** Seven counts, the server's own sentence about what happens next, the
+  best three-to-five qualified or explicitly nearly-qualified openings, the
+  real decisions, a four-figure money row — and everything else behind a
+  disclosure that carries its own count so a person can tell whether opening it
+  is worth it. Nothing was deleted: the full portfolio, every claim and source,
+  the research table, the needs, the money detail, the authority form and the
+  whole activity history are all still there, one click away.
+
+- **The bar I put up had no way over it, and only driving the product found
+  it.** `recommendation` was required for `QUALIFIED` and written by nothing —
+  no lane mapped to it and `proposeEngineTerms` did not propose it — so no
+  piece could ever reach the tier whatever research established. Beside it,
+  `ENGINE_FIELDS` are `cash_card_facts` rows with no column, so the bounded
+  deep dive was the only thing that could answer one: a person who knew
+  perfectly well what a job pays, what it costs and whether it needs a phone
+  call had no way to say so, and their piece could never leave `CANDIDATE`.
+  **§24's *waiting nobody can resolve*, arriving through a gate this very
+  change put up**, and the fifth time this file has had to write that an
+  escalation needs an answering transition.
+
+  **And the first bound on it was one too many.** Raising a research need for
+  every researchable blank on every record would have been two hundred
+  questions asking what to charge for somebody else's product, so a signal was
+  skipped entirely — which left the *payer* unasked, and the payer is the one
+  question that could have stopped it being a signal. A signal is asked the
+  three questions `captureMechanism` is composed from and nothing else.
+
+  Nothing in the unit suites could see either one: every fixture wrote its own
+  card facts, so every one of them cleared a bar the product could not.
+  `cashDeploymentSmoke` found it by driving a sprint the way a person does and
+  **timing out waiting for a piece to become ready** — which is the same
+  argument §30 already makes for why that suite exists. Brain proposes the
+  recommendation where it has a price and a cost to reason from and withholds
+  it otherwise, `fillCard` takes an engine field as a `PERSON` fact, and a test
+  holds every qualification key against the three things that can write one, so
+  a key answered by none of them is a compile-time-visible absence rather than
+  a park somebody finds in production.
+
+- **The production guard cried wolf, and the remedy it named was wrong.** Vite
+  hashes are base64url, the guard matched `[A-Za-z0-9]+`, and the day
+  production shipped `index-C5-52qux.js` the `grep` found nothing — which under
+  `pipefail` and the runner's `bash -e` ended the step with no output and
+  reported *"Production does not match the canonical branch"*. Production was
+  correct the whole time. §27 already has the sentence: a warning that cries
+  wolf is worse than no warning, because it teaches a reader to stop believing
+  the one place that says something is genuinely wrong.
+
 **None of the existing work was rewritten to make any of this come out right.**
 Every orchestration, fragment, claim, report, audit, round and parked candidate
 keeps its id, its reason and its lineage; the two migrations are additive; the
@@ -4301,6 +4427,7 @@ server/
       capabilities.ts   what Brain can verifiably do, read rather than declared
       answers.ts        research reaching the card, and the view Brain forms on it
       figures.ts        a money figure read from a source, and never produced
+      tier.ts           signal, candidate, qualified, ready — derived, never stored
       conditions.ts     what settles a need, as a function rather than a wiring
       discoveryAuthority.ts  what pressing Start authorizes, and what it never will
       validation.ts     the bounded deep dive, and what it puts on the card
@@ -4436,6 +4563,7 @@ tests/                  Vitest suites
   cashOperate.test.ts        a capability read, a need resumed, an action recorded
   cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
+  cashOpportunityStandard.test.ts  what is an opportunity, and whose question is whose
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker

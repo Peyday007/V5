@@ -165,10 +165,26 @@ export function ReadinessPanel({
         ))}
       </ul>
 
+      {/*
+        * Two counts, because they count two things.
+        *
+        * This said `1 / 4 HEALTHY` next to a fleet reporting four eligible
+        * research Routines, and both numbers were right: one account is
+        * proven and it carries all four surfaces. A reader had no way to tell
+        * which of the two they were looking at. Neither figure was changed to
+        * make them agree — they are labelled as what they count.
+        */}
       <div className="rs-ready-count">
-        <span>Claude capacity accounts</span>
+        <span>Claude capacity accounts, with a proven surface</span>
         <strong>
-          {readiness.capacity.healthy} / {readiness.capacity.required} HEALTHY
+          {readiness.capacity.healthy} / {readiness.capacity.rows.length} proven
+        </strong>
+      </div>
+      <div className="rs-ready-count">
+        <span>Execution surfaces Brain can fire</span>
+        <strong>
+          {readiness.capacity.eligibleSurfaces ?? 0} of {readiness.capacity.totalSurfaces ?? 0}{' '}
+          eligible
         </strong>
       </div>
       <ul className="rs-ready-list">
@@ -177,21 +193,52 @@ export function ReadinessPanel({
             <span>No capacity account is registered yet.</span>
           </li>
         ) : (
-          readiness.capacity.rows.map((row) => (
+          readiness.capacity.rows.map((row) => {
+            /*
+             * Optional access, for the reason every other reader here has one.
+             *
+             * A deploy replaces the server and the browser tab separately, so
+             * a client built after these fields existed can be holding a
+             * reading fetched before they did. Rendering the account without
+             * its surface count is right there; throwing takes the whole
+             * panel — and with it the invitation control — down over a number.
+             */
+            const surfaces = row.surfaces ?? [];
+            return (
             <li key={row.accountId} className="rs-ready-row">
-              <span>{row.name}</span>
+              <span>
+                {row.name}
+                {surfaces.length > 0 ? (
+                  <small className="rs-hint">
+                    {' '}
+                    {row.eligibleSurfaces ?? 0} of {surfaces.length}{' '}
+                    {surfaces.length === 1 ? 'surface' : 'surfaces'} eligible
+                  </small>
+                ) : null}
+              </span>
               <span className="rs-ready-state" data-state={row.state}>
                 {row.state}
               </span>
               {row.because ? <span className="rs-hint">{row.because}</span> : null}
+              {surfaces
+                .filter((surface) => !surface.eligible)
+                .map((surface) => (
+                  <span key={surface.routineId} className="rs-hint">
+                    {surface.name} is {surface.state.toLowerCase()}
+                    {surface.because ? `: ${surface.because}` : ''}
+                  </span>
+                ))}
             </li>
-          ))
+            );
+          })
         )}
       </ul>
       <p className="rs-hint">
-        A capacity account is a surface Brain fires, never a person and never an owner of anything
-        here. It is HEALTHY only once a session Brain fired has arrived and finished a piece of
-        work — being registered is configured, which is a different word on purpose.
+        An account holds a subscription allowance; a surface is a Routine Brain fires at. One
+        account can carry four surfaces, so these two numbers are not the same number and are not
+        meant to agree. An account is proven only once a session Brain fired has arrived and
+        finished a piece of work — being registered is configured, which is a different word on
+        purpose. Neither count starts or stops anything.
       </p>
 
       {isBrainAdmin && !failed ? <Invite links={links ?? []} onChanged={read} /> : null}

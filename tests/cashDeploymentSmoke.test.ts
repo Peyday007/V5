@@ -547,7 +547,21 @@ describe('the deployable artifact', () => {
     });
     expect(granted.status).toBe(200);
 
-    // Complete both cards so readiness is not what is being tested.
+    /*
+     * Complete both cards so readiness is not what is being tested.
+     *
+     * Twelve short-card fields and twelve engine ones, in one request. The
+     * second half is the part worth saying out loud: `ENGINE_FIELDS` have no
+     * column, so until this route accepted them the only thing that could
+     * answer one was the bounded deep dive — and `cashTier` requires them, so
+     * a person who knows exactly what a job pays and whether it needs a phone
+     * call had no way to say so and their piece could never leave CANDIDATE.
+     *
+     * That is the transition this step actually proves: a person's own answer,
+     * over HTTP, reaching `cash_card_facts` as a `PERSON` fact and moving the
+     * tier. Nothing here lowers a bar — the tier still requires every question
+     * to be answered, and this is somebody answering them.
+     */
     for (const id of [opportunity.id, other]) {
       const filled = await call('PATCH', `/api/cash/opportunities/${id}`, {
         cookie: admin,
@@ -562,6 +576,19 @@ describe('the deployable artifact', () => {
           deliveryMethod: 'One afternoon',
           fulfillmentOwner: 'Us',
           peakFundingCents: 0,
+          // The execution thesis, answered by the person who knows it.
+          captureMechanism: 'Supply the repair to the operations manager, and be paid for it.',
+          revenueRange: 'Comparable repairs are quoted at USD 500 to 800.',
+          directCosts: 'Nothing to buy. One afternoon of our own time.',
+          requiredCapital: 'Nothing out before the invoice.',
+          timeToFirstCash: 'Their published terms are net 14 from acceptance.',
+          laborNeeds: 'One person, on site, for an afternoon.',
+          fulfilmentModel: 'Manual, by us. Nothing here automates and nothing is subcontracted.',
+          phoneDependency: 'No call. The notice publishes an address and they replied to it.',
+          eligibility: 'No licence, registration or platform rule applies to a repair this size.',
+          disqualifiers: 'Nothing published rules it out. The notice is open.',
+          confidence: 'The payer and the price are from them directly; the costs are ours.',
+          recommendation: 'Worth testing. The margin is the afternoon, and nothing is at risk.',
         },
       });
       expect(filled.status).toBe(200);
@@ -569,7 +596,8 @@ describe('the deployable artifact', () => {
 
     /*
      * Brain then declares both ready by itself, on the tick — the card's own
-     * gate is what bounds that, and every field it checks is answered.
+     * gate and the execution thesis are what bound that, and every question
+     * either one asks is answered.
      */
     await until('the tick to declare both ready', async () => {
       const view = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });

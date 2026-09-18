@@ -430,6 +430,59 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
         'A documented absence of one is a real finding and belongs here.',
       necessity: 'CONDITIONAL',
     },
+    /*
+     * The four the production audit found nothing was asking.
+     *
+     * Thirty-one openings had been filed and every one of them was market
+     * evidence: a vendor's published selling price, a resale *asking* price, a
+     * domain appraisal, a bounty programme, a marketplace page. Each of those
+     * is a real finding and none of them says anybody would pay us. What
+     * separates the two is not a better-worded broad question — it is these
+     * four, asked about the specific thing: may we take it at all, can we get
+     * at it now, does anything actually sell at the higher figure, and does the
+     * only published route to the buyer require somebody to make phone calls.
+     *
+     * `CONDITIONAL`, like the rest: an opening where one genuinely does not
+     * apply is answered by saying so, and a documented absence is a finding.
+     */
+    {
+      id: 'eligibility',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What published rule decides whether a supplier like this one may take this at all — a ' +
+        'licence, a registration, a platform term, a procurement qualification, a residency, ' +
+        'bonding or insurance condition — quoted from whoever publishes it.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'acquisition_access',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What is published about obtaining the thing itself *now*: from whom, at what price, on ' +
+        'what terms, and what registration, membership, broker or licence stands in the way. A ' +
+        'spread nobody can buy into is a fact about a market rather than an opening.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'exit_evidence',
+      evidenceKind: 'MARKET_PATTERN',
+      description:
+        'Published evidence that things like this actually sell at the higher figure — sold ' +
+        'prices, settled auctions, sell-through rates — and what the platform fees leave ' +
+        'behind. An asking price, a listing and an appraisal are none of those, so say plainly ' +
+        'where only those exist.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'contact_mode',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What the published route to the buyer actually is, and specifically whether it ' +
+        'requires a telephone call — a portal, an email address, a form, a bid submission or a ' +
+        'phone number. Where a call is the only published route, say so; that is a finding ' +
+        'rather than a detail.',
+      necessity: 'CONDITIONAL',
+    },
   ],
   expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
   failureConditions: [
@@ -437,6 +490,9 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
     'Every figure found traces back to one upstream source, so nothing independent supports it.',
     'What is published settles the demand but not whether it can be delivered, and that is ' +
       'recorded as unresolved rather than assumed.',
+    'Everything found is a price somebody else charges, an asking price or an appraisal, and ' +
+      'nothing published establishes that we could acquire it or that anything sells at the ' +
+      'higher figure. That is the honest outcome and it is recorded rather than dressed up.',
   ],
   objective: ({ question, scope, from }) =>
     from === 'ENVELOPE'

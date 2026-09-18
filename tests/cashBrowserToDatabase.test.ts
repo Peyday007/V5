@@ -32,11 +32,13 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { freshProject } from './helpers.ts';
+import { EXECUTION_THESIS } from './helpers/cashTier.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { capture, fillCard } from '../server/services/cash/opportunities.ts';
 import { raiseNeed } from '../server/services/cash/needs.ts';
 import { getNeed, getOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
+import { cardFact } from '../server/repos/cashCardFacts.ts';
 import { listMoneyEntries } from '../server/repos/cashLedger.ts';
 import { cashRouter } from '../server/routes/cash.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
@@ -217,28 +219,45 @@ async function mount(): Promise<void> {
 }
 
 /** Open the control behind one review item, by the label the server wrote. */
+/**
+ * The first control with this name, because a qualified piece is drawn twice.
+ *
+ * It appears once under *Best opportunities* and once in the full portfolio,
+ * which is a summary and its detail rather than two opinions — so pressing
+ * the first is pressing the one a person actually sees first. A `findByRole`
+ * that refused on the ambiguity would be the test asserting a layout it has
+ * no view about.
+ */
 async function press(label: RegExp): Promise<void> {
-  const button = await screen.findByRole('button', { name: label });
+  const buttons = await screen.findAllByRole('button', { name: label });
   await act(async () => {
-    fireEvent.click(button);
+    fireEvent.click(buttons[0]!);
   });
 }
 
 async function type(label: RegExp, value: string): Promise<void> {
-  const field = await screen.findByLabelText(label);
+  const fields = await screen.findAllByLabelText(label);
   await act(async () => {
-    fireEvent.change(field, { target: { value } });
+    fireEvent.change(fields[0]!, { target: { value } });
   });
 }
 
 async function confirm(): Promise<void> {
   const buttons = await screen.findAllByRole('button', { name: /^Confirm$/ });
   await act(async () => {
-    fireEvent.click(buttons[buttons.length - 1]!);
+    fireEvent.click(buttons[0]!);
   });
 }
 
-/** An opening whose card is answered except for one thing a person decides. */
+/**
+ * An opening answered except for two things: the offer, and one question the
+ * card asks that has no column at all.
+ *
+ * The second is the point of this fixture now. `ENGINE_FIELDS` are
+ * `cash_card_facts` rows, so before the card grew a control for them the
+ * bounded deep dive was the only thing that could answer one — and the tier
+ * requires them, so a person who knew the answer had nowhere to put it.
+ */
 async function openingMissingItsOffer(): Promise<string> {
   const captured = await capture({
     projectId,
@@ -262,6 +281,16 @@ async function openingMissingItsOffer(): Promise<string> {
       deliveryMethod: 'One afternoon of configuration',
       fulfillmentOwner: 'Us',
       peakFundingCents: 0,
+      /*
+       * And the execution thesis. `markReady` asks for both now: the twelve
+       * short-card fields are what a bounded *test* turns on, and these are
+       * what a *decision* turns on. They have no column, so a person
+       * answering one is a `PERSON` row in `cash_card_facts`.
+       */
+      ...EXECUTION_THESIS,
+      // Left unanswered on purpose: it has no column, so it is the case a
+      // person could not answer at all until the card grew a control for it.
+      eligibility: undefined,
     },
   });
   if (!filled.ok) throw new Error(filled.reason);
@@ -270,15 +299,24 @@ async function openingMissingItsOffer(): Promise<string> {
 
 describe('the screen, the route and the row', () => {
   it('lands a card answer in the column, and the page stops asking for it', async () => {
+    /*
+     * This used to drive the review's `FILL_CARD_FIELD` control, and that
+     * control is gone with the section that produced it: every field it could
+     * have offered is a fact Brain researches or a proposal Brain composes, so
+     * the server emits no such item any more.
+     *
+     * What it tested is not gone and matters more than it did — a person's own
+     * answer reaching the row, and the page then agreeing with it. It moved to
+     * where the question is actually asked. The offer has a column; the one
+     * below it has none, which is the case that could not be answered at all
+     * until the card grew this control.
+     */
     const id = await openingMissingItsOffer();
     await mount();
 
-    // The item the server composed, by the title the server composed.
-    await waitFor(() =>
-      expect(screen.getAllByText(/card with no offer/i).length).toBeGreaterThan(0),
-    );
-    await press(/Answer the offer on this card/i);
-    await type(/card with no offer/i, 'One fixed-scope repair of the published intake form');
+    await press(/Show the full card/i);
+    await press(/Answer the offer/i);
+    await type(/^Offer$/i, 'One fixed-scope repair of the published intake form');
     await confirm();
 
     // The row, first: this is the assertion the UI suite cannot make.
@@ -287,15 +325,33 @@ describe('the screen, the route and the row', () => {
         'One fixed-scope repair of the published intake form',
       ),
     );
-
-    // And then the screen, because an answer that lands and leaves the page
-    // saying what it said before is §29's defect at this surface.
     await waitFor(() =>
       expect(
         screen.getAllByText(/It is yours now, so Brain will not propose over it/i).length,
       ).toBeGreaterThan(0),
     );
-    await waitFor(() => expect(screen.queryAllByText(/card with no offer/i)).toEqual([]));
+  });
+
+  it('lands an answer to a question that has no column, as the person’s own', async () => {
+    const id = await openingMissingItsOffer();
+    await mount();
+
+    await press(/Show the full card/i);
+    await press(/Answer the eligibility and permission/i);
+    await type(/^Eligibility and permission$/i, 'No licence applies to work this size.');
+    await confirm();
+
+    /*
+     * There is no column to look in, so the row this lands in is a
+     * `cash_card_facts` one — and its kind is what makes the answer stick:
+     * `mayReplace` is about authority rather than recency, so nothing
+     * automatic proposes over a person's answer afterwards.
+     */
+    await waitFor(async () => {
+      const fact = await cardFact(id, 'eligibility');
+      expect(fact?.value).toBe('No licence applies to work this size.');
+      expect(fact?.kind).toBe('PERSON');
+    });
   });
 
   it('records funding as a ledger entry, and the position is recomputed from it', async () => {

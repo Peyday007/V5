@@ -573,3 +573,37 @@ The integration boundary, exactly:
 
 Until then `SEND_A_MESSAGE` stays `MISSING`, and no run of this system has
 contacted a buyer, taken a payment, or started a Cowork session.
+
+---
+
+## What changes for a sprint that is already running
+
+Nothing about it stops, and nothing about it is replayed. The change is a
+classification and a page; the research, the packets, the claims, the audits,
+the rounds and the grants are untouched.
+
+**Every record already filed is re-read rather than rewritten.** The tier is
+derived on the read path, so deploying is the whole of the reclassification —
+there is no backfill to run and no command to remember. A sprint that had
+thirty-one "openings" will report thirty-one **signals**, because that is what
+they are: gated, well-sourced evidence about a market, with no payer on any of
+them. Every id, claim, source, packet, round and event is exactly where it was.
+
+**Two columns are added and one reconciliation fills a blank.**
+`cash_opportunities.opportunity_signal` is the typed kind of opening the tier
+turns on, written at promotion from now on and read back from each piece's own
+`source_claim_id` on the durable tick for anything promoted before it existed.
+The write is guarded on the column still being null, so a recorded value is
+never replaced. `cash_opportunities.validation_rounds` bounds the second deep
+dive. Neither is destructive and neither is required for the page to be right.
+
+**Expect the best-opportunity section to be empty at first, and that is the
+point.** Qualifying a signal is the bounded deep dive, two in flight, and the
+bar it has to clear is now the whole execution thesis rather than the short
+card. A section that filled itself with published price lists is what this
+replaced.
+
+**Nothing about spending moved.** No commercial grant is created, the
+prohibitions are the same constant, `max_external_spend` is still zero, and no
+route here contacts, buys, quotes, publishes or commits. The discovery
+authorization that pressing Start gave is unchanged.
