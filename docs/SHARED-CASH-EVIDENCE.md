@@ -447,3 +447,86 @@ there was no frontier to read rather than passing silently.
 reading the script rather than running it — because nothing in the suite
 executes it, which is exactly how §33's `geography_basis` defect reached
 production with the whole suite green.
+
+### What the released image actually answered
+
+Run 252, commit `a7e08fa`, 2026-09-18T07:07Z, against the deployed Brain as
+`verification-member@brain.invalid` — no membership on the cash root, no Brain
+administrator rights:
+
+```
+The shared frontier, as an ordinary member
+  PASS  the member holds no membership on the cash root — not a member
+  PASS  and may still read the shared frontier — 200
+  PASS  the reply says which projection it is — scope=SHARED
+  PASS  discovery, the portfolio, the roadmap and the counts all crossed — 31 opportunit(ies)
+  PASS  the shared frontier carries no myCash
+  PASS  the shared frontier carries no entries
+  PASS  the shared frontier carries no commitments
+  PASS  the shared frontier carries no deployableCents
+  PASS  the shared frontier carries no availableFundsCents
+  PASS  the shared frontier carries no heldCents
+  PASS  the shared frontier carries no maxCommittedCents
+  PASS  the shared frontier carries no maxPerActionCents
+  PASS  the shared frontier carries no committedCents
+  PASS  the shared frontier carries no spentCents
+  PASS  the shared frontier carries no allowedActions
+  PASS  the shared frontier carries no decisionsForMe
+  PASS  the shared frontier carries no engineCards
+  PASS  the shared frontier carries no executionPaths
+  PASS  the shared frontier carries no provenance
+  PASS  whether a commercial grant exists crossed, and nothing about it — commercialGrant=ABSENT
+  PASS  another operation's Cash is refused exactly as a missing one is — both 404, identical body
+  PASS  a member cannot activate or wind down the sprint — 404
+  PASS  a member cannot grant commercial authority — 404
+
+HOSTED-VERIFICATION: PASS 198/198
+```
+
+That is the demonstrated defect answered by the party that demonstrated it: the
+member who was told there was nothing to see now reads thirty-one openings, and
+every private figure is absent as a JSON key at any depth rather than as a field
+somebody remembered to strip.
+
+**The run's own verdict is a failure, and it is not this one.** `flyctl apps
+restart` exited 126 with *"failed to wait for health checks to pass: context
+deadline exceeded"*, and the next step answered `healthy again after 1
+attempt(s)` about twenty-five seconds later — so the machine restarted and came
+back, `flyctl`'s wait gave up first, and the *post*-restart verification was
+skipped because the step before it had failed. The image was released and is
+serving; see CLAUDE.md §27, where this is recorded as a sixth and different
+shape rather than folded into the five that precede it.
+
+### And the image is serving after the restart
+
+`npm run admin -- people list` against the deployed Brain at
+2026-09-18T07:15:12Z — three minutes after the restart `flyctl` gave up waiting
+on:
+
+```
+usr_72e1236be8f04f4d9aa2  PERSON  MEMBER   passkeys=1 signs-in=device   Airyn                      <no address — passkey only>
+usr_0f24a326daaf4e2fbbfc  PERSON  MEMBER   passkeys=1 signs-in=device   Caleb                      <no address — passkey only>
+usr_b2dedd287be04b86853f  SYSTEM  DISABLED passkeys=0 signs-in=password Hosted verification        <verification-member@brain.invalid>
+usr_8d1de66ff2ef43809312  SYSTEM  DISABLED passkeys=0 signs-in=password Hosted verification owner  <verification-owner@brain.invalid>
+usr_14439966398243339341  PERSON  ADMIN    passkeys=0 signs-in=password rosserpeyton@gmail.com     <rosserpeyton@gmail.com>
+usr_4b69e3238341457a953d  PERSON  MEMBER   passkeys=0 signs-in=none     Vince                      <no address — passkey only>
+```
+
+Three facts at once, and the third is the one the run's own verdict could not
+give:
+
+- **The `signs-in` column exists**, and it exists only in this change — so the
+  machine is serving `a7e08fa` rather than the previous image.
+- **The reading is right about every row.** Airyn and Caleb hold devices; the
+  owner's administrator account signs in with a password and is therefore
+  `READY` rather than the unfilled slot it used to read as; Vince holds neither
+  and is the only row that is not joined. On the page the owner reads
+  `rosserpeyton`, because the domain is dropped.
+- **It answered from the live database after the restart.** The restart ran
+  07:07–07:12 and this is 07:15, so persistence survived it — which is the
+  question the skipped post-restart step existed to ask, answered from rows
+  instead of from a step that never ran.
+
+The two verification identities are excluded twice over: `kind = SYSTEM`, and
+`DISABLED`, because `verify-hosted.ts` disables them at the end of its own run.
+Neither row was deleted, and both keep their memberships and their history.

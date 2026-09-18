@@ -2733,6 +2733,29 @@ remote.
   had never run, because the live half is skipped on SQLite. It now holds the
   only client from the top level and asks from outside, and the rule it got
   wrong is pinned as its own test rather than assumed.
+  **An eighth failed at the same place in the workflow and for a different
+  reason, and calling it the same thing would have buried both.** Run 252,
+  `a7e08fa`: release success, `HOSTED-VERIFICATION: PASS 198/198` on the
+  released image, and then **the restart step itself** exited 126 —
+  `flyctl apps restart` reporting *"failed to wait for health checks to pass:
+  context deadline exceeded"* after five minutes of `Waiting for
+  811d651c26d948 to become healthy (started, 0/1)`. The next step in the same
+  job then answered **`healthy again after 1 attempt(s)`**, about twenty-five
+  seconds later. So the machine restarted, came back, and `flyctl`'s own wait
+  gave up first; the post-restart verification never ran at all, because the
+  step before it had failed, and the verdict correctly refused a `skipped`.
+
+  The distinction is worth keeping, and it is now a three-way one. The five
+  earliest are a *check* that ran and failed late, always at the judge step,
+  always consistent with a five-minute work-item lease. The sixth and seventh
+  are that check failing *early*, on `pg-pool`'s own checkout timeout. This is
+  a *restart command* whose health-check deadline is
+  shorter than this machine's cold start, with nothing wrong on either side of
+  it. Reading the two as one condition would have somebody debugging a lease
+  against a `flyctl` timeout. **And re-deploying is the wrong answer to both**,
+  for the reason directly above: the image is live, and a re-deploy restarts a
+  Brain holding leased work to re-prove something the pre-restart run already
+  proved.
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
