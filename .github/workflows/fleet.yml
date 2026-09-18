@@ -61,7 +61,7 @@ on:
         # matters here is the empty one: `set-capabilities --capabilities ""`
         # is how a capability is taken away, and an empty value cannot be
         # expressed by a flag/value pair appended only when non-blank.
-        description: '--capabilities (comma separated, for set-capabilities; empty clears them)'
+        description: '--capabilities (comma separated, for register-routine and set-capabilities; empty clears them)'
         required: false
         default: ''
       extra:
@@ -167,6 +167,13 @@ jobs:
           # one that clears a capability, and a flag appended only when the
           # value is non-blank can never express it.
           if [ "$FLEET_COMMAND" = "set-capabilities" ]; then
+            args="$args --capabilities \"$FLEET_CAPABILITIES\""
+          # And for a registration, where it is optional rather than clearing:
+          # a factory surface is registered with repository,repository-write in
+          # the same run that creates it, and a capability list that only
+          # reached one command would have sent an operator to `extra` for a
+          # field the form already has.
+          elif [ -n "$FLEET_CAPABILITIES" ]; then
             args="$args --capabilities \"$FLEET_CAPABILITIES\""
           fi
           if [ -n "$FLEET_EXTRA" ];   then args="$args $FLEET_EXTRA"; fi
