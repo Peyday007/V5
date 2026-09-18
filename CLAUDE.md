@@ -5091,6 +5091,28 @@ project. §30 records the identical defect one section along: a project with no
 layer can open work and launch nothing, for ever, with every row reading
 healthy.
 
+- **A merged pull request moves no dimension in the registry.** Without
+  something that says otherwise the registry can never leave `ABSENT` /
+  `UNTESTED`, and the obvious way to let it — move the implementation state when
+  a campaign merges — is exactly the lie the six dimensions exist to prevent. So
+  `services/realize/prove.ts` derives every move from a *different* source than
+  the build: the implementation state from the gaps' own closure rather than
+  from the campaign, because those come apart precisely when a campaign succeeds
+  at something narrower than the packet asked for; `LIVE` from the self-model
+  having **observed** the components, which is not a fact a build produces, and
+  where an `UNKNOWN` holds the faculty at `CONNECTED` because unknown is not a
+  reading; `PASSING` from the faculty's own declared evaluation requirements
+  rather than from a green suite, because a suite is evidence about the code and
+  not about the power; and `PRODUCTION_PROVEN` from rows in a project whose
+  purpose is somebody's work. A faculty that declares no evaluation requirements
+  can never pass, because calling that `PASSING` would be passing an exam nobody
+  set. Reading and applying are separate functions, so somebody can look before
+  anything moves.
+- **Availability is never moved, and is named as withheld rather than omitted.**
+  A realization that could switch on what it built would be granting itself the
+  one decision §27 reserves, and an absent line reads as *nothing to say about
+  it* when the honest answer is *this is not mine to say*.
+
 **What is true of this kernel today, said plainly.** Thirteen faculties are
 canonically defined from the real blueprint, each anchored to a named block in
 its extracted text, after an audit that refused two of fifteen with its reasons
@@ -5270,6 +5292,7 @@ server/
       packet.ts         the ten-section packet, versioned, as living state
       director.ts       what to research, and when to stop — with the reason
       compile.ts        the change request a decision-ready packet implies
+      prove.ts          what makes a capability exist, as opposed to built
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning
@@ -5394,6 +5417,7 @@ tests/                  Vitest suites
   realizationPacket.test.ts  derive what is readable; refuse to guess the rest
   capabilityDirector.test.ts most gaps are not research, and the archive comes first
   capabilityCompile.test.ts  every clause traces to a gap, and it starts nothing
+  capabilityProof.test.ts    a merge moves no dimension; each one needs its own evidence
   step12bProduct.test.ts     the product decisions, where they are decided
   step12bResponsive.test.ts  the widths that were clipping, and why they no longer do
   cashMode.test.ts           the lifecycle, and the off switch that is not the Brain's

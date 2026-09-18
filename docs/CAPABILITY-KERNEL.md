@@ -215,13 +215,45 @@ ever, with every row reading healthy.
 
 ---
 
-## 7. The operator surface
+## 7. What makes a capability exist
+
+`services/realize/prove.ts` is the answer to *a merged pull request moves no
+dimension in the registry*. Every move is derived from a different source than
+the build:
+
+| Dimension reaches | On evidence from |
+|---|---|
+| `PARTIAL` / `CONNECTED` | the gaps' own closure, not the campaign's state |
+| `LIVE` | the self-model having **observed** the components |
+| `PASSING` | the faculty's own declared evaluation requirements |
+| `PRODUCTION_PROVEN` | rows in a project whose purpose is somebody's work |
+
+The gaps and the campaign come apart exactly when a campaign succeeds at
+something narrower than the packet asked for — the case a reader most wants to
+see, and the one a campaign-state check would hide. An `UNKNOWN` from the
+self-model holds the faculty at `CONNECTED`, because unknown is not a reading
+and cannot be the evidence for the strongest implementation state there is. A
+faculty declaring no evaluation requirements can never reach `PASSING`: calling
+that passing would be passing an exam nobody set.
+
+`availability_state` is absent from the table and from the module. It is named
+as **withheld** rather than left out, because an absent line reads as "nothing
+to say about it" when the honest answer is "this is not mine to say".
+
+Reading and applying are two functions, so somebody can look before anything
+moves, and every applied move writes its reason into `faculty_state_events` in
+the same breath as the column.
+
+---
+
+## 8. The operator surface
 
 ```
 npm run capability -- register <file> --title <t> [--amends <id>]
 npm run capability -- sources | advance | read <id> | candidates | faculties | history <slug>
 npm run capability -- scan | model | staleness
-npm run capability -- packet open <slug> | derive <id> | show <id> | research <id> | compile <id>
+npm run capability -- packet open <slug> | derive <id> | show <id> | research <id>
+npm run capability -- packet compile <id> | prove <id> [--apply]
 npm run capability -- submit <binId> <file.json> --worker <handle>
 npm run capability -- verdicts <binId> <file.json> --worker <handle>
 ```
@@ -235,7 +267,7 @@ A command that changes nothing exits non-zero rather than printing success.
 
 ---
 
-## 8. What is not built, said plainly
+## 9. What is not built, said plainly
 
 - **No faculty is implemented.** Thirteen are canonically *defined*. Every one
   reports `implementation_state = ABSENT` and `evaluation_state = UNTESTED`, and

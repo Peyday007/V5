@@ -46,6 +46,7 @@ import {
 } from '../server/services/realize/packet.ts';
 import { decisionReadiness, directorPass } from '../server/services/realize/director.ts';
 import { compile } from '../server/services/realize/compile.ts';
+import { applyProof, readProof } from '../server/services/realize/prove.ts';
 
 function out(line = ''): void {
   console.log(line);
@@ -79,6 +80,7 @@ const USAGE = `
   packet show <packetId>                              sections, gaps and readiness
   packet research <packetId>                          what it should research next, if anything
   packet compile <packetId>                           the change request it implies
+  packet prove <packetId> [--apply]                   what the evidence supports, and what it does not
   packets                                             every packet, and faculties with none
 
   submit <binId> <file.json> --worker <handle>        submit a reading through the worker path
@@ -444,6 +446,34 @@ async function packet(argv: string[]): Promise<void> {
       out('');
       break;
     }
+    case 'prove': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet prove <packetId> [--apply]');
+      const apply = rest.includes('--apply');
+      const reading = apply
+        ? await applyProof({ packetId: id as string, actorType: 'PERSON', actorId: 'operator (shell)' })
+        : await readProof(id as string);
+      out('');
+      if (reading.moves.length === 0) out('  Nothing the evidence supports has changed.');
+      for (const move of reading.moves) {
+        out(`  ${move.dimension.padEnd(16)} ${move.from} -> ${move.to}`);
+        out(`      ${move.reason}`);
+      }
+      out('');
+      out('  Withheld');
+      for (const held of reading.withheld) out(`    ${held.dimension.padEnd(16)} ${held.needs}`);
+      out('');
+      if (apply) {
+        const applied = (reading as { applied?: number }).applied ?? 0;
+        out(`  Applied ${applied} move(s).`);
+        out('');
+        if (applied === 0) fail('Nothing moved.');
+      } else if (reading.moves.length > 0) {
+        out('  Reading only. Pass --apply to record them.');
+        out('');
+      }
+      break;
+    }
     case 'compile': {
       const id = rest[0];
       if (!id) fail('Usage: packet compile <packetId> [--project <id>]');
@@ -474,7 +504,7 @@ async function packet(argv: string[]): Promise<void> {
       break;
     }
     default:
-      fail('Usage: packet <open|derive|show|research|compile> …');
+      fail('Usage: packet <open|derive|show|research|compile|prove> …');
   }
 }
 
