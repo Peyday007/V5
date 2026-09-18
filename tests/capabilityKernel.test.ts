@@ -1039,6 +1039,28 @@ describe('the capability kernel', () => {
       expect(loop).toMatch(/report\.capability\.promoted/);
     });
 
+    it('does not accumulate its counts into the report every tick shares', async () => {
+      // `{ ...EMPTY }` is a shallow spread, so a nested object inherited from
+      // the module constant is the *same reference* — and these fields are
+      // assigned one at a time rather than replaced whole, which would make
+      // every tick accumulate into it for the life of the process. A skipped
+      // tick would then report the last real one's counts.
+      const { tick } = await import('../server/services/russell/loop.ts');
+      // The first tick finds no reading at all and takes one, so it reports a
+      // drift number — zero, because a first reading is never drift.
+      const first = await tick('capability-test-owner');
+      expect(first.capability.selfModelDrift).toBe(0);
+
+      // The second finds that reading still standing and takes none, so it must
+      // report **null**. Inheriting the nested object from the module constant
+      // would carry the first tick's number here for the life of the process,
+      // and a skipped tick would report it too.
+      const second = await tick('capability-test-owner');
+      expect(second.capability.selfModelDrift).toBeNull();
+      expect(second.capability.dispatched).toBe(0);
+      expect(second.capability.promoted).toBe(0);
+    });
+
     it('cannot stop the tick when it fails', () => {
       const loop = fs.readFileSync(
         path.join(process.cwd(), 'server/services/russell/loop.ts'),

@@ -501,6 +501,25 @@ export async function tick(owner: string): Promise<TickReport> {
     unresolvedAnswers: [],
   renewedReservations: [],
     frontier: [],
+    /*
+     * Re-initialised rather than inherited from the spread, and that is not
+     * decoration: `{ ...EMPTY }` is shallow, so a nested object would be the
+     * *same reference* as the module constant's — and the fields below are
+     * assigned one at a time rather than replaced wholesale, so every tick
+     * would accumulate into `EMPTY` for the life of the process and a skipped
+     * tick would report the last real one's counts.
+     *
+     * `integrityReopens` gets away without this because it is replaced whole;
+     * this one is not, which is exactly the difference.
+     */
+    capability: {
+      dispatched: 0,
+      settled: 0,
+      audited: 0,
+      promoted: 0,
+      recovered: 0,
+      selfModelDrift: null,
+    },
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
     cashOperations: [],
