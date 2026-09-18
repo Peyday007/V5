@@ -2211,23 +2211,58 @@ function plainEvent(kind: string): string {
  * reading for progress is not decoding enum names and somebody debugging has
  * lost nothing.
  */
+/** How many events the history shows before somebody asks for more. */
+const EVENTS_PER_PAGE = 10;
+
 function Done({ view }: { view: CashView }): JSX.Element {
+  const [shown, setShown] = useState(EVENTS_PER_PAGE);
+  const all = view.whatBrainHasDone;
+  const page = all.slice(0, shown);
   return (
     <section className="rs-card rs-cash-history">
       <h3>Everything that has happened</h3>
-      {view.whatBrainHasDone.length === 0 ? (
+      {all.length === 0 ? (
         <p className="rs-hint">Nothing has happened here yet.</p>
       ) : (
-        <ul className="rs-list">
-          {view.whatBrainHasDone.map((event) => (
-            <li key={event.id} className="rs-row">
-              <span className="rs-item-title">{event.summary}</span>
-              <span className="rs-item-meta" title={event.kind}>
-                {plainEvent(event.kind)} &middot; {event.createdAt}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="rs-list">
+            {page.map((event) => (
+              <li key={event.id} className="rs-row">
+                <span className="rs-item-title">{event.summary}</span>
+                <span className="rs-item-meta">
+                  {plainEvent(event.kind)} &middot; {event.createdAt}
+                </span>
+                {/*
+                  * The internal code, kept and shown rather than hidden in a
+                  * tooltip. A title attribute is not reachable on a phone and
+                  * is not reachable by a screen reader on a span, so the one
+                  * person it was there for — somebody debugging — could not
+                  * get at it on either. It is translated *and* kept, which is
+                  * the whole reason `plainEvent` exists.
+                  */}
+                <details className="rs-cash-event-raw">
+                  <summary>What Brain called it</summary>
+                  <code>{event.kind}</code>
+                  {event.actorRef ? <span className="rs-hint"> · {event.actorRef}</span> : null}
+                </details>
+              </li>
+            ))}
+          </ul>
+          {shown < all.length ? (
+            <button
+              type="button"
+              className="rs-link-button"
+              onClick={() => setShown(shown + EVENTS_PER_PAGE)}
+            >
+              Show {Math.min(EVENTS_PER_PAGE, all.length - shown)} more of {all.length}
+            </button>
+          ) : (
+            <p className="rs-hint">
+              {all.length === 1 ? 'That is the one event' : `All ${all.length} events`} Brain keeps
+              on this page. The record itself is append-only and is never trimmed.
+            </p>
+          )}
+        </>
       )}
     </section>
   );

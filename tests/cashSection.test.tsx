@@ -558,11 +558,70 @@ describe('the research roadmap', () => {
     base();
     await mount();
     await waitFor(() => expect(screen.getByText('Everything that has happened')).toBeTruthy());
-    const line = screen.getByText(/An opening was written down/);
-    // Translated for the person, and the underlying code is still on the row
-    // for somebody who needs it.
-    expect(line.getAttribute('title')).toBe('CASH_OPPORTUNITY_CAPTURED');
+    expect(screen.getByText(/An opening was written down/)).toBeTruthy();
+    /*
+     * Translated for the person, and the underlying code still on the row for
+     * somebody who needs it — in the document rather than in a `title`
+     * attribute, which is unreachable on a phone and unreachable by a screen
+     * reader on a span. The one reader it was there for could not get at it on
+     * either.
+     */
+    expect(screen.getByText('CASH_OPPORTUNITY_CAPTURED')).toBeTruthy();
     expect(screen.getByText('Captured "A paid intake repair".')).toBeTruthy();
+  });
+
+  it('pages the history rather than printing all of it', async () => {
+    const many = Array.from({ length: 24 }, (_, index) => ({
+      id: `evt_${index}`,
+      kind: 'CASH_OPPORTUNITY_CAPTURED',
+      summary: `Event number ${index}.`,
+      actorRef: 'BRAIN',
+      createdAt: '2026-09-15T00:00:00.000Z',
+    }));
+    base({ [VIEW]: { body: view({ whatBrainHasDone: many }) } });
+    await mount();
+    await waitFor(() => expect(screen.getByText('Everything that has happened')).toBeTruthy());
+
+    expect(screen.getByText('Event number 0.')).toBeTruthy();
+    expect(screen.queryByText('Event number 15.')).toBeNull();
+    const more = screen.getByText(/Show 10 more of 24/);
+    fireEvent.click(more);
+    expect(screen.getByText('Event number 15.')).toBeTruthy();
+    expect(screen.queryByText('Event number 23.')).toBeNull();
+  });
+});
+
+describe('the first screen is a summary, not the database', () => {
+  it('puts the whole portfolio, the needs, the research and the history behind a disclosure', async () => {
+    base();
+    await mount();
+    await waitFor(() => expect(screen.getByText('The cash machine')).toBeTruthy());
+
+    /*
+     * Production met thirty-one raw signals and five "decisions" standing for
+     * ninety-eight items before anything said what state the sprint was in.
+     * Nothing is deleted — each of these is one click away and complete — but
+     * none of them is the first screen.
+     */
+    for (const heading of [
+      'Everything Brain has found',
+      'What Brain is working on',
+      'Research detail',
+      'Money detail and the spending authority',
+      'Activity',
+      'People and capacity',
+    ]) {
+      const node = screen.getByText(heading);
+      const disclosure = node.closest('details');
+      expect(disclosure).not.toBeNull();
+      expect(disclosure!.open).toBe(false);
+    }
+
+    // And what *is* on the first screen: the status, the decisions and the
+    // best openings, none of them folded.
+    for (const heading of ['The cash machine', 'Decisions for you', 'Best opportunities', 'Money']) {
+      expect(screen.getByText(heading).closest('details')).toBeNull();
+    }
   });
 });
 

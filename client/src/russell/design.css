@@ -2761,3 +2761,14 @@ details.rs-card > section.rs-card {
   padding: 0;
   margin: var(--gap-3) 0 0;
 }
+
+.rs-cash-event-raw > summary {
+  cursor: pointer;
+  font-size: var(--step--2);
+  color: var(--ink-faint);
+}
+
+.rs-cash-event-raw > code {
+  font-size: var(--step--2);
+  overflow-wrap: anywhere;
+}
