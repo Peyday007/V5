@@ -52,7 +52,7 @@ import {
   recordCardFact,
 } from '../../repos/cashCardFacts.ts';
 import { cashEngineCard } from './engineCard.ts';
-import { readyToTest } from './card.ts';
+import { evidenceCard } from './card.ts';
 import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
@@ -271,7 +271,7 @@ async function mayDiveAgain(opportunity: CashOpportunity): Promise<boolean> {
   const reading = cashTier({
     opportunity,
     card,
-    readyToTest: readyToTest(opportunity),
+    readiness: evidenceCard(opportunity).readiness,
   });
   return reading.tier !== 'QUALIFIED' && reading.tier !== 'READY_TO_TEST';
 }

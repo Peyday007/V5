@@ -155,7 +155,7 @@ async function tierOf(id: string) {
   return cashTier({
     opportunity,
     card: cashEngineCard({ opportunity, facts }),
-    readyToTest: readyToTest(opportunity),
+    readiness: evidenceCard(opportunity).readiness,
   });
 }
 

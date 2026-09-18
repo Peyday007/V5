@@ -10,7 +10,7 @@
  * against a classification the production path would never produce.
  */
 import { cashEngineCard } from '../../server/services/cash/engineCard.ts';
-import { readyToTest } from '../../server/services/cash/card.ts';
+import { evidenceCard } from '../../server/services/cash/card.ts';
 import { cashTier, qualificationKeys, type TierReading } from '../../server/services/cash/tier.ts';
 import { CAPTURE_KEY } from '../../server/services/cash/tier.ts';
 import type { CashCardFact, CashOpportunity } from '../../server/domain/types.ts';
@@ -52,7 +52,7 @@ export function tierFor(
   return cashTier({
     opportunity,
     card: cashEngineCard({ opportunity, facts }),
-    readyToTest: readyToTest(opportunity),
+    readiness: evidenceCard(opportunity).readiness,
   });
 }
 

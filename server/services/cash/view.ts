@@ -206,7 +206,7 @@ export async function cashView(input: {
     tiers[opportunity.id] = cashTier({
       opportunity,
       card: engine,
-      readyToTest: card.readiness.ready,
+      readiness: card.readiness,
     });
   }
 

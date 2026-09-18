@@ -45,7 +45,7 @@ import { listOrchestrationsByProject } from '../server/repos/research.ts';
 import { cashRoadmap } from '../server/services/cash/roadmap.ts';
 import { CASH_DISCOVERY_AUTHORITY_NAME } from '../server/services/cash/discoveryAuthority.ts';
 import { cashTier } from '../server/services/cash/tier.ts';
-import { readyToTest } from '../server/services/cash/card.ts';
+import { evidenceCard } from '../server/services/cash/card.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { WORK_ITEM_STATES } from '../server/domain/types.ts';
 import type { WorkItem } from '../server/domain/types.ts';
@@ -230,7 +230,11 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
     const facts = await cardFactsFor(opportunity.id);
     const card = cashEngineCard({ opportunity, facts });
     if (card.unknowns.length === 0) cardsComplete += 1;
-    const tier = cashTier({ opportunity, card, readyToTest: readyToTest(opportunity) });
+    const tier = cashTier({
+      opportunity,
+      card,
+      readiness: evidenceCard(opportunity).readiness,
+    });
     byTier[tier.tier] = (byTier[tier.tier] ?? 0) + 1;
     console.log(
       `  ${opportunity.id}  ${tier.tier.padEnd(14)} ${opportunity.state.padEnd(12)}` +

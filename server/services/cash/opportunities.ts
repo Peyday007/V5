@@ -342,7 +342,7 @@ export async function markReady(input: {
   const reading = cashTier({
     opportunity,
     card: cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
-    readyToTest: true,
+    readiness: card.readiness,
   });
   if (reading.tier !== 'READY_TO_TEST' && reading.tier !== 'QUALIFIED') {
     return refuse(

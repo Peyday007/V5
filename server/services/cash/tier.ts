@@ -64,7 +64,7 @@ import type { EngineCard, EngineCardEntry } from './engineCard.ts';
 import type { CashOpportunity, OpportunitySignal } from '../../domain/types.ts';
 import type { CardFieldKey } from './card.ts';
 import type { EngineFieldKey } from './engineCard.ts';
-import { fieldOwner, type FieldOwner } from './card.ts';
+import { fieldOwner, type CardReadiness, type FieldOwner } from './card.ts';
 
 export const CASH_TIERS = ['SIGNAL', 'CANDIDATE', 'QUALIFIED', 'READY_TO_TEST'] as const;
 export type CashTier = (typeof CASH_TIERS)[number];
@@ -244,8 +244,16 @@ export function qualificationKeys(signal: OpportunitySignal | null): Qualificati
 export function cashTier(input: {
   opportunity: CashOpportunity;
   card: EngineCard;
-  /** Whether the four load-bearing card fields are answered. */
-  readyToTest: boolean;
+  /**
+   * The short card's own reading: whether a bounded test could be run, and
+   * which load-bearing fields are blank if not.
+   *
+   * Passed rather than recomputed so the tier and `markReady` refuse on
+   * exactly the same set — a second `evidenceCard` call here would be a second
+   * reader of one fact, and the two would disagree the first time the column
+   * and the recorded answer differed.
+   */
+  readiness: CardReadiness;
 }): TierReading {
   const signal = input.opportunity.opportunitySignal ?? null;
   const meaning = signal ? SIGNAL_MEANING[signal] : UNSIGNALLED;
@@ -299,7 +307,7 @@ export function cashTier(input: {
     };
   }
 
-  if (!input.readyToTest) {
+  if (!input.readiness.ready) {
     /*
      * Qualified, and the short card still has a load-bearing blank.
      *
@@ -313,9 +321,15 @@ export function cashTier(input: {
       tier: 'QUALIFIED',
       establishes: meaning.establishes,
       doesNotEstablish: meaning.doesNotEstablish,
-      toAdvance: (input.card.entries
-        .filter((one) => one.value === null)
-        .map((one) => one.key) as QualificationKey[]).map(requirement),
+      /*
+       * The short card's load-bearing blanks, and not every unanswered field.
+       *
+       * At this tier everything the decision turns on is answered, so the
+       * remaining nulls are a mixture of what a *test* still needs and what is
+       * merely nice to know. Listing both would tell somebody a qualified
+       * opening is further from a test than it is.
+       */
+      toAdvance: (input.readiness.missing as QualificationKey[]).map(requirement),
       answered: answeredCount,
       required: keys.length,
       summary:

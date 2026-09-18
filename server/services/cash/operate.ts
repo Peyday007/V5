@@ -59,7 +59,7 @@ import {
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { readCapability, needForCapability } from './capabilities.ts';
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
-import { evidenceCard, readyToTest } from './card.ts';
+import { evidenceCard } from './card.ts';
 import { cashEngineCard } from './engineCard.ts';
 import { cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
@@ -238,7 +238,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
     const reading = cashTier({
       opportunity,
       card: cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
-      readyToTest: readyToTest(opportunity),
+      readiness: evidenceCard(opportunity).readiness,
     });
     if (reading.tier === 'SIGNAL') continue;
 
