@@ -46,6 +46,9 @@ import {
   WorkView,
 } from './Views.tsx';
 import { parseRoute, type Navigation, type Route } from '../lib/router.ts';
+import { CashSection } from './Cash.tsx';
+import { Devices } from './Devices.tsx';
+import { PeopleAndCapacityView } from './People.tsx';
 
 /**
  * The six, and then the two.
@@ -63,6 +66,17 @@ const SECTIONS = [
   { name: 'NEEDS_YOU' as const, label: 'Needs you', primary: true },
   { name: 'BUILD' as const, label: 'Build', primary: false },
   { name: 'SITES' as const, label: 'Connected sites', primary: false },
+  /*
+   * Cash is secondary, and that is a decision rather than a ranking.
+   *
+   * It is the destination the people running a sprint use most, and it is still
+   * a *temporary* section inside a Brain that does research, software and
+   * everything else. Promoting it would make the six primary destinations seven
+   * and rebuild the thumb bar around work that is meant to be wound down in a
+   * month or two — §30's rule that Cash Mode must not become the global
+   * definition of what Brain is allowed to pursue, applied to the navigation.
+   */
+  { name: 'CASH' as const, label: 'Cash', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -442,6 +456,35 @@ export function RussellShell({
                     </div>
                   </li>
                 ) : null}
+                {/* People & capacity is in More rather than the rail because
+                    it is set up once and then read occasionally. It is a
+                    destination all the same: it used to be a panel at the
+                    bottom of Cash, which made a temporary section the place a
+                    person went to administer the permanent Brain. */}
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      go({ name: 'PEOPLE' });
+                    }}
+                  >
+                    People &amp; capacity
+                  </button>
+                </li>
+                <li role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      go({ name: 'DEVICES' });
+                    }}
+                  >
+                    Your devices
+                  </button>
+                </li>
                 <li role="none">
                   <button type="button" role="menuitem" onClick={() => go({ name: 'LEGACY' })}>
                     Full console
@@ -492,11 +535,26 @@ export function RussellShell({
                 stays underneath because it is the one thing that carries its
                 own freshness, which the role-gated view deliberately does not. */}
             <WhoView projectId={projectId} />
+            {/* Who answers "who is on this project"; People & capacity answers
+                "who is in this Brain, and what can run in it". Two questions
+                one word apart, so the link is here rather than the page being
+                folded into this one. */}
+            <p className="rs-hint">
+              <button type="button" className="rs-link" onClick={() => go({ name: 'PEOPLE' })}>
+                People &amp; capacity
+              </button>{' '}
+              is who has joined this Brain and how much Claude research capacity it can fire.
+            </p>
             <FleetView />
             <FleetCentre projectId={projectId} />
           </>
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
+        {route.name === 'DEVICES' ? <Devices /> : null}
+        {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
+        {route.name === 'CASH' ? (
+          <CashSection projectId={projectId} isBrainAdmin={user.isBrainAdmin} />
+        ) : null}
         {route.name === 'SEARCH' ? (
           <Search
             onOpen={(href) => {

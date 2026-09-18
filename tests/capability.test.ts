@@ -66,6 +66,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     evidenceExcerpt: 'No person shall bring an action…',
     evidenceLocator: '§ 442-d',
     evidenceLane: 'statute',
+    opportunitySignal: null,
     retrievedAt: '2026-01-05',
     confidence: 0.9,
     contradictionState: 'UNCHALLENGED',

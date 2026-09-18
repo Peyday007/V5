@@ -25,6 +25,8 @@ import {
   sessionsForRoutine,
   listAccounts,
   listRoutines,
+  renameAccount,
+  renameRoutine,
   policyHistory,
   repointRoutineWorker,
   setRoutineCapabilities,
@@ -58,6 +60,44 @@ function option(name: string): string | null {
   return i === -1 ? null : (argv[i + 1] ?? null);
 }
 
+/**
+ * A human name, which may have spaces in it.
+ *
+ * The dispatch workflow splits its arguments on whitespace, so a name with a
+ * space cannot arrive as one argument at all — `--account Brain Research A`
+ * reaches here as three. `rename` has always written those as underscores and
+ * turned them back; `register-routine` did not, which made an account whose
+ * name has a space in it unreachable from the one surface an operator has.
+ * Every account in this fleet but two is named that way, so the convention was
+ * right and it was applied in one of the two places that needed it.
+ *
+ * It is deliberately only for the options that carry a *name*. A `trig_…` ref,
+ * a worker id and a secret name never contain a space, and folding underscores
+ * in those would corrupt values that legitimately have them.
+ */
+function nameOption(name: string): string | null {
+  return option(name)?.replace(/_/g, ' ') ?? null;
+}
+
+/**
+ * An account named by `--ref`, where the same flag also carries `trig_…` ids.
+ *
+ * A trigger id has underscores in it, so folding `--ref` the way `nameOption`
+ * folds a name would corrupt every one of them. The value is therefore tried
+ * exactly as typed first and only then as a name with its underscores turned
+ * back into spaces — a raw match always wins, so no account that was reachable
+ * before becomes unreachable now.
+ *
+ * Without it an account whose name has a space in it could be created and then
+ * never renamed, quarantined, re-enabled or given a target through the one
+ * surface an operator has. §24's sentence at a command line: an escalation
+ * whose remedy cannot be typed is not a remedy.
+ */
+async function accountByRef(ref: string | null): Promise<Awaited<ReturnType<typeof getAccountByName>>> {
+  if (!ref) return null;
+  return (await getAccountByName(ref)) ?? (await getAccountByName(ref.replace(/_/g, ' ')));
+}
+
 const ACTOR = option('actor') ?? 'operator:fleet-cli';
 
 function ok(line: string): void {
@@ -77,7 +117,7 @@ async function main(): Promise<void> {
   /* ---------------------------------------------------------------------- */
 
   if (command === 'register-account') {
-    const name = option('name');
+    const name = nameOption('name');
     if (!name) return refuse('pass --name.');
     const existing = await getAccountByName(name);
     if (existing) {
@@ -93,10 +133,10 @@ async function main(): Promise<void> {
   }
 
   if (command === 'register-routine') {
-    const accountName = option('account');
+    const accountName = nameOption('account');
     const ref = option('ref');
     const secret = option('secret');
-    const name = option('name') ?? ref;
+    const name = nameOption('name') ?? ref;
     if (!accountName || !ref || !secret) {
       return refuse('pass --account <name> --ref <trig_…> --secret <ENV_VAR_NAME>.');
     }
@@ -270,7 +310,7 @@ async function main(): Promise<void> {
       return refuse(`--to must be one of ${FLEET_STATES.join(', ')}.`);
     }
     if (kind === 'account') {
-      const account = await getAccountByName(ref);
+      const account = await accountByRef(ref);
       if (!account) return refuse(`no account named "${ref}".`);
       const changed = await setAccountState({ accountId: account.id, from: account.state, to, reason });
       if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
@@ -281,6 +321,54 @@ async function main(): Promise<void> {
     const changed = await setRoutineState({ routineId: routine.id, from: routine.state, to, reason });
     if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
     return ok(`set-state routine ${ref} ${routine.state} -> ${to}`);
+  }
+
+  /*
+   * Rename a surface.
+   *
+   * A label and nothing else. `V1` and `V2` were the site names borrowed for
+   * capacity surfaces, which is exactly the collision that makes a fleet reading
+   * ambiguous — so a capacity surface is called `Brain Research A` and a site
+   * keeps `V1`. Nothing about the credential, the trigger, the bound worker or
+   * the state moves, which is why this is safe to run against a Routine that is
+   * mid-packet.
+   */
+  if (command === 'rename') {
+    const kind = (option('kind') ?? '').toLowerCase();
+    // By the trigger it fires, or by what it is currently called — and what it
+    // is called may have spaces in it, so the ref is read both ways below.
+    const ref = option('ref');
+    const to = nameOption('to');
+    if (!kind || !ref || !to) {
+      return refuse('pass --kind account|routine --ref <name|trig_\u2026> --to <New_Name>.');
+    }
+    if (kind !== 'account' && kind !== 'routine') {
+      return refuse(`--kind must be account or routine, not "${kind}".`);
+    }
+    if (kind === 'account') {
+      const account = await accountByRef(ref);
+      if (!account) return refuse(`no account named "${ref}".`);
+      if (account.name === to) return ok(`rename account ${ref}: already called that`);
+      const changed = await renameAccount({ accountId: account.id, from: account.name, to });
+      if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
+      return ok(`rename account ${ref} -> ${to} (credential, state and routines untouched)`);
+    }
+    // By the trigger it fires, or by what it is currently called — the latter
+    // raw first and then with underscores folded, for `accountByRef`'s reason.
+    const all = await listRoutines();
+    const routine =
+      (await getRoutineByRef(ref)) ??
+      all.find((one) => one.name === ref) ??
+      all.find((one) => one.name === ref.replace(/_/g, ' ')) ??
+      null;
+    if (!routine) return refuse(`no Routine registered as ${ref}.`);
+    if (routine.name === to) return ok(`rename routine ${ref}: already called that`);
+    const changed = await renameRoutine({ routineId: routine.id, from: routine.name, to });
+    if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
+    return ok(
+      `rename routine ${routine.routineRef} "${routine.name}" -> "${to}" ` +
+        '(secret name, digest, worker binding and state untouched)',
+    );
   }
 
   /* ---------------------------------------------------------------------- */
@@ -297,7 +385,7 @@ async function main(): Promise<void> {
 
     let scopeId: string | null = null;
     if (scope === 'ACCOUNT') {
-      const account = ref ? await getAccountByName(ref) : null;
+      const account = await accountByRef(ref);
       if (!account) return refuse('pass --ref <account name> for an ACCOUNT target.');
       scopeId = account.id;
     } else if (scope === 'ROUTINE') {
@@ -399,8 +487,29 @@ async function main(): Promise<void> {
      * asking the router.
      */
     const eligible = snapshot.candidates.filter((candidate) => {
+      /*
+       * Asked about a project this surface actually serves, because routing is
+       * project-first and a bin with no project is not a thing that exists.
+       *
+       * `Bin.projectId` is NOT NULL, so every real bin carries one and
+       * `routeBin` asks about it before anything else. The stub below used to
+       * carry none, which made `servesProjects.includes(undefined)` false for
+       * every candidate and printed `0 eligible now` over a fleet that was
+       * demonstrably working — V1 had 294 fires and a completed bin behind it.
+       * That is this line's *other* failure mode: the comment above records the
+       * day it overstated what the fleet could do, and understating it is worse,
+       * because a fleet that reports itself dead is one somebody starts
+       * repairing.
+       *
+       * The question is asked per candidate, against a project that candidate
+       * serves, so the project dimension is still applied rather than skipped.
+       * A candidate serving no project is correctly ineligible: an unbound
+       * Routine, or one whose worker holds no membership, can be handed nothing.
+       */
+      const [servedProject] = candidate.servesProjects;
+      if (!servedProject) return false;
       const probe = routeBin({
-        bin: { id: 'probe', requiredCapabilities: [] } as never,
+        bin: { id: 'probe', projectId: servedProject, requiredCapabilities: [] } as never,
         candidates: [candidate],
         fleetPolicy: null,
         fleetInFlight: 0,
@@ -527,86 +636,37 @@ async function main(): Promise<void> {
   }
 
 /**
- * One bounded self-test bin for a factory surface.
+ * One bounded self-test bin for a surface, of whichever kind it is.
  *
- * The controlled fire `verify-surface --probe` needs, and deliberately the
- * smallest thing that can produce the whole chain. It is a `DETERMINISTIC_CHECK`
- * — the shape §22 already describes as exercising claiming, the lease,
- * heartbeats, fencing and completion without touching a document or spending
- * anything — so a worker answers it by hashing a value that travelled inside the
- * bin.
+ * It was a factory-only probe, and the fleet it was pointed at had no factory
+ * surface in it. Every research Routine — which is all of them here — refused
+ * with five problems that all said the same thing in different words: *this is
+ * not a factory surface*. `docs/CASH-DEPLOYMENT.md` names this command as the
+ * gate before a sprint may be activated, so the documented gate could not pass
+ * for the only kind of surface the documented topology has. A check that
+ * refuses every healthy thing it is pointed at is not a check.
  *
- * It names the repository the worker is authorized for, because that is the
- * dimension being verified and because a repository family with no repository
- * named is refused at admission. It is not work on that repository: the manifest
- * says so, it belongs to no campaign, and nothing reads its result but this
- * command.
+ * The bin itself now lives in `server/services/fleet/probe.ts`. The People &
+ * Capacity page needs the identical fire for the identical reason, and a second
+ * copy of it would be the fourth time in this repository that one rule applied
+ * by one of two readers turned out to be worse than none — here the two would
+ * disagree about what "proven" costs and what a probe may touch.
  */
 async function probeBin(input: {
   worker: { id: string; name: string };
   routing: { repositories: string[] };
   routine: { id: string; name: string; capabilities: string[] };
+  family: 'FACTORY' | 'RESEARCH';
 }): Promise<string> {
-  const { createBin } = await import('../server/repos/bins.ts');
-  const { listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
-  const memberships = (await listMembershipsForPrincipal('WORKER', input.worker.id)).filter(
-    (membership) => membership.active,
-  );
-  const projectId = memberships[0]?.projectId;
-  if (!projectId) throw new Error('this worker is a member of no project, so it can be handed nothing');
-  const repository = input.routing.repositories[0];
-  if (!repository) throw new Error('this worker is authorized for no repository');
-  const nonce = new Date().toISOString();
-  const bin = await createBin({
-    projectId,
-    kind: 'DETERMINISTIC_CHECK',
-    title: `Surface self-test for ${input.routine.name}`,
-    objective:
-      'Prove this surface can be fired, can authenticate, can be handed a bin and can finish one. ' +
-      'Submit the sha-256 of the value below as the unit result. Change nothing anywhere.',
-    rationale: 'verify-surface --probe',
-    manifest: {
-      objective: 'Return the sha-256 of one value carried in this manifest.',
-      why: 'a bounded proof that this Routine runs as the worker it is bound to',
-      lineage: { projectId, layerId: null, goal: null, orchestrationId: null },
-      units: [{ key: 'echo', establishes: 'the surface answered', input: nonce, transform: 'sha256', dependsOn: [] }],
-      /*
-       * Named so the bin routes to this surface and is admitted — a repository
-       * family with no repository named is refused — and explicitly not work on
-       * it. A probe pins no commit and integrates nothing, so both of those are
-       * empty rather than plausible: an invented sha in a row is a lie whoever
-       * reads it next has no way to detect.
-       */
-      repository: {
-        remote: `https://github.com/${repository}`,
-        ref: 'main',
-        baseSha: '',
-        integrationBranch: '',
-        pullRequest: null,
-      },
-      acceptableSources: [],
-      excludedSources: [],
-      evidence: ['one unit result'],
-      outputs: ['the sha-256 of the value in this manifest'],
-      authorizedActions: ['submit the unit result', 'complete this bin'],
-      prohibitedActions: [
-        'cloning, reading, writing, branching or pushing to any repository',
-        'creating or claiming any other work',
-        'anything with an external effect',
-      ],
-      budgetUnits: 1,
-      retry: { maxAttempts: 2, backoffSeconds: 30 },
-      stoppingConditions: ['the declared unit has a result'],
-    },
-    completionContract: 'DETERMINISTIC_UNITS_V1',
-    workloadClass: 'FACTORY_SURFACE_PROBE',
-    requiredCapabilities: [...input.routine.capabilities],
+  const { createProbeBin } = await import('../server/services/fleet/probe.ts');
+  return createProbeBin({
+    worker: input.worker,
+    repositories: input.routing.repositories,
+    routine: input.routine,
+    family: input.family,
     createdByType: 'SYSTEM',
     createdById: 'fleet-cli:verify-surface',
-    ready: true,
-    maxAttempts: 2,
   });
-  return bin.id;
 }
 
   /*
@@ -657,32 +717,95 @@ async function probeBin(input: {
       console.log(`  families    ${routing ? `[${routing.families.join(',')}]` : 'no routing row (derived default)'}`);
       console.log(`  repos       ${routing ? `[${routing.repositories.join(',')}]` : '— (a worker with no row may never be handed repository work)'}`);
       if (worker.archived) problems.push('the bound worker is archived');
-      if (!routing) problems.push('the bound worker has no routing row, so it may never be handed repository work');
-      if (routing && !routing.families.includes('FACTORY')) {
-        problems.push(`the bound worker serves [${routing.families.join(',')}] and not FACTORY`);
+      if (!routing) {
+        problems.push('the bound worker has no routing row, so it may never be handed repository work');
       }
       /*
-       * The check this command exists for. A worker that also serves research is
-       * not a separated identity however its connector is named — it is the
-       * research identity wearing a second label, and every routing boundary
-       * downstream would pass while separating nothing.
+       * What this surface is *for* is read from the bound worker's own routing
+       * row, never assumed.
+       *
+       * Every check below used to assume FACTORY, so a research Routine — which
+       * is every Routine in this fleet — was refused with five problems that all
+       * restated "this is not a factory surface". The instrument was pointed at
+       * a fleet it could not describe, and `docs/CASH-DEPLOYMENT.md` names it as
+       * the gate a sprint waits behind, so the gate could never open. A surface
+       * is verified against the contract it actually has.
        */
-      if (routing && routing.families.some((family) => family !== 'FACTORY')) {
-        problems.push(
-          `the bound worker also serves [${routing.families.filter((f) => f !== 'FACTORY').join(',')}] — ` +
-            'a factory surface must not share an identity with research work',
-        );
-      }
-      if (routing && routing.repositories.length === 0) {
-        problems.push('the bound worker is authorized for no repository, so no factory bin can route here');
-      }
-      for (const tag of ['repository', 'repository-write']) {
-        if (!routine.capabilities.includes(tag)) problems.push(`this Routine does not declare ${tag}`);
+      const surfaceFamily: 'FACTORY' | 'RESEARCH' = routing?.families.includes('FACTORY')
+        ? 'FACTORY'
+        : 'RESEARCH';
+      console.log(`  verifying   as a ${surfaceFamily} surface, from the bound worker's routing row`);
+      if (surfaceFamily === 'FACTORY') {
+        /*
+         * The check this command exists for. A worker that also serves research is
+         * not a separated identity however its connector is named — it is the
+         * research identity wearing a second label, and every routing boundary
+         * downstream would pass while separating nothing.
+         */
+        if (routing && routing.families.some((family) => family !== 'FACTORY')) {
+          problems.push(
+            `the bound worker also serves [${routing.families.filter((f) => f !== 'FACTORY').join(',')}] — ` +
+              'a factory surface must not share an identity with research work',
+          );
+        }
+        if (routing && routing.repositories.length === 0) {
+          problems.push('the bound worker is authorized for no repository, so no factory bin can route here');
+        }
+        for (const tag of ['repository', 'repository-write']) {
+          if (!routine.capabilities.includes(tag)) problems.push(`this Routine does not declare ${tag}`);
+        }
+      } else {
+        /*
+         * The research mirror, and the asymmetry is deliberate. A factory surface
+         * is refused for *also* serving research, because the thing being proved
+         * there is separation. Nothing equivalent holds here: RESEARCH and
+         * GENERAL together is the ordinary shape of a research worker, and
+         * `airynworker2` has served both for this fleet's whole life.
+         *
+         * What does matter is that a research surface must never be able to take
+         * repository work, and that it is a member of something — routing is
+         * project-first, so a worker holding no membership can be handed nothing
+         * whatever else is right about it.
+         */
+        if (routing && routing.repositories.length > 0) {
+          problems.push(
+            `the bound worker is authorized for [${routing.repositories.join(',')}] — ` +
+              'a research surface must not be able to take repository work',
+          );
+        }
+        for (const tag of ['repository', 'repository-write']) {
+          if (routine.capabilities.includes(tag)) {
+            problems.push(`this Routine declares ${tag}, which a research surface must not`);
+          }
+        }
+        const { listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
+        const active = (await listMembershipsForPrincipal('WORKER', worker.id)).filter((m) => m.active);
+        console.log(`  projects    ${active.length} active membership(s)`);
+        if (active.length === 0) {
+          problems.push('the bound worker is a member of no project, so no bin can route here');
+        }
+        /*
+         * Said rather than counted as a problem. One worker across several
+         * projects is invariant 41's shape and a privacy question for a person,
+         * not a fact that makes this surface unusable — and calling it a problem
+         * here would block the probe on a condition the probe cannot settle.
+         */
+        if (active.length > 1) {
+          console.log(
+            `  NOTE        this worker serves ${active.length} projects, so every Routine bound to it ` +
+              'can be handed work from all of them (invariant 41)',
+          );
+        }
       }
     }
 
     if (flag('probe') && problems.length === 0 && worker && routing) {
-      const created = await probeBin({ worker, routing, routine });
+      const created = await probeBin({
+        worker,
+        routing,
+        routine,
+        family: routing.families.includes('FACTORY') ? 'FACTORY' : 'RESEARCH',
+      });
       console.log('');
       console.log(`  PROBE       created ${created} — a bounded self-test bin for this surface.`);
       console.log('              It names no objective, changes no repository and belongs to no');
@@ -846,7 +969,7 @@ async function probeBin(input: {
 
   refuse(
     `unknown command "${command}". Try: show, register-account, register-routine, bind-worker, ` +
-      'repoint-worker, ' +
+      'repoint-worker, rename, ' +
       'set-state, set-target, boost, pause, resume, policy-history, explain-route, verify-surface, scale-advice, ' +
       'profile, simulate.',
   );

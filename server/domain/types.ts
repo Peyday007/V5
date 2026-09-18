@@ -564,11 +564,73 @@ export type LaneNecessity = 'REQUIRED' | 'OPTIONAL' | 'CONDITIONAL';
  * what the worker needs to research it and is never used for matching. Keeping
  * them apart is the whole point: see `domain/evidenceLanes.ts`.
  */
+/**
+ * What kind of evidence a lane is asking for, which decides its bar.
+ *
+ * "Two independent sources" is right for a disputed market estimate and wrong
+ * for everything else — `standards.ts` has that argument per claim. This is the
+ * same argument per *lane*, and it exists because the lane is where a fragment
+ * says how many distinct things it needs, which no per-claim standard can know.
+ *
+ *   SPECIFIC_INSTANCE       one opening, one listing, one solicitation. One
+ *                           authoritative primary listing proves its own
+ *                           existence, price, deadline and terms. Demanding a
+ *                           second publisher for "this posting exists" is
+ *                           demanding something that does not exist.
+ *   MARKET_PATTERN          the claim is that something *repeats*. One example
+ *                           cannot establish a pattern however good it is, so
+ *                           this needs several distinct examples — which is a
+ *                           different count from several publishers.
+ *   GENERALIZED_ECONOMICS   a price, an earnings level, a demand level or a
+ *                           margin stated about a market rather than about one
+ *                           listing. This is the shape that turns out to be one
+ *                           vendor's number repeated, so it needs independent
+ *                           publishers or it stays insufficient.
+ */
+export const LANE_EVIDENCE_KINDS = [
+  'SPECIFIC_INSTANCE',
+  'MARKET_PATTERN',
+  'GENERALIZED_ECONOMICS',
+] as const;
+export type LaneEvidenceKind = (typeof LANE_EVIDENCE_KINDS)[number];
+
 export interface EvidenceLane {
   id: string;
   description: string;
   necessity: LaneNecessity;
+  /** Defaults to SPECIFIC_INSTANCE, which is the bar one listing can clear. */
+  evidenceKind?: LaneEvidenceKind;
+  /**
+   * How many distinct examples this lane needs, when the fragment says.
+   *
+   * Distinct *examples*, not distinct hosts: three separately-posted listings
+   * on one board are three examples of a repeated brief and one publisher.
+   * The fragment's completion criteria used to say "at least 3 distinct
+   * qualifying postings" in prose that nothing read, and the gate accepted one.
+   */
+  minDistinctExamples?: number;
 }
+
+/**
+ * What kind of opening a claim establishes, if it establishes one.
+ *
+ * Here rather than in `opportunitySignals.ts` because it is a column's
+ * vocabulary and this file is where those live; that module holds the mapping
+ * to a mechanism and the sentence a worker is shown. `domain/opportunitySignals.ts`
+ * has the whole argument for why this is typed rather than matched against a
+ * lane id — the short version is that the lane id is a planner's word and this
+ * is a closed set.
+ */
+export const OPPORTUNITY_SIGNALS = [
+  'ACTIVE_BUYER_DEMAND',
+  'PAID_TASK_OR_CONTRACT',
+  'PRICING_OR_INFORMATION_ASYMMETRY',
+  'EXPIRING_OPENING',
+  'SUPPLY_DEMAND_MISMATCH',
+  'RESALABLE_ASSET_OPENING',
+  'RECURRING_OUTSOURCED_WORK',
+] as const;
+export type OpportunitySignal = (typeof OPPORTUNITY_SIGNALS)[number];
 
 export const CLAIM_TYPES = [
   'SOURCED_FACT',
@@ -1248,6 +1310,7 @@ export interface ResearchClaimRow {
   evidence_excerpt: string | null;
   evidence_locator: string | null;
   evidence_lane: string | null;
+  opportunity_signal: string | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -2362,6 +2425,15 @@ export interface ResearchClaim {
   evidenceLocator: string | null;
   /** The fragment evidence lane it fills, if any. Coverage is counted per lane. */
   evidenceLane: string | null;
+  /**
+   * The kind of opening this claim establishes, if it establishes one.
+   *
+   * Null for ordinary descriptive evidence, which is most claims. Kept beside
+   * the lane rather than instead of it: the lane says which question the claim
+   * answers and carries coverage, and this says whether the claim describes a
+   * piece of work. Both are true of one claim and neither substitutes.
+   */
+  opportunitySignal: OpportunitySignal | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -2950,11 +3022,22 @@ export type DenialReason = (typeof DENIAL_REASONS)[number];
 
 export interface UserRow {
   id: string;
-  email: string;
+  /**
+   * Null for a member who enrolled with a passkey.
+   *
+   * An address is how a password is recovered, and there is no password to
+   * recover here (§26's invitation journey is the one that still needs one).
+   * Requiring it of somebody who will never use it would be collecting a
+   * personal detail for nothing.
+   */
+  email: string | null;
   display_name: string;
-  password_algorithm: string;
-  password_verifier: string;
-  password_updated_at: string;
+  /** See `UserKind`. Declared at creation, never inferred from a name. */
+  kind: string;
+  /** Null together with the verifier: a passkey-only account has no password. */
+  password_algorithm: string | null;
+  password_verifier: string | null;
+  password_updated_at: string | null;
   must_change_password: number;
   is_brain_admin: number;
   disabled_at: string | null;
@@ -3141,15 +3224,31 @@ export interface IdentityEventRow {
  * view type without them is what keeps a verifier from being accidentally
  * serialized into an API response.
  */
+/**
+ * Whether an identity is somebody, or machinery proving itself.
+ *
+ * `projects.purpose` settled the same question in migration 028 and for the
+ * same reason: a screen that asks for *people* must not be handed the two
+ * accounts `scripts/verify-hosted.ts` creates to prove authorization works, and
+ * deciding that from a display name is a string comparison standing in for a
+ * fact. It is declared at creation and read by projections; it grants nothing,
+ * refuses nothing, and no authorization decision consults it.
+ */
+export const USER_KINDS = ['PERSON', 'SYSTEM'] as const;
+export type UserKind = (typeof USER_KINDS)[number];
+
 export interface User {
   id: string;
-  email: string;
+  /** Null for a passkey-only member; see `UserRow.email`. */
+  email: string | null;
   displayName: string;
+  kind: UserKind;
   isBrainAdmin: boolean;
   mustChangePassword: boolean;
   disabled: boolean;
   disabledAt: string | null;
-  passwordUpdatedAt: string;
+  /** Null when this account has never had a password. */
+  passwordUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -3238,8 +3337,15 @@ export interface IdentityEvent {
 export interface Principal {
   type: PrincipalType;
   id: string;
-  /** For a person their email, for a worker its canonical name. */
-  handle: string;
+  /**
+   * For a person their email, for a worker its canonical name.
+   *
+   * Null for a person who enrolled with a passkey and therefore has no address.
+   * Nothing authorizes on it — it is what a screen prints and what the password
+   * routes look an account up by, and both of those have to say "there is none"
+   * rather than substitute something that reads like one.
+   */
+  handle: string | null;
   displayName: string;
   /** Brain-wide administration. Always false for a worker. */
   isBrainAdmin: boolean;
@@ -3849,6 +3955,7 @@ export interface FleetAccountRow {
   id: string;
   provider: string;
   name: string;
+  kind: string;
   plan_label: string | null;
   declared_plan_power: string | null;
   state: string;
@@ -3860,10 +3967,23 @@ export interface FleetAccountRow {
   updated_at: string;
 }
 
+/**
+ * Whether an account is capacity somebody bought, or a verification fixture.
+ *
+ * `verify-hosted-account-a` and `-b` expect the sentinel secret
+ * `VERIFY_HOSTED_NEVER_SET`, which is never deployed, so the dispatcher already
+ * leaves them out of routing and reports them under `missingSecrets`. This is
+ * the same fact said once, in a column, instead of by every reader comparing
+ * the name against a prefix.
+ */
+export const FLEET_ACCOUNT_KINDS = ['CAPACITY', 'VERIFICATION'] as const;
+export type FleetAccountKind = (typeof FLEET_ACCOUNT_KINDS)[number];
+
 export interface FleetAccount {
   id: string;
   provider: string;
   name: string;
+  kind: FleetAccountKind;
   planLabel: string | null;
   /** What the operator says they bought. A label, never arithmetic. */
   declaredPlanPower: string | null;
@@ -5399,4 +5519,980 @@ export interface RussellSoftwareRequestRow {
   decline_reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/* ==========================================================================
+ * Cash Mode (§30)
+ *
+ * The temporary operating section. Every enum here is a closed set matched
+ * exactly — there is no substring matching, no "closest state" and no inferred
+ * label anywhere downstream — and every money figure is integer cents.
+ * ======================================================================== */
+
+/**
+ * Where a cash sprint is in its life.
+ *
+ * `WINDING_DOWN` and `ARCHIVED` stop exactly one thing: **new discovery**.
+ * Delivery, collection, settlement, needs and every existing opportunity keep
+ * their ordinary execution in all three, because a sprint ending is not a
+ * customer's obligation ending.
+ */
+export const CASH_MODE_STATES = ['ACTIVE', 'WINDING_DOWN', 'ARCHIVED'] as const;
+export type CashModeState = (typeof CASH_MODE_STATES)[number];
+
+/**
+ * The search buckets, from the plan's own table.
+ *
+ * Closed so a mechanism is a fact rather than free text, and deliberately
+ * non-exhaustive in spirit: `OTHER` exists because the mandate is broad
+ * discovery and a bucket list that refused an unlisted opening would be the
+ * invented preference the plan explicitly forbids.
+ */
+export const CASH_MECHANISMS = [
+  'EXISTING_BUYING_SIGNAL',
+  'DIAGNOSTIC_OPPORTUNITY',
+  'EXPLICIT_PAID_REQUEST',
+  'TEMPORARY_EXPLOIT',
+  'SUPPLY_DEMAND_MISMATCH',
+  'PAIN_TRIGGERED_IMPLEMENTATION',
+  'RESALE_OR_ASSET',
+  /*
+   * The second wave, added when the mandate was made explicit: maximise usable
+   * cash inside a week, from any lawful shape of transaction, without bias
+   * toward building a durable company.
+   *
+   * The five above were the plan's original table and they are all *demand you
+   * can already see published*. These five are the shapes that were missing,
+   * and each one is a different reason money is available rather than a
+   * different industry — which is what keeps the table a list of mechanisms
+   * instead of a list of niches.
+   */
+  'INFORMATION_ASYMMETRY',
+  'PRODUCTIZED_SERVICE',
+  'CAPABILITY_ARBITRAGE',
+  'SUBCONTRACTED_FULFILMENT',
+  'JIGSAW_COMBINATION',
+  'OTHER',
+] as const;
+export type CashMechanism = (typeof CASH_MECHANISMS)[number];
+
+export const CASH_OPPORTUNITY_STATES = [
+  'DISCOVERED',
+  'EVIDENCE_CARD',
+  'READY',
+  'EXECUTING',
+  'DELIVERING',
+  'COLLECTED',
+  'DECLINED',
+  'ARCHIVED',
+] as const;
+export type CashOpportunityState = (typeof CASH_OPPORTUNITY_STATES)[number];
+
+/**
+ * What a person should do with this piece, derived on the read path.
+ *
+ * Never stored. A row is not a decision: a stored label is stale the moment the
+ * dependency it was waiting on settles, and two readers deriving it separately
+ * is how one screen comes to disagree with another.
+ */
+export const CASH_DISPOSITIONS = [
+  'EXECUTE_NOW',
+  'RUN_IN_PARALLEL',
+  'WAIT_FOR_DEPENDENCY',
+  'TEST_A_DECISIVE_UNKNOWN',
+  'ARCHIVED',
+] as const;
+export type CashDisposition = (typeof CASH_DISPOSITIONS)[number];
+
+/**
+ * An execution job: the first thing in Cash Mode that is somebody's.
+ *
+ * Discovery, evidence and the opportunity itself are shared across the whole
+ * Brain. A job is where separation begins, because it is the first moment there
+ * is anything private to separate — an owner, a budget, a credential, a
+ * decision. `RELEASED` hands the work back without destroying the row, so a
+ * reassignment keeps the history of who held it before.
+ */
+/* --------------------------------------------------------------------------
+ * Passkeys, member slots and the links that fill them
+ * ------------------------------------------------------------------------ */
+
+/** How a registered device came to exist, so an audit can tell the cases apart. */
+export const PASSKEY_ORIGINS = ['ENROLLMENT', 'ADDED_DEVICE', 'RECOVERY'] as const;
+export type PasskeyOrigin = (typeof PASSKEY_ORIGINS)[number];
+
+export interface UserPasskeyRow {
+  id: string;
+  user_id: string;
+  credential_id: string;
+  public_key: string;
+  algorithm: number;
+  sign_count: number;
+  label: string;
+  origin_kind: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+}
+
+export interface UserPasskey {
+  id: string;
+  userId: string;
+  /** The authenticator's own id, base64url. */
+  credentialId: string;
+  /** The COSE public key, base64url. Public, so stored as it is. */
+  publicKey: string;
+  algorithm: number;
+  signCount: number;
+  label: string;
+  originKind: PasskeyOrigin;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
+}
+
+export const ENROLLMENT_KINDS = ['ENROLLMENT', 'RECOVERY'] as const;
+export type EnrollmentKind = (typeof ENROLLMENT_KINDS)[number];
+
+export interface MemberEnrollmentRow {
+  id: string;
+  user_id: string;
+  display_name: string;
+  kind: string;
+  token_prefix: string;
+  token_digest: string;
+  issued_by_user_id: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+}
+
+export interface MemberEnrollment {
+  id: string;
+  /** The slot this link fills. Fixed at issue; the acceptor does not choose it. */
+  userId: string;
+  displayName: string;
+  kind: EnrollmentKind;
+  tokenPrefix: string;
+  tokenDigest: string;
+  issuedByUserId: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
+}
+
+export const CASH_JOB_STATES = [
+  'UNASSIGNED',
+  'ASSIGNED',
+  'EXECUTING',
+  'DELIVERING',
+  'COLLECTED',
+  'RELEASED',
+] as const;
+export type CashJobState = (typeof CASH_JOB_STATES)[number];
+
+/**
+ * Who may read a job's working state.
+ *
+ * `PRIVATE` is the default in the schema rather than here, because the safe
+ * answer must not be the one somebody remembers to choose.
+ */
+export const CASH_JOB_VISIBILITIES = ['PRIVATE', 'SHARED'] as const;
+export type CashJobVisibility = (typeof CASH_JOB_VISIBILITIES)[number];
+
+export interface CashJobRow {
+  id: string;
+  opportunity_id: string;
+  project_id: string;
+  state: string;
+  owner_user_id: string | null;
+  visibility: string;
+  budget_cents: number | null;
+  currency: string;
+  note: string | null;
+  assigned_at: string | null;
+  released_at: string | null;
+  release_reason: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashJob {
+  id: string;
+  opportunityId: string;
+  projectId: string;
+  state: CashJobState;
+  /** Null is ordinary: a job may wait for dependencies before anybody holds it. */
+  ownerUserId: string | null;
+  visibility: CashJobVisibility;
+  /** Null means no ceiling of its own; the grant on the root is the outer bound. */
+  budgetCents: number | null;
+  currency: string;
+  note: string | null;
+  assignedAt: string | null;
+  releasedAt: string | null;
+  releaseReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const CASH_COMMITMENT_STATES = ['HELD', 'SETTLED', 'RELEASED'] as const;
+export type CashCommitmentState = (typeof CASH_COMMITMENT_STATES)[number];
+
+export const CASH_MONEY_KINDS = [
+  'CAPITAL_IN',
+  'CAPITAL_OUT',
+  'PIPELINE_AGREED',
+  'CUSTOMER_PAYMENT',
+  'SETTLEMENT',
+  'REFUND',
+  'COST',
+  'UNPAID_COMMITMENT',
+  'COMMITMENT_PAID',
+  'RESERVE',
+  'RESERVE_RELEASE',
+] as const;
+export type CashMoneyKind = (typeof CASH_MONEY_KINDS)[number];
+
+export const CASH_NEED_STATES = ['OPEN', 'RESOLVED', 'WITHDRAWN'] as const;
+export type CashNeedState = (typeof CASH_NEED_STATES)[number];
+
+export const CASH_AUTHORITY_STATES = ['ACTIVE', 'REVOKED', 'EXPIRED'] as const;
+export type CashAuthorityState = (typeof CASH_AUTHORITY_STATES)[number];
+
+export interface CashModeRow {
+  id: string;
+  project_id: string;
+  owner_user_id: string;
+  objective: string;
+  horizon_days: number;
+  envelope_id: string;
+  currency: string;
+  state: string;
+  activated_at: string;
+  wound_down_at: string | null;
+  archived_at: string | null;
+  state_reason: string | null;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashMode {
+  id: string;
+  projectId: string;
+  ownerUserId: string;
+  objective: string;
+  horizonDays: number;
+  envelopeId: string;
+  /**
+   * The one currency this sprint is denominated in.
+   *
+   * Every money entry, every commitment and every derived figure is in it, and
+   * an entry in another currency is refused rather than converted — Brain does
+   * not choose an exchange rate. A second currency is a second sprint.
+   */
+  currency: string;
+  state: CashModeState;
+  activatedAt: string;
+  woundDownAt: string | null;
+  archivedAt: string | null;
+  stateReason: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashAuthorityRow {
+  id: string;
+  project_id: string;
+  owner_user_id: string;
+  name: string;
+  policy_version: number;
+  allowed_actions: string;
+  prohibitions: string;
+  max_committed_cents: number;
+  max_per_action_cents: number;
+  max_concurrent: number;
+  currency: string;
+  starts_at: string;
+  expires_at: string | null;
+  state: string;
+  revoked_at: string | null;
+  revoked_by_user_id: string | null;
+  revoked_reason: string | null;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashAuthority {
+  id: string;
+  projectId: string;
+  ownerUserId: string;
+  name: string;
+  policyVersion: number;
+  allowedActions: string[];
+  prohibitions: string[];
+  maxCommittedCents: number;
+  maxPerActionCents: number;
+  maxConcurrent: number;
+  currency: string;
+  startsAt: string;
+  expiresAt: string | null;
+  state: CashAuthorityState;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+  revokedReason: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Where a piece of the portfolio is in its bounded commercial validation.
+ *
+ * `null` is "not started", which is the state every opening is born in.
+ */
+export const OPPORTUNITY_VALIDATION_STATES = [
+  'PENDING',
+  'RUNNING',
+  'COMPLETE',
+  'BLOCKED',
+] as const;
+export type OpportunityValidationState = (typeof OPPORTUNITY_VALIDATION_STATES)[number];
+
+export interface CashOpportunityRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  owner_user_id: string;
+  title: string;
+  mechanism: string;
+  industry: string | null;
+  source: string | null;
+  candidate_id: string | null;
+  external_record_id: string | null;
+  source_claim_id: string | null;
+  discovered_by_candidate_id: string | null;
+  orchestration_id: string | null;
+  fragment_id: string | null;
+  discovery_round_id: string | null;
+  validation_orchestration_id: string | null;
+  validation_state: string | null;
+  validation_started_at: string | null;
+  validation_settled_at: string | null;
+  /** How many bounded deep dives this piece has had. Null reads as one. */
+  validation_rounds: number | null;
+  /**
+   * What kind of opening the claim behind this established, kept on the piece.
+   *
+   * `mechanism` is derived from it and is lossy — two signals share one
+   * mechanism — and it is the *signal* that decides what this evidence proves
+   * and what it does not. See `services/cash/tier.ts`. Null for a piece
+   * captured by hand and for anything promoted before the column existed;
+   * `reconcileOpportunitySignals` fills the second case from the source claim.
+   */
+  opportunity_signal: string | null;
+  payer: string | null;
+  reachable_channel: string | null;
+  buying_signal: string | null;
+  signal_observed_at: string | null;
+  offer_scope: string | null;
+  acceptance_condition: string | null;
+  price_cents: number | null;
+  currency: string;
+  payment_terms: string | null;
+  fulfillment_owner: string | null;
+  delivery_method: string | null;
+  required_inputs: string | null;
+  deadline: string | null;
+  economics_note: string | null;
+  peak_funding_cents: number | null;
+  human_hours: number | null;
+  expires_at: string | null;
+  expiry_reason: string | null;
+  depends_on_id: string | null;
+  duplicate_of_id: string | null;
+  required_capabilities: string;
+  execution_asset: string | null;
+  asset_revision: string | null;
+  state: string;
+  exhausted_at: string | null;
+  exhausted_reason: string | null;
+  next_action: string | null;
+  next_action_due: string | null;
+  outcome: string | null;
+  stop_rule: string | null;
+  declined_by_user_id: string | null;
+  declined_reason: string | null;
+  reoffered_from_id: string | null;
+  archived_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashOpportunity {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  ownerUserId: string;
+  title: string;
+  mechanism: CashMechanism;
+  industry: string | null;
+  source: string | null;
+  candidateId: string | null;
+  externalRecordId: string | null;
+  /**
+   * The accepted research claim this opportunity was harvested from.
+   *
+   * Present only for one Brain found rather than one a person entered, and it
+   * is the provenance: the claim carries the source URL, the publisher and the
+   * date, so "why does Brain think there is an opening here" resolves to a
+   * passage rather than to a summary.
+   */
+  sourceClaimId: string | null;
+  /**
+   * The discovery bucket whose mission found it, which is a different fact from
+   * `candidateId`.
+   *
+   * `candidateId` is the idea this opportunity *is* — what a person captured,
+   * or what Brain is researching on this opportunity's own behalf. A bucket is
+   * a broad question that found dozens of unrelated openings, and it is never
+   * research about any one of them. The wind-down guard reads the difference.
+   */
+  discoveredByCandidateId: string | null;
+  /**
+   * The packet, the fragment and the round this came out of.
+   *
+   * Written at promotion. `sourceClaimId` alone resolves to a claim and leaves
+   * "what research established this, under which question, in which round" to
+   * be walked backwards through a mission row — which four production packets
+   * started by an administrator simply do not have, and which made their 69
+   * accepted claims unreachable. A round of null is honest rather than a gap:
+   * nobody asked a bucket for it.
+   */
+  orchestrationId: string | null;
+  fragmentId: string | null;
+  discoveryRoundId: string | null;
+  /**
+   * The bounded deep dive that turns an opening into a decision, and where it is.
+   *
+   * Discovery answers "somebody published a request". It does not answer who
+   * pays, what to offer, what it costs or when the cash arrives — and forcing a
+   * broad discovery fragment to answer all of that before it may report an
+   * opening is what made those fragments impossible to satisfy. So the
+   * commercial questions are a *second*, bounded assignment against this piece,
+   * and these say which one and how it went.
+   */
+  validationOrchestrationId: string | null;
+  validationState: OpportunityValidationState | null;
+  validationStartedAt: string | null;
+  validationSettledAt: string | null;
+  /** How many bounded deep dives this piece has had. One after the first. */
+  validationRounds: number;
+  /** What kind of opening its evidence establishes, or null where nothing said. */
+  opportunitySignal: OpportunitySignal | null;
+  payer: string | null;
+  reachableChannel: string | null;
+  buyingSignal: string | null;
+  signalObservedAt: string | null;
+  offerScope: string | null;
+  acceptanceCondition: string | null;
+  priceCents: number | null;
+  currency: string;
+  paymentTerms: string | null;
+  fulfillmentOwner: string | null;
+  deliveryMethod: string | null;
+  requiredInputs: string | null;
+  deadline: string | null;
+  economicsNote: string | null;
+  peakFundingCents: number | null;
+  humanHours: number | null;
+  expiresAt: string | null;
+  expiryReason: string | null;
+  dependsOnId: string | null;
+  duplicateOfId: string | null;
+  requiredCapabilities: string[];
+  executionAsset: string | null;
+  assetRevision: string | null;
+  state: CashOpportunityState;
+  exhaustedAt: string | null;
+  exhaustedReason: string | null;
+  nextAction: string | null;
+  nextActionDue: string | null;
+  outcome: string | null;
+  stopRule: string | null;
+  declinedByUserId: string | null;
+  declinedReason: string | null;
+  reofferedFromId: string | null;
+  archivedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashCommitmentRow {
+  id: string;
+  authority_id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  amount_cents: number;
+  currency: string;
+  purpose: string;
+  expected_result: string;
+  stop_condition: string;
+  idempotency_key: string;
+  payload_fingerprint: string | null;
+  state: string;
+  spent_cents: number | null;
+  settled_at: string | null;
+  released_at: string | null;
+  release_reason: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashCommitment {
+  id: string;
+  authorityId: string;
+  projectId: string;
+  opportunityId: string | null;
+  amountCents: number;
+  currency: string;
+  purpose: string;
+  expectedResult: string;
+  stopCondition: string;
+  idempotencyKey: string;
+  state: CashCommitmentState;
+  /**
+   * How much of the hold was actually spent, once it settled.
+   *
+   * Null while held. A settlement writes the matching cost for exactly this
+   * amount and lets the remainder stop being held, so a partial spend is
+   * neither rounded up to the whole commitment nor silently lost.
+   */
+  spentCents: number | null;
+  settledAt: string | null;
+  releasedAt: string | null;
+  releaseReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashMoneyEntryRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  commitment_id: string | null;
+  idempotency_key: string | null;
+  payload_fingerprint: string | null;
+  kind: string;
+  amount_cents: number;
+  currency: string;
+  verified_reference: string | null;
+  funds_available_at: string | null;
+  occurred_at: string;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+
+export interface CashMoneyEntry {
+  id: string;
+  projectId: string;
+  opportunityId: string | null;
+  /** The commitment this entry settles, when Brain derived it from one. */
+  commitmentId: string | null;
+  idempotencyKey: string | null;
+  payloadFingerprint: string | null;
+  kind: CashMoneyKind;
+  amountCents: number;
+  currency: string;
+  verifiedReference: string | null;
+  fundsAvailableAt: string | null;
+  occurredAt: string;
+  note: string | null;
+  recordedBy: string;
+  createdAt: string;
+}
+
+export interface CashNeedRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  blocked_action: string;
+  why_it_matters: string;
+  recommended_path: string;
+  expected_cost_cents: number | null;
+  setup_effort: string;
+  next_step: string;
+  completion_condition: string | null;
+  occurrence: number;
+  verified_by: string | null;
+  continuation_claimed_at: string | null;
+  continuation_attempts: number;
+  continuation_not_before: string | null;
+  blocks_state: string | null;
+  candidate_id: string | null;
+  request_key: string | null;
+  continued_at: string | null;
+  continuation_note: string | null;
+  state: string;
+  resolution: string | null;
+  resolved_by_user_id: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashNeed {
+  id: string;
+  projectId: string;
+  opportunityId: string | null;
+  blockedAction: string;
+  whyItMatters: string;
+  recommendedPath: string;
+  expectedCostCents: number | null;
+  setupEffort: string;
+  nextStep: string;
+  /**
+   * What settles it, in a form somebody can check.
+   *
+   * Null only on a need raised before Brain asked for one. Backfilling it from
+   * `nextStep` would assert a condition nobody wrote, so what an old row says
+   * is that it has none.
+   */
+  completionCondition: string | null;
+  /**
+   * Which return of this blockage this is.
+   *
+   * A capability that goes missing again is a new occurrence rather than the
+   * old row reopened, because the old row's resolution was true when it was
+   * written and rewriting it would make the history say something else.
+   */
+  occurrence: number;
+  /**
+   * How the completion condition was established, or null while it is open.
+   *
+   * `BRAIN_READ_THE_ROW` means Brain checked and the condition holds.
+   * `PERSON_SUBSTITUTE` means it does not and somebody authorized a manual way
+   * round it, which is a different fact and must not read as the first.
+   */
+  verifiedBy: 'BRAIN_READ_THE_ROW' | 'PERSON_SUBSTITUTE' | null;
+  /** When a continuation took its lease. Reclaimable once it goes stale. */
+  continuationClaimedAt: string | null;
+  continuationAttempts: number;
+  /** Not retried before this, after a temporary refusal. */
+  continuationNotBefore: string | null;
+  /**
+   * The opportunity transition waiting on it, when one is.
+   *
+   * A state rather than a free reference, because that is what a continuation
+   * can actually retry — one that had to read prose to know what to resume
+   * would be model output deciding a transition.
+   */
+  blocksState: CashOpportunityState | null;
+  /** The idea Brain started because of this need, when it could start one. */
+  candidateId: string | null;
+  /** What made it unique, so the same condition raises one need. */
+  requestKey: string | null;
+  /** When its continuation ran. Set once, by a guarded write. */
+  continuedAt: string | null;
+  /** What the continuation actually did, which is not the same as that it ran. */
+  continuationNote: string | null;
+  state: CashNeedState;
+  resolution: string | null;
+  resolvedByUserId: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Who actually did it. There is no third value — see migration 055. */
+export const CASH_ACTION_PERFORMERS = ['BRAIN', 'PERSON'] as const;
+export type CashActionPerformer = (typeof CASH_ACTION_PERFORMERS)[number];
+
+export interface CashActionRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string;
+  authority_id: string;
+  action: string;
+  performed_by: string;
+  reference: string | null;
+  detail: string;
+  confirmed_by: string;
+  request_key: string;
+  created_at: string;
+}
+
+/**
+ * One commercial action that actually happened.
+ *
+ * An opportunity is EXECUTING because one of these exists, never because a
+ * transition was requested. Append-only: what happened is history.
+ */
+export interface CashAction {
+  id: string;
+  projectId: string;
+  opportunityId: string;
+  /** The grant it ran under, read when it was recorded rather than assumed. */
+  authorityId: string;
+  /**
+   * One of `COMMERCIAL_ACTIONS`, checked by `services/cash/authority.ts`.
+   *
+   * A string here for the same reason `allowedActions` is: the vocabulary is
+   * the service's, and a domain type that imported it would invert the
+   * dependency to make one field narrower.
+   */
+  action: string;
+  performedBy: CashActionPerformer;
+  /**
+   * Whatever identifies it outside Brain.
+   *
+   * Free text because Brain cannot verify any of them, and a structured column
+   * would imply it had.
+   */
+  reference: string | null;
+  detail: string;
+  confirmedBy: string;
+  requestKey: string;
+  createdAt: string;
+}
+
+export interface CashCardFactRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string;
+  field: string;
+  kind: string;
+  value: string;
+  claim_id: string | null;
+  need_id: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decided_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * One answer on an evidence card, and what kind of answer it is.
+ *
+ * The kind is the load-bearing part. A card that rendered Brain's proposal the
+ * same way it renders a published source would have told somebody a guess was
+ * checked, which is the one thing this whole section may not do.
+ */
+export interface CashCardFact {
+  id: string;
+  projectId: string;
+  opportunityId: string;
+  field: string;
+  /**
+   * `EVIDENCE` resolves to a claim and therefore to a source, a publisher and a
+   * date. `RECOMMENDATION` is Brain's own proposal and carries its basis, its
+   * assumptions and what would change it. `PERSON` is somebody's decision and
+   * nothing automatic replaces one.
+   */
+  kind: 'EVIDENCE' | 'RECOMMENDATION' | 'PERSON';
+  value: string;
+  claimId: string | null;
+  needId: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decidedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashDiscoveryRoundRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  bucket_id: string;
+  mechanism: string;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * One asking of one discovery bucket.
+ *
+ * The durable answer to three questions the activity feed was being asked and
+ * could not keep answering: which buckets have run, which Russell idea asked
+ * each one, and whether a given candidate is discovery work at all.
+ */
+export interface CashDiscoveryRound {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  bucketId: string;
+  mechanism: string;
+  /** Which asking this is. A bucket may be re-asked; each time is its own row. */
+  round: number;
+  candidateId: string;
+  state: 'OPEN' | 'HARVESTED' | 'ABANDONED';
+  openedAt: string;
+  harvestedAt: string | null;
+  /** How many openings it produced. Zero is a finding about where Brain looked. */
+  found: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashEventRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  kind: string;
+  actor_ref: string;
+  summary: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface CashEvent {
+  id: string;
+  projectId: string;
+  opportunityId: string | null;
+  kind: string;
+  actorRef: string;
+  summary: string;
+  detail: Record<string, unknown>;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// SHARED FINDINGS
+//
+// One Brain, four private operations, and one pool of validated findings
+// between them. The row is a promotion record — pointers and state — and holds
+// no statement, no source and no passage, because `research_claims` already
+// holds all three and a copy is a second place for the truth to live.
+// ---------------------------------------------------------------------------
+
+export type SharedFindingState = 'ACTIVE' | 'REVOKED';
+
+export interface SharedFindingRow {
+  id: string;
+  claim_id: string;
+  origin_project_id: string;
+  origin_orchestration_id: string;
+  origin_fragment_id: string | null;
+  origin_layer_id: string | null;
+  origin_worker_id: string | null;
+  origin_session_ref: string | null;
+  rule_version: string;
+  state: string;
+  valid_until: string | null;
+  revoked_at: string | null;
+  revoked_by_user_id: string | null;
+  revoked_reason: string | null;
+  promoted_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SharedFinding {
+  id: string;
+  claimId: string;
+  originProjectId: string;
+  originOrchestrationId: string;
+  originFragmentId: string | null;
+  originLayerId: string | null;
+  originWorkerId: string | null;
+  originSessionRef: string | null;
+  ruleVersion: string;
+  state: SharedFindingState;
+  validUntil: string | null;
+  revokedAt: string | null;
+  revokedByUserId: string | null;
+  revokedReason: string | null;
+  promotedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// CONNECTING A CLAUDE ACCOUNT
+//
+// A member contributing a Routine does six things in Claude; Brain does three;
+// and one of Brain's three is a privileged operation Brain structurally cannot
+// perform. `resolveToken` reads `process.env[secretName]`, and nothing in this
+// repository can write a deployment secret — so the trigger's bearer reaches
+// the environment and never the database, and the journey has to survive being
+// half-finished for as long as the administrator takes.
+//
+// So it is rows. Every state below is one somebody can be *in* rather than a
+// message about a failure, and each names either the next thing its owner can
+// do or the one thing they are waiting for.
+// ---------------------------------------------------------------------------
+
+export const CAPACITY_CONNECTION_STATES = [
+  'NOT_STARTED',
+  'CONNECTOR_AUTHORIZED',
+  'ROUTINE_DETAILS_NEEDED',
+  'WAITING_FOR_ADMIN',
+  'CONFIGURED',
+  'PROBE_SENT',
+  'ARRIVED',
+  'HEALTHY',
+  'FAILED',
+] as const;
+export type CapacityConnectionState = (typeof CAPACITY_CONNECTION_STATES)[number];
+
+export interface CapacityConnectionRow {
+  id: string;
+  user_id: string;
+  connector_name: string;
+  routine_name: string;
+  secret_name: string;
+  trigger_ref: string | null;
+  account_id: string | null;
+  routine_id: string | null;
+  state: string;
+  failure_reason: string | null;
+  probe_bin_id: string | null;
+  probe_sent_at: string | null;
+  healthy_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapacityConnection {
+  id: string;
+  userId: string;
+  /** The three names Brain assigned. Nobody invents one and no two collide. */
+  connectorName: string;
+  routineName: string;
+  secretName: string;
+  /** The trig_… id the member read out of Claude. Never a credential. */
+  triggerRef: string | null;
+  accountId: string | null;
+  routineId: string | null;
+  state: CapacityConnectionState;
+  failureReason: string | null;
+  probeBinId: string | null;
+  probeSentAt: string | null;
+  healthyAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

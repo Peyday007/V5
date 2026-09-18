@@ -37,7 +37,7 @@ import { StorageConfigurationError } from './services/storage/types.ts';
 import { serveStoredObject } from './routes/files.ts';
 import { accessGate, accessGateConfig, describeAccessGate, AccessGateError, type AccessGateConfig } from './routes/access.ts';
 import { requestContext, requireAuthentication } from './routes/guard.ts';
-import { MCP_PATH, mcpRouter } from './mcp/endpoint.ts';
+import { MCP_PATHS, mcpRouter } from './mcp/endpoint.ts';
 import { OAUTH_BASE, oauthRouter, wellKnownRouter } from './routes/oauth.ts';
 import { authRouter } from './routes/auth.ts';
 import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
@@ -147,12 +147,26 @@ function buildApp(gate: AccessGateConfig): Express {
   // it can enforce its own, much smaller, limit. It is deliberately outside
   // `/api`: it authenticates itself, bearer only, and answers a different
   // protocol.
-  app.use(MCP_PATH, mcpRouter());
+  //
+  // Mounted at every path in `MCP_PATHS`. They are the same endpoint: one
+  // router, one authentication, one policy module. The extra path exists
+  // because Claude refuses a second connector at a URL it already holds, and it
+  // decides nothing — see the comment on `FACTORY_MCP_PATH`.
+  //
+  // Longest first. Express would fall through anyway today, because the router
+  // only declares `/` and a request to `/mcp/factory` under the `/mcp` mount
+  // matches none of it — but that is a property of the routes rather than of
+  // the mounting, and one added `router.post('/:anything')` would quietly turn
+  // the shorter mount into a shadow. Ordering costs nothing and does not
+  // depend on it.
+  for (const mcpPath of [...MCP_PATHS].sort((a, b) => b.length - a.length)) {
+    app.use(mcpPath, mcpRouter());
+  }
 
   // How a client discovers where to authenticate. Unauthenticated by
   // necessity — a caller with no token has to be able to find out how to get
   // one — and disclosing nothing but the endpoints already being served.
-  app.use('/.well-known', wellKnownRouter(MCP_PATH));
+  app.use('/.well-known', wellKnownRouter(MCP_PATHS));
 
   // The authorization server. Its own body parsers, because the token endpoint
   // is form-encoded by specification and the consent screen posts a form, while

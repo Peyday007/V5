@@ -26,6 +26,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createConversation } from '../server/repos/russellConversations.ts';
 import {
@@ -444,6 +445,48 @@ describe('what this conversation is waiting for a word about', () => {
      * the person has settled it is the status-contradicting-the-control defect
      * §29 records, one surface along.
      */
+    expect(await softwareClarificationFor(conversationId)).toBeNull();
+  });
+
+  it('stops asking even when the capture lands in the same millisecond', async () => {
+    /*
+     * The ordering this rests on was `createdAt > refusal.at`, and both are
+     * ISO-8601 to the millisecond — so on a machine quick enough to write the
+     * refusal and the capture answering it inside one millisecond, the
+     * question stayed on screen after the person had settled it. It passed
+     * here and failed in CI, which is the whole tell: an ordering that is true
+     * only sometimes is not an ordering.
+     *
+     * The timestamps are forced equal rather than raced, because a test that
+     * hoped for the collision would be the same flake wearing a different hat.
+     */
+    const conversationId = await thread();
+    await declined(conversationId, {
+      softwareDeclined: true,
+      gateReason:
+        'it refers back to a change, and nothing has been asked for in this conversation yet',
+    });
+    await captureSoftwareChange({
+      projectId: fixture.project.id,
+      conversationId,
+      messageId: null,
+      askedText: 'Fix the quote form so it stops dropping the message.',
+      title: 'Quote form drops the message',
+      objective: 'Fix the quote form so a submitted message is not dropped.',
+      expectedOutcome: 'A submitted message arrives.',
+    });
+
+    const db = getDb();
+    const stamp = '2026-09-18T00:00:00.000Z';
+    await db.run('UPDATE russell_messages SET created_at = ? WHERE conversation_id = ?', [
+      stamp,
+      conversationId,
+    ]);
+    await db.run('UPDATE russell_software_requests SET created_at = ? WHERE conversation_id = ?', [
+      stamp,
+      conversationId,
+    ]);
+
     expect(await softwareClarificationFor(conversationId)).toBeNull();
   });
 

@@ -1,0 +1,42 @@
+-- What kind of opening a piece of the portfolio rests on, on the piece itself.
+--
+-- ---------------------------------------------------------------------------
+-- Why the mechanism could not answer this
+-- ---------------------------------------------------------------------------
+--
+-- `harvest` reads the claim's typed `opportunity_signal`, maps it through
+-- `mechanismForSignal` and stores the *mechanism*. That mapping is lossy on
+-- purpose — `ACTIVE_BUYER_DEMAND` and `PAID_TASK_OR_CONTRACT` are both
+-- `EXPLICIT_PAID_REQUEST`, because the mechanism answers "what shape of
+-- transaction is this" and the signal answers "what did the source actually
+-- establish". The second is the question the Signal / Candidate / Qualified
+-- boundary turns on, and it was thrown away at promotion.
+--
+-- It could be re-read from `research_claims` on every page load. That is a
+-- join per piece on the read path for a value that cannot change once written,
+-- and it would leave a piece captured by hand with no answer at all rather than
+-- an honest null.
+--
+-- ---------------------------------------------------------------------------
+-- The thirty-one that already exist
+-- ---------------------------------------------------------------------------
+--
+-- Nothing is backfilled here. `reconcileOpportunitySignals` derives it on the
+-- tick, from each piece's own `source_claim_id`, guarded on the column still
+-- being null — the same shape `lineageRecovery` uses, and for the same reason:
+-- a recovered value may never replace a recorded one, and a derivation on the
+-- tick reaches everything already written rather than only what arrives next.
+-- A migration that wrote it would do the work once and be unable to reach a
+-- row promoted a minute later by a version that did not set it.
+ALTER TABLE cash_opportunities ADD COLUMN opportunity_signal TEXT;
+
+-- How many bounded deep dives a piece has had.
+--
+-- A qualification bar that rises after a deep dive has already completed is a
+-- bar with no way over it: `startValidations` skips anything with a
+-- `validation_state`, so a piece qualified against the old lane set would sit
+-- one answer short for ever. §24's sentence at a new altitude — an escalation
+-- needs an answering transition — so a piece below QUALIFIED with a completed
+-- dive may have exactly one more, and this is the count that bounds it. Null
+-- reads as "one, if it has a state at all", so nothing is backfilled.
+ALTER TABLE cash_opportunities ADD COLUMN validation_rounds INTEGER;

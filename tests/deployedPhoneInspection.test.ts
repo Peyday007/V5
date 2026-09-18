@@ -30,7 +30,19 @@ import { fileURLToPath } from 'node:url';
 import { pickPort } from './helpers/ports.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = pickPort(6800, 100);
+/*
+ * 7500, because 6800 belongs to `cashHttp`.
+ *
+ * Both suites were written on branches that could not see each other's choice,
+ * which is the exact shape `deploymentOwnership` refuses one floor down and the
+ * reason it refuses it: a collision here does not fail loudly. `/healthz` is
+ * unauthenticated, so the second suite's readiness probe finds the *first*
+ * suite's server, waits happily for it, and then signs in against a Brain with
+ * a different bootstrap administrator — reported as `401`, which reads as a
+ * broken sign-in. The established range stays where it is and the newer arrival
+ * moves.
+ */
+const PORT = pickPort(7500, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 const EMAIL = 'phone-inspection@example.invalid';

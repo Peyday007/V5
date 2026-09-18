@@ -62,6 +62,7 @@ import {
   INVITATION_TTL_MS,
 } from '../repos/invitations.ts';
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
+import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
 
 export const OAUTH_BASE = '/oauth';
@@ -402,7 +403,11 @@ export function oauthRouter(): Router {
            <div class="grant">
              <dt>Next</dt>
              <dd>In Claude, open <strong>Settings → Connectors</strong>, add a connector pointing at
-               <code>${esc(issuerFor(req))}/mcp</code>, then click <strong>Connect</strong>.</dd>
+               one of these, then click <strong>Connect</strong>:
+               <br>${MCP_PATHS.map((mcpPath) => `<code>${esc(issuerFor(req))}${esc(mcpPath)}</code>`).join('<br>')}
+               <br>They are the same endpoint under different names. Claude will not hold two
+               connectors at one address, so if it says a connector with that URL already exists,
+               use the other one — neither of them changes what this worker may do.</dd>
              <dt>What this gives away</dt>
              <dd>Nothing of yours. Claude receives a token for that one worker, which the person who
                invited you can withdraw at any time. No account is created for you, and you are not
@@ -437,7 +442,28 @@ export function oauthRouter(): Router {
 
       const person = await approver(req);
       if (person) {
-        res.type('html').send(await consentPage(req, params, client.clientName, person, null));
+        /*
+         * A signed-in administrator gets the chooser, invitation or not — and
+         * that is correct rather than a fault in the link.
+         *
+         * An invitation stands in for an administrator's approval (see
+         * `invitedApproval`). Somebody who *is* one has that authority already,
+         * so folding the two together would be the one thing that comment warns
+         * against, and it would also mean an administrator could not connect a
+         * worker their browser happens to hold a stale invitation for.
+         *
+         * What was wrong was the silence. The onboarding step used to tell
+         * people that a list meant the link had been opened in the wrong
+         * browser, which is false and sends them round the flow again. So the
+         * invitation is *read* here, purely to say which worker it names and to
+         * preselect it — the administrator's own authority still decides, the
+         * invitation is not spent on this path, and the posted `worker_id` is
+         * the one that counts.
+         */
+        const held = await invitedApproval(req);
+        res.type('html').send(
+          await consentPage(req, params, client.clientName, person, null, held?.worker ?? null),
+        );
         return;
       }
 
@@ -607,8 +633,11 @@ export function oauthRouter(): Router {
        */
       const refuse = async (detail: string): Promise<void> => {
         if (person) {
+          // Same chooser, same preselection: a re-render that lost it would
+          // make an administrator's second attempt harder than their first.
+          const held = await invitedApproval(req);
           res.status(400).type('html').send(
-            await consentPage(req, params, client.clientName, person, detail),
+            await consentPage(req, params, client.clientName, person, detail, held?.worker ?? null),
           );
           return;
         }
@@ -986,6 +1015,14 @@ async function consentPage(
   clientName: string,
   person: Principal,
   error: string | null,
+  /**
+   * The worker an invitation in this browser names, if there is a live one.
+   *
+   * Display only. It preselects that worker and says the invitation is there;
+   * it authorizes nothing, because a signed-in administrator's own authority is
+   * what this screen runs on, and it is not spent by connecting from here.
+   */
+  heldInvitationFor: Worker | null = null,
 ): Promise<string> {
   /**
    * Disabled workers are not offered, but their existence changes what to say.
@@ -1018,11 +1055,21 @@ async function consentPage(
   const options = described
     .map(
       ({ worker, projects }) =>
-        `<option value="${esc(worker.id)}">${esc(worker.displayName)} — ${esc(worker.name)}${
+        `<option value="${esc(worker.id)}"${worker.id === heldInvitationFor?.id ? ' selected' : ''}>${esc(
+          worker.displayName,
+        )} — ${esc(worker.name)}${
           projects.length === 0 ? ' (no project yet)' : ` (${esc(projects.map((p) => p.name).join(', '))})`
         }</option>`,
     )
     .join('');
+
+  // Named rather than merely preselected, because "why am I being shown a list"
+  // is the question this screen was quietly failing to answer.
+  const invitationNote = heldInvitationFor
+    ? `<div class="grant"><dt>Invitation</dt><dd>This browser holds an invitation for
+       <code>${esc(heldInvitationFor.name)}</code>, which is chosen below. You are a Brain
+       administrator, so you may connect any worker here and the invitation is not used.</dd></div>`
+    : '';
 
   const grants = described
     .filter(({ projects }) => projects.length > 0)
@@ -1040,6 +1087,7 @@ async function consentPage(
      <p class="sub"><strong>${esc(clientName)}</strong> is asking to act as one of your Brain
        workers. It will get that worker's access — nothing more, and nothing of yours.</p>
      ${error ? `<div class="err">${esc(error)}</div>` : ''}
+     ${invitationNote}
      ${
        workers.length === 0
          ? someAreDisabled
@@ -1054,7 +1102,7 @@ async function consentPage(
        <button type="submit">Approve</button>
      </form>`
      }
-     <p class="note">Approving as <strong>${esc(person.handle)}</strong>.
+     <p class="note">Approving as <strong>${esc(person.handle ?? person.displayName)}</strong>.
        ${esc(clientName)} never sees your password or your own access — it receives a
        token for the worker you choose, which you can revoke at any time.</p>`),
   );
@@ -1072,31 +1120,48 @@ async function consentPage(
  * find out how to get one, and neither document says anything about this
  * installation beyond the endpoints it already serves.
  */
-export function wellKnownRouter(mcpPath: string): RequestHandler {
+export function wellKnownRouter(mcpPaths: readonly string[]): RequestHandler {
   const router = Router();
+  // The canonical endpoint, which is what the unsuffixed document describes.
+  const canonical = mcpPaths[0] ?? '/mcp';
 
   router.get('/oauth-protected-resource', (req: Request, res: Response) => {
     const issuer = issuerFor(req);
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.json({
-      resource: `${issuer}${mcpPath}`,
+      resource: `${issuer}${canonical}`,
       authorization_servers: [issuer],
       bearer_methods_supported: ['header'],
       resource_documentation: `${issuer}/`,
     });
   });
 
-  // Some clients look for the resource metadata suffixed with the resource
-  // path. Answering both costs nothing and saves a failed discovery.
-  router.get(`/oauth-protected-resource${mcpPath}`, (req: Request, res: Response) => {
-    const issuer = issuerFor(req);
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.json({
-      resource: `${issuer}${mcpPath}`,
-      authorization_servers: [issuer],
-      bearer_methods_supported: ['header'],
+  /*
+   * The suffixed documents, one per endpoint path.
+   *
+   * RFC 9728 puts the metadata for a resource that has a path at
+   * `/.well-known/oauth-protected-resource` followed by that path, and Brain
+   * now serves the endpoint at more than one — because Claude's connector
+   * registry is keyed by URL and will not hold two connectors at the same one.
+   * A door with no metadata document is a connector that cannot discover where
+   * to authenticate, so every mounted path publishes its own.
+   *
+   * They describe the same authorization server and differ only in `resource`,
+   * which is the honest answer: the paths are two names for one endpoint, and
+   * neither of them decides anything about what the token that comes back may
+   * do. The list is a constant, so nothing here echoes a caller-supplied path.
+   */
+  for (const mcpPath of mcpPaths) {
+    router.get(`/oauth-protected-resource${mcpPath}`, (req: Request, res: Response) => {
+      const issuer = issuerFor(req);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.json({
+        resource: `${issuer}${mcpPath}`,
+        authorization_servers: [issuer],
+        bearer_methods_supported: ['header'],
+      });
     });
-  });
+  }
 
   const asMetadata = (req: Request, res: Response): void => {
     const issuer = issuerFor(req);

@@ -81,6 +81,21 @@ const UNAUTHENTICATED_PATHS = new Set([
   '/api/auth/login',
   '/api/invitations/preview',
   '/api/invitations/accept',
+  // Enrollment, for the invitation routes' own reason: an invited member holds
+  // no credential but the link in their hand, and the whole point of the
+  // journey is that they leave it holding one. The same three properties make
+  // it safe — the token is the entire authority and is compared in constant
+  // time against a digest, spending it is one guarded `UPDATE`, and the display
+  // name and the member slot come from the enrollment's own row.
+  '/api/enroll/preview',
+  '/api/enroll/options',
+  '/api/enroll/complete',
+  // Passkey sign-in is the passkey half of `/api/auth/login`: a challenge is
+  // issued to nobody in particular and the assertion that comes back is the
+  // credential. A challenge is spent by a guarded DELETE, so it answers exactly
+  // one assertion however many arrive.
+  '/api/auth/passkey/options',
+  '/api/auth/passkey/verify',
 ]);
 
 /** Authenticated when a credential is presented; anonymous when one is not. */

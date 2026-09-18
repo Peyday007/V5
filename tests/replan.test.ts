@@ -65,6 +65,7 @@ function found(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     evidenceExcerpt: 'Employment: 81,580',
     evidenceLocator: 'National estimates table',
     evidenceLane: 'official statistics',
+    opportunitySignal: null,
     retrievedAt: '2025-01-05',
     confidence: 0.8,
     contradictionState: 'UNCHALLENGED',

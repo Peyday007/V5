@@ -62,6 +62,7 @@ on:
       # never come off the list.
       - 'production'
       - 'claude/pensive-bell-dr81a4'
+      - 'claude/cash-access-people-capacity-uk7sqa'
 
 # One at a time, and the newest commit is the one worth the twenty minutes: a
 # push that supersedes the commit a run is verifying makes that run's answer

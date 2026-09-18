@@ -100,6 +100,12 @@ import {
   setConversationClosed,
 } from '../repos/russellCollections.ts';
 import { knowsForProject, surfaceState } from '../services/russell/knows.ts';
+import { sharedPoolForReader } from '../services/knowledge/shared.ts';
+import {
+  getFinding,
+  revokeFinding,
+  setFindingHorizon,
+} from '../repos/sharedFindings.ts';
 import { groupWork, workForProject } from '../services/russell/work.ts';
 import { ideaMapForProject } from '../services/russell/ideas.ts';
 import { whoForProject } from '../services/russell/who.ts';
@@ -137,6 +143,7 @@ import {
   badRequest,
   bodyOf,
   handler,
+  conflict,
   notFound,
   nullableString,
   optionalInteger,
@@ -1982,3 +1989,109 @@ function enumList(value: unknown, allowed: readonly string[]): string[] | undefi
     .filter((entry) => allowed.includes(entry));
   return kept.length > 0 ? kept : undefined;
 }
+
+/* --------------------------------------------------------------------------
+ * Shared findings
+ *
+ * One Brain, four private operations, and one pool of validated findings
+ * between them. The pool is deliberately not a project-scoped resource: a
+ * finding is a fact about the world, and the whole point is that the person who
+ * did not pay for it can use it.
+ *
+ * What is project-scoped is *where it came from*. The projection decides that
+ * against the reader's own access through `decideProjectAccess`, the same
+ * module every other route uses — there is no shared-knowledge policy module
+ * and there must never be one.
+ * ------------------------------------------------------------------------ */
+
+russellRouter.get(
+  '/shared-findings',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const limit = optionalInteger(queryOf(req)['limit'], 'limit', { min: 1, max: 500 }) ?? 100;
+    const findings = await sharedPoolForReader(principal, { limit });
+    return {
+      findings,
+      // Two counts rather than one: how many exist, and how many Brain would
+      // actually reuse. A single number covering both is the "0 of 8 settled"
+      // defect — accurate and read as the opposite of the truth.
+      total: findings.length,
+      reusable: findings.filter((finding) => finding.withheldReason === null).length,
+    };
+  }),
+);
+
+/**
+ * A finding whose origin this caller administers, or the same 404 an unknown id
+ * gives.
+ *
+ * The finding id is not an oracle either: to somebody who does not administer
+ * the originating project, a real id and an invented one are byte-identical.
+ */
+async function requireOwnFinding(findingId: string) {
+  requirePerson();
+  const finding = await getFinding(findingId);
+  if (!finding) throw notFound('No shared finding with that id.');
+  try {
+    await requireProject(finding.originProjectId);
+  } catch {
+    throw notFound('No shared finding with that id.');
+  }
+  return finding;
+}
+
+/**
+ * Take a finding out of the shared pool.
+ *
+ * It destroys nothing: the row keeps its id, its origin and its rule, and gains
+ * who withdrew it and why. The claim underneath is not touched at all, because
+ * a finding being unsuitable for reuse elsewhere is not the same fact as the
+ * evidence being wrong — and a person who confused the two would be editing
+ * another project's archive from here.
+ */
+russellRouter.post(
+  '/shared-findings/:findingId/revoke',
+  handler(async (req) => {
+    const finding = await requireOwnFinding(pathId(req, 'findingId'));
+    const principal = requirePerson();
+    const reason = requiredString(bodyOf(req)['reason'], 'reason');
+    const revoked = await revokeFinding({ id: finding.id, userId: principal.id, reason });
+    if (!revoked) {
+      // Guarded on the state it is leaving, so two people pressing this produce
+      // one revocation and one ordinary refusal rather than a second audit row
+      // saying the same thing twice.
+      throw conflict('That finding is not in the shared pool, so there is nothing to withdraw.');
+    }
+    return { finding: revoked };
+  }),
+);
+
+/**
+ * Declare how long a finding is good for.
+ *
+ * Nothing derives this. Brain holds no row that states an absolute horizon for
+ * a fact about the world, and inventing one would be a freshness claim wearing
+ * a citation. Staleness *relative to a question* is a different fact and is
+ * already decided by the coverage classifier's own timeframe verdict.
+ */
+russellRouter.post(
+  '/shared-findings/:findingId/horizon',
+  handler(async (req) => {
+    const finding = await requireOwnFinding(pathId(req, 'findingId'));
+    // `undefined` means the field was absent, which is a request that says
+    // nothing rather than a request to clear the horizon. Explicit null clears.
+    const raw = nullableString(bodyOf(req)['validUntil'], 'validUntil');
+    if (raw === undefined) {
+      throw unprocessable('Send "validUntil" as an ISO-8601 timestamp, or null to remove it.');
+    }
+    const validUntil: string | null = raw;
+    if (validUntil !== null && Number.isNaN(Date.parse(validUntil))) {
+      throw unprocessable('validUntil must be an ISO-8601 timestamp, or null to remove it.');
+    }
+    const updated = await setFindingHorizon({ id: finding.id, validUntil });
+    if (!updated) {
+      throw conflict('That finding is not in the shared pool, so it has no horizon to set.');
+    }
+    return { finding: updated };
+  }),
+);

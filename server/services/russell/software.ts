@@ -1004,11 +1004,30 @@ export async function outstandingClarification(
   const refusal = latest;
 
   /*
-   * A change captured after the refusal answers it. Comparing timestamps rather
-   * than counting rows, because a request captured *before* the refusal is a
-   * different ask and settles nothing about this one.
+   * A change captured after the refusal answers it, ordered by the
+   * conversation rather than by the clock where the conversation can say.
+   *
+   * This compared `createdAt > refusal.at`, and both are ISO-8601 to the
+   * millisecond: a capture written in the *same* millisecond as the refusal
+   * it answers compared as not-after, so the question stayed on screen after
+   * the person had settled it — §29's status-contradicting-the-control defect,
+   * reached by nothing but machine speed. It passed locally and failed in CI,
+   * which is the whole tell.
+   *
+   * The conversation's own order is the answer where both rows carry a
+   * message: `listTurns` is ordered, so a request captured from a *later* turn
+   * than the refused one settles it and one from an earlier turn is a
+   * different ask. A request with no message — a capture from a path that is
+   * not a turn — has only the clock, and there `>=` is right rather than
+   * generous: **a refusal captured nothing**, so any request at that same
+   * instant is necessarily a different and successful capture.
    */
-  const superseded = requests.some((request) => request.createdAt > refusal.at);
+  const turnIndex = new Map(turns.map((turn, index) => [turn.id, index]));
+  const refusedAt = turnIndex.get(refusal.messageId) ?? -1;
+  const superseded = requests.some((request) => {
+    const at = request.messageId === null ? undefined : turnIndex.get(request.messageId);
+    return at === undefined ? request.createdAt >= refusal.at : at > refusedAt;
+  });
   return superseded ? null : refusal;
 }
 

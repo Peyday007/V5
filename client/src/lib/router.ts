@@ -24,6 +24,7 @@ export type Route =
   | { name: 'FLEET' }
   | { name: 'NEEDS_YOU' }
   | { name: 'SITES' }
+  | { name: 'CASH' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -34,6 +35,16 @@ export type Route =
    * written to any access log — so this route carries no parameter at all.
    */
   | { name: 'INVITE' }
+  | { name: 'ENROL' }
+  | { name: 'DEVICES' }
+  /**
+   * Who has joined, and what can run.
+   *
+   * Its own address rather than a panel at the bottom of Cash: both questions
+   * are true of the whole Brain and neither is about a sprint, so a temporary
+   * section was the wrong place to administer the permanent one.
+   */
+  | { name: 'PEOPLE' }
   | { name: 'LEGACY' }
   | { name: 'NOT_FOUND'; path: string };
 
@@ -63,10 +74,18 @@ export function parseRoute(pathname: string): Route {
       return { name: 'NEEDS_YOU' };
     case 'sites':
       return { name: 'SITES' };
+    case 'cash':
+      return { name: 'CASH' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
       return { name: 'INVITE' };
+    case 'enrol':
+      return { name: 'ENROL' };
+    case 'devices':
+      return { name: 'DEVICES' };
+    case 'people':
+      return { name: 'PEOPLE' };
     case 'legacy':
       return { name: 'LEGACY' };
     default:
@@ -94,10 +113,18 @@ export function pathFor(route: Route): string {
       return '/needs-you';
     case 'SITES':
       return '/sites';
+    case 'CASH':
+      return '/cash';
     case 'SEARCH':
       return '/search';
     case 'INVITE':
       return '/invite';
+    case 'ENROL':
+      return '/enrol';
+    case 'DEVICES':
+      return '/devices';
+    case 'PEOPLE':
+      return '/people';
     case 'LEGACY':
       return '/legacy';
     default:

@@ -27,8 +27,33 @@ export function sanitizeFilename(input: string): string {
   return RESERVED_WINDOWS_NAMES.test(safe) ? `_${safe}` : safe;
 }
 
-export function buildCanonicalName(layerName: string, version: string): string {
-  return `${layerName.trim()} ${normalizeVersion(version)}`.trim();
+export function buildCanonicalName(
+  layerName: string,
+  version: string,
+  /**
+   * What distinguishes one concurrent artifact in this layer from another.
+   *
+   * Absent for everything that files one document per layer version, which is
+   * every path but staged research in a cash project — and there the name is
+   * byte-identical to what it has always been, because `launch()` treats one
+   * specification as researchable once and a changed name would relaunch work
+   * that has already been done.
+   *
+   * It exists because four production packets answering four different
+   * questions all filed as "Opportunity Research v1" and three were
+   * immediately marked superseded. Supersession is keyed on the canonical
+   * name, so identical names meant each packet buried the one before it: the
+   * layer ended up holding one report and three tombstones, and the three
+   * that lost were not worse — they were earlier.
+   */
+  variant?: string | null,
+): string {
+  const base = `${layerName.trim()} ${normalizeVersion(version)}`.trim();
+  const tidy = (variant ?? '').replace(/\s+/g, ' ').trim();
+  // Clipped, because a canonical name is also a filename and a bucket title
+  // can be a sentence. The version is what orders these; this only separates
+  // them.
+  return tidy.length === 0 ? base : `${base} — ${tidy.slice(0, 80)}`;
 }
 
 /**
@@ -38,8 +63,13 @@ export function buildCanonicalName(layerName: string, version: string): string {
  *   conversation_title   "Qualification Logic v3.1"
  *   filename             "Qualification Logic v3.1.pdf"
  */
-export function buildNames(layerName: string, version: string, extension = '.pdf'): CanonicalNames {
-  const canonicalName = buildCanonicalName(layerName, version);
+export function buildNames(
+  layerName: string,
+  version: string,
+  extension = '.pdf',
+  variant?: string | null,
+): CanonicalNames {
+  const canonicalName = buildCanonicalName(layerName, version, variant);
   const ext = extension.startsWith('.') ? extension : `.${extension}`;
   return {
     canonicalName,

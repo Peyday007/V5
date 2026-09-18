@@ -19,6 +19,7 @@ import type {
   DenialReason,
   IdentityEvent,
   IdentityEventRow,
+  UserKind,
   IdentityResult,
   PrincipalType,
   ProjectMembership,
@@ -57,6 +58,17 @@ function mapUser(row: UserRow): User {
     id: row.id,
     email: row.email,
     displayName: row.display_name,
+    /*
+     * Unknown reads as SYSTEM rather than PERSON.
+     *
+     * The column is NOT NULL with a default, so an unrecognised value means a
+     * row somebody wrote outside this repository — and the cost of the two
+     * mistakes is not symmetric. Calling a real person machinery leaves them
+     * off a list, which they will say something about; calling machinery a
+     * person puts a fixture back on the screen this column exists to clear,
+     * silently. "We could not tell" must never read the same as "we checked".
+     */
+    kind: row.kind === 'PERSON' ? 'PERSON' : 'SYSTEM',
     isBrainAdmin: row.is_brain_admin === 1,
     mustChangePassword: row.must_change_password === 1,
     disabled: row.disabled_at !== null,
@@ -178,6 +190,16 @@ export interface CreateUserInput {
   email: string;
   displayName: string;
   password: string;
+  /**
+   * Declared by the caller, defaulting to a person.
+   *
+   * The default is the safe one for the *only* caller that matters: a route an
+   * administrator uses to create somebody. A script creating machinery has to
+   * say so, which is one line in `verify-hosted.ts` and is visible in review —
+   * where a default of SYSTEM would silently hide a real account the day
+   * somebody forgot to pass it.
+   */
+  kind?: UserKind;
   isBrainAdmin?: boolean;
   mustChangePassword?: boolean;
   createdByType?: ActorType;
@@ -190,14 +212,15 @@ export async function createUser(input: CreateUserInput): Promise<User> {
   const email = normalizeEmail(input.email);
   const verifier = await hashPassword(input.password);
   await getDb().run(
-    `INSERT INTO users (id, email, display_name, password_algorithm, password_verifier,
+    `INSERT INTO users (id, email, display_name, kind, password_algorithm, password_verifier,
                         password_updated_at, must_change_password, is_brain_admin, disabled_at,
                         created_by_type, created_by_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
     [
       id,
       email,
       input.displayName.trim(),
+      input.kind ?? 'PERSON',
       'scrypt',
       verifier,
       at,
@@ -238,11 +261,21 @@ export async function getPasswordVerifierByEmail(
   const row = await getDb().get<UserRow>('SELECT * FROM users WHERE email = ?', [
     normalizeEmail(email),
   ]);
-  return row ? { user: mapUser(row), verifier: row.password_verifier } : null;
+  // A passkey-only account has no verifier, so there is nothing here to compare
+  // a password against. Answering `null` puts it on exactly the same path as an
+  // unknown address — one sentence, one status — rather than inventing a
+  // verifier that could never match and telling the caller the account exists.
+  if (!row || row.password_verifier === null) return null;
+  return { user: mapUser(row), verifier: row.password_verifier };
 }
 
 export async function listUsers(): Promise<User[]> {
-  return (await getDb().all<UserRow>('SELECT * FROM users ORDER BY email')).map(mapUser);
+  // Ordered by the one column every account has. `email` is nullable now, and
+  // the two backends disagree about where a NULL sorts — SQLite puts it first,
+  // Postgres last — so ordering by it would list the same Brain in two orders.
+  return (
+    await getDb().all<UserRow>('SELECT * FROM users ORDER BY display_name, id')
+  ).map(mapUser);
 }
 
 export async function countUsers(): Promise<number> {

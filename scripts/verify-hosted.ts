@@ -323,7 +323,7 @@ async function setUpAuditSurfaces(projectId: string): Promise<Fixtures['audit']>
   async function account(name: string): Promise<string> {
     const existing = await getAccountByName(name);
     if (existing) return existing.id;
-    return (await createAccount({ name, planLabel: 'verification', declaredPlanPower: 'unknown' })).id;
+    return (await createAccount({ name, kind: 'VERIFICATION', planLabel: 'verification', declaredPlanPower: 'unknown' })).id;
   }
   async function surface(
     accountName: string,
@@ -432,6 +432,9 @@ async function setUp(): Promise<Fixtures> {
       email: MEMBER_EMAIL,
       displayName: 'Hosted verification',
       password: memberPassword,
+      // Declared, for migration 066's reason: this is machinery proving
+      // itself, and a screen that asks for people must never be handed it.
+      kind: 'SYSTEM',
       isBrainAdmin: false,
       mustChangePassword: false,
     });
@@ -464,6 +467,7 @@ async function setUp(): Promise<Fixtures> {
         email: OWNER_EMAIL,
         displayName: 'Hosted verification owner',
         password: ownerPassword,
+        kind: 'SYSTEM',
         isBrainAdmin: false,
         mustChangePassword: false,
       })
@@ -810,6 +814,172 @@ async function humanAuthorization(fixtures: Fixtures, cookie: string): Promise<v
     'a cookie-authenticated mutation from another origin is refused',
     forged.status === 403 || forged.status === 401,
     `${forged.status}`,
+  );
+}
+
+/**
+ * The shared frontier, read by somebody who is not a member of its project.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is here and not only in the suite
+ * ---------------------------------------------------------------------------
+ *
+ * The demonstrated defect was *an ordinary member opening `/cash` and being
+ * told there was nothing to see* — the same answer a project that does not
+ * exist gives, on purpose — while the owner's account saw the active frontier.
+ * That is a boundary defect, and a boundary is only proved by the party on the
+ * wrong side of it. An administrator's screenshot cannot prove it, because the
+ * administrator was never refused.
+ *
+ * `verification-member@brain.invalid` is exactly the right party: a real
+ * authenticated person, holding no membership on the cash root, no Brain
+ * administrator rights, and nothing else this Brain would give it. So the
+ * proof runs on the released image, against live rows, at every deploy — and
+ * a regression that closed the frontier again would fail the release gate
+ * rather than wait to be noticed.
+ *
+ * **It is read-only and it creates nothing.** No activation, no grant, no
+ * enqueue, no root brought into existence by being looked at.
+ */
+async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nThe shared frontier, as an ordinary member');
+  if (!cookie) {
+    record('shared cash boundary', false, 'skipped: there was no session to test with');
+    return;
+  }
+
+  const mode = await call('/api/cash/mode', { cookie });
+  expectStatus('a member may read which sprint this Brain is running', mode.status, 200);
+  const root = (mode.json as { root?: { projectId?: string } } | null)?.root ?? null;
+  const rootId = typeof root?.projectId === 'string' ? root.projectId : null;
+
+  /*
+   * No root means no sprint has ever been activated here, which is a real state
+   * of a fresh Brain and not a failure. Said rather than passed silently: the
+   * checks below prove nothing in that case and a reader must know which.
+   */
+  if (rootId === null) {
+    record(
+      'the shared frontier was reachable to test',
+      true,
+      'no Cash Mode is activated in this Brain, so there is no frontier to read; skipped',
+    );
+    return;
+  }
+
+  /*
+   * The member is not a member of the root. Proven from this Brain's own answer
+   * rather than assumed: `/api/projects` lists exactly what they may read, and
+   * if the root were in it this check would be testing the ordinary path.
+   */
+  const list = await call('/api/projects', { cookie });
+  const visible = ((list.json as { projects?: { id: string }[] })?.projects ?? []).map((p) => p.id);
+  record(
+    'the member holds no membership on the cash root',
+    !visible.includes(rootId),
+    visible.includes(rootId) ? 'the root was readable as an ordinary project' : 'not a member',
+  );
+
+  const shared = await call(`/api/projects/${rootId}/cash`, { cookie });
+  expectStatus('and may still read the shared frontier', shared.status, 200);
+  const body = shared.json as Record<string, unknown> | null;
+  record(
+    'the reply says which projection it is',
+    body?.scope === 'SHARED',
+    `scope=${String(body?.scope)}`,
+  );
+  record(
+    'discovery, the portfolio, the roadmap and the counts all crossed',
+    Array.isArray(body?.opportunities) && !!body?.counts && !!body?.roadmap && !!body?.discovery,
+    `${Array.isArray(body?.opportunities) ? (body!.opportunities as unknown[]).length : 0} opportunit(ies)`,
+  );
+
+  /*
+   * And the private half did not.
+   *
+   * Matched as a **JSON key at any depth** — `"name":` — rather than as a bare
+   * word in the serialized body. Both halves of that are deliberate. At any
+   * depth, because a figure nested inside an opportunity is the same disclosure
+   * as one at the top level, and the money keys are precisely what the first
+   * version of this projection leaked: `deployableCents` passed into a function
+   * that composes a sentence out of it. As a key, because `entries`,
+   * `commitments` and `provenance` are ordinary English and this runs in a
+   * release gate — a false finding there costs somebody an hour and teaches
+   * them to stop believing the gate, which §29 says is worse than the defect it
+   * was looking for.
+   */
+  const raw = JSON.stringify(body ?? {});
+  for (const forbidden of [
+    'myCash',
+    'entries',
+    'commitments',
+    'deployableCents',
+    'availableFundsCents',
+    'heldCents',
+    'maxCommittedCents',
+    'maxPerActionCents',
+    'committedCents',
+    'spentCents',
+    'allowedActions',
+    'decisionsForMe',
+    'engineCards',
+    'executionPaths',
+    'provenance',
+  ]) {
+    const key = `"${forbidden}":`;
+    record(
+      `the shared frontier carries no ${forbidden}`,
+      !raw.includes(key),
+      !raw.includes(key) ? '' : `${key} appeared in the shared body`,
+    );
+  }
+  record(
+    'whether a commercial grant exists crossed, and nothing about it',
+    body?.commercialGrant === 'PRESENT' || body?.commercialGrant === 'ABSENT',
+    `commercialGrant=${String(body?.commercialGrant)}`,
+  );
+
+  /*
+   * A project that is neither theirs nor the root is refused, in the same words
+   * a project that does not exist is refused. The frontier being readable is
+   * one seam being open, not authorization being removed.
+   */
+  if (fixtures.holdout) {
+    const other = await call(`/api/projects/${fixtures.holdout.id}/cash`, { cookie });
+    const absent = await call('/api/projects/prj_does_not_exist_at_all/cash', { cookie });
+    record(
+      "another operation's Cash is refused exactly as a missing one is",
+      other.status === 404 && other.status === absent.status && other.body === absent.body,
+      other.status === absent.status && other.body === absent.body
+        ? `both ${other.status}, identical body`
+        : `forbidden ${other.status} ${other.body} · absent ${absent.status} ${absent.body}`,
+    );
+  }
+
+  // The decisions that are the owner's. A member may read the frontier and may
+  // not start one, grant spending against it, or reach anybody's private work.
+  const activate = await call('/api/cash/activate', {
+    method: 'POST',
+    cookie,
+    origin: base,
+    body: { currency: 'USD' },
+  });
+  record(
+    'a member cannot activate or wind down the sprint',
+    activate.status === 404 || activate.status === 403,
+    `${activate.status}`,
+  );
+
+  const grant = await call(`/api/projects/${rootId}/cash/authority`, {
+    method: 'POST',
+    cookie,
+    origin: base,
+    body: { maxConcurrent: 1, maxCommittedCents: 1, maxPerActionCents: 1, allowedActions: [] },
+  });
+  record(
+    'a member cannot grant commercial authority',
+    grant.status === 404 || grant.status === 403,
+    `${grant.status}`,
   );
 }
 
@@ -1175,6 +1345,21 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
       timeframe: 'MATCH',
       population: 'MATCH',
       definitions: 'MATCH',
+      /*
+       * What each verdict was judged against, which the contract now requires
+       * for every dimension the fragment declares.
+       *
+       * `UNSTATED` used to be the fourth answer and the one a verifier fell
+       * into when it had not looked, so it destroyed claims silently — twelve
+       * of thirteen production rejections were that rather than a real
+       * mismatch. The submission is refused without a basis so a worker
+       * corrects it instead of the claim dying, and this harness is a
+       * scripted worker like any other: it says what it judged.
+       */
+      geography_basis: 'The geography this fragment declares.',
+      timeframe_basis: 'The timeframe this fragment declares.',
+      population_basis: 'The population this fragment declares.',
+      definitions_basis: 'The definitions this fragment declares.',
       note: claim.claimType === 'UNSUPPORTED_ASSERTION' ? 'Nothing supports it.' : 'Reads directly.',
     })),
     sufficiency: 'SUFFICIENT',
@@ -3460,6 +3645,7 @@ async function main(): Promise<void> {
     await anonymousIsRefused(fixtures);
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
+    await sharedCashBoundary(fixtures, cookie);
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
     await effectChecks(fixtures, fixtures.adminCookie, cookie);

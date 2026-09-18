@@ -18,7 +18,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createAccount, createRoutine, listRoutines, setRoutineState } from '../server/repos/fleet.ts';
+import { createWorker, grantMembership } from '../server/repos/identity.ts';
+import {
+  bindRoutineWorker,
+  createAccount,
+  createRoutine,
+  listRoutines,
+  setRoutineState,
+} from '../server/repos/fleet.ts';
 import {
   claimDispatchIntent,
   createBin,
@@ -41,18 +48,38 @@ beforeEach(async () => {
   const fixture = await freshProject();
   projectId = fixture.project.id;
   const account = await createAccount({ provider: 'anthropic', name: 'auth-account' });
-  await createRoutine({
-    accountId: account.id,
-    routineRef: 'trig_bad_token',
-    name: 'V-bad',
-    tokenSecretName: 'AUTH_TEST_SECRET_BAD',
-  });
-  await createRoutine({
-    accountId: account.id,
-    routineRef: 'trig_good_token',
-    name: 'V-good',
-    tokenSecretName: 'AUTH_TEST_SECRET_GOOD',
-  });
+  /*
+   * Bound to a worker that holds this project, because the fire asks now.
+   * An unbound surface is fired for nothing — `assignNextBin` scopes its
+   * candidates by membership — so a fixture that left them unbound described a
+   * fleet whose activations could never have been handed the bin.
+   */
+  for (const [ref, name, secret] of [
+    ['trig_bad_token', 'V-bad', 'AUTH_TEST_SECRET_BAD'],
+    ['trig_good_token', 'V-good', 'AUTH_TEST_SECRET_GOOD'],
+  ] as const) {
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: ref,
+      name,
+      tokenSecretName: secret,
+    });
+    const worker = await createWorker({
+      name: `${name}-worker`,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await grantMembership({
+      projectId,
+      principalType: 'WORKER',
+      principalId: worker.id,
+      role: 'MEMBER',
+      scopes: ['project:read', 'queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    await bindRoutineWorker(routine.id, worker.id);
+  }
   process.env['AUTH_TEST_SECRET_BAD'] = 'bad-token';
   process.env['AUTH_TEST_SECRET_GOOD'] = 'good-token';
   refuseRef = 'trig_bad_token';

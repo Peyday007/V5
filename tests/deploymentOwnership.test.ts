@@ -118,6 +118,50 @@ describe('one branch owns production', () => {
   });
 });
 
+describe('a dispatch surface offers the commands it actually accepts', () => {
+  /*
+   * `admin.yml` carries the command list twice: once as the input's own
+   * `description`, which is a label a person reads, and once as a shell
+   * allowlist, which is the control. They drifted — `people list` was added to
+   * the label and not to the case — so the workflow offered a command it then
+   * refused by name, and the one command that could have proved which image was
+   * serving was the command that could not be dispatched.
+   *
+   * It is the same defect this file already refuses one floor down: a rule
+   * written in two places is a rule one of the two copies will be missing. The
+   * remedy is not to remember, it is to assert they are the same set — and that
+   * every member of it is a command the script on the other end of the SSH
+   * session actually implements, because an allowlist may only ever *narrow*
+   * what `scripts/admin.ts` can do.
+   */
+  const workflow = read('.github/workflows/admin.yml');
+
+  const offered = (): string[] => {
+    const described = /description: '([^']+)'\n\s+required: true/.exec(workflow);
+    expect(described).not.toBeNull();
+    return (described?.[1] ?? '').split('|').map((one) => one.trim());
+  };
+
+  const allowed = (): string[] => {
+    const line = workflow
+      .split('\n')
+      .find((one) => one.includes("') ;;") && one.includes('|'));
+    expect(line).toBeDefined();
+    return [...(line ?? '').matchAll(/'([^']+)'/g)].map((match) => match[1] as string);
+  };
+
+  it('describes exactly the commands its allowlist admits', () => {
+    expect([...offered()].sort()).toEqual([...allowed()].sort());
+  });
+
+  it('admits only commands the deployed script implements', () => {
+    const script = read('scripts/admin.ts');
+    for (const command of allowed()) {
+      expect(script, command).toContain(`case '${command}'`);
+    }
+  });
+});
+
 describe('and the console it protects stays gone', () => {
   it('has no operator route module, and refuses the path explicitly', () => {
     expect(fs.existsSync(path.join(REPO, 'server/routes/operator.ts'))).toBe(false);

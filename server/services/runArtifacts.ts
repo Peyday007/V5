@@ -101,6 +101,11 @@ export async function registerRunArtifact(input: {
   originalFilename: string;
   contents: Buffer;
   notes?: string | null;
+  /**
+   * What distinguishes this artifact from another filed into the same layer
+   * version at the same time. See `buildCanonicalName`.
+   */
+  variant?: string | null;
 }): Promise<RegisterRunArtifactResult> {
   const { run, layer, project } = input;
   const version = await targetVersionForRun(run, layer.id, project.id);
@@ -112,6 +117,7 @@ export async function registerRunArtifact(input: {
     contents: input.contents,
     layerId: layer.id,
     version,
+    variant: input.variant ?? null,
     documentType,
     notes: input.notes ?? `Returned by run ${run.id}.`,
   });

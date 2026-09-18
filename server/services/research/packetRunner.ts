@@ -51,6 +51,7 @@ import type {
   WorkItem,
   WorkerScope,
 } from '../../domain/types.ts';
+import { exampleIdentity, laneFloor } from './gate.ts';
 import type { ClaimJudgement, GateCondition, GateResult, LaneCoverage } from './gate.ts';
 import { countIndependentSources, duplicateGroups } from './standards.ts';
 import {
@@ -237,9 +238,15 @@ async function itemsFor(orchestration: ResearchOrchestration): Promise<WorkItem[
  *
  * This used to stop the packet. `faultedOut` set the orchestration to
  * NEEDS_HUMAN and returned, which aborted the rest of the advance — and since
- * `advancePacket` short-circuits on NEEDS_HUMAN, every later call did nothing
- * at all. So one fragment whose verification died took the whole packet with
- * it, permanently.
+ * `advancePacket` short-circuited on NEEDS_HUMAN at the time, every later call
+ * did nothing at all. So one fragment whose verification died took the whole
+ * packet with it, permanently.
+ *
+ * That short-circuit is **gone** — see the terminal-status note below, which
+ * removed it deliberately — and this sentence is kept in the past tense rather
+ * than deleted, because a reader who takes it as current will conclude that a
+ * NEEDS_HUMAN packet is never re-entered. It is, on every tick, which is the
+ * whole reason `faultedOut` had to stop overwriting the reason it finds there.
  *
  * On the live packet that was Texas. Four other fragments were sitting
  * VALIDATING with real research on them — California, Florida, New York,
@@ -280,15 +287,54 @@ async function faultedFragment(input: {
   });
 }
 
+/**
+ * The sentence this writes when it genuinely has nothing else to say.
+ *
+ * Exported so the one reader that has to tell a preserved diagnosis from this
+ * fallback can compare against it rather than against a copy.
+ */
+export function faultedOutReason(what: string): string {
+  return (
+    `A ${what} work item finished without recording anything, and nothing was ` +
+    'recorded about why. The packet cannot continue on its own: re-plan it, or ' +
+    'investigate the work item.'
+  );
+}
+
+/**
+ * Stop the packet, and do not overwrite a diagnosis with a guess.
+ *
+ * This used to assert its own cause — "investigate why the worker completed
+ * without submitting" — and that sentence names a party this function has not
+ * established anything about. `fileResearchPacket` records the specific reason
+ * when a report cannot be filed, naming the provider's own refusal; and
+ * `NEEDS_HUMAN` was deliberately removed from the terminal list above, so such
+ * a packet **is** re-entered on the next tick, reaches this branch with
+ * `documentId` still null, and used to have that reason replaced by this one.
+ *
+ * Four production Cash discovery rounds parked reading "investigate why the
+ * worker completed without submitting", about workers that had submitted
+ * correctly and a Brain that could not store the bytes — the Supabase key
+ * refusal §25's filenames caused. The cause was recorded and then destroyed by
+ * a downstream sentence, which is why the fault was untraceable, and it is
+ * §33's own defect: the evidence was right and the sentence about it was wrong.
+ *
+ * So the reason already on the row wins. A reader is owed *which* condition
+ * this is, and Brain knows: a recorded reason means something failed and said
+ * so, and its absence means the item finished having recorded nothing at all.
+ * Those have different remedies, and a function that cannot tell them apart
+ * must say so rather than pick the one that reads like an explanation.
+ *
+ * `completedAt` is still stamped either way, because the packet has stopped
+ * whichever it was.
+ */
 async function faultedOut(input: {
   orchestration: ResearchOrchestration;
   fragment?: ResearchFragment | null;
   what: string;
 }): Promise<AdvanceResult> {
-  const reason =
-    `A ${input.what} work item finished without recording anything. ` +
-    'The packet cannot continue on its own: re-plan it, or investigate why the worker ' +
-    'completed without submitting.';
+  const recorded = input.orchestration.failureReason?.trim();
+  const reason = recorded && recorded.length > 0 ? recorded : faultedOutReason(input.what);
   if (input.fragment) {
     await updateFragment(input.fragment.id, {
       status: 'BLOCKED',
@@ -826,13 +872,27 @@ function gateShapeFor(fragment: ResearchFragment, claims: ResearchClaim[]): Gate
 
   const coverage: LaneCoverage[] = fragment.requiredEvidence.map((lane) => {
     const inLane = accepted.filter((claim) => claim.evidenceLane === lane.id);
+    // The same floor the gate applied, read from the same function, so a
+    // repair plan is made against the bar the fragment was actually judged at.
+    const floor = laneFloor(lane);
+    const examples = new Set(
+      inLane.map((claim) => exampleIdentity(claim)).filter((id): id is string => id !== null),
+    );
+    const sources = countIndependentSources(inLane);
     return {
       lane: lane.id,
       description: lane.description,
       necessity: lane.necessity,
+      evidenceKind: floor.kind,
       acceptedClaims: inLane.length,
-      independentSources: countIndependentSources(inLane),
-      meetsThreshold: inLane.length > 0,
+      distinctExamples: examples.size,
+      independentSources: sources,
+      requiredExamples: floor.examples,
+      requiredIndependentSources: floor.independentSources,
+      meetsThreshold:
+        inLane.length > 0 &&
+        examples.size >= floor.examples &&
+        sources >= floor.independentSources,
     };
   });
 

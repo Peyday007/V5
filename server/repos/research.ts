@@ -7,6 +7,8 @@
  * claimed, and on what basis, cannot be quietly revised afterwards.
  */
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
+import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
+import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
 import { chargeFragments } from './russellAuthority.ts';
@@ -188,6 +190,9 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     evidenceExcerpt: row.evidence_excerpt,
     evidenceLocator: row.evidence_locator,
     evidenceLane: row.evidence_lane,
+    opportunitySignal: isOpportunitySignal(row.opportunity_signal)
+      ? row.opportunity_signal
+      : null,
     retrievedAt: row.retrieved_at,
     confidence: Number(row.confidence),
     contradictionState: row.contradiction_state as ContradictionState,
@@ -772,6 +777,8 @@ export interface InsertClaimInput {
   evidenceExcerpt: string | null;
   evidenceLocator: string | null;
   evidenceLane: string | null;
+  /** The kind of opening this claim establishes, from the closed set, or null. */
+  opportunitySignal?: OpportunitySignal | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState?: ContradictionState;
@@ -808,16 +815,18 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
       await db.run(
         `INSERT INTO research_claims (id, orchestration_id, fragment_id, pass_id, pass_key, claim,
            source_url, source_title, source_publisher, source_date, evidence_excerpt,
-           evidence_locator, evidence_lane, retrieved_at, confidence, contradiction_state,
+           evidence_locator, evidence_lane, opportunity_signal, retrieved_at, confidence,
+           contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
            accepted, rejection_reason, scope_match, claim_type, source_group, primary_source,
            geography, timeframe, population, definition, requirement_ids, job_id,
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
-          input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane, input.retrievedAt,
+          input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
+          input.opportunitySignal ?? null, input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,
           input.validationState, input.validationDetail, fromBool(input.sourced),
@@ -900,6 +909,58 @@ export async function citableClaims(orchestrationId: string): Promise<ResearchCl
       [orchestrationId],
     ))
     .map(mapClaim);
+}
+
+/**
+ * Every citable claim in one project that says it is an opening.
+ *
+ * The typed replacement for walking candidate → mission → orchestration, which
+ * is how `harvest` used to find its evidence and why 69 accepted claims in four
+ * production packets were unreachable: those packets were started by an
+ * administrator and have no mission row at all. An authorized research
+ * orchestration in a cash project *is* the provenance; the mission is one way
+ * of arriving at one, not the only way.
+ *
+ * Citable rather than accepted-fragment-only, for `citableClaims`' own reason:
+ * a broad discovery question routinely falls short on coverage while every
+ * claim it produced cleared the gate on its own, and an opening is a single
+ * observation rather than an answer to the whole bucket.
+ *
+ * Ordered oldest first so promotion is deterministic and a bounded pass makes
+ * progress through a backlog rather than re-reading its head.
+ */
+export async function signalledClaims(input: {
+  projectId: string;
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.opportunity_signal IS NOT NULL
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+        /*
+         * Not the deep dive's own findings.
+         *
+         * A validation packet researches one opening that already exists, and
+         * it will legitimately establish demand, pricing and deadlines about
+         * it. Harvesting those would file the answer to "is this worth doing"
+         * as a second piece of work, and then validate *that* — a loop that
+         * looks like discovery and is one packet chasing its own tail.
+         */
+        AND NOT EXISTS (
+          SELECT 1 FROM cash_opportunities v
+           WHERE v.validation_orchestration_id = o.id
+        )
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, Math.max(1, input.limit ?? 50)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
 }
 
 /**

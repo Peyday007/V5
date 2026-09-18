@@ -77,6 +77,12 @@ import { AUDIT_ROLES, type AuditRole } from '../services/queue/workTypes.ts';
 import { assignmentFor } from '../services/research/assignment.ts';
 import { explainLaneProblems, laneProblems } from '../services/research/lanes.ts';
 import { isLaneId, laneIdFrom, LANE_NECESSITIES } from '../domain/evidenceLanes.ts';
+import {
+  OPPORTUNITY_SIGNALS,
+  SIGNAL_GUIDE,
+  isOpportunitySignal,
+  type OpportunitySignal,
+} from '../domain/opportunitySignals.ts';
 import type { EvidenceLane, LaneNecessity } from '../domain/types.ts';
 import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
 import { planDependencies } from '../services/research/splitting.ts';
@@ -85,7 +91,14 @@ import {
   recordFragmentClaims,
   type ClaimVerification,
 } from '../services/research/submission.ts';
-import { SCOPE_MATCH_VALUES, type ClaimScopeMatch } from '../services/research/schema.ts';
+import {
+  SCOPE_DIMENSIONS,
+  SCOPE_MATCH_SUBMISSION_VALUES,
+  declaredScopeOf,
+  scopeAnswerRefusal,
+  type ClaimScopeBasis,
+  type ClaimScopeMatch,
+} from '../services/research/schema.ts';
 import { CLAIM_TYPES } from '../domain/types.ts';
 import {
   createFragments,
@@ -1033,6 +1046,26 @@ function retrievalStateOf(row: Record<string, unknown>, where: string): Retrieva
   return raw as RetrievalState;
 }
 
+/**
+ * The opening a claim says it establishes, or null.
+ *
+ * Refused rather than ignored when it is outside the closed set: a signal
+ * stored as an unrecognised string would compare against nothing for ever,
+ * which is exactly how `demand_signal` came to be matched by none of the
+ * seventeen lane ids production actually wrote.
+ */
+function optionalSignal(row: Record<string, unknown>, where: string): OpportunitySignal | null {
+  const raw = row['opportunity_signal'];
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (!isOpportunitySignal(raw)) {
+    throw invalidInput(
+      `${where}: opportunity_signal must be one of ${OPPORTUNITY_SIGNALS.join(', ')}, ` +
+        'or omitted when the claim is descriptive evidence rather than an opening.',
+    );
+  }
+  return raw;
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1041,7 +1074,12 @@ const submitClaimsTool: McpTool = {
     'evidence gate decides what counts, not you, and it decides once. Send the claims you ' +
     'actually have, including ones you could not source: an unsourced claim is stored, marked ' +
     'and excluded from the synthesis, and omitting it makes the ledger look better than the ' +
-    'research was. One submission per work item; a redelivery replays it rather than adding to it.',
+    'research was. Where a claim establishes a concrete opening somebody could act on, set ' +
+    'opportunity_signal to the kind it is: ' +
+    OPPORTUNITY_SIGNALS.map((signal) => `${signal} — ${SIGNAL_GUIDE[signal]}`).join('; ') +
+    '. Leave it out for descriptive evidence, which is most claims. It does not lower any bar: ' +
+    'a claim with a signal passes the same gate as every other. ' +
+    'One submission per work item; a redelivery replays it rather than adding to it.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -1068,6 +1106,16 @@ const submitClaimsTool: McpTool = {
                 'exactly one of the strings brain_get_assignment returns as `requiredEvidence`, ' +
                 'verbatim. The gate asks per lane whether any accepted claim filled it, so an ' +
                 'untagged claim cannot answer the question it was found for, however good it is.',
+            },
+            opportunity_signal: {
+              type: 'string',
+              enum: [...OPPORTUNITY_SIGNALS],
+              description:
+                'Optional, and absent for most claims. Set it only when this claim establishes ' +
+                'a concrete opening somebody could act on, naming which kind it is: ' +
+                OPPORTUNITY_SIGNALS.map((signal) => `${signal} — ${SIGNAL_GUIDE[signal]}`).join('; ') +
+                '. Descriptive evidence carries none, and that is not a deficiency. It lowers no ' +
+                'bar: a claim with a signal passes exactly the same gate as every other.',
             },
             retrieval_state: {
               type: 'string',
@@ -1135,6 +1183,15 @@ const submitClaimsTool: McpTool = {
         retrievedAt: maybeStr(row, 'retrieved_at', where, 64),
         confidence: confidence(row, where),
         evidenceLane: maybeStr(row, 'evidence_lane', where, MAX_LIST_ITEM_CHARS),
+        /*
+         * The kind of opening this claim establishes, if it establishes one.
+         *
+         * Validated exactly against the closed set, because this is the column
+         * that decides whether an accepted claim becomes a piece of somebody's
+         * portfolio. Absent means descriptive evidence, which is what most
+         * claims are and is not a deficiency.
+         */
+        opportunitySignal: optionalSignal(row, where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),
@@ -1269,7 +1326,10 @@ const submitVerificationTool: McpTool = {
   description:
     'Answer, per claim, the two questions only somebody who read the source can: does the ' +
     'source directly support the claim, and does its scope match the fragment\'s geography, ' +
-    'timeframe, population and definitions. The Brain then applies all seven gate conditions ' +
+    'timeframe, population and definitions. Say MATCH, MISMATCH, NOT_APPLICABLE or UNKNOWN for ' +
+    'each, and for every dimension the fragment declares, put the fragment value you judged it ' +
+    'against in the matching _basis field — a verdict with no basis is refused so you can ' +
+    'correct it rather than lose the claim. The Brain then applies all seven gate conditions ' +
     'and records which claims are accepted and why the rest were not. Every claim on the ' +
     'fragment needs a verdict — call brain_get_assignment first and answer the ' +
     'claims_to_verify it hands you, which is the full list whether or not you submitted them. ' +
@@ -1287,10 +1347,25 @@ const submitVerificationTool: McpTool = {
           properties: {
             claim_id: { type: 'string' },
             supports_claim: { type: 'boolean' },
-            geography: { type: 'string', enum: [...SCOPE_MATCH_VALUES] },
-            timeframe: { type: 'string', enum: [...SCOPE_MATCH_VALUES] },
-            population: { type: 'string', enum: [...SCOPE_MATCH_VALUES] },
-            definitions: { type: 'string', enum: [...SCOPE_MATCH_VALUES] },
+            geography: { type: 'string', enum: [...SCOPE_MATCH_SUBMISSION_VALUES] },
+            timeframe: { type: 'string', enum: [...SCOPE_MATCH_SUBMISSION_VALUES] },
+            population: { type: 'string', enum: [...SCOPE_MATCH_SUBMISSION_VALUES] },
+            definitions: { type: 'string', enum: [...SCOPE_MATCH_SUBMISSION_VALUES] },
+            /*
+             * What you actually judged each declared dimension against.
+             *
+             * Required for every dimension the fragment declares, and the
+             * submission is refused without it. `UNSTATED` used to be the
+             * fourth enum value and the one a verifier fell into when it had
+             * not looked — and because the gate fails closed, that silently
+             * destroyed the claim. Production lost a $125M settlement figure
+             * and three marketplace postings that matched their fragment's
+             * population exactly, all to a blank.
+             */
+            geography_basis: { type: 'string' },
+            timeframe_basis: { type: 'string' },
+            population_basis: { type: 'string' },
+            definitions_basis: { type: 'string' },
             contradiction_state: { type: 'string', enum: [...CONTRADICTION_STATES] },
             note: { type: 'string' },
           },
@@ -1333,15 +1408,36 @@ const submitVerificationTool: McpTool = {
         throw invalidInput(`${where}.claim_id is not a claim on this fragment.`);
       }
       const scopeMatch: ClaimScopeMatch = {
-        geography: oneOf(row, 'geography', where, SCOPE_MATCH_VALUES),
-        timeframe: oneOf(row, 'timeframe', where, SCOPE_MATCH_VALUES),
-        population: oneOf(row, 'population', where, SCOPE_MATCH_VALUES),
-        definitions: oneOf(row, 'definitions', where, SCOPE_MATCH_VALUES),
+        geography: oneOf(row, 'geography', where, SCOPE_MATCH_SUBMISSION_VALUES),
+        timeframe: oneOf(row, 'timeframe', where, SCOPE_MATCH_SUBMISSION_VALUES),
+        population: oneOf(row, 'population', where, SCOPE_MATCH_SUBMISSION_VALUES),
+        definitions: oneOf(row, 'definitions', where, SCOPE_MATCH_SUBMISSION_VALUES),
       };
+      const scopeBasis: ClaimScopeBasis = {};
+      for (const dimension of SCOPE_DIMENSIONS) {
+        const basis = maybeStr(row, `${dimension}_basis`, where, MAX_NOTE_CHARS);
+        if (basis !== null && basis !== undefined) scopeBasis[dimension] = basis;
+      }
+      /*
+       * Refuse an incomplete answer here, rather than storing it and letting
+       * the gate destroy the claim.
+       *
+       * The difference is everything: a refusal is a sentence the worker can
+       * act on while it still holds the lease, and a stored blank is a claim
+       * with a permanent rejection reason nobody meant to write.
+       */
+      const refusal = scopeAnswerRefusal({
+        where,
+        declared: declaredScopeOf(fragment),
+        scopeMatch,
+        scopeBasis,
+      });
+      if (refusal) throw invalidInput(refusal);
       return {
         claimId,
         supportsClaim: bool(row, 'supports_claim', where, false),
         scopeMatch,
+        scopeBasis,
         note: maybeStr(row, 'note', where, MAX_NOTE_CHARS) ?? '',
         contradictionState: oneOf(
           row,

@@ -485,6 +485,30 @@ describe('opening Brain', () => {
     await waitFor(() => expect(screen.getByText('Some of this is settled.')).toBeTruthy());
   });
 
+  /**
+   * People & capacity is reachable, and at every width.
+   *
+   * It used to be a panel at the bottom of Cash, so it had no address at all
+   * and vanished the moment a sprint's activation state changed. It is a
+   * destination now — in the same menu the console and Sign out are in, which
+   * `visual-qa` found was `display: none` at phone width and took Sign out with
+   * it. A page nothing can reach is not a page.
+   */
+  it('reaches People & capacity from the secondary menu', async () => {
+    baseRoutes();
+    await mount();
+    await waitFor(() => expect(screen.getByRole('button', { name: /More/ })).toBeTruthy());
+    expect(screen.queryByRole('menuitem', { name: /People & capacity/ })).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /More/ }));
+    });
+    const entry = screen.getByRole('menuitem', { name: /People & capacity/ });
+    await act(async () => {
+      fireEvent.click(entry);
+    });
+    expect(window.location.pathname).toBe('/people');
+  });
+
   it('keeps the old console one click away behind a secondary menu', async () => {
     baseRoutes();
     await mount();

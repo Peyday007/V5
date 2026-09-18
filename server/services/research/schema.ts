@@ -27,6 +27,10 @@ import {
   type RetrievalState,
   type EvidenceLane,
   type LaneNecessity,
+  OPPORTUNITY_SIGNALS,
+  type OpportunitySignal,
+  LANE_EVIDENCE_KINDS,
+  type LaneEvidenceKind,
 } from '../../domain/types.ts';
 import {
   booleanField,
@@ -510,6 +514,8 @@ export interface ParsedClaim {
   retrievedAt: string | null;
   confidence: number;
   evidenceLane: string | null;
+  /** The kind of opening this claim establishes, or null for context. */
+  opportunitySignal: OpportunitySignal | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -586,10 +592,38 @@ function laneArray(value: unknown, where: string): ParseResult<EvidenceLane[]> {
       : strictEnum(row['necessity'], LANE_NECESSITIES, `${at}.necessity`);
     if (!necessity.ok) return necessity;
 
+    /*
+     * What kind of evidence this lane wants, and how many distinct examples.
+     *
+     * Optional, and the defaults are the weakest honest ones — one specific
+     * instance — because a planner that says nothing is saying it wants one
+     * listing, which one authoritative listing can prove. Declaring
+     * MARKET_PATTERN or GENERALIZED_ECONOMICS, or a higher example count, only
+     * ever *raises* the bar; `laneFloor` in the gate refuses to let either
+     * lower it. That is the same direction `requiredSources` already takes.
+     *
+     * This exists because a fragment's completion criteria said "at least 3
+     * independently-posted listings … for materially the same task" in prose
+     * that nothing read, and the gate accepted one posting as a pattern.
+     */
+    const evidenceKind = row['evidenceKind'] === undefined
+      ? { ok: true as const, value: undefined }
+      : strictEnum(row['evidenceKind'], LANE_EVIDENCE_KINDS, `${at}.evidenceKind`);
+    if (!evidenceKind.ok) return evidenceKind;
+
+    let minDistinctExamples: number | undefined;
+    if (row['minDistinctExamples'] !== undefined) {
+      const parsed = nonNegativeInteger(row['minDistinctExamples'], `${at}.minDistinctExamples`);
+      if (!parsed.ok) return parsed;
+      minDistinctExamples = parsed.value;
+    }
+
     lanes.push({
       id: declared.length > 0 ? declared : laneIdFrom(description.value),
       description: description.value.trim(),
       necessity: necessity.value as LaneNecessity,
+      ...(evidenceKind.value ? { evidenceKind: evidenceKind.value as LaneEvidenceKind } : {}),
+      ...(minDistinctExamples === undefined ? {} : { minDistinctExamples }),
     });
   }
   const ids = new Set<string>();
@@ -626,6 +660,23 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   const lane = stringField(row['evidenceLane'], `${where}.evidenceLane`);
   if (!lane.ok) return lane;
 
+  /*
+   * The kind of opening this claim establishes, if it establishes one.
+   *
+   * Absent and empty both mean "descriptive evidence", which is what most
+   * claims are. Anything present and outside the closed set refuses the whole
+   * submission rather than being stored and compared against nothing — an
+   * unknown field refusing a whole proposal, which is §24's rule at a new
+   * subject.
+   */
+  const signalRaw = row['opportunitySignal'];
+  let opportunitySignal: OpportunitySignal | null = null;
+  if (signalRaw !== undefined && signalRaw !== null && signalRaw !== '') {
+    const parsed = strictEnum(signalRaw, OPPORTUNITY_SIGNALS, `${where}.opportunitySignal`);
+    if (!parsed.ok) return parsed;
+    opportunitySignal = parsed.value;
+  }
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -656,6 +707,7 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       retrievedAt: retrievedAt.value || null,
       confidence: confidence.value ?? 0,
       evidenceLane: lane.value || null,
+      opportunitySignal,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,
@@ -780,8 +832,54 @@ export function parseBundledResearchPass(
 // Verification pass — does the evidence actually hold, and is there enough
 // ---------------------------------------------------------------------------
 
-export const SCOPE_MATCH_VALUES = ['MATCH', 'MISMATCH', 'UNSTATED'] as const;
+/**
+ * Every scope verdict this build can *read*, including the one it will not
+ * accept any more.
+ *
+ * `UNSTATED` is legacy. It is kept here so verdicts already stored — thirteen
+ * of them in production, each carrying a real rejection reason — still parse
+ * and still mean what they meant. It is refused on submission by
+ * `SCOPE_MATCH_SUBMISSION_VALUES` below.
+ */
+export const SCOPE_MATCH_VALUES = [
+  'MATCH',
+  'MISMATCH',
+  'UNKNOWN',
+  'NOT_APPLICABLE',
+  'UNSTATED',
+] as const;
 export type ScopeMatchValue = (typeof SCOPE_MATCH_VALUES)[number];
+
+/**
+ * What a verifier may say today, and why `UNSTATED` is not on the list.
+ *
+ * It was the default a verifier fell into when it had not looked, and the gate
+ * fails closed, so it destroyed claims silently. Production measured it: all
+ * thirteen rejected claims in the Cash packets were `SCOPE_MATCH`, and twelve
+ * of them were `UNSTATED` rather than `MISMATCH` — including a $125M court
+ * settlement and three marketplace postings that were *literally* the
+ * population the fragment declared. The evidence was fine. Nobody had said so.
+ *
+ * The replacement makes the verifier choose and say why:
+ *
+ *   MATCH           the claim is inside the fragment's declared value.
+ *   MISMATCH        it is outside it. Still rejected, exactly as before.
+ *   NOT_APPLICABLE  the fragment's declaration does not bear on this claim.
+ *   UNKNOWN         the source does not settle it. Still rejected — but now it
+ *                   is a stated finding with a basis beside it rather than a
+ *                   blank, and the submission that omits the basis is refused
+ *                   so the worker can correct it instead of losing the claim.
+ */
+export const SCOPE_MATCH_SUBMISSION_VALUES = [
+  'MATCH',
+  'MISMATCH',
+  'UNKNOWN',
+  'NOT_APPLICABLE',
+] as const;
+export type ScopeMatchSubmissionValue = (typeof SCOPE_MATCH_SUBMISSION_VALUES)[number];
+
+export const SCOPE_DIMENSIONS = ['geography', 'timeframe', 'population', 'definitions'] as const;
+export type ScopeDimension = (typeof SCOPE_DIMENSIONS)[number];
 
 export interface ClaimScopeMatch {
   geography: ScopeMatchValue;
@@ -790,12 +888,82 @@ export interface ClaimScopeMatch {
   definitions: ScopeMatchValue;
 }
 
+/**
+ * What the verifier actually evaluated, per dimension it answered.
+ *
+ * Required for every dimension the fragment declared. "Require the verifier to
+ * quote or identify the fragment value it evaluated" is the whole of it: a
+ * verdict with no basis is indistinguishable from a verdict nobody formed, and
+ * the two were indistinguishable for as long as `UNSTATED` existed.
+ */
+export type ClaimScopeBasis = Partial<Record<ScopeDimension, string>>;
+
 export interface ClaimVerdict {
   claimIndex: number;
   supportsClaim: boolean;
   scopeMatch: ClaimScopeMatch;
+  scopeBasis: ClaimScopeBasis;
   contradictionState: ContradictionState;
   note: string;
+}
+
+/** Which dimensions a fragment actually declared, and therefore must be answered. */
+export interface DeclaredScope {
+  geography: boolean;
+  timeframe: boolean;
+  population: boolean;
+  definitions: boolean;
+}
+
+export function declaredScopeOf(fragment: {
+  geography: string | null;
+  timeframe: string | null;
+  population: string | null;
+  definitions: string | null;
+}): DeclaredScope {
+  return {
+    geography: (fragment.geography ?? '').trim().length > 0,
+    timeframe: (fragment.timeframe ?? '').trim().length > 0,
+    population: (fragment.population ?? '').trim().length > 0,
+    definitions: (fragment.definitions ?? '').trim().length > 0,
+  };
+}
+
+/**
+ * The one refusal both submission paths share.
+ *
+ * Returns the sentence to refuse with, or null when the verdict is complete.
+ * It is deliberately not a gate condition: the point is to refuse the
+ * *submission* so the worker can answer, rather than to store an incomplete
+ * verdict and destroy an otherwise valid claim — which is what the old default
+ * did thirteen times in production.
+ */
+export function scopeAnswerRefusal(input: {
+  where: string;
+  declared: DeclaredScope;
+  scopeMatch: ClaimScopeMatch;
+  scopeBasis: ClaimScopeBasis;
+}): string | null {
+  for (const dimension of SCOPE_DIMENSIONS) {
+    if (!input.declared[dimension]) continue;
+    const value = input.scopeMatch[dimension];
+    if (value === 'UNSTATED') {
+      return (
+        `"${input.where}.${dimension}" is UNSTATED, which is no longer an answer. This fragment ` +
+        `declares a ${dimension}, so say MATCH, MISMATCH, NOT_APPLICABLE or UNKNOWN and put ` +
+        `what you evaluated in "${dimension}_basis".`
+      );
+    }
+    const basis = (input.scopeBasis[dimension] ?? '').trim();
+    if (basis.length === 0) {
+      return (
+        `"${input.where}.${dimension}_basis" is missing. This fragment declares a ${dimension}, ` +
+        `so quote or name the fragment value you judged "${dimension}" against. A verdict with ` +
+        'no basis cannot be told apart from one nobody formed.'
+      );
+    }
+  }
+  return null;
 }
 
 export interface VerificationPassOutput {
@@ -812,15 +980,43 @@ function parseScopeMatch(value: unknown, where: string): ParseResult<ClaimScopeM
   }
   const row = value as Record<string, unknown>;
   const out: Partial<ClaimScopeMatch> = {};
-  for (const field of ['geography', 'timeframe', 'population', 'definitions'] as const) {
-    const parsed = strictEnum(row[field], SCOPE_MATCH_VALUES, `${where}.${field}`);
+  for (const field of SCOPE_DIMENSIONS) {
+    // The submission set, not the readable one: `UNSTATED` parses from storage
+    // and is refused on the way in.
+    const parsed = strictEnum(row[field], SCOPE_MATCH_SUBMISSION_VALUES, `${where}.${field}`);
     if (!parsed.ok) return parsed;
     out[field] = parsed.value;
   }
   return { ok: true, value: out as ClaimScopeMatch };
 }
 
-export function parseVerificationPass(text: string): ParseResult<VerificationPassOutput> {
+function parseScopeBasis(value: unknown, where: string): ParseResult<ClaimScopeBasis> {
+  if (value === undefined || value === null) return { ok: true, value: {} };
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return fail(`"${where}" must be an object naming the fragment value judged per dimension.`);
+  }
+  const row = value as Record<string, unknown>;
+  const out: ClaimScopeBasis = {};
+  for (const field of SCOPE_DIMENSIONS) {
+    const raw = row[field];
+    if (raw === undefined || raw === null) continue;
+    if (typeof raw !== 'string') return fail(`"${where}.${field}" must be a string.`);
+    out[field] = raw;
+  }
+  return { ok: true, value: out };
+}
+
+export function parseVerificationPass(
+  text: string,
+  /**
+   * Which scope dimensions the fragment declared, when the caller knows.
+   *
+   * Optional because one caller — the fixture replay — has no fragment in
+   * hand. Every production path passes it, and passing it is what turns a
+   * silently incomplete verdict into a refusal the worker can answer.
+   */
+  declared?: DeclaredScope,
+): ParseResult<VerificationPassOutput> {
   const json = extractJsonObject(text);
   if (!json.ok) return json;
   const body = json.value;
@@ -845,6 +1041,19 @@ export function parseVerificationPass(text: string): ParseResult<VerificationPas
     const scopeMatch = parseScopeMatch(row['scopeMatch'], `${where}.scopeMatch`);
     if (!scopeMatch.ok) return scopeMatch;
 
+    const scopeBasis = parseScopeBasis(row['scopeBasis'], `${where}.scopeBasis`);
+    if (!scopeBasis.ok) return scopeBasis;
+
+    if (declared) {
+      const refusal = scopeAnswerRefusal({
+        where: `${where}.scopeMatch`,
+        declared,
+        scopeMatch: scopeMatch.value,
+        scopeBasis: scopeBasis.value,
+      });
+      if (refusal) return fail(refusal);
+    }
+
     const contradiction = strictEnum(
       row['contradictionState'],
       CONTRADICTION_STATES,
@@ -859,6 +1068,7 @@ export function parseVerificationPass(text: string): ParseResult<VerificationPas
       claimIndex: claimIndex.value,
       supportsClaim: supports.value,
       scopeMatch: scopeMatch.value,
+      scopeBasis: scopeBasis.value,
       contradictionState: contradiction.value,
       note: note.value,
     });

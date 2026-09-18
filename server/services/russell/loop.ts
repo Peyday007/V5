@@ -114,7 +114,13 @@ import {
 import { outcomeOf, writeBack } from './writeback.ts';
 import { launch, repairLaunches, type LaunchInput } from './launch.ts';
 import { applyTurn } from './turn.ts';
-import { askArchive, judgeCandidate, specifyOverriddenCandidate } from './planning.ts';
+import {
+  applyDeclaredLaunchOrdinals,
+  askArchive,
+  judgeCandidate,
+  specifyOverriddenCandidate,
+} from './planning.ts';
+import { promoteEligibleClaims } from '../../repos/sharedFindings.ts';
 import { compileMission } from './compiler.ts';
 import { specificationKey } from './launch.ts';
 import {
@@ -125,6 +131,10 @@ import {
   resumeAnsweredRequest,
 } from './needsHuman.ts';
 import { parseJson } from '../../repos/util.ts';
+import { getCashMode } from '../../repos/cashMode.ts';
+import { launchableUnderCashMode } from '../cash/lifecycle.ts';
+import { runDiscovery } from '../cash/discovery.ts';
+import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
 import type { RussellCandidate, RussellMission, RussellVisibility } from '../../domain/types.ts';
@@ -313,6 +323,64 @@ export interface TickReport {
    * something `listInquiries` already answers per project.
    */
   lensInquiries: { dispatched: number; settled: number };
+  /**
+   * Each active sprint's discovery step: buckets opened, openings filed.
+   *
+   * Reported by id rather than counted, because "which bucket" is the thing a
+   * person asks when a sprint looks quiet, and a count cannot answer it.
+   */
+  cashDiscovery: {
+    projectId: string;
+    opened: string[];
+    harvested: string[];
+    /** True on the one tick that wrote the sprint's discovery authorization. */
+    authorized: boolean;
+    /** Ideas that had parked for want of it and are back in the ordinary queue. */
+    resumed: string[];
+    /** Pieces whose kind of opening was read back from their own source claim. */
+    signalled: string[];
+  }[];
+  /**
+   * What each sprint's operating pass did about what its pieces need.
+   *
+   * `resumed` counts only the continuations that actually moved something. A
+   * continuation that ran and found nothing to resume is recorded on the need
+   * itself, where the note says which it was — the distinction is the point,
+   * so it must not be flattened into "it ran".
+   */
+  cashOperations: {
+    projectId: string;
+    needsRaised: string[];
+    needsSettled: string[];
+    resumed: string[];
+    dependentWork: string[];
+    /** Needs whose research came back and reached the card it was raised for. */
+    cardsAnswered: string[];
+    /** Pieces Brain formed a commercial view about, as recommendations. */
+    termsProposed: string[];
+    /**
+     * Deep dives this pass started, and the ones it moved.
+     *
+     * `runValidations` has always returned both and the report read neither —
+     * the same "returned four facts and read two" shape `runDiscovery` had, and
+     * the reason it matters is diagnostic rather than cosmetic: a tick whose
+     * only effect was starting the qualification of an opening would have
+     * reported silence, which is indistinguishable from a tick that did
+     * nothing.
+     */
+    validationsStarted: string[];
+    validationsSettled: string[];
+  }[];
+  /** Claims this pass promoted into the Brain-wide shared pool. */
+  sharedPromoted: string[];
+  /**
+   * Ideas given the launch rank their own envelope declares.
+   *
+   * Only ever the ones judged before that rank existed: the guard is
+   * `ordinal IS NULL`, so this empties out once it has caught up and a silence
+   * here means there is nothing left to rank.
+   */
+  ranked: string[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
 }
@@ -351,6 +419,10 @@ const EMPTY: TickReport = {
   renewedReservations: [],
   frontier: [],
   lensInquiries: { dispatched: 0, settled: 0 },
+  cashDiscovery: [],
+  cashOperations: [],
+  sharedPromoted: [],
+  ranked: [],
   bounded: false,
 };
 
@@ -401,9 +473,27 @@ export async function tick(owner: string): Promise<TickReport> {
   renewedReservations: [],
     frontier: [],
     lensInquiries: { dispatched: 0, settled: 0 },
+    cashDiscovery: [],
+    cashOperations: [],
+    sharedPromoted: [],
   };
 
   try {
+    /*
+     * 0. Make what the Brain has validated available to the rest of the Brain.
+     *
+     * A derivation over rows rather than a hook on the moment a fragment is
+     * accepted: that is what lets it reach everything already written, survive
+     * a tick that died halfway, and be run by two instances at once — the
+     * unique index on `claim_id` is the arbiter and a loser is an ordinary
+     * outcome. It is first because it is the cheapest thing in the pass and
+     * because a bound later in the tick must not be able to starve it.
+     *
+     * It creates no work, spends nothing, and moves no project state. It
+     * writes one pointer per already-gated claim.
+     */
+    report.sharedPromoted = await promoteEligibleClaims();
+
     // 1. Finish what ended — but only where the loop can say something true.
     for (const raw of await missionsAwaitingWriteback(cycle.maxEventsPerCycle)) {
       const outcome = await outcomeOf(raw);
@@ -811,6 +901,121 @@ export async function tick(owner: string): Promise<TickReport> {
     }
 
     /*
+     * 1e-iii-b. Start each active sprint's discovery, and file what it found.
+     *
+     * Activating a sprint used to write a mode row and nothing else: no goal,
+     * no candidate, no mission, no queued job. A freshly activated sprint could
+     * therefore sit empty beside a perfectly healthy fleet while the screen said
+     * discovery had started — §24's "waiting nobody can resolve" arriving at a
+     * section rather than at a state machine.
+     *
+     * Both halves are idempotent by rows rather than by a flag, so a restart
+     * mid-tick resumes rather than repeating: a bucket is opened once because
+     * its `CASH_DISCOVERY_OPENED` event says so, and a claim becomes an
+     * opportunity once because of the unique index on `(project, claim)`.
+     *
+     * `openDiscovery` is gated by the sprint's own lifecycle and `harvest` is
+     * deliberately not: winding down stops new discovery and never stops the
+     * answers to what already ran arriving. Opening is bounded to one bucket
+     * per project per tick, because five simultaneous missions on activation is
+     * five simultaneous activations — the same bound the lens dispatch takes.
+     *
+     * Nothing here bypasses anything: what it creates is a candidate, which
+     * still goes through the archive check, the judgment pass, the mission
+     * compiler, the approval envelope, the evidence gate and all three audit
+     * roles before a single claim can be harvested from it.
+     */
+    for (const project of await listProjects()) {
+      try {
+        const run = await runDiscovery(project.id);
+        /*
+         * Reported when anything happened at all, which now includes the two
+         * things reconciliation does.
+         *
+         * `runDiscovery` has always returned four facts and this read two of
+         * them — the same shape as destructuring `{ audits }` and dropping the
+         * synthesis beside it. A grant written and ten ideas put back are
+         * exactly what somebody watching a repaired sprint needs to see, and a
+         * tick that did both while opening nothing would have reported
+         * silence.
+         */
+        if (
+          run.opened.length > 0 ||
+          run.harvested.length > 0 ||
+          run.authorized ||
+          run.resumed.length > 0 ||
+          run.signalled.length > 0
+        ) {
+          report.cashDiscovery.push({
+            projectId: project.id,
+            opened: run.opened.map((one) => one.bucketId),
+            harvested: run.harvested.map((one) => one.opportunity.id),
+            authorized: run.authorized,
+            resumed: run.resumed,
+            signalled: run.signalled,
+          });
+        }
+      } catch {
+        /* a sprint whose discovery could not run is left as it was */
+      }
+
+      try {
+        /*
+         * And the part where Brain acts on what a piece says it needs.
+         *
+         * Its own `try`, because the two are separate answers with separate
+         * remedies: a harvest that threw must not also stop Brain settling a
+         * need whose capability has arrived, and the pass that raises needs
+         * runs whether or not anything new was discovered this tick.
+         *
+         * `required_capabilities` was written by the card and read by nothing,
+         * so a piece could declare that collecting its money needs a payment
+         * processor and reach READY against a Brain that has none and had
+         * never been asked. `closeNeed` set a status and resumed nothing,
+         * because nothing recorded what had been waiting — a person could
+         * answer the same need repeatedly and never learn their answer was
+         * recorded and ignored.
+         *
+         * Derived from rows on every tick rather than hooked to the moment a
+         * card changed, which is what reaches the pieces already stranded. It
+         * gates nothing: an open need is a valid execution state and Brain
+         * carries on around it.
+         */
+        const operated = await operate(project.id);
+        const raised = [
+          ...operated.capabilities.raised,
+          ...operated.gaps.map((one) => one.needId),
+        ];
+        if (
+          raised.length > 0 ||
+          operated.capabilities.settled.length > 0 ||
+          operated.continuations.length > 0 ||
+          operated.dependentWork.length > 0 ||
+          operated.research.applied.length > 0 ||
+          operated.proposed.length > 0 ||
+          operated.validations.started.length > 0 ||
+          operated.validations.settled.length > 0
+        ) {
+          report.cashOperations.push({
+            projectId: project.id,
+            needsRaised: raised,
+            needsSettled: operated.capabilities.settled,
+            resumed: operated.continuations.filter((one) => one.resumed).map((one) => one.needId),
+            dependentWork: operated.dependentWork.map((one) => one.candidateId),
+            cardsAnswered: operated.research.applied.map((one) => one.needId),
+            termsProposed: operated.proposed.map((one) => one.opportunityId),
+            validationsStarted: operated.validations.started.map((one) => one.opportunityId),
+            validationsSettled: operated.validations.settled.map(
+              (one) => `${one.opportunityId}=${one.to}`,
+            ),
+          });
+        }
+      } catch {
+        /* a sprint whose operating pass could not run is left as it was */
+      }
+    }
+
+    /*
      * 1e-iv. Carry asked lenses to a worker, and read the answers back.
      *
      * The frontier's five DERIVED lenses are answered above, from rows. The
@@ -921,6 +1126,20 @@ export async function tick(owner: string): Promise<TickReport> {
     // A launch that crashed between its steps is finished here rather than at
     // boot only, so a mission half-built at 3am does not wait for a restart.
     await repairLaunches();
+
+    /*
+     * Rank what was judged before its envelope declared a rank.
+     *
+     * Before the launch step, so an idea this moves can take a slot in the same
+     * pass rather than waiting one out. Derived from rows, because
+     * `judgeCandidate` writes the rank and only ever sees an unjudged
+     * candidate — so everything judged earlier would have kept a null ordinal
+     * for ever, which is the whole reason this exists rather than the judgment
+     * being enough on its own.
+     */
+    for (const id of await applyDeclaredLaunchOrdinals(cycle.maxEventsPerCycle)) {
+      report.ranked.push(id);
+    }
 
     // 4. Start at most one thing.
     const launchable = await nextLaunchable(cycle.maxEventsPerCycle);
@@ -1133,10 +1352,40 @@ async function nextLaunchable(limit: number): Promise<
     followOnOfMissionId: string | null;
     spec: Omit<LaunchInput, 'candidateId'>;
   }[] = [];
+  /*
+   * One mode lookup per project rather than per candidate. The cache lives for
+   * this call only: a mode a person reactivates mid-tick is read on the next
+   * one, which is ten seconds away.
+   */
+  const modeByProject = new Map<string, Awaited<ReturnType<typeof getCashMode>>>();
   for (const row of rows) {
     const judgment = parseJson<Record<string, unknown>>(row.judgment, {});
     const spec = judgment['missionSpec'];
     if (!spec || typeof spec !== 'object') continue;
+
+    /*
+     * A wound-down sprint launches no new cash discovery.
+     *
+     * Asked here as well as at the producer, because a guard on one entrance is
+     * not a guard: an idea captured while the sprint was active can still be
+     * sitting queued when it winds down, and launching it then would be exactly
+     * the "new short-cash discovery" the wind-down exists to stop.
+     *
+     * It is a **skip**, not a refusal: no state moves, no attempt is charged, no
+     * reason is written on the candidate. The idea keeps its place and launches
+     * by itself the moment the sprint is active again, which is what makes
+     * reactivating a decision rather than a recovery. Only a candidate that
+     * belongs to a cash opportunity is affected; ordinary research in a project
+     * that happens to run a sprint is untouched.
+     */
+    if (row.project_id) {
+      if (!modeByProject.has(row.project_id)) {
+        modeByProject.set(row.project_id, await getCashMode(row.project_id));
+      }
+      const mode = modeByProject.get(row.project_id) ?? null;
+      if (!(await launchableUnderCashMode({ candidateId: row.id, mode }))) continue;
+    }
+
     out.push({
       candidateId: row.id,
       followOnOfMissionId: row.follow_on_of_mission_id,

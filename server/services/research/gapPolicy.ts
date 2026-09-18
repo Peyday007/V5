@@ -37,7 +37,8 @@ export type AuthorizeResult =
  */
 export async function authorizeUnresolvedGaps(input: {
   orchestrationId: string;
-  authorizedBy: { id: string; email: string };
+  /** The address is null for a member who holds no address at all (§26). */
+  authorizedBy: { id: string; email: string | null };
 }): Promise<AuthorizeResult> {
   const orchestration = await getOrchestration(input.orchestrationId);
   if (!orchestration) throw new GapPolicyRefused('No such orchestration.');
