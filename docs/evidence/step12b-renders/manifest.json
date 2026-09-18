@@ -1,9 +1,9 @@
 {
-  "revision": "22519f02e48bd9e3989fd6cd55874dd9235d25ba",
+  "revision": "aa9345e755ceb9c423e237ff3ba219c0f78a3652",
   "treeDirtyAtManifestTime": true,
-  "renderSetDigest": "4ffd8f21e6e004a5c5bfcb23bf4897deff365448fd373285b5281eb6c0b13a0b",
+  "renderSetDigest": "b14f0e7eb9e96f5aab1dcce7a271ade00ce2e3fd6471dce78a84796e712675c0",
   "renderCount": 12,
-  "generatedAt": "2026-09-18T11:28:44.151Z",
+  "generatedAt": "2026-09-18T12:03:36.443Z",
   "renders": [
     {
       "screen": "needs-you-empty",
@@ -51,7 +51,7 @@
       "screen": "project-constellation",
       "width": 953,
       "file": "project-constellation-953.png",
-      "bytes": 231048
+      "bytes": 231141
     },
     {
       "screen": "project-constellation",
