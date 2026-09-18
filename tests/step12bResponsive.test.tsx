@@ -390,3 +390,76 @@ describe('what measuring the constellation found', () => {
     expect(rule('.lim-node {')).toMatch(/overflow-wrap:\s*anywhere/);
   });
 });
+
+/**
+ * Theme is colour. Structure is not.
+ *
+ * §12C's parity work had to answer whether a member's dark screen and an
+ * administrator's light one could be showing two different layouts. They
+ * cannot, and the reason is worth pinning rather than re-derived: **nothing in
+ * this repository ever sets `data-theme`.** There is no theme control, no theme
+ * preference — `PREFERENCES` is `depth`, `showPulse`, `showWhyThisMatters` and
+ * `landingSection`, and a key is a code change somebody reviews — and no stored
+ * value to migrate. What a viewer gets is their own browser's
+ * `prefers-color-scheme`, honoured identically whoever they are.
+ *
+ * Which leaves one thing that could make the two structural, and this is it: a
+ * theme block that changed a *layout* property. It never has, and now it cannot
+ * without failing here.
+ */
+describe('a theme changes colour and cannot change layout', () => {
+  /** Everything a theme block is allowed to declare: custom properties, and nothing else. */
+  function declarationsIn(block: string): string[] {
+    return [...block.matchAll(/(^|[;{])\s*([a-zA-Z-]+)\s*:/g)]
+      .map((match) => match[2] as string)
+      .filter((name) => !name.startsWith('--'));
+  }
+
+  it('declares nothing but custom properties in either dark block', () => {
+    const media = CSS.slice(CSS.indexOf('@media (prefers-color-scheme: dark)'));
+    const dark = media.slice(0, media.indexOf('\n}\n\n') + 2);
+    const stamped = CSS.slice(CSS.indexOf(".rs-shell[data-theme='dark']"));
+    const explicit = stamped.slice(0, stamped.indexOf('\n}'));
+
+    expect(dark).toMatch(/--paper:/);
+    expect(explicit).toMatch(/--paper:/);
+    expect(declarationsIn(dark)).toEqual([]);
+    expect(declarationsIn(explicit)).toEqual([]);
+  });
+
+  it('keys no layout rule on a theme at all', () => {
+    /*
+     * A rule like `[data-theme='dark'] .rs-cash-money-row { display: none }`
+     * would pass the check above — it is outside both token blocks — and would
+     * make two viewers of one page see two structures. There is no such rule,
+     * and the only selectors mentioning a theme are the two that define tokens.
+     */
+    const themed = [...CSS.matchAll(/[^\n{}]*\[data-theme[^\n{}]*\{/g)].map((one) =>
+      one[0].trim(),
+    );
+    for (const selector of themed) {
+      expect(selector).toMatch(/^(\.rs-shell|\.rs-boot)[^,]*(,|\{)/);
+    }
+    expect(themed.length).toBeGreaterThan(0);
+  });
+
+  it('hides no Cash section at any width', () => {
+    /*
+     * The mobile shell already lost a whole menu this way: a React branch was
+     * written, tested and reachable by nothing, because
+     * `.rs-shell-bar .rs-rail-foot { display: none }` removed the element it
+     * lived in at exactly that width. A mechanism nothing can reach is not a
+     * mechanism, and no test of either half could see the other.
+     *
+     * So the same question is asked of Cash directly: no rule anywhere may
+     * take one of its sections off the page. A section may reflow; it may not
+     * disappear on one screen and not another, because that is the divergence
+     * this whole correction removed, arriving through the stylesheet instead.
+     */
+    for (const match of CSS.matchAll(/([^\n{}]*rs-cash-[^\n{}]*)\{([^}]*)\}/g)) {
+      const body = match[2] ?? '';
+      expect(body).not.toMatch(/display\s*:\s*none/);
+      expect(body).not.toMatch(/visibility\s*:\s*hidden/);
+    }
+  });
+});
