@@ -401,3 +401,49 @@ is nearly true: the connection row that assigns a member their three names
 (because a name that changed between two reads would be one somebody had already
 pasted into Claude), and that connection's `state`, reconciled from rows.
 Neither creates an account, a Routine, a worker, a credential or a bin.
+
+---
+
+## 6. The live proof, in the gate rather than in a screenshot
+
+The demonstrated defect was a boundary defect: the owner's account saw the
+active frontier and an ordinary member was told there was nothing to see. A
+boundary is only proved by the party on the wrong side of it, so an
+administrator's screenshot cannot settle it — the administrator was never
+refused.
+
+`scripts/verify-hosted.ts` runs against the **released image** after every
+deploy, signed in as `verification-member@brain.invalid`: a real authenticated
+person holding no membership on the cash root, no Brain administrator rights,
+and nothing else this Brain would give it. `sharedCashBoundary` is the check,
+and it asserts, in that session:
+
+- the member may read `/api/cash/mode` and learn which sprint is running;
+- `/api/projects` does **not** list the cash root — proven from the Brain's own
+  answer rather than assumed, so the check cannot silently degrade into testing
+  the ordinary member path;
+- `/api/projects/<root>/cash` answers **200** with `scope: 'SHARED'`, carrying
+  the portfolio, the counts, the roadmap and the discovery state;
+- the whole serialized body contains none of `myCash`, `entries`,
+  `commitments`, `deployableCents`, `availableFundsCents`, `heldCents`,
+  `maxCommittedCents`, `maxPerActionCents`, `committedCents`, `spentCents`,
+  `allowedActions`, `decisionsForMe`, `engineCards`, `executionPaths` or
+  `provenance` — asserted against the string rather than the top-level keys,
+  because a figure nested inside an opportunity is the same disclosure, and
+  because those money keys are exactly what the first version of this
+  projection leaked;
+- `commercialGrant` crossed as `PRESENT` or `ABSENT` and nothing about the
+  grant itself;
+- another operation's Cash is **404 with a byte-identical body** to a project
+  that does not exist;
+- `POST /api/cash/activate` and `POST /api/projects/<root>/cash/authority` are
+  refused to that member.
+
+It creates nothing: no activation, no grant, no enqueue, and no root brought
+into existence by being looked at. A fresh Brain with no sprint records that
+there was no frontier to read rather than passing silently.
+
+`tests/sharedCashAccess.test.ts` asserts the check is present **and called**,
+reading the script rather than running it — because nothing in the suite
+executes it, which is exactly how §33's `geography_basis` defect reached
+production with the whole suite green.
