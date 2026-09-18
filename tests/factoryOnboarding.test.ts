@@ -29,6 +29,8 @@ import { listInvitationsForWorker } from '../server/repos/invitations.ts';
 import type { Bin, BinManifest, Principal, User } from '../server/domain/types.ts';
 import { OPERATOR_RESOLVED_KINDS } from '../server/services/dispatch/loop.ts';
 import { FACTORY_MCP_PATH, MCP_PATH } from '../server/mcp/endpoint.ts';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 let fixture: TestProject;
 let actor: User;
@@ -348,6 +350,54 @@ describe('readiness is derived, and says what is left', () => {
     expect(ready.readiness).toBe('READY');
     expect(ready.remaining).toHaveLength(0);
     expect(ready.surfaces).toContain('Factory surface');
+  });
+});
+
+describe('the permission a fired worker reads out of this repository', () => {
+  /*
+   * §22's rule, at the file it actually depends on.
+   *
+   * A fired Cowork worker checks out the repository its Routine attaches and
+   * reads `.claude/settings.json`; `permissions.allow` is what lets it call the
+   * connector's tools without stopping for approval. A factory Routine attaches
+   * **this** repository, so this file is the pre-approval for factory work —
+   * and it listed the research connector only. Nothing anywhere would have said
+   * so: the fire succeeds, the session starts, and it stops at a prompt nobody
+   * is there to answer. That is the precondition §22 records as having been
+   * missed once already, diagnosed wrongly as an allowlist problem.
+   *
+   * Both separators, because the tool prefix a connector name produces is not
+   * worth guessing at fire time, and the cost of carrying both is nothing.
+   *
+   * This asserts the checked-in file rather than a constant: the worker reads
+   * the file, and a constant agreeing with itself proves nothing about it.
+   */
+  const settings = (): { permissions?: { allow?: string[] } } =>
+    JSON.parse(
+      fs.readFileSync(fileURLToPath(new URL('../.claude/settings.json', import.meta.url)), 'utf8'),
+    ) as { permissions?: { allow?: string[] } };
+
+  it('pre-approves the factory connector, in both spellings', () => {
+    const allow = settings().permissions?.allow ?? [];
+    for (const entry of [
+      'mcp__factory-brain',
+      'mcp__factory-brain__*',
+      'mcp__factory_brain',
+      'mcp__factory_brain__*',
+    ]) {
+      expect(allow, `${entry} is not pre-approved, so an unattended factory session stops at a prompt`).toContain(entry);
+    }
+  });
+
+  it('still pre-approves the research connector, because this file serves both', () => {
+    // The research Routines attach `brain-worker-bootstrap` rather than this
+    // repository, so these entries are belt and braces — and removing them
+    // while adding the factory ones would be the kind of silent swap this test
+    // exists to refuse.
+    const allow = settings().permissions?.allow ?? [];
+    for (const entry of ['mcp__cloud-brain__*', 'mcp__cloud_brain__*']) {
+      expect(allow).toContain(entry);
+    }
   });
 });
 

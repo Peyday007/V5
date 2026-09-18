@@ -46,7 +46,13 @@ import { createProject } from '../server/repos/projects.ts';
 import { FACTORY_MCP_PATH, MCP_PATH, MCP_PATHS } from '../server/mcp/endpoint.ts';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = pickPort(6800, 100);
+// 7300, because `tests/cashHttp.test.ts` took 6800 on production while this
+// suite was on a branch. Two suites on one range do not fail loudly — `/healthz`
+// is unauthenticated, so the second one's readiness probe finds the first one's
+// server and then signs in against a Brain with a different bootstrap
+// administrator, which reports 401 and reads as a broken sign-in.
+// `deploymentOwnership` is what caught it at the merge.
+const PORT = pickPort(7300, 100);
 const BASE = `http://127.0.0.1:${PORT}`;
 const MODERN = '2026-07-28';
 const LEGACY = '2025-11-25';

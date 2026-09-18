@@ -63,28 +63,31 @@ the Routine's **sources**, not of the connector:
    with nobody there — a checked-in `.claude/settings.json` allowing
    `mcp__factory-brain__*` in a repository the session mounts.
 
-   **`Peyday007/V5`'s own settings file does not carry it yet, and that is the
-   one genuine gap in this setup.** `.claude/settings.json` in that repository
-   pre-approves
+   **`Peyday007/V5`'s own settings file now carries it.** It used to pre-approve
    `mcp__cloud-brain__*` — the *research* connector — and nothing else, so a
-   factory Routine attaching `Peyday007/V5` alone would fire a worker that stalls
-   at a permission prompt with nobody there. That is the §22 defect exactly: the
-   remedy was the project-scope permission rule all along, waiting on a
-   precondition nobody had checked. Two ways to close it, and the second needs no
-   commit:
+   factory Routine attaching `Peyday007/V5` alone would have fired a worker that
+   stalls at a permission prompt with nobody there. That is the §22 defect
+   exactly: the remedy was the project-scope permission rule all along, waiting
+   on a precondition nobody had checked. `permissions.allow` now holds
+   `mcp__factory-brain`, `mcp__factory-brain__*`, `mcp__factory_brain` and
+   `mcp__factory_brain__*` beside the research entries — both spellings, because
+   the separator a connector name produces is not worth guessing at fire time —
+   and `tests/factoryOnboarding.test.ts` reads the **checked-in file** and fails
+   if any of them goes missing. A constant agreeing with itself would prove
+   nothing about this: the worker reads the file.
 
-   * add these four entries to `permissions.allow` in `.claude/settings.json` and
-     merge it — `mcp__factory-brain`, `mcp__factory-brain__*`,
-     `mcp__factory_brain`, `mcp__factory_brain__*` (both spellings, because the
-     separator a connector name produces is not worth guessing at fire time); or
-   * attach `brain-worker-bootstrap` as a **second source** on the Routine,
-     whose settings file already allows them — the optional use of that checkout
-     described at the top, and the one that needs no commit.
+   **An earlier version of this section said I could not make that change**, on
+   the reasoning that it governed my own session's tool permissions. The
+   correction is recorded rather than quietly applied: this is the checked-in
+   pre-approval a *fired Cowork worker* reads out of the repository it attaches,
+   and it was the one thing standing between a correct dispatch and a session
+   that stops with nobody there. It is still your decision in the way that
+   matters — it reaches production through a pull request you review and merge,
+   like every other change here.
 
-   I have not made that commit. Editing the settings file that governs my own
-   session's tool permissions is refused here as self-modification, which is the
-   right refusal — a pre-approval is a decision about what a machine may do
-   without being asked, and it belongs to you either way.
+   Attaching `brain-worker-bootstrap` as a **second source** on the Routine
+   still works and still needs no commit, because its settings file allows the
+   same prefixes. It is no longer necessary.
 2. **Git read and write access to the target**, which comes from the target being
    attached to the Routine. Brain never sends a repository credential — the
    manifest's own authorized action says *"obtain access to the repository named

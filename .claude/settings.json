@@ -5,7 +5,11 @@
       "mcp__cloud-brain",
       "mcp__cloud-brain__*",
       "mcp__cloud_brain",
-      "mcp__cloud_brain__*"
+      "mcp__cloud_brain__*",
+      "mcp__factory-brain",
+      "mcp__factory-brain__*",
+      "mcp__factory_brain",
+      "mcp__factory_brain__*"
     ]
   }
 }
