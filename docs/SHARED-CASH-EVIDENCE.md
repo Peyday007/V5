@@ -447,3 +447,52 @@ there was no frontier to read rather than passing silently.
 reading the script rather than running it — because nothing in the suite
 executes it, which is exactly how §33's `geography_basis` defect reached
 production with the whole suite green.
+
+### What the released image actually answered
+
+Run 252, commit `a7e08fa`, 2026-09-18T07:07Z, against the deployed Brain as
+`verification-member@brain.invalid` — no membership on the cash root, no Brain
+administrator rights:
+
+```
+The shared frontier, as an ordinary member
+  PASS  the member holds no membership on the cash root — not a member
+  PASS  and may still read the shared frontier — 200
+  PASS  the reply says which projection it is — scope=SHARED
+  PASS  discovery, the portfolio, the roadmap and the counts all crossed — 31 opportunit(ies)
+  PASS  the shared frontier carries no myCash
+  PASS  the shared frontier carries no entries
+  PASS  the shared frontier carries no commitments
+  PASS  the shared frontier carries no deployableCents
+  PASS  the shared frontier carries no availableFundsCents
+  PASS  the shared frontier carries no heldCents
+  PASS  the shared frontier carries no maxCommittedCents
+  PASS  the shared frontier carries no maxPerActionCents
+  PASS  the shared frontier carries no committedCents
+  PASS  the shared frontier carries no spentCents
+  PASS  the shared frontier carries no allowedActions
+  PASS  the shared frontier carries no decisionsForMe
+  PASS  the shared frontier carries no engineCards
+  PASS  the shared frontier carries no executionPaths
+  PASS  the shared frontier carries no provenance
+  PASS  whether a commercial grant exists crossed, and nothing about it — commercialGrant=ABSENT
+  PASS  another operation's Cash is refused exactly as a missing one is — both 404, identical body
+  PASS  a member cannot activate or wind down the sprint — 404
+  PASS  a member cannot grant commercial authority — 404
+
+HOSTED-VERIFICATION: PASS 198/198
+```
+
+That is the demonstrated defect answered by the party that demonstrated it: the
+member who was told there was nothing to see now reads thirty-one openings, and
+every private figure is absent as a JSON key at any depth rather than as a field
+somebody remembered to strip.
+
+**The run's own verdict is a failure, and it is not this one.** `flyctl apps
+restart` exited 126 with *"failed to wait for health checks to pass: context
+deadline exceeded"*, and the next step answered `healthy again after 1
+attempt(s)` about twenty-five seconds later — so the machine restarted and came
+back, `flyctl`'s wait gave up first, and the *post*-restart verification was
+skipped because the step before it had failed. The image was released and is
+serving; see CLAUDE.md §27, where this is recorded as a sixth and different
+shape rather than folded into the five that precede it.
