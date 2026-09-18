@@ -42,6 +42,8 @@ import {
   livePacketFor,
   missingSections,
   openPacket,
+  PACKET_SECTIONS,
+  putSection,
   readiness,
 } from '../server/services/realize/packet.ts';
 import { decisionReadiness, directorPass } from '../server/services/realize/director.ts';
@@ -81,6 +83,7 @@ const USAGE = `
   packet research <packetId>                          what it should research next, if anything
   packet compile <packetId>                           the change request it implies
   packet prove <packetId> [--apply]                   what the evidence supports, and what it does not
+  packet section <packetId> <SECTION> <file.json>     write a design section a reader authored
   packets                                             every packet, and faculties with none
 
   submit <binId> <file.json> --worker <handle>        submit a reading through the worker path
@@ -443,6 +446,36 @@ async function packet(argv: string[]): Promise<void> {
       out(`  Decision-ready: ${stop.decisionReady ? 'YES' : 'no'}`);
       out(`  ${stop.reason}`);
       for (const line of stop.unresolved.slice(0, 20)) out(`    ${line}`);
+      out('');
+      break;
+    }
+    case 'section': {
+      const id = rest[0];
+      const section = rest[1];
+      const file = rest[2];
+      if (!id || !section || !file) {
+        fail('Usage: packet section <packetId> <SECTION> <file.json>');
+      }
+      if (!(PACKET_SECTIONS as readonly string[]).includes(section as string)) {
+        fail(`"${section}" is not one of ${PACKET_SECTIONS.join(', ')}.`);
+      }
+      const absolute = path.resolve(file as string);
+      if (!fs.existsSync(absolute)) fail(`There is no file at ${absolute}.`);
+      const content: unknown = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+      /*
+       * `PROPOSED`, never `ACCEPTED`. A design somebody wrote is a proposal
+       * until a person accepts it, and a command that could write `ACCEPTED`
+       * would let whoever ran it accept their own work.
+       */
+      const written = await putSection({
+        packetId: id as string,
+        section: section as (typeof PACKET_SECTIONS)[number],
+        content,
+        authorKind: 'PROPOSED',
+        evidence: `Authored by a reader and supplied from ${absolute}.`,
+      });
+      out('');
+      out(`  ${written.section} v${written.version}  ${written.authorKind}`);
       out('');
       break;
     }
