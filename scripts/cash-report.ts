@@ -44,6 +44,8 @@ import { listWorkItems } from '../server/repos/workQueue.ts';
 import { listOrchestrationsByProject } from '../server/repos/research.ts';
 import { cashRoadmap } from '../server/services/cash/roadmap.ts';
 import { CASH_DISCOVERY_AUTHORITY_NAME } from '../server/services/cash/discoveryAuthority.ts';
+import { cashTier } from '../server/services/cash/tier.ts';
+import { readyToTest } from '../server/services/cash/card.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
 import { WORK_ITEM_STATES } from '../server/domain/types.ts';
 import type { WorkItem } from '../server/domain/types.ts';
@@ -208,16 +210,40 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
   console.log(`PORTFOLIO (${opportunities.length})`);
   let cardsComplete = 0;
   let validationsStarted = 0;
+  /*
+   * The tier, counted here as well as printed per piece.
+   *
+   * It is the one number a person asking "is any of this actually an
+   * opportunity" wants, and before it existed the report said `PORTFOLIO (31)`
+   * about thirty-one published price lists. Derived exactly as `cashView`
+   * derives it, from the same two functions, so the terminal and the page
+   * cannot disagree.
+   */
+  const byTier: Record<string, number> = {
+    SIGNAL: 0,
+    CANDIDATE: 0,
+    QUALIFIED: 0,
+    READY_TO_TEST: 0,
+  };
   for (const opportunity of opportunities) {
     if (opportunity.validationState !== null) validationsStarted += 1;
     const facts = await cardFactsFor(opportunity.id);
     const card = cashEngineCard({ opportunity, facts });
     if (card.unknowns.length === 0) cardsComplete += 1;
+    const tier = cashTier({ opportunity, card, readyToTest: readyToTest(opportunity) });
+    byTier[tier.tier] = (byTier[tier.tier] ?? 0) + 1;
     console.log(
-      `  ${opportunity.id}  ${opportunity.state.padEnd(15)}` +
+      `  ${opportunity.id}  ${tier.tier.padEnd(14)} ${opportunity.state.padEnd(12)}` +
+        ` signal=${String(opportunity.opportunitySignal ?? '—').padEnd(32)}` +
         ` validation=${String(opportunity.validationState ?? 'NOT_STARTED').padEnd(12)}` +
-        ` answered=${card.entries.length - card.unknowns.length}/${card.entries.length}`,
+        ` round=${opportunity.validationRounds}` +
+        ` answered=${tier.answered}/${tier.required}`,
     );
+    if (tier.toAdvance.length > 0) {
+      console.log(
+        `      to advance: ${tier.toAdvance.map((one) => one.key).join(', ')}`,
+      );
+    }
     console.log(`      ${trim(opportunity.title)}`);
     console.log(
       `      from claim ${opportunity.sourceClaimId ?? '—'}` +
@@ -264,6 +290,8 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       ` succeeded=${shape.byState['SUCCEEDED'] ?? 0} failed=${shape.byState['FAILED'] ?? 0}` +
       ` cancelled=${shape.byState['CANCELLED'] ?? 0}` +
       ` opportunities=${opportunities.length}` +
+      ` signals=${byTier['SIGNAL']} candidates=${byTier['CANDIDATE']}` +
+      ` qualified=${byTier['QUALIFIED']} ready=${byTier['READY_TO_TEST']}` +
       ` validations=${validationsStarted}` +
       ` cards_complete=${cardsComplete}`,
   );

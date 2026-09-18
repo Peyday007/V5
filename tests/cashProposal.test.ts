@@ -37,6 +37,7 @@ import { capture, fillCard } from '../server/services/cash/opportunities.ts';
 import { applyProposal, proposeTerms } from '../server/services/cash/answers.ts';
 import type { ProposedTerm } from '../server/services/cash/answers.ts';
 import { advanceWithinAuthority } from '../server/services/cash/operate.ts';
+import { CAPTURE_KEY, qualificationKeys } from '../server/services/cash/tier.ts';
 import { readMoneyFigures } from '../server/services/cash/figures.ts';
 import { cardFact, recordCardFact } from '../server/repos/cashCardFacts.ts';
 import { getOpportunity, updateOpportunity } from '../server/repos/cashPortfolio.ts';
@@ -329,6 +330,27 @@ describe('Brain acts inside the standing authority', () => {
     });
     const proposal = await proposeTerms(piece);
     await applyProposal({ opportunity: piece, proposal });
+    /*
+     * And the rest of the execution thesis.
+     *
+     * `markReady` asks for more than the short card now — whether we are
+     * eligible, how the work actually gets done, whether calling is required,
+     * what it costs and when the money arrives — because a piece can answer
+     * every readiness field and still have nothing saying any of that. The
+     * gate `advanceWithinAuthority` presses is unchanged: what changed is what
+     * the gate checks, and this fixture answers it.
+     */
+    for (const field of [CAPTURE_KEY, ...qualificationKeys(null)]) {
+      await recordCardFact({
+        projectId,
+        opportunityId: piece.id,
+        field,
+        kind: 'EVIDENCE',
+        value: `A published answer to ${field}.`,
+        claimId: `clm_${field}`,
+        decidedBy: 'BRAIN',
+      });
+    }
     return (await getOpportunity(piece.id))!;
   }
 

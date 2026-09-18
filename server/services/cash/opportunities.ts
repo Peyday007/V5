@@ -38,7 +38,7 @@ import {
   settleCommitment,
 } from '../../repos/cashAuthority.ts';
 import { countActions, recordAction } from '../../repos/cashActions.ts';
-import { recordCardFact } from '../../repos/cashCardFacts.ts';
+import { cardFactsFor, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
 import { recordMoney } from '../../repos/cashLedger.ts';
@@ -49,6 +49,8 @@ import {
   isCommercialAction,
 } from './authority.ts';
 import { evidenceCard } from './card.ts';
+import { cashEngineCard } from './engineCard.ts';
+import { cashTier } from './tier.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { cashPosition, checkMoneyEntry } from './money.ts';
 import { toJson } from '../../repos/util.ts';
@@ -322,6 +324,34 @@ export async function markReady(input: {
   if (!opportunity) return refuse('No opportunity with that id.');
   const card = evidenceCard(opportunity);
   if (!card.readiness.ready) return refuse(card.readiness.summary);
+
+  /*
+   * And the execution thesis, not only the short card.
+   *
+   * `evidenceCard` asks what a bounded *test* turns on — a payer, an offer, a
+   * delivery path and a bounded exposure — and a piece can answer all four
+   * while nothing establishes whether we are eligible for it, whether we could
+   * acquire it, what it would leave after fees, or whether the only route to
+   * the buyer is a telephone call. Marking that ready is the favourable
+   * assumption arriving at the last transition before somebody spends money.
+   *
+   * It refuses nothing that was passing before: at the moment this shipped no
+   * production piece was READY, and every one of the thirty-one was short of
+   * the short card too.
+   */
+  const reading = cashTier({
+    opportunity,
+    card: cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
+    readyToTest: true,
+  });
+  if (reading.tier !== 'READY_TO_TEST' && reading.tier !== 'QUALIFIED') {
+    return refuse(
+      `${reading.summary} Ready to test means the execution thesis is supported, and ` +
+        `${reading.toAdvance.length} thing${reading.toAdvance.length === 1 ? '' : 's'} ` +
+        `still ${reading.toAdvance.length === 1 ? 'needs' : 'need'} establishing: ` +
+        `${reading.toAdvance.map((one) => one.label.toLowerCase()).join(', ')}.`,
+    );
+  }
 
   const moved = await transitionOpportunity({
     id: opportunity.id,

@@ -45,7 +45,15 @@ import {
 import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { citableClaims, getOrchestration } from '../../repos/research.ts';
-import { cardFact, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
+import {
+  cardFact,
+  cardFactsFor,
+  mayReplace,
+  recordCardFact,
+} from '../../repos/cashCardFacts.ts';
+import { cashEngineCard } from './engineCard.ts';
+import { readyToTest } from './card.ts';
+import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
@@ -53,6 +61,24 @@ import type { CashOpportunity, OpportunityValidationState } from '../../domain/t
 
 /** How many deep dives one project may have in flight. Provider capacity. */
 export const MAX_VALIDATIONS_IN_FLIGHT = 2;
+
+/**
+ * How many bounded deep dives one opening may have, in total.
+ *
+ * A second one exists because the qualification bar rose after some pieces had
+ * already been dived: the eligibility, acquisition, exit-evidence and
+ * contact-mode lanes did not exist when the first production dives were
+ * compiled, so a piece that answered everything its dive asked could still sit
+ * one answer short of qualified with `startValidations` skipping it for ever.
+ * §24's sentence at a new altitude — every escalation needs an answering
+ * transition, and a bar with no way over it is a park rather than a standard.
+ *
+ * Two, and not a ladder. A third dive against the same published sources asks
+ * the same question a third time, which is `repair.ts`'s rule about never
+ * running the same search twice. A piece still short after two has an honest
+ * answer — the sources do not publish it — and the card says which fields.
+ */
+export const MAX_VALIDATION_ROUNDS = 2;
 
 export interface StartedValidation {
   opportunityId: string;
@@ -85,7 +111,14 @@ export function validationQuestion(opportunity: CashOpportunity): string {
     'before any money arrives, how long published terms say payment takes, how much human ' +
     'time comparable work is published as taking, whether selling, calling, fulfilment or ' +
     'subcontracted labour is required, what the first steps would be, what the bottleneck is, ' +
-    'and whether anything published would disqualify it outright.'
+    'and whether anything published would disqualify it outright. Establish also what rule ' +
+    'decides whether a supplier like this one is eligible at all, what is published about ' +
+    'acquiring the thing itself now and from whom, whether anything actually sells at the ' +
+    'higher figure after fees rather than merely being listed or appraised at it, and whether ' +
+    'the only published route to the buyer is a telephone call. ' +
+    'A price somebody else charges, an asking price and an appraisal are evidence about a ' +
+    'market and are not evidence that anybody would pay us: where that is all there is, say ' +
+    'so plainly rather than treating it as an answer.'
   );
 }
 
@@ -141,7 +174,7 @@ export async function startValidations(input: {
   const out: StartedValidation[] = [];
   for (const opportunity of all) {
     if (room <= 0 || out.length >= limit) break;
-    if (opportunity.validationState !== null) continue;
+    if (opportunity.validationState !== null && !(await mayDiveAgain(opportunity))) continue;
     // A piece somebody has already declined, archived or finished is not worth
     // qualifying. DISCOVERED and EVIDENCE_CARD are the two states where the
     // commercial questions are still open.
@@ -156,6 +189,7 @@ export async function startValidations(input: {
       title: `Qualify: ${opportunity.title}`,
       statement: validationQuestion(opportunity),
     });
+    const round = opportunity.validationRounds + 1;
     const moved = await updateOpportunity(opportunity.id, {
       // `candidate_id` is "the idea this opportunity is", which is the column
       // the compiler reads to know it is compiling a deep dive rather than a
@@ -163,6 +197,17 @@ export async function startValidations(input: {
       candidate_id: candidate.id,
       validation_state: 'PENDING',
       validation_started_at: new Date().toISOString(),
+      validation_rounds: round,
+      /*
+       * A second round clears the settled stamp and leaves everything else.
+       *
+       * The first round's orchestration id is deliberately *not* cleared: it
+       * is the provenance of every card fact that round produced, and
+       * `applyValidationAnswers` reads the current one. Nothing recorded is
+       * destroyed — `mayReplace` still decides authority, so a fact from the
+       * first dive is only ever replaced by one of at least equal standing.
+       */
+      validation_settled_at: null,
     });
     if (!moved) continue;
 
@@ -172,14 +217,48 @@ export async function startValidations(input: {
       kind: 'CASH_VALIDATION_STARTED',
       actorRef: 'BRAIN',
       summary:
-        'Brain is qualifying this opening from published sources: who pays, what it pays, ' +
-        'what it costs and what would rule it out. Nothing is being contacted or spent.',
-      detail: { candidateId: candidate.id, signal: opportunity.buyingSignal },
+        round > 1
+          ? 'Brain is qualifying this opening a second time, for the questions the first ' +
+            'pass was never asked. Nothing is being contacted or spent.'
+          : 'Brain is qualifying this opening from published sources: who pays, what it pays, ' +
+            'what it costs and what would rule it out. Nothing is being contacted or spent.',
+      detail: { candidateId: candidate.id, signal: opportunity.buyingSignal, round },
     });
     out.push({ opportunityId: opportunity.id, candidateId: candidate.id });
     room -= 1;
   }
   return out;
+}
+
+/**
+ * Whether an opening that has already been dived may have one more.
+ *
+ * Three conditions, and none of them is a preference. The dive has to be
+ * **over** — a second one started beside a live one is two workers answering
+ * the same question with the sprint paying twice. There has to be a **round
+ * left**, which is what stops a piece being re-asked for ever. And it has to
+ * be genuinely **short of qualified**, read from the card rather than from a
+ * state column: a piece that answered everything is finished whatever its
+ * round count says.
+ *
+ * Read in the loop rather than precomputed, because it is asked only of the
+ * pieces that already have a terminal dive, and the loop stops at `room`.
+ */
+async function mayDiveAgain(opportunity: CashOpportunity): Promise<boolean> {
+  if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED') {
+    return false;
+  }
+  if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS) return false;
+  const card = cashEngineCard({
+    opportunity,
+    facts: await cardFactsFor(opportunity.id),
+  });
+  const reading = cashTier({
+    opportunity,
+    card,
+    readyToTest: readyToTest(opportunity),
+  });
+  return reading.tier !== 'QUALIFIED' && reading.tier !== 'READY_TO_TEST';
 }
 
 /**
@@ -323,6 +402,16 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   effort: 'hours',
   delivery_requirements: 'laborNeeds',
   disqualifier: 'disqualifiers',
+  /*
+   * The four the audit found nothing was asking. The lanes above are untouched
+   * on purpose: a deep dive compiled before these existed still submits
+   * against them, and a running mission must not be invalidated by a key that
+   * changed underneath it.
+   */
+  eligibility: 'eligibility',
+  acquisition_access: 'acquisitionAccess',
+  exit_evidence: 'exitEvidence',
+  contact_mode: 'phoneDependency',
 });
 
 export interface AppliedValidation {
@@ -426,6 +515,8 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
     const payer = await cardFact(opportunity.id, 'payer');
     const disqualifiers = await cardFact(opportunity.id, 'disqualifiers');
     const labor = await cardFact(opportunity.id, 'laborNeeds');
+    const delivery = await cardFact(opportunity.id, 'delivery');
+    const hours = await cardFact(opportunity.id, 'hours');
 
     const proposals: {
       field: string;
@@ -454,6 +545,74 @@ export async function proposeEngineTerms(projectId: string): Promise<string[]> {
         uncertainty:
           'Anything the sources do not publish a price for is not in this figure. A cost that ' +
           'turns up later raises it.',
+      });
+    }
+
+    /*
+     * The capture thesis, and only where somebody would actually pay *us*.
+     *
+     * This is the field the whole Signal / Candidate boundary turns on, so
+     * what it rests on matters more than what it says. It is composed from a
+     * payer and something to supply them — both already on the card, both
+     * arrived through the gate — and it is withheld entirely where there is no
+     * payer, because a mechanism with nobody at the other end of it is the
+     * favourable assumption in its purest form.
+     *
+     * That is what keeps a vendor's published price a signal for ever unless
+     * research finds an actual buyer: nothing about Rev charging $1.99 a
+     * minute names anybody who would pay us, so no payer ever lands, so no
+     * capture thesis is ever proposed. No phrase is matched to reach that
+     * outcome — see `tier.ts` for why a keyword list was refused.
+     */
+    const supplies = opportunity.offerScope ?? delivery?.value ?? null;
+    if (payer?.value && supplies) {
+      proposals.push({
+        field: 'captureMechanism',
+        value:
+          `Supply ${clampText(supplies, 220)} to ${clampText(payer.value, 160)}` +
+          `${opportunity.reachableChannel ? `, reached through ${clampText(opportunity.reachableChannel, 120)}` : ''}` +
+          ', and be paid by them for it.',
+        basis:
+          `A payer established from a published source${payer.claimId ? ` (claim ${payer.claimId})` : ''}` +
+          ', and something recorded that we would supply them.',
+        assumptions:
+          'That the payer is still buying, and that what we would supply is what they are ' +
+          'paying for rather than something adjacent to it.',
+        uncertainty:
+          'Nothing here establishes that they would choose us. It establishes that there is ' +
+          'somebody for a price to be quoted to, which is the thing market evidence alone ' +
+          'never gives.',
+      });
+    }
+
+    /*
+     * How the work actually gets done, read from what is published about it.
+     *
+     * Composed from the delivery requirements and the published hours rather
+     * than from how the work sounds, and withheld where neither exists — §30's
+     * rule that a blank may never be the reason something rises, applied to
+     * the field a person uses to tell a business from a job.
+     */
+    if (labor?.value || delivery?.value || hours?.value) {
+      const parts: string[] = [];
+      if (delivery?.value) parts.push(`Delivery, as published: ${clampText(delivery.value, 200)}`);
+      if (labor?.value) parts.push(`What it requires: ${clampText(labor.value, 200)}`);
+      if (hours?.value) parts.push(`Published effort: ${clampText(hours.value, 140)}`);
+      proposals.push({
+        field: 'fulfilmentModel',
+        value:
+          `${parts.join('. ')}. Which of AI, software, delegation, subcontracting or manual ` +
+          'work covers each part is what the published requirements above describe; what they ' +
+          'do not cover is human work that stays with whoever takes this on.',
+        basis:
+          'The published delivery requirements and effort on this card' +
+          `${delivery?.claimId ? ` (claim ${delivery.claimId})` : ''}.`,
+        assumptions:
+          'That what is published about delivering comparable work is what delivering this ' +
+          'one would take.',
+        uncertainty:
+          'How much of it automates is not published anywhere and is not asserted here. What ' +
+          'is published is what the requirements are.',
       });
     }
 

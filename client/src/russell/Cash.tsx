@@ -213,13 +213,26 @@ export function CashView_({
       </p>
       <p className="rs-hint">{data.discovery.reason}</p>
 
+      {/*
+        * The order is the order a person reads in, and it is a correction.
+        *
+        * It used to open with the decisions, then the whole money picture,
+        * then every money entry, then every piece in the portfolio with its
+        * full card, then every need, then the research table, then every
+        * event. In production that was thirty-one raw signals and five
+        * "decisions" standing for ninety-eight items before anything said what
+        * state the sprint was in.
+        *
+        * Now: where this stands, what to decide, what is worth doing, what the
+        * money is — and everything else behind a disclosure that is still one
+        * click away and still complete. Nothing was deleted; the first screen
+        * stopped being all of it.
+        */}
+      <Status view={data} />
       <Decisions view={data} projectId={rootId} onChanged={view.reload} />
-      <MoneyPicture view={data} />
-      <MyCash view={data} />
-      <CurrentWork view={data} onChanged={view.reload} />
-      <Needs view={data} />
-      <Roadmap view={data} />
-      <Done view={data} />
+      <BestOpportunities view={data} onChanged={view.reload} />
+      <MoneyRow view={data} />
+      <Details view={data} onChanged={view.reload} />
       {/*
         * People and capacity, on the running sprint.
         *
@@ -232,14 +245,22 @@ export function CashView_({
         * there is no second invitation path and nothing about enrollment
         * changed.
         */}
-      <section className="rs-card rs-cash-people">
-        <h3>People and capacity</h3>
+      <details className="rs-card rs-cash-people">
+        <summary>
+          <h3>People and capacity</h3>
+          <span className="rs-hint">
+            {known.readiness.members.ready} of {known.readiness.members.rows.length} people can
+            sign in · {known.readiness.capacity.eligibleSurfaces} execution{' '}
+            {known.readiness.capacity.eligibleSurfaces === 1 ? 'surface' : 'surfaces'} Brain can
+            fire
+          </span>
+        </summary>
         <p className="rs-hint">
           Counts, not gates. Anybody can be invited while the sprint runs, and a capacity
           account can be registered at any time; neither stops or starts the work below.
         </p>
         <ReadinessPanel readiness={known.readiness} isBrainAdmin={isBrainAdmin} />
-      </section>
+      </details>
       <Lifecycle projectId={rootId} state={data.mode.state} onChanged={view.reload} />
     </section>
   );
@@ -1354,6 +1375,302 @@ function MyCash({ view }: { view: CashView }): JSX.Element {
  * Every piece carries its disposition and the server's own sentence saying what
  * decided it, so "waiting" always names what it is waiting for.
  */
+/**
+ * Where this sprint stands, in one screen.
+ *
+ * Seven counts and two sentences, and every one of them is a row the server
+ * already derived. It exists because the page had no such screen: a person
+ * arriving at it met thirty-one raw signals and had to infer the state of the
+ * machine from the length of a list.
+ *
+ * The tiers are the honest version of the number that used to be here. "31
+ * openings" was one count over four different things — market evidence, a
+ * capture thesis, a supported case, and something a test could actually be run
+ * against — and calling all four an opening is the defect this whole change
+ * is about.
+ */
+function Status({ view }: { view: CashView }): JSX.Element {
+  const plan = view.myCurrentWork;
+  const tiers = plan.byTier ?? { SIGNAL: 0, CANDIDATE: 0, QUALIFIED: 0, READY_TO_TEST: 0 };
+  const inState = (states: string[]): number =>
+    plan.placements.filter((one) => states.includes(one.opportunity.state)).length;
+
+  /*
+   * The blocker, and only a real one.
+   *
+   * A decision the server marked BLOCKING is one nothing can proceed without.
+   * Anything else — work in progress, a question Brain is out researching —
+   * is not a blocker, and a screen that called it one would be asking somebody
+   * to act on something that is already moving.
+   */
+  const blocking = view.decisionsForMe.items.filter(
+    (item) => item.urgency === 'BLOCKING' || item.urgency === 'URGENT',
+  );
+
+  return (
+    <section className="rs-card rs-cash-status">
+      <h3>The cash machine</h3>
+      <ul className="rs-cash-tiers">
+        <li>
+          <strong>{view.mode?.state === 'ACTIVE' ? 'Active' : (view.mode?.state ?? 'Not started')}</strong>
+          <span>Discovery</span>
+        </li>
+        <li>
+          <strong>{tiers.SIGNAL}</strong>
+          <span>Signals found</span>
+        </li>
+        <li>
+          <strong>{tiers.CANDIDATE}</strong>
+          <span>Being qualified</span>
+        </li>
+        <li>
+          <strong>{tiers.QUALIFIED}</strong>
+          <span>Qualified</span>
+        </li>
+        <li>
+          <strong>{tiers.READY_TO_TEST}</strong>
+          <span>Ready to test</span>
+        </li>
+        <li>
+          <strong>{inState(['EXECUTING', 'DELIVERING'])}</strong>
+          <span>Executing</span>
+        </li>
+        <li>
+          <strong>{inState(['COLLECTED'])}</strong>
+          <span>Collected</span>
+        </li>
+      </ul>
+      <p className="rs-decision-why">{view.roadmap.whatHappensNext}</p>
+      {blocking.length === 0 ? (
+        <p className="rs-hint">
+          Nothing is waiting on you. A signal is evidence Brain found and is still working out how
+          money would be made from it; it is not work for you.
+        </p>
+      ) : (
+        <p className="rs-hint">
+          {blocking.length === 1
+            ? 'One thing is waiting on you, below.'
+            : `${blocking.length} things are waiting on you, below.`}
+        </p>
+      )}
+    </section>
+  );
+}
+
+const TIER_LABEL: Record<string, string> = {
+  SIGNAL: 'Signal — evidence, not yet work',
+  CANDIDATE: 'Being qualified',
+  QUALIFIED: 'Qualified',
+  READY_TO_TEST: 'Ready to test',
+};
+
+/**
+ * The few worth putting in front of somebody, and nothing else.
+ *
+ * Qualified first; where there are none, the candidates with the fewest
+ * questions left, said plainly to be that. It is never filled up with signals,
+ * which is the whole correction: a best-opportunities section padded with a
+ * vendor's published price list is worse than an empty one, because the empty
+ * one is true.
+ *
+ * The full portfolio is not hidden — it is under *Everything Brain has found*,
+ * with every claim, source and packet on it.
+ */
+function BestOpportunities({
+  view,
+  onChanged,
+}: {
+  view: CashView;
+  onChanged(): void;
+}): JSX.Element {
+  const plan = view.myCurrentWork;
+  const best = plan.best ?? [];
+
+  return (
+    <section className="rs-card rs-cash-best">
+      <h3>Best opportunities</h3>
+      {best.length === 0 ? (
+        <p className="rs-hint">
+          Nothing is qualified yet, and nothing is being padded out to fill this space.{' '}
+          {(plan.byTier?.CANDIDATE ?? 0) > 0
+            ? `${plan.byTier?.CANDIDATE} ${plan.byTier?.CANDIDATE === 1 ? 'idea has' : 'ideas have'} a capture thesis and ${plan.byTier?.CANDIDATE === 1 ? 'is' : 'are'} being qualified.`
+            : `Brain is working out how money would be made from ${plan.byTier?.SIGNAL ?? 0} ${(plan.byTier?.SIGNAL ?? 0) === 1 ? 'signal' : 'signals'} it has found.`}
+        </p>
+      ) : (
+        <>
+          {plan.bestAreNearlyQualified ? (
+            <p className="rs-hint">
+              None of these is qualified yet. They are the ones closest to it, with the fewest
+              questions left.
+            </p>
+          ) : null}
+          <ul className="rs-list">
+            {best.map((placement) => {
+              const tier = placement.tier;
+              return (
+              <li key={placement.opportunity.id} className="rs-group">
+                <p className="rs-item-title">{placement.opportunity.title}</p>
+                {tier ? (
+                  <>
+                    <p className="rs-badge">{TIER_LABEL[tier.tier] ?? tier.tier}</p>
+                    <p className="rs-decision-why">{tier.summary}</p>
+                    <p className="rs-item-meta">
+                      {tier.answered} of {tier.required} decision questions answered. Next:{' '}
+                      {DISPOSITION_LABEL[placement.disposition]} &mdash; {placement.because}
+                    </p>
+                    {tier.toAdvance.length > 0 ? (
+                      <p className="rs-item-meta">
+                        Brain is establishing:{' '}
+                        {tier.toAdvance
+                          .slice(0, 4)
+                          .map((one) => one.label.toLowerCase())
+                          .join(', ')}
+                        {tier.toAdvance.length > 4
+                          ? `, and ${tier.toAdvance.length - 4} more`
+                          : ''}
+                        .
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="rs-decision-why">{placement.because}</p>
+                )}
+                <EngineCard
+                  card={plan.engineCards?.[placement.opportunity.id]}
+                  economics={plan.economics?.[placement.opportunity.id] ?? []}
+                />
+                <Actions
+                  placement={placement}
+                  allowedActions={view.authority.allowedActions}
+                  onChanged={onChanged}
+                />
+              </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The money, in one row.
+ *
+ * Four figures and a disclosure. The detailed authority form is real and is
+ * still here; what changed is that it is no longer the second thing on the
+ * page on a sprint where nothing is qualified yet, because a screen that leads
+ * with *set a spending limit* implies discovery is waiting on one. It is not:
+ * §33's discovery authorization is what pressing Start gave, and this grant is
+ * for an entirely different thing.
+ */
+function MoneyRow({ view }: { view: CashView }): JSX.Element {
+  const currency = view.myCash.position.currency;
+  const qualified =
+    (view.myCurrentWork.byTier?.QUALIFIED ?? 0) + (view.myCurrentWork.byTier?.READY_TO_TEST ?? 0);
+  return (
+    <section className="rs-card rs-cash-money-row">
+      <h3>Money</h3>
+      <ul className="rs-cash-tiers">
+        <li>
+          <strong>{money(view.authority.maxCommittedCents, currency)}</strong>
+          <span>Authorized</span>
+        </li>
+        <li>
+          <strong>{money(view.authority.committedCents, currency)}</strong>
+          <span>Committed</span>
+        </li>
+        <li>
+          <strong>{money(view.authority.spentCents, currency)}</strong>
+          <span>Spent</span>
+        </li>
+        <li>
+          <strong>{money(view.myCash.position.deployableCents, currency)}</strong>
+          <span>Remaining capacity</span>
+        </li>
+      </ul>
+      <p className="rs-hint">
+        {view.authority.exists
+          ? 'A standing commercial authority is live. It bounds what may be committed; it commits nothing.'
+          : qualified > 0
+            ? 'Nothing is authorized to be spent. Something is qualified now, so this is the decision it is waiting on.'
+            : 'Nothing is authorized to be spent, and nothing needs it yet. Discovery and qualification cost nothing and are not waiting on this.'}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * Everything else, complete and one click away.
+ *
+ * §29's rule about `/legacy` applied inside a page: nothing is deleted and
+ * nothing is hidden, it stops being the first thing. Each disclosure carries
+ * its own count in the summary, so a person can tell whether opening it is
+ * worth it without opening it.
+ */
+function Details({ view, onChanged }: { view: CashView; onChanged(): void }): JSX.Element {
+  const plan = view.myCurrentWork;
+  return (
+    <>
+      <details className="rs-card rs-cash-portfolio">
+        <summary>
+          <h3>Everything Brain has found</h3>
+          <span className="rs-hint">
+            {plan.placements.length}{' '}
+            {plan.placements.length === 1 ? 'record' : 'records'}, with their claims and sources
+          </span>
+        </summary>
+        <CurrentWork view={view} onChanged={onChanged} />
+      </details>
+      <details className="rs-card rs-cash-needs-detail">
+        <summary>
+          <h3>What Brain is working on</h3>
+          <span className="rs-hint">
+            {view.whatBrainNeeds.length} open {view.whatBrainNeeds.length === 1 ? 'question' : 'questions'} in
+            Brain&rsquo;s own queue
+          </span>
+        </summary>
+        <p className="rs-hint">
+          These are facts about the world, so Brain looks them up. None of them is a task for you.
+        </p>
+        <Needs view={view} />
+      </details>
+      <details className="rs-card rs-cash-research">
+        <summary>
+          <h3>Research detail</h3>
+          <span className="rs-hint">
+            {view.roadmap.rounds.total} discovery {view.roadmap.rounds.total === 1 ? 'round' : 'rounds'},{' '}
+            {view.roadmap.research.planned} planned items
+          </span>
+        </summary>
+        <Roadmap view={view} />
+      </details>
+      <details className="rs-card rs-cash-money-detail">
+        <summary>
+          <h3>Money detail and the spending authority</h3>
+          <span className="rs-hint">
+            {view.myCash.entries.length} recorded{' '}
+            {view.myCash.entries.length === 1 ? 'entry' : 'entries'} ·{' '}
+            {view.authority.exists ? 'a grant is live' : 'no grant'}
+          </span>
+        </summary>
+        <MoneyPicture view={view} />
+        <MyCash view={view} />
+      </details>
+      <details className="rs-card rs-cash-history">
+        <summary>
+          <h3>Activity</h3>
+          <span className="rs-hint">
+            {view.whatBrainHasDone.length} recent{' '}
+            {view.whatBrainHasDone.length === 1 ? 'event' : 'events'}
+          </span>
+        </summary>
+        <Done view={view} />
+      </details>
+    </>
+  );
+}
+
 function CurrentWork({
   view,
   onChanged,
@@ -1710,7 +2027,14 @@ function Roadmap({ view }: { view: CashView }): JSX.Element {
   return (
     <section className="rs-card rs-cash-roadmap">
       <h3>What Brain is researching</h3>
-      <p className="rs-hint">{map.whatHappensNext}</p>
+      {/*
+        * `whatHappensNext` is on the status screen above, and only there.
+        *
+        * It was here too, which put the server's one sentence about where the
+        * sprint is on the page twice — and the second copy was inside a
+        * disclosure, so a person could read it, open this, and read it again.
+        * One fact, one place.
+        */}
 
       <div className="rs-table-wrap">
         <table>

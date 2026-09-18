@@ -58,7 +58,10 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { readCapability, needForCapability } from './capabilities.ts';
-import { evidenceCard } from './card.ts';
+import { cardFactsFor } from '../../repos/cashCardFacts.ts';
+import { evidenceCard, readyToTest } from './card.ts';
+import { cashEngineCard } from './engineCard.ts';
+import { cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
@@ -191,16 +194,21 @@ export interface DiscoverableGap {
 /**
  * Turn the card's *facts* into Brain's work, and leave its decisions alone.
  *
- * `evidenceCard` now says which is which. Who can approve payment, how to reach
- * them and what they published are things somebody could look up, so putting
- * them on a person's review is Brain asking for homework it could have done —
- * and the review's own claim that answering one group releases three cards is
- * false when the three are three different buyers.
+ * `evidenceCard` says which is which, and the set moved. It used to be three
+ * fields — the payer, the access route and the buying evidence — with the
+ * price, the delivery path, who does the work, the cash dates, the economics
+ * and the exposure all classified as the owner's calls. §30 had already
+ * corrected the reasoning ("a commercial judgment is not permanently a
+ * person's either") and the boolean had not moved with it, so production put
+ * ninety-eight of those in front of somebody as decisions while Brain's own
+ * screen said it was researching them.
  *
- * What to offer, what to charge, what counts as accepted and who does the work
- * are the owner's calls. Brain never captures an idea for one of those, because
- * a researched answer to "what should we charge" is invented judgment wearing a
- * citation.
+ * What a price, a fee, a settlement date, an eligibility rule or a delivery
+ * requirement *is*, is a fact about the world. Brain raises a need and looks it
+ * up. What is left for a person is what to offer and what counts as accepted —
+ * `BRAIN_PROPOSES`, which Brain proposes and a person may overrule — and those
+ * still never become needs, because a researched answer to "what should we
+ * charge for this" is invented judgment wearing a citation.
  */
 export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
@@ -211,9 +219,32 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
     projectId,
     states: ['DISCOVERED', 'EVIDENCE_CARD'],
   })) {
+    /*
+     * Only for something Brain has a reason to spend on.
+     *
+     * Widening the researched set from three fields to seven made this reach
+     * every blank on every record — and most records are signals, so a sprint
+     * holding thirty-one published price lists would have raised two hundred
+     * needs asking what to charge for somebody else's product. A need is
+     * Brain's own work item; two hundred of them is the allowance spent
+     * qualifying things that are not opportunities.
+     *
+     * The instrument that moves a **signal** is the bounded deep dive, which
+     * asks the payer lane and is capped at two in flight. This is the fallback
+     * for what the dive left blank, so it runs once there is a capture thesis
+     * — a named payer and something to supply them — which is exactly the
+     * point at which spending more on the piece is justified.
+     */
+    const reading = cashTier({
+      opportunity,
+      card: cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }),
+      readyToTest: readyToTest(opportunity),
+    });
+    if (reading.tier === 'SIGNAL') continue;
+
     const card = evidenceCard(opportunity);
     for (const field of card.fields) {
-      if (!field.loadBearing || !field.discoverable || field.value !== null) continue;
+      if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
       const key = questionKey(opportunity.id, field.key);
       if (keys.has(key)) continue;
       const raised = await raiseNeed({

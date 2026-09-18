@@ -22,6 +22,23 @@
  * over an empty observed one is a refusal rather than a pass is the whole
  * reason those are two different words here.
  *
+ * **An account is not an execution surface, and reporting one number was a
+ * label saying the wrong thing rather than a projection computing the wrong
+ * answer.** The page read `1 / 4 HEALTHY` beside a fleet that reports four
+ * eligible research Routines, and both were correct: production holds two real
+ * accounts, of which one — `Brain Research A` — carries all four research
+ * Routines and the other, `friend-2`, has its single Routine quarantined. So
+ * one account is proven and four surfaces are eligible, and a reader with one
+ * of those numbers in front of them has no way to know it is not the other.
+ * §23 drew exactly this distinction and warned what happens to arithmetic that
+ * ignores it: **an account holds a subscription allowance; a Routine is a fire
+ * surface.** Both counts are reported now, each labelled as what it counts.
+ *
+ * The `required` figures stay and stop nothing — §32 removed the lock and the
+ * counts kept their honesty. They are the topology the sprint was designed
+ * around rather than a bar, which is why `mayStart` is read by nobody who can
+ * refuse anything.
+ *
  * Nothing private crosses. A member appears as a display name and a state, so
  * the Cash page can say `3 / 4 READY` without telling anybody who holds which
  * device, what they can reach, or whether they have an address.
@@ -51,11 +68,44 @@ export interface AccountReadiness {
   state: 'HEALTHY' | 'CONFIGURED' | 'UNAVAILABLE';
   /** Why it is not healthy, in words with a remedy in them. */
   because?: string;
+  /** How many of this account's Routines Brain could fire right now. */
+  eligibleSurfaces: number;
+  /** Every Routine under it, so a quarantine is visible rather than implied. */
+  surfaces: SurfaceReadiness[];
+}
+
+/**
+ * One Routine, which is a fire surface rather than an allowance.
+ *
+ * `reason` is `fleet_routines.state_reason` — the provider's own words for
+ * what refused the last fire. §29 records what it cost for that column to be
+ * written on every quarantine and read by nothing: a fleet with no usable
+ * surface showed `QUARANTINED` and offered nowhere to find out why.
+ */
+export interface SurfaceReadiness {
+  routineId: string;
+  name: string;
+  state: string;
+  /** Whether Brain could route a fire to it now. */
+  eligible: boolean;
+  /** Why not, when it is not. Only for a surface that is actually held back. */
+  because?: string;
 }
 
 export interface CashReadiness {
   members: { ready: number; required: number; rows: MemberReadiness[] };
-  capacity: { healthy: number; required: number; rows: AccountReadiness[] };
+  capacity: {
+    healthy: number;
+    required: number;
+    rows: AccountReadiness[];
+    /**
+     * Execution surfaces, which is the number the fleet reports and is not the
+     * number of accounts. One account can carry four Routines, and four
+     * accounts can carry one between them.
+     */
+    eligibleSurfaces: number;
+    totalSurfaces: number;
+  };
   /** The one question the button asks. */
   mayStart: boolean;
   /** What is still missing, for a person reading rather than counting. */
@@ -101,7 +151,7 @@ export async function cashReadiness(): Promise<CashReadiness> {
      * make the fleet look two accounts larger than it is.
      */
     .filter((account) => !account.name.startsWith('verify-hosted'))
-    .map((account) => {
+    .map((account): AccountReadiness => {
       const mine = routines.filter((routine) => routine.accountId === account.id);
       const usable = mine.filter(
         (routine) => routine.state === 'ENABLED' && routine.workerId !== null,
@@ -116,25 +166,52 @@ export async function cashReadiness(): Promise<CashReadiness> {
       const proven = usable.filter(
         (routine) => routine.totalFires > 0 && routine.consecutiveNoShows === 0,
       );
+      const surfaces: SurfaceReadiness[] = mine.map((routine) => {
+        const eligible = routine.state === 'ENABLED' && routine.workerId !== null;
+        return {
+          routineId: routine.id,
+          name: routine.name,
+          state: routine.state,
+          eligible,
+          ...(eligible
+            ? {}
+            : {
+                /*
+                 * The provider's own words where there are any, and never a
+                 * paraphrase. A quarantine carries why the last fire was
+                 * refused, and a screen that summarised it into "held back"
+                 * would be the column §29 found nothing was reading.
+                 */
+                because:
+                  routine.stateReason ??
+                  (routine.workerId === null
+                    ? 'bound to no worker, so nothing can be fired at it'
+                    : `it is ${routine.state.toLowerCase()}`),
+              }),
+        };
+      });
+      const common = { eligibleSurfaces: usable.length, surfaces };
       if (proven.length > 0) {
-        return { accountId: account.id, name: account.name, state: 'HEALTHY' as const };
+        return { accountId: account.id, name: account.name, state: 'HEALTHY', ...common };
       }
       if (usable.length > 0) {
         return {
           accountId: account.id,
           name: account.name,
-          state: 'CONFIGURED' as const,
+          state: 'CONFIGURED',
           because: 'registered and bound, but no fire has arrived and finished here yet',
+          ...common,
         };
       }
       return {
         accountId: account.id,
         name: account.name,
-        state: 'UNAVAILABLE' as const,
+        state: 'UNAVAILABLE',
         because:
           mine.length === 0
             ? 'no Routine is registered under this account'
             : 'its Routine is not enabled, or is bound to no worker',
+        ...common,
       };
     });
 
@@ -152,7 +229,13 @@ export async function cashReadiness(): Promise<CashReadiness> {
 
   return {
     members: { ready, required: REQUIRED_MEMBERS, rows },
-    capacity: { healthy, required: REQUIRED_CAPACITY_ACCOUNTS, rows: capacityRows },
+    capacity: {
+      healthy,
+      required: REQUIRED_CAPACITY_ACCOUNTS,
+      rows: capacityRows,
+      eligibleSurfaces: capacityRows.reduce((total, row) => total + row.eligibleSurfaces, 0),
+      totalSurfaces: capacityRows.reduce((total, row) => total + row.surfaces.length, 0),
+    },
     mayStart: ready >= REQUIRED_MEMBERS && healthy >= REQUIRED_CAPACITY_ACCOUNTS,
     blockedBy,
   };

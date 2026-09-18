@@ -78,6 +78,35 @@ export interface Placement {
   disposition: CashDisposition;
   because: string;
   missing: string[];
+  /**
+   * Whether this is evidence, a capture thesis, a qualified opportunity or
+   * something ready to test — and what is still open before the next one.
+   *
+   * Optional here and required on the server, deliberately. A deploy replaces
+   * the server and the browser tab separately, so for the minutes between them
+   * a client built after this existed can hold a view fetched before it did.
+   * Every reader falls back rather than throwing, which is the difference
+   * between one blank badge and the whole section coming down.
+   */
+  tier?: TierReadingView;
+}
+
+/** One line of the Signal / Candidate / Qualified / Ready reading. */
+export interface TierRequirementView {
+  key: string;
+  label: string;
+  task: string;
+  owner: 'BRAIN_RESEARCH' | 'BRAIN_PROPOSES' | 'PERSON_ONLY';
+}
+
+export interface TierReadingView {
+  tier: 'SIGNAL' | 'CANDIDATE' | 'QUALIFIED' | 'READY_TO_TEST';
+  establishes: string;
+  doesNotEstablish: string;
+  toAdvance: TierRequirementView[];
+  answered: number;
+  required: number;
+  summary: string;
 }
 
 export interface CashEvent {
@@ -233,6 +262,12 @@ export interface CashView {
     placements: Placement[];
     executeNow: Placement[];
     waiting: Placement[];
+    /** How many pieces are at each tier. Optional for the same deploy reason. */
+    byTier?: Record<'SIGNAL' | 'CANDIDATE' | 'QUALIFIED' | 'READY_TO_TEST', number>;
+    /** The few worth putting in front of a person, in rank order. */
+    best?: Placement[];
+    /** True when `best` holds candidates rather than qualified openings. */
+    bestAreNearlyQualified?: boolean;
     combinedContributionCents: number;
     peakFundingCents: number;
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;

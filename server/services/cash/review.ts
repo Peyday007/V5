@@ -53,7 +53,6 @@ export type ReviewAnswerKind =
   | 'RESOLVE_NEED'
   | 'RELEASE_COMMITMENT'
   | 'RECORD_MONEY'
-  | 'FILL_CARD_FIELD'
   | 'NOTHING_TO_PRESS';
 
 export interface ReviewAnswer {
@@ -213,50 +212,55 @@ export function compressedReview(input: ReviewInput): CompressedReview {
   }
 
   /*
-   * 3. Cards with the same load-bearing blank.
+   * 3. Choosing between openings that are all qualified.
    *
-   * Grouped by the missing field, and **not** claimed to be one decision. The
-   * first version of this said answering the group released every card in it,
-   * and that is false wherever the group is three different buyers: one
-   * afternoon of the same kind of work is a batch, not one answer. The item
-   * now says which it is, so the count on the screen means what it says.
+   * There used to be a section here grouping cards by their missing
+   * load-bearing field, and it is **deleted rather than narrowed**. Every
+   * field it could group on is either a fact about the world that Brain
+   * researches, or a proposal Brain composes — so the section had no members
+   * that were genuinely a person's, and what it actually produced in
+   * production was five "decisions" standing for ninety-eight items, each
+   * asking somebody to supply a payer, a price or an exposure that Brain was
+   * at that moment out researching. A control saying *mark all thirty done*
+   * over facts nobody has established is worse than no control: it teaches a
+   * person that answering the screen does nothing.
    *
-   * The discoverable fields are absent from here entirely — Brain raises a
-   * need and researches them (see `reconcileDiscoverableGaps`), because a
-   * review filling up with homework Brain could have done is the opposite of
-   * compression.
+   * What replaces it is the decision that genuinely is a person's once the
+   * researching is over: several qualified openings and not enough capacity
+   * to run them all. That is §30's list of person-only matters — a choice
+   * between already-qualified alternatives — and it cannot exist until
+   * something is qualified, which is why this screen is correctly empty on a
+   * sprint that is still qualifying.
    */
-  const byMissing = new Map<string, string[]>();
-  for (const placement of input.placements) {
-    if (placement.disposition !== 'TEST_A_DECISIVE_UNKNOWN') continue;
-    for (const field of placement.missing) {
-      if (DISCOVERABLE_FIELDS.has(field)) continue;
-      const bucket = byMissing.get(field) ?? [];
-      bucket.push(placement.opportunity.id);
-      byMissing.set(field, bucket);
-    }
-  }
-  for (const [field, ids] of [...byMissing.entries()].sort((a, b) => b[1].length - a[1].length)) {
+  const qualified = input.placements.filter(
+    (p) =>
+      p.disposition !== 'ARCHIVED' &&
+      (p.tier.tier === 'QUALIFIED' || p.tier.tier === 'READY_TO_TEST'),
+  );
+  const concurrency = input.authority?.maxConcurrent ?? 0;
+  if (qualified.length > 1 && concurrency > 0 && qualified.length > concurrency) {
     items.push({
-      key: `MISSING_${field.toUpperCase()}`,
-      title: `${ids.length} card${ids.length === 1 ? '' : 's'} with no ${humanField(field)}`,
-      why: `An unknown is not a favourable assumption, so none of these can be tested until the ${humanField(field)} is established.`,
-      recommendation: REMEDY[field] ?? `Establish the ${humanField(field)} for each of these.`,
+      key: 'CHOOSE_BETWEEN_QUALIFIED',
+      title: `${qualified.length} qualified openings and room for ${concurrency}`,
+      why:
+        'Each of these has a supported execution thesis, so nothing more Brain can find out ' +
+        'separates them. Which to run first is a preference about risk and timing rather than ' +
+        'a fact, and that is yours.',
+      recommendation:
+        'Brain has ranked them by what an hour of work is worth in each. Take them in that ' +
+        'order, or say otherwise.',
       consequence:
-        ids.length === 1
-          ? 'It becomes ready to test the moment its answer exists.'
-          : `These are ${ids.length} separate answers of the same kind — one sitting, not one ` +
-            'decision. Each becomes ready to test the moment its own answer exists.',
+        'The rest stay exactly as they are and start by themselves as capacity frees up.',
       urgency: 'WHENEVER',
-      underlying: ids,
-      sharedRemedy: ids.length === 1,
+      underlying: qualified.map((p) => p.opportunity.id),
+      sharedRemedy: true,
       costCents: null,
       costNote: null,
       answer: {
-        kind: 'FILL_CARD_FIELD',
-        targets: ids,
-        label: `Answer the ${humanField(field)} on ${ids.length === 1 ? 'this card' : 'each card'}`,
-        completionCondition: `Every one of these cards records a ${humanField(field)}.`,
+        kind: 'NOTHING_TO_PRESS',
+        targets: qualified.map((p) => p.opportunity.id),
+        label: 'Answered by starting one, not by a control here',
+        completionCondition: `At most ${concurrency} of these are executing at once.`,
       },
     });
   }
@@ -293,7 +297,15 @@ export function compressedReview(input: ReviewInput): CompressedReview {
         needs.length === 1
           ? `Brain needs: ${needs[0]!.blockedAction}`
           : `${needs.length} blocked actions, one remedy`,
-      why: needs.map((n) => n.whyItMatters).join(' '),
+      /*
+       * One sentence per distinct reason, not one per row.
+       *
+       * These needs were grouped because they recommend the identical path,
+       * and identical paths routinely carry identical explanations — so the
+       * join printed the same sentence thirty times inside one card. A card
+       * that repeats itself is one nobody finishes reading.
+       */
+      why: [...new Set(needs.map((n) => n.whyItMatters.trim()))].join(' '),
       recommendation: `${path}${cents === null ? '' : ` (about ${cents} cents)`}. Next step: ${needs[0]!.nextStep}`,
       consequence: `Resolving this unblocks ${needs.length} action${needs.length === 1 ? '' : 's'}. Independent work is running meanwhile.`,
       urgency: 'WHENEVER',
@@ -308,6 +320,14 @@ export function compressedReview(input: ReviewInput): CompressedReview {
       answer: {
         kind: 'RESOLVE_NEED',
         targets: needs.map((n) => n.id),
+        /*
+         * The plural control only where one act genuinely answers all of them.
+         *
+         * `byPath` groups by the recommended path, which is one tool bought
+         * once or one account opened once — so *mark all N done* is true here
+         * and was never true of the card-blank section above, which is why
+         * that section is gone rather than relabelled.
+         */
         label:
           needs.length === 1
             ? 'Mark this done, and say what you did'
@@ -409,15 +429,28 @@ const URGENCY: Record<ReviewItem['urgency'], number> = { URGENT: 0, BLOCKING: 1,
 /**
  * The card blanks Brain looks up rather than asking about.
  *
- * Kept as a set here rather than read from `evidenceCard`, because this module
- * is a pure projection over rows and taking an opportunity apart to ask about
- * one field would make it depend on the card's shape. Exported so a test holds
- * the two in agreement: two readers of one fact that could drift is how the one
- * nobody reads comes to be wrong, and here the drift would put a question Brain
- * researches back on a person's review, or take one off it that Brain never
- * looks up.
+ * Nine of the twelve, and it used to be three. Kept as a set here rather than
+ * read from `evidenceCard`, because this module is a pure projection over rows
+ * and taking an opportunity apart to ask about one field would make it depend
+ * on the card's shape. Exported so a test holds the two in agreement: the
+ * drift that matters is the silent one, where a question Brain never looks up
+ * quietly stops reaching anybody.
+ *
+ * Nothing reads it to *exclude* anything any more — the section that needed
+ * excluding is deleted — so it is now purely the assertion that this module
+ * and the card agree about whose work each question is.
  */
-export const DISCOVERABLE_FIELDS = new Set(['payer', 'access', 'buyingEvidence']);
+export const RESEARCHED_FIELDS = new Set([
+  'payer',
+  'access',
+  'buyingEvidence',
+  'price',
+  'delivery',
+  'fulfillment',
+  'cashDates',
+  'economics',
+  'exposure',
+]);
 
 /**
  * What a shared remedy costs, which is not the sum of what it unblocks.
@@ -454,35 +487,6 @@ function remedyCost(needs: CashNeed[]): { cents: number | null; note: string | n
   };
 }
 
-const REMEDY: Record<string, string> = {
-  payer: 'Establish who can approve payment. This is an access question, not a pricing one.',
-  access: 'Find a channel that actually reaches them, before writing anything to send.',
-  buyingEvidence:
-    'Record the request, deadline or conversation that supports each of these, with its source ' +
-    'and date. "An industry has this problem" is not evidence that one owner will buy this week.',
-  offer: 'Write one outcome and one scope for each.',
-  acceptance: 'State what the buyer has to see for it to be accepted.',
-  price: 'Quote one price. A missing supplier price is a quoting task, not a discount.',
-  delivery: 'Say how the work actually gets done, and what the customer has to provide.',
-  fulfillment: 'Name who or what fulfils each of these.',
-  exposure: 'State the maximum cash out before the money comes back.',
-};
-
-function humanField(field: string): string {
-  return (
-    {
-      payer: 'payer',
-      access: 'way to reach the payer',
-      buyingEvidence: 'buying evidence',
-      offer: 'offer',
-      acceptance: 'acceptance condition',
-      price: 'price',
-      delivery: 'delivery path',
-      fulfillment: 'fulfilment owner',
-      exposure: 'exposure',
-    }[field] ?? field
-  );
-}
 
 function plusDays(iso: string, days: number): string {
   return new Date(Date.parse(iso) + days * 86_400_000).toISOString();

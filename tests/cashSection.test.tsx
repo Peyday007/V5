@@ -25,7 +25,7 @@
  *     redrawing.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act } from 'react';
 import { CashSection } from '../client/src/russell/Cash.tsx';
 
@@ -75,11 +75,54 @@ const READY = {
   capacity: {
     healthy: 4,
     required: 4,
+    /*
+     * An account and a surface are two counts, and this fixture carries both.
+     *
+     * Production has one account carrying four Routines, which is how the page
+     * came to read `1 / 4 HEALTHY` beside a fleet reporting four eligible
+     * surfaces. A fixture with one Routine per account could never have shown
+     * that, so the shape is here and `cashPipelineRepair` holds the production
+     * shape against it.
+     */
+    eligibleSurfaces: 4,
+    totalSurfaces: 4,
     rows: [
-      { accountId: 'fac_a', name: 'Brain Research A', state: 'HEALTHY' as const },
-      { accountId: 'fac_b', name: 'Brain Research B', state: 'HEALTHY' as const },
-      { accountId: 'fac_c', name: 'Brain Research C', state: 'HEALTHY' as const },
-      { accountId: 'fac_d', name: 'Brain Research D', state: 'HEALTHY' as const },
+      {
+        accountId: 'fac_a',
+        name: 'Brain Research A',
+        state: 'HEALTHY' as const,
+        eligibleSurfaces: 1,
+        surfaces: [
+          { routineId: 'rtn_a', name: 'Brain Research A', state: 'ENABLED', eligible: true },
+        ],
+      },
+      {
+        accountId: 'fac_b',
+        name: 'Brain Research B',
+        state: 'HEALTHY' as const,
+        eligibleSurfaces: 1,
+        surfaces: [
+          { routineId: 'rtn_b', name: 'Brain Research 1-B', state: 'ENABLED', eligible: true },
+        ],
+      },
+      {
+        accountId: 'fac_c',
+        name: 'Brain Research C',
+        state: 'HEALTHY' as const,
+        eligibleSurfaces: 1,
+        surfaces: [
+          { routineId: 'rtn_c', name: 'Brain Research 1-C', state: 'ENABLED', eligible: true },
+        ],
+      },
+      {
+        accountId: 'fac_d',
+        name: 'Brain Research D',
+        state: 'HEALTHY' as const,
+        eligibleSurfaces: 1,
+        surfaces: [
+          { routineId: 'rtn_d', name: 'Brain Research 1-D', state: 'ENABLED', eligible: true },
+        ],
+      },
     ],
   },
   mayStart: true,
@@ -349,22 +392,33 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
             completionCondition: 'A live commercial grant exists on this project.',
           },
         },
+        /*
+         * A second decision that is genuinely a person's.
+         *
+         * This used to be `MISSING_PAYER` — "3 cards with no payer", with a
+         * control offering to answer the payer on each — and the server does
+         * not produce that item any more, because a payer is a fact about the
+         * world that Brain researches. A client fixture modelling a shape the
+         * server can no longer emit tests nothing, so it is replaced by one it
+         * still does: several needs sharing one remedy, which is one tool
+         * bought once.
+         */
         {
-          key: 'MISSING_PAYER',
-          title: '3 cards with no payer',
-          why: 'An unknown is not a favourable assumption.',
-          recommendation: 'Establish who can approve payment.',
-          consequence: 'Each becomes ready to test the moment its answer exists.',
+          key: 'NEED_cnd_1',
+          title: '3 blocked actions, one remedy',
+          why: 'Reaching a buyer needs a way to send a message, and Brain has none.',
+          recommendation: 'Connect a way to send messages. Next step: pick one and connect it.',
+          consequence: 'Resolving this unblocks 3 actions. Independent work is running meanwhile.',
           urgency: 'WHENEVER',
-          underlying: ['cop_2', 'cop_3', 'cop_4'],
-          sharedRemedy: false,
+          underlying: ['cnd_1', 'cnd_2', 'cnd_3'],
+          sharedRemedy: true,
           costCents: null,
           costNote: null,
           answer: {
-            kind: 'FILL_CARD_FIELD',
-            targets: ['cop_2', 'cop_3', 'cop_4'],
-            label: 'Answer the payer on each card',
-            completionCondition: 'Every one of these cards records a payer.',
+            kind: 'RESOLVE_NEED',
+            targets: ['cnd_1', 'cnd_2', 'cnd_3'],
+            label: 'Mark all 3 done, and say what you did',
+            completionCondition: 'A way to send a message is connected.',
           },
         },
       ],
@@ -433,7 +487,7 @@ describe('activation does not take the invitation away', () => {
     await mount();
     await waitFor(() => expect(screen.getByText('People and capacity')).toBeTruthy());
     expect(screen.getByText('Human members')).toBeTruthy();
-    expect(screen.getByText('Claude capacity accounts')).toBeTruthy();
+    expect(screen.getByText('Claude capacity accounts, with a proven surface')).toBeTruthy();
     // And says plainly that they are counts rather than a gate, because the
     // last thing this screen did with them was refuse to start.
     expect(screen.getByText(/Counts, not gates/)).toBeTruthy();
@@ -475,7 +529,9 @@ describe('the research roadmap', () => {
     await mount();
     await waitFor(() => expect(screen.getByText('What Brain is researching')).toBeTruthy());
 
-    expect(screen.getByText(ROADMAP.whatHappensNext)).toBeTruthy();
+    // The server's one sentence about where this is, in one place: the status
+    // screen. It used to be here too, which put it on the page twice.
+    expect(screen.getAllByText(ROADMAP.whatHappensNext).length).toBe(1);
     // The plan's own denominator. Five, because the plan holds five — not
     // twenty, and not a percentage of a number nobody knows.
     expect(screen.getByText('1 of 5 research items done', { exact: false })).toBeTruthy();
@@ -486,7 +542,16 @@ describe('the research roadmap', () => {
     expect(
       screen.getByText('Who is publicly asking to pay for work right now?'),
     ).toBeTruthy();
-    for (const stage of ROADMAP.pipeline) expect(screen.getByText(stage.label)).toBeTruthy();
+    /*
+     * Scoped to this section. The status screen above counts pieces *ready to
+     * test*, which is a tier of the portfolio and shares a label with a stage
+     * of the pipeline — two different facts that happen to be said the same
+     * way, so the query says which one it means.
+     */
+    const roadmap = document.querySelector('.rs-cash-roadmap') as HTMLElement;
+    for (const stage of ROADMAP.pipeline) {
+      expect(within(roadmap).getByText(stage.label)).toBeTruthy();
+    }
   });
 
   it('translates the event code and keeps it', async () => {
@@ -507,10 +572,17 @@ describe('the money picture', () => {
     await mount();
     await waitFor(() => expect(screen.getByText('The money picture')).toBeTruthy());
 
-    expect(screen.getByText('Authorized')).toBeTruthy();
-    expect(screen.getByText('Committed')).toBeTruthy();
-    expect(screen.getByText('Spent')).toBeTruthy();
-    expect(screen.getByText('Remaining authorized capacity')).toBeTruthy();
+    /*
+     * Scoped to the detailed picture, because the compact money row above says
+     * the same four words about the same four figures. That is a summary of
+     * this rather than a second opinion — one server-derived source, rendered
+     * twice — so the query names which rendering it is asserting about.
+     */
+    const picture = document.querySelector('.rs-cash-picture') as HTMLElement;
+    expect(within(picture).getByText('Authorized')).toBeTruthy();
+    expect(within(picture).getByText('Committed')).toBeTruthy();
+    expect(within(picture).getByText('Spent')).toBeTruthy();
+    expect(within(picture).getByText('Remaining authorized capacity')).toBeTruthy();
     // Nothing authorized is something Brain knows. It must not read like a
     // figure that has not been worked out.
     expect(
@@ -701,7 +773,7 @@ describe('Cash Mode is not running yet', () => {
     expect(screen.queryByText(/not ready to start/i)).toBeNull();
     // The counters are untouched: still derived, still shown, still honest.
     expect(screen.getByText(/3 \/ 4 READY/)).toBeTruthy();
-    expect(screen.getByText(/4 \/ 4 HEALTHY/)).toBeTruthy();
+    expect(screen.getByText(/4 \/ 4 proven/)).toBeTruthy();
     expect(screen.getByText('One')).toBeTruthy();
     expect(screen.getByText(/Link sent/i)).toBeTruthy();
   });
@@ -786,7 +858,21 @@ describe('the decision nothing can proceed without', () => {
       expect(screen.getByText(/Spending limits .* what Brain may spend here/)).toBeTruthy(),
     );
     const headings = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
-    expect(headings[0]).toBe('Decisions for you');
+    /*
+     * The status screen is first and the decisions are second, and neither is
+     * folded.
+     *
+     * This asserted that the decisions were the very first thing. That was
+     * right while the page had no summary at all, and it is the wrong shape
+     * now: a person arriving needed to know what state the machine was in
+     * before being handed something to decide. What matters is unchanged — the
+     * decision nothing can proceed without is above everything it blocks, and
+     * is not inside a disclosure.
+     */
+    expect(headings[0]).toBe('The cash machine');
+    expect(headings[1]).toBe('Decisions for you');
+    const decisions = document.querySelector('.rs-cash-decisions');
+    expect(decisions?.closest('details')).toBeNull();
   });
 
   it('shows the outstanding approval once, as the control rather than twice', async () => {
@@ -799,7 +885,7 @@ describe('the decision nothing can proceed without', () => {
     // The server's own list titles it the old way; the card is the control, so
     // the list entry is the one that goes.
     expect(screen.queryByText('Decide what Brain may spend here')).toBeNull();
-    expect(screen.getByText('3 cards with no payer')).toBeTruthy();
+    expect(screen.getByText('3 blocked actions, one remedy')).toBeTruthy();
   });
 
 
@@ -812,11 +898,18 @@ describe('the decision nothing can proceed without', () => {
     );
     /*
      * "One answer covers" and "the same kind of work on" are different claims,
-     * and this group is the second: three cards with no payer are three
-     * different buyers. The screen used to say answering it released all three.
+     * and the screen still draws both. This group is the first: three needs
+     * recommending the identical path are one tool bought once, so answering
+     * it genuinely releases all three.
+     *
+     * The second branch used to be exercised here by three cards with no
+     * payer, and the server does not produce that group any more — a payer is
+     * a fact Brain researches rather than a question for a person. It is still
+     * drawn for an expiring opening, which is several pieces that share no
+     * remedy at all.
      */
-    expect(screen.getByText(/The same kind of work on 3 items\./)).toBeTruthy();
-    expect(screen.queryByText(/One answer covers 3 items\./)).toBeNull();
+    expect(screen.getByText(/One answer covers 3 items\./)).toBeTruthy();
+    expect(screen.queryByText(/The same kind of work on 3 items\./)).toBeNull();
   });
 
   it('shows what can never be authorized, before anybody approves', async () => {
@@ -1320,7 +1413,10 @@ describe('the money, and the work', () => {
     expect(screen.getAllByText('USD 750.00').length).toBe(3);
     expect(screen.getAllByText('USD 0.00').length).toBeGreaterThan(0);
     // Deployable is negative and is printed as such rather than clamped to nil.
-    expect(screen.getByText('-USD 200.00')).toBeTruthy();
+    // Scoped, because the compact money row above reports the same figure as
+    // remaining capacity — a summary of this table rather than a second one.
+    const mine = document.querySelector('.rs-cash-money') as HTMLElement;
+    expect(within(mine).getByText('-USD 200.00')).toBeTruthy();
     expect(screen.getByText(/Deployable cash is negative/i)).toBeTruthy();
   });
 
