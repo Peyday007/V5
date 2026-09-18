@@ -7,8 +7,8 @@ flag that once let a condition excuse itself from scoring was removed.
 
 ## The reading, and what kind of thing each answer is
 
-Reconciled with production at **beafc06** — 116 commits — and read at the head
-of that merge.
+Reconciled with production at **3a73bb1** — 118 commits over two merges — and
+read at the head of that reconciliation.
 
     242 conditions · 216 held · 0 failing · 26 open · 0 unanswerable · 0 deferred
 
