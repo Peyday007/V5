@@ -41,6 +41,7 @@ import {
   listGaps,
   openPacket,
   putSection,
+  setGapState,
 } from '../server/services/realize/packet.ts';
 import {
   getFaculty,
@@ -313,6 +314,27 @@ describe('moving a faculty dimension from what the rows say', () => {
 
     await applyRealization({ packetId: blind, actorType: 'SYSTEM' });
     expect((await getFaculty(facultyId))?.implementationState).toBe('LIVE');
+  });
+
+  it('refuses a reading for a packet whose requirements were all waived', async () => {
+    const facultyId = await promoteFaculty(definition());
+    const packetId = await classifiedPacket({ facultyId, kind: 'MUST_BE_BUILT' });
+    for (const gap of await listGaps(packetId)) {
+      await setGapState({
+        gapId: gap.id,
+        state: 'WAIVED',
+        reason: 'Owned by another faculty\'s packet.',
+      });
+    }
+
+    const reading = await readRealization(packetId);
+    const implementation = reading.readings.find((row) => row.dimension === 'IMPLEMENTATION');
+    // Nothing is outstanding, and that is a statement about where the
+    // requirements went rather than about whether the faculty runs. The branch
+    // below it used to fall through to LIVE.
+    expect(implementation?.to).toBeNull();
+    expect(implementation?.to).not.toBe('LIVE');
+    expect(implementation?.reason).toMatch(/every one was closed or waived/);
   });
 
   it('refuses an evaluation reading for a faculty that declares no standard', async () => {

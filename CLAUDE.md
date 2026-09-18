@@ -5368,7 +5368,16 @@ nothing turned one into work.
   link from a gap to its work is a join rather than a search a merge could
   answer wrongly.
 
-**Writing the fixture found a hole that reading had not, in my own module.**
+**Two holes in this work were found by looking rather than by the suite, and
+they were found in opposite ways.** A packet whose every gap was *waived* had
+nothing outstanding, an empty matched set and every count zero, so the
+implementation reading fell through to `LIVE` — and a waiver means *another
+faculty's packet owns this*, which is the opposite of a reading that the thing
+works. That one came out of re-reading the diff, §34's own discipline. There is
+no reading at all in that case now, rather than `CONNECTED`, which would be the
+same invention one rung lower.
+
+**The other came from writing the fixture, in my own module.**
 `judgeGap` could not record *which* component a reader matched — the column
 existed and only `classify` ever wrote it — so a reader answering
 `EXISTS_AND_LIVE` recorded that something serves the requirement and could not

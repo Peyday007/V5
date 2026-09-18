@@ -291,7 +291,17 @@ What makes it worth having is what it will not say:
   *action*, and a Brain that could switch its own faculties on is §22's worker
   creating its own work one altitude up.
 
-Writing the fixture found a hole in it. `judgeGap` could not record *which*
+**A second hole came out of re-reading the diff rather than from a test**, which
+is the discipline §34 records and the reason it is worth naming. `served`
+counts a `CLOSED` or `WAIVED` gap — correctly, since those requirements are not
+outstanding — while the reach count is asked only of the gaps something actually
+matches. A packet whose every gap was waived therefore had nothing outstanding,
+an empty matched set, every count zero, and fell through to **`LIVE`**. A waiver
+means *another faculty's packet owns this*, which is the opposite of a reading
+that the thing works. There is no reading at all in that case now — not
+`CONNECTED`, which would be the same invention one rung lower.
+
+Writing the fixture found the first one. `judgeGap` could not record *which*
 component a reader matched, so a reader answering `EXISTS_AND_LIVE` said
 something serves the requirement and could not say what — and the reach count
 read an empty set of keys as *no unknowns*, which walked straight to `LIVE`. A

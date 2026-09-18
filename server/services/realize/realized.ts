@@ -310,14 +310,42 @@ async function implementationReading(
   // Asked of the requirements something actually serves. A closed or waived gap
   // is not a component whose reach could be observed, so counting it would make
   // every waiver an unknown and put a genuinely live faculty at CONNECTED.
-  const reach = await reachOf(
-    gaps.filter(
-      (gap) => gap.kind === 'EXISTS_AND_LIVE' || gap.kind === 'EXISTS_BUT_DISCONNECTED',
-    ),
+  const matched = gaps.filter(
+    (gap) => gap.kind === 'EXISTS_AND_LIVE' || gap.kind === 'EXISTS_BUT_DISCONNECTED',
   );
+  const reach = await reachOf(matched);
   basis.push(
     `${reach.connected} component(s) read CONNECTED: YES, ${reach.unknown} UNKNOWN, ${reach.no} NO`,
   );
+
+  /*
+   * A packet whose every requirement was closed or waived says nothing about
+   * whether the faculty runs.
+   *
+   * Found by re-reading the diff rather than by a test, which is why it is
+   * worth naming: `served` counts a `CLOSED` or `WAIVED` gap, correctly — those
+   * requirements are genuinely not outstanding — and `reach` is asked only of
+   * the gaps something actually serves. With every gap waived that set is
+   * empty, every count is zero, and the branch below fell through to `LIVE`. A
+   * waiver means *another faculty's packet owns this*, which is the opposite of
+   * a reading that it works.
+   *
+   * So `LIVE` needs at least one requirement served by a component whose reach
+   * was observed. With none there is no reading at all — not `CONNECTED`, which
+   * would be the same invention one rung lower.
+   */
+  if (matched.length === 0) {
+    return {
+      dimension: 'IMPLEMENTATION',
+      to: null,
+      reason:
+        'Nothing outstanding remains, and no requirement is matched to anything — every one was ' +
+        'closed or waived. That says where the requirements went rather than whether this ' +
+        'faculty runs.',
+      basis,
+      withheld: null,
+    };
+  }
 
   if (disconnected.length > 0 || reach.no > 0 || reach.unknown > 0) {
     return {
