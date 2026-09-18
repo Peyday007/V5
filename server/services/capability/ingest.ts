@@ -48,6 +48,7 @@ import { enqueueExtraction } from '../documents/queue.ts';
 import { getCurrentExtractionRun } from '../../repos/extraction.ts';
 import { getDocument } from '../../repos/documents.ts';
 import { createProject, getProjectBySlug } from '../../repos/projects.ts';
+import { createLayer, listLayers } from '../../repos/layers.ts';
 import { registerSource, type CapabilitySource, type SourceKind } from '../../repos/faculties.ts';
 import { recordEvent } from '../../repos/events.ts';
 import type { Project } from '../../domain/types.ts';
@@ -61,18 +62,38 @@ import type { Project } from '../../domain/types.ts';
 export const ARCHITECTURE_SLUG = 'brain-architecture';
 
 /**
+ * The layer realization work files under.
+ *
+ * One, and it is not what the blueprint is filed under: the blueprint is a
+ * project source with `layer_id = NULL` (§11), because forcing architectural
+ * knowledge into one heading would file most of it under the wrong one. Those
+ * are two different facts and I conflated them at first — this scope was
+ * created with no layer at all on the strength of the document's own
+ * layer-lessness, and running it found the consequence immediately.
+ *
+ * §30 records the same defect one section along: `standingAuthority` refuses a
+ * launch on a project with no layer to file the work under, so a scope without
+ * one can open discovery, capture ideas and **launch nothing, for ever**, with
+ * every row reading healthy. The remedy there was that activation creates the
+ * layer, because that is the moment the project becomes an operation. Here it
+ * is the moment the scope is created, for the same reason.
+ */
+export const ARCHITECTURE_LAYER = 'Capability Realization';
+
+/**
  * Make sure the architecture scope exists, once.
  *
  * Idempotent by slug rather than by a flag, so a restart, a second instance and
- * a re-run all produce one project. It creates no layer: a blueprint is a
- * project source (`layer_id = NULL`, §11) and inventing a layer to file it
- * under would file architectural knowledge under a research heading.
+ * a re-run all produce one project and one layer.
  */
 export async function ensureArchitectureScope(): Promise<Project> {
   const existing = await getProjectBySlug(ARCHITECTURE_SLUG);
-  if (existing) return existing;
+  if (existing) {
+    await ensureArchitectureLayer(existing.id);
+    return existing;
+  }
   try {
-    return await createProject({
+    const created = await createProject({
       name: 'Brain Architecture',
       slug: ARCHITECTURE_SLUG,
       description:
@@ -80,13 +101,32 @@ export async function ensureArchitectureScope(): Promise<Project> {
         'machinery describing itself rather than somebody\'s work, which is what `purpose` says.',
       purpose: 'TECHNICAL',
     });
+    await ensureArchitectureLayer(created.id);
+    return created;
   } catch {
     // Two callers raced. The slug is unique, so the loser reads the winner's
     // row — an ordinary outcome, the same shape as losing any other claim here.
     const raced = await getProjectBySlug(ARCHITECTURE_SLUG);
-    if (raced) return raced;
+    if (raced) {
+      await ensureArchitectureLayer(raced.id);
+      return raced;
+    }
     throw new Error('The architecture scope could not be created or read back.');
   }
+}
+
+/** Idempotent by name, so a re-run finds the layer rather than adding a second. */
+async function ensureArchitectureLayer(projectId: string): Promise<void> {
+  const layers = await listLayers(projectId);
+  if (layers.some((layer) => layer.name === ARCHITECTURE_LAYER)) return;
+  await createLayer({
+    projectId,
+    name: ARCHITECTURE_LAYER,
+    orderIndex: 1,
+    notes:
+      'Where work on Brain’s own capabilities files. The blueprints themselves are project ' +
+      'sources with no layer; this is for what realizing one produces.',
+  });
 }
 
 export interface RegisteredBlueprint {

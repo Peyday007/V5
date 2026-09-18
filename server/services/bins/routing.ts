@@ -165,7 +165,23 @@ export function classesForFamilies(families: readonly WorkloadFamily[]): {
   const prefixes: string[] = [];
   if (families.includes('FACTORY')) prefixes.push('FACTORY');
   if (families.includes('RESEARCH')) prefixes.push('RESEARCH', 'RUSSELL', 'SURFACE_PROBE');
-  // A row with no class is GENERAL, so only a GENERAL worker may be offered one.
+  /*
+   * `GENERAL` is a prefix as well as the absence of one, and it was only the
+   * second — which made explicitly-classed general work unroutable.
+   *
+   * The convention this function is built on is that a class belongs to the
+   * family whose name it starts with, so that a stage nobody has invented yet is
+   * admitted without editing a list. `GENERAL` was the one family that had no
+   * name under that convention: it meant *no class at all*, so a bin that
+   * declared `GENERAL_…` matched nothing and the assigner answered NO_READY_BINS
+   * with everything about the bin correct. Running the capability kernel is what
+   * found it — the extraction bin was READY, the worker held the scopes, and the
+   * candidate query excluded it on the one column nobody was looking at.
+   *
+   * Null still means GENERAL, because rows written before `workload_class`
+   * existed carry none and must stay reachable.
+   */
+  if (families.includes('GENERAL')) prefixes.push('GENERAL');
   return { prefixes, allowsNull: families.includes('GENERAL') };
 }
 

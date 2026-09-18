@@ -17,12 +17,17 @@
  * genuinely cannot see it. Every test here runs from a checkout where it *can*,
  * so the unreadable case is forced rather than waited for.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
-import { observeSystem, REPO_ROOT, testsVisible } from '../server/services/selfmodel/observe.ts';
+import {
+  DOCS_ROOT,
+  observeSystem,
+  REPO_ROOT,
+  testsVisible,
+} from '../server/services/selfmodel/observe.ts';
 import {
   componentHistory,
   getComponent,
@@ -290,13 +295,54 @@ describe('the system self-model', () => {
   });
 
   describe('the deployment image', () => {
-    it('copies server and client and not tests, which is why EVALUATED is unknowable there', () => {
+    it('copies server and client and not tests or docs, which is why two levels are unknowable', () => {
       // The self-model's own justification for its third answer is a fact about
       // the Dockerfile, so it is asserted against the Dockerfile rather than
       // restated in a comment.
       const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
       expect(dockerfile).toMatch(/COPY server \.\/server/);
       expect(dockerfile).not.toMatch(/COPY tests/);
+      // And neither `docs/` nor CLAUDE.md, which is what makes DOCUMENTED
+      // unreadable from a deployment too. This assertion is the one that would
+      // have caught the original defect: `documentedReading` answered NO.
+      expect(dockerfile).not.toMatch(/COPY docs/);
+      expect(dockerfile).not.toMatch(/COPY CLAUDE\.md/);
+    });
+
+    it('answers DOCUMENTED unknown rather than no when nothing is readable', async () => {
+      // Forced rather than waited for: every test runs from a checkout where the
+      // documents *are* readable, so the deployed case has to be constructed.
+      // Without this the defect is invisible until production, where it would
+      // have read five hundred components as undocumented.
+      const real = fs.readdirSync;
+      const hidden = path.resolve(DOCS_ROOT);
+      try {
+        // Hide `docs/` and CLAUDE.md the way the image does: not there at all.
+        vi.spyOn(fs, 'readdirSync').mockImplementation(((dir: fs.PathLike, options?: unknown) => {
+          if (path.resolve(String(dir)) === hidden) throw new Error('ENOENT');
+          return (real as unknown as (d: fs.PathLike, o?: unknown) => unknown)(dir, options);
+        }) as typeof fs.readdirSync);
+        const readFile = fs.readFileSync;
+        vi.spyOn(fs, 'readFileSync').mockImplementation(((file: fs.PathOrFileDescriptor, options?: unknown) => {
+          if (String(file).endsWith('CLAUDE.md')) throw new Error('ENOENT');
+          return (readFile as unknown as (f: fs.PathOrFileDescriptor, o?: unknown) => unknown)(
+            file,
+            options,
+          );
+        }) as typeof fs.readFileSync);
+
+        const pass = await observeSystem();
+        const sample = pass.components.filter((c) => c.kind === 'WORK_TYPE');
+        expect(sample.length).toBeGreaterThan(0);
+        for (const component of sample) {
+          expect(component.readings.DOCUMENTED?.answer).toBe('UNKNOWN');
+          expect(component.readings.DOCUMENTED?.evidence).toMatch(/would turn "we cannot see"/);
+        }
+        // And the pass names it, rather than leaving a reader to notice.
+        expect(pass.unreadable.join(' ')).toContain('neither `docs/` nor `CLAUDE.md`');
+      } finally {
+        vi.restoreAllMocks();
+      }
     });
   });
 

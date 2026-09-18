@@ -73,10 +73,19 @@ export const EXTRACTION_CONTRACT = 'BLUEPRINT_EXTRACTION_V1';
 export const AUDIT_CONTRACT = 'BLUEPRINT_AUDIT_V1';
 export const EXTRACTION_KIND = 'CAPABILITY_EXTRACTION';
 export const AUDIT_KIND = 'CAPABILITY_AUDIT';
-export const CAPABILITY_WORKLOAD_CLASS = 'CAPABILITY_READ';
+export const CAPABILITY_WORKLOAD_CLASS = 'GENERAL_CAPABILITY_READ';
 
 /** The shortest quote that can anchor. Below this, a match means nothing. */
 const MIN_QUOTE_CHARS = 24;
+
+/**
+ * The most amendment text a manifest may carry.
+ *
+ * An amendment longer than this is *named* rather than pasted, because a
+ * manifest is stored, shown and read back, and an unbounded one is a way to put
+ * a whole second document where a bounded assignment belongs.
+ */
+const MAX_AMENDMENT_CHARS = 8_000;
 
 /* ------------------------------------------------------------------------- */
 /* Reading the source                                                         */
@@ -127,17 +136,74 @@ export async function readSource(sourceId: string): Promise<SourceReading | null
 
   const blocks = await listBlocks(run.id);
   const scan = scanSections(blocks);
+
+  /*
+   * An amendment declaring no sections is not an unreadable amendment.
+   *
+   * This was wrong when it was written and running it found it: the Faculty 14
+   * clarification registered cleanly, extracted cleanly, and was then marked
+   * FAILED for "declaring no sections this kernel recognises" — which is a
+   * correct statement about a *blueprint* and a category error about an
+   * amendment. An amendment does not define faculties. It changes what one of
+   * them means, and the document it changes is the one with the numbering.
+   *
+   * So an amendment is never dispatched for extraction at all. It is **carried
+   * into the reading of the blueprint it amends**, which is what the operator's
+   * own instruction asks for — *preserve the source and amendment with
+   * provenance* — and is the only shape that keeps both hashes intact while
+   * letting one definition reflect both. `amendmentsFor` below is that carrying.
+   */
+  const isAmendment = source.kind === 'AMENDMENT';
   return {
     source,
     blocks,
     sections: scan.sections,
     skipped: scan.skipped,
     unreadable:
-      scan.sections.length === 0
+      !isAmendment && scan.sections.length === 0
         ? 'The source is readable and declares no sections this kernel recognises, so there is ' +
           'nothing to extract. A blueprint numbers its definitions; this document does not.'
         : null,
   };
+}
+
+/**
+ * The amendments registered against one blueprint, as readable text.
+ *
+ * Bounded, because a manifest is stored, shown and read back, and an unbounded
+ * one is a way to put a whole second document into a prompt. An amendment that
+ * does not fit is named with its document id rather than truncated — §27's
+ * rule, at a new place: truncation is the one outcome a reader cannot recover
+ * from, because it is presented as success.
+ */
+export async function amendmentsFor(blueprintId: string): Promise<
+  Array<{ sourceId: string; documentId: string; title: string; text: string | null }>
+> {
+  const out: Array<{ sourceId: string; documentId: string; title: string; text: string | null }> = [];
+  for (const source of await listSources()) {
+    if (source.kind !== 'AMENDMENT' || source.amendsId !== blueprintId) continue;
+    const run = await getCurrentExtractionRun(source.documentId);
+    if (!run || (run.status !== 'READY' && run.status !== 'READY_WITH_WARNINGS')) {
+      out.push({
+        sourceId: source.id,
+        documentId: source.documentId,
+        title: source.title,
+        text: null,
+      });
+      continue;
+    }
+    const text = (await listBlocks(run.id))
+      .map((block) => block.normalizedText)
+      .join('\n')
+      .trim();
+    out.push({
+      sourceId: source.id,
+      documentId: source.documentId,
+      title: source.title,
+      text: text.length <= MAX_AMENDMENT_CHARS ? text : null,
+    });
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -160,6 +226,11 @@ export async function readSource(sourceId: string): Promise<SourceReading | null
 export async function dispatchExtraction(sourceId: string): Promise<string | null> {
   const reading = await readSource(sourceId);
   if (!reading) return null;
+  if (reading.source.kind === 'AMENDMENT') {
+    // Carried, never extracted. See `readSource` for why this is a category
+    // distinction rather than a special case.
+    return null;
+  }
   if (reading.unreadable !== null) {
     await advanceSource({
       id: sourceId,
@@ -174,6 +245,7 @@ export async function dispatchExtraction(sourceId: string): Promise<string | nul
   if (!claimed) return null;
 
   const document = await getDocument(reading.source.documentId);
+  const amendments = await amendmentsFor(sourceId);
   const units = reading.sections.map((section) => ({
     key: sectionUnitKey(section),
     establishes:
@@ -218,6 +290,16 @@ export async function dispatchExtraction(sourceId: string): Promise<string | nul
       acceptableSources: [
         `The registered source document ${reading.source.documentId}` +
           (document ? ` ("${document.canonicalName}")` : ''),
+        ...amendments.map(
+          (amendment) =>
+            `Amendment ${amendment.sourceId} ("${amendment.title}"), document ` +
+            `${amendment.documentId}. It changes what one of these sections means, so a ` +
+            'definition it touches must reflect both. The blueprint is not rewritten: both ' +
+            'sources keep their bytes, and the promoted definition records which it read.' +
+            (amendment.text === null
+              ? ' Its text is too long to carry here; read it from the document.'
+              : `\n\n${amendment.text}`),
+        ),
       ],
       excludedSources: [
         'Any source other than the registered document. This is a reading of one artifact, not ' +
@@ -908,6 +990,8 @@ export async function advanceSources(): Promise<{
     if (outcome) promoted += outcome.promoted;
   }
 
+  await settleAmendments();
+
   return { dispatched, settled, audited, promoted, recovered };
 }
 
@@ -928,3 +1012,36 @@ async function binIsFinished(binId: string | null): Promise<boolean> {
 }
 
 export type { Bin };
+
+
+/**
+ * An amendment is finished when the blueprint that carried it is.
+ *
+ * Derived from the blueprint's state rather than hooked to the moment it was
+ * promoted, so it reaches the ones already registered and survives a tick that
+ * died halfway — the same distinction this repository has needed five times.
+ *
+ * It records that the amendment was *carried*, which is a weaker and truer
+ * claim than that it was applied: whether a particular definition reflects it
+ * is a fact about that definition's own text, and the audit is what establishes
+ * it. Saying "applied" here would be asserting something no row checked.
+ */
+export async function settleAmendments(): Promise<number> {
+  let settled = 0;
+  for (const source of await listSources({ states: ['REGISTERED'] })) {
+    if (source.kind !== 'AMENDMENT' || source.amendsId === null) continue;
+    const blueprint = await getSource(source.amendsId);
+    if (!blueprint || blueprint.ingestState !== 'PROMOTED') continue;
+    const moved = await advanceSource({
+      id: source.id,
+      from: 'REGISTERED',
+      to: 'PROMOTED',
+      detail:
+        `Carried into the reading of ${blueprint.id}, which has been promoted. Whether any ` +
+        'particular definition reflects this amendment is a fact about that definition and is ' +
+        'what the audit established; this records only that the reader had it.',
+    });
+    if (moved) settled += 1;
+  }
+  return settled;
+}

@@ -604,19 +604,38 @@ async function main(): Promise<void> {
    * Brain whose self-model could not be read must still serve — a self-model is
    * a reading *about* the system and never a precondition of it.
    */
-  void scanIfStale()
-    .then((report) => {
-      if (report && report.drift.length > 0) {
-        console.log(`  Self-model      ${report.drift.length} level(s) moved since the last reading`);
-      }
-    })
-    .catch((error: unknown) => {
-      console.warn(
-        `  Self-model      could not be read: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    });
+  /*
+   * Deliberately after a delay rather than immediately.
+   *
+   * The scan walks the source tree and writes a row per component — around six
+   * hundred statements on this Brain — and §27 records six production failures
+   * whose common feature is the database being busy during or just after a
+   * restart. None of them was caused by this, and adding six hundred statements
+   * to the boot window of a system with that history is a risk with no upside:
+   * the reading is just as true a minute later, and the deploy's own
+   * verification runs in exactly the window this stays out of.
+   *
+   * `unref` so it never holds the process open — a Brain shutting down should
+   * not wait to find out about itself.
+   */
+  const BOOT_SCAN_DELAY_MS = 60_000;
+  setTimeout(() => {
+    void scanIfStale()
+      .then((report) => {
+        if (report && report.drift.length > 0) {
+          console.log(
+            `  Self-model      ${report.drift.length} level(s) moved since the last reading`,
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn(
+          `  Self-model      could not be read: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      });
+  }, BOOT_SCAN_DELAY_MS).unref();
 
   /*
    * Russell's loop, beside the dispatcher and after recovery.

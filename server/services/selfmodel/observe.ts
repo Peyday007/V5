@@ -83,6 +83,26 @@ const NO_TESTS_HERE =
   'this process. Evaluation coverage is a repository fact and cannot be answered here — ' +
   'reporting it as NO would turn "we cannot see" into "it is untested".';
 
+/**
+ * The same sentence about documents, and it is the one I got wrong first.
+ *
+ * `documentedReading` answered `NO` — "no document in this image names it" —
+ * which is a true sentence and the wrong answer. The image copies `server` and
+ * `client`, so neither `docs/` nor `CLAUDE.md` is there, and every one of the
+ * five hundred components in a deployed Brain would have read undocumented when
+ * the truth is that nothing could be read. That is precisely the collapse the
+ * third answer exists to prevent, built into the column that was supposed to
+ * prevent it, and only checking the Dockerfile found it.
+ *
+ * So the two are symmetrical: with nothing to read, the answer is `UNKNOWN`
+ * with the reason. With documents present, `NO` is a genuine reading.
+ */
+const NO_DOCS_HERE =
+  'The deployment image copies `server` and `client` only, so neither `docs/` nor `CLAUDE.md` ' +
+  'is readable from this process. Whether a component is documented is a repository fact and ' +
+  'cannot be answered here — reporting it as NO would turn "we cannot see" into "nothing ' +
+  'documents it".';
+
 /** Every `.ts` file under a directory, relative to the repository root. */
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -176,10 +196,12 @@ function mentioning(
 }
 
 function documentedReading(index: TextIndex, needles: string[]): Reading {
+  // Nothing to read is `UNKNOWN`, never `NO`. See NO_DOCS_HERE.
+  if (index.docs.length === 0) return unknown(NO_DOCS_HERE);
   const hits = mentioning(index.docs, needles);
   return hits.length > 0
     ? yes(`named in ${hits.slice(0, 3).join(', ')}`)
-    : no('no document in this image names it');
+    : no('no document readable from here names it');
 }
 
 function evaluatedReading(index: TextIndex, needles: string[]): Reading {
@@ -641,6 +663,7 @@ export async function observeSystem(): Promise<ObservationPass> {
   }
 
   if (!testsVisible()) unreadable.push(NO_TESTS_HERE);
+  if (index.docs.length === 0) unreadable.push(NO_DOCS_HERE);
   if (BRAIN_REVISION === null) {
     unreadable.push(
       'This process carries no BRAIN_REVISION, so the reading cannot be attributed to a commit. ' +
@@ -651,4 +674,4 @@ export async function observeSystem(): Promise<ObservationPass> {
   return { components, unreadable };
 }
 
-export { REPO_ROOT, TESTS_ROOT, testsVisible };
+export { DOCS_ROOT, NO_DOCS_HERE, NO_TESTS_HERE, REPO_ROOT, TESTS_ROOT, testsVisible };

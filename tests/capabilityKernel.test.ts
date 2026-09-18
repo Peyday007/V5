@@ -44,6 +44,7 @@ import {
   dispatchAudit,
   dispatchExtraction,
   readSource,
+  settleAmendments,
   settleAudit,
   settleExtraction,
 } from '../server/services/capability/extraction.ts';
@@ -116,6 +117,28 @@ the surrounding conversation, history, project, relationships, and situation.
 ## 9.1 Observation
 
 What happened, the source, the time, the scope and the permissions.
+`;
+
+const AMENDMENT = `# Amendment to the Brain Intelligence Map
+
+**Amends:** the canonical working blueprint
+**Status:** Authoritative
+
+## Faculty 14 is renamed and its scope is widened
+
+Faculty 14 is expanded from Capability-Acquisition Intelligence to Capability
+Acquisition and Realization Intelligence. It owns the process of mapping a
+desired capability into Brain, graphing current and target topology, identifying
+and acquiring required knowledge, compiling that knowledge into usable system
+contracts, calculating implementation gaps, directing construction, proving the
+resulting capability, registering it, and improving the realization process.
+
+## What this does not change
+
+The count remains fourteen faculties. This renames and widens one; it adds none.
+The Shared Executive remains a coordinating mind rather than a fifteenth
+specialist department. Every other faculty definition is untouched, and nothing
+here grants any authority or authorizes any spending.
 `;
 
 function definition(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -286,18 +309,81 @@ describe('the capability kernel', () => {
       ).rejects.toThrow(/must name the source it amends/);
     });
 
+    it('never extracts an amendment, and carries it into the blueprint instead', async () => {
+      const { sourceId } = await registerFixture();
+      const amendment = await registerBlueprint({
+        filename: 'faculty-14-amendment.md',
+        contents: Buffer.from(AMENDMENT, 'utf8'),
+        title: 'Faculty 14 clarification',
+        kind: 'AMENDMENT',
+        amendsId: sourceId,
+        origin: 'test',
+        registeredBy: 'test',
+      });
+
+      // An amendment declares no numbered faculties, and that is a category
+      // distinction rather than an unreadable document. Running the real thing
+      // is what found this: the clarification registered cleanly, extracted
+      // cleanly, and was then marked FAILED for "declaring no sections".
+      const reading = await readSource(amendment.source.id);
+      expect(reading?.unreadable).toBeNull();
+      expect(await dispatchExtraction(amendment.source.id)).toBeNull();
+      expect((await getSource(amendment.source.id))?.ingestState).toBe('REGISTERED');
+
+      // It is carried into the blueprint's own assignment instead, whole, with
+      // both provenance ids on it.
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      const bin = await getBin(binId);
+      const carried = bin?.manifest.acceptableSources.join('\n') ?? '';
+      expect(carried).toContain(amendment.source.id);
+      expect(carried).toContain('Capability Acquisition and Realization Intelligence');
+      expect(carried).toContain('The blueprint is not rewritten');
+    });
+
+    it('finishes an amendment when the blueprint that carried it is promoted', async () => {
+      const { sourceId } = await registerFixture();
+      const amendment = await registerBlueprint({
+        filename: 'amendment.md',
+        contents: Buffer.from(AMENDMENT, 'utf8'),
+        title: 'A clarification',
+        kind: 'AMENDMENT',
+        amendsId: sourceId,
+        origin: 'test',
+        registeredBy: 'test',
+      });
+
+      // Still registered while the blueprint is unfinished.
+      await settleAmendments();
+      expect((await getSource(amendment.source.id))?.ingestState).toBe('REGISTERED');
+
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      await submit(binId, 'faculty_01', { definition: definition(), quote: RESEARCH_QUOTE });
+      await finish(binId);
+      await settleExtraction(sourceId);
+      const auditBinId = (await dispatchAudit(sourceId)) as string;
+      await submit(auditBinId, 'verdict_research_intelligence', {
+        verdict: 'FAITHFUL',
+        reason: 'Faithful to 5.1.',
+      });
+      await finish(auditBinId);
+      await settleAudit(sourceId);
+
+      expect(await settleAmendments()).toBe(1);
+      const after = await getSource(amendment.source.id);
+      expect(after?.ingestState).toBe('PROMOTED');
+      // "Carried" is a weaker and truer claim than "applied": whether a
+      // definition reflects it is a fact about that definition's own text.
+      expect(after?.ingestDetail).toMatch(/Carried into the reading of/);
+      expect(after?.ingestDetail).not.toMatch(/applied/);
+    });
+
     it('keeps the blueprint’s bytes when an amendment arrives', async () => {
       const { sourceId } = await registerFixture();
       const before = await getSource(sourceId);
 
       const amendment = await registerBlueprint({
         filename: 'faculty-14-amendment.md',
-        contents: Buffer.from(
-          '# Amendment to the Brain Intelligence Map\n\nFaculty 14 is expanded from ' +
-            'Capability-Acquisition Intelligence to Capability Acquisition and Realization ' +
-            'Intelligence.\n',
-          'utf8',
-        ),
+        contents: Buffer.from(AMENDMENT, 'utf8'),
         title: 'Faculty 14: acquisition and realization',
         kind: 'AMENDMENT',
         amendsId: sourceId,
@@ -365,7 +451,7 @@ describe('the capability kernel', () => {
 
       const bin = await getBin(binId as string);
       expect(bin?.completionContract).toBe('BLUEPRINT_EXTRACTION_V1');
-      expect(bin?.workloadClass).toBe('CAPABILITY_READ');
+      expect(bin?.workloadClass).toBe('GENERAL_CAPABILITY_READ');
       expect((bin?.manifest.units ?? []).map((u) => u.key)).toEqual([
         'shared_executive',
         'faculty_01',
