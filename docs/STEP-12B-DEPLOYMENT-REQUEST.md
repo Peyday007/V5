@@ -112,32 +112,51 @@ why `deploy.yml` is `workflow_dispatch` only:
 **O is not "the only thing left", and this document does not claim it is.**
 Until step 3 has run, every condition above is open.
 
-## 5. The other branch, and the one thing whoever merges second must do
+## 5. The other branch, which merged first — this section is resolved history
 
-`claude/pensive-bell-dr81a4` (PR #1, the Software Factory's conversational
-entrance) is concurrent work against the same base, and it must be preserved.
-It is not a competitor to this one and neither supersedes the other.
+**Everything below the next paragraph was true when it was written and is not
+true now.** It is kept rather than deleted, because a reader who finds a
+migration-collision warning and cannot tell whether it still applies will
+either renumber files that are already applied — breaking their checksums — or
+learn to disbelieve this document. Both are worse than a corrected paragraph.
 
-**They collide on exactly one shared contract: migration numbers.**
+`claude/pensive-bell-dr81a4` merged into `production` as **PR #4** (`b8ea8a4`),
+and this branch has since reconciled with it twice. The collision is settled:
+both chains carry both workstreams with no gap and no duplicate —
+**SQLite at 066, Postgres at 057** — and this branch's `049_design_approvals`,
+`050_project_invitations`, `040_design_approvals` and `041_project_invitations`
+are unchanged and uncollided. `tests/deploymentOwnership.test.ts` walks both
+chains on every run and passes. **Nobody needs to renumber anything.**
 
-| chain | this branch | PR #1 |
-| --- | --- | --- |
-| SQLite | `049_design_approvals.sql`, `050_project_invitations.sql` | `049_software_from_conversation.sql` |
-| Postgres | `040_design_approvals.sql`, `041_project_invitations.sql` | `040_software_from_conversation.sql` |
+<details>
+<summary>What this section said before the merge</summary>
 
-Production is at SQLite 048 / Postgres 039, so neither is applied yet and
-neither is checksum-locked. `loadMigrationFiles` refuses a duplicate version
-rather than applying one and skipping the other, so the collision is a boot
-failure with a sentence in it rather than a schema quietly missing half of
-itself — which is the whole reason the numbering is checked at load time
-(§25, which records this happening once already at 035).
+> `claude/pensive-bell-dr81a4` (PR #1, the Software Factory's conversational
+> entrance) is concurrent work against the same base, and it must be preserved.
+> It is not a competitor to this one and neither supersedes the other.
+>
+> **They collide on exactly one shared contract: migration numbers.**
+>
+> | chain | this branch | PR #1 |
+> | --- | --- | --- |
+> | SQLite | `049_design_approvals.sql`, `050_project_invitations.sql` | `049_software_from_conversation.sql` |
+> | Postgres | `040_design_approvals.sql`, `041_project_invitations.sql` | `040_software_from_conversation.sql` |
+>
+> Production is at SQLite 048 / Postgres 039, so neither is applied yet and
+> neither is checksum-locked. `loadMigrationFiles` refuses a duplicate version
+> rather than applying one and skipping the other, so the collision is a boot
+> failure with a sentence in it rather than a schema quietly missing half of
+> itself — which is the whole reason the numbering is checked at load time
+> (§25, which records this happening once already at 035).
+>
+> **Whichever merges second renumbers its own files**, to the next free number
+> in each chain, and updates nothing else: an unapplied migration has no
+> checksum to break. `tests/deploymentOwnership.test.ts` walks both chains for
+> a gap or a collision and will fail the merge that does not.
+>
+> Nothing else about the two branches conflicts in a way that a normal merge
+> does not settle; both touch `CLAUDE.md`, `client/src/russell/Views.tsx`,
+> `scripts/visual-qa.ts` and `server/routes/russell.ts`, and those are
+> ordinary text merges.
 
-**Whichever merges second renumbers its own files**, to the next free number in
-each chain, and updates nothing else: an unapplied migration has no checksum to
-break. `tests/deploymentOwnership.test.ts` walks both chains for a gap or a
-collision and will fail the merge that does not.
-
-Nothing else about the two branches conflicts in a way that a normal merge does
-not settle; both touch `CLAUDE.md`, `client/src/russell/Views.tsx`,
-`scripts/visual-qa.ts` and `server/routes/russell.ts`, and those are ordinary
-text merges.
+</details>
