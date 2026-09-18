@@ -1,0 +1,94 @@
+{
+ "changeRequest": "Implement the aftermath of a research packet: what it taught, what it left open, and what it proposes next.",
+ "units": [
+  {
+   "key": "schema",
+   "owns": [
+    "server/db/migrations/",
+    "server/db/pg-migrations/"
+   ],
+   "establishes": "three append-only tables keyed to the packet they derive from",
+   "dependsOn": []
+  },
+  {
+   "key": "retrospective",
+   "owns": [
+    "server/services/research/aftermath.ts"
+   ],
+   "establishes": "the per-fragment retrospective, derived from attempts held against citations",
+   "dependsOn": [
+    "schema"
+   ],
+   "closes": [
+    "an after-the-fact evaluation of which research choices were useful"
+   ]
+  },
+  {
+   "key": "standing-questions",
+   "owns": [
+    "server/services/research/questions.ts"
+   ],
+   "establishes": "a question that outlives its packet, opened from an audit gap or a contradiction and closed by a later packet's accepted claims",
+   "dependsOn": [
+    "schema"
+   ],
+   "closes": [
+    "new questions and research gaps",
+    "contradictory evidence requires adversarial research"
+   ]
+  },
+  {
+   "key": "proposals",
+   "owns": [
+    "server/services/research/proposals.ts"
+   ],
+   "establishes": "belief updates and suggested tests, each refused whole when it cites nothing",
+   "dependsOn": [
+    "schema",
+    "standing-questions"
+   ],
+   "closes": [
+    "belief-update proposals",
+    "suggested experiments or simulations"
+   ]
+  },
+  {
+   "key": "lessons",
+   "owns": [
+    "server/services/research/lessons.ts"
+   ],
+   "establishes": "what a run taught about researching, from the retrospective rather than from prose",
+   "dependsOn": [
+    "retrospective"
+   ],
+   "closes": [
+    "research lessons",
+    "a decision reached that could not reliably be reached before"
+   ]
+  },
+  {
+   "key": "tick",
+   "owns": [
+    "server/services/russell/loop.ts"
+   ],
+   "establishes": "the derivation on the durable tick, fleet-wide, idempotent by packet",
+   "dependsOn": [
+    "retrospective",
+    "standing-questions",
+    "proposals",
+    "lessons"
+   ]
+  }
+ ],
+ "integrationOrder": [
+  "schema",
+  "retrospective",
+  "standing-questions",
+  "proposals",
+  "lessons",
+  "tick"
+ ],
+ "verification": "npm run typecheck && npm test, plus the suite against Postgres, because the change adds tables and \u00a725's rule is that a repository layer over two databases is true or merely compiling.",
+ "repair": "A finding becomes a repair unit in the same campaign, owned by the unit whose declared paths contain it. A finding that names a path no unit owns narrows nothing and is reported.",
+ "promotionGate": "A person approves the objective and a person approves the release. Nothing in this plan moves a registry dimension: `prove.ts` does that, from evidence, afterwards."
+}

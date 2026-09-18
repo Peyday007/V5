@@ -1,0 +1,47 @@
+{
+ "activation": [
+  "A packet reaches a terminal state with a filed report, or terminates without one.",
+  "A contradiction is recorded against a claim in a project this faculty has researched.",
+  "It is never activated by a person asking for it, because the aftermath of a run is not a request."
+ ],
+ "contextRequirements": [
+  "The packet's own rows: fragments, claims, verification verdicts, the synthesis's citations, the audit's gaps.",
+  "Nothing outside the packet. A pass that could read another project's claims would be proposing beliefs from evidence this project never accepted."
+ ],
+ "reasoningStages": [
+  "1. Read what the packet accepted, rejected and cited. Deterministic.",
+  "2. Classify each audit gap: does its classification permit research to stay open? Deterministic, from the existing vocabulary.",
+  "3. Phrase a question for a gap that states a finding and no question. One bounded model pass, and the only one.",
+  "4. Derive the per-fragment retrospective. Deterministic.",
+  "5. Emit proposals. Deterministic assembly over 1-4."
+ ],
+ "allowedProposals": [
+  "A belief update, to faculty 4.",
+  "A standing question, to this faculty's own next planning pass.",
+  "A suggested test, to faculty 9.",
+  "A retrospective, to faculty 10."
+ ],
+ "validation": [
+  "Every proposal cites the rows it came from, and one that cites nothing is refused whole rather than stored with a note.",
+  "The phrasing pass may produce a question and may not produce a classification: the classification is already a column and a model answering it again would be model output deciding state.",
+  "A proposal is never applied by this faculty. Applying is the receiving faculty's, which is what makes 'proposes' true rather than a word."
+ ],
+ "reentry": [
+  "A standing question is re-read whenever a later packet in the same project reaches a terminal state, and closes if that packet's accepted claims answer it.",
+  "It is not re-derived: closing is a transition on the existing row, so the question's history survives."
+ ],
+ "stopping": [
+  "One aftermath per packet, for ever. There is no loop here and nothing to exhaust.",
+  "A standing question with no answer is not a failure and is never retried; it is the output."
+ ],
+ "invariants": [
+  "Uncertainty must survive the pipeline \u2014 this is the mechanism that makes that true past the packet boundary, which is where it currently stops being true.",
+  "An access failure is not a rejection, and a rejected claim is not a contradiction.",
+  "Nothing here writes a claim, a document, an audit or a knowledge row."
+ ],
+ "authorityBoundaries": [
+  "It proposes to four faculties and applies nothing.",
+  "It spends no allowance except the single bounded phrasing pass, which runs only for a gap that states no question.",
+  "It performs no external action and reads no external source at all."
+ ]
+}

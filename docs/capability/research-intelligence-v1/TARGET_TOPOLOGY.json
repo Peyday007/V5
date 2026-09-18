@@ -1,0 +1,47 @@
+{
+ "thesis": "Everything this faculty is missing sits after the packet's own terminal state. The run itself \u2014 plan, fragment, verify, gate, synthesize, audit \u2014 is live and proven. What no row survives is what the run learned, what it left open, and what it thinks should be tried next.",
+ "stateFlow": [
+  "A packet reaches COMPLETE or COMPLETE_WITH_GAPS, as it does today.",
+  "A new `research_aftermath` row is derived from that packet's own rows: its accepted and rejected claims, its audit gaps, its repair attempts and its fragment outcomes.",
+  "From it, three kinds of proposal are written, each as a candidate row nothing believes yet: a belief update, a standing question, and a suggested test.",
+  "A standing question that is not answered by a later packet stays open and is readable, which is the thing an `audit_gaps` row stops being once its packet is terminal.",
+  "A contradiction recorded against a claim becomes a standing question of its own, which is the trigger `contradictions.ts` classifies for and nothing currently pulls."
+ ],
+ "controlFlow": [
+  "Derived on the durable tick from terminal packets, never hooked to the moment a packet finishes \u2014 a hook fixes one entrance and the rows reach every entrance plus whatever is already stranded.",
+  "Idempotent by (packet, kind), so a redelivered tick writes one aftermath.",
+  "Nothing here re-opens a packet or charges an attempt: a terminal packet stays terminal."
+ ],
+ "events": [
+  "RESEARCH_AFTERMATH_DERIVED \u2014 counts only, with the packet id.",
+  "RESEARCH_QUESTION_OPENED / _CLOSED \u2014 a standing question and what answered it.",
+  "BELIEF_UPDATE_PROPOSED \u2014 never applied by this faculty."
+ ],
+ "modelCalls": [
+  "None in the derivation. Which claims were accepted, which were rejected and why, which fragments were repaired and how many times are all rows.",
+  "One bounded worker pass to phrase a standing question from an audit gap that states a finding without stating a question \u2014 and that pass proposes a question, never a verdict."
+ ],
+ "deterministicValidation": [
+  "A belief-update proposal must cite an accepted claim id that resolves; one citing a rejected or unknown claim is refused whole.",
+  "A standing question must name the packet it came from and the gap or contradiction that is its basis.",
+  "A suggested test must name what result would support and what would challenge the belief, because a test that cannot fail is not one."
+ ],
+ "persistence": [
+  "Three new tables, all append-only, all keyed to the packet they were derived from.",
+  "Nothing writes `russell_knowledge` or `research_claims`. A belief update is a proposal to faculty 4, which owns the world model."
+ ],
+ "runtimeWork": [
+  "One optional work type for the phrasing pass, IDEMPOTENT by the packet and the gap.",
+  "No new bin kind: the existing research family carries it."
+ ],
+ "outputs": [
+  "Belief-update proposals, with the accepted claims that justify them.",
+  "Standing questions that outlive the packet that raised them.",
+  "Suggested experiments or simulations, each with its expected and disconfirming result.",
+  "A per-packet retrospective: which fragments were worth running, measured against whether their claims were cited in the synthesis."
+ ],
+ "feedback": [
+  "The retrospective is the input to the faculty's own second evaluation requirement, and is what makes the first one measurable at all.",
+  "A standing question answered by a later packet closes with the claim that answered it, which is the loop `replan.ts` runs inside one packet, extended past its boundary."
+ ]
+}

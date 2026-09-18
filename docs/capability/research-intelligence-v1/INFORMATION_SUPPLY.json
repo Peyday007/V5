@@ -1,0 +1,60 @@
+{
+ "required": [
+  {
+   "information": "Which claims a packet accepted and which it rejected, and why",
+   "source": "`research_claims` and the gate's recorded rejection reasons",
+   "acquisition": "a query; already written by `gateFragment`",
+   "type": "row",
+   "freshness": "immutable once the packet is terminal",
+   "permissions": "project-scoped, read through the existing repositories",
+   "reliability": "authoritative \u2014 the gate wrote them",
+   "transformation": "none",
+   "gaps": "none"
+  },
+  {
+   "information": "Which claims the synthesis actually cited",
+   "source": "the filed document's cited claim ids, recorded by `brain_submit_synthesis`",
+   "acquisition": "a query",
+   "type": "row",
+   "freshness": "immutable",
+   "permissions": "project-scoped",
+   "reliability": "authoritative",
+   "transformation": "joined against the fragment each claim belongs to, which is what turns it into a per-fragment verdict",
+   "gaps": "a packet that filed nothing has no citation set; its retrospective is the fragments' own outcomes and says so"
+  },
+  {
+   "information": "What the judge said was still missing",
+   "source": "`audit_gaps`",
+   "acquisition": "a query",
+   "type": "row",
+   "freshness": "immutable once the round is settled",
+   "permissions": "project-scoped",
+   "reliability": "authoritative for the classification; the prose is the judge's",
+   "transformation": "a gap whose classification may keep research open becomes a candidate standing question",
+   "gaps": "a finding that states no question needs one phrased, which is the single bounded worker pass in the topology"
+  },
+  {
+   "information": "Which claims are in contradiction, and of what kind",
+   "source": "`research_claims.contradiction_state` and `services/research/contradictions.ts`",
+   "acquisition": "a query",
+   "type": "row",
+   "freshness": "changes when new evidence arrives",
+   "permissions": "project-scoped",
+   "reliability": "authoritative",
+   "transformation": "a genuine contradiction \u2014 not a scope, timeframe, geography or population difference \u2014 becomes a standing question",
+   "gaps": "none: the classification already exists and nothing reads it for this purpose"
+  },
+  {
+   "information": "How many attempts a fragment took and which strategies were tried",
+   "source": "`research_fragments` attempt history and `services/research/repair.ts`",
+   "acquisition": "a query",
+   "type": "row",
+   "freshness": "immutable",
+   "permissions": "project-scoped",
+   "reliability": "authoritative",
+   "transformation": "joined against whether the fragment was ultimately cited, which is the retrospective's whole signal",
+   "gaps": "none"
+  }
+ ],
+ "note": "Every input is a row this Brain already writes. That is the finding, not a convenience: the faculty's missing half needs no new evidence and no new external access, only a reader of what the runs already recorded."
+}
