@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 067. See that file for why a member
+-- The Postgres half of SQLite migration 068. See that file for why a member
 -- must be able to ask for their own connector link, why a connection has to be
 -- revocable and reconnectable, and why a surface bound to somebody else's
 -- worker needs a name rather than a silent CONFIGURED.

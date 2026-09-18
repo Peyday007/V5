@@ -34,7 +34,7 @@
 --
 -- `state` carries a CHECK, deliberately — §32's rule that a status a caller
 -- could write is a status a caller could claim — and SQLite cannot relax one in
--- place. So the table is rebuilt, and it carries the 067 marker for the reason
+-- place. So the table is rebuilt, and it carries the rebuild marker for the reason
 -- §32 records: `PRAGMA foreign_keys` is a documented no-op *inside* a
 -- transaction, which is where every migration runs, so the standard recipe's
 -- `OFF` does nothing and the drop cascades. Nothing references this table
