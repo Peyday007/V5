@@ -431,10 +431,34 @@ function record(
  * `deferredBy` — a decision an owner made, with who, when and where it is
  * recorded. Nothing here constructs one.
  */
+/**
+ * What *kind* of thing answered a condition.
+ *
+ * Four answers, because they are four different claims and the difference is
+ * the one this reporter is most often asked to blur:
+ *
+ * - `TREE` — the mechanism is **implemented**, read out of the repository. It
+ *   says a runner exists and says nothing about it having run.
+ * - `EXERCISED` — this run **drove it**, through the real services against an
+ *   isolated database it created and deleted. No worker, no network, no
+ *   provider.
+ * - `FLEET` — only a real Brain's rows can answer it: a worker arrived, a fire
+ *   was traced, a site delivered, a person read a screen on a deployment.
+ * - `PERSON` — a decision somebody has to take. Not a run anywhere.
+ *
+ * It is on the record rather than in the prose beside it, because *"the reader
+ * and the runner exist"* and *"the measurement happened"* are exactly the two
+ * sentences that read alike in a summary and mean opposite things. A reader
+ * that has to infer which one it is looking at will eventually infer wrongly.
+ */
+type EvidenceKind = 'TREE' | 'EXERCISED' | 'FLEET' | 'PERSON';
+
 interface GateCondition {
   name: string;
   held: boolean | null;
   saw: string;
+  /** Filled in by `recordConditions` where a helper did not set it. */
+  evidence?: EvidenceKind;
   needs?: Environment;
   /**
    * Not unexercisable and not standing: **waiting on somebody**.
@@ -525,18 +549,25 @@ function liveRow(
 
 function fromCheckout(name: string, held: boolean, saw: string): GateCondition {
   return REPO_VISIBLE
-    ? { name, held, saw }
-    : { name, held: null, saw: 'this run cannot see the repository', needs: 'CHECKOUT' };
+    ? { name, held, saw, evidence: 'TREE' }
+    : {
+        name,
+        held: null,
+        saw: 'this run cannot see the repository',
+        needs: 'CHECKOUT',
+        evidence: 'TREE',
+      };
 }
 
 function fromProduction(name: string, held: boolean, saw: string): GateCondition {
   return READING_PRODUCTION
-    ? { name, held, saw }
+    ? { name, held, saw, evidence: 'FLEET' }
     : {
         name,
         held: null,
         saw: 'this run does not read the deployed Brain',
         needs: 'PRODUCTION',
+        evidence: 'FLEET',
       };
 }
 
@@ -588,6 +619,17 @@ function recordConditions(
   conditions: GateCondition[],
   lede: string,
 ): void {
+  /*
+   * Anything a helper did not stamp is one of the two remaining kinds, and
+   * which one is decided by the condition itself rather than by a guess: a
+   * condition waiting on somebody is a decision, and everything else in this
+   * file is something this run drove against its own scratch database.
+   */
+  for (const condition of conditions) {
+    if (condition.evidence === undefined) {
+      condition.evidence = condition.awaits !== undefined ? 'PERSON' : 'EXERCISED';
+    }
+  }
   const verdict = verdictOf(conditions);
   const broke = conditions.filter((c) => c.held === false);
   const waiting = conditions.filter(

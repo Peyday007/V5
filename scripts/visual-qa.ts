@@ -388,6 +388,21 @@ const MUST_REACH = [
   'Search',
   'Build',
   'Connected sites',
+  /*
+   * Cash, People & capacity and Your devices arrived on another branch, and
+   * this list predated them.
+   *
+   * That is how the defect this probe exists for comes back. `Sign out` was
+   * reachable in React and painted over by a stylesheet at exactly one width,
+   * and no test of either half could see it; what found it was asking every
+   * chrome control `document.elementFromPoint` at its own centre. A list that
+   * does not name a control cannot ask about it — so three destinations a
+   * person can reach today were, until this line, outside the only check that
+   * would notice if they stopped being reachable tomorrow.
+   */
+  'Cash',
+  'People & capacity',
+  'Your devices',
   'Normal',
   'Interested',
   'Technical',

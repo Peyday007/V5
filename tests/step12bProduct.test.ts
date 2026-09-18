@@ -3133,14 +3133,28 @@ describe('a condition keeps its name whichever environment answered it', () => {
       expect(start, `${helper} is missing`).toBeGreaterThan(-1);
       const body = reporter.slice(start, reporter.indexOf('\n}', start)).replace(/\s+/g, ' ');
       /*
-       * The name is passed straight through in both arms; only `held` and
-       * `saw` differ. Whitespace is collapsed first because the two helpers
-       * are formatted differently — one fits on a line and one does not — and
-       * a test that depended on that would be pinning the formatter rather
-       * than the property.
+       * The name is passed straight through in both arms; only the *answer*
+       * differs. Whitespace is collapsed first because the two helpers are
+       * formatted differently — one fits on a line and one does not — and a
+       * test that depended on that would be pinning the formatter rather than
+       * the property.
+       *
+       * **It was `toContain('? { name, held, saw }')`, which pinned the
+       * formatter after all** — the closing brace made it a claim about the
+       * exact field list, so adding a constant that is identical in both arms
+       * failed it. `evidence` is such a field: `fromCheckout` stamps `TREE` on
+       * both arms and `fromProduction` stamps `FLEET` on both, which is
+       * precisely the shape this test exists to *allow*. What it must refuse
+       * is a helper that renames the condition or moves the name between
+       * arms, because the combiner joins the two readings by name and a
+       * renamed condition silently becomes two.
        */
-      expect(body).toContain('? { name, held, saw }');
+      expect(body).toMatch(/\? \{ name, held, saw[,}]/);
       expect(body).toMatch(/: \{ name, held: null,/);
+      // Passed through as shorthand in both arms, never rewritten — asked of
+      // what the helper *returns*, since its own signature declares `name:
+      // string` and matching that would be reading the parameter list.
+      expect(body.slice(body.indexOf('return'))).not.toMatch(/name:\s/);
     }
   });
 
