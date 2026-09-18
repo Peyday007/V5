@@ -49,7 +49,7 @@ hostname; `BOTH` means both.
 
 | # | Requirement | Evidence | Result |
 |---|---|---|---|
-| 1 | One MCP endpoint, `POST /mcp`, answering JSON-RPC | BOTH — *answers POST at exactly one path* | **PASS** |
+| 1 | One MCP endpoint, `POST /mcp`, answering JSON-RPC | BOTH — *answers POST at the canonical path* (named *answers POST at exactly one path* when this was recorded; renamed, with nothing it asserts changed, when `/mcp/factory` became a second **name** for the same endpoint — see `docs/MCP.md` §1a) | **PASS** |
 | 2 | `GET` refused with `405`, because this revision removed the GET stream | BOTH — *refuses GET with 405* | **PASS** |
 | 3 | `DELETE` refused with `405`, because sessions went with it | AUTOMATED — *refuses DELETE with 405* | **PASS** |
 | 4 | Reachable through the optional outer shared-token gate | AUTOMATED — *is reachable through the outer shared-token gate* | **PASS** |

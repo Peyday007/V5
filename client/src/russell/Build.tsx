@@ -221,6 +221,22 @@ function Repositories({
                 {repo.surfaces.join(', ')}.
               </p>
             ) : null}
+            {repo.readiness === 'AWAITING_SURFACE' ? (
+              /*
+               * The exact URL, composed here rather than on the server.
+               *
+               * Brain does not know its own public address without a request,
+               * and a guessed one in a setup instruction is worse than none —
+               * this page is *served* from that address, so it can say it
+               * exactly. The path is a constant from the server, and it grants
+               * nothing: the worker approved on the consent screen is what
+               * decides what the connection can do.
+               */
+              <p className="rs-hint">
+                Connector URL:{' '}
+                <code>{`${window.location.origin}${repo.connectorPath}`}</code>
+              </p>
+            ) : null}
             {repo.remaining.length > 0 ? (
               <ol className="rs-repo-remaining">
                 {repo.remaining.map((step) => (

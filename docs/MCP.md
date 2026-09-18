@@ -4,10 +4,61 @@ Brain speaks the Model Context Protocol at one endpoint, `POST /mcp`, so that a
 worker somewhere else can read project state and operate the durable work queue
 without holding anything but a Brain worker credential.
 
+It answers that one endpoint at **more than one path** — see §1a — and the
+distinction that matters is in that sentence: more than one path, one endpoint.
+
 This document is the design and the reasoning. `docs/STEP-7-EVIDENCE.md` is what
 was actually proven.
 
 ---
+
+## 1a. One endpoint, more than one path
+
+`MCP_PATHS` in `server/mcp/endpoint.ts` is the list, canonical first:
+
+| Path | Who points at it |
+|---|---|
+| `/mcp` | everything, and the research connector |
+| `/mcp/factory` | the Software Factory connector |
+
+**This is not a second endpoint and must never become one.** The same router is
+mounted at each: same authentication, same origin rule, same limits, same eras,
+same tool registry, same `services/identity/policy.ts`. The path selects no
+worker, no project, no repository and no scope, and nothing reads it — not
+`execute.ts`, not `tools.ts`, not the policy module, not
+`services/bins/routing.ts`. **A URL must not grant authority by itself**: the
+authenticated credential is what says who the caller is, and that credential is
+decided at the consent screen by a person choosing a worker.
+
+The reason there is a second path at all is a fact about the client rather than
+about Brain. **Claude keys its connector registry by URL** and refuses a second
+custom connector at a URL an existing one already holds — *"A connector with
+this URL already exists in your organization"* — with no other field on that
+screen able to tell two connections apart. A Brain whose research connector sits
+at `/mcp` therefore cannot be connected a second time there, however correct its
+credential design is. So the second path is a **name**, and it is nothing else.
+
+Three properties keep it that way, and `tests/mcpConnectorPaths.test.ts` asserts
+each against a real server process:
+
+- **The set is closed.** A constant, not a free-form label — so the discovery
+  documents echo nothing a caller supplied, and an unregistered sibling like
+  `/mcp/research` is an ordinary 404 rather than a working door.
+- **A refusal is byte-identical at every path.** Invariant 23 at a new boundary:
+  the extra door is not an oracle.
+- **Discovery resolves for each.** RFC 9728 puts the metadata for a resource
+  with a path under that path, so every mounted path publishes its own
+  `/.well-known/oauth-protected-resource<path>` document and the `401`'s
+  `WWW-Authenticate` names the one for the door that was actually addressed.
+  They differ in `resource` and in nothing else: one authorization server, one
+  consent flow, one refresh grant. A door with no metadata document is a
+  connector that cannot discover where to authenticate, which is a failure with
+  no message in it.
+
+The `resource` a client passes is recorded on the token and is deliberately
+**not** enforced at the endpoint. A token minted through either connector works
+at either path, which is the same statement as "the path grants nothing" read in
+the other direction.
 
 ## 1. Two protocol eras, one endpoint
 
@@ -289,8 +340,9 @@ on every reconnect and lists on every startup.
 
 ## 9. Connecting a client
 
-The endpoint is `https://<host>/mcp`. A client needs one thing: a Brain worker
-credential, as a bearer token.
+The endpoint is `https://<host>/mcp`, or `https://<host>/mcp/factory`, which is
+the same endpoint under a second name (§1a). A client needs one thing: a Brain
+worker credential, as a bearer token — the path it used contributes nothing.
 
 ```
 POST /mcp

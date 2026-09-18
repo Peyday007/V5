@@ -51,6 +51,7 @@
  * repository that is not in the envelope cannot be onboarded here however the
  * request is spelled.
  */
+import { FACTORY_MCP_PATH, MCP_PATH } from '../../mcp/endpoint.ts';
 import { REPOSITORY_ENVELOPE_ID, decideRepository, listRepositoryGrants } from './repositoryEnvelope.ts';
 import type { RepositoryGrant } from './repositoryEnvelope.ts';
 import {
@@ -128,6 +129,15 @@ export interface RepositoryOnboarding {
   routedRepositories: string[];
   /** Enabled Routines whose worker is this one. Names only; never a secret. */
   surfaces: string[];
+  /**
+   * The endpoint path a factory connector is pointed at, as a constant.
+   *
+   * A path rather than a URL, because Brain does not know its own public
+   * address without a request and a guessed one is worse than none: the surface
+   * that renders this is served from that address and can say it exactly. It
+   * authorizes nothing — see `FACTORY_MCP_PATH`.
+   */
+  connectorPath: string;
   readiness: RepositoryReadiness;
   /** What a person still has to do, in the order they have to do it. */
   remaining: string[];
@@ -167,20 +177,43 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
  * The two steps Brain cannot take, in the order they have to happen, and worded
  * so that neither has a value left to invent.
  *
- * The ordering in the first one is the whole of it: the invitation sets a cookie
- * in the browser that opens it, and that cookie is what makes the consent screen
- * offer *this* worker instead of a list. Connect first and a person is asked to
- * choose, which is the one place this flow can go quietly wrong.
+ * The ordering in the first one still matters: the invitation sets a cookie in
+ * the browser that opens it, and that cookie is what lets the consent screen
+ * name *this* worker.
+ *
+ * **The URL matters for a reason that is nothing to do with authority.** Claude
+ * keys its connector registry by URL and refuses a second connector at one an
+ * existing connector already holds, so a Brain whose research connector is at
+ * `/mcp` cannot have a factory connector there too. `FACTORY_MCP_PATH` is the
+ * same endpoint under a second name, and it decides nothing: the credential the
+ * connection ends up holding is what says which worker this is.
+ *
+ * **And the old wording was wrong about the list.** It said a chooser meant the
+ * link had not been opened in that browser. It does not: `/oauth/authorize`
+ * checks for a signed-in administrator *before* it looks for an invitation, so
+ * anybody signed in to this Brain gets the chooser with or without one — which
+ * is the ordinary case for the person who just pressed Onboard. The chooser
+ * names the held invitation and preselects its worker, and connecting from
+ * there is correct and does not spend the invitation. Sending that person back
+ * to re-open a link that was working is the shape this file keeps having to
+ * correct: a remedy for a condition that was never true.
  *
  * The second names both capabilities rather than "the capabilities", because a
  * surface that can read but not push produces a campaign that plans and then
  * reports an honest blocker for ever.
  */
-const CONNECTOR_STEP =
-  'Open the invitation link below in the browser you will authorise from — first, before ' +
-  'anything else — then in Claude add a connector to this Brain’s /mcp endpoint and press ' +
-  'Connect. The consent screen must name this one worker; if it offers you a list, the link ' +
-  'was not opened in that browser.';
+function connectorStep(workerName: string): string {
+  return (
+    'Open the invitation link below in the browser you will authorise from — first, before ' +
+    'anything else — then in Claude add a connector whose URL is this Brain’s address ' +
+    `followed by ${FACTORY_MCP_PATH}, and press Connect. That path is deliberately not the ` +
+    `research connector’s ${MCP_PATH}: Claude will not hold two connectors at one URL, and ` +
+    'the path itself grants nothing — the worker you approve is what decides what the ' +
+    `connection can do. Approve as ${workerName}. If you are signed in to Brain you will be ` +
+    'offered a list with that worker already chosen, which is correct — it is not a sign ' +
+    'the link was opened in the wrong browser.'
+  );
+}
 const SURFACE_STEP =
   'In Cowork, create a Routine with this repository attached and that connector — and only ' +
   'that connector — enabled, with an API trigger and no schedule. Put its trigger token in the ' +
@@ -281,7 +314,7 @@ async function describeGrant(
     remaining.push('Onboard this repository, which registers a worker for it and issues one invitation.');
   }
   if (registered && surfaces.length === 0) {
-    remaining.push(CONNECTOR_STEP, SURFACE_STEP);
+    remaining.push(connectorStep(workerName), SURFACE_STEP);
   }
 
   return {
@@ -297,6 +330,7 @@ async function describeGrant(
     routedFamilies,
     routedRepositories,
     surfaces,
+    connectorPath: FACTORY_MCP_PATH,
     readiness,
     remaining,
     waiting: readiness === 'READY' ? 0 : await waitingFor(projectId, repositoryId),

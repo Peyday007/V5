@@ -35,6 +35,62 @@ import { idOf, looksModern, validateModernRequest } from './validate.ts';
 
 export const MCP_PATH = '/mcp';
 
+/**
+ * The factory's door, which is the same door.
+ *
+ * Claude's connector registry is keyed by URL: a second custom connector
+ * pointing at a URL an existing one already uses is refused outright — *"a
+ * connector with this URL already exists in your organization"* — and there is
+ * no field on that screen for anything else that could tell two connections
+ * apart. One Brain therefore cannot be connected twice at one path, however
+ * correct its credential design is. That is a fact about the client, and it is
+ * the whole reason this constant exists.
+ *
+ * So the second path is a **name**, and it is nothing else:
+ *
+ *   - It is served by the identical router. Same authentication, same origin
+ *     rule, same limits, same eras, same tool registry, same policy module.
+ *   - It selects no worker, no project, no repository and no scope. Nothing in
+ *     `execute.ts`, `tools.ts`, `services/identity/policy.ts` or
+ *     `services/bins/routing.ts` reads it, and nothing may start: **the
+ *     authenticated credential decides who the caller is, and a URL must never
+ *     grant authority by itself.** A factory worker that presented its token at
+ *     `/mcp` would get exactly what it gets here, and a research worker that
+ *     presented its token here would get exactly what it gets at `/mcp`.
+ *   - It is a closed set rather than a free-form label, so the discovery
+ *     documents echo nothing a caller supplied and an unregistered path is an
+ *     ordinary 404.
+ *
+ * The audit row and the `WWW-Authenticate` pointer name the path that was
+ * actually addressed, because which door a refused credential arrived at is
+ * worth reading even though it decided nothing.
+ */
+export const FACTORY_MCP_PATH = '/mcp/factory';
+
+/**
+ * Every path the MCP endpoint answers on, canonical first.
+ *
+ * `server/index.ts` mounts the router at each — sorting longest first there, so
+ * the mounting never depends on which routes happen to be declared — and
+ * `wellKnownRouter` publishes protected-resource metadata for each. The order
+ * here is canonical first, because the first entry is what the unsuffixed
+ * metadata document describes and what `pathOf` falls back to.
+ */
+export const MCP_PATHS: readonly string[] = [MCP_PATH, FACTORY_MCP_PATH];
+
+/**
+ * The path this request actually came in on, as one of `MCP_PATHS`.
+ *
+ * `req.baseUrl` is the mount path, which is server configuration rather than
+ * anything the caller chose — but it is compared against the closed set anyway,
+ * so that nothing reflected into an audit row or a header can come from a
+ * request.
+ */
+function pathOf(req: Request): string {
+  const mounted = req.baseUrl;
+  return MCP_PATHS.includes(mounted) ? mounted : MCP_PATH;
+}
+
 /* ------------------------------------------------------------------------ */
 /* Refusals                                                                  */
 /* ------------------------------------------------------------------------ */
@@ -63,7 +119,7 @@ async function auditRefusal(req: Request, reason: DenialReason): Promise<void> {
       actorType: 'ANONYMOUS',
       action: 'MCP_AUTHENTICATE',
       targetType: 'ROUTE',
-      targetId: `POST ${MCP_PATH}`,
+      targetId: `POST ${pathOf(req)}`,
       result: 'DENIED',
       // A category, never what was tried.
       reason,
@@ -255,9 +311,13 @@ export function mcpRouter(): Router {
          * "expired", "revoked" and "unknown" are still the same message.
          */
         const issuer = `${req.protocol}://${req.get('host') ?? 'localhost'}`;
+        // Suffixed with the path this endpoint is mounted at, which is what RFC
+        // 9728 asks of a resource that has one. A connector reaching the factory
+        // door is pointed at the factory door's own metadata; both documents name
+        // the same authorization server, because there is only one.
         res.setHeader(
           'WWW-Authenticate',
-          `Bearer realm="brain", resource_metadata="${issuer}/.well-known/oauth-protected-resource"`,
+          `Bearer realm="brain", resource_metadata="${issuer}/.well-known/oauth-protected-resource${pathOf(req)}"`,
         );
         refuse(res, 401, TRANSPORT_REFUSED, 'Not authorized. Connect through this Brain, or present a worker credential.');
         return;
