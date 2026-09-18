@@ -2475,6 +2475,61 @@ remote.
   the person would never have seen it. A re-read leaves the previous answer up
   until the new one arrives, and the section is keyed by the project so a change
   of project still throws it away.
+- **An instruction that cannot be carried out is a defect in the instruction,
+  and this one could not be carried out past the client's own dialog.** The
+  onboarding step said to add a connector to *"this Brain's /mcp endpoint"* —
+  and Claude keys its connector registry by URL, so a second custom connector at
+  a URL an existing one already holds is refused outright: *"A connector with
+  this URL already exists in your organization."* There is no other field on
+  that screen that could tell two connections apart, so a Brain whose research
+  connector sits at `/mcp` cannot be connected there twice, however correct its
+  credential design is. That is a fact about the client, and the remedy has to
+  be one too.
+
+  So `/mcp/factory` is a second **name** for one endpoint, and the whole of its
+  safety is that it is nothing else. The same router is mounted at each path,
+  behind the same authentication, origin rule, limits, eras, tool registry and
+  `services/identity/policy.ts`; the path selects no worker, project, repository
+  or scope, and nothing reads it — not the executor, not the policy module, not
+  `services/bins/routing.ts`. **A URL must not grant authority by itself**: the
+  authenticated credential says who the caller is, and a person choosing a
+  worker on the consent screen is what decides that credential. The `resource` a
+  client passes is recorded on the token and deliberately not enforced, which is
+  the same statement read the other way — a token minted through either
+  connector works at either door.
+
+  The set is a **constant** rather than a free-form label, so the discovery
+  documents echo nothing a caller supplied and an unregistered sibling is an
+  ordinary 404; a refusal is **byte-identical** at every path, because an extra
+  door that answered differently would be an oracle (invariant 23 at a new
+  boundary); and every mounted path publishes its own
+  `/.well-known/oauth-protected-resource<path>` document with the `401` naming
+  the door actually addressed, because RFC 9728 puts it there and a connector
+  with nothing to discover fails with no message in it. They differ in
+  `resource` and in nothing else: one authorization server, one consent flow,
+  one refresh grant. Nothing about the research connector, its credential, its
+  worker or its routing was touched.
+
+- **"If it offers you a list, the link was opened in the wrong browser" was
+  false, and it sent people to fix a condition that did not exist.**
+  `/oauth/authorize` looks for a signed-in administrator **before** it looks for
+  an invitation, and that ordering is correct rather than a bug: an invitation
+  *stands in for* an administrator's approval, so folding the two together would
+  be the thing `invitedApproval` warns against, and it would also stop an
+  administrator connecting a worker their browser happens to hold a stale
+  invitation for. Which means the person who has just pressed **Onboard** —
+  signed in, by definition — sees the chooser every single time.
+
+  The defect was the silence, so the fix is words rather than authority. The
+  screen reads the held invitation purely to **name it and preselect its
+  worker**, the invitation is **not spent** on that path, and the administrator's
+  own authority is still what the approval runs on; the invited path, where the
+  posted worker id is checked against the invitation and a mismatch refused
+  outright, is untouched. `tests/oauth.test.ts` pins both halves — display only,
+  and still live afterwards. **A remedy for a condition that was never true is
+  worse than no remedy**: it teaches a person that the thing in front of them is
+  broken when it is working.
+
 - **A stage becomes fireable when something makes it fireable, not on the hour.**
   A factory bin's completion advances **its own** campaign and dispatches what
   that created, and the twenty-second remote loop dispatches what it created too.
