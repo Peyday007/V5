@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 068. See that file for why a definition
+-- The Postgres half of SQLite migration 069. See that file for why a definition
 -- is never an implementation, why nothing canonical arrives without passing
 -- through a candidate, and why every canonical statement traces to the source.
 --
