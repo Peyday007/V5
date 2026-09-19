@@ -44,6 +44,7 @@ import { getApprovalEnvelope } from '../research/approvalEnvelope.ts';
 import { ensureDiscoveryAuthority, withdrawDiscoveryAuthority } from './discoveryAuthority.ts';
 import { opportunitiesForCandidate } from '../../repos/cashPortfolio.ts';
 import { roundForCandidate } from '../../repos/cashDiscovery.ts';
+import { industryRoundForCandidate } from '../../repos/industry.ts';
 import type {
   CashMode,
   CashModeState,
@@ -427,6 +428,25 @@ export async function launchableUnderCashMode(input: {
    * what made that possible.** `cash_discovery_rounds` is the statement.
    */
   if (await roundForCandidate(input.candidateId)) return false;
+
+  /*
+   * And a kernel question is discovery work for the same reason.
+   *
+   * Mapping a subject and searching one for openings are both *new* discovery:
+   * they start work that spends the allowance to learn something the sprint
+   * does not yet know. Classified by a row that says so — `industry_rounds` —
+   * rather than inferred from the absence of another table's, which is exactly
+   * how the buckets sailed through this guard before `cash_discovery_rounds`
+   * existed.
+   *
+   * A CAPITAL round is here too, and that is the one worth arguing about: it
+   * is about an opening the sprint already holds, so it looks like support
+   * work. It is not. It starts a fresh research packet to learn something new,
+   * and a person who has wound a sprint down has said to stop doing that.
+   * Every obligation already entered into — delivering, collecting, settling —
+   * runs on, because none of those is a research launch.
+   */
+  if (await industryRoundForCandidate(input.candidateId)) return false;
 
   const linked = await opportunitiesForCandidate(input.candidateId);
   if (linked.length === 0) return true;

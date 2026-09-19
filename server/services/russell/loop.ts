@@ -134,6 +134,7 @@ import { parseJson } from '../../repos/util.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
+import { runIndustryKernel } from '../industry/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -369,6 +370,23 @@ export interface TickReport {
    * itself, where the note says which it was — the distinction is the point,
    * so it must not be flattened into "it ran".
    */
+  /**
+   * What the industry kernel did: which questions it opened and why, and what
+   * the finished ones added to the map.
+   *
+   * `why` travels with the round because the allocator is a pure function over
+   * a snapshot that has since moved — `services/dispatch/router.ts`' promise,
+   * kept: "why did Brain research this" resolves to a sentence written when it
+   * was decided rather than to a re-run against a different database.
+   */
+  industryKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    subjects: string[];
+    constraints: string[];
+    capital: string[];
+    settled: string[];
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -449,6 +467,7 @@ const EMPTY: TickReport = {
   frontier: [],
   lensInquiries: { dispatched: 0, settled: 0 },
   cashDiscovery: [],
+  industryKernel: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -522,6 +541,7 @@ export async function tick(owner: string): Promise<TickReport> {
     },
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
+    industryKernel: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -1054,6 +1074,55 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a sprint whose discovery could not run is left as it was */
+      }
+
+      try {
+        /*
+         * And the axis the ten buckets never had: *where* to look.
+         *
+         * The buckets are ten mechanisms — who published a paid request, where
+         * one deliverable has two prices, who has sold more than they can
+         * deliver — and not one of them says which part of the economy to ask.
+         * So production discovery searched an undifferentiated one: thirty-one
+         * openings across transcription, stock photography, ticket resale,
+         * sneakers and domains, with nothing saying which industries Brain had
+         * looked at or what lived underneath any of them.
+         *
+         * Its own `try`, for the reason the block below has one: a kernel pass
+         * that threw must not stop a sprint settling a need or harvesting what
+         * already ran. It is derived from rows on every tick, so a sprint that
+         * predates it gets a map with nobody pressing anything, and it is
+         * bounded by how many questions may be open at once rather than by any
+         * lifetime count — §24's correction, which this kernel does not undo.
+         *
+         * Nothing it creates bypasses anything. A kernel round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does.
+         */
+        const kernel = await runIndustryKernel(project.id);
+        if (
+          kernel.opened.length > 0 ||
+          kernel.absorbed.nodes.length > 0 ||
+          kernel.absorbed.constraints.length > 0 ||
+          kernel.absorbed.capital.length > 0 ||
+          kernel.absorbed.settled.length > 0
+        ) {
+          report.industryKernel.push({
+            projectId: project.id,
+            opened: kernel.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            subjects: kernel.absorbed.nodes.map((one) => one.id),
+            constraints: kernel.absorbed.constraints.map((one) => one.id),
+            capital: kernel.absorbed.capital.map((one) => one.id),
+            settled: kernel.absorbed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a map that could not be advanced is left exactly as it was */
       }
 
       try {

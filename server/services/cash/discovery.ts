@@ -82,6 +82,7 @@ import {
   openRound,
   openRoundsByCandidate,
 } from '../../repos/cashDiscovery.ts';
+import { openIndustryRoundsByCandidate } from '../../repos/industry.ts';
 import { getClaim, signalledClaims } from '../../repos/research.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
 import { mechanismForSignal } from '../../domain/opportunitySignals.ts';
@@ -492,11 +493,22 @@ export async function harvest(input: {
    * asked a bucket for it.
    */
   const live = await liveRounds(input.projectId);
+  /*
+   * And which *subject* each live kernel scan is about.
+   *
+   * A scan round is the same ten mechanism questions with a scope at last, so
+   * its openings belong to the subject it asked about. Read from the round
+   * rather than derived from the opening's title, which would be a guess
+   * wearing a foreign key — §25's defect, at the column that decides which
+   * industry Brain believes something is in.
+   */
+  const kernelByCandidate = await openIndustryRoundsByCandidate(input.projectId);
   const missions = await listMissions({ projectId: input.projectId });
   const roundByOrchestration = new Map<
     string,
     { round: CashDiscoveryRound; bucket: SearchBucket; missionDone: boolean }
   >();
+  const nodeByOrchestration = new Map<string, string>();
   const missionByOrchestration = new Map<string, string>();
   for (const mission of missions) {
     if (!mission.orchestrationId) continue;
@@ -508,6 +520,10 @@ export async function harvest(input: {
         ...entry,
         missionDone: mission.state === 'DONE',
       });
+    }
+    const kernel = kernelByCandidate.get(mission.candidateId);
+    if (kernel && kernel.purpose === 'SCAN' && kernel.nodeId) {
+      nodeByOrchestration.set(mission.orchestrationId, kernel.nodeId);
     }
   }
 
@@ -558,6 +574,10 @@ export async function harvest(input: {
       currency: mode.currency,
       source: claim.sourcePublisher ?? claim.sourceTitle ?? claim.sourceUrl,
       discoveredByCandidateId: context ? context.round.candidateId : null,
+      // The subject whose scan found it, where a kernel scan did. Null where
+      // the question was not about one — an un-scoped bucket, or a packet an
+      // administrator started — which is honest rather than a gap.
+      industryNodeId: nodeByOrchestration.get(entry.orchestrationId) ?? null,
       sourceClaimId: claim.id,
       // The rest of the chain, written here and never inferred later: which
       // packet established this, under which fragment's question, in which

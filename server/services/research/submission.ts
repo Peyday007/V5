@@ -101,6 +101,19 @@ export async function recordFragmentClaims(input: {
         evidenceLocator: claim.evidenceLocator ?? null,
         evidenceLane: claim.evidenceLane ?? null,
         opportunitySignal: claim.opportunitySignal ?? null,
+        /*
+         * The structural declaration travels whole or not at all.
+         *
+         * Four fields that only mean anything together: a restructuring
+         * without its qualifier reduces nothing, and an amount without its
+         * finding belongs to no requirement. Carrying three of four here is
+         * the shape of defect §33 records at `applyValidationAnswers` — the
+         * fact reached one reader and not the other, and both looked healthy.
+         */
+        structuralFinding: claim.structuralFinding ?? null,
+        structuralSubject: claim.structuralSubject ?? null,
+        structuralQualifier: claim.structuralQualifier ?? null,
+        structuralAmountCents: claim.structuralAmountCents ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though
