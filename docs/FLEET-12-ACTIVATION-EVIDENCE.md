@@ -85,14 +85,105 @@ a credential: Caleb 3-A/3-B. Absent entirely: Airyn ×4.
 
 ---
 
-## Current phase
+## Phase 2 — six fresh pinned probes, and what they found
 
-Phase 1 — targets, then fresh pinned probes on the six provable surfaces.
+One probe per provable surface, created by `fleet verify-surface --ref … --probe`
+between 08:50:25Z and 08:53:29Z. Each carries its own nonce (`createProbeBin`
+stamps `new Date().toISOString()` into the manifest unit's input), belongs to no
+campaign, and forbids every external effect.
 
-## Next executable action
+| Surface | Probe bin | What happened |
+| --- | --- | --- |
+| Brain Research A | `bin_94a474cb442544ee85d0` | fired 08:50:33.784Z, session `cse_01Ua47ZP4RFB6K4N2TWrKX5N`, **COMPLETE** |
+| Brain Research 1-B | `bin_2b38a27698094e238b16` | fired 08:51:13.616Z, session `cse_01QdhMUPWWFRvriFpcA47wdr`, **COMPLETE** |
+| Brain Research 1-C | `bin_8b0e06410d6d4bf1a199` | fired 08:51:53.483Z, session `cse_01NHKxvEWmtqBAvNxuLWcr1t`, **COMPLETE** |
+| Brain Research 1-D | `bin_16c5e13d832a44cfb7f7` | **never fired.** Claimed by 1-C's session — see below |
+| Caleb 3-C | `bin_f2eec76c517943d5bdf0` | fired 08:52:52Z → provider `AUTH 401`, surface quarantined |
+| Caleb 3-D | `bin_09b669a94726494da139` | fired 08:53:32Z → provider `AUTH 401`, surface quarantined |
 
-`fleet verify-surface --ref trig_01CBLu5oCZziEwznw5q9xU7g --probe`, then the same
-for `trig_01TT7u3m4T6JW14vjwsK9qHm`, `trig_01QbxS8dWTcqV3zoEhx9wBen`,
-`trig_015aYoUwidycXymZ2xxWBC5B`, `trig_016yNPUw8BpoiYa5S8tU3bG3`,
-`trig_01YAGrc58yyaYXHh4Zpfrvzt`; capture each probe's bin id and prove it with
-`step10 trace <bin>`.
+### Caleb: all four secrets are wrong, and now all four are proven wrong
+
+3-A and 3-B had 401'd overnight. 3-C and 3-D had **never been fired in their
+lives** (`fires=0`), so nothing had ever tested them. These two probes did, and
+the provider refused both in the same words:
+
+```
+Caleb 3-C  row written 2026-09-19T08:52:52.685Z
+  AUTH: 401 {"error":{"message":"Token is not authorized for this routine",
+             "type":"authentication_error"},"request_id":"req_011CfCWoygitxXsnxBrRiUNU"}
+Caleb 3-D  row written 2026-09-19T08:53:32.722Z
+  … "request_id":"req_011CfCWrvrA7bYjiFNSy3ZjS"
+```
+
+So the reading is no longer "two of Caleb's surfaces are broken". It is **all
+four of Caleb's deployment secrets hold a token that is not authorized for the
+trigger it is registered against.** Brain did the right thing four times: fired
+once, quarantined by name at the first `AUTH`, recorded the provider's own
+words, and spent nothing further.
+
+Not a Brain defect and not repairable from here. `calebworker1` holds 46 minted
+OAuth tokens of which 23 have been used, so Caleb's *connector* authenticates
+to Brain perfectly well — it is the four *trigger* tokens Brain fires **with**
+that are wrong. Correcting one means holding its value, and a Routine's token
+is only visible in the Claude account that owns it.
+
+### The defect: a pin bounded the fire and not the claim
+
+`step10 trace bin_16c5e13d832a44cfb7f7`:
+
+```
+BIN bin_16c5e13d832a44cfb7f7  COMPLETE  gen 2
+  title      Surface self-test for Brain Research 1-D
+  ready      2026-09-19T08:52:20.721Z
+  completed  2026-09-19T08:52:30.532Z
+  terminal   DETERMINISTIC_UNITS_V1 v1 evaluated true.
+
+  DISPATCH
+                            <- empty
+  EVENTS
+    08:52:22.159Z  BIN_ASSIGNED  worker wkr_1cdd82cfb2a54faf8edd
+                                 session claude-code-session_01NHKxvEWmtqBAvNxuLWcr1t
+```
+
+`cse_01NHKxvEWmtqBAvNxuLWcr1t` is the session Brain fired at **1-C** at
+08:51:53. It finished its own probe, checked in again, and was handed 1-D's —
+1.4 seconds after that bin went READY and before the dispatcher's next tick
+could fire 1-D at all.
+
+`bins.pinned_routine_id` was read by `routeBin` and by nothing else:
+`assignNextBin` never consulted it. So on an account whose four Routines share
+one Claude connector, a pinned probe is taken by whichever sibling is awake.
+And because `proveSurface` reads the sessions `creditDispatchArrival`
+attributed to *that Routine's own* dispatches, the substituted probe leaves the
+pinned surface's chain open for ever — which is exactly why 1-B and 1-D read
+**35 fires, arrivals, and no closed chain** while being perfectly healthy.
+
+Fixed in this branch; see the entry under Phase 3.
+
+## Phase 3 — the durable fix
+
+`server/domain/sessionRef.ts` + a guard in `assignNextBin`: a pinned bin is
+offered only to the session Brain actually fired at that Routine, read from
+`bin_dispatch`. Fails closed, restrictive only, skipped ahead of the accounting
+so a refusal costs no attempt. `tests/pinnedProbeClaim.test.ts` reproduces the
+production sequence; five of its nine assertions were run against a neutered
+guard first, and failed.
+
+## Phase 4 — the overnight backlog
+
+`admin research start`, one packet and one bin per `SEARCH_BUCKET`, auto-
+approved inside `RUSSELL_CASH_DISCOVERY_V1`, attributed to
+`rosserpeyton@gmail.com`.
+
+| Project | Layer | Result |
+| --- | --- | --- |
+| `cash-mode-2` | `lyr_fb5743c000d045059555` | 10 started, 0 repaired |
+| `cash-mode-3` | `lyr_f6f526f93fe34f0db759` | 10 started, 0 repaired |
+| `cash-mode-4` | `lyr_…` (created in the same run) | 10 started, 0 repaired |
+
+**Thirty substantive research bins**, none overlapping another: ten bounded
+questions per operation, and the three operations are separate private projects.
+
+Each bin carries a bounded discovery question, published-source-only evidence
+requirements, its own orchestration, and prohibitions on buying, contacting,
+advertising and paid overage.
