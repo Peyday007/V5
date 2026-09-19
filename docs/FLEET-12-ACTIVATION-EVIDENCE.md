@@ -11,14 +11,13 @@ production row, a workflow run, or a timestamp taken from one. Where something
 is not known it says so; where it is blocked on a person it names the person and
 the exact action.
 
-**Where it stands, as at 2026-09-19T17:09Z.** Eight surfaces registered, seven
-individually VERIFIED, one more that has demonstrably run and completed work
-without its chain being attributable yet, and four not registered at all.
+**Where it stands, as at 2026-09-19T18:14Z.** Eight surfaces registered and
+**all eight individually VERIFIED**. Four more are not registered at all.
 
 | | Registered | Chain closed | What is in the way |
 | --- | --- | --- | --- |
 | Account 1 — `airynworker2` | 4 | **4** | nothing |
-| Caleb — `calebworker1` | 4 | **3** | a clock, not a repair: `worker_sessions` is keyed on a per-connector credential, so one surface can be proved per rotation — measured over three windows, Phases 19 and 20. 3-D needs one window |
+| Caleb — `calebworker1` | 4 | **4** | nothing — proved one per credential window across four windows (Phases 19 to 21) |
 | Airyn | 0 | — | one Brain-side worker identity, which only she can mint, in her own Claude account (Phase 16) |
 
 Two earlier conclusions in this file are **wrong and are corrected in place
@@ -1594,3 +1593,52 @@ window. The pattern Phase 15 could only infer is now a measured series.
 **Seven of twelve individually VERIFIED**: Brain Research A, 1-B, 1-C, 1-D,
 Caleb 3-A, 3-B, 3-C. Caleb 3-D needs one probe in a window of its own, and
 Airyn's four are unchanged — blocked on one worker identity only she can mint.
+
+## Phase 21 — Caleb 3-D closes the account. Eight of twelve.
+
+```
+18:13:04.000  DISPATCH_ROUTED   Selected Caleb 3-D on Caleb: 0/∞ on the Routine, 0/4 on the account.
+18:13:05.040  DISPATCH_SENT     session cse_016LcqRa3Fuijwcisabgz3cT
+18:13:14.346  BIN_ASSIGNED      wkr_1db1193323454ee69bb1  session session_016LcqRa3Fuijwcisabgz3cT
+18:13:27.640  BIN_UNIT_SUBMITTED
+18:13:29.443  BIN_COMPLETION_ACCEPTED   COMPLETE
+```
+
+**35 seconds ready to terminal**, first fire, `FLEET: OK verify-surface
+trig_01YAGrc58yyaYXHh4Zpfrvzt VERIFIED`.
+
+The credential series closes with the count landing exactly where the previous
+three windows predicted it would:
+
+| Window | `oauth` on calebworker1 | Credential that closed the chain | Surface |
+| --- | --- | --- | --- |
+| 15:00Z | 48 minted, 24 used | `oat_d8c4695c841047f2aa30` | 3-A |
+| 16:04Z | 50 minted, 25 used | `oat_49d459502a2d4b9a88e5` | 3-C |
+| 17:09Z | 52 minted, 26 used | `oat_e542824f696248029397` | 3-B |
+| **18:14Z** | **54 minted, 27 used** | **`oat_8286dc53997f4720a1ba`** | **3-D** |
+
+Four windows, four distinct credentials, four closed chains, two tokens minted
+and one used per window, and the fourth reading was **predicted before it was
+taken**. §23 asks for a measurement rather than a projection; this is a
+measurement that also happens to have been a successful prediction, which is
+the strongest form the reading could take.
+
+### All four of Caleb's surfaces are now individually proven
+
+| Surface | Secret it fires with | Chain | Fires to close it |
+| --- | --- | --- | --- |
+| Caleb 3-A | `BRAIN_ROUTINE_TOKEN_CALEB_3_D` | 14:55:24 → 14:55:59, 35.5s | 1 |
+| Caleb 3-B | `BRAIN_ROUTINE_TOKEN_CALEB_3_C` | 17:07:34 → 17:08:08, 42s | 1 |
+| Caleb 3-C | `BRAIN_ROUTINE_TOKEN_CALEB_3_B` | 16:01:54 → 16:02:29, 35s | 3 |
+| Caleb 3-D | `BRAIN_ROUTINE_TOKEN_CALEB_3_A` | 18:13:05 → 18:13:29, 24.5s | 1 |
+
+Every one of those secret names is the *reversed* mapping Phase 13 established.
+So the reconciliation is not merely accepted by the provider — **all four
+repointed pairings have each produced a session that authenticated as
+calebworker1, was handed a bin and completed it.** The claim in Phase 10 that
+these four bearers were invalid and needed a human to regenerate them is
+refuted four times over, by four separate closed chains.
+
+**Eight of twelve individually VERIFIED.** That is every surface that exists.
+The remaining four are Airyn's and are not registered at all, for the one reason
+Phase 16 names.
