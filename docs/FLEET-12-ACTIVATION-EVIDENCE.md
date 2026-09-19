@@ -1110,6 +1110,30 @@ So nothing about Airyn's deployment secrets needs redoing. The four
 `trig_…` references are hers to supply and the four bearers are already in
 place; what is missing is one Brain-side identity for them to be bound to.
 
+### Re-read at 15:04:42Z, and the answer has not changed
+
+`admin workers list`,
+[run 35450657088](https://github.com/Peyday007/V5/actions/runs/35450657088) —
+ten identities, the same ten:
+
+```
+airynworker1                         wkr_80f386d4d53d4679bf1a  ARCHIVED  0 project(s)
+airynworker2                         wkr_1cdd82cfb2a54faf8edd  ACTIVE    8 project(s)
+calebworker1                         wkr_1db1193323454ee69bb1  ACTIVE    3 project(s)
+deal-dispatch                        wkr_02392cb548e14f8e96db  ACTIVE    1 project(s)
+factory-brain                        wkr_f8e118e87fd141689adc  ACTIVE    1 project(s)
+verification-worker                  wkr_60e23daeff4d4da1a966  ACTIVE    1 project(s)
+verification-worker-research         wkr_f3b260bc47f44ea9969e  ACTIVE    1 project(s)
+verification-worker-research-audit-a wkr_f316703921d14060ae2c  ACTIVE    1 project(s)
+verification-worker-research-audit-b wkr_a1b5b1d1cd4c472e8632  ACTIVE    1 project(s)
+verification-worker-rival            wkr_4d80121e6312435aa4f2  ACTIVE    1 project(s)
+```
+
+This is re-read rather than remembered on purpose: an authorization that
+arrived while this session was working would change the answer, and §1 says an
+AI memory of a row is not a reading of one. It did not. The blocker below is
+therefore a current fact and not a stale one.
+
 ---
 
 ## Phase 13 — the four bearers were valid the whole time
