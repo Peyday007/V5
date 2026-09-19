@@ -493,6 +493,16 @@ from the fire rather than from the static binding.
 matrix pairs applied — including `SYNTHESIS_PRIMARY` and
 `SYNTHESIS_ADVERSARIAL` — at `SESSION`, which is the floor. `compliant=true`.
 
+The same command against the project's other `AUDITING` packet,
+`orc_21ca96f6328f4e0eacb7`
+([run 35443854608](https://github.com/Peyday007/V5/actions/runs/35443854608),
+12:48:04Z), returns **byte-identical lineage** — the same three `oat_…`
+credentials in the same three roles. That is not a bug in the reading: a Cowork
+session drains more than one bin, so one activation of 1-B carried the PRIMARY
+role on both packets. It is worth stating because it also bounds what these two
+readings prove: they attribute substantive passes to **1-B and 1-D**, and say
+nothing about `Brain Research A` or `1-C`.
+
 ### Audit independence, scanned rather than asserted
 
 `npm run admin -- packets independence cash-mode-2`, 12:42:12Z
