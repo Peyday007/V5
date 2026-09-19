@@ -11,8 +11,10 @@ production row, a workflow run, or a timestamp taken from one. Where something
 is not known it says so; where it is blocked on a person it names the person and
 the exact action.
 
-**Where it stands, as at 2026-09-19T18:14Z.** Eight surfaces registered and
-**all eight individually VERIFIED**. Four more are not registered at all.
+**Where it stands, as at 2026-09-19T18:24Z.** Eight surfaces registered and
+**all eight individually VERIFIED**. Fleet concurrency **8, measured** across two
+accounts under saturation, against a policy target of 12 — the policy is not the
+constraint, the surface count is. Four surfaces are not registered at all.
 
 | | Registered | Chain closed | What is in the way |
 | --- | --- | --- | --- |
@@ -1642,3 +1644,105 @@ refuted four times over, by four separate closed chains.
 **Eight of twelve individually VERIFIED.** That is every surface that exists.
 The remaining four are Airyn's and are not registered at all, for the one reason
 Phase 16 names.
+
+## Phase 22 — the cross-account wave, measured
+
+Eight surfaces exist, so the twelve-way wave the objective asks for cannot be
+run. What can be run is the same instrument at the size the fleet actually is:
+`step10 ramp 10 3 600` — ten `DETERMINISTIC_CHECK` bins seeded at once, and a
+harness whose only actions are **create and read**, because the dispatcher is
+the thing under test.
+
+```
+STEP10 RAMP rung=10 units=3 deadline=600s
+  +20s  3 bins  READY -> LEASED
+  +30s  5 bins  READY -> LEASED   (and the first COMPLETE)
+  +40s  2 bins  READY -> LEASED
+  ...
+  rung wall clock  61.1s
+  complete         10/10
+  still open       0
+  dispatch intents 10  sent 8
+```
+
+| | |
+| --- | --- |
+| assignments | 10 |
+| takeovers | 0 |
+| duplicate activations | 0 |
+| completion refusals | 0 |
+| lease expiries | 0 |
+| fenced stale writes | 0 |
+| not complete | 0 |
+| provider errors | **`ACCOUNT_TARGETS_REACHED` ×2** |
+
+**Ten bins, sixty-one seconds, nothing lost.** Median ready→done 42.5s, min
+26.7s, max 53.5s; median ready→fired 11.3s; median queue wait 25.6s.
+
+### The ceiling is 8, and Brain refused the ninth itself
+
+`dispatch intents 10 sent 8` with `ACCOUNT_TARGETS_REACHED ×2` is the whole
+reading. The router refuses with that reason only when **no** account has
+headroom, and the two targets are 4 and 4 — so at the moment of each refusal
+both accounts were holding four in-flight activations. **Measured fleet
+concurrency: 8, across two accounts.** Not a sum of declared capacity, not a
+projection, and not inferred from a clock: Brain's own refusal is the
+measurement, which is the form §23 requires.
+
+Both accounts were filling at once, from the router's own arithmetic three
+seconds apart:
+
+```
+18:18:24.181  DISPATCH_ROUTED  Selected Brain Research 1-B on Brain Research A: 0/∞ on the Routine, 2/4 on the account.
+18:18:27.312  DISPATCH_ROUTED  Selected Caleb 3-D on Caleb: 0/∞ on the Routine, 3/4 on the account.
+```
+
+That is the fact Step 11 closed without: §23 records V1 and V2 both being
+*fired*, and says in terms that cross-account **diversity** was not proven.
+Distribution across two accounts under saturation now is.
+
+**Two of the ten were never fired and still completed**, which is not a fault:
+`bin_a760…` and `bin_ff8f…` show `ready→fired —` and were assigned at 34.5s and
+38s to sessions already awake that had finished their own bin and asked for
+another. §23's sentence — *a worker that finishes one asks for another* — at a
+new rung. It is why ten bins drained through eight activations.
+
+**And it is a throughput reading, not an independence one.** These bins are
+unpinned by design, so one account's session may take a bin Brain fired at the
+other — `bin_292c3a…` was routed to Caleb 3-D and assigned to Account 1's
+worker. That is correct for measuring drain and useless for proving a surface,
+which is exactly why the surface proofs in Phases 19 to 21 used pinned probes
+one credential window apart.
+
+### The fleet as it stands, 18:24Z
+
+```
+FLEET
+  accounts    5
+  routines    13
+  target      12
+  in flight   0
+  candidates  11 considered, 8 eligible now
+
+  Brain Research A  target=4
+      Brain Research A    fires=329  refusals=2  no-shows=0
+      Brain Research 1-B  fires=50   refusals=0  no-shows=0
+      Brain Research 1-C  fires=50   refusals=0  no-shows=0
+      Brain Research 1-D  fires=51   refusals=0  no-shows=0
+  Caleb  target=4
+      Caleb 3-A  fires=3  refusals=1  no-shows=0   secret=…CALEB_3_D
+      Caleb 3-B  fires=4  refusals=1  no-shows=0   secret=…CALEB_3_C
+      Caleb 3-C  fires=5  refusals=1  no-shows=0   secret=…CALEB_3_B
+      Caleb 3-D  fires=4  refusals=1  no-shows=0   secret=…CALEB_3_A
+```
+
+Every Caleb surface still carries exactly **one** refusal — the single historic
+`AUTH 401` from the wrong pairing, preserved. Not one refusal has been recorded
+against any of them since the reconciliation, across sixteen fires.
+
+**The honest summary of the objective.** Twelve Routines were asked for; eight
+exist and all eight are individually VERIFIED. Per-account concurrency of 4 is
+measured on both accounts. Fleet concurrency is **8 measured against a policy
+target of 12** — the policy is not the constraint, the surface count is. The
+remaining four are Airyn's and are blocked on one worker identity only she can
+mint (Phase 16).
