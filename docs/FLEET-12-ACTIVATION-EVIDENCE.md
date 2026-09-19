@@ -11,14 +11,14 @@ production row, a workflow run, or a timestamp taken from one. Where something
 is not known it says so; where it is blocked on a person it names the person and
 the exact action.
 
-**Where it stands, as at 2026-09-19T15:37Z.** Eight surfaces registered, five
-individually VERIFIED, three more that have demonstrably run and completed work
+**Where it stands, as at 2026-09-19T16:05Z.** Eight surfaces registered, six
+individually VERIFIED, two more that have demonstrably run and completed work
 without their chain being attributable yet, and four not registered at all.
 
 | | Registered | Chain closed | What is in the way |
 | --- | --- | --- | --- |
 | Account 1 — `airynworker2` | 4 | **4** | nothing |
-| Caleb — `calebworker1` | 4 | **1** | a clock, not a repair: `worker_sessions` is keyed on a per-connector credential, so one surface can be proved per rotation (Phases 15, 17). 3-C additionally awaits an arrival that identifies itself (Phase 18) |
+| Caleb — `calebworker1` | 4 | **2** | a clock, not a repair: `worker_sessions` is keyed on a per-connector credential, so one surface can be proved per rotation — measured, Phase 19. 3-B and 3-D need one window each |
 | Airyn | 0 | — | one Brain-side worker identity, which only she can mint, in her own Claude account (Phase 16) |
 
 Two earlier conclusions in this file are **wrong and are corrected in place
@@ -1516,3 +1516,49 @@ If it is the first reading, then a surface whose client omits `session_ref`
 cannot be proved by a pinned probe at all, and the remedy is at the worker
 rather than in Brain. Three dispatch attempts remain on this bin, so the next
 arrival that identifies itself will close it.
+
+## Phase 19 — 3-C closed on the third fire, and the rotation reading is now conclusive
+
+The second reopen fired at **16:01:54.989Z** and this time the arrival
+identified itself:
+
+```
+16:01:53.873  DISPATCH_ROUTED   Selected Caleb 3-C on Caleb: 0/∞ on the Routine, 0/4 on the account.
+16:01:54.989  DISPATCH_SENT     session cse_01ULb3BkRMEeYF2PcT4x7erZ
+16:02:07.232  BIN_ASSIGNED      wkr_1db1193323454ee69bb1  session session_01ULb3BkRMEeYF2PcT4x7erZ
+16:02:27.045  BIN_UNIT_SUBMITTED
+16:02:29.731  BIN_COMPLETION_ACCEPTED   COMPLETE
+```
+
+Same suffix on both sides of the fire, so `sameProviderSession` matched and the
+pin let it through — on the **same bin**, at **0/2 attempts still**, after two
+earlier fires it had refused. `FLEET: OK verify-surface trig_016yNPUw8BpoiYa5S8tU3bG3 VERIFIED`.
+
+**Phase 18's open question is answered, and the answer is the less comfortable
+of the two.** The arrivals at 15:01:46 and 15:31:54 that reported nothing were
+*not* a property of this Routine and not a permanent client defect: the third
+fire to the same Routine, in the same hour, reported its session normally. So
+`brain_check_in`'s optional `session_ref` is **sometimes** omitted by this
+client and sometimes not, which is worse than either fixed answer — it means a
+pinned probe's success is partly a coin toss, and the honest expectation is
+"one to three fires per surface" rather than one. It cost nothing here because
+the pin spends dispatch attempts and not bin attempts, which is exactly the
+distinction §27 drew for a surface-blocked stage.
+
+**And the credential rotation is now measured rather than inferred.**
+
+| Reading | `oauth` on calebworker1 | Credential the arrival used |
+| --- | --- | --- |
+| 15:00:26Z (3-A VERIFIED) | 48 minted, 24 used | `oat_d8c4695c841047f2aa30` |
+| 16:04Z (3-C VERIFIED) | **50 minted, 25 used** | **`oat_49d459502a2d4b9a88e5`** |
+
+Two more tokens minted and one more used across the hour, and the arrival that
+closed 3-C carried a different `oat_` from the one that closed 3-A. That is the
+test Phase 15 named: the connector refreshed, `worker_sessions` accepted a
+second row for this worker, and the earlier collisions were the mechanism.
+Nothing was re-keyed and no control was relaxed to get here — the only thing
+that changed is the hour.
+
+**Six of twelve individually VERIFIED**: Brain Research A, 1-B, 1-C, 1-D, Caleb
+3-A, Caleb 3-C. 3-B and 3-D each need one probe in a credential window of their
+own.
