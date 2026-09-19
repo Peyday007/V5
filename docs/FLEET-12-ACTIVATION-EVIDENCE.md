@@ -1406,3 +1406,42 @@ against her four existing secret names is operator work with no browser and no
 deploy — and if it is done before her connector is right, `verify-surface` will
 say so by name rather than quietly passing: an arrival under another identity
 is reported as a **fault**, not as a missing proof.
+
+## Phase 17 — five of twelve are individually VERIFIED, and the count is stated as five
+
+All four Account 1 surfaces, re-read at 15:17–15:21Z under the pin-bound claim
+added earlier today. Each prints its own closed chain:
+
+| Surface | Fires | Arrivals attributed | The chain `proveSurface` accepted |
+| --- | --- | --- | --- |
+| Brain Research A | 328 sent, 2 refused | **20** | fired 08:50:33.784 → `oat_56fc29a3118a43b19985` arrived 08:51:06.973 → `bin_94a474cb442544ee85d0` COMPLETE |
+| Brain Research 1-B | 49 sent, 0 refused | **6** | fired 09:45:13.876 → `oat_f93edc036d9944eab32b` arrived 13:23:26.393 → `bin_e04839c28e9f4cda908a` COMPLETE |
+| Brain Research 1-C | 49 sent, 0 refused | **5** | fired 09:15:07.141 (17 Sep) → `oat_7f277d8c3a68473589d8` arrived 09:15:30.948 → `bin_f1ea8de040334864893f` COMPLETE |
+| Brain Research 1-D | 50 sent, 0 refused | **5** | fired 09:08:17.228 → `oat_7055fa59e3584ccdb5ce` arrived 12:03:01.924 → `bin_7024d12474c949129a0c` COMPLETE |
+
+`FLEET: OK verify-surface … VERIFIED`, four times, plus Caleb 3-A. **Five of
+twelve.** Not twelve, not "effectively twelve", and not eight-with-four-pending:
+seven surfaces have not closed the chain and are named as such below.
+
+### These four also settle the question Phase 15 left open
+
+Thirty-six arrivals are attributed across four Routines that share **one**
+worker and therefore one connector — and every credential above is a different
+`oat_…`. So the credential does rotate, `worker_sessions` does accumulate one
+row per rotation, and a pooled account's surfaces are individually provable
+**over hours rather than within one**. Account 1's four proofs are spread across
+two days and four separate token lifetimes; Caleb's four probes were spent
+inside seven minutes of one.
+
+That is the reading Phase 15 said would settle it, arrived at from rows that
+were already there rather than by waiting: the mechanism is rotation, not a
+null credential. The remaining Caleb surfaces need one probe each in separate
+token lifetimes, which is a clock rather than a repair.
+
+### Where the twelve actually stand
+
+| | Surfaces | Chain closed |
+| --- | --- | --- |
+| Account 1 (`airynworker2`) | 4 | **4** |
+| Caleb (`calebworker1`) | 4 | **1** — 3-B and 3-D ran and completed bins, unattributed; 3-C awaiting its own fire |
+| Airyn | 0 registered | — blocked on one worker identity (Phase 16) |
