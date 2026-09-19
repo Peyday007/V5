@@ -887,6 +887,15 @@ only a person holding those Claude accounts can take.**
 
 ## What is blocked, and on whom
 
+> **Superseded by Phases 11 to 16, and kept rather than deleted.** Item 1 below
+> is **wrong**: no bearer was invalid and no human ever had to touch a Claude
+> account for Caleb — the four tokens were registered against the wrong four
+> triggers, which Brain established by itself in fourteen seconds (Phase 13).
+> Item 2 is **half wrong**: Airyn's Routines and deployment secrets exist, and
+> what is missing is one Brain-side worker identity (Phases 12 and 16). The
+> reasoning that produced both is worth keeping, because both mistakes have the
+> same shape — a refusal was read as proof of a stronger claim than it carried.
+
 Two things, both genuinely human-only, both outside what any credential in the
 deployed environment can reach.
 
@@ -1350,3 +1359,50 @@ which an unidentified caller cannot answer. It fails closed, correctly: an
 unproven surface reported as proven is the one outcome a surface proof may
 never produce. The bin keeps both attempts and `reopenNoShowDispatches` will
 put it back thirty minutes after the fire.
+
+## Phase 16 — the one thing left that a person has to do, and exactly what it is
+
+Everything about Airyn that can be established from rows has been, twice, most
+recently at 15:04:42Z. The state is:
+
+| | |
+| --- | --- |
+| Airyn as a Brain member | **exists** — `usr_72e1236be8f04f4d9aa2`, PERSON, MEMBER, one passkey, signs in with a device |
+| Her four Claude Routines | **exist** — created by her; their `trig_…` references are hers to supply |
+| Her four deployment secrets | **exist and are four distinct bearers** — `BRAIN_ROUTINE_TOKEN_AIRYN_2_A…D`, proved by four non-mutating `--dry-run` registrations (Phase 12) |
+| A distinct Airyn **worker** | **does not exist** — ten identities, none of them new |
+| `airynworker2` | **is Account 1's worker**, bound to all four `Brain Research` surfaces and holding eight project memberships |
+
+So the missing piece is one Brain-side identity, and it cannot be made from
+here for a reason that is the whole of §22's split: **Brain owns dispatch; the
+surface owns whether a worker may act.** A worker's token is minted by the
+OAuth consent screen, in a browser, on a person's approval, inside the Claude
+account that will run it. A Brain that could mint its own workers would be
+exactly the back door that separation exists to prevent — and the invitation
+that stands in for the approval is a single-use credential, which §17 forbids
+putting in a workflow log.
+
+**And `airynworker2` must not be reused, however convenient its name.** Binding
+Airyn's four Routines to it would produce four more surfaces resolving to one
+worker, so an audit spanning them would read `SESSION_SEPARATED` and never
+`WORKER_SEPARATED` or `ACCOUNT_SEPARATED` — the second capacity bucket would be
+a relabelling of the first. §23 is explicit that a same-account result is never
+described as cross-account independent; a same-*worker* one must not be either.
+
+### The trap that has to be named, because it is what happened already
+
+Airyn has evidently authorized a Brain connector at some point, and **no new
+worker came out of it**. §27 records why: Claude keys its connector registry by
+URL, so a second connector at a URL an existing one already holds is refused
+outright — and *selecting an existing connector* in a new Routine hands it the
+**old** worker. That is the one action that looks like it worked and separates
+nothing. The consent screen must name the new worker, and each of her four
+Routines must have *that* connector attached.
+
+### What Brain does the moment it exists
+
+Nothing further is asked of anybody. Registering her four existing triggers
+against her four existing secret names is operator work with no browser and no
+deploy — and if it is done before her connector is right, `verify-surface` will
+say so by name rather than quietly passing: an arrival under another identity
+is reported as a **fault**, not as a missing proof.
