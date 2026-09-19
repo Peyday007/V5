@@ -59,6 +59,7 @@ the reading to a commit it cannot see — a local checkout legitimately has none
 | SQLite suite | **159 files, 3 487 passed, 41 skipped** |
 | Postgres suite, merged tree | **159 files, 3 497 passed, 12 skipped** |
 | Postgres suite, with the three mechanisms | **160 files, 3 515 passed, 12 skipped** |
+| Postgres suite, final tree | **159 of 160 files, 3 518 passed, 12 skipped, 1 failed** — see below |
 | Migrate from empty | 71 migrations applied in order |
 | Restart against existing | clean; no reapplication, checksums verified |
 | `deploymentOwnership` | 18 passed — no chain gap, no collision, no port collision |
@@ -71,6 +72,29 @@ to a different worker. The rule was right and the matcher took co-occurrence
 anywhere in a file as a write. Tightened to match the write itself, and asserted
 against both the write it exists for and the comment that produced the false
 positive.
+
+### The one Postgres failure, and why it is not this work's
+
+`connectContract.test.ts > the storage reading > takes at most one sample an
+hour however often it is read` **timed out at 30 000 ms**. Not an assertion — a
+timeout, in a suite this work does not touch.
+
+It is pre-existing, and that is established rather than assumed: a detached
+worktree at `origin/production` (`5db7866`), carrying none of these changes,
+fails the same test the same way on the same database, in 108 s. The worktree
+was removed immediately, because §28 records a stray one holding the canonical
+branch as a third way that section's damage arrives.
+
+What is **not** established is the cause. The identical suite passed on this
+machine against Postgres earlier the same night, so something about the
+environment moved rather than the code — and naming it would be a guess. The
+test is left exactly as it is: it is somebody's gate, this work does not
+understand why it is slow, and relaxing a timeout to get a green line is
+weakening a control to satisfy the reader of a report.
+
+An earlier reading in this document said `3 515 passed` with no failure. That
+run predates the waived-gap fix, and the sentence is corrected here rather than
+edited there.
 
 ## 5. The deployed Brain, read and not touched
 
