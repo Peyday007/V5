@@ -595,15 +595,16 @@ not exist at the previous reading:
 | 12:29:26Z | `fleet show` reports `in flight 2`, one on 1-B and one on 1-C — different fires again |
 | 12:36:00Z | the same two fires still counted, at ages 797s and 787s |
 | 12:42:50Z | `fleet show` again: **counters unchanged** — A 328, 1-B 48, 1-C 48, 1-D 48, with 1-B and 1-C still `in-flight=1` |
+| **12:56:24Z** | **the wave the flat reading was waiting for.** 1-C **48 → 49**, 1-D **48 → 49**, both now `in-flight=1`; 1-B's earlier activation finished and it is back to `in-flight=0`. Two new fires, dispatched while this conversation did nothing but sleep, at almost exactly the thirty-minute mark after the 12:22 fires — which is `reopenNoShowDispatches` reopening them and the router sending them to two *different* surfaces than last time ([run 35444283874](https://github.com/Peyday007/V5/actions/runs/35444283874)) |
 
-**Twenty minutes with no new fire is a reading too, and it is reported rather
-than smoothed over.** Between 12:22:53Z and 12:42:50Z the counters did not
-move: the account holds 2 of its 4 in flight and the bins those two fires were
-for have not yet been answered. That is not the fleet idling past a backlog —
-it is two activations outstanding against a queue whose other items are either
-terminal or inside a live lease. If nobody arrives, `reopenNoShowDispatches`
-reopens them at the thirty-minute mark, which is the same mechanism that
-rescued `bin_5922df8c521a421cb9de` below.
+**Twenty minutes with no new fire is a reading too, and it was reported rather
+than smoothed over — and then it resolved.** Between 12:22:53Z and 12:42:50Z
+the counters did not move: two activations were outstanding against a queue
+whose other items were either terminal or inside a live lease. The prediction
+written here at the time was that `reopenNoShowDispatches` would reopen them at
+the thirty-minute mark. **It did**, and the 12:56:24Z row below is the
+measurement rather than the prediction: two new fires, to two different
+surfaces, with nobody watching.
 
 Two of those waves are complete autonomous cycles rather than just fires:
 
@@ -856,11 +857,12 @@ never existed in this Brain.
 | Per-account concurrency target | 4 (both accounts) | policy row |
 | Per-account concurrency **observed** | **4 of 4** | MEASURED — `ACCOUNT_TARGETS_REACHED` ×4 |
 | Per-Routine ceiling | `∞` (research Routines declare none) | router output |
-| Fires in the session window | +39 | counter delta |
+| Fires in the session window | **+41** (08:41:41Z → 12:56:24Z: A 327→328, 1-B 35→48, 1-C 36→49, 1-D 35→49) | counter delta |
 | Refusals in the session window | **2**, both Caleb (`3-C` 08:52:52Z, `3-D` 08:53:32Z). `3-A`/`3-B`'s pair was written at 02:03/02:05Z, before this window; account 1's `refusals=2` is older still and unchanged across both readings | row |
 | No-shows | **one event**, on `bin_5922df8c521a421cb9de`'s 11:03:24Z fire, reopened at 11:33:33Z and completed. Every `fleet show` row reads `no-shows=0` because that counter is *consecutive* and resets on the next arrival — the two facts agree | row |
 | Remaining queue depth | 28 claimable items across `cash-mode-1/3/4`; `cash-mode-2` drained | queue read 12:30Z |
 | Deployed commit | `ca6c3eb` | [run 35440403377](https://github.com/Peyday007/V5/actions/runs/35440403377) |
+| Fleet state at the last reading | 2 of 4 in flight (1-C, 1-D), 1-B and A free | `fleet show` 12:56:24Z |
 | Provider-capacity condition | **none on account 1** — no rate limit, no `429`, no `PROVIDER_ENFORCED` refusal anywhere in the window | row |
 
 ### Against the definition of done
