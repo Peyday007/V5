@@ -136,3 +136,73 @@ export async function decideCashRead(projectId: string): Promise<CashReadDecisio
 
   return { scope: 'NONE', rootProjectId };
 }
+
+/**
+ * What a control on the Cash page may be *offered* for, decided by the server.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is not derived in the client
+ * ---------------------------------------------------------------------------
+ *
+ * The obvious client-side answer is "is this a Brain administrator", because
+ * that is the one role flag the browser holds. It is the wrong answer twice
+ * over, in opposite directions. Activating a sprint, moving its lifecycle and
+ * granting commercial authority are all **project `ADMIN`** — so a project
+ * administrator who is not a Brain administrator would have had those controls
+ * hidden from them although every route would have accepted the call, and an
+ * escalation with no visible remedy is §24's *waiting nobody can resolve*. And
+ * a Brain administrator reaches every project by design, so the flag would
+ * equally have offered controls on a project where the level was the real
+ * question.
+ *
+ * So the same `decideProjectAccess` every route applies answers it here too.
+ * There is no Cash capability module and there must never be one.
+ *
+ * ---------------------------------------------------------------------------
+ * It is a convenience and never the control
+ * ---------------------------------------------------------------------------
+ *
+ * Every one of these four is re-decided at the moment anything happens, by
+ * `requirePerson`, `requireProject`, `checkCommercialAuthority` and the policy
+ * module. A hidden button is not authorization (§17) and this is not one. What
+ * it is for is that a control which cannot succeed should not be offered: a
+ * refusal somebody could not have predicted teaches them the refusal is
+ * arbitrary.
+ */
+export interface CashCapabilities {
+  /** Start, wind down, reactivate or archive the sprint. Project `ADMIN`. */
+  mayAdminister: boolean;
+  /** Make or withdraw the commercial grant. Project `ADMIN`. */
+  mayGrantAuthority: boolean;
+  /** Money, commercial terms, engine cards, the decisions review. */
+  mayViewPrivateJob: boolean;
+  /** Record an action, mark a piece ready, answer a decision. */
+  mayActOnJob: boolean;
+}
+
+export function cashCapabilities(input: {
+  scope: CashReadScope;
+  projectId: string;
+}): CashCapabilities {
+  /*
+   * A SHARED reader has no private blocks in their payload at all, so every
+   * one of these is false whatever their membership says — there is nothing
+   * present for a control to act on, which is the boundary rather than this
+   * function's opinion of it.
+   */
+  if (input.scope !== 'FULL') {
+    return {
+      mayAdminister: false,
+      mayGrantAuthority: false,
+      mayViewPrivateJob: false,
+      mayActOnJob: false,
+    };
+  }
+  const administers = decideProjectAccess(currentPrincipal(), input.projectId, 'ADMIN').allowed;
+  return {
+    mayAdminister: administers,
+    mayGrantAuthority: administers,
+    mayViewPrivateJob: true,
+    mayActOnJob: true,
+  };
+}

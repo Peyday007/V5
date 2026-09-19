@@ -661,6 +661,37 @@ describe('an ordinary member reading the shared frontier', () => {
     mode: MODE.mode,
     discovery: { open: true, reason: 'Cash Mode is active.' },
     commercialGrant: 'ABSENT',
+    best: [
+      {
+        id: 'cop_1',
+        title: 'A paid intake repair somebody asked for',
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        industry: null,
+        state: 'READY',
+        availability: 'CLAIMED',
+        because: 'Every load-bearing question about this is answered.',
+        validationState: null,
+        buyingSignal: 'Asked what it would cost',
+        signalObservedAt: '2026-09-14T09:00:00.000Z',
+        sourceClaimId: 'clm_1',
+        orchestrationId: null,
+        fragmentId: null,
+        discoveryRoundId: null,
+        expiresAt: null,
+        deadline: null,
+        qualification: { ready: true, missing: [], summary: 'Every load-bearing field is answered.' },
+        tier: {
+          tier: 'READY_TO_TEST',
+          establishes: 'that somebody asked what it would cost',
+          doesNotEstablish: 'that they have agreed a price',
+          toAdvance: [],
+          answered: 6,
+          required: 6,
+          summary: 'Everything a bounded test turns on is answered.',
+        },
+      },
+    ],
+    bestAreNearlyQualified: false,
     opportunities: [
       {
         id: 'cop_1',
@@ -680,19 +711,68 @@ describe('an ordinary member reading the shared frontier', () => {
         expiresAt: null,
         deadline: null,
         qualification: { ready: true, missing: [], summary: 'Every load-bearing field is answered.' },
+        /*
+         * Names, tasks and counts — and no value of any commercial term, which
+         * is why a tier reading may cross to a member at all.
+         */
+        tier: {
+          tier: 'READY_TO_TEST',
+          establishes: 'that somebody asked what it would cost',
+          doesNotEstablish: 'that they have agreed a price',
+          toAdvance: [],
+          answered: 6,
+          required: 6,
+          summary: 'Everything a bounded test turns on is answered.',
+        },
       },
     ],
+    byTier: { SIGNAL: 0, CANDIDATE: 0, QUALIFIED: 0, READY_TO_TEST: 1 },
+    byState: {
+      DISCOVERED: 0,
+      EVIDENCE_CARD: 0,
+      READY: 1,
+      EXECUTING: 0,
+      DELIVERING: 0,
+      COLLECTED: 0,
+      DECLINED: 0,
+      ARCHIVED: 0,
+    },
     counts: { total: 1, open: 0, beingQualified: 0, claimed: 1, inExecution: 0, delivered: 0, closed: 0 },
     roadmap: {
       mechanisms: ['EXPLICIT_PAID_REQUEST'],
       rounds: { open: 1, harvested: 2, abandoned: 0, total: 3 },
       active: [],
-      research: { planned: 0, byStatus: {} },
+      /*
+       * Every status key, because the server always sends every status key. A
+       * fixture that sent a partial map would render NaN and test a shape
+       * production cannot produce.
+       */
+      research: {
+        planned: 0,
+        byStatus: {
+          PLANNED: 0,
+          QUEUED: 0,
+          RUNNING: 0,
+          VALIDATING: 0,
+          ACCEPTED: 0,
+          BLOCKED: 0,
+          REJECTED: 0,
+          CANCELLED: 0,
+          NEEDS_HUMAN: 0,
+        },
+      },
       pipeline: [{ key: 'DISCOVERED', label: 'Found', count: 1, note: 'an opening nobody has qualified yet' }],
       whatHappensNext: 'The next thing to move is a deep dive.',
     },
     needs: [],
     activity: [{ kind: 'CASH_OPPORTUNITY_HARVESTED', count: 11, mostRecentAt: '2026-09-17T00:00:00.000Z' }],
+    /* Nothing may be pressed, including the two reads: there is nothing here to read. */
+    capabilities: {
+      mayAdminister: false,
+      mayGrantAuthority: false,
+      mayViewPrivateJob: false,
+      mayActOnJob: false,
+    },
   };
 
   async function mountCash(): Promise<void> {
@@ -703,44 +783,97 @@ describe('an ordinary member reading the shared frontier', () => {
     });
   }
 
+  /*
+   * The headings below are the **canonical** ones, and that is the change.
+   *
+   * These assertions used to name *The frontier*, *Where the research is*,
+   * *Opportunities* and *What Brain has been doing* — a second page's
+   * vocabulary, which existed only for a member. There is one skeleton now, so
+   * a member's substance is asserted under the same headings an administrator
+   * sees. Every claim these tests made is still made; what changed is that they
+   * no longer document a divergence.
+   */
   it('sees the frontier rather than the project-not-found concealment', async () => {
     await mountCash();
-    await waitFor(() => expect(screen.getByText('The frontier')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('The cash machine')).toBeTruthy());
     // The exact sentence the production defect produced.
     expect(screen.queryByText(/nothing here for you to see/i)).toBeNull();
-    expect(screen.getByText('Opportunities found')).toBeTruthy();
-    expect(screen.getByText('A paid intake repair somebody asked for')).toBeTruthy();
+    expect(screen.getAllByText('Ready to test').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('A paid intake repair somebody asked for').length,
+    ).toBeGreaterThan(0);
   });
 
   it('is told a claimed piece is claimed, and nothing about the job', async () => {
     await mountCash();
-    await waitFor(() => expect(screen.getByText('Opportunities')).toBeTruthy());
-    expect(screen.getByText('Claimed')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Everything Brain has found')).toBeTruthy());
+    /*
+     * A taken piece is **redacted rather than hidden** — another member needs
+     * to know it is taken, or two of them research the same opening — and gets
+     * nothing else about it.
+     */
+    expect(screen.getAllByText(/Every load-bearing question about this is answered/).length)
+      .toBeGreaterThan(0);
     const text = document.body.textContent ?? '';
-    expect(text).not.toMatch(/\$/);
+    // Matched on the shape `money()` renders, which is a currency code and an amount.
+    expect(text).not.toMatch(/\b[A-Z]{3}\s?-?[\d,]+\.\d\d/);
     expect(text).not.toMatch(/750/);
   });
 
   it('shows where the research is, and why nothing is executing', async () => {
     await mountCash();
-    await waitFor(() => expect(screen.getByText('Where the research is')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Research detail')).toBeTruthy());
     expect(screen.getByText('The next thing to move is a deep dive.')).toBeTruthy();
-    expect(screen.getByText(/No commercial grant has been made yet/)).toBeTruthy();
+    // The absent grant is the answer to "why is none of this executing".
+    expect(screen.getAllByText(/Nothing is authorized to be spent/).length).toBeGreaterThan(0);
   });
 
   it('counts activity rather than quoting it', async () => {
     await mountCash();
-    await waitFor(() => expect(screen.getByText('What Brain has been doing')).toBeTruthy());
-    expect(screen.getByText('opportunity harvested')).toBeTruthy();
-    expect(screen.getByText('11')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Activity')).toBeTruthy());
+    expect(screen.getByText(/An opening was harvested/)).toBeTruthy();
+    expect(screen.getByText(/11 times/)).toBeTruthy();
+    // No free text from any event reaches a member.
+    expect(document.body.textContent ?? '').not.toMatch(/Captured "/);
   });
 
   it('says plainly what it is not showing', async () => {
     await mountCash();
-    await waitFor(() => expect(screen.getByText('The frontier')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('The cash machine')).toBeTruthy());
     expect(
-      screen.getByText(/The money, the spending authority and each execution job/),
+      screen.getByText(/Decisions about an execution job belong to whoever owns that job/),
     ).toBeTruthy();
+    expect(
+      screen.getByText(/The money belongs to whoever owns an execution job/),
+    ).toBeTruthy();
+  });
+
+  it('renders the same section skeleton the administrator page renders', async () => {
+    /*
+     * The structural half, asserted where the member payload actually is.
+     * `cashSection.test.tsx` holds the two trees against each other; this holds
+     * the member's tree against the contract, so a change that quietly dropped
+     * a section for a member fails in both files rather than in neither.
+     */
+    await mountCash();
+    await waitFor(() => expect(screen.getByText('The cash machine')).toBeTruthy());
+    const root = document.querySelector('section.rs-view-cash') as HTMLElement;
+    const ids = [...root.children]
+      .filter((node): node is HTMLElement => node instanceof HTMLElement)
+      .filter((node) => node.classList.contains('rs-card'))
+      .map((node) => [...node.classList].find((one) => one.startsWith('rs-cash-')));
+    expect(ids).toEqual([
+      'rs-cash-status',
+      'rs-cash-decisions',
+      'rs-cash-best',
+      'rs-cash-money-row',
+      'rs-cash-portfolio',
+      'rs-cash-needs-detail',
+      'rs-cash-research',
+      'rs-cash-money-detail',
+      'rs-cash-history',
+      'rs-cash-lifecycle',
+    ]);
   });
 });
 

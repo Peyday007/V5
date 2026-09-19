@@ -82,7 +82,7 @@ COPY objectives ./objectives
 # blueprint does not happen to name would read a confident `NO`, which is the
 # exact defect that reading was corrected for once already. A blueprint is a
 # statement about faculties Brain wants, never documentation of components Brain
-# has — §36's own first sentence, at a path.
+# has — §37's own first sentence, at a path.
 #
 # Prose the owner supplied, no secrets, and no authority of its own; what it can
 # move is bounded by `INGESTION_MAY_MOVE`, which is DEFINITION and nothing else.
