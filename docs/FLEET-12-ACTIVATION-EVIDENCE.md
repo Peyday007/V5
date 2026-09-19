@@ -1232,3 +1232,121 @@ verification that ran against it before the restart passed in full — and §27'
 rule holds: a ceiling nobody has observed stays UNKNOWN. Re-deploying to
 "fix" it would restart a Brain holding leased work to re-prove something the
 pre-restart run already proved.
+
+## Phase 15 — all four Caleb surfaces run; only one of them can be *proved* right now
+
+The four repointed Routines were each given a bounded `DETERMINISTIC_CHECK`
+probe. Three of the four produced the whole chain, read from `step10 trace` —
+Brain's own rows, not a worker's account of itself:
+
+| Surface | Fired | Arrived (BIN_ASSIGNED) | Bin | Completed | Elapsed |
+| --- | --- | --- | --- | --- | --- |
+| Caleb 3-A | 14:55:24.418 | 14:55:37.390 | `bin_1e77dcf850544dd4b932` | 14:55:59.951 | **35.5s** |
+| Caleb 3-B | 14:55:47.314 | 14:55:54.833 | `bin_07f44b66f79648d7a201` | 14:56:02.571 | **15.3s** |
+| Caleb 3-D | 15:02:04.832 | 15:02:14.250 | `bin_36da3cf5814c42e0a420` | 15:02:28.754 | **23.9s** |
+| Caleb 3-C | 15:01:34.722 | — | `bin_9be8aa842a36495e8133` | — | still READY |
+
+Every arrival authenticated as `wkr_1db1193323454ee69bb1` (calebworker1), every
+bin carries a submitted unit and `DETERMINISTIC_UNITS_V1 v1 evaluated true`, and
+every one of those rows was written by Brain rather than reported by a worker.
+**The four bearers are not merely accepted by the provider; three of the four
+surfaces have now done a piece of work Brain accepted.**
+
+### Two Caleb surfaces ran at the same time, and the overlap is measured
+
+3-A held `bin_1e77…` from 14:55:37.390 to 14:55:59.951. 3-B held `bin_07f4…`
+from 14:55:54.833 to 14:56:02.571. The intersection is
+**14:55:54.833 → 14:55:59.951 — 5.118 seconds** of two *different* sessions
+(`session_01Wpkyz98ZWTGLw5tUPeLEUV` and `session_01YDFxc4qTNszNoXQrrXCSMq`) on
+two *different* Routines of one account, each holding its own bin.
+
+The router says the same thing from the other side, and it is the account
+arithmetic §23 asks for rather than a sum of declared capacity:
+
+```
+14:55:23.327  DISPATCH_ROUTED  Selected Caleb 3-A on Caleb: 0/∞ on the Routine, 0/4 on the account.
+14:55:45.311  DISPATCH_ROUTED  Selected Caleb 3-B on Caleb: 0/∞ on the Routine, 1/4 on the account.
+15:01:33.649  DISPATCH_ROUTED  Selected Caleb 3-C on Caleb: 0/∞ on the Routine, 0/4 on the account.
+15:02:03.650  DISPATCH_ROUTED  Selected Caleb 3-D on Caleb: 0/∞ on the Routine, 1/4 on the account.
+```
+
+`1/4 on the account` is Brain counting an activation already in flight at the
+moment it chose the second surface. **Measured concurrency on Caleb: 2.** Not 4
+— nothing here observed four at once, and §23 forbids reporting a ceiling
+nobody has seen.
+
+### `verify-surface` reports VERIFIED for 3-A alone, and the reason is a property rather than a fault
+
+```
+FLEET: OK verify-surface trig_016dyf9oueMd7zQLY2pGrQFt VERIFIED
+  sessions  1 arrival(s) attributed to this Routine
+    fired     2026-09-19T14:55:24.418Z
+    arrived   oat_d8c4695c841047f2aa30 authenticated as calebworker1 at 14:55:37.790Z
+    assigned  bin_1e77dcf850544dd4b932
+    completed bin_1e77dcf850544dd4b932 reached COMPLETE
+```
+
+3-B and 3-D report `0 arrival(s) attributed to this Routine` over bins that
+demonstrably completed. That is not a contradiction; it is `worker_sessions`
+saying what it is able to say. The table is
+`INSERT … ON CONFLICT (session_ref) DO NOTHING`, and `session_ref` there is the
+**credential the request authenticated with** — which §27 already records is
+*per connector*, not per session:
+
+> `worker_sessions` is keyed by the credential and the credential is
+> per-connector rather than per-session — every session an account fires
+> presents the same one, so the row describes the fleet and cannot describe the
+> arrival.
+
+All four Caleb Routines are bound to one worker and therefore reached Brain
+through one connector. 3-A arrived first at 14:55:37 and took the row; 3-B's
+arrival seventeen seconds later, and 3-D's seven minutes after that, collided
+with it and wrote nothing.
+
+**So `proveSurface` can close at most one surface per connector credential per
+access-token lifetime**, and `ACCESS_TOKEN_TTL_MS` is an hour. Four probes in
+seven minutes can therefore never yield four proofs, however healthy the four
+surfaces are. That is a rate limit on *proving*, not on running, and it is
+worth writing down because the reading it produces — three healthy surfaces
+reported as unproven — looks exactly like the failure this command exists to
+catch.
+
+**What is established and what is inferred, kept apart.** Established from
+rows: the three chains completed; no `worker_sessions` row exists for 3-B or
+3-D; the table's key is the credential and its conflict clause is a silent
+no-op. Inferred: that the collision is *why*. The other candidate is a null
+`credentialId` on those arrivals, which `creditDispatchArrival` also treats as
+"write nothing". **The decisive test is one probe fired after the credential
+has rotated**, and it is the one being run rather than a conclusion being
+asserted.
+
+**Nothing was changed to make this come out green.** Re-keying
+`worker_sessions` on the provider session would close all four chains this
+afternoon and would also make the table stop meaning what `proveSurface` reads
+it as meaning — weakening a control to satisfy the evaluator, which
+`independenceEvidence.ts` re-checks its own guard to prevent.
+
+### 3-C was fired, and the pin refused three arrivals that were not its own
+
+```
+15:01:34.755  DISPATCH_SENT           session cse_01Xm75ttxZuXUyaoyeV8DDJ2
+15:01:46.692  BIN_ASSIGNMENT_REFUSED  PINNED_TO_ANOTHER_SESSION  (caller reported no session at all)
+15:02:14.045  BIN_ASSIGNMENT_REFUSED  PINNED_TO_ANOTHER_SESSION  session_01N6uJ4khcyTQ1R38DPLdKpU
+15:02:30.765  BIN_ASSIGNMENT_REFUSED  PINNED_TO_ANOTHER_SESSION  session_01N6uJ4khcyTQ1R38DPLdKpU
+```
+
+The pin added earlier in this session is doing exactly its job: `session_01N6uJ…`
+is **3-D's** session, awake and eligible, and without the pin it would have taken
+3-C's probe and completed it — which is the substitution that left two of
+Account 1's surfaces reading unproven for thirty-five fires. It costs no
+attempt: the bin is still `0/2`.
+
+The first refusal is the one worth noting. The caller **reported no session at
+all**, twelve seconds after 3-C was fired, which is the shape of 3-C's own
+session arriving from a client that omitted `session_ref`. The pin cannot fall
+back to `bin_dispatch` the way §27's independence floor does — there the
+question is *which session is this*, and here it is *is this the one I fired*,
+which an unidentified caller cannot answer. It fails closed, correctly: an
+unproven surface reported as proven is the one outcome a surface proof may
+never produce. The bin keeps both attempts and `reopenNoShowDispatches` will
+put it back thirty minutes after the fire.
