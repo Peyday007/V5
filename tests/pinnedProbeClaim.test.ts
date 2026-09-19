@@ -36,6 +36,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import {
   assignNextBin,
+  listBinEvents,
   claimDispatchIntent,
   createBin,
   ensureDispatchIntent,
@@ -139,6 +140,41 @@ function assign(sessionRef: string | null) {
 }
 
 describe('the production sequence, reproduced', () => {
+  it('says so when it skips, rather than leaving a bin READY with no reason', async () => {
+    /*
+     * The first version of this guard skipped silently, and production showed
+     * the cost inside the hour: `bin_5922df8c521a421cb9de` was fired at
+     * 11:03:24.954Z and was still READY at 0/2 attempts fourteen minutes later,
+     * with nothing anywhere saying whether its own session had never arrived or
+     * had arrived and been refused here. Those have different remedies.
+     */
+    const dProbe = await probeBinFor(routineD, 'Surface self-test for Brain Research 1-D');
+    await fire(dProbe, routineD, 'trig_D', 'cse_01DDDDDDDDDDDDDDDDDDDDDD');
+    expect(await assign('claude-code-session_01NHKxvEWmtqBAvNxuLWcr1t')).toBeNull();
+
+    const refusal = (await listBinEvents(dProbe, 50)).find(
+      (event) => event.outcome === 'PINNED_TO_ANOTHER_SESSION',
+    );
+    expect(refusal).toBeDefined();
+    // It names both sides, so an operator can tell which of the two conditions
+    // this is without guessing.
+    expect(refusal!.reason).toContain('cse_01DDDDDDDDDDDDDDDDDDDDDD');
+    expect(refusal!.reason).toContain('01NHKxvEWmtqBAvNxuLWcr1t');
+    // And it is still free: the bin is untouched by having been asked about.
+    const bin = (await getBin(dProbe))!;
+    expect(bin.state).toBe('READY');
+    expect(bin.attemptCount).toBe(0);
+  });
+
+  it('names the other condition too — a pinned bin whose fire has not gone out', async () => {
+    const cProbe = await probeBinFor(routineC, 'Surface self-test for 1-C');
+    expect(await assign('claude-code-session_01ANYBODY')).toBeNull();
+    const refusal = (await listBinEvents(cProbe, 50)).find(
+      (event) => event.outcome === 'PINNED_TO_ANOTHER_SESSION',
+    );
+    expect(refusal?.reason).toContain('has not been fired yet');
+  });
+
   it('refuses a sibling session the probe pinned to another surface', async () => {
     const dProbe = await probeBinFor(routineD, 'Surface self-test for Brain Research 1-D');
     // Brain has not fired 1-D yet — the tick has not come round. 1-C's session is
