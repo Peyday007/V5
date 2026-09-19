@@ -331,7 +331,62 @@ describe('the system self-model', () => {
       // looks. A blueprint is a statement about faculties Brain wants; it is
       // never documentation of components Brain has.
       const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
-      expect(dockerfile).toMatch(/COPY docs\/capability \.\/blueprints/);
+      expect(dockerfile).toMatch(/COPY blueprints \.\/blueprints/);
+    });
+
+    it('copies nothing the build context does not contain', () => {
+      /*
+       * The assertion above says where the bytes are going. It cannot say
+       * whether they are reachable, and for a while they were not.
+       *
+       * `COPY docs/capability ./blueprints` names a destination outside `docs/`,
+       * which is the rule the comment beside it exists to enforce, and a *source*
+       * inside it — and `.dockerignore` excludes `docs`. So the build context
+       * never held the path, every deploy from that tree died at
+       *
+       *     #14 ERROR: failed to calculate checksum of ref …:
+       *          "/docs/capability": not found
+       *
+       * before any image was released, and this file's own Dockerfile test
+       * passed the whole time, because reading a Dockerfile tells you what it
+       * intends and never what it can reach.
+       *
+       * So the two files are read together. Every `COPY` source that comes from
+       * the build context is held against every exclusion in `.dockerignore`, and
+       * a source under an excluded path fails here rather than in a deploy.
+       */
+      const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
+      const ignore = fs.readFileSync(path.join(REPO_ROOT, '.dockerignore'), 'utf8');
+
+      const excluded = ignore
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('!'))
+        .map((line) => line.replace(/\/+$/, ''));
+      const reincluded = ignore
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('!'))
+        .map((line) => line.slice(1).replace(/\/+$/, '').replace(/\/\*\*$/, ''));
+
+      // `--from=<stage>` copies from an earlier stage rather than the context, so
+      // it is not subject to `.dockerignore` and is deliberately skipped.
+      const sources = dockerfile
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('COPY ') && !line.includes('--from='))
+        .flatMap((line) => line.slice('COPY '.length).trim().split(/\s+/).slice(0, -1));
+
+      expect(sources.length).toBeGreaterThan(0);
+      for (const source of sources) {
+        const covers = (pattern: string) => source === pattern || source.startsWith(`${pattern}/`);
+        const blockedBy = excluded.find(covers);
+        const rescuedBy = reincluded.find((pattern) => covers(pattern) || pattern.startsWith(`${source}/`));
+        expect(
+          blockedBy === undefined || rescuedBy !== undefined,
+          `Dockerfile copies ${source}, which .dockerignore excludes via "${blockedBy}"`,
+        ).toBe(true);
+      }
     });
 
     it('answers DOCUMENTED unknown rather than no when nothing is readable', async () => {

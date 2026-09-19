@@ -5805,7 +5805,7 @@ client/                 React UI
   src/russell/Search.tsx one search over everything this person may see
   src/russell/design.css the Step 12B design system: tokens, container reflow, both themes
   src/App.tsx           the legacy console, at /legacy
-docs/capability/        the blueprint and its amendments, preserved with their hashes
+blueprints/             the blueprint and its amendments, preserved with their hashes
 objectives/             software objectives a person approved, in the image by design
 scripts/
   capability.ts             the kernel's operator surface: register, advance, derive
