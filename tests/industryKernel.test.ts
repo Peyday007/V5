@@ -929,11 +929,29 @@ describe('persistence and idempotency', () => {
     await runIndustryKernel(projectId);
 
     const events = await listCashEvents(projectId, 50);
-    const opened = events.find((one) => one.kind === 'INDUSTRY_ROUND_OPENED');
-    expect(opened).toBeDefined();
-    // "Why did Brain research this" resolves to a sentence written when the
-    // decision was made, over a snapshot that has since moved on.
-    expect(String((opened!.detail as Record<string, unknown>)['why'])).toContain('A sector');
+    const opened = events.filter((one) => one.kind === 'INDUSTRY_ROUND_OPENED');
+    /*
+     * Every opened round, rather than whichever one the listing happens to
+     * return first.
+     *
+     * One pass opens more than one question — the bootstrap and the seeded
+     * subject's first scan — and `listCashEvents` orders by `created_at DESC,
+     * id DESC` over ids that are random. Two rows written in the same
+     * millisecond therefore come back in an arbitrary order, so a `find` here
+     * asserts on whichever one sorted first. It passed locally and failed in
+     * CI, which is the tell: an ordering that is true only sometimes is not an
+     * ordering, and §33 records the same defect one surface along.
+     *
+     * The intent was never "the first event names the subject" anyway. It is
+     * that **each** round carries the reason it was opened for, so that "why
+     * did Brain research this" resolves to a sentence written when the
+     * decision was made, over a snapshot that has since moved on.
+     */
+    const why = opened.map((one) => String((one.detail as Record<string, unknown>)['why']));
+    expect(why.length).toBeGreaterThan(0);
+    expect(why.every((one) => one.trim().length > 0)).toBe(true);
+    expect(why.some((one) => one.includes('A sector'))).toBe(true);
+    expect(why.some((one) => one.includes('the economy contains'))).toBe(true);
   });
 });
 
