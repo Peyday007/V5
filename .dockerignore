@@ -19,6 +19,22 @@ docs
 *.md
 !README.md
 
+# The inputs the deployed Brain reads by path, re-included explicitly.
+#
+# `blueprints/` is not excluded by anything above — and saying so out loud is
+# the point. `*.md` is a single-segment pattern, so by Docker's own matching it
+# covers markdown at the *root* of the context and not inside a directory; the
+# blueprint is `blueprints/Brain_Intelligence_Map.md` and is therefore safe. That
+# is a fact about BuildKit's semantics rather than about this repository, it
+# cannot be tested without a daemon, and the cost of being wrong about it is a
+# failed deploy — which this directory has already caused once, when it lived
+# under `docs/` and the build answered `"/docs/capability": not found`.
+#
+# So the exception is written down rather than reasoned about. It is a no-op if
+# the semantics are what I believe, and it is the fix if they are not.
+!blueprints
+!blueprints/**
+
 # Build and editor noise.
 .vscode
 .idea

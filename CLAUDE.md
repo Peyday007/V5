@@ -5501,19 +5501,34 @@ advance never stops Russell writing back a mission.
   `WAIVED` with the words on it, which is a different fact from a grant and must
   never read the same.
 
-- **The blueprint could not reach the deployed image, and the obvious fix was
-  wrong in a way a guard caught.** `.dockerignore` excludes `docs/`, and
-  `registerBlueprint` reads a source by path — so the first version copied
-  `docs/capability` to `docs/capability`. `readTextIndex` reads `docs/`, and
+- **The blueprint could not reach the deployed image, and I got it wrong twice
+  — the second time in production.** `registerBlueprint` reads a source by path,
+  so the bytes have to be in the image.
+
+  The first version copied `docs/capability` to `docs/capability`, and a guard
+  caught it before it shipped: `readTextIndex` reads `docs/`, and
   `documentedReading` answers `unknown(NO_DOCS_HERE)` **only while that
-  directory is absent**: a `docs/` tree holding one blueprint would have made
-  every component the blueprint does not name read a confident `NO`, which is
-  the exact reading corrected once already. So the bytes land at `blueprints/`,
-  outside the tree DOCUMENTED is read from, which is also what the `objectives/`
-  precedent actually records — the remedy there was to move the input out of
-  `docs/`, never to start copying `docs/` in. **A blueprint is a statement about
-  faculties Brain wants and is never documentation of components Brain has**,
-  which is §37's own first sentence arriving at a path.
+  directory is absent**, so a `docs/` tree holding one blueprint would have made
+  every component the blueprint does not name read a confident `NO` — the exact
+  reading corrected once already. **A blueprint is a statement about faculties
+  Brain wants and is never documentation of components Brain has**, which is
+  §37's own first sentence arriving at a path.
+
+  So the destination moved to `blueprints/` and **the source did not**, and that
+  is the half no test was looking at. `.dockerignore` excludes `docs`, which
+  removes it from the build *context* — so `COPY docs/capability ./blueprints`
+  fails the build outright with `"/docs/capability": not found`, however right
+  its destination is. The deploy released nothing and production went on serving
+  the previous image, which is the one mercy in it.
+
+  The `objectives/` comment had already recorded the answer — *"once for living
+  under `docs/` (excluded)"* — and its remedy was to **move the input out of
+  `docs/`**, which is why `objectives/` sits at the repository root. I read that
+  as a statement about where bytes should land when it is a statement about what
+  the build can see. The inputs are at `blueprints/` now, and the guard holds
+  every `COPY` source against `.dockerignore` itself rather than against a
+  remembered list — run against the version that broke the deploy, where it
+  reproduces the failure as a test failure with the same diagnosis.
 
 **What is true of this kernel today, said plainly.** Thirteen faculties are
 canonically defined from the real blueprint, each anchored to a named block in
@@ -5805,7 +5820,7 @@ client/                 React UI
   src/russell/Search.tsx one search over everything this person may see
   src/russell/design.css the Step 12B design system: tokens, container reflow, both themes
   src/App.tsx           the legacy console, at /legacy
-docs/capability/        the blueprint and its amendments, preserved with their hashes
+blueprints/             the blueprint, its amendments and the design sections, read by path
 objectives/             software objectives a person approved, in the image by design
 scripts/
   capability.ts             the kernel's operator surface: register, advance, derive

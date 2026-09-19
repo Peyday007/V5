@@ -68,25 +68,30 @@ COPY scripts ./scripts
 # twice: once for living under `docs/` (excluded) and once for this COPY being
 # absent. Prose a person approved, no secrets, and no authority of its own.
 COPY objectives ./objectives
-# The capability blueprint and its amendments, at `blueprints/` and deliberately
-# not at `docs/`. `registerBlueprint` reads a source *by path* and hashes the
-# bytes it read, so a blueprint that exists only in the repository is one the
-# deployed Brain can never ingest — verbatim the failure the `objectives/`
-# comment above records, and the remedy that comment records is to move the
-# input out of `docs/` rather than to start copying `docs/` in.
+# The capability blueprint, its amendments, and the design sections a reader
+# authored. `registerBlueprint` reads a source *by path* and hashes the bytes it
+# read, so an input that exists only in the repository is one the deployed Brain
+# can never ingest.
 #
-# **Which is not merely tidiness here, and the first version of this line got it
-# wrong.** `readTextIndex` reads `docs/`, and `documentedReading` answers
-# `unknown(NO_DOCS_HERE)` only while that directory is *absent*. A `docs/` tree
-# holding the blueprint and nothing else is worse than none: every component the
-# blueprint does not happen to name would read a confident `NO`, which is the
-# exact defect that reading was corrected for once already. A blueprint is a
-# statement about faculties Brain wants, never documentation of components Brain
-# has — §37's own first sentence, at a path.
+# **They live at the repository root for the reason `objectives/` does, and the
+# first version of this got it wrong twice.** `.dockerignore` excludes `docs`,
+# which removes it from the build *context* — so `COPY docs/capability` cannot
+# find it at all, whatever the destination. That is the failure the `objectives/`
+# comment above already records — "once for living under `docs/` (excluded)" —
+# and its remedy was to move the input out of `docs/`, never to copy `docs/` in
+# or to negate the ignore.
+#
+# The destination matters separately and for a different reason.
+# `readTextIndex` reads `docs/`, and `documentedReading` answers
+# `unknown(NO_DOCS_HERE)` only while that directory is *absent*: a `docs/` tree
+# holding one blueprint would make every component the blueprint does not name
+# read a confident `NO`, which is the exact reading corrected once already. A
+# blueprint is a statement about faculties Brain wants, never documentation of
+# components Brain has — §37's own first sentence, at a path.
 #
 # Prose the owner supplied, no secrets, and no authority of its own; what it can
 # move is bounded by `INGESTION_MAY_MOVE`, which is DEFINITION and nothing else.
-COPY docs/capability ./blueprints
+COPY blueprints ./blueprints
 COPY --from=build /app/client/dist ./client/dist
 
 # Not root. The process needs no privilege: it opens a socket and talks to two

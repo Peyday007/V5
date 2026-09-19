@@ -331,7 +331,58 @@ describe('the system self-model', () => {
       // looks. A blueprint is a statement about faculties Brain wants; it is
       // never documentation of components Brain has.
       const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
-      expect(dockerfile).toMatch(/COPY docs\/capability \.\/blueprints/);
+      expect(dockerfile).toMatch(/COPY blueprints \.\/blueprints/);
+      expect(fs.existsSync(path.join(REPO_ROOT, 'blueprints'))).toBe(true);
+    });
+
+    it('copies nothing the build context does not contain', () => {
+      /*
+       * The half the first version of this did not test, and the half that
+       * actually broke the deploy.
+       *
+       * `.dockerignore` excludes a path from the *context*, so a `COPY` whose
+       * source is ignored fails the build outright — "not found" — however
+       * correct its destination is. The first blueprint copy read
+       * `COPY docs/capability ./blueprints`: the destination was right, the
+       * source was unreachable, and the guard above passed because it was
+       * looking at the wrong end of the line.
+       *
+       * So every `COPY` with a local source is held against `.dockerignore`
+       * itself rather than against a remembered list. It is the `objectives/`
+       * comment's own lesson, finally checked: the remedy for an input under an
+       * ignored directory is to move the input, never to copy the directory in.
+       */
+      const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
+      const ignored = fs
+        .readFileSync(path.join(REPO_ROOT, '.dockerignore'), 'utf8')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('!'));
+
+      const sources = [...dockerfile.matchAll(/^COPY (?!--from)(\S+) /gm)].map(
+        (match) => match[1] as string,
+      );
+      expect(sources.length).toBeGreaterThan(3);
+
+      // And the one directory whose absence is a failed deploy is re-included
+      // by name, rather than resting on Docker's single-segment matching of
+      // `*.md` — a fact about BuildKit that cannot be tested without a daemon.
+      const raw = fs.readFileSync(path.join(REPO_ROOT, '.dockerignore'), 'utf8');
+      expect(raw).toMatch(/^!blueprints$/m);
+      expect(raw).toMatch(/^!blueprints\/\*\*$/m);
+
+      for (const source of sources) {
+        const head = source.split('/')[0] as string;
+        expect(
+          ignored,
+          `Dockerfile copies "${source}", whose root "${head}" is excluded from the build ` +
+            'context by .dockerignore — the build cannot find it.',
+        ).not.toContain(head);
+        expect(
+          fs.existsSync(path.join(REPO_ROOT, source)),
+          `Dockerfile copies "${source}", which is not in the repository.`,
+        ).toBe(true);
+      }
     });
 
     it('answers DOCUMENTED unknown rather than no when nothing is readable', async () => {
