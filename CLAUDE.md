@@ -5664,6 +5664,66 @@ because that needs a deploy and a fire; until one has, the engine passing its
 tests says nothing about the research, which is the separation Step 3 drew
 between the research engine and a real job having actually run.
 
+**That paragraph was true when it was written and is corrected here rather than
+edited there.** The kernel is deployed, `Animation and anime production` is on
+the map as `ind_eb01b182ff4640358862` `[SECTOR/SEED]`, written through the
+terminal door by a real enabled administrator, and the durable tick opened the
+bootstrap question and the seeded subject's first scan by itself. What a fleet
+worker has answered is still pending on what follows.
+
+**An exhausted bin attempt budget is a deadlock with no answering transition,
+and production sat in one for fifty-one hours.** The kernel was doing exactly
+what it should and nothing could reach a worker, because the fleet had fired
+*nothing at all* — `in-flight counted=0 examined=0` over a thirty-minute
+window, eight eligible surfaces, zero in flight, and every Routine's fire count
+byte-identical across readings an hour apart.
+
+The cause is one clause. `DISPATCHABLE_SQL` is
+
+    ((state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))
+     AND attempt_count < max_attempts)
+
+so a dead lease is handled by design and **the attempt budget is not**.
+`bin_2e8710626ed84b3bbc88` held ten accepted claims and two claimable work
+items at `attempts 5/5`, on a lease that had expired fifty hours earlier. A
+`LEASED` bin is rescued by `assignNextBin`'s takeover — which needs a worker to
+arrive, which needs a fire, which the exhausted budget refuses. **The bin could
+only be rescued by a worker that could only arrive if the bin were rescued.**
+
+Nine such missions held all six of the standing grant's concurrency slots, so
+sixty-one ideas — including both kernel rounds — were queued behind work that
+could never finish. §24's sentence at a new altitude and the fifth time this
+file has had to write it: *a state that says waiting which nobody can resolve
+is not waiting, it is stuck.*
+
+**`creditBinAttempt` already fixed this forward and could not reach what was
+already stranded** — the fourth time that distinction has been the difference
+between a fix that reaches production and one that does not. The answering
+transition is `regrantBinAttempts`, whose own comment names the identical
+incident (`bin_75bea12e15534ba4b93f`, 5/5, document filed, primary audit done,
+adversarial and judge still claimable, *"no further activation could ever be
+fired at it"*). It raises the ceiling and never resets the count, refuses a
+terminal bin, only ever raises so it cannot strand one, and records
+`BIN_ATTEMPTS_REGRANTED` with a reason from a closed set. Raised 5/5 → 5/40
+under `budget-too-small`, the honest code: `refusals 0`, a SUCCEEDED fragment,
+and a packet that needs a synthesis, a verification and three separately
+sessioned audit roles against a budget of five.
+
+**The reading is what makes it a diagnosis rather than a story.** Three minutes
+after the ceiling moved, the same windowed query answered
+`in-flight counted=2 examined=2`. Nothing else was touched: no quarantine
+lifted, no concurrency raised, no attempt count reset, no lease revived, no
+packet re-planned.
+
+**What is still owed is the general case.** One regrant answers one bin, and
+what stranded these was a budget sized below the length of legitimate work — so
+the honest remedy is a derivation on the tick that regrants a bin whose budget
+is spent while its packet still holds claimable items, rather than an operator
+finding each one. `step10.yml`'s header also claims its subcommands are
+"confined to the harness's own acceptance project", which `regrant` is not and
+never was: it takes any bin id, and its own comments record raising a real
+research bin's ceiling to 100. The comment is the thing that is wrong.
+
 
 ## Repository map
 
