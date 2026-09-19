@@ -11,14 +11,14 @@ production row, a workflow run, or a timestamp taken from one. Where something
 is not known it says so; where it is blocked on a person it names the person and
 the exact action.
 
-**Where it stands, as at 2026-09-19T16:05Z.** Eight surfaces registered, six
-individually VERIFIED, two more that have demonstrably run and completed work
-without their chain being attributable yet, and four not registered at all.
+**Where it stands, as at 2026-09-19T17:09Z.** Eight surfaces registered, seven
+individually VERIFIED, one more that has demonstrably run and completed work
+without its chain being attributable yet, and four not registered at all.
 
 | | Registered | Chain closed | What is in the way |
 | --- | --- | --- | --- |
 | Account 1 — `airynworker2` | 4 | **4** | nothing |
-| Caleb — `calebworker1` | 4 | **2** | a clock, not a repair: `worker_sessions` is keyed on a per-connector credential, so one surface can be proved per rotation — measured, Phase 19. 3-B and 3-D need one window each |
+| Caleb — `calebworker1` | 4 | **3** | a clock, not a repair: `worker_sessions` is keyed on a per-connector credential, so one surface can be proved per rotation — measured over three windows, Phases 19 and 20. 3-D needs one window |
 | Airyn | 0 | — | one Brain-side worker identity, which only she can mint, in her own Claude account (Phase 16) |
 
 Two earlier conclusions in this file are **wrong and are corrected in place
@@ -1562,3 +1562,35 @@ that changed is the hour.
 **Six of twelve individually VERIFIED**: Brain Research A, 1-B, 1-C, 1-D, Caleb
 3-A, Caleb 3-C. 3-B and 3-D each need one probe in a credential window of their
 own.
+
+## Phase 20 — 3-B closed on the first fire of its own window
+
+One probe, one window, one fire:
+
+```
+17:07:33.926  DISPATCH_ROUTED   Selected Caleb 3-B on Caleb: 0/∞ on the Routine, 0/4 on the account.
+17:07:34.944  DISPATCH_SENT     session cse_01Mnn8duTtkWF4JatzVGtwwL
+17:07:46.349  BIN_ASSIGNED      wkr_1db1193323454ee69bb1  session session_01Mnn8duTtkWF4JatzVGtwwL
+17:08:05.531  BIN_UNIT_SUBMITTED
+17:08:08.130  BIN_COMPLETION_ACCEPTED   COMPLETE
+```
+
+**42 seconds, ready to terminal**, and `FLEET: OK verify-surface
+trig_012DkgiTnPr799Le6iL4HEPt VERIFIED`. The arrival identified itself this
+time, so the pin matched on the first attempt — which is the intermittency
+Phase 19 named, seen from the lucky side.
+
+The credential count moves again, and the arrival carries a third distinct one:
+
+| Reading | `oauth` on calebworker1 | Credential that closed the chain |
+| --- | --- | --- |
+| 15:00:26Z (3-A) | 48 minted, 24 used | `oat_d8c4695c841047f2aa30` |
+| 16:04Z (3-C) | 50 minted, 25 used | `oat_49d459502a2d4b9a88e5` |
+| **17:09Z (3-B)** | **52 minted, 26 used** | **`oat_e542824f696248029397`** |
+
+Three windows, three credentials, three closed chains, two tokens minted per
+window. The pattern Phase 15 could only infer is now a measured series.
+
+**Seven of twelve individually VERIFIED**: Brain Research A, 1-B, 1-C, 1-D,
+Caleb 3-A, 3-B, 3-C. Caleb 3-D needs one probe in a window of its own, and
+Airyn's four are unchanged — blocked on one worker identity only she can mint.
