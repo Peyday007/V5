@@ -927,3 +927,158 @@ fleet set-target        --kind ACCOUNT --ref Airyn --to 4
 **Neither is a Brain defect and neither is a capacity limit.** With both
 resolved, the fleet reaches twelve surfaces and the target of 12 already set in
 policy becomes reachable without any further change to this repository.
+
+---
+
+## Phase 11 — four refusals closed four cells of sixteen, and I read them as sixteen
+
+The report above said Caleb's four deployment secrets "hold a token that is not
+authorized for the trigger it is registered against" and sent that to a person
+as *regenerate these four bearers*. **The evidence did not support the
+conclusion, and the correction is recorded rather than quietly applied.**
+
+What the four `AUTH 401`s establish is exactly four facts:
+
+```
+Caleb 3-A  x  BRAIN_ROUTINE_TOKEN_CALEB_3_A   refused
+Caleb 3-B  x  BRAIN_ROUTINE_TOKEN_CALEB_3_B   refused
+Caleb 3-C  x  BRAIN_ROUTINE_TOKEN_CALEB_3_C   refused
+Caleb 3-D  x  BRAIN_ROUTINE_TOKEN_CALEB_3_D   refused
+```
+
+Four triggers against four secrets is a **sixteen-cell square**, and those are
+its diagonal. The provider's own words say `Token is not authorized for this
+routine` — *this* token, *this* routine — so each one closes one cell and says
+nothing whatever about the other twelve. Four bearers registered in the order
+somebody wrote them down, paired wrongly, produce precisely this reading. A
+fleet can be one relabelling away from working while every row in it reads
+permanently broken, and the only way to tell is to ask.
+
+This is the same defect this file records at four other altitudes: **the
+evidence was right and the sentence about it was wrong.**
+
+### What was built, and what it refuses to do
+
+`server/services/dispatch/secretReconcile.ts` walks the rest of the square.
+
+- **One cell at most once, ever.** Every attempt is an append-only
+  `identity_events` row, so a second run costs nothing, a crashed run resumes,
+  and a decided cell is never paid for twice.
+- **A match locks on both axes.** Its trigger and its secret both leave the
+  space, which is what makes this a one-to-one reconciliation rather than n²
+  probing: four triggers cost at most ten further fires and in practice fewer.
+- **The four existing refusals are seeded from the rows themselves** — a
+  `QUARANTINED` Routine carrying a recorded `AUTH` reason was refused while
+  registered against the secret its row names — and written into the durable log
+  *before* any repoint, because afterwards the row names something else and its
+  reason is about a pairing that no longer exists.
+- **A rate limit, a 5xx or a dead connection closes nothing.** Recording one as
+  *this bearer does not open this door* would burn a true pairing out of the
+  space permanently on a bad minute. They stop the search for that trigger and
+  are reported as inconclusive: §30's rule that *we could not tell* must never
+  read the same as *we checked*.
+- **It re-enables nothing.** A quarantine is a health state a person answers
+  with `fleet set-state`, and a diagnostic that lifted its own would be grading
+  its own exam. `tests/secretReconcile.test.ts` asserts every surface is exactly
+  as quarantined afterwards as it was before.
+- **No secret value reaches anything.** The bearer is resolved from the
+  environment by name into `fireRoutine`'s one `Authorization` header and
+  nowhere else; the audit rows carry the secret's *name*, the outcome and a
+  twelve-character digest prefix. Two tests assert the values never appear.
+
+`fleet set-secret` is the answering transition for a proven pairing — the
+companion to `set-capabilities`, and for its reason: a row that has become
+wrong, with no remedy but manual SQL, which invariant 2 forbids. It moves no
+Fly secret and reads no value back.
+
+`fleet check-secret` answers `present` or `absent` for a named variable and
+nothing else — not a length, not a prefix, not a digest. A boolean about a
+secret is not a secret; anything that narrowed the value would be.
+
+### The cost, said rather than glossed
+
+There is no way to ask the provider *would this token work* without using it, so
+proving a pairing costs one activation on the account that owns it — at most one
+per trigger, and only on the pairing that is correct. A fire Brain sends carries
+no text (§22), so such a session authenticates, checks in, and is handed
+whatever `calebworker1` is entitled to, or nothing.
+
+Pinning a probe bin at it first would be worse rather than better: a pinned bin
+is answerable only by the session Brain's own dispatcher fired at that Routine
+(Phase 6), and this fire is deliberately outside the dispatcher, so the bin
+would be refused by the very guard that makes pinning meaningful. The honest
+order is **reconcile, then re-enable, then prove through the dispatcher** with
+`verify-surface --probe`, which is the four-row chain that actually establishes
+a surface works.
+
+### Two guards were run against a neutered build first
+
+Because a regression test nobody has seen fail is a claim rather than a reading:
+
+- making an inconclusive outcome eliminate a cell fails
+  *"records a rate limit as nothing learned, and closes no cell"*;
+- removing the locked-secret check fails
+  *"never offers a cell twice, and locks a match out on both axes"*.
+
+## Phase 12 — Airyn: the worker does not exist, and the rows say why
+
+The report above said Airyn's account "does not exist" and asked for four
+Routines to be created. Read properly, that was half right and the expensive
+half was wrong.
+
+`admin people list` at 13:36:08Z:
+
+```
+usr_72e1236be8f04f4d9aa2  PERSON  MEMBER  passkeys=1  signs-in=device  Airyn
+```
+
+**Airyn is an enrolled member of this Brain and can sign in with a device.**
+So the journey §34 and §35 built for exactly this is available to her, and the
+missing piece is narrower than "an account".
+
+`admin workers list` at 13:26:48Z returns ten identities and **not one of them
+is a new Airyn worker**:
+
+```
+airynworker1   wkr_80f386d4d53d4679bf1a  ARCHIVED  0 project(s)
+airynworker2   wkr_1cdd82cfb2a54faf8edd  ACTIVE    8 project(s)
+calebworker1   wkr_1db1193323454ee69bb1  ACTIVE    3 project(s)
+deal-dispatch, factory-brain, verification-worker ×5
+```
+
+So the answer to *did Airyn's connector authorization mint a distinct worker* is
+**no**, established from rows rather than assumed.
+
+**`airynworker2` must not be reused for this, and its name is a trap.** It is
+Account 1's worker — the identity all four `Brain Research A / 1-B / 1-C / 1-D`
+surfaces are bound to, holding membership on eight projects. Binding Airyn's
+Routines to it would produce four more surfaces that resolve to one worker, so
+an audit run across them would read `SESSION_SEPARATED` and never
+`WORKER_SEPARATED` or `ACCOUNT_SEPARATED`, and the second capacity bucket Airyn
+is supposed to be would be a relabelling of the first. §23 is explicit that a
+same-account result is never described as cross-account independent; a
+same-*worker* one must not be either.
+
+`namesFor(usr_72e1236be8f04f4d9aa2)` derives what her connection will mint:
+
+| | |
+| --- | --- |
+| worker | `research-airyn-72e123` |
+| connector | `Brain (Airyn)` |
+| Routine | `Brain Research — Airyn` |
+| its own secret | `BRAIN_ROUTINE_TOKEN_AIRYN_72E123` |
+
+That worker does not exist yet, which is the whole of what is missing.
+
+**She does not need to recreate her four Routines.** The four `trig_…`
+references and the four `BRAIN_ROUTINE_TOKEN_AIRYN_2_*` deployment secrets are
+already made; what they lack is a Brain-side identity to be bound to. Once
+`research-airyn-72e123` exists, registering the four existing triggers against
+the four existing secret names is `fleet register-routine` ×4 plus
+`bind-worker` ×4 — an operator path, no browser, no deploy.
+
+**And the invitation cannot be issued into a workflow log.** An invitation token
+is a single-use credential, and §17 admits no credential in a log. The surface
+that issues one shows it once, in a browser, to somebody signed in — which is
+`issueConnectorInvitation` on her own connection page. That is why this one step
+is a person's and is not a limitation of the operator surface.
