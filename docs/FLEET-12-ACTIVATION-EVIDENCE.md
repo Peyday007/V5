@@ -1169,3 +1169,42 @@ The diagnostic did not do this and must not: a quarantine is a health state a
 person answers, and a diagnostic that lifted its own would be grading its own
 exam. Every earlier refusal keeps its row, its `request_id` and its timestamp —
 nothing was rewritten to make this come out right.
+
+## Phase 14 — the eighth pool reading, and the first one with a number in it
+
+Deploy [run 35447977114](https://github.com/Peyday007/V5/actions/runs/35447977114)
+carried this branch to production. Release: success. Pre-restart hosted
+verification: success, on the released image. Restart: success. `/healthz`:
+healthy. **Post-restart verification: failure**, and the line it failed on is
+the reason this is recorded rather than re-deployed:
+
+```
+The database pool had no free connection within 10000ms:
+2/2 connection(s) in use, 0 idle, 379 caller(s) waiting, ceiling 2.
+```
+
+§27 records seven earlier occurrences of this condition and says, twice, that
+raising `BRAIN_DATABASE_POOL_SIZE` blind could exhaust the server's own
+connection limit and turn a failed verification into a failed boot — so
+*instrument first, size from the reading*. `describePoolExhaustion` is that
+instrument, and this is the first run in which it produced the numbers rather
+than `pg-pool`'s eight bare words.
+
+Three things are now established that were not:
+
+- **The pool was genuinely at its ceiling**, not refused by the server:
+  `2/2 in use, 0 idle` against `ceiling 2` is the first branch of the two the
+  diagnostic separates, and its remedy is the opposite of the second's.
+- **The ceiling was 2, not 10.** That is the operator script's own self-imposed
+  pool size, not the application default. So seven earlier readings that assumed
+  the app's untuned 10 were reasoning about the wrong number, and the condition
+  is reachable far more cheaply from a script than from the server.
+- **379 callers were waiting.** A queue that deep is not contention over a
+  slow statement; it is a fan-out with no bound on it.
+
+**No knob was turned, and that is deliberate.** This is still a reading rather
+than a cause, the release itself is proved — the image is live and the
+verification that ran against it before the restart passed in full — and §27's
+rule holds: a ceiling nobody has observed stays UNKNOWN. Re-deploying to
+"fix" it would restart a Brain holding leased work to re-prove something the
+pre-restart run already proved.
