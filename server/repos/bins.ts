@@ -1537,7 +1537,57 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
             WHERE bin_id = ? AND lease_generation = ? AND routine_id = ? AND state = 'SENT'`,
           [row.id, row.lease_generation, row.pinned_routine_id],
         );
-        if (!sameProviderSession(fired?.session_ref, input.sessionRef)) continue;
+        if (!sameProviderSession(fired?.session_ref, input.sessionRef)) {
+          /*
+           * Skipped — and **said**, which the first version of this guard did
+           * not, and that was the same defect one layer along.
+           *
+           * The skip is deliberately as cheap as losing the compare-and-swap:
+           * no attempt, no lease, no generation, no refusal row and no fire
+           * backoff. Writing *nothing at all* is a different thing, and
+           * production showed the cost within the hour:
+           * `bin_5922df8c521a421cb9de` was fired at 11:03:24.954Z to session
+           * `cse_01UHrnKDgJeez7e6mZt27sQf` and was still READY at 0/2 attempts
+           * fourteen minutes later, with no event anywhere saying whether the
+           * fired session had never arrived or had arrived and been refused
+           * here. Those two have completely different remedies and nothing
+           * could tell them apart.
+           *
+           * §27 records the identical shape — a worker omitting `session_ref`
+           * refused every review silently, because `bin_session_refusals` is
+           * keyed by the session and the missing one left no row, so a bin sat
+           * READY at nought attempts "with nothing anywhere naming a reason".
+           * A guard that cannot be diagnosed is one an operator eventually
+           * turns off.
+           *
+           * So it records what it saw. Both values are session identifiers that
+           * every `step10 trace` already prints, and neither is a credential.
+           * It is an event and not a `bin_session_refusals` row on purpose: that
+           * table drives a fire backoff, and deferring the *fire* of a bin whose
+           * whole problem is that it is waiting for its own fire is the loop
+           * this pin exists to avoid.
+           */
+          await recordBinEvent({
+            eventType: 'BIN_ASSIGNMENT_REFUSED',
+            binId: row.id,
+            projectId: row.project_id,
+            orchestrationId: row.orchestration_id,
+            leaseGeneration: row.lease_generation,
+            workerId: input.workerId,
+            sessionRef: input.sessionRef ?? null,
+            workloadClass: row.workload_class,
+            outcome: 'PINNED_TO_ANOTHER_SESSION',
+            reason:
+              `This bin is pinned to ${row.pinned_routine_id} and is answerable only by the ` +
+              `session Brain fired at it, ` +
+              `${fired?.session_ref ? `which was ${fired.session_ref}` : 'which has not been fired yet'}. ` +
+              `The caller reported ${input.sessionRef ?? 'no session at all'}.`,
+            // Brain read two rows it wrote itself and compared them. Nothing
+            // here is inferred and nothing was taken from the caller.
+            evidenceClass: 'MEASURED',
+          });
+          continue;
+        }
       }
 
       /*
