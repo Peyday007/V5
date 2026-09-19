@@ -1109,3 +1109,63 @@ before a row exists.
 So nothing about Airyn's deployment secrets needs redoing. The four
 `trig_…` references are hers to supply and the four bearers are already in
 place; what is missing is one Brain-side identity for them to be bound to.
+
+---
+
+## Phase 13 — the four bearers were valid the whole time
+
+`fleet reconcile-secrets --account Caleb`, 14:52:33–14:52:38Z,
+[run 35450044574](https://github.com/Peyday007/V5/actions/runs/35450044574).
+Fourteen seconds, seven fires, and the answer:
+
+```
+  ELIMINATED     Caleb 3-B  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_A   401 req_011CfCzEmCyJQzz79qVUTW1k
+  MATCHED        Caleb 3-B  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_C   session cse_01HdafpjCUNWn7myUp8xywWH
+                 repointed BRAIN_ROUTINE_TOKEN_CALEB_3_B -> BRAIN_ROUTINE_TOKEN_CALEB_3_C
+  ELIMINATED     Caleb 3-A  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_B   401 req_011CfCzEugxyVwsxLfueRifC
+  MATCHED        Caleb 3-A  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_D   session cse_012ZiYotSgkY6Cz5F7yKJEpy
+                 repointed BRAIN_ROUTINE_TOKEN_CALEB_3_A -> BRAIN_ROUTINE_TOKEN_CALEB_3_D
+  ELIMINATED     Caleb 3-C  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_A   401 req_011CfCzEzB5ezfN5LKBPtWyr
+  MATCHED        Caleb 3-C  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_B   session cse_01QbkWheYEmqWsRhzE8BWr9p
+                 repointed BRAIN_ROUTINE_TOKEN_CALEB_3_C -> BRAIN_ROUTINE_TOKEN_CALEB_3_B
+  MATCHED        Caleb 3-D  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_A   session cse_01R4kYsgJWrqjuqXjyDokysM
+                 repointed BRAIN_ROUTINE_TOKEN_CALEB_3_D -> BRAIN_ROUTINE_TOKEN_CALEB_3_A
+
+  matched      4
+  eliminated   3 this run
+  inconclusive 0
+  still open   0 cell(s)
+FLEET: OK reconcile-secrets account=Caleb tried=7 matched=4 open=0
+```
+
+**The true mapping is a reversal**: 3-A↔3-D and 3-B↔3-C. Not one bearer was
+invalid, revoked, expired, or from another account. Four tokens had been written
+down against four triggers in the opposite order, and every `AUTH 401` this
+Brain ever recorded about Caleb was the provider saying so accurately.
+
+The search cost **seven** of the twelve open cells rather than twelve, because a
+match leaves the space on both axes: once `3-C`'s bearer was proved to open
+`3-B`, it stopped being a candidate for `3-A`, `3-C` and `3-D`. The last
+trigger, `3-D`, matched on its first attempt with no elimination at all — by
+then only one bearer was left.
+
+**The report in Phase 10 was wrong and is corrected here.** It said the four
+secrets "hold a token that is not authorized for the trigger it is registered
+against" — true, and then drew from it *"regenerating the tokens in the Claude
+account that owns them is the remaining remedy"*, which did not follow. No
+person needed to touch a Claude account. The remedy was a relabelling that Brain
+could establish on its own in fourteen seconds, and the only reason it took a
+day is that nobody asked the other twelve questions.
+
+### Re-enabled as a separate, recorded decision
+
+Four `fleet set-state --kind routine --to ENABLED` calls, 14:53:28–14:54:51Z,
+each carrying the same reason on the row:
+
+> reconcile-secrets proved the provider accepts the bearer now registered
+> against this trigger; the earlier 401 was a wrong pairing, not a bad token.
+
+The diagnostic did not do this and must not: a quarantine is a health state a
+person answers, and a diagnostic that lifted its own would be grading its own
+exam. Every earlier refusal keeps its row, its `request_id` and its timestamp —
+nothing was rewritten to make this come out right.
