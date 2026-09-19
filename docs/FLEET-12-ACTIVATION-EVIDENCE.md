@@ -1445,3 +1445,58 @@ token lifetimes, which is a clock rather than a repair.
 | Account 1 (`airynworker2`) | 4 | **4** |
 | Caleb (`calebworker1`) | 4 | **1** — 3-B and 3-D ran and completed bins, unattributed; 3-C awaiting its own fire |
 | Airyn | 0 registered | — blocked on one worker identity (Phase 16) |
+
+## Phase 18 — the no-show reopen ran by itself, and 3-C was refused again for the same reason
+
+Thirty minutes after the unanswered fire, with nobody watching:
+
+```
+15:31:43.653  DISPATCH_INTENT   PENDING
+15:31:43.818  DISPATCH_ROUTED   Selected Caleb 3-C on Caleb: 0/∞ on the Routine, 0/4 on the account.
+15:31:44.889  DISPATCH_SENT     session cse_01TQH1kdT68NGt1Qs5Ytqy9K
+```
+
+and the first intent now carries its own verdict rather than silence:
+
+```
+gen 0  SENT  attempt 2/5  sent 2026-09-19T15:31:44.857Z
+  NO_SHOW: Fired, and no worker ever claimed the bin before the in-flight window closed.
+```
+
+`reopenNoShowDispatches` did exactly what §27 says it is for — derived the
+condition from rows rather than scheduling it, spent a *dispatch* attempt and
+not a *bin* attempt (the bin is still `0/2`), and left three fires in hand.
+
+**And ten seconds later the same refusal, in the same shape as the first time:**
+
+| Fire | First refusal | Gap | Caller reported |
+| --- | --- | --- | --- |
+| 15:01:34.755 | 15:01:46.692 ×3 | 11.9s | **no session at all** |
+| 15:31:44.889 | 15:31:54.894 ×3 | 10.0s | **no session at all** |
+
+`sameProviderSession` returns false when either side is null, so a caller that
+identifies itself as nothing cannot be matched to the session Brain fired. The
+pin refuses, records both values, and costs the bin nothing.
+
+**This is the guard working, and it is also the limit of what the guard can
+do.** The question it asks is *are you the session I fired*, and an
+unidentified caller cannot answer it — the `bin_dispatch` fallback §27 uses for
+the independence floor is circular here, because that row is Brain's record of
+who it *fired*, not of who has just turned up. Failing closed is the only
+correct answer: an unproven surface reported as proven is the one outcome a
+surface proof may never produce.
+
+**What is not established, and is worth somebody measuring.** Whether those
+unidentified arrivals *are* 3-C's own session. Two readings fit and the rows do
+not separate them: the fired session arriving from a client that omitted
+`brain_check_in`'s optional `session_ref`, or some other calebworker1 session
+that happened to be awake. What makes the first plausible is the timing — ten
+to twelve seconds after each fire, twice, which is exactly the 7–13 second
+arrival latency 3-A, 3-B and 3-D each showed. What argues against it is that
+those three *did* report a ref, so the field is not universally omitted by this
+client.
+
+If it is the first reading, then a surface whose client omits `session_ref`
+cannot be proved by a pinned probe at all, and the remedy is at the worker
+rather than in Brain. Three dispatch attempts remain on this bin, so the next
+arrival that identifies itself will close it.
