@@ -11,6 +11,22 @@ production row, a workflow run, or a timestamp taken from one. Where something
 is not known it says so; where it is blocked on a person it names the person and
 the exact action.
 
+**Where it stands, as at 2026-09-19T15:37Z.** Eight surfaces registered, five
+individually VERIFIED, three more that have demonstrably run and completed work
+without their chain being attributable yet, and four not registered at all.
+
+| | Registered | Chain closed | What is in the way |
+| --- | --- | --- | --- |
+| Account 1 — `airynworker2` | 4 | **4** | nothing |
+| Caleb — `calebworker1` | 4 | **1** | a clock, not a repair: `worker_sessions` is keyed on a per-connector credential, so one surface can be proved per rotation (Phases 15, 17). 3-C additionally awaits an arrival that identifies itself (Phase 18) |
+| Airyn | 0 | — | one Brain-side worker identity, which only she can mint, in her own Claude account (Phase 16) |
+
+Two earlier conclusions in this file are **wrong and are corrected in place
+rather than deleted**: that Caleb's four bearers were invalid, and that Airyn's
+Routines had to be created. Both had the same shape — a refusal read as proof of
+a stronger claim than it carried. See the superseded banner on *What is blocked,
+and on whom*.
+
 ---
 
 ## Phase 0 — the authoritative inventory
