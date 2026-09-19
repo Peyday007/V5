@@ -271,11 +271,21 @@ two files nothing held against each other.
 | [35436929809](https://github.com/Peyday007/V5/actions/runs/35436929809) | `8c997720` | released; post-restart verification `fetch failed` after 5m20s — recorded below |
 | [35440403377](https://github.com/Peyday007/V5/actions/runs/35440403377) | `ca6c3eb` | released 11:46:00Z, restarted, healthy 12:00:05Z |
 
-`ca6c3ebc119687470307607e13f358c2fcbc7e20` is the deployed commit, confirmed
-independently of its own deploy run by the scheduled Production guard,
-[run 35439163107](https://github.com/Peyday007/V5/actions/runs/35439163107) at
-11:05:42Z against `8c997720`, and by every operator command in this file since
-12:17Z reporting `head_sha ca6c3eb`.
+`ca6c3ebc119687470307607e13f358c2fcbc7e20` is the deployed commit. Said
+precisely, because the two commits prove different things:
+
+- **`8c997720` was live and serving**, confirmed *independently of its own
+  deploy run* by the scheduled Production guard,
+  [run 35439163107](https://github.com/Peyday007/V5/actions/runs/35439163107)
+  at 11:05:42Z — and by production behaviour that only exists in it: the
+  4m24s hold on `bin_5922df8c521a421cb9de` at 11:33 (Phase 6) is the pin guard
+  running, and it could not have happened on the previous image.
+- **`ca6c3eb` is what deploy [run 35440403377](https://github.com/Peyday007/V5/actions/runs/35440403377)
+  released** at 11:46:00Z, with the machine answering healthy at 12:00:05Z. It
+  differs from `8c997720` only by the `BIN_ASSIGNMENT_REFUSED` recording, which
+  emits a row nothing has yet needed to emit — so there is no *behavioural*
+  confirmation of this commit beyond its own release, and this file does not
+  claim one.
 
 ### One post-restart verification failure, recorded and not explained away
 
@@ -419,6 +429,87 @@ That last one is the standard this platform exists for: an unreadable source
 recorded as **unresolved**, and a negative result established by a documented
 search rather than asserted.
 
+### `cash-mode-4` — ten packets, read at 12:45:01Z
+
+`npm run admin -- packets list cash-mode-4`
+([run 35443729343](https://github.com/Peyday007/V5/actions/runs/35443729343)):
+
+```
+orc_011f2760e0b9400bbfa6  NEEDS_HUMAN   1 fragment(s)
+orc_34486968016c44d28716  NEEDS_HUMAN   2 fragment(s)
+orc_26fd2244c1844cce8052  NEEDS_HUMAN   1 fragment(s)
+orc_4bcbef858db7404db71a  NEEDS_HUMAN   2 fragment(s)
+orc_271c83cad055422c9a90  AUDITING      3 fragment(s)
+orc_531b1a254e624ae5a803  NEEDS_HUMAN   2 fragment(s)
+orc_21ca96f6328f4e0eacb7  AUDITING      3 fragment(s)
+orc_b3695f9d569843d79eaa  NEEDS_HUMAN   3 fragment(s)
+orc_dae70d4850cc4d1c9d6e  NEEDS_HUMAN   3 fragment(s)
+orc_34a7690f50134224ae2a  NEEDS_HUMAN   1 fragment(s)
+```
+
+Ten packets, twenty-one fragments, two under audit and eight waiting on a
+person. **Eight of ten is a high park rate and is reported as one** rather than
+averaged away: `NEEDS_HUMAN` here is the evidence machinery refusing to advance
+— a plan outside the approval envelope, a lane with no accepted claim, a
+`MORE_RESEARCH` verdict — and each carries its own recorded reason. It is the
+gate working, and it is also a signal that these ten bucket questions are
+harder to settle from published sources than `cash-mode-2`'s were. Which of
+those two it is, per packet, is a Cash Mode question rather than a fleet one,
+and this file does not guess at it.
+
+### Execution lineage, per Routine, on a live packet
+
+`step10 audit-lineage orc_271c83cad055422c9a90` at 12:46:15Z
+([run 35443770935](https://github.com/Peyday007/V5/actions/runs/35443770935)):
+
+```
+SYNTHESIS (author, attempt 1)  COMPLETE  worker=wkr_1cdd82cfb2a54faf8edd
+                                         routine=rtn_29cec4a75d3947c9b786  (Brain Research 1-D)
+                                         account=acct_70dda3fae2e1428e944b
+                                         session=oat_39a0d3597fa04a0fb4eb
+PRIMARY                        COMPLETE  routine=rtn_fbcb288d55854991bdfa  (Brain Research 1-B)
+                                         session=oat_3eb966331acc4a13afee
+ADVERSARIAL                    COMPLETE  routine=rtn_29cec4a75d3947c9b786  (Brain Research 1-D)
+                                         session=oat_7055fa59e3584ccdb5ce
+applied  PRIMARY_ADVERSARIAL      at SESSION
+applied  SYNTHESIS_PRIMARY        at SESSION
+applied  SYNTHESIS_ADVERSARIAL    at SESSION
+STEP10: OK audit-lineage compliant=true audits=2 synthesis=1
+```
+
+Three things in that block are worth naming.
+
+**It is per-Routine substantive attribution, from rows.** 1-D wrote the report;
+1-B reviewed it; 1-D's *other* session argued against it. Those are research
+passes, not probes, and each resolves to a named Routine, account and
+authenticated session.
+
+**`executor_account_id` is populated.** §24 records a period when it was null on
+every row this Brain had ever written, so `A11_INDEPENDENT_AUDIT` read `NOT_RUN`
+over genuinely independent passes. It reads `acct_70dda3fae2e1428e944b` here,
+from the fire rather than from the static binding.
+
+**The author is a party to its own audit, and is separated from it.** All three
+matrix pairs applied — including `SYNTHESIS_PRIMARY` and
+`SYNTHESIS_ADVERSARIAL` — at `SESSION`, which is the floor. `compliant=true`.
+
+### Audit independence, scanned rather than asserted
+
+`npm run admin -- packets independence cash-mode-2`, 12:42:12Z
+([run 35443568410](https://github.com/Peyday007/V5/actions/runs/35443568410)):
+
+```
+No packet has a reviewer that shared a session with its author.
+(Packets with no completed audit or no completed synthesis are not
+ in scope: there is nothing to compare.)
+ADMIN: OK
+```
+
+That scan reports and acts on nothing, and it separates *we could not tell*
+from *we checked* — so this is the second answer rather than an absence of
+findings. The packet it can compare is the one that reached a `PASS` verdict,
+and its author is not among its reviewers.
+
 ### Queue depth at 12:30Z
 
 | Project | Claimable now | Note |
@@ -492,7 +583,17 @@ not exist at the previous reading:
 | --- | --- |
 | 12:23:13Z | `cash-mode-4` fired 12:22:43.122Z (`cse_01Y1UB3d24w5Fme3f3RZPVE6`) and 12:22:53.443Z (`cse_01Xp79gAd7rEH1iyYtfobQ3G`) — ages 30s and 20s |
 | 12:29:26Z | `fleet show` reports `in flight 2`, one on 1-B and one on 1-C — different fires again |
-| 12:36:00Z | the same two fires still counted, at ages 797s and 787s — workers holding them thirteen minutes in, which is what a research bin being *worked* looks like rather than one being re-fired |
+| 12:36:00Z | the same two fires still counted, at ages 797s and 787s |
+| 12:42:50Z | `fleet show` again: **counters unchanged** — A 328, 1-B 48, 1-C 48, 1-D 48, with 1-B and 1-C still `in-flight=1` |
+
+**Twenty minutes with no new fire is a reading too, and it is reported rather
+than smoothed over.** Between 12:22:53Z and 12:42:50Z the counters did not
+move: the account holds 2 of its 4 in flight and the bins those two fires were
+for have not yet been answered. That is not the fleet idling past a backlog —
+it is two activations outstanding against a queue whose other items are either
+terminal or inside a live lease. If nobody arrives, `reopenNoShowDispatches`
+reopens them at the thirty-minute mark, which is the same mechanism that
+rescued `bin_5922df8c521a421cb9de` below.
 
 Two of those waves are complete autonomous cycles rather than just fires:
 
@@ -544,7 +645,24 @@ anybody arrived. The trace does:
 12:21:50.182  BIN_TERMINAL    NEEDS_HUMAN
 ```
 
-**Five fires, five arrivals, three different Routines, zero no-shows.** Every
+**Three fires, five arrivals, three different Routines.** Said exactly, because
+the arrivals and the fires do not pair one-to-one and pretending they did would
+be the kind of tidy sentence this file exists to refuse:
+
+- the 12:18:17 fire to **1-B** produced the 12:18:39 arrival, matched on
+  `cse_013ztquUfw85LomxBJFU3dAN` ↔ `session_013ztquUfw85LomxBJFU3dAN`;
+- the 12:20:12 fire to **1-D** produced the 12:20:30 arrival, likewise;
+- the **12:16:41 arrival was `cse_01An6qsjWED89rrv45SJurMi`**, a session Brain
+  had fired at **1-B** twenty minutes earlier for `bin_4fb70d9782c141eea555`.
+  It finished that bin, checked in again, and was handed this one — which is
+  `checkIn`'s reassignment path working, not a reply to the 11:59:52 fire;
+- the 11:59:52 fire to **1-C** has no arrival bearing its session id. It is
+  neither confirmed arrived nor recorded as a no-show, because the bin went
+  terminal before its thirty-minute window closed.
+- two further arrivals at 12:19:32 and 12:21:28 are the same sessions being
+  re-handed the bin on check-in after releasing it.
+
+Every
 worker read the state correctly, said so precisely, checkpointed and released
 rather than inventing a report. That is the fleet working, and it is the same
 thing §23 already records about five refused activations: *the workers were not
@@ -680,8 +798,8 @@ All readings 2026-09-19, deployed commit
 | Refusals | 2 (historical) | 0 | 0 | 0 |
 | No-shows | 0 consecutive | 0 consecutive | 0 consecutive | 0 consecutive |
 | Arrivals attributed | 20 | 5 | ≥1 | ≥1 |
-| Substantive completed bin | — | `bin_52d91a0a243e48929772`, `bin_4fb70d9782c141eea555` | `bin_8b0e06410d6d4bf1a199` | `bin_7024d12474c949129a0c` |
-| Latest successful completion | 08:51:06Z chain | ~12:09Z | ~12:34Z (verify read) | 11:34:08.294Z |
+| Non-probe bin completed | not separately identified in this window | `bin_52d91a0a243e48929772`; and its session `cse_01An6qsjWED89rrv45SJurMi` recorded the `MORE_RESEARCH` JUDGE verdict on `bin_741172668373427caada` at 12:12:02Z | not separately identified in this window | `bin_7024d12474c949129a0c`; its 12:20:11Z session worked `bin_dda9ea6fd034448fa505` |
+| Latest completion in a proven chain | 08:51:06Z | 12:12:02Z (JUDGE verdict) | read at 12:34:29Z by `verify-surface` | 11:34:08.294Z |
 | Verify run | [35443173917](https://github.com/Peyday007/V5/actions/runs/35443173917) | [35442542759](https://github.com/Peyday007/V5/actions/runs/35442542759) | [35443224895](https://github.com/Peyday007/V5/actions/runs/35443224895) | [35442417627](https://github.com/Peyday007/V5/actions/runs/35442417627) |
 
 Account headroom at 12:29:26Z: **2 of 4 in flight**, 2 free. Measured ceiling
@@ -729,8 +847,8 @@ never existed in this Brain.
 | Per-account concurrency **observed** | **4 of 4** | MEASURED — `ACCOUNT_TARGETS_REACHED` ×4 |
 | Per-Routine ceiling | `∞` (research Routines declare none) | router output |
 | Fires in the session window | +39 | counter delta |
-| Refusals in the session window | 4, all Caleb `AUTH` | row |
-| No-shows | 1 (`bin_5922df8c521a421cb9de`, reopened and completed 30 min later) | row |
+| Refusals in the session window | **2**, both Caleb (`3-C` 08:52:52Z, `3-D` 08:53:32Z). `3-A`/`3-B`'s pair was written at 02:03/02:05Z, before this window; account 1's `refusals=2` is older still and unchanged across both readings | row |
+| No-shows | **one event**, on `bin_5922df8c521a421cb9de`'s 11:03:24Z fire, reopened at 11:33:33Z and completed. Every `fleet show` row reads `no-shows=0` because that counter is *consecutive* and resets on the next arrival — the two facts agree | row |
 | Remaining queue depth | 28 claimable items across `cash-mode-1/3/4`; `cash-mode-2` drained | queue read 12:30Z |
 | Deployed commit | `ca6c3eb` | [run 35440403377](https://github.com/Peyday007/V5/actions/runs/35440403377) |
 | Provider-capacity condition | **none on account 1** — no rate limit, no `429`, no `PROVIDER_ENFORCED` refusal anywhere in the window | row |
@@ -743,7 +861,7 @@ never existed in this Brain.
 | Targets permit 4 per account and 12 fleet-wide | **done** |
 | 12 fresh pinned probes, all proven | **4 of 4 provable surfaces proven; 8 not provable** |
 | Fresh twelve-way wave, observed concurrency 12 | **four-way wave, observed concurrency 4 of 4** |
-| Every Routine completes substantive research | **4 of 4 usable surfaces did** |
+| Every Routine completes substantive research | **partial, and said precisely.** All four are VERIFIED end to end on Brain's own four-row chain. Two — 1-B and 1-D — additionally hold a *non-probe* completed bin identified in this window, and 1-B recorded a judged audit verdict. For `Brain Research A` and `1-C` the chain I can point at in this window is their pinned probe; both have been carrying substantive research for weeks (A: 328 fires) but I did not isolate a specific non-probe bin id for them, and I am not going to claim one I did not read |
 | ≥2 automatic refill waves, no chat involvement | **done** — Phase 8 |
 | Outputs, sources, evidence and lineage persisted | **done** — 75 claims, 1 filed document, 2 judged audits (`PASS`, `MORE_RESEARCH`) |
 | Failed/stale probes excluded from substantive metrics | **done** |
