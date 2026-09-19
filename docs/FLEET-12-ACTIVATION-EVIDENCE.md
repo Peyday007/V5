@@ -1082,3 +1082,30 @@ is a single-use credential, and §17 admits no credential in a log. The surface
 that issues one shows it once, in a browser, to somebody signed in — which is
 `issueConnectorInvitation` on her own connection page. That is why this one step
 is a person's and is not a limitation of the operator surface.
+
+
+### Airyn's four deployment secrets are already there, and each is distinct
+
+Established at 13:47–13:53Z without deploying anything, and without reading a
+value. `register-routine` resolves the named secret and runs the
+digest-collision check **before** it returns on `--dry-run`, so it is a
+non-mutating presence probe against the code already in production:
+
+| Secret | Present | Distinct bearer |
+| --- | --- | --- |
+| `BRAIN_ROUTINE_TOKEN_AIRYN_2_A` | yes | yes — [run 35446771906](https://github.com/Peyday007/V5/actions/runs/35446771906) |
+| `BRAIN_ROUTINE_TOKEN_AIRYN_2_B` | yes | yes — [run 35446871100](https://github.com/Peyday007/V5/actions/runs/35446871100) |
+| `BRAIN_ROUTINE_TOKEN_AIRYN_2_C` | yes | yes — [run 35446966535](https://github.com/Peyday007/V5/actions/runs/35446966535) |
+| `BRAIN_ROUTINE_TOKEN_AIRYN_2_D` | yes | yes — [run 35447061811](https://github.com/Peyday007/V5/actions/runs/35447061811) |
+
+`FLEET: OK dry-run register-routine … (nothing written)` on all four. The
+second column is not a second reading of the same fact: `routineRegistrationCollision`
+compares the digest against every registered Routine, so passing it says each of
+these four bearers is **not** a token some existing surface already fires with.
+Two names holding one token is the failure mode that would make a fleet look
+like two surfaces while being one trigger fired twice, and it is ruled out here
+before a row exists.
+
+So nothing about Airyn's deployment secrets needs redoing. The four
+`trig_…` references are hers to supply and the four bearers are already in
+place; what is missing is one Brain-side identity for them to be bound to.
