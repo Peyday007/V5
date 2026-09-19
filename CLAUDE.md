@@ -5389,6 +5389,23 @@ prose** — the same matcher defect `operatorConsoleRemoved` had to be corrected
 for in the commit before it, which is how often a test that greps a file gets
 this wrong.
 
+**And all three were unreachable in practice, because the joint before them was
+a state nothing could leave.** `NEEDS_A_READING` is where a derivation leaves a
+gap whose requirement matched nothing; `judgeGap` is the only way out; and it
+had no route, tool or command calling it — four test suites and nothing else.
+Everything downstream is guarded on it, so `readiness`, `decisionReadiness`,
+`compile`, `handOff` and the implementation reading all refused for ever, and
+§36's own record of *a reader then classified the 25* was made through something
+that is not a shipped surface. Every part passed its own tests throughout, which
+is what makes this the same defect as the three it blocks rather than a
+different one. The reading is `npm run capability -- packet judge`, on a
+terminal because reaching the shell is the authentication — and a reader may
+answer **any** kind, because `DERIVABLE` bounds what *Brain* derives by itself
+while `NEEDS_JUDGEMENT` is exactly the set a person is there to supply. What is
+not settable is who the answer is recorded as. `packet show` prints gap ids now,
+since a command taking one beside a listing that printed none is §24's remedy
+the person cannot use.
+
 **What is still not true, and is not rounded up.** No faculty is implemented:
 `realized.ts` can now say one is, from rows, and on this repository every
 packet still holds unread gaps. Nothing has been deployed — the hosted tool

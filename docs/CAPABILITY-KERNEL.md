@@ -340,6 +340,29 @@ The gap moves to `ASSIGNED` carrying the candidate, so the next pass — which
 reads only `OPEN` gaps — asks nothing twice, and the link from a gap to its work
 is a join rather than a search that a merge could answer wrongly.
 
+### The joint that made all three unreachable
+
+`NEEDS_A_READING` is where a derivation leaves a gap whose requirement matched
+nothing, and `judgeGap` is the only transition out of it. It existed, four
+suites exercised it, and **no route, tool or command called it** — so in
+production a packet could enter that state and never leave, and everything
+guarded on it is everything: `readiness`, `decisionReadiness`, `compile`,
+`handOff` and the implementation reading all refuse while one gap is open.
+
+The three mechanisms above were therefore reachable in tests and unreachable in
+practice, and §5's record of *a reader then classified the 25* was made through
+something that is not a shipped surface. Every part passed its own tests
+throughout. It is the same defect as the three it blocks, one joint further in.
+
+`npm run capability -- packet judge <gapId> --kind <k> --evidence "…"` is the
+reading, on a terminal because reaching the shell is the authentication. A
+reader may answer **any** kind: `DERIVABLE` bounds what *Brain* derives by
+itself and `NEEDS_JUDGEMENT` is precisely the set a person is here to supply.
+What is not settable is who the answer is recorded as — `derivedBy` is always
+`PERSON`, with no flag that changes it. And `packet show` prints gap ids now,
+because a command taking one beside a listing that printed none is §24's remedy
+the person cannot use, at a terminal.
+
 ### What is still not true
 
 - **No faculty is implemented.** `realized.ts` can now *say* one is, from rows,

@@ -109,6 +109,13 @@ Three mechanisms existed, were tested, and had no caller.
 | `moveDimension`, for five of six dimensions | nothing | `services/realize/realized.ts`, `npm run capability -- packet realize` |
 | `compile()`'s `ObjectiveSubmission` | a printer | `services/realize/handoff.ts`, `npm run capability -- packet handoff` |
 | `directorPass`'s questions | nothing | `services/realize/askTheWorld.ts`, `npm run capability -- packet ask` |
+| `judgeGap`, the only way out of `NEEDS_A_READING` | four test suites | `npm run capability -- packet judge` |
+
+The fourth is the one that made the other three unreachable in practice.
+Everything downstream of an unread gap refuses — `readiness`,
+`decisionReadiness`, `compile`, `handOff`, the implementation reading — so a
+production packet could enter that state and never leave while every part passed
+its own tests.
 
 All three commands were driven against a real database rather than only against
 tests, and each refuses correctly on an unknown packet.
