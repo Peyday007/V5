@@ -187,3 +187,49 @@ questions per operation, and the three operations are separate private projects.
 Each bin carries a bounded discovery question, published-source-only evidence
 requirements, its own orchestration, and prohibitions on buying, contacting,
 advertising and paid overage.
+
+### What the backlog actually produced, within ten minutes
+
+`brain_list_work` on `cash-mode-2` at 09:17Z, read through the MCP connector:
+
+- **10 of 10 `RESEARCH_PLAN` items SUCCEEDED.** Every bucket decomposed into
+  bounded fragments with declared evidence lanes.
+- `RESEARCH_FRAGMENT` items running and finishing with sourced claims —
+  `wki_3510b3976e154338b10b` submitted ten (`clm_05d8edeb…` and nine more):
+  two open Algora.io GitHub-issue bounties with their amounts, and the ARC
+  Prize Milestone #2 with its closing date; Topcoder and Bugcrowd recorded as
+  **unresolved** because their listings were unreachable or JavaScript-only,
+  rather than dropped or inferred.
+- `RESEARCH_VERIFY` passes accepting *and rejecting* on evidence:
+  *"Verified all 6 submitted claims against their source articles (re-fetched
+  raw HTML to confirm verbatim quotes) … 4 accepted / 2 rejected; Legacy
+  Plumbing's 2 claims failed scope match on population/definitions since the
+  source doesn't establish independent ownership."*
+
+That is substantive, source-backed, persisted research, produced by the
+deployed loops with nothing in this conversation driving it.
+
+### One packet in ten parked, and it is explained rather than stuck
+
+`orc_35c546339ab145d59b92` ("Which openings are about to close") is
+`NEEDS_HUMAN` at `pass PLAN`, with the reason recorded verbatim:
+
+> The proposed plan falls outside the preauthorized envelope: fragment
+> `"us-federal-grant-deadlines-closing"` accepts *"Linked agency Notice of
+> Funding Opportunity (NOFO) PDF documents (primary)"*, which this envelope
+> does not admit.
+
+The plan itself is well-formed — three fragments, declared lanes, primary
+sources — and a federal NOFO published on Grants.gov is an official government
+record, which is the envelope's own first admitted category. `CASH_SOURCE_TYPES`
+simply carries no alternative matching *agency*, *notice*, *funding
+opportunity* or *document*. It is the same shape this file records four times
+already: **a list with the rule right and the alphabet short.**
+
+It is **not** fixed here, deliberately. Nine of ten packets planned and are
+researching, so this is not what stops the fleet working, and widening an
+approval envelope is a change with its own reasoning that does not belong
+riding on a dispatch fix. The answering transition exists and is documented:
+`NEEDS_HUMAN` is in `startPacket`'s `DEAD` set, so re-running
+`admin research start` on the project starts a corrected packet beside it with
+every row of the refused one preserved.
