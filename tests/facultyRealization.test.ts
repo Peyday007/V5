@@ -655,3 +655,50 @@ async function counts(): Promise<Record<string, number>> {
   }
   return out;
 }
+
+/* ------------------------------------------------------------------------- */
+
+describe('the reading every packet waits for', () => {
+  /**
+   * `NEEDS_A_READING` is the state a derivation leaves a gap in when a name
+   * comparison matched nothing, and *everything* downstream is guarded on it:
+   * `readiness` refuses while one is open, `decisionReadiness` refuses,
+   * `compile` refuses, `handOff` refuses, and the implementation reading
+   * refuses. `judgeGap` is the only way out of it — and it had no production
+   * caller at all, only four test suites.
+   *
+   * So a packet in production could enter that state and never leave, which
+   * makes every mechanism above it unreachable in practice while each one
+   * passes its own tests. The kernel's own record of a reader classifying
+   * twenty-five gaps was therefore done through something that is not a shipped
+   * surface.
+   *
+   * This reads the repository rather than behaviour, for `operatorConsoleRemoved`'s
+   * reason: the property is that a caller *exists* outside `tests/`, and a
+   * behavioural test can only say that the thing it happened to call worked.
+   */
+  it('has a caller outside the test suites', () => {
+    const cli = readFileSync('scripts/capability.ts', 'utf8');
+    expect(cli).toMatch(/\bjudgeGap\(/);
+    expect(cli).toContain("case 'judge'");
+  });
+
+  it('records a reader as a person, with no flag that says otherwise', () => {
+    const cli = readFileSync('scripts/capability.ts', 'utf8');
+    const call = cli.slice(cli.indexOf('await judgeGap({'));
+    expect(call.slice(0, 400)).toContain("derivedBy: 'PERSON'");
+    // A reader may answer any kind — DERIVABLE bounds what Brain derives by
+    // itself, and NEEDS_JUDGEMENT is exactly the set a person is here to
+    // supply. What must not be settable is who the answer is recorded as.
+    expect(cli).not.toMatch(/derivedBy:\s*flag\(/);
+    expect(cli).not.toMatch(/derivedBy:\s*\(?\s*rest/);
+  });
+
+  it('names a gap the operator can actually see', () => {
+    // A command that takes a gap id is no use beside a listing that prints
+    // none. §24's remedy-the-person-cannot-use, at a terminal.
+    const cli = readFileSync('scripts/capability.ts', 'utf8');
+    const show = cli.slice(cli.indexOf("case 'show'"), cli.indexOf("case 'judge'"));
+    expect(show).toMatch(/\$\{gap\.id\}/);
+  });
+});
