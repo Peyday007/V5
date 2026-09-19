@@ -29,6 +29,7 @@ import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
+import { sameProviderSession } from '../domain/sessionRef.ts';
 import type { BinConfinement } from './workQueue.ts';
 import type {
   Bin,
@@ -1482,6 +1483,63 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
     if (candidates.length === 0) return null;
 
     for (const row of candidates) {
+      /*
+       * A pinned bin is answered by the surface it names, or by nobody.
+       *
+       * `bins.pinned_routine_id` was introduced to make a probe prove *one*
+       * surface, and it was read by `routeBin` alone — so it bounded the fire
+       * and not the claim. §34 says the pin "narrows the candidate list to one
+       * and changes nothing else", which is true of the router and was taken to
+       * mean the whole mechanism was sound. It is not: any eligible session that
+       * is already awake takes the bin first, and on a pool where four Routines
+       * share one connector every sibling is eligible.
+       *
+       * **Production, 2026-09-19.** `bin_16c5e13d832a44cfb7f7`, "Surface
+       * self-test for Brain Research 1-D", went READY at 08:52:20.721Z and was
+       * ASSIGNED at 08:52:22.159Z to session
+       * `claude-code-session_01NHKxvEWmtqBAvNxuLWcr1t` — the session Brain had
+       * fired at **1-C** twenty-seven seconds earlier for a different probe. Its
+       * own `DISPATCH` block is empty: Brain never fired 1-D at all, because the
+       * bin was gone before the next tick. The probe completed, the contract
+       * evaluated true, and it proved nothing whatsoever about 1-D.
+       *
+       * The damage is not a lost probe. `proveSurface` reads the sessions
+       * `creditDispatchArrival` attributed to *this* Routine's dispatches, so a
+       * substituted probe leaves the pinned surface's chain open for ever —
+       * however many probes are sent, each one is taken by whichever sibling
+       * happens to be awake, and each one looks like it worked because the bin
+       * reaches COMPLETE. That is exactly the reading 1-B and 1-D carried: 35
+       * fires, arrivals, and no closed chain, on two surfaces that are healthy.
+       *
+       * So the claim is asked the same question the fire is: the bin is offered
+       * only to the session Brain actually fired at the pinned Routine, compared
+       * against `bin_dispatch` — a row Brain wrote — at this bin's current
+       * generation. It **fails closed**, because the unknown here is one that
+       * would let something false be recorded: an unproven surface reported as
+       * proven is the one outcome a surface proof may never produce. The cost of
+       * over-refusing is that a probe waits for its own fire and, if that never
+       * arrives, retires honestly through the no-show path and its own
+       * `max_attempts`.
+       *
+       * Restrictive only, and only for pinned bins. Nothing here can offer a bin
+       * to anybody who was not already eligible for it, and nothing but a probe
+       * is ever pinned.
+       *
+       * Ahead of the admission hook and its refusal memory on purpose: this is
+       * not a judgement about the session, it is the pin. A skip costs no
+       * attempt, no lease, no generation and writes nothing — indistinguishable
+       * from losing the compare-and-swap, which is what §23 requires of every
+       * decision taken before the accounting.
+       */
+      if (row.pinned_routine_id) {
+        const fired = await db.get<{ session_ref: string | null }>(
+          `SELECT session_ref FROM bin_dispatch
+            WHERE bin_id = ? AND lease_generation = ? AND routine_id = ? AND state = 'SENT'`,
+          [row.id, row.lease_generation, row.pinned_routine_id],
+        );
+        if (!sameProviderSession(fired?.session_ref, input.sessionRef)) continue;
+      }
+
       /*
        * Eligibility first, accounting second. This ordering is the whole fix.
        *
