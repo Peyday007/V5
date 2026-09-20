@@ -17,6 +17,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { freshProject, teardown } from './helpers.ts';
+import { getHumanRequest, answerHumanRequest } from '../server/repos/russellMissions.ts';
+import type { RussellHumanRequest } from '../server/domain/types.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { resumeAnsweredRequest } from '../server/services/russell/needsHuman.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   advanceCapabilityPackets,
@@ -160,6 +164,96 @@ describe('the kernel advancing on the tick', () => {
     expect(Number(again[0]?.n ?? 0)).toBe(1);
   });
 
+  /*
+   * The whole point, and the half that nothing else in this file asserts.
+   *
+   * Raising a card is easy; §24's defect is a person *answering* one and
+   * nothing happening — the mission flipped back to RUNNING while the packet
+   * underneath stayed exactly where it was, so the same question could be
+   * answered every day and the decision recorded and ignored. Here it would be
+   * worse than that: `resumeAnsweredRequest` returns `settled: true` for any
+   * request with no mission — *"the request was not about a mission"* — so the
+   * card would be marked RESUMED having carried nothing out, vanish, and be
+   * raised again identically on the next tick.
+   *
+   * So this walks it: the tick raises the card, a person answers it through
+   * the same repository call `POST /api/russell/needs-you/:id/answer` makes,
+   * the tick's own resume runs, and the *gap* is what is asserted on.
+   */
+  it('closes the gap when a person answers the card, rather than only closing the card', async () => {
+    const facultyId = await promoteFaculty(definition());
+    const { packet } = await openPacket({
+      facultyId,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await advanceCapabilityPackets();
+
+    const person = (await listGaps(packet.id)).find(
+      (gap) => gap.kind === 'REQUIRES_PERSON_AUTHORITY',
+    );
+    if (!person) throw new Error('the fixture produced no person-owned gap');
+    const request = await cardFor(person.id);
+
+    const administrator = await anAdministrator();
+    const answered = await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: administrator.id,
+      choice: 'GRANT_AUTHORITY',
+      reason: 'Authorized: read published sources only, and spend nothing.',
+    });
+    expect(answered.ok).toBe(true);
+
+    const resumed = await resumeAnsweredRequest(answered.request!);
+    expect(resumed.ok).toBe(true);
+
+    const closed = (await listGaps(packet.id)).find((gap) => gap.id === person.id);
+    expect(closed?.state).toBe('CLOSED');
+    // And the sentence says who, through what, in their own words — because a
+    // gap closed with no statement records that somebody pressed something.
+    expect(closed?.stateReason).toContain(administrator.email);
+    expect(closed?.stateReason).toContain('spend nothing');
+    // Attribution, not authentication: a browser answer is BROWSER, and the
+    // weaker value is what a shell gets. §23's column pair.
+    expect(closed?.stateReason).toContain('BROWSER');
+    expect(closed?.derivedBy).toBe('PERSON');
+  });
+
+  /*
+   * The other answer, which must not read the same as the first. A refusal is
+   * WAIVED with the refusal recorded, so the packet correctly stays short of
+   * whatever that requirement was load-bearing for.
+   */
+  it('records a refusal as a refusal, never as a grant', async () => {
+    const facultyId = await promoteFaculty(definition());
+    const { packet } = await openPacket({
+      facultyId,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await advanceCapabilityPackets();
+
+    const person = (await listGaps(packet.id)).find(
+      (gap) => gap.kind === 'REQUIRES_PERSON_AUTHORITY',
+    );
+    if (!person) throw new Error('the fixture produced no person-owned gap');
+    const request = await cardFor(person.id);
+
+    const administrator = await anAdministrator();
+    const answered = await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: administrator.id,
+      choice: 'REFUSE_AUTHORITY',
+      reason: 'Not while this is unreviewed.',
+    });
+    await resumeAnsweredRequest(answered.request!);
+
+    const after = (await listGaps(packet.id)).find((gap) => gap.id === person.id);
+    expect(after?.state).toBe('WAIVED');
+    expect(after?.state).not.toBe('CLOSED');
+    expect(after?.stateReason).toContain('Refused by');
+  });
+
   it('offers a refusal as well as a grant, because a card with one answer is not a decision', () => {
     const keys = CAPABILITY_AUTHORITY_CHOICES.map((choice) => choice.key);
     expect(keys).toContain('GRANT_AUTHORITY');
@@ -269,6 +363,35 @@ describe('the kernel advancing on the tick', () => {
     expect(loop.slice(call, call + 900)).toContain('catch');
   });
 });
+
+/** The card the tick raised for this gap, through the same reader the route uses. */
+async function cardFor(gapId: string): Promise<RussellHumanRequest> {
+  const rows = await getDb().all<{ id: string }>(
+    'SELECT id FROM russell_human_requests WHERE resume_key = ?',
+    [authorityResumeKey(gapId)] as never[],
+  );
+  const id = rows[0]?.id;
+  if (!id) throw new Error('the card was not raised');
+  const request = await getHumanRequest(id);
+  if (!request) throw new Error('the card disappeared');
+  return request;
+}
+
+/**
+ * An enabled Brain administrator, because `answerAuthorityGap` resolves one
+ * against `users` rather than trusting a name on a call. Created per test, so
+ * the email in the recorded sentence is this test's own.
+ */
+async function anAdministrator(): Promise<{ id: string; email: string }> {
+  const email = `capability-tick-${Math.random().toString(36).slice(2, 10)}@example.test`;
+  const user = await createUser({
+    email,
+    displayName: 'Administrator',
+    password: 'correct horse battery staple',
+    isBrainAdmin: true,
+  });
+  return { id: user.id, email };
+}
 
 async function counts(): Promise<{
   missions: number;
