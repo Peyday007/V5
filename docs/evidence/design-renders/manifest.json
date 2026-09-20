@@ -1,63 +1,63 @@
 {
-  "revision": "3c4274559ed0afcebdb2370847f0c2fd37ad5725",
+  "revision": "985b484037d32972595484e2f2345a4c227a2921",
   "treeDirtyAtManifestTime": false,
-  "renderSetDigest": "17d9a70a3d9b1c6ee4615c21e27fd018dca66454172b3c226970d62dc52a2c6d",
+  "renderSetDigest": "d04277bc0819fc6f9636b545fd835942b66acf2455fa6fe4098d2e9553d0f6c0",
   "renderCount": 9,
-  "generatedAt": "2026-09-20T10:23:01.366Z",
+  "generatedAt": "2026-09-20T12:31:04.456Z",
   "renders": [
     {
       "screen": "russell/default",
       "width": 1180,
       "file": "russell-default-1180w-p0.png",
-      "bytes": 118239
+      "bytes": 118207
     },
     {
       "screen": "russell/default",
       "width": 953,
       "file": "russell-default-953w-p0.png",
-      "bytes": 110578
+      "bytes": 109246
     },
     {
       "screen": "russell/default",
       "width": 390,
       "file": "russell-default-390w-p0.png",
-      "bytes": 68415
+      "bytes": 68349
     },
     {
       "screen": "build/default",
       "width": 1180,
       "file": "build-default-1180w-p0.png",
-      "bytes": 140119
+      "bytes": 140502
     },
     {
       "screen": "build/default",
       "width": 953,
       "file": "build-default-953w-p0.png",
-      "bytes": 141312
+      "bytes": 139594
     },
     {
       "screen": "build/default",
       "width": 390,
       "file": "build-default-390w-p0.png",
-      "bytes": 74957
+      "bytes": 76205
     },
     {
       "screen": "fleet/default",
       "width": 1180,
       "file": "fleet-default-1180w-p0.png",
-      "bytes": 113255
+      "bytes": 111424
     },
     {
       "screen": "fleet/default",
       "width": 953,
       "file": "fleet-default-953w-p0.png",
-      "bytes": 110097
+      "bytes": 109219
     },
     {
       "screen": "fleet/default",
       "width": 390,
       "file": "fleet-default-390w-p0.png",
-      "bytes": 70558
+      "bytes": 70841
     }
   ]
 }
