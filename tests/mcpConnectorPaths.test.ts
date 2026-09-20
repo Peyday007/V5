@@ -193,12 +193,13 @@ async function makeWorker(
   name: string,
   project: string,
   scopes: string[],
-): Promise<{ id: string; secret: string }> {
-  const worker = await api<{ worker: { id: string } }>('POST', '/api/admin/workers', {
+): Promise<{ id: string; label: string; secret: string }> {
+  const worker = await api<{ worker: { id: string; label: string } }>('POST', '/api/admin/workers', {
     cookie: adminCookie,
     body: { name, displayName: name },
   });
   const id = worker.body.worker.id;
+  const label = worker.body.worker.label;
   const granted = await api('POST', `/api/admin/projects/${project}/members`, {
     cookie: adminCookie,
     body: { principalId: id, principalType: 'WORKER', scopes },
@@ -208,7 +209,7 @@ async function makeWorker(
     cookie: adminCookie,
     body: {},
   });
-  return { id, secret: issued.body.secret };
+  return { id, label, secret: issued.body.secret };
 }
 
 /* ------------------------------------------------------------------------ */
@@ -262,13 +263,20 @@ beforeAll(async () => {
   factoryProject = (await createProject({ name: 'A Repository Project' })).id;
   await closeDatabase();
 
-  researchName = 'paths-research-worker';
-  researchSecret = (
-    await makeWorker(researchName, researchProject, ['project:read', 'queue:read', 'queue:claim'])
-  ).secret;
+  // The *label* Brain assigned, not the handle typed above: a worker's
+  // operational identity is neutral by construction, so a test that expected
+  // the typed name back would be pinning the defect migration 073 removes.
+  const researchWorker = await makeWorker('paths-research-worker', researchProject, [
+    'project:read',
+    'queue:read',
+    'queue:claim',
+  ]);
+  researchName = researchWorker.label;
+  researchSecret = researchWorker.secret;
 
-  factoryName = 'paths-factory-worker';
-  factorySecret = (await makeWorker(factoryName, factoryProject, ['project:read'])).secret;
+  const factoryWorker = await makeWorker('paths-factory-worker', factoryProject, ['project:read']);
+  factoryName = factoryWorker.label;
+  factorySecret = factoryWorker.secret;
 }, 90_000);
 
 afterAll(async () => {
@@ -366,6 +374,11 @@ describe('the credential decides who the caller is', () => {
       const factory = await tool(endpoint, 'brain_whoami', {}, factorySecret);
       expect(factory.isError, endpoint).toBe(false);
       expect(factory.structured['handle'], endpoint).toBe(factoryName);
+
+      // Two workers, two identities, and neither is the handle somebody typed.
+      expect(researchName, endpoint).not.toBe(factoryName);
+      expect(researchName, endpoint).toMatch(/^worker-\d\d$/);
+      expect(factoryName, endpoint).toMatch(/^worker-\d\d$/);
     }
   });
 
