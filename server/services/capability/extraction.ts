@@ -67,6 +67,7 @@ import {
   facultySlug,
   InvalidFacultyDefinition,
   LIST_FIELDS,
+  MAX_CONNECTIONS,
   validateFacultyDefinition,
   type FacultyDefinition,
 } from '../../domain/faculties.ts';
@@ -342,27 +343,32 @@ export async function dispatchExtraction(sourceId: string): Promise<string | nul
         `These are arrays of strings, each present even when the source gives it nothing, in ` +
           `which case send an empty array rather than omitting it: ${LIST_FIELDS.join(', ')}.`,
         /*
-         * Interpolated rather than described, because the hand-written version
-         * of this sentence named `kind`, `faculty` and `note` — and
-         * `CONNECTION_KEYS` declares `relationship`, `toFacultySlug`,
-         * `toComponent` and `rationale`. Not one field in common. A worker that
-         * did exactly as instructed had all fifteen of its definitions refused
-         * whole, because an unknown field refuses the candidate rather than the
-         * field, which is the right rule meeting the wrong contract.
+         * Composed, for the reason the two lines above are, and recorded here
+         * because this one was not and that is what broke the first real run.
          *
-         * §27 records the same defect at `brain_check_in`'s `session_ref` and
-         * §33 at `brain_submit_claims`' `opportunity_signal`. This is the third,
-         * and the reason all three survived is identical: the validator and the
-         * sentence describing it were each correct on their own, and nothing
-         * held them against each other.
+         * It read: each connection carries "kind" and "faculty" and an optional
+         * "note". `validateConnections` accepts `CONNECTION_KEYS` and refuses
+         * an unknown field by rejecting the whole candidate — so the contract
+         * named three keys that are precisely the three it refuses. The worker
+         * did exactly what it was told; all fifteen candidates were rejected
+         * with "A connection carried unknown field(s): kind, faculty, note",
+         * and the blueprint went to FAILED having been read correctly.
+         *
+         * The endpoint rule and the relationship vocabulary were missing too,
+         * so a worker that had guessed the key names right would still have
+         * been refused twice more. Every part of it is read from the validator's
+         * own constants now; the drift guard in `tests/capability.test.ts` is
+         * what stops prose growing back beside them.
          */
-        `"connections" is an array of objects carrying exactly these fields: ` +
-          `${CONNECTION_KEYS.join(', ')}. "relationship" is one of ` +
-          `${FACULTY_RELATIONSHIPS.join(', ')}. Name exactly one endpoint — ` +
-          `"toFacultySlug" for another faculty in this document, or "toComponent" for ` +
-          `something outside it — never both and never neither. "rationale" is a required ` +
-          `non-empty string saying why the source says they are related. Any other field ` +
-          `refuses the whole definition. Send an empty array when the section states none.`,
+        `"connections" is an array of at most ${MAX_CONNECTIONS} objects carrying exactly these ` +
+          `keys and no others, because an unknown field refuses the whole candidate: ` +
+          `${CONNECTION_KEYS.join(', ')}.`,
+        `"relationship" is required and must be exactly one of: ${FACULTY_RELATIONSHIPS.join(', ')}.`,
+        'Name exactly one endpoint: "toFacultySlug" for another faculty in this blueprint, by ' +
+          'its canonical name as the source writes it, or "toComponent" for something outside ' +
+          'it. Sending both, or neither, is refused. "rationale" is a required non-empty string ' +
+          'saying what the source states about the relationship. Send an empty array when the ' +
+          'section states none.',
       ],
       authorizedActions: [
         'reading the registered source document',

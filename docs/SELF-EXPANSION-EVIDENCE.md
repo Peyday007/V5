@@ -388,51 +388,52 @@ thing that drifts."* No fixture could have caught it: every one builds a
 candidate from the declared shape, so the validator and the instruction were each
 proved correct against themselves.
 
-### And the failure had no way back
+### And the failure had no way back — fixed twice, independently
 
 `advanceSources` never looks at `FAILED`; `registerSource` is idempotent by
 `(content_hash, kind)`, so re-registering the same bytes returns the failed row;
 `recoverExtraction` only reaches an assignment whose bin has vanished. A source
 that failed **because Brain was wrong** was therefore terminal.
-`services/capability/reoffer.ts` is the answering transition, and it refuses by
-name the failure it is not for — an unreadable document is the bytes rather than
-the contract, and re-offering one would hand out a bin, spend a fire and fail
-identically for ever.
 
-## 6e. The `reoffer` command, driven against a real database
+## 6e. Two sessions built the same transition, and this branch dropped its own
 
-The service had seven tests and the **command** had none — which is the gap
-§6d's own evidence section warns about for the other three, and it matters here
-because production gets one attempt. A local Brain was driven into production's
+Working the same production failure in parallel, the other session landed
+`ff54377` (the contract fix) and `server/services/capability/reopen.ts` on
+`production` at `07971c3` while this branch's Postgres gate was running. This
+branch had written its own contract fix and its own
+`services/capability/reoffer.ts`, with a CLI command, a workflow entry and seven
+tests.
+
+**Theirs ships and mine is removed, and the deciding difference is worth
+recording rather than smoothing over.** My version's own summary said a
+corrected reading *"lands over the refusal because `putCandidate` already
+replaces per `(source_id, slug)`"*, treating the overwrite as ordinary. It is
+the opposite: that upsert is keyed on the slug, so a second reading silently
+rewrites the first one's `rejection_reason`, and fixing the contract would have
+**erased the evidence that the contract was ever wrong**. `reopen.ts` carries
+every refusal onto the project's history in an append-only event *before* the
+swap. That is §5, which this repository refuses to break more consistently than
+anything else, and I broke it one screen after writing a paragraph about it.
+
+Theirs is also more complete on the contract itself: it bounds
+`MAX_CONNECTIONS` and states the exactly-one-endpoint rule as its own sentence,
+neither of which mine did.
+
+**What the removed work still establishes**, because it was driven against a
+real database before it was dropped: a local Brain was taken into production's
 exact state through the real transitions — register the real 63 586-byte
 blueprint, `advanceSources` to dispatch, finish the bin with no unit results,
 `settleExtraction`, `dispatchAudit` — reaching `FAILED` with the identical
-detail string production carries:
-
-    No candidate survived validation, so there is nothing to audit.
-    The refusals are on the candidate rows with their reasons.
-
-| Drive | Exit | What it said |
-|---|---|---|
-| no arguments | 1 | `Usage: reoffer <sourceId> --admin <email> --reason "…"` |
-| unknown source | 1 | `Not offered … No source with id cps_doesnotexist.` |
-| unknown administrator | 1 | resolves to no enabled administrator of this Brain |
-| **the real one** | **0** | `Offered again … Now: REGISTERED` |
-| the same one again | 1 | `That source is REGISTERED, not FAILED.` |
-
-And what it left behind, read back from the rows:
-
-- one `identity_events` row, `CAPABILITY_SOURCE_REOFFERED` / `SUCCESS`, carrying
-  the reason, the previous bin id and the previous detail
-- `FAILED → REGISTERED`
-- the next `advanceSources` reporting `dispatched: 1`, a **new** extraction bin
-  `READY`, and the old bin still `COMPLETE` — nothing destroyed (§5)
-
-The candidate count is 0 in this fixture because it never had any. Production
-holds fifteen `REJECTED` rows, and they stay: `settleExtraction` reads
+detail string production carries, and the recovery then produced a **new**
+extraction bin with the old one kept `COMPLETE`. That is a property of the
+ingestion chain rather than of either implementation, and it holds for
+`reopen.ts` for the same reason: `settleExtraction` reads
 `listBinUnitResults(bin.id)` scoped to the new bin, and `dispatchAudit` lists
-`states: ['VALIDATED']`, which a refused candidate is not.
+`states: ['VALIDATED']`, which a refused candidate is not. Production's fifteen
+`REJECTED` rows therefore stay, and under `reopen.ts` their reasons are
+additionally preserved on the project history before anything overwrites them.
 
+The recovery run on production uses `npm run capability -- reopen`.
 
 ## 6f. The last command in the chain, and its own comment named the caller it never got
 

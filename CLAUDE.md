@@ -3011,6 +3011,27 @@ remote.
   first real campaign's to prove, and reporting a green probe as a green campaign
   would be the comfortable half-truth this file exists to refuse.
 
+  **And the one caveat it exists to say was printed only by runs that had
+  already failed.** *"Only one surface is registered, so nothing here is
+  pooled"* was pushed onto `problems`, which `ok` deliberately does not count —
+  so a single-surface pool that proved itself returned green, the reporter
+  returned on `ok` before it reached the loop, and the sentence never appeared
+  on the one run where somebody could read `VERIFIED` as *pooled*. It also made
+  the refusal over-count: *"2 problem(s)"* over one problem and one caveat.
+  Found by running it against the first real surface rather than by reading it.
+  `notes` is its own channel, printed on both paths, and the failure mode is
+  fixed at *said too often* rather than *said only when it is too late*.
+
+  **The line above it printed `cooling until` a moment eleven days gone, beside
+  `eligible yes`.** A `retry_at` in the past is history rather than a
+  condition — the fire router compares it to the clock and ignores it — so the
+  surface block answered one question twice and disagreed with itself. It is
+  reported only while it is still ahead, and the instant it is compared to is
+  part of the snapshot rather than something the judgment reads: a pure
+  decision that took its own clock would answer differently on a re-run against
+  the same recorded input, which is the property `router.ts` keeps this module
+  pure for.
+
   **Putting the Routine's reference in front of every project member was mine
   and is corrected here rather than quietly.** A pool makes the *name*
   ambiguous — three surfaces all reading `Factory Brain …` — so the Fleet page
@@ -5712,13 +5733,88 @@ advance never stops Russell writing back a mission.
   faculties Brain wants and is never documentation of components Brain has**,
   which is §37's own first sentence arriving at a path.
 
+- **The contract told the worker three field names the validator refuses, and
+  the guard that was supposed to catch that was one level too shallow. The
+  correction is recorded rather than quietly applied.** The first fired Routine
+  read the blueprint on production and proposed fifteen definitions. Every one
+  was rejected with *"A connection carried unknown field(s): kind, faculty,
+  note"*, and the source went to `FAILED`. The worker had done exactly what it
+  was told: the extraction manifest said a connection carries `"kind"` and
+  `"faculty"` and an optional `"note"`, and `validateConnections` accepts
+  `relationship`, `toFacultySlug`, `toComponent` and `rationale` — so the
+  contract named precisely the three keys it refuses, and omitted the
+  exactly-one-endpoint rule and the relationship vocabulary as well.
+
+  The comment three lines above that instruction claimed it was *"composed from
+  the constants the validator itself reads, so the instruction cannot drift from
+  what judges it."* That was true of the two lines built from `DEFINITION_KEYS`
+  and `LIST_FIELDS` and false of the connections line, which was hand-written
+  prose. **The one field group that was not composed from a constant is the one
+  that drifted** — a rule applied by one of two readers, for the umpteenth time
+  in this file, with the two readers nine lines apart inside one function.
+
+  And the test named *"names every field the validator requires, so a worker is
+  not guessing"* passed the whole time, because `connections` **is** in
+  `DEFINITION_KEYS`: it proved the top level and stopped at the nesting. It now
+  asserts the nested keys and the relationship vocabulary, and — the durable
+  half — holds **every quoted identifier the contract names** against the union
+  of the keys the validator accepts, so the next group cannot drift without
+  failing. Beside it, a round trip builds a connection out of what the contract
+  states and hands it to the validator, because string matching proves the words
+  are present and only that proves the two agree. Both were run against the
+  broken manifest to watch them fail first.
+
+- **`FAILED` was terminal, so a source refused by Brain's own contract could
+  never be re-read after the contract was fixed.** `registerSource` dedupes on
+  the content hash and answers `created: false` for the same bytes;
+  `advanceSources` only ever dispatches a `REGISTERED` source. So correcting the
+  manifest would have changed nothing, because nothing could ask for a second
+  reading. **A state that says a person must act, which no action that person
+  could take would answer, is stuck rather than waiting** — §24's sentence at a
+  new altitude and in its worst form, because here the remedy did not exist
+  anywhere to be applied.
+
+  `services/capability/reopen.ts` is that transition, and four properties are
+  what make it a remedy rather than a way around the gate. It **destroys
+  nothing**: the document keeps its bytes and hash, the source keeps its id,
+  version and lineage, the spent bin keeps its row, every candidate keeps its
+  own. It is a **compare-and-swap naming the state it came from**, so two ticks
+  or a retry after a lost response produce one reopening and the loser is an
+  ordinary outcome. It **grants nothing** — no faculty promoted, no dimension
+  moved, no contract widened, and no opinion that the refused candidates were
+  right; it buys one more reading that the same validator judges on the same
+  terms. And it **preserves the refusals it is reopening**, in an append-only
+  event, *before* the swap: `putCandidate` is an upsert on `(source_id, slug)`,
+  which is right because re-submitting after a correction is the common case,
+  so left alone **the fix for the contract would have erased the evidence that
+  the contract was ever wrong.** That is the one thing this repository refuses
+  more consistently than any other.
+
+  It is an administrator's decision rather than a read, because it spends a real
+  activation: `--admin` resolves an enabled Brain administrator from `users` and
+  the channel defaults to `SHELL`, which is §23's column pair — attribution is
+  not authentication, and Brain cannot check a channel.
+
 **What is true of this kernel today, said plainly.** Thirteen faculties are
-canonically defined from the real blueprint, each anchored to a named block in
-its extracted text, after an audit that refused two of fifteen with its reasons
-kept. **No faculty is implemented**, every one reports `ABSENT` and `UNTESTED`,
-and nothing here can move either. Nothing has been deployed, so no fired Routine
-has read a blueprint. No change request has been compiled, because the Research
-Intelligence packet correctly refuses on its remaining person clause.
+canonically defined **on a development database** from the real blueprint, each
+anchored to a named block in its extracted text, after an audit that refused two
+of fifteen with its reasons kept. **No faculty is implemented**, every one
+reports `ABSENT` and `UNTESTED`, and nothing here can move either. No change
+request has been compiled, because the Research Intelligence packet correctly
+refuses on its remaining person clause.
+
+**It has now been deployed, and a fired Routine has read a blueprint — and the
+production reading failed.** An earlier version of this paragraph said nothing
+had been deployed; that was true when it was written. What is true now is
+narrower and worth stating exactly: on production the blueprint registered, a
+bin was dispatched, a real fired Routine read the document and proposed fifteen
+definitions, and **Brain refused all fifteen because its own contract named the
+wrong field names**. The source is `FAILED` with the refusals on the candidate
+rows. That is the validator behaving exactly as §8 requires and the contract
+behaving exactly as §27 warns — and the two corrections above are what the run
+bought. **No faculty has been promoted from a production reading**, and saying
+otherwise on the strength of a development run would be the comfortable
+half-truth this file exists to refuse.
 
 **Three of those sentences named one defect rather than three, and the
 correction is recorded rather than quietly applied.** *Nothing here can move
@@ -5857,68 +5953,33 @@ the person cannot use.
   question a person owns — asserted against missions, goals, orchestrations and
   approved change requests rather than stated in a comment.
 
-- **The instruction named three fields the validator has never had, and a
-  production worker did exactly as it was told.** The extraction bin's manifest
-  said a connection is an object *"each with `kind` and `faculty` … and an
-  optional `note`"*; `CONNECTION_KEYS` says `relationship`, `toFacultySlug`,
-  `toComponent`, `rationale`. **Not one field in common.** A fired Cowork
-  session read all fifteen sections of the real blueprint, derived every slug
-  correctly, followed the sentence it was given, and had every definition
-  refused whole — `A connection carried unknown field(s): kind, faculty, note.`
-  — so the source went `FAILED` with *"no candidate survived validation"*. The
-  rule is right: an unknown field refuses the **candidate** rather than the
-  field, because a worker that sent one has misunderstood what it was asked for.
-  What was wrong is the thing that asked.
+- **Two sessions fixed this defect independently, and the other one's is the
+  one that ships. The reconciliation is recorded rather than quietly applied.**
+  Working in parallel on the same production failure, this branch wrote its own
+  contract fix and its own `services/capability/reoffer.ts`, and the paragraphs
+  above — written by the other session — landed on `production` first. Keeping
+  both would have been two mechanisms for one transition and two sentences for
+  one rule, which is the *two readers of one fact* defect this file records more
+  than any other, arriving through documentation instead of code.
 
-  §27 records this at `brain_check_in`'s `session_ref` and §33 at
-  `brain_submit_claims`' `opportunity_signal`. **This is the third, and all
-  three survived for one reason: each half was correct on its own and nothing
-  held them against each other.** The instruction is built from
-  `CONNECTION_KEYS` and `FACULTY_RELATIONSHIPS` now rather than describing them,
-  which is what `LIST_FIELDS` two lines above it already did — the hand-written
-  sentence was the only part of that manifest a constant did not compose.
+  **Theirs is better on the point that matters, and it is worth naming which.**
+  My version ended by saying a corrected reading *"lands over the refusal
+  because `putCandidate` already replaces per `(source_id, slug)`"* — treating
+  the overwrite as ordinary. It is the opposite: because that upsert is keyed on
+  the slug, a second reading silently rewrites the first one's
+  `rejection_reason`, so fixing the contract would have **erased the evidence
+  that the contract was ever wrong**. `reopen.ts` carries every refusal onto the
+  project's history in an append-only event *before* the swap. Mine did not, and
+  that is §5 — the rule this repository refuses to break more consistently than
+  any other — which I had written the paragraph directly above about and then
+  broken one screen later.
 
-  **The test for this existed, was written for exactly this failure mode, and
-  stopped one level short.** *"names every field the validator requires, so a
-  worker is not guessing"* holds the manifest against `DEFINITION_KEYS` and
-  `LIST_FIELDS`, and its own comment gives the reason — *"the assertion is
-  against the validator's constants rather than against a copied list, because
-  a copied list is the thing that drifts."* The **nested** set was the copied
-  list. It is held against its constant too now, with the three names that were
-  never fields asserted **absent**, so a later correction cannot leave the old
-  sentence standing beside the new one.
-
-  **Nothing in fifteen suites could have caught it**, and that is the durable
-  part: every fixture builds a candidate from the *declared* shape, so the
-  validator and the instruction were each proved correct against themselves. It
-  took a real worker reading a real document through a fired Routine — which is
-  the whole argument for §16's separation between an engine passing its tests
-  and a job having actually run.
-
-- **A source that failed because Brain's contract was wrong had no way back,
-  which is the same sentence one state along.** `advanceSources` walks
-  `REGISTERED → EXTRACTING → PROPOSED → AUDITING` and never looks at `FAILED`;
-  `registerSource` is idempotent by `(content_hash, kind)`, so re-registering
-  the same bytes returns the failed row unchanged; and `recoverExtraction` only
-  reaches an assignment whose bin has vanished. That was tolerable while
-  `FAILED` meant *the document is not evidence*. It stopped being tolerable the
-  moment a source failed for a defect in Brain: the blueprint was fine, the
-  worker was fine, the validator was fine, and the source was terminal.
-
-  `services/capability/reoffer.ts` is the answering transition, and three things
-  make it a recovery rather than a way around the gate. **It refuses the failure
-  it is not for, by name** — `surfaceRecovery`'s own division, at a document: a
-  source whose extraction never became evidence failed because of its bytes, and
-  re-offering it would hand out a bin, spend a fire and fail identically for
-  ever. **It is a person's reading on a terminal**, because Brain cannot tell a
-  manifest it has since corrected from one it has not; deriving it from the
-  running revision was the tempting alternative and is refused for exactly that
-  reason. **It destroys nothing** — every refused candidate keeps its row and
-  its reason, the spent bin keeps its attempts, and a corrected reading lands
-  over the refusal because `putCandidate` already replaces per
-  `(source_id, slug)`. `FAILED` is a condition of the `UPDATE`, so two callers
-  produce one re-offer.
-
+  So `reoffer.ts`, its command, its workflow entry and its tests are removed
+  here rather than merged beside theirs, and the ingestion contract is theirs in
+  full — including the two things mine omitted, a bound on `MAX_CONNECTIONS` and
+  the endpoint rule stated as its own sentence. What this branch keeps is what
+  does not overlap: the realization half of the chain, which production does not
+  have at all.
 - **The chain had a seventh command, and it stood in front of the six.**
   `advance.ts` was written because running the kernel was six invocations in the
   right order, and it could not run at all until somebody typed `packet open
@@ -6571,8 +6632,8 @@ server/
       sections.ts       the sections a document declares, from its own headings
       extraction.ts     the bin, the validation, the audit, the promotion
       independence.ts   a reading is not audited by the session that produced it
+      reopen.ts         the answering transition for a reading that failed
       reader.ts         the identity a reading is submitted under; it grants no tier
-      reoffer.ts        the way back from a failure that was Brain's own contract
     selfmodel/
       levels.ts         seven kinds of evidence, three answers each
       observe.ts        what Brain can honestly read about itself, from here
@@ -6725,6 +6786,7 @@ tests/                  Vitest suites
   researchIntelligence.test.ts   the judgement layer, in three unrelated domains
   researchIntelligencePass.test.ts  one campaign, walked, with only the world simulated
   capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
+  capabilityReopen.test.ts   a failed reading put back, and everything it must not destroy
   systemSelfModel.test.ts    what a reading may claim, and the seven it may not
   realizationPacket.test.ts  derive what is readable; refuse to guess the rest
   capabilityDirector.test.ts most gaps are not research, and the archive comes first

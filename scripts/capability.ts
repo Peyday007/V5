@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { registerBlueprint, ensureArchitectureScope } from '../server/services/capability/ingest.ts';
-import { reofferSource } from '../server/services/capability/reoffer.ts';
+import { reopenFailedSource, failedSources } from '../server/services/capability/reopen.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import {
   advanceSources,
@@ -78,13 +78,12 @@ const USAGE = `
   register <file> --title <t> [--amends <sourceId>]   register a blueprint or amendment
   sources                                             every registered source and its state
   advance                                             run one ingestion tick
+  reopen <sourceId> --admin <e> --reason <words>      read a FAILED source again
+  failed                                              every source whose reading failed
   read <sourceId>                                     what Brain can see in one source
   candidates [<sourceId>]                             proposed definitions and their verdicts
   faculties                                           the canonical registry, all six dimensions
   history <slug>                                      why each dimension of one faculty moved
-
-  reoffer <sourceId> --admin <e> --reason <words>     offer a source again after Brain's own
-                                                      contract refused every reading of it
 
   scan [--reason <r>]                                 take a reading of Brain's own parts
   model [--kind <k>] [--level <l>] [--answer <a>]     read the self-model back
@@ -147,8 +146,11 @@ async function main(): Promise<void> {
     case 'advance':
       await advance();
       break;
-    case 'reoffer':
-      await reoffer(rest);
+    case 'reopen':
+      await reopen(rest);
+      break;
+    case 'failed':
+      await failed();
       break;
     case 'read':
       await read(rest);
@@ -237,6 +239,61 @@ async function register(argv: string[]): Promise<void> {
   }
 }
 
+async function reopen(argv: string[]): Promise<void> {
+  const sourceId = argv[0];
+  const admin = flag(argv, 'admin');
+  const reason = flag(argv, 'reason');
+  if (!sourceId || sourceId.startsWith('--') || !admin || !reason) {
+    fail(
+      'Usage: reopen <sourceId> --admin <email> --reason "…"\n' +
+        '  Reopening spends an activation, so it names the administrator whose authority it ' +
+        'carries and says why. It refuses anything that is not FAILED.',
+    );
+  }
+  const outcome = await reopenFailedSource({
+    sourceId: sourceId as string,
+    requestedByEmail: admin as string,
+    reason: reason as string,
+    channel: 'SHELL',
+  });
+  out('');
+  out(`  ${outcome.reopened ? 'Reopened' : 'Not reopened'}  ${sourceId}`);
+  if (outcome.source) out(`  State            ${outcome.source.ingestState}`);
+  out(`  Refusals kept    ${outcome.preserved}`);
+  for (const line of wrapLines(outcome.reason)) out(`  ${line}`);
+  out('');
+  if (!outcome.reopened) fail('Nothing was reopened.');
+}
+
+async function failed(): Promise<void> {
+  const rows = await failedSources();
+  out('');
+  if (rows.length === 0) out('  No source has failed its reading.');
+  for (const row of rows) {
+    out(`  ${row.id}  ${row.kind} v${row.version}  ${row.title}`);
+    out(`      bin    ${row.binId ?? '-'}`);
+    for (const line of wrapLines(row.ingestDetail ?? 'no detail recorded')) out(`      ${line}`);
+  }
+  out('');
+}
+
+/** Wrap a recorded sentence so a terminal reader sees all of it. */
+function wrapLines(text: string, width = 92): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if (line.length === 0) line = word;
+    else if (line.length + 1 + word.length <= width) line += ` ${word}`;
+    else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line.length > 0) lines.push(line);
+  return lines;
+}
+
 async function sources(): Promise<void> {
   const rows = await listSources();
   out('');
@@ -259,37 +316,6 @@ async function advance(): Promise<void> {
   const moved =
     report.dispatched + report.settled + report.audited + report.promoted + report.recovered;
   if (moved === 0) fail('Nothing moved. Every source is waiting on a worker or is terminal.');
-}
-
-/**
- * Offer a source again, after Brain's own contract was what refused it.
- *
- * `--reason` is required and stored verbatim, because a re-offer with no reason
- * records that somebody pressed something. `--admin` is the attribution,
- * resolved against `users` rather than trusted; reaching this shell is what
- * authenticated the call, and Brain cannot check that, so the channel is the
- * weaker unverifiable value.
- */
-async function reoffer(argv: string[]): Promise<void> {
-  const sourceId = argv[0];
-  const admin = flag(argv, 'admin');
-  const reason = flag(argv, 'reason');
-  if (!sourceId || sourceId.startsWith('--') || !admin || !reason) {
-    fail('Usage: reoffer <sourceId> --admin <email> --reason "…"');
-  }
-  const outcome = await reofferSource({
-    sourceId: sourceId as string,
-    reason: reason as string,
-    requestedByEmail: admin as string,
-    channel: 'SHELL',
-    executedByRef: process.env['BRAIN_EXECUTED_BY'] ?? null,
-  });
-  out('');
-  out(`  ${outcome.reoffered ? 'Offered again' : 'Not offered'}  ${sourceId}`);
-  out(`  ${outcome.reason}`);
-  if (outcome.source) out(`  Now: ${outcome.source.ingestState}`);
-  out('');
-  if (!outcome.reoffered) fail('Nothing changed.');
 }
 
 async function read(argv: string[]): Promise<void> {

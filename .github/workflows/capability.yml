@@ -28,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'register | sources | advance | reoffer | read | candidates | faculties | history | scan | model | staleness | packet <sub> | packets | submit | verdicts'
+        description: 'register | sources | advance | reopen | failed | read | candidates | faculties | history | scan | model | staleness | packet <sub> | packets | submit | verdicts'
         required: true
         default: faculties
       args:

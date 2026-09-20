@@ -269,7 +269,7 @@ npm run capability -- packet open <slug> | derive <id> | show <id> | research <i
 npm run capability -- packet compile <id> | prove <id> [--apply] | realize <id> [--apply]
 npm run capability -- packet judge <gapId> --kind <k> --evidence "…"
 npm run capability -- packet outstanding <id> | ask <id> | handoff <id>
-npm run capability -- reoffer <sourceId> --admin <email> --reason "…"
+npm run capability -- reopen <sourceId> --admin <email> --reason "…"
 npm run capability -- packet awaiting <id> | answer <gapId> --grant|--refuse --admin <e> --statement "…"
 npm run capability -- packets
 npm run capability -- submit <binId> <file.json> --worker <handle>
