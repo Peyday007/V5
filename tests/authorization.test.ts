@@ -462,7 +462,10 @@ describe('a worker', () => {
     });
     expect(me.status).toBe(200);
     expect(me.body.principal.type).toBe('WORKER');
-    expect(me.body.principal.handle).toBe('test-runner');
+    // A worker is named by its neutral label, never by the handle whoever
+    // created the row typed. See migration 072.
+    expect(me.body.principal.handle).toMatch(/^worker-\d\d$/);
+    expect(me.body.principal.handle).not.toBe('test-runner');
 
     const project = await call('GET', `/api/projects/${projectA}`, { bearer: workerCredential });
     expect(project.status).toBe(200);
