@@ -1271,6 +1271,13 @@ async function probeBin(input: {
         `      secret ${surface.secretName}  bearer ${surface.bearerFingerprint ?? '—'}  ` +
           `worker ${surface.workerId ?? '—'}  state ${surface.routineState}`,
       );
+      if (surface.workerCreatedAt) {
+        console.log(
+          `      worker row written ${surface.workerCreatedAt} by ${surface.workerCreatedBy}` +
+            `  owner ${surface.ownerUserId ?? 'not established'}` +
+            (surface.ownerEvidence ? ` (${surface.ownerEvidence})` : ''),
+        );
+      }
       if (surface.workerLegacyName && surface.workerLegacyName !== surface.workerLabel) {
         console.log(
           `      legacy handle ${surface.workerLegacyName} — a lookup key only; it attributes nothing`,

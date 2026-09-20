@@ -187,6 +187,12 @@ export interface SurfaceAttribution {
   /** The legacy operator handle. Never authorizes, never attributes; shown so a row is findable. */
   workerLegacyName: string | null;
   workerStatus: string | null;
+  /** When the worker row was written, and by what. Creation lineage, never a name. */
+  workerCreatedAt: string | null;
+  workerCreatedBy: string | null;
+  /** Whose capacity this is, where Brain can prove it. Null means it cannot. */
+  ownerUserId: string | null;
+  ownerEvidence: string | null;
   /** Distinct OAuth clients that have minted a token for the bound worker. */
   clientIds: string[];
   clientNames: string[];
@@ -306,6 +312,10 @@ export function analyseAttribution(snapshot: AttributionSnapshot): FleetAttribut
       workerLabel: worker?.label ?? null,
       workerLegacyName: worker?.name ?? null,
       workerStatus: worker ? (worker.archived ? 'ARCHIVED' : worker.status) : null,
+      workerCreatedAt: worker?.createdAt ?? null,
+      workerCreatedBy: worker ? `${worker.createdByType}:${worker.createdById}` : null,
+      ownerUserId: worker?.ownerUserId ?? null,
+      ownerEvidence: worker?.ownerEvidence ?? null,
       clientIds: clients,
       clientNames: clients.map((id) => clientByClientId.get(id)?.clientName ?? id),
       approverUserIds: [...(approversByWorker.get(routine.workerId ?? '') ?? new Set<string>())].sort(),
