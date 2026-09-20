@@ -75,6 +75,10 @@ import { generateInvitationToken } from '../identity/secrets.ts';
 import { FACTORY_WORKER_SCOPES } from '../../domain/types.ts';
 import type { User, WorkerScope } from '../../domain/types.ts';
 import type { FactoryScopeKind } from '../../domain/factory.ts';
+import {
+  contributedCapacity,
+  contributedForRepository,
+} from '../capacity/contribution.ts';
 
 /**
  * The capabilities a factory surface must declare to be fired for this work.
@@ -129,6 +133,24 @@ export interface RepositoryOnboarding {
   routedRepositories: string[];
   /** Enabled Routines whose worker is this one. Names only; never a secret. */
   surfaces: string[];
+  /**
+   * Member-contributed Claude connections this repository could actually use.
+   *
+   * A person connecting their own Claude account registers a fleet Routine, and
+   * the factory fires Routines — so their capacity is visible to this pool
+   * through the fleet it already reads. What it is **not** is automatically
+   * usable here: §27's rule is that no worker without an explicit
+   * `worker_routing` row may ever be handed repository work, and that row is
+   * written by onboarding a repository, which is a person's decision at ADMIN.
+   *
+   * So this names the connections that are *both* verified capacity — the four
+   * -row proof chain closed, a live authorization, an enabled surface bound to
+   * that member's own worker, and the deployment credential present — and
+   * routed to this repository for this family. An unverified, lapsed, revoked
+   * or misbound one can never appear in it, and neither can one nobody has
+   * authorized for this repository.
+   */
+  contributedSurfaces: { displayName: string; workerName: string; routineName: string | null }[];
   /**
    * The endpoint path a factory connector is pointed at, as a constant.
    *
@@ -233,9 +255,12 @@ const SURFACE_STEP =
  */
 export async function repositoryOnboarding(projectId: string): Promise<RepositoryOnboarding[]> {
   const routines = await listRoutines();
+  // Read once for the whole list. It walks every member's connection, and the
+  // answer cannot differ between two repositories on one page.
+  const contributed = await contributedCapacity();
   const out: RepositoryOnboarding[] = [];
   for (const grant of listRepositoryGrants()) {
-    out.push(await describeGrant(projectId, grant, routines));
+    out.push(await describeGrant(projectId, grant, routines, contributed));
   }
   return out;
 }
@@ -263,6 +288,14 @@ async function describeGrant(
   projectId: string,
   grant: RepositoryGrant,
   routines: Awaited<ReturnType<typeof listRoutines>>,
+  /*
+   * Read once by the caller and passed down, rather than read per grant.
+   *
+   * It walks every member's connection and the rows behind it, so asking it
+   * inside the loop would be that walk multiplied by the number of authorized
+   * repositories — for an answer that cannot differ between them.
+   */
+  contributed: Awaited<ReturnType<typeof contributedCapacity>>,
 ): Promise<RepositoryOnboarding> {
   const workerName = factoryWorkerName(grant.id);
   const worker = await getWorkerByName(workerName);
@@ -286,6 +319,7 @@ async function describeGrant(
   }
 
   const boundaryRow = await getProjectRepository(projectId, grant.id);
+  const forThisOne = contributedForRepository(contributed, repositoryId);
 
   const registered =
     worker !== null &&
@@ -330,6 +364,11 @@ async function describeGrant(
     routedFamilies,
     routedRepositories,
     surfaces,
+    contributedSurfaces: forThisOne.map((one) => ({
+      displayName: one.displayName,
+      workerName: one.workerName,
+      routineName: one.routineName,
+    })),
     connectorPath: FACTORY_MCP_PATH,
     readiness,
     remaining,
@@ -433,7 +472,12 @@ export async function onboardRepository(input: {
     };
   }
 
-  const before = await describeGrant(input.projectId, grant, await listRoutines());
+  const before = await describeGrant(
+    input.projectId,
+    grant,
+    await listRoutines(),
+    await contributedCapacity(),
+  );
 
   const worker =
     existing ??
@@ -521,7 +565,12 @@ export async function onboardRepository(input: {
     },
   });
 
-  const onboarding = await describeGrant(input.projectId, grant, await listRoutines());
+  const onboarding = await describeGrant(
+    input.projectId,
+    grant,
+    await listRoutines(),
+    await contributedCapacity(),
+  );
   return {
     ok: true,
     result: {

@@ -932,10 +932,36 @@ async function completeChainFor(surface: Surface): Promise<void> {
   expect(dispatch?.state).toBe('SENT');
   expect(dispatch?.routineRef).toBe(surface.routineRef);
 
+  /*
+   * A sibling cannot take it, and that is the shape this helper used to model
+   * by accident.
+   *
+   * The bin is pinned, so it is answerable only by the session Brain fired at
+   * *this* surface. The helper passed no `sessionRef` at all, which is not what
+   * a Cowork worker does — production's own rows carry it, in two spellings:
+   *
+   *     BIN_ASSIGNED  session session_01EJAUDiZArHdjBizN6w64M8
+   *     DISPATCH_SENT session cse_01EJAUDiZArHdjBizN6w64M8
+   *
+   * So the arrival reports the session the fire recorded, and an arrival that
+   * reports somebody else's is refused before the accounting — which is
+   * asserted here rather than assumed, because this helper is what every pool
+   * proof in this file is built on.
+   */
+  expect(
+    await assignNextBin({
+      workerId: factoryWorkerId,
+      projectIds: [projectId],
+      credentialId: `cse_${surface.routineRef}`,
+      sessionRef: 'claude-code-session_somebody-else',
+    }),
+  ).toBeNull();
+
   const assigned = await assignNextBin({
     workerId: factoryWorkerId,
     projectIds: [projectId],
     credentialId: `cse_${surface.routineRef}`,
+    sessionRef: dispatch!.sessionRef,
   });
   expect(assigned?.bin.id).toBe(binId);
   expect(

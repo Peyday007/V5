@@ -1,0 +1,37 @@
+{
+ "principle": "Every claimed power links to a proof, and the proof is never that the code exists. The faculty's own two evaluation requirements are the bar, and both are about a difference in what Brain could do rather than about a run.",
+ "powers": [
+  {
+   "power": "Brain can name the unknown that would change what it does, past the end of a run.",
+   "baseline": "today a gap the judge names dies with its packet: `audit_gaps` is unreadable as a question once the round is settled, and `coverBeforeWork` cannot answer 'we asked and did not settle it'.",
+   "candidate": "a standing question survives, and the archive check can distinguish never-asked from asked-and-unsettled.",
+   "test": "drive two packets in one project where the first leaves a gap the second answers; assert the question opens on the first and closes on the second, citing the claim that closed it.",
+   "ablation": "with the standing-question table empty, the same second packet must re-derive the question rather than find it \u2014 which is the current behaviour and the thing being changed.",
+   "adversarial": "a gap whose classification does not permit research to stay open must open nothing; a rejected claim must not become a contradiction.",
+   "live": "a production packet whose gap opens a question, and a later packet that closes it."
+  },
+  {
+   "power": "Brain can say which research choices were worth making.",
+   "baseline": "nothing compares a fragment's cost to its contribution. `bin_events` times what happened and says nothing about whether it was worth running.",
+   "candidate": "a per-fragment retrospective: attempts held against whether the fragment's claims were cited in the synthesis.",
+   "test": "a packet with three fragments where one is cited, one is accepted and uncited, and one is blocked; assert three distinct retrospective verdicts.",
+   "ablation": "with the retrospective absent, the faculty's second evaluation requirement has no producer, which is the gap this closes.",
+   "adversarial": "a packet that filed no document must produce a retrospective that says so rather than one that reads as every fragment being worthless.",
+   "live": "a production packet with a filed report and a mixture of cited and uncited fragments."
+  },
+  {
+   "power": "Brain proposes a belief update rather than silently holding one.",
+   "baseline": "accepted claims sit in `research_claims` and `knows.ts` projects them; nothing proposes a change to a held belief with what would reverse it.",
+   "candidate": "a proposal citing accepted claims, refused whole when it cites a rejected or unknown one.",
+   "test": "submit a proposal citing an accepted claim (stored), one citing a rejected claim (refused), one citing nothing (refused).",
+   "ablation": "none needed: the refusals are the mechanism.",
+   "adversarial": "a proposal that cites a claim from another project must be refused, because this faculty reads one packet.",
+   "live": "a production packet whose accepted claims produce a proposal faculty 4 can act on."
+  }
+ ],
+ "whatWouldNotCount": [
+  "The suite passing. That is evidence about the code and not about the power.",
+  "A merged pull request. `prove.ts` refuses to move a dimension on one.",
+  "A row existing in the new tables. The retrospective and the question have to be *read* by something \u2014 `coverBeforeWork` for the question, the faculty's evaluation for the retrospective \u2014 or the mechanism is one nothing calls, for the seventh time."
+ ]
+}

@@ -53,6 +53,11 @@ import {
   revokeAuthority,
 } from '../repos/cashAuthority.ts';
 import { getNeed, getOpportunity } from '../repos/cashPortfolio.ts';
+import { getNode } from '../repos/industry.ts';
+import { seedSubject, retireSubject } from '../services/industry/seed.ts';
+import { industryView } from '../services/industry/view.ts';
+import { isIndustryNodeKind } from '../domain/industry.ts';
+import { INDUSTRY_NODE_KINDS, type IndustryNodeKind } from '../domain/types.ts';
 import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   COMMERCIAL_ACTIONS,
@@ -85,7 +90,7 @@ import {
 } from '../services/cash/opportunities.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
 import { cashView } from '../services/cash/view.ts';
-import { decideCashRead } from '../services/cash/access.ts';
+import { cashCapabilities, decideCashRead } from '../services/cash/access.ts';
 import { sharedCashView } from '../services/cash/shared.ts';
 import {
   CANONICAL_CASH_OBJECTIVE,
@@ -367,7 +372,10 @@ cashRouter.get(
      */
     const decision = await decideCashRead(projectId);
     if (decision.scope === 'SHARED') {
-      return await sharedCashView({ projectId });
+      return {
+        ...(await sharedCashView({ projectId })),
+        capabilities: cashCapabilities({ scope: 'SHARED', projectId }),
+      };
     }
     if (decision.scope === 'NONE') {
       /*
@@ -383,6 +391,14 @@ cashRouter.get(
     return {
       scope: 'FULL' as const,
       ...view,
+      /*
+       * What may be *offered*, decided by the same `decideProjectAccess` this
+       * route already ran. The client holds only a Brain-administrator flag,
+       * and these three decisions are project `ADMIN` — so a client deriving
+       * them would hide a lifecycle control from the project administrator
+       * entitled to press it.
+       */
+      capabilities: cashCapabilities({ scope: 'FULL', projectId: project.id }),
       // The contract travels down with the view rather than being restated in
       // the client, so what a person is offered and what the server accepts are
       // one object — §24's manifest lesson.
@@ -1039,5 +1055,107 @@ cashRouter.post(
       }),
     );
     return { need: value, message };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The industry map
+ *
+ * Reading it is any project member's: where Brain is looking, what it has
+ * established, what it would ask next and why. Seeding a subject and retiring
+ * one are ADMIN plus `requirePerson`, the same pair the commercial authority
+ * carries — and for a related reason. `SEED` is the one node origin Brain
+ * itself cannot write, because the schema requires every other origin to carry
+ * the claim that established it; a machine that could name its own subjects
+ * would be choosing what the economy is, which is §22's split at the table
+ * that decides where everything else looks.
+ *
+ * Seeding spends nothing and starts nothing. It creates a row; the allocator
+ * decides when the subject is asked about, the discovery grant decides whether
+ * that may run, and the evidence gate decides what may be claimed.
+ * ------------------------------------------------------------------------ */
+
+cashRouter.get(
+  '/projects/:projectId/cash/industries',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return industryView(project.id);
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/industries',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const name = requiredString(body['name'], 'name');
+    const kindRaw = optionalString(body['kind'], 'kind');
+    if (kindRaw && !isIndustryNodeKind(kindRaw)) {
+      // An unknown field refuses the whole thing rather than being dropped:
+      // `proposal.ts`'s rule, at the table that decides where Brain looks.
+      throw badRequest(
+        `"${kindRaw}" is not a kind of subject this map holds. The set is fixed in code: ` +
+          `${INDUSTRY_NODE_KINDS.join(', ')}.`,
+      );
+    }
+
+    const parentId = optionalString(body['parentId'], 'parentId') ?? null;
+    if (parentId) {
+      const parent = await getNode(parentId);
+      if (!parent || parent.projectId !== project.id) {
+        // The same 404 a subject that never existed gives, because a parent id
+        // in somebody else's operation must not be distinguishable from an
+        // invented one — invariant 23, at a foreign key.
+        throw notFound('No subject with that id.');
+      }
+    }
+
+    const result = await seedSubject({
+      projectId: project.id,
+      name,
+      kind: kindRaw ? (kindRaw as IndustryNodeKind) : undefined,
+      description: optionalString(body['description'], 'description') ?? null,
+      parentId,
+      actorRef: principal.id,
+      reason: optionalString(body['reason'], 'reason') ?? null,
+    });
+
+    return {
+      subject: result.node,
+      created: result.created,
+      message: result.created
+        ? `${result.node.name} is on the map. Brain decides when to ask about it; nothing has ` +
+          'been spent and no research has started.'
+        : `${result.node.name} was already on the map, so nothing changed. How Brain came to ` +
+          'know about it is history, and naming it again does not rewrite that.',
+    };
+  }),
+);
+
+cashRouter.patch(
+  '/projects/:projectId/cash/industries/:nodeId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const node = await retireSubject({
+      projectId: project.id,
+      nodeId: pathId(req, 'nodeId'),
+      reason: requiredString(body['reason'], 'reason'),
+      actorRef: principal.id,
+    });
+    if (!node) throw notFound('No subject with that id.');
+
+    return {
+      subject: node,
+      message:
+        'Brain stops offering it and reads it as a dead end with your reason. Nothing was ' +
+        'destroyed: its evidence, its children and every round ever run against it are ' +
+        'exactly where they were, which is what stops it arriving again as a fresh discovery.',
+    };
   }),
 );

@@ -51,6 +51,7 @@ function mapOpportunity(row: CashOpportunityRow): CashOpportunity {
     title: row.title,
     mechanism: row.mechanism as CashMechanism,
     industry: row.industry,
+    industryNodeId: row.industry_node_id,
     source: row.source,
     candidateId: row.candidate_id,
     externalRecordId: row.external_record_id,
@@ -136,6 +137,15 @@ export interface NewOpportunity {
    * mechanism and are two entirely different things to qualify.
    */
   opportunitySignal?: OpportunitySignal | null;
+  /**
+   * The industry subject whose scan produced this opening.
+   *
+   * Written at promotion from the round that asked, and never derived later
+   * from the title: which industry something is in is a fact about which
+   * question found it, and a guess wearing a foreign key is the Westbrook
+   * defect §25 records. Null is honest — nobody asked a subject for it.
+   */
+  industryNodeId?: string | null;
   expiresAt?: string | null;
   expiryReason?: string | null;
   dependsOnId?: string | null;
@@ -157,6 +167,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
        (id, project_id, cash_mode_id, owner_user_id, title, mechanism, industry, source,
         candidate_id, external_record_id, source_claim_id, discovered_by_candidate_id,
         orchestration_id, fragment_id, discovery_round_id, opportunity_signal,
+        industry_node_id,
         payer, reachable_channel, buying_signal, signal_observed_at,
         offer_scope, acceptance_condition, price_cents, currency, payment_terms,
         fulfillment_owner, delivery_method, required_inputs, deadline, economics_note,
@@ -168,6 +179,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
         created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
              ?, ?, ?, ?,
+             ?,
              NULL, NULL, NULL, NULL,
              NULL, NULL, NULL, ?, NULL,
              NULL, NULL, NULL, NULL, NULL,
@@ -195,6 +207,7 @@ export async function createOpportunity(input: NewOpportunity): Promise<CashOppo
       input.fragmentId ?? null,
       input.discoveryRoundId ?? null,
       input.opportunitySignal ?? null,
+      input.industryNodeId ?? null,
       input.currency,
       input.expiresAt ?? null,
       input.expiryReason ?? null,

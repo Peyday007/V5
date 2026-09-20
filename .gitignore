@@ -20,3 +20,4 @@ data/factory/
 .DS_Store
 .vitest/
 .claude/worktrees/
+scripts/tmp-*.ts

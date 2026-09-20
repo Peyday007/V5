@@ -74,6 +74,7 @@ import { opportunityForOwnCandidate } from '../../repos/cashPortfolio.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
+import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
   EvidenceLane,
@@ -164,6 +165,24 @@ async function envelopeIdFor(
    * question and asking one opening what it pays are not the same question and
    * must not be judged by the same completion standard.
    */
+  /*
+   * A kernel question is decided by the round that asked it.
+   *
+   * `industry_rounds` is the exact statement — this candidate is asking this
+   * purpose about this subject — written by Brain when the round was opened,
+   * and it is read before the deep dive's own check because it is the more
+   * specific row: a CAPITAL round creates its own candidate, and nothing
+   * should have to reason about whether that candidate could also look like
+   * an opportunity's own. A SCAN falls through deliberately: searching a
+   * subject for openings *is* the discovery question, with a scope at last.
+   */
+  const kernel = await industryRoundForCandidate(candidate.id);
+  if (kernel) {
+    if (kernel.purpose === 'BOOTSTRAP' || kernel.purpose === 'MAP') {
+      return 'RUSSELL_INDUSTRY_MAP_V1';
+    }
+    if (kernel.purpose === 'CAPITAL') return 'RUSSELL_CAPITAL_STRUCTURE_V1';
+  }
   if (await opportunityForOwnCandidate(project.id, candidate.id)) {
     return 'RUSSELL_CASH_VALIDATION_V1';
   }

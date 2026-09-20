@@ -1989,6 +1989,128 @@ export async function reconcileArguedAuditRoles(
   return out;
 }
 
+/**
+ * Conclude a live packet that no worker can do anything more with.
+ *
+ * ---------------------------------------------------------------------------
+ * The deadlock this exists for
+ * ---------------------------------------------------------------------------
+ *
+ * `reconcileTerminalPackets` takes live work off a packet that has *finished*.
+ * This is the mirror image and the one nothing covered: a packet that has not
+ * finished, holding only work items that are **past their own attempt
+ * ceilings**. Every one of them is `QUEUED`, or `LEASED` on a lease that
+ * lapsed days ago, so the queue keeps offering them and no worker can turn any
+ * of them into anything. Nothing advances the packet, because `advancePacket`
+ * runs when something *completes* — which is exactly what has stopped
+ * happening. `reconcileArguedAuditRoles` records the same sentence one state
+ * along: **a reconciliation that only runs when something else happens cannot
+ * reach a state in which nothing is happening.**
+ *
+ * Production sat in it for fifty-one hours. Nine missions in one cash sprint
+ * were `RUNNING` against a standing grant whose concurrency is six, so sixty-one
+ * ideas — including both of the industry kernel's open rounds — were queued
+ * behind work that could never finish. The fleet was healthy the whole time and
+ * fired *nothing*: `in-flight counted=0 examined=0` over a thirty-minute
+ * window, eight eligible surfaces, zero in flight.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it costs no activations
+ * ---------------------------------------------------------------------------
+ *
+ * The tempting remedy is to give the bin more assignments, and for a packet
+ * whose items can still be attempted that is the right one —
+ * `regrantBinAttempts` is the answering transition and its own comment names
+ * the incident. It is the wrong one here: a worker fired at an item already
+ * past its ceiling arrives, claims, fails and retires it, which spends a fire
+ * to learn what the rows already say. So this performs **no dispatch at all**.
+ * It takes the dead work off the packet and lets `advancePacket` say what the
+ * packet is, which is the existing transition rather than a new terminal path.
+ *
+ * ---------------------------------------------------------------------------
+ * Fail-closed, and every condition is load-bearing
+ * ---------------------------------------------------------------------------
+ *
+ *   - **Live packets only.** A terminal one is the other sweep's.
+ *   - **Something must actually be stranded** — at least one outstanding item
+ *     past its ceiling. A healthy packet selects nothing.
+ *   - **Never while one item could still be attempted.** One `QUEUED` item with
+ *     attempts left means a worker can move this packet, so it is not stuck and
+ *     this must not touch it.
+ *   - **Never under a live lease.** Somebody may be working right now, and
+ *     `retireTerminalWork` already records what retiring live work costs: a
+ *     compliant worker told its completion is no longer current.
+ *   - **It concludes nothing itself.** It retires and then advances; whether
+ *     that faults the packet, enqueues a repair or re-plans is `advancePacket`'s
+ *     decision on the packet's own rows.
+ *
+ * Derived from rows rather than hooked to a moment, so it reaches the nine that
+ * were already stranded without anybody naming them — the fourth time that
+ * distinction has been the difference between a fix that reaches production and
+ * one that does not. Idempotent by the state it produces: once the items are
+ * `CANCELLED` the selection no longer matches.
+ */
+export async function concludeUnworkablePackets(
+  limit: number,
+): Promise<{ orchestrationId: string; retired: number }[]> {
+  const live = ['PLANNING', 'RESEARCHING', 'VERIFYING', 'SYNTHESIZING', 'AUDITING', 'AWAITING_REPAIR'];
+  const now = queueNow();
+  const rows = await getDb().all<{ id: string }>(
+    `SELECT DISTINCT o.id AS id
+       FROM research_orchestrations o
+       JOIN work_items w ON w.orchestration_id = o.id
+      WHERE o.status IN (${live.map(() => '?').join(', ')})
+        AND w.state IN ('QUEUED','LEASED')
+        AND w.attempt_count >= w.max_attempts
+      ORDER BY o.id
+      LIMIT ?`,
+    [...live, Math.max(1, limit)],
+  );
+
+  const out: { orchestrationId: string; retired: number }[] = [];
+  for (const row of rows) {
+    const orchestration = await getOrchestration(row.id);
+    if (!orchestration) continue;
+
+    const outstanding = (await listWorkItems(orchestration.projectId, { limit: 500 })).filter(
+      (item) =>
+        item.orchestrationId === orchestration.id &&
+        (item.state === 'QUEUED' || item.state === 'LEASED'),
+    );
+    if (outstanding.length === 0) continue;
+
+    /*
+     * One item somebody could still move is enough to leave the whole packet
+     * alone. Asked over *every* outstanding item rather than the ones the
+     * query matched, because the query matched a packet and this decides about
+     * a packet.
+     */
+    const workable = outstanding.some(
+      (item) =>
+        item.attemptCount < item.maxAttempts ||
+        (item.state === 'LEASED' && item.leaseExpiresAt !== null && item.leaseExpiresAt > now),
+    );
+    if (workable) continue;
+
+    let retired = 0;
+    for (const item of outstanding) {
+      await cancelWork(
+        item.id,
+        `This item has spent all ${item.maxAttempts} of its attempts and no further one can be ` +
+          'made, and every other item on this packet is in the same state — so the packet is ' +
+          'not waiting for a worker, and leaving it claimable would send one for work that ' +
+          'cannot be performed. The attempts and the reasons they failed are kept.',
+      );
+      retired += 1;
+    }
+    // Only now, and only because something moved. What the packet *is* stays
+    // `advancePacket`'s answer, read from the packet's own rows.
+    await advancePacket(orchestration.id);
+    out.push({ orchestrationId: orchestration.id, retired });
+  }
+  return out;
+}
+
 export async function reconcileTerminalPackets(
   limit: number,
 ): Promise<{ orchestrationId: string; retired: number }[]> {

@@ -68,6 +68,33 @@ COPY scripts ./scripts
 # twice: once for living under `docs/` (excluded) and once for this COPY being
 # absent. Prose a person approved, no secrets, and no authority of its own.
 COPY objectives ./objectives
+# The capability blueprint and its amendments, at `blueprints/` in the repository
+# and `blueprints/` in the image. `registerBlueprint` reads a source *by path* and
+# hashes the bytes it read, so a blueprint that exists only in the repository is
+# one the deployed Brain can never ingest — verbatim the failure the `objectives/`
+# comment above records, and the remedy that comment records is to move the input
+# out of `docs/` rather than to start copying `docs/` in.
+#
+# **The destination was moved and the source was not, and that is a third way for
+# the same line to be wrong.** `.dockerignore` excludes `docs`, so
+# `COPY docs/capability ./blueprints` names a path the build context does not
+# contain, and every deploy from that tree died at
+# `"/docs/capability": not found` before an image was ever released. The test
+# that was supposed to guard this read the Dockerfile's *text*, which can say
+# where the bytes are going and can never say whether they are reachable — so it
+# passed the whole time. It reads `.dockerignore` too now.
+#
+# The destination still matters for its own reason and is unchanged.
+# `readTextIndex` reads `docs/`, and `documentedReading` answers
+# `unknown(NO_DOCS_HERE)` only while that directory is *absent*. A `docs/` tree
+# holding the blueprint and nothing else is worse than none: every component the
+# blueprint does not happen to name would read a confident `NO`. A blueprint is a
+# statement about faculties Brain wants, never documentation of components Brain
+# has — §37's own first sentence, at a path.
+#
+# Prose the owner supplied, no secrets, and no authority of its own; what it can
+# move is bounded by `INGESTION_MAY_MOVE`, which is DEFINITION and nothing else.
+COPY blueprints ./blueprints
 COPY --from=build /app/client/dist ./client/dist
 
 # Not root. The process needs no privilege: it opens a socket and talks to two

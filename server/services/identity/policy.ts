@@ -341,6 +341,19 @@ const OVERRIDES: Override[] = [
   // entry that could drift.
   { pattern: /^\/api\/projects\/[^/]+\/cash\/mode$/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/cash\/authority/, level: 'ADMIN' },
+
+  // ---------------------------------------------------------------------
+  // The industry kernel's map (§38)
+  // ---------------------------------------------------------------------
+  //
+  // Seeding a subject and retiring one are ADMIN, for the split above: both
+  // are decisions *about* what the operation looks at rather than work inside
+  // it, and `SEED` is the one node origin Brain itself may never write — a
+  // machine that could name its own subjects would be deciding what the
+  // economy is. Reading the map is deliberately absent and takes the default
+  // READ, so every member of the project can see where Brain is looking.
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'PATCH', level: 'ADMIN' },
 ];
 
 export interface Requirement {

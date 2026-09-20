@@ -118,6 +118,42 @@ describe('one branch owns production', () => {
   });
 });
 
+describe('the restart that makes persistence mean something actually runs', () => {
+  /*
+   * §27 records three consecutive deploys ending `after the restart: skipped`.
+   * `flyctl apps restart` waits for health checks with a deadline shorter than
+   * this machine's cold start, exits non-zero, and a failing step with no `if:`
+   * skips every step after it — so the post-restart verification was not
+   * failing, it was not running. A gate that never runs stops being evidence
+   * long before anybody notices.
+   *
+   * Two properties, and the second is the one that keeps the first honest.
+   */
+  const deploy = read('.github/workflows/deploy.yml');
+  const restart = deploy.slice(
+    deploy.indexOf('- name: Restart it'),
+    deploy.indexOf('- name: Wait for it to answer after the restart'),
+  );
+
+  it('tolerates the health-check deadline, because the poll after it is the judge', () => {
+    expect(restart).toMatch(/failed to wait for health checks/);
+    expect(restart).toMatch(/context deadline exceeded/);
+    // And the thing it defers to has to be there, polling from outside the
+    // machine rather than asking the machine about itself.
+    expect(deploy).toContain('- name: Wait for it to answer after the restart');
+    expect(deploy).toMatch(/healthz/);
+  });
+
+  it('does not swallow a restart refused for any other reason', () => {
+    // A tolerance that matches everything is not a tolerance, it is a removed
+    // check — and it would hide a machine that never restarted at all, which is
+    // precisely what the step exists to cause.
+    expect(restart).not.toMatch(/\|\|\s*true/);
+    expect(restart).toMatch(/::error::/);
+    expect(restart).toMatch(/exit 1/);
+  });
+});
+
 describe('a dispatch surface offers the commands it actually accepts', () => {
   /*
    * `admin.yml` carries the command list twice: once as the input's own
@@ -159,6 +195,64 @@ describe('a dispatch surface offers the commands it actually accepts', () => {
     for (const command of allowed()) {
       expect(script, command).toContain(`case '${command}'`);
     }
+  });
+
+  /*
+   * `capability.yml` is the same surface one door along and is deliberately a
+   * different shape: it has no shell allowlist at all, because the closed set
+   * already exists in `scripts/capability.ts` and a second copy in YAML would be
+   * the drift above waiting to happen. So there is exactly one thing to assert,
+   * and it is the half that can still be wrong — the label a person reads must
+   * name commands the script on the other end actually implements. A label
+   * offering a command that does not exist sends somebody to dispatch a job that
+   * fails for a reason that is about the workflow rather than about their Brain.
+   */
+  const kernel = read('.github/workflows/capability.yml');
+
+  it('offers only kernel commands the deployed script implements', () => {
+    const described = /description: '([^']+)'\n\s+required: true/.exec(kernel);
+    expect(described).not.toBeNull();
+    const script = read('scripts/capability.ts');
+    const offeredHere = (described?.[1] ?? '')
+      .split('|')
+      .map((one) => one.trim().split(/\s+/)[0] as string);
+    expect(offeredHere.length).toBeGreaterThan(5);
+    for (const command of offeredHere) {
+      expect(script, command).toContain(`case '${command}'`);
+    }
+  });
+
+  it('never puts a dispatch input into the command it sends, and never evals one', () => {
+    /*
+     * `flyctl ssh console -C` takes ONE command string, and the shell inside
+     * the production container runs it. So an input interpolated into that
+     * string is not an argument, it is a command — a quote ends the string and
+     * everything after it executes. Anyone who can dispatch this can already
+     * dispatch `deploy.yml`, so it is not a privilege escalation; it is still a
+     * hole, and the *quieter* half is the ordinary quoting bug, because an
+     * authority statement is prose and a truncated one is reported as success.
+     *
+     * The inputs therefore arrive as environment variables and are parsed with
+     * `shlex`, which applies shell quoting rules and executes nothing. `eval`
+     * is named here because `eval "set -- $ARGS"` is the tidy-looking version
+     * of the same hole: it honours quotes and also runs `$(…)`.
+     */
+    const run = kernel.slice(kernel.indexOf('- name: Run'));
+    expect(run).toContain('COMMAND: ${{ inputs.command }}');
+    expect(run).toContain('ARGS: ${{ inputs.args }}');
+    expect(run).toContain('shlex.quote');
+    // Neither input may appear as an interpolation anywhere in the script body.
+    const script = run.slice(run.indexOf('run: |'));
+    expect(script).not.toContain('${{ inputs.command }}');
+    expect(script).not.toContain('${{ inputs.args }}');
+    expect(script).not.toMatch(/\beval\b/);
+  });
+
+  it('cannot deploy, and says so by containing no deploy command', () => {
+    // The floor `leaves exactly one workflow able to deploy` already sets, said
+    // again at the surface most likely to grow one: the kernel's job is to read
+    // and advance rows, and building an image is not one of its commands.
+    expect(kernel).not.toContain('flyctl deploy');
   });
 });
 

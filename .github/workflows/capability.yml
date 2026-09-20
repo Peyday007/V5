@@ -1,0 +1,88 @@
+# Driving the self-expansion kernel on the deployed Brain, without a terminal.
+#
+# The sibling of `packet-report.yml` and `admin.yml`, and separate from
+# `deploy.yml` for the reason the first of those already gives: asking the
+# kernel a question through the deploy pipeline would mean building an image,
+# restarting the machine and running the whole hosted verification to read a
+# faculty's six dimensions. That is minutes and a restart per question, so in
+# practice it would not be asked and the answer would come from somebody's
+# memory of a conversation instead.
+#
+# **This adds convenience and not privilege**, on `admin.yml`'s own argument.
+# Anyone who can dispatch this can already dispatch `deploy.yml`; repository
+# write access is production administration on this project however the buttons
+# are arranged. What it must not do is grow past the job it is for, so the
+# command is passed through to `scripts/capability.ts`, which is the same closed
+# surface a terminal reaches and refuses everything else — it cannot promote a
+# faculty without an audit, cannot move a dimension the evidence does not
+# support, cannot grant authority, and cannot start a campaign. Approving an
+# objective and approving a release stay person-only decisions on the Build
+# surface, exactly as §27 requires.
+#
+# Reaching this is the authentication, as §26 says of the shell, and `--admin`
+# is the attribution where a command takes one — resolved against the database
+# rather than trusted.
+name: Capability kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'register | sources | advance | read | candidates | faculties | history | scan | model | staleness | packet <sub> | packets | submit | verdicts'
+        required: true
+        default: faculties
+      args:
+        description: 'The rest of the command line, passed through verbatim'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a reading that raced a restart would be reporting whichever half answered.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  capability:
+    name: Capability kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # The inputs reach the shell as *environment variables*, never as `${{ }}`
+      # interpolated into the script, and they are parsed rather than evaluated.
+      #
+      # That is not style. `-C` takes one command string, so an input pasted
+      # into it is executed by the shell inside the production container: a
+      # quote in an argument ends the string and everything after it is a
+      # command. It is a script-injection surface at the same time as being an
+      # ordinary quoting bug — and the quoting bug is the one that would have
+      # bitten first and quietest, because an authority statement is prose. §27
+      # already records what silent truncation costs: it is the one outcome the
+      # far end cannot recover from, because it is reported as success.
+      #
+      # `shlex` is the whole of the fix, and it is deliberately not `eval`:
+      # `eval "set -- $ARGS"` reads like a tidy way to honour quotes and is the
+      # identical hole one line along, because `$(…)` inside the string runs.
+      # `shlex.split` applies the same quoting rules and executes nothing, and
+      # `shlex.quote` puts the words back together so the container receives
+      # exactly the characters that were typed, whatever they are.
+      - name: Run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COMMAND: ${{ inputs.command }}
+          ARGS: ${{ inputs.args }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          remote=$(python3 - <<'PY'
+          import os, shlex
+          words = shlex.split(os.environ.get('COMMAND', '')) + shlex.split(os.environ.get('ARGS', ''))
+          print(' '.join(['sh', '/app/scripts/capability.sh'] + [shlex.quote(w) for w in words]))
+          PY
+          )
+          echo "Running: $remote"
+          # `tee` would otherwise hide a non-zero exit behind its own success.
+          set -o pipefail
+          flyctl ssh console --app "$app" -C "$remote" 2>&1 | tee capability.txt

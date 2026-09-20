@@ -432,6 +432,103 @@ submitting anything anywhere; making any commitment on anybody's behalf. This is
 read-only research into what is already published, and every action beyond reading needs
 a separate commercial authorization from a person.`;
 
+export const INDUSTRY_MAP_ASSIGNMENT_TEMPLATE = `Establish, from published sources, how this part of the economy is actually put together:
+
+{QUESTION}
+
+Subject: the subject named above, and what sits underneath it. Anything you establish about
+a different subject is reported as being about somewhere else rather than generalized.
+
+Market: {JURISDICTION}. Say which market each finding is about.
+
+What to settle, as far as published sources allow: which narrower industries the subject
+contains, as the sources themselves name them; the stages of producing and delivering here,
+in the order the sources describe; which kinds of organisation pay for work in this
+subject; who or what actually performs the work that gets paid for; how money changes hands
+— what is bought, on what terms, and on what cycle; and where supply is constrained, as a
+documented shortage, queue or chokepoint rather than an impression.
+
+Every one of those becomes part of the map only if you declare it. Set structural_finding
+on the claim to the kind it is, and structural_subject to the subject's own name as the
+source calls it. A claim with no structural_finding is ordinary context, which is most of
+them and is not a deficiency.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. An industry classification
+system, a trade body's own taxonomy and a statistical agency's publication are all
+conclusive about what they declare, and none of them is evidence that the structure they
+declare is the one the money actually moves through — so where a trade source and a
+classification disagree, record both rather than choosing.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found. Do not invent a
+level that no source names, and do not produce a tidy hierarchy by filling gaps: a subject
+with three published sub-industries has three, and the map saying so is worth more than a
+symmetrical one that is partly guessed.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or
+submitting anything anywhere; making any commitment on anybody's behalf. This is
+read-only research into what is already published, and every action beyond reading needs
+a separate commercial authorization from a person.`;
+
+export const CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what owner capital this actually requires — after the
+requirements have been taken apart:
+
+{QUESTION}
+
+Subject: one opening, named above. Everything you establish must be about that opening or
+about the way work of that kind is financed in its industry.
+
+Market: {JURISDICTION}. Say which market each finding is about.
+
+A headline startup cost is a published figure about a *shape* of the business, usually the
+shape where the owner buys the equipment, leases the property, hires the staff and carries
+the receivables. It is not the answer. What to settle instead:
+
+First, which specific requirements exist for this transaction — labour, equipment,
+property, inventory, licensing, customer acquisition, working capital, deposits, insurance,
+compliance, fulfilment, transport, storage, technology, minimum order sizes, guarantees —
+and what published sources say each one costs. Declare each with structural_finding set to
+CAPITAL_REQUIREMENT.
+
+Second, which published practices in this industry remove, defer or shift each of those
+onto somebody else: subcontracting, brokerage, agency, customer deposits, milestone
+billing, pre-sales, purchase-order finance, receivables finance, supplier credit,
+consignment, leasing, rental, licensing in, revenue share, joint venture, project finance,
+offtake, distribution advances, government incentives, capacity reservations, management
+contracts, contract manufacture, third-party logistics, white labelling, marketplaces.
+Declare each with structural_finding set to CAPITAL_RESTRUCTURING, naming the requirement
+it answers and what the owner still funds afterwards where the source says.
+
+Do not assume a mechanism applies because it exists. Establish that this industry actually
+uses it, from a source about this industry.
+
+Third, anything published that changes the economics and is not obvious from outside — a
+cycle longer than the stated one because acceptance follows it, a prohibition on passing
+work on, a credential requirement, a supervision ceiling, payment only on final acceptance,
+a bonding requirement, a regulatory capital rule, a spread that disappears once management
+is counted. Declare each with structural_finding set to HIDDEN_CONSTRAINT. Do not report
+things true of every business: that staff must be paid, that contracts must be lawful,
+that customers might not buy. Those are assumed and reporting them wastes the reader's
+attention on what is already known.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. A figure is read from a source,
+never produced. Where nothing publishes an amount, record the requirement with no amount
+and say what would settle it — an unknown amount is reported as unknown, and never as a
+small number or as nothing to pay.
+
+Completion standard: each requirement either carries a published figure or is explicitly
+recorded as having none. A restructuring with no published residual is reported as
+available and does not reduce anything.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or
+submitting anything anywhere; making any commitment on anybody's behalf. This is
+read-only research into what is already published, and every action beyond reading needs
+a separate commercial authorization from a person.`;
+
 /**
  * What a cash question may cite, what that means in words, and what it may
  * never instruct Brain to do.
@@ -683,6 +780,77 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     jurisdiction: 'the market this question names',
     // One opening, and as many bounded questions about it as the unknowns
     // require. Every condition applies to each of them.
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * The question that builds the map, rather than searching inside it.
+   *
+   * `RUSSELL_CASH_DISCOVERY_V1`'s permissions exactly — the same source
+   * classes, the same forbidden actions, the same zero external effect, taken
+   * by reference rather than written afresh so the three cannot drift into
+   * authorizing different things. What differs is only the assignment it pins,
+   * which is why it is a separate envelope at all: `planFitsEnvelope` pins one
+   * template per envelope, and a packet has to be judged against the rules for
+   * the question it is actually asking.
+   *
+   * **It authorizes no effect that discovery did not already authorize.**
+   * Adding it is a code change somebody reviews, which is where "does this
+   * authorize something new?" gets asked, and the answer is no: it authorizes
+   * reading published sources about how an industry is organized.
+   */
+  RUSSELL_INDUSTRY_MAP_V1: Object.freeze({
+    id: 'RUSSELL_INDUSTRY_MAP_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it: published sources only, across any industry, business ' +
+      'model or market, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing how a part of the ' +
+      'economy is organized, so that the search for openings has somewhere to look. Acting ' +
+      'on what is found is authorized separately by a commercial grant a person makes, and ' +
+      'never by this envelope.',
+    assignmentTemplate: INDUSTRY_MAP_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * Taking a capital requirement apart, which is the one question that decides
+   * whether an opening is reachable with the money that actually exists.
+   *
+   * Same permissions again, and the same argument for being its own envelope.
+   * Worth saying explicitly because the subject sounds financial: nothing here
+   * authorizes borrowing, committing, depositing or spending anything. It
+   * authorizes *reading about* how an industry finances work of this kind, and
+   * every one of the mechanisms its assignment names is a thing to establish
+   * from a published source rather than a thing to do.
+   */
+  RUSSELL_CAPITAL_STRUCTURE_V1: Object.freeze({
+    id: 'RUSSELL_CAPITAL_STRUCTURE_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it: published sources only, with no spending, no paid API or purchased ' +
+      'data, no contact with any person or organisation, no advertising, no publishing and no ' +
+      'external effect of any kind. This envelope is that authorization applied to ' +
+      'establishing what capital one opening requires and how its industry finances work of ' +
+      'that kind. It authorizes reading about those mechanisms and never using one: every ' +
+      'commitment, deposit, borrowing and purchase is a commercial action a person grants ' +
+      'separately, and never this envelope.',
+    assignmentTemplate: CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
     maxFragments: null,
     geography: /\S/,
     forbiddenScope: /(?!)/,

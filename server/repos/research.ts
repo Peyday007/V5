@@ -8,6 +8,8 @@
  */
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
 import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
+import { isStructuralFinding } from '../domain/industry.ts';
+import type { StructuralFinding } from '../domain/types.ts';
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
@@ -193,6 +195,12 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     opportunitySignal: isOpportunitySignal(row.opportunity_signal)
       ? row.opportunity_signal
       : null,
+    structuralFinding: isStructuralFinding(row.structural_finding)
+      ? row.structural_finding
+      : null,
+    structuralSubject: row.structural_subject,
+    structuralQualifier: row.structural_qualifier,
+    structuralAmountCents: row.structural_amount_cents,
     retrievedAt: row.retrieved_at,
     confidence: Number(row.confidence),
     contradictionState: row.contradiction_state as ContradictionState,
@@ -779,6 +787,14 @@ export interface InsertClaimInput {
   evidenceLane: string | null;
   /** The kind of opening this claim establishes, from the closed set, or null. */
   opportunitySignal?: OpportunitySignal | null;
+  /** The structural fact about an industry it establishes, or null. */
+  structuralFinding?: StructuralFinding | null;
+  /** What the finding is about: a name, or a value from that kind's own set. */
+  structuralSubject?: string | null;
+  /** For a restructuring, the requirement it answers. */
+  structuralQualifier?: string | null;
+  /** A published capital figure in minor units, or null for unknown. */
+  structuralAmountCents?: number | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState?: ContradictionState;
@@ -815,18 +831,23 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
       await db.run(
         `INSERT INTO research_claims (id, orchestration_id, fragment_id, pass_id, pass_key, claim,
            source_url, source_title, source_publisher, source_date, evidence_excerpt,
-           evidence_locator, evidence_lane, opportunity_signal, retrieved_at, confidence,
+           evidence_locator, evidence_lane, opportunity_signal, structural_finding,
+           structural_subject, structural_qualifier, structural_amount_cents,
+           retrieved_at, confidence,
            contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
            accepted, rejection_reason, scope_match, claim_type, source_group, primary_source,
            geography, timeframe, population, definition, requirement_ids, job_id,
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
-          input.opportunitySignal ?? null, input.retrievedAt,
+          input.opportunitySignal ?? null,
+          input.structuralFinding ?? null, input.structuralSubject ?? null,
+          input.structuralQualifier ?? null, input.structuralAmountCents ?? null,
+          input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,
           input.validationState, input.validationDetail, fromBool(input.sourced),
@@ -956,6 +977,59 @@ export async function signalledClaims(input: {
       ORDER BY c.created_at, c.rowid
       LIMIT ?`,
     [input.projectId, Math.max(1, input.limit ?? 50)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
+/**
+ * Every citable claim in one project that establishes a structural fact about
+ * an industry.
+ *
+ * `signalledClaims`' shape, one axis along, and deliberately *not* the same
+ * query with an `OR`: the two answer different questions about one claim —
+ * *is this a piece of work* and *is this how the industry is put together* —
+ * and a claim can carry both. Joining them would make a caller reading
+ * openings walk structural findings it has nothing to do with, and a caller
+ * reading structure walk openings.
+ *
+ * The one condition they share is the exclusion of a deep dive's own output,
+ * for the same reason: a validation packet researches one opening that already
+ * exists, and absorbing its findings as *new structure* would file the answer
+ * to "is this worth doing" as a fresh subject and then decompose that.
+ */
+export async function structuralClaims(input: {
+  projectId: string;
+  /**
+   * The orchestrations worth reading, which is always the ones whose kernel
+   * round is still open.
+   *
+   * Required rather than optional, and that is the point. The window is
+   * oldest-first and bounded, so without it every claim belonging to a round
+   * that has already settled sits permanently at the head of it — and once a
+   * sprint has run for a while the budget is spent entirely on claims that
+   * were filed weeks ago, while the ones that just arrived are never reached.
+   * A bounded scan that cannot make progress is worse than an unbounded one,
+   * because it looks like it is working.
+   */
+  orchestrationIds: readonly string[];
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.structural_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100)],
   );
   return rows.map((row) => {
     const claim = mapClaim(row);

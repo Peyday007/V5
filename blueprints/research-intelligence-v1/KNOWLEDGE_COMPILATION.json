@@ -1,0 +1,30 @@
+{
+ "principle": "Raw information here is already Brain-native \u2014 rows the gate, the synthesis and the audit wrote. What compilation has to produce is objects downstream faculties can consume without re-reading a packet.",
+ "objects": [
+  {
+   "object": "BeliefUpdateProposal",
+   "from": "accepted claims plus the synthesis that cited them",
+   "supports": "faculty 4's world model, which decides whether to hold it",
+   "refusedWhen": "it cites a claim that is not accepted, or no claim at all"
+  },
+  {
+   "object": "StandingQuestion",
+   "from": "an audit gap whose classification may keep research open, or a genuine contradiction",
+   "supports": "the next planning pass, and `coverBeforeWork`, which can then answer 'we already asked this and did not settle it'",
+   "refusedWhen": "it names no packet and no basis"
+  },
+  {
+   "object": "SuggestedTest",
+   "from": "a standing question whose answer observation alone cannot settle",
+   "supports": "faculty 9, which decides what rung of the execution ladder it belongs on",
+   "refusedWhen": "it names no disconfirming result"
+  },
+  {
+   "object": "FragmentRetrospective",
+   "from": "a fragment's attempts held against whether its claims were cited",
+   "supports": "faculty 10, which generalizes across runs, and the faculty's own second evaluation requirement",
+   "refusedWhen": "the packet filed no document, in which case the fragments' own outcomes stand and the absence is recorded"
+  }
+ ],
+ "boundary": "None of these objects is knowledge. Each is a proposal to a faculty that owns the corresponding state, and this faculty's boundary \u2014 it proposes what is true and what remains unknown, and grants no authority \u2014 is why."
+}

@@ -77,6 +77,10 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
   return {
     claimType: 'SOURCED_FACT',
     sourceGroup: 'host:bls.gov',
+    structuralFinding: null,
+    structuralSubject: null,
+    structuralQualifier: null,
+    structuralAmountCents: null,
     primarySource: true,
     geography: 'United States',
     timeframe: '2023',

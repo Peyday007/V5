@@ -1,0 +1,42 @@
+{
+ "implementationVersion": "Research Intelligence v1 \u2014 the aftermath half. The run itself is unchanged and was already live.",
+ "supportedInputs": [
+  "A terminal research packet in one project, with its fragments, claims, citations and audit gaps.",
+  "A contradiction recorded against a claim in that project."
+ ],
+ "supportedOutputs": [
+  "Belief-update proposals, to faculty 4.",
+  "Standing questions, to this faculty's own planning and to `coverBeforeWork`.",
+  "Suggested tests, to faculty 9.",
+  "Per-fragment retrospectives, to faculty 10."
+ ],
+ "routing": [
+  "Activated by a packet reaching a terminal state, on the durable tick.",
+  "Never activated by a person asking, because the aftermath of a run is not a request.",
+  "Never activated across projects."
+ ],
+ "constraints": [
+  "One bounded model pass per packet, and only for an audit gap that states a finding without stating a question.",
+  "No external source is read at all.",
+  "Nothing is applied: every output is a proposal to a faculty that owns the state."
+ ],
+ "permissions": [
+  "Project-scoped reads through the existing repositories.",
+  "No new scope, no new credential, no new external-action authority."
+ ],
+ "knownFailures": [
+  "A packet that filed nothing yields a retrospective from fragment outcomes alone, which is weaker and is recorded as such rather than smoothed over.",
+  "A standing question phrased from a gap is only as good as the gap; a finding stated vaguely produces a vague question, and that is visible rather than hidden.",
+  "Nothing here closes a question that was answered outside Brain."
+ ],
+ "evaluationState": "UNTESTED until the evaluation graph's three tests exist and pass; PASSING is not a merge and `prove.ts` will not treat it as one.",
+ "productionProof": "Requires the three live rows named in the evaluation graph, in a project whose purpose is somebody's work.",
+ "monitoring": [
+  "Standing questions open against standing questions closed, per project. A number that only rises means the closing path is not being reached.",
+  "Aftermaths derived against terminal packets. A gap between them means the tick is missing some."
+ ],
+ "retirement": [
+  "If faculty 4's world model subsumes belief-update proposals, this faculty stops producing them and says so rather than producing both.",
+  "If a later faculty owns standing questions across projects, this one's becomes its input rather than a parallel store."
+ ]
+}

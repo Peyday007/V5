@@ -10,10 +10,29 @@
  */
 import { api } from './api.ts';
 import type { CapacityReading, SurfaceReading } from '../../../server/services/fleet/capacity.ts';
-import type { ConnectionStep, ConnectionView } from '../../../server/services/capacity/connection.ts';
+import type { ContributedCapacity } from '../../../server/services/capacity/contribution.ts';
+import type {
+  ConnectionCheck,
+  ConnectionControl,
+  ConnectionIdentity,
+  ConnectionStep,
+  ConnectionView,
+  TroubleshootingEntry,
+} from '../../../server/services/capacity/connection.ts';
 import type { MemberState } from '../../../server/services/identity/people.ts';
 
-export type { CapacityReading, SurfaceReading, ConnectionStep, ConnectionView, MemberState };
+export type {
+  CapacityReading,
+  ContributedCapacity,
+  SurfaceReading,
+  ConnectionCheck,
+  ConnectionControl,
+  ConnectionIdentity,
+  ConnectionStep,
+  ConnectionView,
+  TroubleshootingEntry,
+  MemberState,
+};
 
 /** A live passkey, the bootstrap password account, or neither. */
 export type SignsInWith = 'DEVICE' | 'PASSWORD' | 'NONE';
@@ -47,6 +66,8 @@ export interface PeopleAndCapacity {
     excluded?: { systemIdentities: number; disabledAccounts: number };
   };
   capacity: CapacityReading;
+  /** Which members' connections are usable capacity, and why not when they are not. */
+  contributed: ContributedCapacity;
   me: ConnectionView;
   contract: { mcpUrl: string; bootstrapRepository: string };
 }
@@ -60,6 +81,11 @@ export interface ConnectionSummary {
   triggerRef: string | null;
   routineId: string | null;
   failureReason: string | null;
+  /** When the member asked for their link, and when one was issued. */
+  invitationRequestedAt: string | null;
+  invitationIssuedAt: string | null;
+  revokedAt: string | null;
+  revokedReason: string | null;
   updatedAt: string;
 }
 
@@ -82,6 +108,34 @@ export const PeopleApi = {
   /** One bounded self-test. Pressing it twice makes one bin. */
   sendProbe: (): Promise<ConnectionView> =>
     api('/api/people/me/claude/probe', { method: 'POST', body: '{}' }),
+
+  /**
+   * Ask for your own one-time connector link.
+   *
+   * Yours by principal, and idempotent by the timestamp it writes: asking twice
+   * asks once. It creates nothing and grants nothing — it puts you in front of
+   * a Brain administrator, who is the one who may mint a worker identity.
+   */
+  requestInvitation: (): Promise<ConnectionView> =>
+    api('/api/people/me/claude/invitation-request', { method: 'POST', body: '{}' }),
+
+  /**
+   * Check the connection against the rows, rather than against a claim.
+   *
+   * Reads the worker, its membership, the tokens minted against it, the
+   * registered surface, the deployment variable's presence and the four-row
+   * proof chain. Fires nothing and spends nothing.
+   */
+  verify: (): Promise<ConnectionView> =>
+    api('/api/people/me/claude/verify', { method: 'POST', body: '{}' }),
+
+  /** Take your own connection back. Destroys nothing; reconnecting resumes it. */
+  revoke: (reason: string): Promise<ConnectionView> =>
+    api('/api/people/me/claude/revoke', { method: 'POST', body: JSON.stringify({ reason }) }),
+
+  /** Put your own revoked connection back into the journey. */
+  reconnect: (): Promise<ConnectionView> =>
+    api('/api/people/me/claude/reconnect', { method: 'POST', body: '{}' }),
 
   /** A Brain administrator's: mints the worker identity and its one-time link. */
   issueConnectorInvitation: (userId: string): Promise<ConnectionView> =>
