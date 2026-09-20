@@ -506,10 +506,17 @@ async function main(): Promise<void> {
         const state = user.disabledAt ? 'DISABLED' : user.isBrainAdmin ? 'ADMIN' : 'MEMBER';
         const passkeys = await countLivePasskeys(user.id);
         // What the page derives `READY` from, printed the same way it derives
-        // it: a device, or a password, or neither. A timestamp is evidence a
-        // password exists and says nothing about it.
+        // it, and in the same order: the PIN the sign-in screen asks for, the
+        // password `/recovery` takes, then a device, which reaches neither. A
+        // timestamp is evidence a credential exists and says nothing about it.
         const signIn =
-          passkeys > 0 ? 'device' : user.passwordUpdatedAt !== null ? 'password' : 'none';
+          user.pinUpdatedAt !== null
+            ? 'pin'
+            : user.passwordUpdatedAt !== null
+              ? 'password'
+              : passkeys > 0
+                ? 'device'
+                : 'none';
         console.log(
           `  ${user.id}  ${user.kind.padEnd(7)} ${state.padEnd(8)} ` +
             `passkeys=${passkeys} signs-in=${signIn.padEnd(8)} ${user.displayName}` +
@@ -519,7 +526,10 @@ async function main(): Promise<void> {
       console.log('');
       console.log('  kind=PERSON is somebody; kind=SYSTEM is machinery proving itself.');
       console.log('  Only PERSON rows, not disabled, reach the People & capacity page.');
-      console.log('  signs-in=none is a slot nobody has filled; device and password both count.');
+      console.log('  signs-in=none is a slot nobody has filled.');
+      console.log('  signs-in=pin and signs-in=password are ways in; the screen asks for a PIN.');
+      console.log('  signs-in=device holds a passkey the sign-in screen no longer offers:');
+      console.log('  that person needs a new link, which People has a control for.');
       break;
     }
     case 'projects list': {
