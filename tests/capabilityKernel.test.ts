@@ -567,6 +567,53 @@ describe('the capability kernel', () => {
       expect(definition.connections[0]?.toComponent).toBe('services/dispatch/loop.ts');
     });
 
+    it('hands the reviewer the definition it is asked to judge, not an id for it', async () => {
+      /*
+       * Production's second reading validated thirteen definitions and promoted
+       * none of them, because every audit unit's `input` was a bare `fcd_…`
+       * candidate id and **no tool dereferences one**. Three independent leases
+       * released saying exactly that — "Cannot read the 13 fcd_* proposed-
+       * definition candidates named as each unit's input" — and the bin retired
+       * at NEEDS_HUMAN with all thirteen unjudged.
+       *
+       * So the assertion is the property rather than the wording: no unit input
+       * may be a bare row id, and the definition's own content has to be in
+       * there. A test that only checked for the absence of `fcd_` would pass on
+       * an empty string.
+       */
+      const { sourceId } = await registerFixture();
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      await submit(binId, 'faculty_01', { definition: definition(), quote: RESEARCH_QUOTE });
+      await finish(binId);
+      await settleExtraction(sourceId);
+
+      const auditBinId = (await dispatchAudit(sourceId)) as string;
+      const auditBin = await getBin(auditBinId);
+      const units = auditBin?.manifest.units ?? [];
+      expect(units.length).toBeGreaterThan(0);
+
+      for (const unit of units) {
+        expect(unit.input, 'a unit input must never be a bare row id').not.toMatch(/^fcd_[0-9a-f]+$/);
+        const carried = JSON.parse(unit.input) as {
+          canonicalName: string;
+          definition: { canonicalName: string; purpose: string; promisedPower: string };
+          evidence: { quote: string };
+        };
+        // The three required strings are what OVERREACHES and INCOMPLETE are
+        // judgements about, so a reviewer must actually be holding them.
+        expect(carried.definition.canonicalName).toBe(carried.canonicalName);
+        expect(carried.definition.purpose.length).toBeGreaterThan(0);
+        expect(carried.definition.promisedPower.length).toBeGreaterThan(0);
+        // And the quote it was anchored to, because "does this carry that
+        // claim" is most of the question.
+        expect(carried.evidence.quote.length).toBeGreaterThan(0);
+      }
+
+      // And the contract says where it is, so a worker is not left looking.
+      const sources = (auditBin?.manifest.acceptableSources ?? []).join('\n');
+      expect(sources).toMatch(/carried in full in each unit/);
+    });
+
     it('is handed out once, however many ticks read it', async () => {
       const { sourceId } = await registerFixture();
       const [first, second] = await Promise.all([

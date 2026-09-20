@@ -5799,6 +5799,47 @@ advance never stops Russell writing back a mission.
   the channel defaults to `SHELL`, which is §23's column pair — attribution is
   not authentication, and Brain cannot check a channel.
 
+- **The contract fix worked, and the stage after it named an input no worker
+  can obtain.** The reopened source was read again and **thirteen of fifteen
+  definitions validated**, each anchored to a real block — so the connections
+  repair above is settled by a production reading rather than by its tests. The
+  two that failed are the worker's own (a quote not copied exactly), and the two
+  `kind, faculty, note` rows from the first reading are still there, which is
+  the reopen preserving what it replaced.
+
+  Then the audit promoted nothing and left all thirteen unjudged. Every audit
+  unit's `input` was `candidate.id` — a bare `fcd_…` — and **no tool on the MCP
+  surface dereferences a candidate**. The extraction bin can name a heading and
+  be right, because the worker holds the whole document and the unit only says
+  *which part* to answer for; an audit unit is the opposite case, because what
+  is judged is a row in `faculty_candidates` that appears in no document at all.
+
+  **Three independent leases said so exactly, and not one invented a verdict**:
+  *"Cannot read the 13 fcd_* proposed-definition candidates named as each unit's
+  input"*, then *"Confirmed on a second, independent lease"*, then *"Final
+  attempt (3 of 3) confirms the same blocker across three independent leases"* —
+  and the bin retired at `NEEDS_HUMAN`. That is the behaviour the whole design
+  is for, and it is worth recording as the opposite of a fault.
+
+  So the definition is carried, whole, in the unit's own input, with the quote
+  it was anchored to — the remedy the extraction contract already uses for an
+  amendment. Whole rather than summarised, because two of the three verdicts are
+  judgements about what the definition *claims*, and a reviewer given a shortened
+  one would be asked whether the source supports something it was never shown.
+  The guard asserts the property rather than the wording: no unit input may be a
+  bare row id, and the definition's required strings and its quote must be in
+  there — a test that only banned `fcd_` would pass on an empty string. It was
+  run against the bare id and fails with production's own value.
+
+  **And carrying it makes this the one manifest whose size grows with the
+  blueprint**, so the bytes are measured before the bin is made. `createBin`
+  enforces the limit by throwing, which here would escape the tick and strand
+  the source in `AUDITING` — a state nothing answers, which is the defect this
+  file has corrected more than any other. It is a recorded failure with both
+  numbers in it that `reopen` can answer, and **nothing is shortened to fit**:
+  §27 already records that truncation is the one outcome a worker cannot
+  recover from, because it arrives looking like success.
+
 **What is true of this kernel today, said plainly.** Thirteen faculties are
 canonically defined **on a development database** from the real blueprint, each
 anchored to a named block in its extracted text, after an audit that refused two
@@ -5807,18 +5848,21 @@ reports `ABSENT` and `UNTESTED`, and nothing here can move either. No change
 request has been compiled, because the Research Intelligence packet correctly
 refuses on its remaining person clause.
 
-**It has now been deployed, and a fired Routine has read a blueprint — and the
-production reading failed.** An earlier version of this paragraph said nothing
-had been deployed; that was true when it was written. What is true now is
-narrower and worth stating exactly: on production the blueprint registered, a
-bin was dispatched, a real fired Routine read the document and proposed fifteen
-definitions, and **Brain refused all fifteen because its own contract named the
-wrong field names**. The source is `FAILED` with the refusals on the candidate
-rows. That is the validator behaving exactly as §8 requires and the contract
-behaving exactly as §27 warns — and the two corrections above are what the run
-bought. **No faculty has been promoted from a production reading**, and saying
-otherwise on the strength of a development run would be the comfortable
-half-truth this file exists to refuse.
+**It has been deployed, a fired Routine has read the blueprint twice, and no
+faculty has been promoted from a production reading yet.** The first reading
+proposed fifteen definitions and Brain refused all fifteen, because its own
+contract named the three connection field names the validator rejects. The
+source was reopened, read again against the corrected contract, and **thirteen
+validated** — so the first correction is settled by production rather than by
+its tests. The audit then promoted none of the thirteen, because its units named
+an input no worker can fetch; that is the correction directly above, and it has
+not yet been read by a fired Routine.
+
+Every stage of this has been Brain refusing to record something it could not
+stand behind, and every worker involved reported the blocker precisely instead
+of inventing a result. **Saying a faculty is canonical on the strength of a
+development run would be the comfortable half-truth this file exists to
+refuse**, and it stays unsaid until an audit on production promotes one.
 
 **Three of those sentences named one defect rather than three, and the
 correction is recorded rather than quietly applied.** *Nothing here can move

@@ -41,7 +41,13 @@
  * document about Research Intelligence establishes what Brain is supposed to be
  * able to do and nothing whatsoever about whether it can.
  */
-import { createBin, getBin, listBinUnitResults } from '../../repos/bins.ts';
+import {
+  createBin,
+  getBin,
+  listBinUnitResults,
+  MAX_MANIFEST_BYTES,
+} from '../../repos/bins.ts';
+import { toJson } from '../../repos/util.ts';
 import { getCurrentExtractionRun, listBlocks } from '../../repos/extraction.ts';
 import { getDocument } from '../../repos/documents.ts';
 import { recordEvent } from '../../repos/events.ts';
@@ -727,10 +733,65 @@ export async function dispatchAudit(sourceId: string): Promise<string | null> {
     establishes:
       `Whether the proposed definition of ${candidate.canonicalName} is a faithful reading of ` +
       'the source, or overreaches it.',
-    input: candidate.id,
+    /*
+     * The definition itself, carried, because there is nowhere else to get it.
+     *
+     * This was `candidate.id` — a bare `fcd_…`. The extraction bin can name a
+     * heading as its input and be right, because the worker holds the whole
+     * document and the unit only has to say *which part* to answer for. An
+     * audit unit is the opposite case: what is being judged is a row in
+     * `faculty_candidates`, it appears in no document, and **no tool on the MCP
+     * surface dereferences a candidate id**. So the contract named an input the
+     * worker had no way to obtain.
+     *
+     * Production said so, precisely, three times. Three independent leases
+     * released with "Cannot read the 13 fcd_* proposed-definition candidates
+     * named as each unit's input", "Confirmed on a second, independent lease",
+     * and "Final attempt (3 of 3) confirms the same blocker across three
+     * independent leases" — then the bin retired at NEEDS_HUMAN, every one of
+     * thirteen validated candidates left unjudged, and the source went to
+     * FAILED reporting that the audit had promoted nothing. Not one of those
+     * workers invented a verdict, which is the behaviour this design is for.
+     *
+     * §27's sentence at a third altitude: a contract that does not give a
+     * worker what it asks it to read refuses the work and says nothing about
+     * why. The remedy is the same one the extraction contract already uses for
+     * an amendment — carry the bytes when the worker cannot fetch them.
+     */
+    input: auditUnitInput(candidate),
     transform: 'NONE',
     dependsOn: [],
   }));
+
+  /*
+   * Refuse a manifest that will not fit, rather than letting `createBin` throw.
+   *
+   * Carrying every definition makes this the one manifest in the kernel whose
+   * size grows with the blueprint. `createBin` enforces `MAX_MANIFEST_BYTES` by
+   * throwing, which here would escape the tick with the source stranded in
+   * `AUDITING` — a state nothing answers, which is the defect this file has had
+   * to correct more than any other. So it is measured first and reported as a
+   * failure the operator's `reopen` can answer, with both numbers in it.
+   *
+   * Truncating to fit is the one thing that must not happen: a reviewer handed
+   * a clipped definition would be judging something nobody proposed, and §27
+   * already records that truncation is the outcome a worker cannot recover from
+   * because it arrives looking like success.
+   */
+  const unitBytes = Buffer.byteLength(toJson(units), 'utf8');
+  if (unitBytes > MAX_MANIFEST_BYTES) {
+    await advanceSource({
+      id: sourceId,
+      from: 'AUDITING',
+      to: 'FAILED',
+      detail:
+        `The ${candidates.length} proposed definition(s) need ${unitBytes} bytes to hand to a ` +
+        `reviewer and a manifest may carry ${MAX_MANIFEST_BYTES}. Nothing was shortened: a ` +
+        'clipped definition would be judged as though somebody had proposed it. Reopen the ' +
+        'source once the audit can be split across more than one bin.',
+    });
+    return null;
+  }
 
   const bin = await createBin({
     projectId: reading.source.projectId,
@@ -757,7 +818,12 @@ export async function dispatchAudit(sourceId: string): Promise<string | null> {
         orchestrationId: null,
       },
       units,
-      acceptableSources: [`The registered source document ${reading.source.documentId}`],
+      acceptableSources: [
+        `The registered source document ${reading.source.documentId}`,
+        'The proposed definition itself, which is carried in full in each unit\u2019s "input" ' +
+          'as JSON. It is a Brain row rather than part of any document, so it is handed to you ' +
+          'here: there is no tool that reads one and nothing else to fetch.',
+      ],
       excludedSources: [
         'Any source other than the registered document. The question is whether the definition ' +
           'is faithful to *this* source, not whether it is a good definition.',
@@ -766,6 +832,10 @@ export async function dispatchAudit(sourceId: string): Promise<string | null> {
       outputs: [
         'One unit result per candidate, whose value is a JSON object with a "verdict" of ' +
           'FAITHFUL, OVERREACHES or INCOMPLETE, and a "reason".',
+        'Each unit\u2019s "input" is a JSON object carrying "canonicalName", the "definition" ' +
+          'exactly as it was proposed, and the "evidence" quote it was anchored to with its ' +
+          'page. Judge that definition against the source document; you do not need to look ' +
+          'anything up to have it.',
       ],
       authorizedActions: ['reading the registered source', 'submitting one verdict per candidate'],
       prohibitedActions: [
@@ -794,6 +864,29 @@ export async function dispatchAudit(sourceId: string): Promise<string | null> {
     binId: bin.id,
   });
   return bin.id;
+}
+
+/**
+ * What an audit unit hands the worker: the definition, whole.
+ *
+ * Deliberately every field rather than a summary. The verdict vocabulary is
+ * FAITHFUL / OVERREACHES / INCOMPLETE, and two of those three are judgements
+ * about what the definition *claims* — so a reviewer given a shortened version
+ * would be asked whether the source supports something it had not been shown.
+ * The evidence quote travels with it because that is what the definition was
+ * anchored to, and "does this quote carry that claim" is most of the question.
+ */
+export function auditUnitInput(candidate: FacultyCandidate): string {
+  return JSON.stringify({
+    canonicalName: candidate.canonicalName,
+    slug: candidate.slug,
+    ordinal: candidate.ordinal,
+    definition: candidate.definition,
+    evidence: {
+      quote: candidate.evidenceQuote,
+      page: candidate.evidencePage,
+    },
+  });
 }
 
 export function auditUnitKey(candidate: Pick<FacultyCandidate, 'slug'>): string {
