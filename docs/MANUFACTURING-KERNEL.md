@@ -332,7 +332,13 @@ guards, because a guard on one entrance is not a guard. **There is no
 manufacturing policy module and there must never be one.**
 
 **A terminal**, `npm run manufacturing -- <command>`, calling exactly what the
-routes call. §26's rule: reaching the shell is the authentication, and
+routes call — and `.github/workflows/manufacturing.yml` dispatches that same
+script inside the deployed container, so the programme is operable in
+production without a laptop. It adds convenience and not privilege: anyone who
+can dispatch it can already dispatch `deploy.yml`, and the command is passed
+through to the same closed surface, which cannot build, buy, tool or enter
+anything and cannot mark a capability held without a person naming one and
+saying how it came to be true. §26's rule: reaching the shell is the authentication, and
 `--admin <email>` is *attribution* resolved against `users` — §23's distinction,
 which establishes that such a person exists and nothing about who typed the
 command.
