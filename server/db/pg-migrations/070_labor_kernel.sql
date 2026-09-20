@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 078. See that file for why the default
+-- The Postgres half of SQLite migration 079. See that file for why the default
 -- is a burden of proof rather than an assumption, why the favourable direction
 -- of an unknown here is *towards Brain* and is refused, why `basis` has no
 -- DERIVED value, and why both decision tables are append-only.
