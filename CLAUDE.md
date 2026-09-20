@@ -5525,6 +5525,230 @@ Intelligence packet correctly refuses on its remaining person clause.
 
 ---
 
+## 38. A mechanism says how money is reachable. It never says where.
+
+Cash Mode's discovery holds ten search buckets and they are ten *mechanisms* —
+who published a paid request, where the same deliverable has two published
+prices, who has sold more work than they can deliver. Every one of them is a
+question about how money is reachable, and **not one of them is a question
+about where.** So production discovery searched an undifferentiated economy:
+thirty-one openings across transcription rates, stock-photo subscriptions,
+ticket resale, sneakers, trading cards, domain appraisals and bug bounties,
+with nothing anywhere saying which industries Brain had looked at, which it had
+never opened, or what lived underneath any of them. §29 asks *which
+economically important areas have we barely examined*; nothing held the
+question, so nothing could answer it.
+
+The kernel (`server/services/industry/`, `server/repos/industry.ts`,
+`server/domain/industry.ts`, `docs/INDUSTRY-KERNEL.md`) is the missing axis, and
+everything it adds is a new **entrance** to machinery Steps 4 to 12C already
+built. A kernel round is a Russell candidate: `judgeCandidate` asks the archive
+first, the compiler writes the specification, the approval envelope decides
+whether it may start, the evidence gate decides what may be claimed, and all
+three audit roles decide whether it stands.
+
+- **There is no list of industries in this repository, and that is asserted by
+  reading the source rather than by behaviour.** `operatorConsoleRemoved` reads
+  the repository for the same reason: what must not exist is not something a
+  behavioural test can see. The bootstrap is a *question* — which sectors do
+  NAICS, ISIC, SIC, GICS and the national statistical agencies declare — so the
+  classification systems are named as **sources**, exactly as `proposedSources`
+  already names source classes, and the sectors arrive as gated claims. A
+  constant holding them would answer the question the kernel exists to ask, and
+  would be wrong about every economy a classification system has revised since
+  somebody typed it. The schema is the other half: `CHECK (origin = 'SEED' OR
+  source_claim_id IS NOT NULL)`, so a node that traces to neither a passage nor
+  a person cannot be written by any path.
+- **A structural finding is declared by whoever read the source, from a closed
+  set.** §33's repair one axis along, for its exact reason: `harvest` decided
+  "is this an opening" by matching a lane id against a literal, planners name
+  their own lanes, and the bridge could never fire. So `structural_finding` is
+  one nullable column on `research_claims`, ten kinds, validated exactly on
+  submission, and anything outside it refuses the **whole submission** rather
+  than being stored and compared against nothing. Seven kinds add a subject to
+  the map; three are facts *about* a subject and carry a value from their own
+  closed set instead. One validator decides and **both doors call it** — the
+  wire door and the provider door — because a rule applied by one of two readers
+  is worse than none, for the fifth time.
+- **There is no kind for a platitude, and that is structural rather than a
+  filter over prose.** `CONSTRAINT_KINDS` holds fourteen entries and not one of
+  them is an obligation every business has, so *customers may not buy* and
+  *staff must be paid* have nowhere to go. §27 records what happens to a closed
+  list that must be complete over ordinary English — four widenings, each adding
+  the one word the last production message was declined for — so this list's
+  failure mode is fixed at **missing a real constraint**, never at admitting a
+  baseline one.
+- **A headline startup cost is a figure about a shape of the business, not an
+  answer.** One row per capital requirement; a restructuring is a second row
+  naming the requirement it answers, because a requirement can have several
+  published answers and the honest output is all of them rather than the
+  cheapest one silently chosen. `readCapital` **withholds the minimum owner
+  capital entirely** when any requirement's amount is unpublished, rather than
+  summing the rest — §30's rule at the margin, and worse here, because an
+  understated minimum makes something look executable today and *executable
+  today* is what starts spending. A restructuring with no published residual is
+  reported as available and reduces nothing, however plausible it sounds. Where
+  several structures answer one requirement the lowest published residual wins:
+  the one place the function chooses at all, and it chooses rather than averages
+  because you use one structure, not the mean of three.
+- **`NOT_DECOMPOSED` and `NO` are different answers with opposite remedies.**
+  One says nobody has looked, the other says the capital is established and out
+  of reach; the first waits for a question and the second waits for money.
+  Collapsing them would be *we could not tell* reading the same as *we checked*,
+  at the number that starts spending.
+- **Nothing derivable is stored.** No coverage score, no priority, no capital
+  tier, no path verdict — `tier.ts`' argument and `placements`' before it: a row
+  is not a decision, and a stored verdict is stale the moment the evidence it
+  was waiting on arrives. Two things are stored because no derivation could
+  recover them: that a person seeded a subject, and that a person killed a path.
+  `CAPITAL_TIERS` are presentation only; the decision is `executableNow`
+  comparing the derived minimum against `deployableCents`, which is measured.
+- **The allocator is pure over a recorded snapshot**, kept apart from the reads
+  for `services/dispatch/router.ts`' reason: *why did Brain research that* must
+  be answerable from an input rather than from a re-run against a database that
+  has moved. Being pure makes it useless as a safety mechanism, which is the
+  same split the dispatcher draws — the exclusion is the unique index on
+  `industry_rounds`, and two ticks both deciding correctly produce one round.
+  Seven rules in a fixed order and **no weighted score anywhere**, because a
+  score needs weights, weights are a judgement nobody made, and the number then
+  reads like a measurement.
+- **Decomposing a qualified opening's capital outranks starting the map, and the
+  first version had it the other way round.** Writing the map is the
+  longest-horizon question the kernel asks; an opening that is already qualified
+  has had the research that found it and the deep dive that qualified it both
+  paid for. On a pass with free slots both are asked, so the order decides only
+  what waits when they are scarce — and the thing that waits should be the map
+  rather than the money.
+- **It stops, and each bound is a bound rather than a preference.** One live
+  question per subject per purpose; a cool-off on a settled round; and a subject
+  searched `BARREN_ROUNDS` times for nothing *and* decomposed into nothing is
+  not offered again — because Brain has documented that there is nothing there,
+  and §13's rule about the archive applies to Brain's own history. `kindRecurses`
+  is the other half: a bottleneck, a buyer type and a transaction type are
+  leaves of understanding, and mapping them would produce a graph of adjectives.
+  They are still *scanned*, because a bottleneck is exactly where an opening
+  lives. `MAX_OPEN_KERNEL_ROUNDS` is concurrency and **not** a lifetime quota —
+  §24 removed exactly that kind of number and recorded why.
+- **`SEED` is the one origin Brain may never write.** A machine that could name
+  its own subjects would be deciding what the economy is — §22's split at the
+  table that decides where everything else looks. It is ADMIN plus
+  `requirePerson` on the Cash surface, a worker is refused by type, and seeding
+  spends nothing and starts nothing: it creates a row, and every gate downstream
+  still decides. Retiring destroys nothing, because a deleted subject arrives
+  again on the next expansion as a fresh discovery and the allowance is spent
+  learning what somebody already decided.
+- **Cash now and position later are two readings, never one.** The tempting
+  implementation is a blended figure, and it would need a rate of exchange
+  between *money this week* and *a relationship with a producer* that nobody has
+  set. Both are lists of established facts and named unknowns; the unknowns are
+  the half that matters, because a piece with three facts and six unknowns is
+  not a better bet than one with one fact and none, and a number would have said
+  it was.
+
+**Two defects in this work were found by running it rather than by reading it,
+and both are recorded rather than quietly fixed.** Every decline read
+`ind_d947baf680e046138443: there is no free slot` — technically true and
+useless, which is §29's status nobody can read. And eleven sectors with no
+evidence between them are genuinely equal, so the tie fell through to the
+generated node id: deterministic, meaningless, and leaving the same subjects at
+the back of the queue for ever. An ask carries its own subject and the age of
+the thing it is about now, so every subject gets a turn and every refusal names
+what it refused.
+
+**What has and has not run, said plainly.** The kernel operates end to end
+against a local Brain: a seeded subject, a bootstrap question carrying no
+sector, two specifications compiled against two reviewed envelopes, ten sectors
+absorbed from a real fetched source, and the allocator re-deciding over the
+larger map. **No fleet worker has answered a kernel question in production**,
+because that needs a deploy and a fire; until one has, the engine passing its
+tests says nothing about the research, which is the separation Step 3 drew
+between the research engine and a real job having actually run.
+
+**That paragraph was true when it was written and is corrected here rather than
+edited there.** The kernel is deployed, `Animation and anime production` is on
+the map as `ind_eb01b182ff4640358862` `[SECTOR/SEED]`, written through the
+terminal door by a real enabled administrator, and the durable tick opened the
+bootstrap question and the seeded subject's first scan by itself. What a fleet
+worker has answered is still pending on what follows.
+
+**An exhausted bin attempt budget is a deadlock with no answering transition,
+and production sat in one for fifty-one hours.** The kernel was doing exactly
+what it should and nothing could reach a worker, because the fleet had fired
+*nothing at all* — `in-flight counted=0 examined=0` over a thirty-minute
+window, eight eligible surfaces, zero in flight, and every Routine's fire count
+byte-identical across readings an hour apart.
+
+The cause is one clause. `DISPATCHABLE_SQL` is
+
+    ((state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))
+     AND attempt_count < max_attempts)
+
+so a dead lease is handled by design and **the attempt budget is not**.
+`bin_2e8710626ed84b3bbc88` held ten accepted claims and two claimable work
+items at `attempts 5/5`, on a lease that had expired fifty hours earlier. A
+`LEASED` bin is rescued by `assignNextBin`'s takeover — which needs a worker to
+arrive, which needs a fire, which the exhausted budget refuses. **The bin could
+only be rescued by a worker that could only arrive if the bin were rescued.**
+
+Nine such missions held all six of the standing grant's concurrency slots, so
+sixty-one ideas — including both kernel rounds — were queued behind work that
+could never finish. §24's sentence at a new altitude and the fifth time this
+file has had to write it: *a state that says waiting which nobody can resolve
+is not waiting, it is stuck.*
+
+**`creditBinAttempt` already fixed this forward and could not reach what was
+already stranded** — the fourth time that distinction has been the difference
+between a fix that reaches production and one that does not. The answering
+transition is `regrantBinAttempts`, whose own comment names the identical
+incident (`bin_75bea12e15534ba4b93f`, 5/5, document filed, primary audit done,
+adversarial and judge still claimable, *"no further activation could ever be
+fired at it"*). It raises the ceiling and never resets the count, refuses a
+terminal bin, only ever raises so it cannot strand one, and records
+`BIN_ATTEMPTS_REGRANTED` with a reason from a closed set. Raised 5/5 → 5/40
+under `budget-too-small`, the honest code: `refusals 0`, a SUCCEEDED fragment,
+and a packet that needs a synthesis, a verification and three separately
+sessioned audit roles against a budget of five.
+
+**The reading is what makes it a diagnosis rather than a story.** Three minutes
+after the ceiling moved, the same windowed query answered
+`in-flight counted=2 examined=2`. Nothing else was touched: no quarantine
+lifted, no concurrency raised, no attempt count reset, no lease revived, no
+packet re-planned.
+
+**The general case is `concludeUnworkablePackets`, and it is the mirror image
+of the sweep it sits beside.** `reconcileTerminalPackets` takes live work off a
+packet that has *finished*; this takes it off one that has **not**, holding
+only items past their own attempt ceilings. `reconcileArguedAuditRoles` already
+wrote the sentence one state along: *a reconciliation that only runs when
+something else happens cannot reach a state in which nothing is happening.*
+
+**It performs no dispatch, and that is the point.** Regranting the bin is the
+right answer when the items can still be attempted and the wrong one here: a
+worker fired at an item already past its ceiling arrives, claims, fails and
+retires it, spending an activation to learn what the rows already say. So this
+retires the dead work and calls `advancePacket`, which is the existing
+transition — what the packet *is* stays its answer, read from its own rows,
+rather than a new terminal path written here.
+
+Every condition is load-bearing and fails closed: live packets only, something
+must actually be stranded, **never while one outstanding item could still be
+attempted**, and **never under a live lease** — `retireTerminalWork` already
+records what retiring live work costs, a compliant worker told its completion
+is no longer current. The two refusals are what the tests pin, and they were
+run against a neutered guard to watch them fail before they were trusted to
+pass.
+
+**One thing it deliberately does not do.** A packet whose items can still be
+attempted but whose *bin* is spent is the other half, and that stays the
+operator's `regrant`: automatic bin regranting would put fires behind a packet
+that may simply keep failing, which is the loop that looks like progress.
+
+`step10.yml`'s header also claims its subcommands are "confined to the
+harness's own acceptance project", which `regrant` is not and never was: it
+takes any bin id, and its own comments record raising a real research bin's
+ceiling to 100. The comment is the thing that is wrong.
+
+
 ## Repository map
 
 ```

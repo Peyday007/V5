@@ -40,6 +40,10 @@ import type { ExistingClaim, ResearchClaim } from '../server/domain/types.ts';
 function found(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
   return {
     claimType: 'SOURCED_FACT',
+    structuralFinding: null,
+    structuralSubject: null,
+    structuralQualifier: null,
+    structuralAmountCents: null,
     sourceGroup: 'host:bls.gov',
     primarySource: true,
     geography: 'United States',

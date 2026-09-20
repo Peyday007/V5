@@ -55,6 +55,7 @@ import { recoverExecutionLineage } from '../server/services/dispatch/lineageReco
 import { enqueueWork, getWorkItem, claimWork } from '../server/repos/workQueue.ts';
 import {
   reconcileArguedAuditRoles,
+  concludeUnworkablePackets,
   reconcileTerminalPackets,
 } from '../server/services/research/packetRunner.ts';
 import type { ExistingClaim, Principal } from '../server/domain/types.ts';
@@ -1000,5 +1001,146 @@ describe('a packet that has finished holds nothing a worker can be sent for', ()
 
     // Idempotent by the state it produces: nothing left to select.
     expect(await reconcileTerminalPackets(10)).toHaveLength(0);
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/* A live packet nobody can work is concluded, without spending a fire        */
+/* ------------------------------------------------------------------------- */
+
+describe('a live packet whose every item is past its ceiling', () => {
+  async function packetWithItems(): Promise<{ orchestrationId: string; ids: string[] }> {
+    const run = await createRun({
+      projectId,
+      layerId,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'anything',
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId,
+      runId: run.id,
+      title: 'A packet whose items are all spent',
+      assignment: 'nothing here can be attempted again',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    const first = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_SYNTHESIZE',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+    const second = await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_VERIFY',
+      payload: {},
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId: orchestration.id,
+    });
+    await updateOrchestration(orchestration.id, { status: 'SYNTHESIZING' });
+    return { orchestrationId: orchestration.id, ids: [first.id, second.id] };
+  }
+
+  /**
+   * Put an item exactly where production's were: spent, and long lapsed.
+   *
+   * A lease is written whole or not at all — `work_items` carries §19's
+   * invariant as a CHECK, so a fixture that set only `lease_expires_at` is
+   * refused by the schema rather than quietly producing a row the queue could
+   * never have made.
+   */
+  async function spend(id: string, state: 'QUEUED' | 'LEASED'): Promise<void> {
+    const holder =
+      state === 'LEASED'
+        ? await createWorker({ name: `holder-${id}`, createdByType: 'SYSTEM', createdById: 'test' })
+        : null;
+    await getDb().run(
+      `UPDATE work_items
+          SET attempt_count = max_attempts + 2, state = ?,
+              lease_id = ?, worker_id = ?, lease_expires_at = ?
+        WHERE id = ?`,
+      [
+        state,
+        holder ? `lease-${id}` : null,
+        holder ? holder.id : null,
+        holder ? new Date(Date.now() - 86_400_000).toISOString() : null,
+        id,
+      ],
+    );
+  }
+
+  it('leaves the packet alone while one item could still be attempted', async () => {
+    const { orchestrationId, ids } = await packetWithItems();
+    await spend(ids[0]!, 'LEASED');
+    // The second keeps its attempts, so a worker can still move this packet.
+
+    expect(
+      (await concludeUnworkablePackets(10)).map((entry) => entry.orchestrationId),
+    ).not.toContain(orchestrationId);
+    expect((await getWorkItem(ids[0]!))!.state).toBe('LEASED');
+    expect((await getWorkItem(ids[1]!))!.state).toBe('QUEUED');
+  });
+
+  it('leaves it alone while somebody is actually holding one', async () => {
+    const { orchestrationId, ids } = await packetWithItems();
+    await spend(ids[0]!, 'QUEUED');
+    // Spent, but under a lease that has not lapsed: a worker may be mid-step.
+    const live = await createWorker({
+      name: `live-${ids[1]!}`,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await getDb().run(
+      `UPDATE work_items
+          SET attempt_count = max_attempts + 1, state = 'LEASED',
+              lease_id = ?, worker_id = ?, lease_expires_at = ?
+        WHERE id = ?`,
+      [`lease-${ids[1]!}`, live.id, new Date(Date.now() + 600_000).toISOString(), ids[1]!],
+    );
+
+    expect(
+      (await concludeUnworkablePackets(10)).map((entry) => entry.orchestrationId),
+    ).not.toContain(orchestrationId);
+    expect((await getWorkItem(ids[1]!))!.state).toBe('LEASED');
+  });
+
+  it('retires every spent item, keeps the rows, and is idempotent', async () => {
+    const { orchestrationId, ids } = await packetWithItems();
+    await spend(ids[0]!, 'LEASED');
+    await spend(ids[1]!, 'QUEUED');
+
+    const first = await concludeUnworkablePackets(10);
+    expect(first.map((entry) => entry.orchestrationId)).toContain(orchestrationId);
+
+    for (const id of ids) {
+      const item = (await getWorkItem(id))!;
+      expect(item.state).toBe('CANCELLED');
+      // Kept, not deleted: the attempts that were spent are still on the row.
+      expect(item.attemptCount).toBeGreaterThan(0);
+      expect(item.cancelledReason).toContain('cannot be performed');
+    }
+
+    // Idempotent by the state it produces: nothing left to select.
+    expect(await concludeUnworkablePackets(10)).toHaveLength(0);
+  });
+
+  it('does not touch a packet that has finished — that is the other sweep', async () => {
+    const { orchestrationId, ids } = await packetWithItems();
+    await spend(ids[0]!, 'QUEUED');
+    await spend(ids[1]!, 'QUEUED');
+    await updateOrchestration(orchestrationId, {
+      status: 'COMPLETE',
+      completedAt: new Date().toISOString(),
+    });
+
+    expect(
+      (await concludeUnworkablePackets(10)).map((entry) => entry.orchestrationId),
+    ).not.toContain(orchestrationId);
   });
 });
