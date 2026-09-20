@@ -426,3 +426,105 @@ describe('what the rows say about attribution', () => {
     expect(Object.keys(AMBIGUATES).sort()).toEqual([...findings].sort());
   });
 });
+
+/* ------------------------------------------------------------------------- */
+/* Ownership: metadata, only where a row proves it                            */
+/* ------------------------------------------------------------------------- */
+
+describe('whose capacity a worker is', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+  afterEach(async () => {
+    await teardown();
+  });
+
+  async function connection(email: string, workerId: string): Promise<void> {
+    const { getDb } = await import('../server/db/database.ts');
+    const { createUser } = await import('../server/repos/identity.ts');
+    const { createAccount, createRoutine, bindRoutineWorker } = await import(
+      '../server/repos/fleet.ts'
+    );
+    const user = await createUser({
+      email,
+      displayName: email,
+      password: 'a-long-enough-password-for-the-verifier',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const account = await createAccount({ name: `acct-${email.split('@')[0]}` });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_${email.split('@')[0]}`,
+      name: `Routine ${email}`,
+      tokenSecretName: `SECRET_${email.split('@')[0]!.toUpperCase()}`,
+      tokenDigest: null,
+    });
+    await bindRoutineWorker(routine.id, workerId);
+    const at = new Date().toISOString();
+    await getDb().run(
+      `INSERT INTO capacity_connections
+         (id, user_id, connector_name, routine_name, secret_name, trigger_ref,
+          account_id, routine_id, state, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'CONFIGURED', ?, ?)`,
+      [
+        `cxn_${email.split('@')[0]}`,
+        user.id,
+        `Brain (${email})`,
+        `Routine ${email}`,
+        `SECRET_${email.split('@')[0]!.toUpperCase()}`,
+        `trig_${email.split('@')[0]}`,
+        account.id,
+        routine.id,
+        at,
+        at,
+      ],
+    );
+  }
+
+  it('is established from the connection a person completed themselves', async () => {
+    const worker = await createWorker({ name: 'owned-one', createdByType: 'SYSTEM', createdById: 'test' });
+    await connection('one@example.invalid', worker.id);
+    const { reconcileWorkerOwnership } = await import('../server/services/identity/ownership.ts');
+    const report = await reconcileWorkerOwnership();
+    expect(report.established).toHaveLength(1);
+    const after = await getWorker(worker.id);
+    expect(after?.ownerUserId).toBeTruthy();
+    expect(after?.ownerEvidence).toBe('CAPACITY_CONNECTION');
+  });
+
+  it('leaves a shared worker unowned rather than picking one of its members', async () => {
+    const worker = await createWorker({ name: 'shared-one', createdByType: 'SYSTEM', createdById: 'test' });
+    await connection('alpha@example.invalid', worker.id);
+    await connection('beta@example.invalid', worker.id);
+    const { reconcileWorkerOwnership } = await import('../server/services/identity/ownership.ts');
+    const report = await reconcileWorkerOwnership();
+    expect(report.ambiguous).toContain(worker.id);
+    expect((await getWorker(worker.id))?.ownerUserId).toBeNull();
+  });
+
+  it('never replaces an owner that was already recorded', async () => {
+    const worker = await createWorker({ name: 'recorded-one', createdByType: 'SYSTEM', createdById: 'test' });
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(
+      "UPDATE workers SET owner_user_id = 'usr_already', owner_evidence = 'SOMETHING_ELSE' WHERE id = ?",
+      [worker.id],
+    );
+    await connection('gamma@example.invalid', worker.id);
+    const { reconcileWorkerOwnership } = await import('../server/services/identity/ownership.ts');
+    await reconcileWorkerOwnership();
+    const after = await getWorker(worker.id);
+    expect(after?.ownerUserId).toBe('usr_already');
+    expect(after?.ownerEvidence).toBe('SOMETHING_ELSE');
+  });
+
+  it('does not read an approver as an owner', async () => {
+    // A worker with tokens and codes but no connection has no established
+    // owner. §22: the human on an authorization code approved a grant, which
+    // an administrator can do for capacity that is not theirs.
+    const worker = await createWorker({ name: 'approved-one', createdByType: 'SYSTEM', createdById: 'test' });
+    const { reconcileWorkerOwnership } = await import('../server/services/identity/ownership.ts');
+    await reconcileWorkerOwnership();
+    expect((await getWorker(worker.id))?.ownerUserId).toBeNull();
+  });
+});
