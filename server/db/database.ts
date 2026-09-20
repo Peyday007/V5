@@ -139,6 +139,7 @@ async function openCloud(config: DatabaseConfig): Promise<{ db: Database; descri
   const adapter = new PostgresAdapter({
     connectionString: config.connectionString!,
     max: config.poolSize,
+    connectionTimeoutMillis: config.connectTimeoutMs,
     schema: config.schema,
   });
   const described = describeConnection(config.connectionString!);
