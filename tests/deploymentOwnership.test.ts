@@ -441,3 +441,56 @@ describe('every workstream is present in the canonical tree', () => {
     }
   });
 });
+
+describe('and the log surface reads, and only reads', () => {
+  /*
+   * `logs.yml` exists because the only way to read production's log was to
+   * deploy — `deploy.yml` runs `flyctl logs` twice, as diagnosis attached to a
+   * deploy — and a deploy replaces the machine, which is how you lose the log
+   * you came for. So the surface is worth having and is worth being exactly one
+   * thing.
+   *
+   * "Strictly read-only" is a claim, and a claim about a file is a test that
+   * reads the file. It is pinned as a closed set of `flyctl` subcommands rather
+   * than as a list of things it must not say, because a ban is complete only
+   * against the commands somebody thought of, and this one must stay complete
+   * against the ones added later.
+   */
+  const logs = read('.github/workflows/logs.yml');
+  /** The commands, without the prose above them. */
+  const BODY = logs.slice(logs.indexOf('run: |'));
+
+  it('runs no flyctl subcommand that could change anything', () => {
+    const READS = new Set(['logs', 'status']);
+    const used = [...logs.matchAll(/flyctl\s+([a-z-]+)/g)].map((m) => m[1] ?? '');
+    expect(used.length).toBeGreaterThan(0);
+    for (const one of used) {
+      expect(READS.has(one), `logs.yml runs "flyctl ${one}"`).toBe(true);
+    }
+  });
+
+  it('has no way into the machine and no script to run there', () => {
+    /*
+     * `ssh console` is how every *writing* workflow on this repository reaches
+     * the Brain. The absence of it is what makes the subcommand set above a
+     * boundary rather than a preference.
+     *
+     * Asked of the **script body** rather than of the file, for
+     * `operatorConsoleRemoved`'s reason: a comment saying "there is no ssh
+     * console here, and that is the point" is the kind of prose this repository
+     * keeps, and a check that went red on it would be teaching somebody to
+     * delete the explanation instead of the command.
+     */
+    expect(BODY).not.toContain('ssh');
+    expect(BODY).not.toContain('scripts/');
+    expect(BODY).not.toContain('curl');
+  });
+
+  it('lets no input reach a shell', () => {
+    expect(BODY).not.toContain('${{ inputs.');
+    expect(BODY).not.toMatch(/\beval\b/);
+    // Both inputs are compared against a closed class before they are used.
+    expect(BODY).toContain('seconds must be a whole number');
+    expect(BODY).toContain('pattern must be one of');
+  });
+});

@@ -1,0 +1,124 @@
+# The application's own log, read from outside, without touching anything.
+#
+# `deploy.yml` already runs `flyctl logs` — twice, as diagnosis attached to a
+# deploy. So the only way to read production's log was to deploy, which is
+# precisely the thing you must not do while diagnosing a live fault: a deploy
+# replaces the machine, and replacing the machine is how you lose the log you
+# came for.
+#
+# **This is strictly read-only and it is the whole of what it does.** Two
+# commands, both of which only read: `flyctl logs` and `flyctl status`. There is
+# no `ssh console` here, no script, no subcommand allowlist to widen, and no
+# input that reaches a shell — `SECONDS` is compared against a numeric class and
+# then used as an argument to `timeout`, and nothing else crosses. It changes no
+# image, restarts nothing, deploys nothing, and alters no behaviour of the
+# Brain: the machine cannot tell it was read.
+#
+# It captures two windows in one pass, because the fault it was written for is
+# both historical and recurring. `flyctl logs` prints the recent buffer and then
+# follows, so a single bounded run gets whatever Fly still holds *and* whatever
+# happens while we watch. `timeout` ends it; the non-zero exit that produces is
+# expected and tolerated, because a diagnosis that fails must not replace the
+# failure it was explaining.
+#
+# The excerpt is printed **last**, after the raw capture, so that a reader
+# fetching the tail of the job log reaches the thing they came for rather than
+# the cleanup after it.
+name: Logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: 'How long to watch, in seconds (60-900). The recent buffer is printed whatever this is.'
+        required: false
+        default: '600'
+      pattern:
+        description: 'Which excerpt to pull out at the end: mcp-tool-failure | error | boot | none'
+        required: false
+        default: mcp-tool-failure
+
+# Its own group. Reading a log during a deploy is harmless, so this must not
+# queue behind one — the moment you most want the log is the moment something
+# else is happening.
+concurrency:
+  group: logs-brain
+  cancel-in-progress: false
+
+jobs:
+  logs:
+    name: Read the production log
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Capture
+        timeout-minutes: 20
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          # Through the environment, never interpolated into the shell.
+          LOG_SECONDS: ${{ inputs.seconds }}
+          LOG_PATTERN: ${{ inputs.pattern }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          # Digits only, and inside a range this job can actually finish in.
+          case "$LOG_SECONDS" in
+            ''|*[!0-9]*)
+              echo "::error::seconds must be a whole number."
+              exit 1
+              ;;
+          esac
+          if [ "$LOG_SECONDS" -lt 60 ] || [ "$LOG_SECONDS" -gt 900 ]; then
+            echo "::error::seconds must be between 60 and 900."
+            exit 1
+          fi
+
+          # A closed set, resolved to a fixed pattern below. A free-text grep
+          # would be the one input on this workflow that could be made to mean
+          # something else.
+          case "$LOG_PATTERN" in
+            mcp-tool-failure|error|boot|none) ;;
+            *)
+              echo "::error::pattern must be one of: mcp-tool-failure, error, boot, none."
+              exit 1
+              ;;
+          esac
+
+          echo "::group::Machine state"
+          flyctl status --app "$app" 2>&1 | tail -40 || true
+          echo "::endgroup::"
+
+          echo "Watching $app for ${LOG_SECONDS}s. The recent buffer comes first."
+          # `flyctl logs` prints what Fly still holds and then follows, so one
+          # bounded run is both windows. `timeout` is what ends it, so a non-zero
+          # exit here is the ordinary outcome rather than a failure.
+          set +e
+          timeout "$LOG_SECONDS" flyctl logs --app "$app" > all.txt 2>&1
+          set -e
+          echo "captured $(wc -l < all.txt) lines"
+
+          echo "::group::Raw capture"
+          cat all.txt
+          echo "::endgroup::"
+
+          # Last, and outside a group, so the tail of the job log is the excerpt.
+          case "$LOG_PATTERN" in
+            mcp-tool-failure) expr='\[mcp\] tool call failed' ;;
+            error)            expr='Error|error:|at [A-Za-z_$][A-Za-z0-9_$]*' ;;
+            boot)             expr='BRAIN:|migrat|listening|storage|cloud mode' ;;
+            none)             expr='' ;;
+          esac
+
+          echo "LOGS: EXCERPT pattern=$LOG_PATTERN"
+          if [ -n "$expr" ]; then
+            # Generous trailing context: what is being looked for is a logged
+            # exception, and an exception is its stack rather than its first line.
+            if grep -nEB 4 -A 60 "$expr" all.txt; then
+              :
+            else
+              echo "(no line matched)"
+            fi
+          fi
+          echo "LOGS: OK app=$app seconds=$LOG_SECONDS lines=$(wc -l < all.txt)"
