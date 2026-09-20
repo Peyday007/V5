@@ -36,6 +36,7 @@ import { RussellHome } from './Home.tsx';
 import { Search } from './Search.tsx';
 import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
+import { MachinesView } from './Machines.tsx';
 import {
   FleetView,
   ProjectView,
@@ -77,6 +78,15 @@ const SECTIONS = [
    * definition of what Brain is allowed to pursue, applied to the navigation.
    */
   { name: 'CASH' as const, label: 'Cash', primary: false },
+  /*
+   * Machines is secondary for Cash's reason, read the other way round.
+   *
+   * Cash is secondary because it is temporary; this is secondary because its
+   * horizon is decades and a person does not steer it hourly. Promoting either
+   * would rebuild the thumb bar around one kind of work in a Brain that does
+   * research, software and everything else.
+   */
+  { name: 'MACHINES' as const, label: 'Machines', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -504,6 +514,7 @@ export function RussellShell({
           </>
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
+        {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (
