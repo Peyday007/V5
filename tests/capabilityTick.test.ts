@@ -291,6 +291,37 @@ describe('the kernel advancing on the tick', () => {
     expect(reading.readings.find((row) => row.dimension === 'IMPLEMENTATION')?.to).toBeNull();
   });
 
+  /*
+   * A tick runs every thirty seconds for the life of a process, and a restart
+   * re-enters the same pass over the same rows. So the pass has to be
+   * idempotent by its own effects rather than by a cursor or a flag — a flag
+   * can be set by a tick that then dies, and a cursor is a second place for
+   * the truth to live.
+   *
+   * Asserted on the append-only rows, because those are what a duplicate would
+   * be visible in: a dimension move that recorded "already LIVE" every thirty
+   * seconds would bury the one that mattered under ten thousand that did not.
+   */
+  it('runs again over the same rows without duplicating anything', async () => {
+    const facultyId = await promoteFaculty(definition());
+    const { packet } = await openPacket({
+      facultyId,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+
+    await advanceCapabilityPackets();
+    const first = await appendOnlyCounts(packet.id);
+
+    // Three more passes, which is what a restart plus two ticks looks like.
+    await advanceCapabilityPackets();
+    await advanceCapabilityPackets();
+    await advanceCapabilityPackets();
+    const after = await appendOnlyCounts(packet.id);
+
+    expect(after).toEqual(first);
+  });
+
   it('approves nothing and spends nothing on its own', async () => {
     const facultyId = await promoteFaculty(definition());
     await openPacket({ facultyId, createdByType: 'SYSTEM', createdById: 'test' });
@@ -391,6 +422,24 @@ async function anAdministrator(): Promise<{ id: string; email: string }> {
     isBrainAdmin: true,
   });
   return { id: user.id, email };
+}
+
+/**
+ * The rows a duplicate would show up in: the cards, the dimension history and
+ * the gaps themselves.
+ */
+async function appendOnlyCounts(
+  packetId: string,
+): Promise<{ cards: number; stateEvents: number; gaps: number }> {
+  const one = async (sql: string, params: unknown[] = []): Promise<number> => {
+    const rows = await getDb().all<{ n: number }>(sql, params as never[]);
+    return Number(rows[0]?.n ?? 0);
+  };
+  return {
+    cards: await one('SELECT COUNT(*) AS n FROM russell_human_requests'),
+    stateEvents: await one('SELECT COUNT(*) AS n FROM faculty_state_events'),
+    gaps: await one('SELECT COUNT(*) AS n FROM realization_gaps WHERE packet_id = ?', [packetId]),
+  };
 }
 
 async function counts(): Promise<{
