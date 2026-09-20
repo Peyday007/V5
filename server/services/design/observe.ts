@@ -192,7 +192,23 @@ export function readingsExpression(
         bad.push(label(el) + ': off the side of the screen');
         continue;
       }
-      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      /* A centre outside the viewport is a scroll question, not a reachability
+         one - and elementFromPoint answers null for it, which reads exactly
+         like a control nothing can hit. The guard above skips a box that is
+         *entirely* past the fold; one straddling it has a rectangle on screen
+         and a centre below, which is how a half-past-the-fold select on
+         Build came back as a BLOCKER saying a control could not be pressed.
+
+         Third time the same class of false finding has come out of this reader,
+         and the same answer each time: ask whether scrolling reaches it. */
+      const cx = box.left + box.width / 2;
+      const cy = box.top + box.height / 2;
+      if (cy < 0 || cy > innerHeight || cx < 0 || cx > innerWidth) {
+        if (canBeScrolledTo(el)) continue;
+        bad.push(label(el) + ': its centre is off the screen and nothing can scroll it into view');
+        continue;
+      }
+      const hit = document.elementFromPoint(cx, cy);
       if (!hit) { bad.push(label(el) + ': nothing at its own centre'); continue; }
       if (el.contains(hit) || hit.contains(el)) continue;
       if (canBeScrolledTo(el)) continue;
