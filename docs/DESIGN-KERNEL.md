@@ -255,9 +255,26 @@ passed over VISUAL_COMPOSITION_FROM_PIXELS: 2 expansions are already live, which
        is the concurrency ceiling — not a quota.
 ```
 
-Both parked, naming the remedy: this Brain has no `purpose = 'TECHNICAL'`
-project for architecture research to be filed against. Creating one is
-`npm run admin`.
+Both parked on that database, naming the remedy: it had no architecture project
+for the research to be filed against. Creating one is `npm run admin`, which is
+a person's decision — a loop that made itself a project to have somewhere to put
+its own work would be a machine creating its own scope.
+
+**The park was then answered, which is the half that matters.** The same pass,
+run against a Brain holding `brain-architecture` (`prj_17172d01abf843fcba05`),
+routed both: `rcn_2d1a4599051f4544bf68` and `rcn_d69ba7de0d924c5b8f7c` are real
+`russell_candidates` rows, and the two expansions read `ROUTED` rather than
+`PARKED`. Nothing about the candidates is special to this kernel — they go
+through `judgeCandidate`, the archive check, the compiler, the approval envelope,
+the evidence gate and three audit roles exactly as any other idea does, and
+whether a packet is ever bought is that pipeline's decision and a person's, not
+this loop's.
+
+Which project that is, is resolved through `ARCHITECTURE_SLUG` — the capability
+kernel's own answer to the identical question — before falling back to
+`purpose = 'TECHNICAL'`. Two kernels resolving *Brain's architecture scope* by
+two different rules would file into two different projects, and the disagreement
+would read as research going missing rather than as a routing defect.
 
 ### The correction that made that possible
 

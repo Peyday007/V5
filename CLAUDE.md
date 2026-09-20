@@ -5856,7 +5856,14 @@ nowhere.
   authorizes on Build, then a decision no amount of building closes. A gap that
   settles is left alone for a cool-off, which was a defect the tests found: a
   parked expansion is not *live*, so the partial unique index allowed another and
-  every tick wrote two more rows about the same three gaps for ever.
+  every tick wrote two more rows about the same three gaps for ever. Which
+  project a research route files against is `ARCHITECTURE_SLUG` — §37's own
+  answer to the identical question — before the `purpose = 'TECHNICAL'` fallback,
+  because two kernels resolving *Brain's architecture scope* by two different
+  rules would file into two different projects and the disagreement would read
+  as research going missing. It **reads and never creates**: a loop that made
+  itself a project to have somewhere to put its own work would be a machine
+  creating its own scope, so a Brain with none parks naming `npm run admin`.
 - **Research that came back becomes knowledge, or it was a pile of links.**
   `design_patterns.origin` declared `RESEARCH` and nothing wrote it, so an
   expansion could run the whole research pipeline and what came back sat in
