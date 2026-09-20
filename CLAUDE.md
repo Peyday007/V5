@@ -6021,6 +6021,133 @@ nowhere.
   same bytes** — verified, `17d9a70a3d9b1c6e…`, nine pictures, two paths.
   Nothing in `scripts/` can record an approval, still deliberately.
 
+- **A capture needs a browser and a judgement needs the fleet, and those are two
+  machines. For a while there was nothing between them.** That is the defect at
+  the centre of this kernel and it is recorded rather than quietly repaired,
+  because every part of it passed its own tests. `requestDesignCycle` opened a
+  cycle where a change integrates — a server with no browser — and the only
+  thing that could ever render it was `npm run design resume`, which boots its
+  *own* SQLite Brain against a throwaway directory and cannot see that cycle at
+  all. Meanwhile `openDesignReview` had exactly **one caller in the repository
+  and it was a test**: nothing in the server ever opened a review bin, so
+  `ingestFinishedReviews` walked cycles looking for bins that could not exist
+  and `JUDGE_COMPOSITION` could never leave `UNTESTED`. This file's own header
+  named `advanceDesignCycles` as the function that read the answer back, and
+  there was no such function. **A mechanism nothing calls is not a mechanism**,
+  for the seventh time, and the sentence was right about the design and wrong
+  about the code.
+
+  A render is work Brain wants done by a machine with a capability Brain lacks,
+  reported as structured rows and validated before it is believed — which is a
+  **bin**, and every property it needs is Step 10's, unchanged. So
+  `DESIGN_RENDER_V1` is the route, with its own `GENERAL_DESIGN_RENDER` class so
+  the fire router can send it somewhere that can actually drive a browser, and
+  `npm run design render` is the worker half: the same `capture.ts` a local
+  cycle uses, printing one object to hand back. The bytes stay with the renderer
+  and the hashes travel, because the address is an address and the digest is the
+  evidence. The tick then has the whole loop — ask for a render, read one back
+  and measure it with the same `measurePass` a local run uses, ask for the
+  judgement, read that back, close the cycle with a reason derived from what is
+  still open — every step idempotent by a row rather than by a flag.
+
+- **A review is bound to the evidence it was briefed on, and was not.**
+  `openDesignReview` computed `digestCaptures(input.captures)` and used it for
+  nothing at all, so the digest a review was finally recorded with came from
+  reading the table back **at ingest time** — a different question. A capture
+  written in between would have been folded in silently, and a judgement about
+  one set would have settled another. `design_bin_requests` (075 / pg 066) is
+  the binding, written when the question is asked and compared before the
+  answer is believed; §23's audit reopen answers the identical shape the
+  identical way. A bin carrying a *render* request is refused by kind rather
+  than falling through to a digest comparison that would call it stale, and a
+  bin Brain has no record of at all is refused before anything about its
+  submission is read.
+
+- **A REFUSED review is not a judgement, and was settling the cycle.** A refusal
+  is recorded as a row — deliberately, because §8 requires the failure and its
+  raw response to persist — so *there is a JUDGED row for this pass* was true of
+  a review that established nothing. A cycle whose evidence had moved underneath
+  its reviewer closed reading **rendered, measured and judged**, which is the
+  silent success this whole kernel exists not to produce. It closes
+  `NEEDS_PERSON` with the refusal's own words now, and still **closes**: nothing
+  would ever ask again, so leaving it open would be a park.
+
+- **A dispatch generation and a lease generation are one apart, and two kernels
+  read one as the other.** `assignNextBin` swaps `lease_generation` to
+  `row.lease_generation + 1` and credits the arrival against the row's own
+  generation, so a unit result submitted under a lease holds one more than the
+  dispatch that produced it. Asking at the lease's own generation resolves
+  nothing, always. `services/design/judge.ts` therefore refused **every** judged
+  review for "no resolvable lineage" — failing closed, so the symptom was a lane
+  that never worked. `services/capability/independence.ts` (§37) asked the same
+  way while building the set of sessions an audit must be independent *of*, and
+  a session missing from that set is a session allowed to audit its own reading
+  — **failing open, which is the expensive direction**. Its fixture wrote the
+  dispatch row at the generation the broken reader wanted, so the suite stayed
+  green over it. `dispatchedSessionForLease` is the corrected reader, a second
+  function rather than an argument because the two questions genuinely differ;
+  `dispatchedSessionForBin` is untouched for the admission hook, which asks
+  before a claim and is right.
+
+- **`authorsOf` selected three columns that do not exist.** `factory_sessions`
+  declares `external_session_id`, `worker_id` and `account_ref`; the query asked
+  for `session_ref`, `account_id` and `routine_id`, threw on every UI-impact
+  cycle, and the `catch` — whose own comment promised to say so out loud —
+  swallowed it. So every design review of a real change reported
+  `NOT_APPLICABLE`: *nobody for the reviewer to be independent of*, about a
+  change a session had demonstrably written. The guard silently never ran, which
+  is worse than the guard being absent, because the tier was recorded and read
+  as a deliberate answer.
+
+- **Every one of those was found by walking the journey, and none of them by
+  reading it.** `tests/designJudgedWalk.test.ts` drives one cycle from a change
+  landing to a cycle closing and simulates only the Cowork activation — the
+  workers are `WORKER` principals claiming real bins off the real queue, exactly
+  as `cashIntegrationPass` and `sharedKnowledge` already have to say of
+  themselves. §24 and §30 both record the same lesson at the same altitude: a
+  test that arranges its own starting state cannot tell a mechanism from a
+  function nobody calls.
+
+- **The product surface did not own its own elements.** `main.tsx` imports the
+  legacy console's stylesheet and the product's, globally, and the legacy one
+  styles bare elements — so its `h4 { color: var(--fg-dim); text-transform:
+  uppercase }` applied to every h4 in the application. `--fg-dim` is `#b3c1d1`,
+  chosen for a near-black background and painted on `--paper`: the conversation
+  names on Home rendered at **1.66:1**, in capitals nobody chose. Repairing it
+  found bare `label` doing the same thing at 3.36:1 one screen along, so the fix
+  is the class of defect rather than the instance — inside `.rs-shell`,
+  headings, labels, legends, selects and textareas take their colour from what
+  contains them and impose no case or tracking. Size is untouched, because size
+  is what a Russell class decides, and `/legacy` is untouched because that
+  surface is not this kernel's to restyle.
+
+- **A surface colour is not a text colour, and `--verdigris-ink` already knew
+  it.** `--ochre` measured 3.15:1 as text on `--paper` and 3.01:1 on its own
+  wash; `--moss` 4.07:1 on its wash. Both now have the ink companion verdigris
+  has always had, sized by computing luminances rather than by eye, and the
+  surface tokens are **untouched** — every chip, border and background is the
+  colour it was. Dark mode already measured 7:1 and better, so its inks resolve
+  to what it already uses.
+
+- **The reader was wrong twice more, and both are in the readers.** A native
+  radio is 13×13 in every browser and nobody aims at it: it sits in a `<label>`
+  and the words are the target, so measuring the control hid the honest number —
+  870×**23**, one pixel under the floor, a repair rather than a redesign. And
+  Fleet's link-styled buttons came back as small targets while sitting *in a
+  sentence*, which is WCAG 2.2 SC 2.5.8's own Inline exception; a criterion that
+  flagged those would be asking for the sentence to be broken to satisfy a rule
+  that excludes it. **A false finding costs more than the defect it was looking
+  for**, for the third and fourth time in this kernel's short life.
+
+- **Nothing here is deployed, and the distinction is the whole of §37's first
+  sentence.** The branch is unmerged; production does not contain
+  `server/services/design` at all, so the deployed Brain has no design table and
+  runs no design tick. An earlier report of mine named two Russell candidates as
+  evidence that proactive expansion had routed research — they were rows in a
+  throwaway directory, and production's `brain-architecture` project holds zero
+  work items. The machinery is complete and **no fleet worker has answered a
+  design bin**; that needs a deploy, which is a person's.
+
 **The sharpest limitation, because it is the one most worth being honest about:
 the judged lane reads a structured description of the rendered page, not the
 picture.** A reviewer gets the heading outline in document order, the controls a
@@ -6214,6 +6341,8 @@ server/
       impact.ts         whether a change reaches the interface, and which screens
       route.ts          a landed change becomes design work, where it landed
       judge.ts          the view a measurement cannot establish, through a bin
+      render.ts         the route a picture takes from a machine that has a browser
+      scope.ts          which project design work is filed against; one reader
       operate.ts        loop 1: render, measure, repair, render, stop honestly
       learn.ts          loop 2: what recurred, what they said, what it cannot do
       expand.ts         loop 3: its own weakest ability, routed somewhere real
@@ -6361,6 +6490,7 @@ scripts/
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
   designKernel.test.ts       what a design kernel may conclude, and what it may not
+  designJudgedWalk.test.ts   one cycle, walked: a change lands, two bins, a closed cycle
   capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
   systemSelfModel.test.ts    what a reading may claim, and the seven it may not
   realizationPacket.test.ts  derive what is readable; refuse to guess the rest

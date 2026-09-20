@@ -9,6 +9,48 @@ This document is the operator's account. `CLAUDE.md` §39 is the rule set;
 
 ---
 
+## Where this is, exactly
+
+**Branch** `claude/design-kernel-implementation-a5bws8`. **Nothing here is
+merged and nothing is deployed.** Production runs the `production` branch, which
+does not contain `server/services/design` at all — so the deployed Brain has no
+design tables, runs no design tick, and holds no cycle, capture, finding or
+expansion. Any design row referred to anywhere is a local one.
+
+That matters for one claim in particular. An earlier report named two Russell
+candidates as evidence that proactive expansion had routed research. They were
+rows in a throwaway SQLite directory. Read through the MCP connector on
+2026-09-20, production's `brain-architecture` project (`prj_ac780d726f394a8ca81d`)
+holds one layer, `Capability Realization`, `NOT_STARTED`, and **zero work
+items**. Nothing has been routed there by anything.
+
+### What works end to end, and what the evidence is
+
+| | Evidence |
+| --- | --- |
+| A landed change opens a cycle | `remoteLoop` → `requestDesignCycle`, walked in `tests/designJudgedWalk.test.ts` |
+| A cycle reaches a machine with a browser | the tick opens a `DESIGN_RENDER_V1` bin; the walk claims and answers it |
+| The real interface is rendered and measured | `npm run design render` against Chromium 141, six surfaces × three widths |
+| A judgement comes back and is validated | `DESIGN_REVIEW_V1`, zero-trust validator, recorded lineage, the walk |
+| The judgement is bound to the evidence it saw | `design_bin_requests.capture_digest`; a moved set is refused by name |
+| The cycle closes with a derived stop reason | `settleJudgedCycles`, and a REFUSED review may not settle one |
+| Three open findings are closed | re-rendered: zero low-contrast, zero small-target findings |
+
+### What is still partial or blocked
+
+- **No fleet worker has answered a design bin.** The machinery is complete and
+  the walk drives it with real `WORKER` principals over the real queue, but a
+  *fired* Cowork session needs this branch deployed. That is a person's decision
+  and the honest state is UNPROVEN, not working.
+- **`JUDGE_COMPOSITION` reads a description, never the picture.** Unchanged, and
+  declared as the absent capability `VISUAL_COMPOSITION_FROM_PIXELS`.
+- **The deployed Brain still has no browser** and must not acquire one. The
+  render bin is how that stops being a dead end; it needs the deploy and a
+  `worker_routing` row for `GENERAL_DESIGN_RENDER`.
+- **No design surface exists in the product.** Findings are read on a terminal.
+
+---
+
 ## What was already here, and what was reused
 
 Nothing in this kernel is a second copy of machinery Brain already has.
@@ -33,13 +75,27 @@ Nothing in this kernel is a second copy of machinery Brain already has.
 ### 1. Operate — `services/design/operate.ts`
 
 ```
-render the real interface  →  measure it  →  judge what measurement cannot settle
-  →  repair  →  render again  →  measure again  →  settle, or stop honestly
+a change lands
+  →  requestDesignCycle opens a cycle, on a Brain with no browser
+    →  the tick asks for a render, as a bin
+      →  a worker with a checkout and a browser answers it
+        →  the tick stores the captures and measures them
+          →  the tick asks for the judgement, as a bin
+            →  a different session answers it
+              →  the tick closes the cycle, with a reason derived from what is open
 ```
 
 The measured half runs synchronously wherever a browser and a running product
 exist. The judged half is a bin, because §8 says model prose never mutates state
 and §24 says the deployed Brain buys no inference.
+
+**Both halves are bins because they have to be, and for a while only one of them
+was.** A capture needs a browser; the deployed Brain has none. A judgement needs
+the fleet; the fleet only fires at the deployed Brain. Those are two machines
+with nothing between them, and until `services/design/render.ts` there was no
+route: a cycle opened by a real change waited for somebody to run a command
+against a database that does not hold it. `openDesignReview`, meanwhile, had
+exactly one caller in the repository and it was a test.
 
 **It is bounded at three rounds** (`MAX_DESIGN_PASSES`). A cycle that reaches the
 ceiling closes `REPAIR_EXHAUSTED` **with its findings still OPEN**, and they are
@@ -205,17 +261,57 @@ rectangle inside the viewport and is painted over by the command bar in the row
 beneath. Every one of them reported as covered. The condition is scroll *room*
 now, not the coverer's position.
 
-### What is still open, and honestly so
+### The three findings that were left open, and how each one closed
 
-- `--ochre` at 3.15:1 on the "You are needed" line. Real, and `--ochre` is also
-  used as a background — so changing it is an accent decision that belongs to
-  the owner. Reported, not repaired.
-- `h4.rs-collection-name` at 1.66:1. A real reading with its element and its
-  number, for somebody to check.
-- Touch targets under 24px on Build's radio inputs.
+All three were re-measured against the current UI rather than taken from the
+report, and every one had a root cause a level above where it was reported.
 
-The cycle closed `NEEDS_PERSON` naming all of it. That is the correct outcome
-within current authority, and it is not dressed up as anything else.
+**`h4.rs-collection-name` at 1.66:1 was a stylesheet leak, not a colour
+choice.** `main.tsx` imports `styles.css` and `design.css` globally, and
+`styles.css` is the legacy console's — *dark, dense, information-first*, by its
+own first line. Its bare `h4 { color: var(--fg-dim); text-transform: uppercase }`
+applies to every h4 in the application, and `--fg-dim` is `#b3c1d1`, a grey-blue
+for a near-black background, painted on `--paper` `#f2f4f6`. The conversation
+names on Home were rendering in capitals nobody chose, at 1.66:1.
+
+Repairing it found the same leak one element along — bare `label` puts `#7d8ea1`
+on white at 3.36:1 inside every scope row on Build — so the fix is scoped to the
+class of defect: inside `.rs-shell`, headings, labels, legends, selects and
+textareas take their colour from what contains them and impose no case or
+tracking. Size is untouched, because size is what a Russell class decides.
+Nothing about `/legacy` changes.
+
+**The Build radios were never 13×13.** A native radio is that size in every
+browser and nobody aims at it: it sits in a `<label>`, and the words are the
+target. The reader measured the control, so the honest number was hidden — the
+target is 870×**23**, one pixel under the floor. `observe.ts` measures the union
+of a control and the label that labels it now, and only a label that wraps it or
+names it in `for`. Beside it, an unstyled `<button>` measured 21px tall;
+`.rs-shell button:not([class])` gives the buttons nobody styled an appearance
+and a floor, and touches no button the file already styles.
+
+**And the reader was wrong again on a surface nobody had rendered.** Fleet's
+link-styled buttons came back as small targets; both sit *in a sentence*, which
+is WCAG 2.2 SC 2.5.8's own Inline exception. Implemented in the criterion's
+terms: the parent must hold real text outside the control and the control must
+fit in one line of it.
+
+**The ochre line was the one that touches identity, and the repair changes no
+surface.** `--ochre` is a background colour being read as text: 3.15:1 on
+`--paper`, 3.01:1 on its own wash. `--moss` is 4.07:1 on its wash and fails by
+less. Both now have the ink companion `--verdigris-ink` has always had —
+`--ochre-ink: #8a6011` (4.74:1 on the worst light surface), `--moss-ink:
+#42704f` (4.79:1) — chosen by computing the luminances rather than by eye. The
+surface tokens are untouched, so every chip, border and background is the colour
+it was, and dark mode already measured 7:1 and better so its inks resolve to
+what it already uses.
+
+**Verified by re-rendering, not by reasoning.** russell/default, build/default,
+fleet/default, work/default, projects/default and knowledge/default, three
+widths each: **zero low-contrast and zero small-target findings**.
+
+A finding now carries the two colours as well as the ratio, because "1.66:1"
+sends a reader back to the browser to find the pair, and the pair is the repair.
 
 ---
 
@@ -316,6 +412,7 @@ npm run design -- next           # what the expansion loop would do; creates not
 npm run design -- expand         # run one expansion pass
 npm run design -- cycle --surfaces russell/default,build/default
 npm run design -- resume <cycleId>   # a cycle the Factory opened when a change landed
+npm run design -- render --surfaces a,b --pass 0   # answer a render bin
 npm run design -- findings [--cycle <id>]
 npm run design -- impact --paths a,b --says "..."
 npm run design -- correction --admin you@example.com --says "..."
@@ -333,6 +430,20 @@ database, it moved `LEARN_FROM_CORRECTION` from `ABSENT` to `LIVE / PASSING`.
 directory, sign in and render. Set `BRAIN_DATA_DIR` to keep the rows so the
 reading commands can see them afterwards.
 
+`render` is the worker half of the render lane. A `DESIGN_RENDER_V1` bin tells a
+worker to run exactly this line; it renders with the same `capture.ts` a local
+cycle uses and prints one JSON object between two markers, which the worker
+submits through `brain_bin_submit_unit`. The bytes stay with the renderer and
+the hashes travel. It writes to a throwaway directory rather than to
+`docs/evidence/design-renders`, deliberately: that set is declared, digested and
+committed as the evidence of one run at one commit, and half-replacing it with
+pictures from another revision would leave a manifest whose digest no longer
+describes what is in the directory.
+
+Nothing in this script talks to a deployed Brain. The worker's own connector
+does, which is what keeps this a command rather than a second client holding a
+second credential.
+
 ## Registering a surface
 
 Rows, not a deployment. The seed is `SEED_SURFACES` in
@@ -345,8 +456,21 @@ Westbrook defect at a screen.
 
 ## Where the tick runs it
 
-`services/russell/loop.ts`, step 1a-iv-f, fleet-wide, in its own `try`. It
-ingests judged reviews whose bins finished, learns from closed cycles, and runs
-one expansion pass. **Rendering deliberately does not run there** — the deployed
-Brain has no browser and a tick that tried would either fail every pass or
-quietly decide a surface was fine.
+`services/russell/loop.ts`, step 1a-iv-f, fleet-wide, in its own `try`. Six
+things, in the order the work is in:
+
+1. read back renders whose bins finished, store the captures and measure them;
+2. read back judged reviews whose bins finished;
+3. close the cycles whose judgement landed;
+4. ask for a render for any cycle still waiting for a machine with a browser;
+5. learn from cycles that closed, and from what recurred across them;
+6. absorb finished design research, then run one expansion pass.
+
+The order matters: a render that came back this tick produces the captures a
+review is briefed on, and a review that came back this tick is what lets a cycle
+close. Any other order makes each stage a tick late for ever.
+
+**Rendering itself deliberately does not run there** — the deployed Brain has no
+browser and a tick that tried would either fail every pass or quietly decide a
+surface was fine. What the tick does is *ask*, which is a row; the browser work
+happens wherever the worker that claims the bin is.
