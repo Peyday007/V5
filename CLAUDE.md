@@ -2969,6 +2969,27 @@ remote.
   first real campaign's to prove, and reporting a green probe as a green campaign
   would be the comfortable half-truth this file exists to refuse.
 
+  **And the one caveat it exists to say was printed only by runs that had
+  already failed.** *"Only one surface is registered, so nothing here is
+  pooled"* was pushed onto `problems`, which `ok` deliberately does not count —
+  so a single-surface pool that proved itself returned green, the reporter
+  returned on `ok` before it reached the loop, and the sentence never appeared
+  on the one run where somebody could read `VERIFIED` as *pooled*. It also made
+  the refusal over-count: *"2 problem(s)"* over one problem and one caveat.
+  Found by running it against the first real surface rather than by reading it.
+  `notes` is its own channel, printed on both paths, and the failure mode is
+  fixed at *said too often* rather than *said only when it is too late*.
+
+  **The line above it printed `cooling until` a moment eleven days gone, beside
+  `eligible yes`.** A `retry_at` in the past is history rather than a
+  condition — the fire router compares it to the clock and ignores it — so the
+  surface block answered one question twice and disagreed with itself. It is
+  reported only while it is still ahead, and the instant it is compared to is
+  part of the snapshot rather than something the judgment reads: a pure
+  decision that took its own clock would answer differently on a re-run against
+  the same recorded input, which is the property `router.ts` keeps this module
+  pure for.
+
   **Putting the Routine's reference in front of every project member was mine
   and is corrected here rather than quietly.** A pool makes the *name*
   ambiguous — three surfaces all reading `Factory Brain …` — so the Fleet page

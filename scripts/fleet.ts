@@ -1448,6 +1448,16 @@ async function probeBin(input: {
     }
 
     console.log('');
+    /*
+     * Notes print on both paths, and that is the point of their being a
+     * separate channel. They used to be problems, and this block returned on
+     * `ok` before reaching the loop — so the single-surface caveat was printed
+     * only by a run that had already failed for another reason, and never by
+     * the green run that is the only place somebody could read "VERIFIED" as
+     * "pooled". A caveat visible only on failure is not a caveat.
+     */
+    for (const note of report.notes) console.log(`  NOTE      ${note}`);
+    if (report.notes.length > 0) console.log('');
     if (report.ok) {
       console.log(`  VERIFIED  ${report.surfaces.length} surface(s), each fired, each arrived as`);
       console.log(`            ${report.expectedWorkerName}, each handed a bin and each completing it.`);
