@@ -58,8 +58,12 @@
  */
 import type { DesignExpansion, DesignPattern, DesignPrimitive } from '../../domain/design.ts';
 import { isDesignPrimitive } from '../../domain/design.ts';
-import { listExpansions, settleExpansion, upsertPattern } from '../../repos/design.ts';
-import { getCapability } from '../../repos/design.ts';
+import {
+  getCapability,
+  listExpansions,
+  settleExpansion,
+  upsertPattern,
+} from '../../repos/design.ts';
 import { citableClaims } from '../../repos/research.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { patternFingerprint } from './patterns.ts';
