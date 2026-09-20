@@ -36,6 +36,24 @@ items**. Nothing has been routed there by anything.
 | The cycle closes with a derived stop reason | `settleJudgedCycles`, and a REFUSED review may not settle one |
 | Three open findings are closed | re-rendered: zero low-contrast, zero small-target findings |
 
+### Checks, against the revision actually tested
+
+`d09c1ce`, a clean tree, both backends:
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean |
+| Full suite, SQLite | 168 files passed, 1 skipped; 3692 passed, 41 skipped |
+| Full suite, Postgres | 169 files passed; 3721 passed, 12 skipped |
+| Six surfaces × three widths, Chromium 141 | zero low-contrast, small-target and unreachable findings |
+| A full cycle over three surfaces | stopped `SETTLED` |
+| Cycle digest vs. `design-manifest` | both `d04277bc0819…` over the same nine pictures |
+
+An earlier full run was in flight when two more commits landed, so it was
+running against a tree that no longer existed. It was stopped and discarded
+rather than reported: a green result over a tree that changed underneath it is
+not a result about this one.
+
 ### What is still partial or blocked
 
 - **No fleet worker has answered a design bin.** The machinery is complete and
