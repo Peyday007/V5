@@ -480,71 +480,23 @@ export function oauthRouter(): Router {
     })();
   });
 
-  /**
-   * Sign in, from the consent screen.
+  /*
+   * There is no `POST /authorize/signin`, and its absence is the design.
    *
-   * This posts to the ordinary sign-in service rather than reimplementing it:
-   * same throttle, same refusal text, same session cookie. The only difference
-   * is that it lands back on the consent screen instead of the application.
+   * It existed to take an address and a password from the page above and hand
+   * them to `/api/auth/login`, which was then the human door and is now the
+   * break-glass one (see `services/identity/passwordDoor.ts`). A consent screen
+   * that kept posting to it would be the one surface still offering a password
+   * as an ordinary way in — and it would go on working for exactly as long as
+   * the operator had not yet registered a device, which is the worst possible
+   * lifetime for an authentication path: long enough to be learned, short
+   * enough to break without warning.
+   *
+   * So the operator signs in to the Brain with their device, in the tab that
+   * page links, and presses Continue. `approver(req)` then reads the session
+   * they already hold, and every other path through this file — the invitation,
+   * the chooser, the approval — is untouched.
    */
-  router.post('/authorize/signin', (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
-      if (!originIsSameSite(req)) {
-        errorPage(res, 403, 'Blocked', 'That form was not submitted from this site.');
-        return;
-      }
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      const params = readAuthorizeParams(body);
-      if ('error' in params) {
-        errorPage(res, 400, 'This connection request is not valid', params.error);
-        return;
-      }
-      const client = await getClientByClientId(params.clientId);
-      if (!client || !redirectUriIsRegistered(client.redirectUris, params.redirectUri)) {
-        errorPage(res, 400, 'Unknown client', 'That client is not registered with this Brain.');
-        return;
-      }
-
-      // Delegated to the application's own sign-in endpoint so there is exactly
-      // one implementation of "is this password right", with one throttle.
-      const email = typeof body['email'] === 'string' ? body['email'] : '';
-      const password = typeof body['password'] === 'string' ? body['password'] : '';
-      const signIn = await fetch(`${issuerFor(req)}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', origin: issuerFor(req) },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!signIn.ok) {
-        res.status(401).type('html').send(
-          signInPage(req, params, client.clientName, 'That email address and password were not accepted.'),
-        );
-        return;
-      }
-      const setCookie = signIn.headers.get('set-cookie');
-      if (setCookie) res.setHeader('Set-Cookie', setCookie);
-
-      // Redirect back to the authorize screen rather than rendering it here.
-      //
-      // The alternative is to re-read the principal from the cookie we have
-      // just set, which means constructing something that looks enough like a
-      // Request to fool the authenticator — a fake that would silently diverge
-      // the first time authentication reads a field the fake does not have.
-      // A 303 makes the browser re-ask with the real cookie on a real request,
-      // and the GET handler that already knows how to render both states does
-      // the rest.
-      const back = new URL(`${issuerFor(req)}${OAUTH_BASE}/authorize`);
-      back.searchParams.set('response_type', 'code');
-      back.searchParams.set('client_id', params.clientId);
-      back.searchParams.set('redirect_uri', params.redirectUri);
-      back.searchParams.set('code_challenge', params.codeChallenge);
-      back.searchParams.set('code_challenge_method', 'S256');
-      if (params.scope) back.searchParams.set('scope', params.scope);
-      if (params.state) back.searchParams.set('state', params.state);
-      if (params.resource) back.searchParams.set('resource', params.resource);
-      res.redirect(303, back.toString());
-    })();
-  });
 
   /* -- Approve ----------------------------------------------------------- */
 
@@ -947,6 +899,22 @@ function hiddenFields(params: AuthorizeParams): string {
     .join('');
 }
 
+/**
+ * Nobody is signed in, and this page can no longer sign them in.
+ *
+ * It used to carry an address and a password and post them to
+ * `/api/auth/login`. Both halves of that are gone: a person signs in to this
+ * Brain with a device, and a device sign-in is a WebAuthn exchange rather than
+ * a form post — so reproducing it here would mean a second authentication
+ * surface, in a server-rendered page, for the one journey that already works
+ * perfectly in the application.
+ *
+ * What replaces it is the honest instruction. The operator is in a browser, on
+ * this Brain's own origin, at the moment they clicked *connect* in their
+ * client — so the Brain is one tab away, the session it sets is the same
+ * session this page reads, and **Continue** is this same address re-asked with
+ * the request's own parameters preserved.
+ */
 function signInPage(
   _req: Request,
   params: AuthorizeParams,
@@ -955,20 +923,19 @@ function signInPage(
 ): string {
   return page(
     'Sign in to connect a worker',
-    card(`<h1>Sign in to the Brain</h1>
+    card(`<h1>Sign in with your device</h1>
      <p class="sub">${esc(clientName)} is asking to connect as one of your workers.
        Sign in to choose which one.</p>
      ${error ? `<div class="err">${esc(error)}</div>` : ''}
-     <form method="post" action="${OAUTH_BASE}/authorize/signin">
+     <p>This Brain has no sign-in form. Open it in another tab, press
+       <strong>Sign in with your device</strong>, and come back.</p>
+     <p><a href="/" target="_blank" rel="noopener">Open the Brain</a></p>
+     <form method="get" action="${OAUTH_BASE}/authorize">
        ${hiddenFields(params)}
-       <label for="email">Email</label>
-       <input id="email" name="email" type="email" autocomplete="username" required autofocus>
-       <label for="password">Password</label>
-       <input id="password" name="password" type="password" autocomplete="current-password" required>
-       <button type="submit">Sign in</button>
+       <button type="submit">Continue</button>
      </form>
-     <p class="note">This is the same account you use for the Brain. Your password is
-       never shared with ${esc(clientName)}.</p>`),
+     <p class="note">Nothing about your account reaches ${esc(clientName)} — not an address, a
+       password, a session or a device. What it is given is a token for the worker you choose.</p>`),
   );
 }
 
