@@ -171,6 +171,10 @@ There must be no workflow where the user has to remember "now go update the data
     a sprint down ends new discovery and never a customer's obligation.
 41. No identity shared between two private operations, and no credential that
     resolves a project its holder was not connected to.
+42. No capability a machine is said to teach recorded as one this company
+    holds — what producing something requires is established by research, what
+    this company can do is established by a person, and nothing derives the
+    second from the first.
 
 ## 8. Model prose never mutates project state.
 
@@ -5749,6 +5753,219 @@ takes any bin id, and its own comments record raising a real research bin's
 ceiling to 100. The comment is the thing that is wrong.
 
 
+## 39. A capability a machine teaches is not a capability this company holds.
+
+The manufacturing empire kernel (`server/services/manufacturing/`,
+`server/repos/manufacturing.ts`, `server/domain/manufacturing.ts`,
+`docs/MANUFACTURING-KERNEL.md`) is a second graph beside §38's industry map,
+answering a question containment cannot hold: **which machine should be built
+next, and what does building it make possible that was not possible before?**
+Everything it adds is a new *entrance* to machinery Steps 4 to 12C already
+built, and none of it is a second set of rules.
+
+**`industry_nodes` could not have held it, for two reasons.** A capability is
+not *inside* an industry — it is a property of a firm, and a node kind for it
+would make that graph a place to put everything, at which point "what is
+underneath animation" stops having an answer. And a capability chain is not a
+tree: *"pressure washers lead to motorcycles"* is not a claim that motorcycles
+are inside pressure washers, it is two claims about a third thing — producing
+one **develops** small-engine integration, producing the other **requires** it.
+Several categories teach one capability and several require it, so it is an edge
+table. **A tree that pretended to hold it would make the sequence look decided,
+when the brief's whole optimization rule is that it is not.**
+
+- **A capability a product *teaches* is never a capability this company
+  *holds*.** The rule the whole kernel rests on, and it is a property of the
+  code rather than a rule somebody follows. `capabilities.held_at` is written by
+  one function that demands an actor and an evidence kind; the module that files
+  research does not import it, has no parameter for it, and no value of
+  `capability_finding` reaches it. Without that separation a well-sourced packet
+  about what motorcycle production teaches becomes, three joins later, evidence
+  that this company can build motorcycles — and every reading of what to build
+  next is downstream of it. §37's *a definition is not an implementation*,
+  arriving in a factory.
+
+  **`held_evidence` has one value and not two, which is a deliberate narrowing
+  rather than an omission.** The obvious second was a holding derived from work
+  this project actually got paid for; it is absent because nothing in this Brain
+  could write it — Cash Mode delivers services and the Software Factory delivers
+  code, and neither is evidence that this company can build a machine. A value
+  nothing could ever produce would be the *mechanism nothing calls* this file
+  has had to correct six times, wearing an enum. There is certainly no
+  `RESEARCHED`, and there never will be.
+
+- **Demand pulls manufacturing, and it is enforced by what can be derived rather
+  than by a sentence in a prompt.** A category reads `ENTER` only when four
+  conditions are `MET`: dated published evidence that somebody is buying, a
+  published route to them, requirements established, and every one of those
+  requirements held. Each answers `MET`, `NOT_MET` or `UNKNOWN`, and **`UNKNOWN`
+  is never `MET`** — invariant 39, at the number that would start a factory. A
+  category with every engineering fact established and no buyer cannot reach it,
+  and no objective, instruction or argument changes that, because nothing
+  deciding it reads prose.
+
+  **And `found` is derived from the claims rather than tallied from what a
+  pass wrote, which is a correction rather than a preference.** Tallying is
+  correct only while every pass that absorbs a round also closes it — and a
+  tick that dies between the two leaves the claims filed and the round OPEN, so
+  the next pass writes nothing because every insert conflicts, counts zero, and
+  records a round that established five things as having established none.
+  `found` is what barrenness is decided against, so that category is then
+  declined as one nobody should look at again. Derived, it is the same number
+  however many times it is asked, which is the property a crash window needs.
+  The regression test was run against the tallying version to watch it fail
+  before it was trusted to pass — a regression test nobody has seen fail is a
+  claim rather than a reading.
+
+  **The same shape is latent one kernel along and is deliberately not fixed
+  here.** §38's `absorb` tallies the same way for its BOOTSTRAP, MAP and
+  CAPITAL rounds; only its SCAN branch reads openings from rows. It is reported
+  rather than changed, because widening this into somebody else's kernel is a
+  decision for whoever owns that one.
+
+  **Buyers with no published route is its own verdict**, because the brief
+  names distribution as its own step and the two remedies differ: *nobody is
+  buying* is answered by looking elsewhere, *nobody has established how it gets
+  to them* by asking again. It fell through to `INVESTIGATING` in the first
+  version, which said a category was still being researched while its demand
+  round had settled — §29's status contradicting the rows underneath it, found
+  by re-reading the diff rather than by a test.
+
+  **The subtle one is `CAPABILITIES_HELD`, and the obvious implementation is
+  wrong.** `requires.every(held)` is **true of the empty set**, so a category
+  nobody has asked what it takes to build would report that this company already
+  has everything it needs. Holding is `UNKNOWN` until the requirements are
+  known: you cannot have established that you hold all of a set nobody has
+  established.
+
+- **The ladder is discovered, never declared.** There is no list of machine
+  categories in this repository and no constant holding one — the brief's own
+  six levels are an example sequence it *explicitly refuses to mandate*, so
+  encoding them would encode the one thing it says not to. A category exists
+  because a gated claim named it or a person seeded it, and the test that says
+  so reads the source rather than behaviour, for `operatorConsoleRemoved`'s
+  reason.
+
+- **A finding is declared by whoever read the source, from a closed set.** §33's
+  repair, §38's repair, and now the third axis to need it. One vocabulary,
+  validated by **one function called at both doors** — the provider path and the
+  wire — because a rule applied by one of two readers is worse than none, for
+  the fifth time. Every failure refuses the submission rather than dropping the
+  field: §27's rule that truncation and silent dropping are the outcomes a
+  worker cannot recover from, because they are reported as success.
+
+  **A third column on `research_claims` rather than more values in the second,
+  and the distinction is the question each answers.** `opportunity_signal` is
+  *what kind of opening is this*; `structural_finding` is *what does this
+  establish about how an industry works*; `capability_finding` is *what does
+  this establish about what building a machine takes and teaches*. §38's warning
+  was against splitting **one** question across several columns, which is a
+  different thing: one claim can carry all three, and most carry none.
+
+- **A demand signal with no observation date is refused.** §30's rule one table
+  along, at the column that decides whether a category may be entered: an
+  undated buying signal cannot be told apart from one somebody remembers from
+  years ago. And an entry barrier is kept apart from a capital requirement —
+  *what must exist at all* and *what needs owner money* are two questions, and
+  filing a certification nobody can buy their way past as a capital requirement
+  would make an unreachable category look merely expensive.
+
+- **Two spellings of a capability are one; two names are two, and that limit is
+  stated rather than papered over.** The identity is a deterministic reduction
+  of the name, so "Chassis Engineering" and "chassis engineering" join.
+  "chassis engineering" and "frame design" do not, and joining them needs a
+  reader deciding two phrases mean one thing — §24's semantic-merge floor. A
+  guess there would silently weld together two capability chains that are not
+  the same chain, which is worse than two rows a person can see.
+
+- **The allocator's rule order is the brief's core principle, not a
+  preference.** `DEMAND` outranks `CAPABILITY` for every category, always:
+  establishing what a machine takes to build, for a machine nobody has shown
+  anybody is buying, is the exact inversion the brief exists to forbid — and the
+  expensive one, because capability research is the long kind. It is pure over a
+  recorded snapshot for `services/dispatch/router.ts`' reason, which makes it
+  useless as a safety mechanism; the exclusion is the unique index, so two ticks
+  deciding correctly produce one round. Lexicographic over rules and never a
+  weighted score — a score needs weights, weights are a judgement nobody made,
+  and the number then reads like a measurement.
+
+  **It stops, and every bound is a bound rather than a preference**: one live
+  round per purpose per category, a cool-off on a settled one, and a category
+  asked the demand question `BARREN_ROUNDS` times for nothing is not asked again
+  — Brain has documented that nothing is there, and §13's rule about the archive
+  applies to Brain's own history. What is *not* a bound is a lifetime quota:
+  §24 removed exactly that kind of number, and what bounds this is how many
+  questions may be open at once, which is real.
+
+- **Nothing derivable is stored.** No readiness column, no entry verdict, no
+  capability count, no sequence position. The brief asks to *continuously
+  calculate the strongest next expansion*; a stored ordering is the rigid
+  roadmap it refuses, and a derived one moves the day an acquisition, a
+  breakthrough or one piece of evidence changes what is reachable. Three things
+  **are** stored because no derivation could recover them: that a person seeded
+  a category, that a person retired one, and that this company holds a
+  capability. All three are decisions.
+
+- **It is not a Cash Mode sprint, and that is invariant 40 rather than
+  tidiness.** §30 says Cash Mode is meant to be wound down after a month or two;
+  this kernel's horizon is the question sprints run underneath. Hanging it off
+  `cash_modes` would mean winding one sprint down silently ended a decade-scale
+  programme — and it would have looked like it worked. Pressing Start *is* the
+  authorization (§33, one section along), and what it authorizes is reading
+  published sources: `RESEARCH` only, `max_external_spend` a literal zero,
+  `ALWAYS_PROHIBITED` unioned in by the repository, one live grant per project
+  enforced by a partial unique index. **Pausing stops new questions and keeps
+  absorbing**, because filing what already ran is not new discovery and the
+  spending happened when it ran.
+
+- **Three envelopes rather than one, for `RUSSELL_CASH_VALIDATION_V1`'s
+  reason.** `planFitsEnvelope` pins one assignment template per envelope, and
+  asking which machines exist, asking who buys them and asking what building
+  them takes are three questions with three completion standards. Judging one by
+  another's is §25's Westbrook defect at a compiler: a worker answers correctly
+  and Brain judges it by the wrong standard. All three take their source classes
+  and forbidden actions verbatim from the cash discovery constants, so nothing
+  here authorizes an effect discovery did not already authorize — and **nothing
+  anywhere in this kernel authorizes building, buying, tooling, certifying or
+  entering anything.** Those are decisions with a factory on the end of them,
+  and there is no route to one through any envelope, route or command.
+
+- **The demand profile's failure condition is the half that matters.** *Nothing
+  published establishes that anybody is buying* has to be a **returnable
+  answer** rather than an incomplete one, because it is the finding that stops a
+  category being pursued. A profile that treated it as a gap would push a worker
+  towards producing an estimate instead — which is the one output this kernel
+  most needs never to receive.
+
+- **Every write is ADMIN, which is wider than the two sections above and is
+  deliberate.** There are four, and each is a decision *about* the programme
+  rather than work inside it: starting it, moving its lifecycle, naming a
+  category, and recording that this company holds a capability. The last is why
+  the line is drawn there rather than at WRITE — it is the one fact in this
+  kernel that research may never establish, and everything about what to build
+  next turns on it. No entry names a worker scope, so a machine is refused by
+  level at every write and by principal *type* at every route including the
+  reads. **There is no manufacturing policy module and there must never be
+  one.**
+
+**There is no client surface for this kernel yet**, and saying so is the honest
+report rather than a gap to be quietly filled. The routes exist so one can be
+built without a second, weaker path appearing beside them, and
+`npm run manufacturing` is the door that works today, calling exactly what the
+routes call.
+
+**What has and has not happened, said plainly.** The kernel operates end to end
+against both backends: a programme started, the opening question opened by the
+allocator, categories filed from gated claims, demand and capability rounds, the
+chain derived across two categories, a person recording a holding, and the
+verdict moving to `ENTER` and back when that holding is withdrawn. **No fleet
+worker has answered a manufacturing question in production**, because that needs
+a deploy and a fire — and until one has, the engine passing its tests says
+nothing about the research, which is the separation Step 3 drew between the
+research engine and a real job having actually run. **Nothing has been built,
+bought, tooled or entered**, and nothing here can do any of those.
+
+
 ## Repository map
 
 ```
@@ -5773,6 +5990,7 @@ server/
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
+    manufacturing.ts    what a capability finding creates, and what it may never
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
@@ -5792,6 +6010,7 @@ server/
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
     capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
+    manufacturing.ts  the ladder, the capability ledger, and the one write research cannot reach
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
   services/
     storage.ts          document keys, confinement, and writing through the store
@@ -5903,6 +6122,16 @@ server/
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
       readiness.ts      four people and four surfaces, counted from rows
+    manufacturing/
+      program.ts        starting a programme, and what pressing Start authorizes
+      ladder.ts         the classes of machine, and how far Brain has got with each
+      readiness.ts      the four conditions, and why an unknown is never met
+      allocate.ts       demand before capability, as a pure decision over a snapshot
+      questions.ts      what each round asks, and the one it must not be asked
+      expand.ts         opening a question, and filing what a gated claim established
+      declare.ts        the three things only a person can say
+      kernel.ts         one project's pass, derived on the tick
+      view.ts           the ladder, the gaps, and what would close the nearest one
     capability/
       ingest.ts         a blueprint becomes a registered, readable source
       sections.ts       the sections a document declares, from its own headings
@@ -6002,6 +6231,7 @@ server/
     factory.ts          the Software Factory: objective, stage, evidence, release
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
+    manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     passkeys.ts         enrolling, signing in with a device, and your own devices
     people.ts           who has joined, what can run, and connecting your Claude account
@@ -6034,6 +6264,7 @@ objectives/             software objectives a person approved, in the image by d
 scripts/
   capability.ts             the kernel's operator surface: register, advance, derive
   factory.ts                the operator's factory surface: register, submit, run
+  manufacturing.ts          the programme's terminal door, until a surface exists
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
   admin.ts                  emergency administration, on a terminal rather than a page
@@ -6042,6 +6273,7 @@ scripts/
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
+  manufacturingKernel.test.ts  a gated round files everything and holds nothing
   capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
   systemSelfModel.test.ts    what a reading may claim, and the seven it may not
   realizationPacket.test.ts  derive what is readable; refuse to guess the rest

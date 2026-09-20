@@ -74,6 +74,7 @@ import { opportunityForOwnCandidate } from '../../repos/cashPortfolio.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
+import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
@@ -147,6 +148,32 @@ async function envelopeIdFor(
 ): Promise<string | null> {
   const declared = ENVELOPE_BY_PROJECT[project.slug];
   if (declared) return declared;
+
+  /*
+   * A manufacturing question is decided by the round that asked it, and it is
+   * asked *before* the cash mode is read.
+   *
+   * `manufacturing_rounds` is the exact statement — this candidate is asking
+   * this purpose about this category — written by Brain when the round was
+   * opened. It comes first because the two sections are independent: a project
+   * may run a programme with no sprint at all, and falling through to the cash
+   * branch would refuse every programme question on such a project.
+   *
+   * Three envelopes rather than one, because `planFitsEnvelope` pins one
+   * assignment template per envelope and the three questions have three
+   * completion standards. Judging "who is buying" against "what does producing
+   * require" would be the Westbrook defect at a compiler: a worker answers the
+   * question correctly and Brain judges it by the wrong standard.
+   */
+  const programme = await manufacturingRoundForCandidate(candidate.id);
+  if (programme) {
+    if (programme.purpose === 'BOOTSTRAP' || programme.purpose === 'MAP') {
+      return 'RUSSELL_MACHINE_LADDER_V1';
+    }
+    if (programme.purpose === 'DEMAND') return 'RUSSELL_MACHINE_DEMAND_V1';
+    return 'RUSSELL_MACHINE_CAPABILITY_V1';
+  }
+
   const mode = await getCashMode(project.id);
   if (!mode) return null;
   /*

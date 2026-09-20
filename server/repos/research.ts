@@ -8,6 +8,7 @@
  */
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
 import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
+import { isCapabilityFinding } from '../domain/manufacturing.ts';
 import { isStructuralFinding } from '../domain/industry.ts';
 import type { StructuralFinding } from '../domain/types.ts';
 import type { OpportunitySignal } from '../domain/types.ts';
@@ -201,6 +202,11 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     structuralSubject: row.structural_subject,
     structuralQualifier: row.structural_qualifier,
     structuralAmountCents: row.structural_amount_cents,
+    capabilityFinding: isCapabilityFinding(row.capability_finding)
+      ? row.capability_finding
+      : null,
+    capabilitySubject: row.capability_subject,
+    capabilityObservedOn: row.capability_observed_on,
     retrievedAt: row.retrieved_at,
     confidence: Number(row.confidence),
     contradictionState: row.contradiction_state as ContradictionState,
@@ -795,6 +801,9 @@ export interface InsertClaimInput {
   structuralQualifier?: string | null;
   /** A published capital figure in minor units, or null for unknown. */
   structuralAmountCents?: number | null;
+  capabilityFinding?: string | null;
+  capabilitySubject?: string | null;
+  capabilityObservedOn?: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState?: ContradictionState;
@@ -833,6 +842,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            source_url, source_title, source_publisher, source_date, evidence_excerpt,
            evidence_locator, evidence_lane, opportunity_signal, structural_finding,
            structural_subject, structural_qualifier, structural_amount_cents,
+           capability_finding, capability_subject, capability_observed_on,
            retrieved_at, confidence,
            contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
@@ -840,13 +850,15 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            geography, timeframe, population, definition, requirement_ids, job_id,
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
           input.opportunitySignal ?? null,
           input.structuralFinding ?? null, input.structuralSubject ?? null,
           input.structuralQualifier ?? null, input.structuralAmountCents ?? null,
+          input.capabilityFinding ?? null, input.capabilitySubject ?? null,
+          input.capabilityObservedOn ?? null,
           input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,
@@ -1035,6 +1047,75 @@ export async function structuralClaims(input: {
     const claim = mapClaim(row);
     return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
   });
+}
+
+/**
+ * The accepted claims that declared a capability finding, for the manufacturing
+ * kernel to file.
+ *
+ * `structuralClaims`' shape and its reasoning, one column along — including why
+ * `orchestrationIds` is required rather than optional. The window is
+ * oldest-first and bounded, so without it every claim belonging to a round that
+ * has already settled sits permanently at the head of it, and once a programme
+ * has run for a while the budget is spent entirely on claims filed weeks ago
+ * while the ones that just arrived are never reached. A bounded scan that
+ * cannot make progress is worse than an unbounded one, because it looks like it
+ * is working.
+ */
+export async function capabilityClaims(input: {
+  projectId: string;
+  orchestrationIds: readonly string[];
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.capability_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
+/**
+ * How many accepted, declared capability findings one orchestration produced.
+ *
+ * What a manufacturing round *found*, derived rather than tallied — and the
+ * distinction is load-bearing rather than stylistic. Counting the rows a pass
+ * newly wrote is only correct while every pass that absorbs a round also closes
+ * it: a tick that dies in between leaves the claims filed and the round open,
+ * and the next pass writes nothing (every insert conflicts), tallies zero, and
+ * records a round that produced five findings as having produced none.
+ *
+ * `found` is what barrenness is decided against, so that reads as a category
+ * nobody should look at again. Derived from the claims, it is the same number
+ * however many times it is asked — which is the property a crash window
+ * needs.
+ *
+ * It counts findings rather than rows written, and the difference is honest: a
+ * declaration Brain could not file is still something the round established,
+ * and where it went instead is reported in `refused`.
+ */
+export async function countDeclaredCapabilityClaims(orchestrationId: string): Promise<number> {
+  const row = await getDb().get<{ total: number }>(
+    `SELECT COUNT(*) AS total FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+      WHERE c.orchestration_id = ? AND c.accepted = 1
+        AND c.capability_finding IS NOT NULL
+        AND f.status IN ('ACCEPTED', 'BLOCKED')`,
+    [orchestrationId],
+  );
+  return Number(row?.total ?? 0);
 }
 
 /**

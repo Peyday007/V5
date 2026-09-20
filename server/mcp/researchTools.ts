@@ -90,7 +90,13 @@ import {
   subjectVocabularyFor,
   validateStructural,
 } from '../domain/industry.ts';
-import type { StructuralFinding } from '../domain/types.ts';
+import {
+  CAPABILITY_FINDINGS,
+  describeVocabularies,
+  FINDING_GUIDE as CAPABILITY_FINDING_GUIDE,
+  validateCapabilityFinding,
+} from '../domain/manufacturing.ts';
+import type { CapabilityFinding, StructuralFinding } from '../domain/types.ts';
 import type { EvidenceLane, LaneNecessity } from '../domain/types.ts';
 import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
 import { planDependencies } from '../services/research/splitting.ts';
@@ -1113,6 +1119,37 @@ function structuralOf(
   };
 }
 
+/**
+ * The capability declaration on one submitted claim.
+ *
+ * The third question a claim can answer, beside the opening signal and the
+ * industry structure. Same shape, same delegation and the same reason for it:
+ * `services/research/schema.ts` calls this identical function for a pass a
+ * provider returned, so the two doors cannot come to disagree about what a
+ * valid declaration is.
+ */
+function capabilityOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  capabilityFinding: CapabilityFinding | null;
+  capabilitySubject: string | null;
+  capabilityObservedOn: string | null;
+} {
+  const parsed = validateCapabilityFinding({
+    where,
+    finding: row['capability_finding'],
+    subject: row['capability_subject'],
+    observedOn: row['capability_observed_on'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    capabilityFinding: parsed.value.finding,
+    capabilitySubject: parsed.value.subject,
+    capabilityObservedOn: parsed.value.observedOn,
+  };
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1132,8 +1169,17 @@ const submitClaimsTool: McpTool = {
     '. The kinds that add a subject to the industry map (SUB_INDUSTRY, VALUE_CHAIN_LAYER, ' +
     'BUYER_TYPE, FULFILMENT_SOURCE, TRANSACTION_TYPE, BOTTLENECK, ADJACENT_INDUSTRY) also ' +
     'require structural_subject, which is that subject\'s name; the other three must omit it. ' +
-    'A claim can carry both an opportunity_signal and a structural_finding, and most claims ' +
-    'carry neither. ' +
+    'Separately again, where a claim establishes what building a machine takes or teaches, ' +
+    'set capability_finding to the kind it is: ' +
+    CAPABILITY_FINDINGS.map((one) => `${one} — ${CAPABILITY_FINDING_GUIDE[one]}`).join('; ') +
+    '. All nine require capability_subject. For a category, a capability or a component that ' +
+    'is its own name as the source calls it; for the four that have a closed set it is a value ' +
+    'from that set (' +
+    describeVocabularies() +
+    '). DEMAND_EVIDENCE additionally requires capability_observed_on, the date the source ' +
+    'observed it, because an undated buying signal cannot be told apart from an old one. ' +
+    'A claim can carry any of opportunity_signal, structural_finding and capability_finding ' +
+    'together, and most claims carry none of the three. ' +
     'One submission per work item; a redelivery replays it rather than adding to it.',
   inputSchema: {
     type: 'object',
@@ -1219,6 +1265,45 @@ const submitClaimsTool: McpTool = {
                 'withholds the minimum owner capital, which is the correct outcome; a guess ' +
                 'would understate it.',
             },
+            /*
+             * The third declaration, and declared in the schema rather than
+             * only in the prose above — §33's defect, which this repository
+             * has already paid for once: `opportunity_signal` was named in a
+             * tool's description and left out of its schema, and
+             * `additionalProperties: false` meant a client honouring the
+             * schema dropped the one field that decided whether anything was
+             * ever created.
+             */
+            capability_finding: {
+              type: 'string',
+              enum: [...CAPABILITY_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes what ' +
+                'building a machine in some category takes, teaches, or runs into: ' +
+                CAPABILITY_FINDINGS.map(
+                  (one) => `${one} — ${CAPABILITY_FINDING_GUIDE[one]}`,
+                ).join('; ') +
+                '. Independent of the other two declarations — a claim may carry any of them.',
+            },
+            capability_subject: {
+              type: 'string',
+              description:
+                'Required whenever capability_finding is set: what the finding is about. For a ' +
+                'category, a capability or a bought-in component it is that thing\'s own name ' +
+                'as the source calls it, not a sentence about it. For the four kinds with a ' +
+                'closed set it is a value from that set: ' +
+                describeVocabularies() +
+                '.',
+            },
+            capability_observed_on: {
+              type: 'string',
+              description:
+                'Only for DEMAND_EVIDENCE, where it is required: the ISO-8601 date the source ' +
+                'observed what it reports. An undated buying signal cannot be told apart from ' +
+                'one somebody remembers from years ago, and this is the field that decides ' +
+                'whether a machine category counts as having established demand. Omitted for ' +
+                'every other kind.',
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
@@ -1303,6 +1388,15 @@ const submitClaimsTool: McpTool = {
          * answer can overwrite the other.
          */
         ...structuralOf(row, where),
+        /*
+         * And what it establishes about what building a machine takes.
+         *
+         * A third question about the same claim, and a claim can answer all
+         * three: a trade report on excavator shipments is a demand signal
+         * about a machine category *and* a fact about an industry. One column
+         * each rather than one shared column, so no answer overwrites another.
+         */
+        ...capabilityOf(row, where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),
