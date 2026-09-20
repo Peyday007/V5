@@ -201,8 +201,11 @@ async function advanceOnePacket(packet: RealizationPacket): Promise<PacketAdvanc
         'building closes one, so Brain routes it to a person whatever machinery matched it. ' +
         `Brain's own reading: ${gap.evidence}`,
       recommendation:
-        `Packet ${packet.id} stops here: its readiness check refuses while any requirement is ` +
-        'waiting on a person, so nothing downstream of this can be compiled.',
+        `Packet ${packet.id} stops here, on gap ${gap.id}: its readiness check refuses while ` +
+        'any requirement is waiting on a person, so nothing downstream of this can be ' +
+        'compiled. Answering here is the same transition `npm run capability -- packet answer ' +
+        '<gapId>` performs, so a person with a browser and a person with a terminal reach one ' +
+        'guard rather than two.',
       choices: [...CAPABILITY_AUTHORITY_CHOICES],
       urgency: 'BLOCKING',
       resumeKey: authorityResumeKey(gap.id),
