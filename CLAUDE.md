@@ -2672,6 +2672,52 @@ remote.
   slowness rather than fixing it: nobody yet knows what the judge pass costs,
   because nothing has waited long enough to see.
 
+- **That bound does not bind either, and the sentence it prints is now
+  confidently wrong. The correction is recorded rather than quietly applied.**
+  The deploy of 2026-09-20 (`d973175`) failed both verifications with the new
+  message, and the message says fifteen minutes. Neither wait was:
+  `brain_submit_audit` at **319.6s** pre-restart, `brain_submit_synthesis` at
+  **335.1s** after the restart, both `UND_ERR_HEADERS_TIMEOUT`.
+
+  `AbortSignal.timeout` bounds the whole request and **does not raise undici's
+  `headersTimeout`**, which is what actually ends a wait for a server that has
+  accepted the connection and not answered. **Measured here rather than
+  reasoned about** — a server that accepts and never replies, Node 22.22.2,
+  `AbortSignal.timeout(900_000)` — it throws after **300.9s**, which is §27's
+  own 300.8s default unchanged by the signal. Raising it needs a `dispatcher`,
+  which needs `undici` as a dependency, and this repository has none. So the
+  bound changed the *message* and nothing else.
+
+  **A diagnostic that states a wait nobody waited is worse than the
+  unattributable `fetch failed` it replaced**, because it sends the next reader
+  looking for a fifteen-minute operation that never existed — the
+  cries-wolf defect §27 already records, in the one place somebody goes when a
+  deploy has gone wrong. `describeTimeout` is pure and reports the **observed**
+  elapsed time, which is the only number in the sentence that was measured, and
+  separates the two limits `fetch` collapses: undici's header wait, which this
+  client cannot raise, and this client's own bound genuinely being reached.
+  An unrecognised cause claims nothing about which fired.
+
+  Two things this establishes and one it does not. It refines *always the judge
+  step* — the two failures are **two different methods**, so it is whichever
+  long call comes next rather than one stage. It settles that every reading in
+  this section from `fetch failed` onward is the 300s default rather than any
+  bound. And it still does **not** say how long the judge pass takes, because
+  the instrument that could answer that is a dispatcher rather than a signal,
+  and nothing here has one.
+
+  **What that run proved is separate from what it failed at.** `Deploy`
+  succeeded and the image was released; the restart itself succeeded for once,
+  and `/healthz` answered 200 in 0.42s from outside the runner. The commit was
+  proved live **behaviourally** rather than from the workflow's status: `npm run
+  capability -- failed` on the released image printed *"6 candidate(s) not
+  promoted — a partial reading, which is reopenable for exactly those"*, a
+  sentence that exists only in that commit, where its predecessor would have
+  printed *"No source has failed its reading."* A run that says
+  `release: success` and then fails its own scripted packet has proved the
+  deployment and failed a check, and reading it as "the deploy did not work"
+  would send somebody to redeploy a version that is already there.
+
   **And post-restart the pool diagnostic finally produced the number §27 asked
   for.** Not a seventh anecdote: `2/2 connection(s) in use, 0 idle, **380
   caller(s) waiting**, ceiling 2`. So the eighth occurrence says what the

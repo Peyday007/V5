@@ -81,13 +81,50 @@ function encodeHeaderValue(value: string): string {
 }
 
 /**
- * How long one request may take before this client says so.
+ * How long one request may take before this client says so — **when it is what
+ * ends the wait**, which measurement says is usually not the case.
  *
  * Matches `verify-hosted.ts`'s own bound deliberately: the two are the same
  * client talking to the same Brain, and a shorter one here would make the
- * release gate fail in two different places for one condition.
+ * release gate fail in two different places for one condition. What neither of
+ * them can do is outlast undici's 300.9s header wait, because `AbortSignal`
+ * does not raise it — see the request itself, which measures rather than
+ * assumes which limit fired.
  */
 const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
+
+/**
+ * What to say when nothing answered, from what was observed.
+ *
+ * Pure, so the branch it draws is testable without a socket. It separates the
+ * two limits `fetch` collapses, because their remedies are opposite and the
+ * thrown error names neither: `UND_ERR_HEADERS_TIMEOUT` is undici's own
+ * header wait, which `signal` does not raise, and an abort is this client's
+ * bound actually being reached. The elapsed time is always reported, because
+ * it is the only number in the sentence that was measured.
+ */
+export function describeTimeout(
+  method: string,
+  params: Record<string, unknown>,
+  elapsedMs: number,
+  error: unknown,
+  cause: string | undefined,
+): string {
+  const named = typeof params['name'] === 'string' ? ` (${params['name']})` : '';
+  const waited = `${(elapsedMs / 1000).toFixed(1)}s`;
+  const message = error instanceof Error ? error.message : String(error);
+  const limit =
+    cause === 'UND_ERR_HEADERS_TIMEOUT'
+      ? " undici's own header wait ended it, which this client's bound does not raise, so " +
+        `the ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s limit below it was never reached.`
+      : cause === 'TimeoutError' || message.includes('timed out')
+        ? ` This client's own ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s limit ended it.`
+        : '';
+  return (
+    `${method}${named} did not answer; nothing answered it after ${waited} ` +
+    `(${message}${cause ? `, ${cause}` : ''}).${limit} The request was not refused.`
+  );
+}
 
 export class ModernMcpClient {
   private readonly options: ModernClientOptions;
@@ -151,27 +188,40 @@ export class ModernMcpClient {
     }
 
     /*
-     * An explicit bound with a named failure — and the reason it is *here*.
+     * An explicit bound with a named failure — **and the bound does not bind.**
      *
-     * `verify-hosted.ts`'s own `call()` grew exactly this after six deploys
-     * died at the judge audit step, and its comment is right about the
-     * mechanism: no `signal` means Node's default, measured at 300.8 seconds,
-     * thrown as a bare `fetch failed`. What that change could not do is reach
-     * the requests that actually time out. The audit roles are submitted
-     * through **this** client, not through that helper, so the bound never
-     * applied to them — and the run of 2026-09-20 failed at 5m22s with the
-     * same unattributable sentence, four seconds from two readings taken
-     * before the bound existed. A mechanism that does not reach the thing it
-     * exists for is not a mechanism, which is a sentence this repository has
-     * had to write more than once.
+     * The paragraph this replaces said fifteen minutes is where the next
+     * occurrence either finishes or fails naming the method and the wait. It
+     * failed naming the method. It did not wait fifteen minutes, and it said
+     * it had.
      *
-     * **It is not a fix for the slowness and must not be read as one.** The
-     * judge pass takes longer than five minutes and nobody yet knows how much
-     * longer, because nothing has ever waited long enough to find out. Fifteen
-     * minutes is where the next occurrence either finishes — and the
-     * timestamps say what it costs — or fails naming the method and the wait.
+     * `AbortSignal.timeout` bounds the *whole* request and does not raise
+     * undici's `headersTimeout`, which is what actually ends a wait for a
+     * server that has accepted the connection and not answered. Measured here
+     * rather than recalled — a server that accepts and never replies, Node
+     * 22.22.2, `AbortSignal.timeout(900_000)` — it throws after **300.9s**
+     * with `UND_ERR_HEADERS_TIMEOUT`, which is §27's 300.8s default unchanged
+     * by the signal. Raising it needs a `dispatcher`, which needs `undici` as
+     * a dependency, and this repository has none.
+     *
+     * So the deploy of 2026-09-20 failed twice, and both readings are the
+     * default rather than the bound: `brain_submit_audit` at **319.6s**
+     * pre-restart, `brain_submit_synthesis` at **335.1s** after it. Two
+     * different methods, which also refines §27's "always the judge step" —
+     * it is whichever long call comes next.
+     *
+     * **A message that states a wait nobody waited is worse than the
+     * unattributable `fetch failed` it replaced**, because it sends the next
+     * reader looking for a fifteen-minute operation. So the sentence reports
+     * the **observed** elapsed time, which is a measurement, and names the
+     * limit that actually applied when undici's is the one that fired.
+     *
+     * **None of this is a fix for the slowness and it must not be read as
+     * one.** How long the judge pass really takes is still unknown, and the
+     * instrument that could answer it is a dispatcher rather than a signal.
      */
     let response: Response;
+    const startedAt = Date.now();
     try {
       response = await fetch(this.options.url, {
         method: 'POST',
@@ -181,13 +231,9 @@ export class ModernMcpClient {
       });
     } catch (error) {
       const cause = (error as { cause?: { code?: string } }).cause?.code;
-      throw new Error(
-        `${method}${typeof params['name'] === 'string' ? ` (${params['name']})` : ''} ` +
-          `did not answer within ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s ` +
-          `(${error instanceof Error ? error.message : String(error)}` +
-          `${cause ? `, ${cause}` : ''}). The request was not refused; nothing answered it.`,
-        { cause: error },
-      );
+      throw new Error(describeTimeout(method, params, Date.now() - startedAt, error, cause), {
+        cause: error,
+      });
     }
 
     const text = await response.text();
