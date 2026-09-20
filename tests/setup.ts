@@ -27,7 +27,7 @@ const PREFIX = 'brain-test-';
  * individual suite is a couple of minutes; an hour is far past any of them and
  * far short of leaving a run's worth of directories behind.
  */
-const STALE_AFTER_MS = 60 * 60 * 1000;
+export const STALE_AFTER_MS = 60 * 60 * 1000;
 
 function sweepStaleRoots(): void {
   const tmp = os.tmpdir();
