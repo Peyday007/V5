@@ -2728,7 +2728,17 @@ remote.
   cause** — five points across two days that also carried other changes is not
   a curve, the two fast ones are two days older than the three slow ones, and
   recording it as established would be the comfortable half-truth this section
-  exists to refuse. What *is* established is the spread and the crossing. The beat makes the harness
+  exists to refuse. What *is* established is the spread and the crossing.
+
+  **And the obvious mechanism is ruled out, which is the more useful half of
+  the lead.** The first place to look is `recordAuditEvidence`, since a judge
+  that searched the archive for passages would scale with exactly the number
+  that correlates. It does not: `pipeline.ts` passes it `auditedDocumentIds` —
+  the packet's own documents — and it returns early on an empty list. A hosted
+  verification packet files one document, so that pass is O(1) in the archive
+  however large the archive gets. Whatever is actually driving the growth is
+  somewhere else, and a reader starting from the correlation should not start
+  there. The beat makes the harness
   survive whichever end of that range it gets; it makes nothing faster, and
   whatever is actually driving the growth is still unmeasured. **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so
