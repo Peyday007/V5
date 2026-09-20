@@ -5799,6 +5799,41 @@ advance never stops Russell writing back a mission.
   the channel defaults to `SHELL`, which is §23's column pair — attribution is
   not authentication, and Brain cannot check a channel.
 
+  **It accepted `FAILED` alone, and a partial reading is the shape production
+  actually produced. The correction is recorded rather than quietly applied.**
+  `settleAudit` writes `PROMOTED` whenever *one* definition made it, and the
+  third production reading of the blueprint promoted eleven, was refused one by
+  the audit and had three rejected at validation — among them Research
+  Intelligence, section 5.1, for a quote the worker had not copied exactly. So
+  the source read `PROMOTED`, and every route back was shut: nothing dispatches
+  a promoted source, `registerSource` dedupes on the content hash so the same
+  bytes can never be registered again, and this refused it **by name**, saying
+  "one that succeeded has nothing to answer". **A partially successful reading
+  is not an answer for the parts it failed**, and the four sections it failed
+  had no way back for ever — §24's sentence arriving inside the very transition
+  written to answer it, which is the second time this module has had to be told
+  that a state nothing can leave is stuck rather than finished.
+
+  The widening is one condition and stays narrow: a `PROMOTED` source is
+  reopenable **only while something it produced is unpromoted**, because a
+  reading where every candidate was promoted is genuinely finished and
+  reopening it would spend two activations restating what is already canonical.
+  `REGISTERED` is already waiting for the tick, and `EXTRACTING` and `AUDITING`
+  hold a live bin this would strand. Re-reading cannot lose a faculty:
+  `promoteCandidate` updates the `faculties` row it finds by slug rather than
+  inserting a second one and nothing here deletes one, so a worse second
+  reading leaves every canonical definition exactly as it was and a better one
+  restates it.
+
+  **And the listing had to widen with it or the state would have been
+  unreachable in practice.** `failedSources` selected `FAILED`, and the refusal
+  it feeds is the only place an operator learns this state exists at all — so a
+  reader who cannot find a partially promoted source cannot reopen one.
+  `reopenableSources` carries the unpromoted count, so the caller prints the
+  reason rather than inferring it from the state. The two guards were run
+  against the un-widened version to watch the partial case fail before either
+  was trusted to pass.
+
 - **The contract fix worked, and the stage after it named an input no worker
   can obtain.** The reopened source was read again and **thirteen of fifteen
   definitions validated**, each anchored to a real block — so the connections
@@ -5848,21 +5883,35 @@ reports `ABSENT` and `UNTESTED`, and nothing here can move either. No change
 request has been compiled, because the Research Intelligence packet correctly
 refuses on its remaining person clause.
 
-**It has been deployed, a fired Routine has read the blueprint twice, and no
-faculty has been promoted from a production reading yet.** The first reading
-proposed fifteen definitions and Brain refused all fifteen, because its own
-contract named the three connection field names the validator rejects. The
-source was reopened, read again against the corrected contract, and **thirteen
-validated** — so the first correction is settled by production rather than by
-its tests. The audit then promoted none of the thirteen, because its units named
-an input no worker can fetch; that is the correction directly above, and it has
-not yet been read by a fired Routine.
+**Eleven faculties are canonical on production, promoted by a real audit on a
+fired Routine.** The paragraph this replaces said no faculty had been promoted
+from a production reading; that was true when it was written and is corrected
+here rather than edited there. It took three readings, and what each of them
+refused is the record:
+
+1. Fifteen definitions proposed, **all fifteen refused**, because Brain's own
+   extraction contract named the three connection field names `validateConnections`
+   rejects. The worker obeyed the instruction it was given.
+2. Reopened against the corrected contract, **thirteen validated**, each
+   anchored to a real block — and the audit promoted none of them, because
+   every unit's `input` was a bare `fcd_…` no tool on the MCP surface can
+   dereference. Three independent leases said exactly that and not one invented
+   a verdict.
+3. Reopened again with the definition carried whole in the unit's own input:
+   **11 promoted, 1 refused by the audit, 0 left unjudged, 67 relationships
+   recorded.** The "0 left unjudged" is what says the second correction worked.
+
+The one the audit refused is Shared Executive, `INCOMPLETE`, with a substantive
+critique of what the blueprint's §2 does and does not establish — a reviewer
+reading the definition it was handed, which is the thing the previous round
+could not do. Three were rejected at validation for the worker's own reasons,
+Research Intelligence among them for a quote not copied exactly.
 
 Every stage of this has been Brain refusing to record something it could not
 stand behind, and every worker involved reported the blocker precisely instead
-of inventing a result. **Saying a faculty is canonical on the strength of a
-development run would be the comfortable half-truth this file exists to
-refuse**, and it stays unsaid until an audit on production promotes one.
+of inventing a result. **The two earlier readings are still on the table with
+their refusals intact**, which is the reopen preserving what it replaced rather
+than the fix erasing the evidence that there was ever anything to fix.
 
 **Three of those sentences named one defect rather than three, and the
 correction is recorded rather than quietly applied.** *Nothing here can move

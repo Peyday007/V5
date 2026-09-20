@@ -19,12 +19,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { registerBlueprint } from '../server/services/capability/ingest.ts';
-import { reopenFailedSource, failedSources } from '../server/services/capability/reopen.ts';
+import { reopenFailedSource, reopenableSources } from '../server/services/capability/reopen.ts';
 import { advanceSource, getSource, listCandidates, putCandidate } from '../server/repos/faculties.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createBin } from '../server/repos/bins.ts';
 import { getSource as readSourceRow } from '../server/repos/faculties.ts';
-import { facultySlug } from '../server/domain/faculties.ts';
+import { facultySlug, type FacultyDefinition } from '../server/domain/faculties.ts';
 
 const BLUEPRINT = [
   '# Brain Intelligence Map',
@@ -36,6 +36,37 @@ const BLUEPRINT = [
   'It answers questions about the world from sources it can cite.',
   '',
 ].join('\n');
+
+/**
+ * One valid definition.
+ *
+ * The shape is incidental to every test in this file — what each one is about
+ * is the *state* a source is in — so a wall of empty arrays repeated per case
+ * would bury the one line that differs.
+ */
+function aDefinition(): FacultyDefinition {
+  return {
+    slug: facultySlug('Research Intelligence'),
+    ordinal: 1,
+    canonicalName: 'Research Intelligence',
+    purpose: 'p',
+    centralQuestion: null,
+    promisedPower: 'q',
+    responsibilities: [],
+    boundaries: [],
+    inputs: [],
+    outputs: [],
+    activationConditions: [],
+    reentryConditions: [],
+    dependencies: [],
+    infrastructure: [],
+    allowedProposals: [],
+    invariants: [],
+    evaluationRequirements: [],
+    failureModes: [],
+    connections: [],
+  };
+}
 
 let adminEmail = '';
 let sourceId = '';
@@ -71,27 +102,7 @@ async function failItWithRefusals(): Promise<string> {
   await putCandidate({
     sourceId,
     binId: bin.id,
-    definition: {
-      slug: facultySlug('Research Intelligence'),
-      ordinal: 1,
-      canonicalName: 'Research Intelligence',
-      purpose: 'p',
-      centralQuestion: null,
-      promisedPower: 'q',
-      responsibilities: [],
-      boundaries: [],
-      inputs: [],
-      outputs: [],
-      activationConditions: [],
-      reentryConditions: [],
-      dependencies: [],
-      infrastructure: [],
-      allowedProposals: [],
-      invariants: [],
-      evaluationRequirements: [],
-      failureModes: [],
-      connections: [],
-    },
+    definition: aDefinition(),
     evidenceQuote: 'It answers questions about the world from sources it can cite.',
     evidenceBlockId: null,
     evidencePage: null,
@@ -227,27 +238,7 @@ describe('reopening a failed source', () => {
       await putCandidate({
         sourceId,
         binId: null,
-        definition: {
-          slug: facultySlug('Research Intelligence'),
-          ordinal: 1,
-          canonicalName: 'Research Intelligence',
-          purpose: 'p',
-          centralQuestion: null,
-          promisedPower: 'q',
-          responsibilities: [],
-          boundaries: [],
-          inputs: [],
-          outputs: [],
-          activationConditions: [],
-          reentryConditions: [],
-          dependencies: [],
-          infrastructure: [],
-          allowedProposals: [],
-          invariants: [],
-          evaluationRequirements: [],
-          failureModes: [],
-          connections: [],
-        },
+        definition: aDefinition(),
         evidenceQuote: 'It answers questions about the world from sources it can cite.',
         evidenceBlockId: null,
         evidencePage: null,
@@ -260,6 +251,78 @@ describe('reopening a failed source', () => {
       // Gone from the row, still on the history.
       expect(payload.refusals[0]?.rejectionReason).toContain('kind, faculty, note');
     });
+
+  it('reopens a partial reading, because promoting eleven is no answer for the four it failed',
+    async () => {
+      /*
+       * The production shape, and the one the first version of this refused by
+       * name. The whole chain ran: eleven definitions promoted, one refused by
+       * the audit, three rejected at validation — among them Research
+       * Intelligence, for a quote the worker had not copied exactly.
+       * `settleAudit` writes PROMOTED whenever *one* definition made it, so the
+       * source read PROMOTED and every route back shut: nothing dispatches a
+       * promoted source, `registerSource` dedupes on the content hash, and
+       * reopen said "one that succeeded has nothing to answer".
+       */
+      await failItWithRefusals();
+      // One promoted beside the refused one: a partial reading, not a failure.
+      const promotedSlug = facultySlug('Simulation and Modeling Intelligence');
+      await putCandidate({
+        sourceId,
+        binId: null,
+        definition: {
+          ...aDefinition(),
+          slug: promotedSlug,
+          canonicalName: 'Simulation and Modeling Intelligence',
+          ordinal: 2,
+        },
+        evidenceQuote: 'It answers questions about the world from sources it can cite.',
+        evidenceBlockId: null,
+        evidencePage: null,
+        state: 'PROMOTED',
+        rejectionReason: null,
+      });
+      await advanceSource({ id: sourceId, from: 'FAILED', to: 'PROMOTED', detail: '1 promoted' });
+
+      /*
+       * And an operator has to be able to *find* it. The listing is the only
+       * place this state is learnable, so listing FAILED alone would have left
+       * the production case invisible: a blueprint reading PROMOTED, eleven
+       * faculties canonical, and four sections with no way back.
+       */
+      const listed = await reopenableSources();
+      expect(listed.map((one) => one.source.id)).toEqual([sourceId]);
+      expect(listed[0]?.unpromoted).toBe(1);
+
+      const outcome = await reopenFailedSource({
+        sourceId,
+        requestedByEmail: adminEmail,
+        reason: 'section 5.1 was rejected for a quote the worker mis-copied',
+      });
+
+      expect(outcome.reopened).toBe(true);
+      expect(outcome.source?.ingestState).toBe('REGISTERED');
+      // The promoted candidate is untouched by the reopening itself.
+      const after = await listCandidates({ sourceId });
+      expect(after.find((one) => one.slug === promotedSlug)?.state).toBe('PROMOTED');
+    });
+
+  it('refuses a promoted source with nothing left to win, and says why', async () => {
+    /*
+     * The other half, and what keeps the widening narrow: a reading where every
+     * candidate was promoted is finished. Reopening it would spend two
+     * activations restating what is already canonical.
+     */
+    await advanceSource({ id: sourceId, from: 'REGISTERED', to: 'PROMOTED', detail: 'all of them' });
+    const outcome = await reopenFailedSource({
+      sourceId,
+      requestedByEmail: adminEmail,
+      reason: 'there is nothing here to win',
+    });
+    expect(outcome.reopened).toBe(false);
+    expect(outcome.reason).toMatch(/nothing a second reading could win/);
+    expect((await getSource(sourceId))?.ingestState).toBe('PROMOTED');
+  });
 
   it('is idempotent by effect: the second call finds it already back', async () => {
     await failItWithRefusals();
@@ -287,15 +350,16 @@ describe('reopening a failed source', () => {
   });
 
   it('lists what an operator could reopen, and nothing else', async () => {
-    expect(await failedSources()).toHaveLength(0);
+    expect(await reopenableSources()).toHaveLength(0);
     await failItWithRefusals();
-    const failed = await failedSources();
-    expect(failed.map((one) => one.id)).toEqual([sourceId]);
+    const failed = await reopenableSources();
+    expect(failed.map((one) => one.source.id)).toEqual([sourceId]);
+    expect(failed[0]?.unpromoted).toBe(1);
     await reopenFailedSource({
       sourceId,
       requestedByEmail: adminEmail,
       reason: 'the contract was corrected',
     });
-    expect(await failedSources()).toHaveLength(0);
+    expect(await reopenableSources()).toHaveLength(0);
   });
 });

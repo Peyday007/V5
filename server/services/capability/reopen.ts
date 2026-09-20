@@ -110,23 +110,55 @@ export async function reopenFailedSource(input: ReopenRequest): Promise<ReopenOu
     };
   }
 
+  const everyCandidate = await listCandidates({ sourceId: before.id });
+  const unpromoted = everyCandidate.filter((one) => one.state !== 'PROMOTED');
+
   /*
-   * Only a failed source. Named rather than reported as the nearest available
-   * refusal, because the three other states send an operator three different
-   * ways: `REGISTERED` is already waiting for the tick, `EXTRACTING` and
-   * `AUDITING` have a live bin that reopening would strand, and `READY` has
-   * nothing wrong with it.
+   * A failed reading, or a partial one that left something a re-read could win.
+   *
+   * The first version accepted `FAILED` alone, and said of everything else that
+   * "one that succeeded has nothing to answer". That is true of a source whose
+   * every candidate was promoted and **false of a partial success**, which is
+   * what production produced the first time the whole chain ran: eleven
+   * definitions promoted, one refused by the audit, and three rejected at
+   * validation — among them Research Intelligence, section 5.1, for a quote the
+   * worker had not copied exactly. `settleAudit` writes `PROMOTED` whenever one
+   * definition made it, so the door shut on the other four permanently. Nothing
+   * dispatches a `PROMOTED` source, `registerSource` dedupes on the content hash
+   * so the same bytes can never be registered again, and this refused it by
+   * name.
+   *
+   * **A partially successful reading is not an answer for the parts it
+   * failed**, and a state nothing can move is stuck rather than finished —
+   * §24's sentence arriving inside the very transition written to answer it.
+   *
+   * It is still narrow. A `PROMOTED` source with nothing left unpromoted is
+   * refused, because there is genuinely nothing to win and a re-read would
+   * spend two activations restating what is already canonical. `REGISTERED` is
+   * already waiting for the tick, and `EXTRACTING` and `AUDITING` hold a live
+   * bin this would strand.
+   *
+   * Re-reading cannot lose a faculty. `promoteCandidate` updates the `faculties`
+   * row it finds by slug rather than inserting a second one, and nothing here
+   * deletes one — so a worse second reading leaves every canonical definition
+   * exactly as it was, and a better one restates it. What moves is the candidate
+   * row, which is what `putCandidate`'s upsert is for.
    */
-  if (before.ingestState !== 'FAILED') {
+  const partial = before.ingestState === 'PROMOTED' && unpromoted.length > 0;
+  if (before.ingestState !== 'FAILED' && !partial) {
     return {
       reopened: false,
       source: before,
       preserved: 0,
       reason:
-        `That source is ${before.ingestState}, not FAILED. This puts a failed reading back to ` +
-        'be read again and refuses everything else: a source already waiting will be dispatched ' +
-        'by the next tick, one mid-read holds a live bin that this would strand, and one that ' +
-        'succeeded has nothing to answer.',
+        `That source is ${before.ingestState}` +
+        (before.ingestState === 'PROMOTED'
+          ? ' and every candidate it produced was promoted, so there is nothing a second ' +
+            'reading could win. Reopening would spend two activations restating what is ' +
+            'already canonical.'
+          : ', which is neither a failed reading nor a partial one. A source already waiting ' +
+            'will be dispatched by the next tick, and one mid-read holds a live bin that this ' +
+            'would strand.'),
     };
   }
 
@@ -137,7 +169,7 @@ export async function reopenFailedSource(input: ReopenRequest): Promise<ReopenOu
    * first submission overwrites these rows. This is the only moment they are
    * both complete and still the reading that failed.
    */
-  const candidates = await listCandidates({ sourceId: before.id });
+  const candidates = everyCandidate;
   const refusals = candidates.map((candidate) => ({
     candidateId: candidate.id,
     slug: candidate.slug,
@@ -149,13 +181,14 @@ export async function reopenFailedSource(input: ReopenRequest): Promise<ReopenOu
 
   const channel: ReopenChannel = input.channel ?? 'SHELL';
   const detail =
-    `Reopened by ${person.email} via ${channel}: ${why} ` +
+    `Reopened by ${person.email} via ${channel} from ${before.ingestState}: ${why} ` +
     `(previous reading: bin ${before.binId ?? 'none'}, ${refusals.length} candidate(s), ` +
+    `${unpromoted.length} of them not promoted, ` +
     `detail: ${before.ingestDetail ?? 'none recorded'})`;
 
   const swapped = await advanceSource({
     id: before.id,
-    from: 'FAILED',
+    from: before.ingestState,
     to: 'REGISTERED',
     detail,
   });
@@ -167,8 +200,9 @@ export async function reopenFailedSource(input: ReopenRequest): Promise<ReopenOu
       source: now,
       preserved: 0,
       reason:
-        `Another reopening won: the source is ${now?.ingestState ?? 'gone'} rather than FAILED. ` +
-        'The effect is present either way, so there is nothing left to do.',
+        `Another reopening won: the source is ${now?.ingestState ?? 'gone'} rather than ` +
+        `${before.ingestState}. The effect is present either way, so there is nothing left ` +
+        'to do.',
     };
   }
 
@@ -183,8 +217,10 @@ export async function reopenFailedSource(input: ReopenRequest): Promise<ReopenOu
       kind: before.kind,
       version: before.version,
       contentHash: before.contentHash,
+      previousState: before.ingestState,
       previousBinId: before.binId,
       previousDetail: before.ingestDetail,
+      unpromotedCandidates: unpromoted.length,
       requestedById: person.id,
       requestedByEmail: person.email,
       authorityChannel: channel,
@@ -205,16 +241,36 @@ export async function reopenFailedSource(input: ReopenRequest): Promise<ReopenOu
   };
 }
 
-/** Every failed source, for an operator deciding whether to reopen one. */
-export async function failedSources(): Promise<CapabilitySource[]> {
+/**
+ * Every source a second reading could still win something from.
+ *
+ * Failed ones, and **partially promoted ones**, because a reader who cannot
+ * find the second kind cannot reopen it — and the refusal this function feeds
+ * is the only place an operator learns the state exists at all. Listing only
+ * `FAILED` would have left the production case invisible: a blueprint reading
+ * `PROMOTED`, eleven faculties canonical, and four sections with no way back.
+ *
+ * `unpromoted` is the count that decides it, so the caller prints the reason
+ * rather than inferring it from the state.
+ */
+export async function reopenableSources(): Promise<
+  { source: CapabilitySource; unpromoted: number }[]
+> {
   const rows = await getDb().all<{ id: string }>(
-    `SELECT id FROM capability_sources WHERE ingest_state = 'FAILED' ORDER BY updated_at DESC`,
+    `SELECT id FROM capability_sources
+      WHERE ingest_state IN ('FAILED', 'PROMOTED')
+      ORDER BY updated_at DESC`,
     [] as never[],
   );
-  const out: CapabilitySource[] = [];
+  const out: { source: CapabilitySource; unpromoted: number }[] = [];
   for (const row of rows) {
     const source = await getSource(String(row.id));
-    if (source) out.push(source);
+    if (!source) continue;
+    const candidates = await listCandidates({ sourceId: source.id });
+    const unpromoted = candidates.filter((one) => one.state !== 'PROMOTED').length;
+    // A promoted source with nothing left is finished, not reopenable.
+    if (source.ingestState === 'PROMOTED' && unpromoted === 0) continue;
+    out.push({ source, unpromoted });
   }
   return out;
 }

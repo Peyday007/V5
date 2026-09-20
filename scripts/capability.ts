@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { registerBlueprint, ensureArchitectureScope } from '../server/services/capability/ingest.ts';
-import { reopenFailedSource, failedSources } from '../server/services/capability/reopen.ts';
+import { reopenFailedSource, reopenableSources } from '../server/services/capability/reopen.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import {
   advanceSources,
@@ -78,8 +78,8 @@ const USAGE = `
   register <file> --title <t> [--amends <sourceId>]   register a blueprint or amendment
   sources                                             every registered source and its state
   advance                                             run one ingestion tick
-  reopen <sourceId> --admin <e> --reason <words>      read a FAILED source again
-  failed                                              every source whose reading failed
+  reopen <sourceId> --admin <e> --reason <words>      read a failed or partial source again
+  failed                                              every source a re-read could still win
   read <sourceId>                                     what Brain can see in one source
   candidates [<sourceId>]                             proposed definitions and their verdicts
   faculties                                           the canonical registry, all six dimensions
@@ -266,13 +266,19 @@ async function reopen(argv: string[]): Promise<void> {
 }
 
 async function failed(): Promise<void> {
-  const rows = await failedSources();
+  const rows = await reopenableSources();
   out('');
-  if (rows.length === 0) out('  No source has failed its reading.');
-  for (const row of rows) {
-    out(`  ${row.id}  ${row.kind} v${row.version}  ${row.title}`);
-    out(`      bin    ${row.binId ?? '-'}`);
-    for (const line of wrapLines(row.ingestDetail ?? 'no detail recorded')) out(`      ${line}`);
+  if (rows.length === 0) out('  Nothing a second reading could win anything from.');
+  for (const { source, unpromoted } of rows) {
+    out(`  ${source.id}  ${source.ingestState} ${source.kind} v${source.version}  ${source.title}`);
+    out(`      bin    ${source.binId ?? '-'}`);
+    out(
+      `      ${unpromoted} candidate(s) not promoted` +
+        (source.ingestState === 'PROMOTED'
+          ? ' — a partial reading, which is reopenable for exactly those.'
+          : ''),
+    );
+    for (const line of wrapLines(source.ingestDetail ?? 'no detail recorded')) out(`      ${line}`);
   }
   out('');
 }
