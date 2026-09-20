@@ -78,6 +78,7 @@ import { getBin, listBinUnitResults, putBinUnitResult } from '../server/repos/bi
 import { hashUnitValue } from '../server/services/bins/contracts.ts';
 import { evaluateContract } from '../server/services/bins/contracts.ts';
 import { capabilityAuditLineage } from '../server/services/capability/independence.ts';
+import { readableText } from '../server/services/documents/retrieval.ts';
 
 /* ------------------------------------------------------------------------- */
 /* The document                                                               */
@@ -236,6 +237,55 @@ async function finish(binId: string, state = 'COMPLETE'): Promise<void> {
     new Date().toISOString(),
     binId,
   ] as never[]);
+}
+
+/**
+ * A worker holding exactly what a fired auditor holds, and nothing else.
+ *
+ * Production's second reading left thirteen definitions unjudged because every
+ * audit unit's `input` was a bare `fcd_…` and no tool on the MCP surface
+ * dereferences a candidate. The guard above asserts the manifest now *carries*
+ * the definition — and carrying it and being enough to judge from are different
+ * claims. The production failure was about the second one.
+ *
+ * So this takes the unit's input and the document's extracted text as its only
+ * two arguments and closes over nothing: no candidate row, no fixture constant
+ * and no repository is reachable from inside it. That is what makes "only the
+ * manifest and the source-document surface" a property of the code rather than
+ * a promise about the test.
+ */
+function judgeFromManifestAlone(
+  unitInput: string,
+  documentText: string,
+): { verdict: string; reason: string } {
+  const carried = JSON.parse(unitInput) as {
+    canonicalName: string;
+    definition: { canonicalName: string; purpose: string; promisedPower: string };
+    evidence: { quote: string };
+  };
+  const flat = (value: string): string => value.replace(/\s+/g, ' ').trim();
+  const text = flat(documentText);
+
+  // Is the quote it was anchored to actually in the source it cites?
+  if (!text.includes(flat(carried.evidence.quote))) {
+    return {
+      verdict: 'OVERREACHES',
+      reason: `The anchoring quote for ${carried.canonicalName} is not in the source.`,
+    };
+  }
+  // Does the source name the thing the definition claims to define?
+  if (!text.includes(flat(carried.definition.canonicalName))) {
+    return {
+      verdict: 'INCOMPLETE',
+      reason: `The source never names ${carried.definition.canonicalName}.`,
+    };
+  }
+  return {
+    verdict: 'FAITHFUL',
+    reason: `The source states it, and the definition carries its purpose: ${flat(
+      carried.definition.purpose,
+    ).slice(0, 48)}`,
+  };
 }
 
 let fixture: TestProject;
@@ -941,6 +991,71 @@ describe('the capability kernel', () => {
       // candidate stage exists to prevent.
       expect(promoted).not.toContain('SIMULATION_AND_MODELING_INTELLIGENCE');
       expect(promoted).not.toContain('THE_SHARED_EXECUTIVE_THE_MIND_THAT_COORDINATES_THE_FACULTIES');
+    });
+
+    it('gives a fired auditor enough to judge with, from the manifest and the document alone', async () => {
+      /*
+       * The end-to-end shape of the production failure, which the guard on the
+       * manifest's *contents* cannot reach on its own.
+       *
+       * Three independent leases released the real audit bin saying they could
+       * not read the thirteen `fcd_…` ids their units named, and the bin retired
+       * at NEEDS_HUMAN with nothing judged. What that cost was not a missing
+       * field — it was that the assignment could not be carried out at all with
+       * the surface a fired worker actually has.
+       *
+       * So the verdicts below are produced by `judgeFromManifestAlone`, which
+       * closes over nothing and is handed exactly two things: the unit's own
+       * input, and the extracted text of the document the manifest names,
+       * fetched through `readableText` — the function `brain_get_document_text`
+       * itself calls. No candidate row and no fixture sentence is in scope, so
+       * a regression that put the bare id back cannot pass by reaching for one:
+       * `JSON.parse('fcd_…')` throws before any verdict exists.
+       */
+      const { sourceId } = await readyForAudit();
+      const source = await getSource(sourceId);
+      expect(source).not.toBeNull();
+
+      const auditBinId = (await dispatchAudit(sourceId)) as string;
+      const auditBin = await getBin(auditBinId);
+      const units = auditBin?.manifest.units ?? [];
+      expect(units).toHaveLength(4);
+
+      // The one reading surface a fired auditor holds. It resolves a *document*
+      // id, which is why an `fcd_` unit input was unanswerable.
+      const { pages } = await readableText(source?.documentId as string);
+      const documentText = pages
+        .flatMap((page) => page.blocks.map((block) => block.text))
+        .join('\n');
+      expect(documentText.length).toBeGreaterThan(0);
+
+      for (const unit of units) {
+        await submit(auditBinId, unit.key, judgeFromManifestAlone(unit.input, documentText), {
+          workerId: 'wkr_auditor',
+        });
+      }
+      await finish(auditBinId);
+
+      const settled = await settleAudit(sourceId);
+      // Nothing left unjudged is the whole difference from production's second
+      // reading, where all thirteen were.
+      expect(settled?.unjudged).toEqual([]);
+      expect(settled?.promoted).toBe(4);
+      expect(settled?.refused).toBe(0);
+
+      // And the verdicts landed on the right candidates, which is the unit key
+      // doing its job: `auditUnitKey` is read by the dispatcher and the settler
+      // both, so a correlation that drifted would show up here as a promotion
+      // under the wrong slug.
+      const promoted = (await listFaculties()).map((one) => one.slug).sort();
+      expect(promoted).toEqual(
+        [
+          'INTENT_AND_CONTEXT_INTELLIGENCE',
+          'RESEARCH_INTELLIGENCE',
+          'SIMULATION_AND_MODELING_INTELLIGENCE',
+          'THE_SHARED_EXECUTIVE_THE_MIND_THAT_COORDINATES_THE_FACULTIES',
+        ].sort(),
+      );
     });
 
     it('refuses a verdict that is not one of the three', async () => {
