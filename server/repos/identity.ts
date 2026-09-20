@@ -82,8 +82,11 @@ function mapUser(row: UserRow): User {
 function mapWorker(row: WorkerRow): Worker {
   return {
     id: row.id,
+    label: row.label,
     name: row.name,
     displayName: row.display_name,
+    ownerUserId: row.owner_user_id,
+    ownerEvidence: row.owner_evidence,
     workerType: row.worker_type,
     description: row.description,
     status: row.status as WorkerStatus,
@@ -558,29 +561,72 @@ export interface CreateWorkerInput {
   createdById: string;
 }
 
+/**
+ * The next neutral label, and why it is a retry loop rather than a MAX.
+ *
+ * `label` carries a UNIQUE index, so two concurrent creations that both read
+ * the same maximum produce one winner and one constraint violation — the
+ * arbiter is the database, exactly as §20 requires of every reservation in this
+ * codebase. The loser simply reads again and takes the next one. Bounded,
+ * because the alternative to a bound is a spin.
+ */
+const MAX_LABEL_ATTEMPTS = 25;
+
+function labelOrdinal(label: string | null): number {
+  if (!label) return 0;
+  const match = /^worker-(\d+)$/.exec(label);
+  return match ? Number(match[1]) : 0;
+}
+
+async function nextWorkerLabel(): Promise<string> {
+  const rows = await getDb().all<{ label: string | null }>('SELECT label FROM workers');
+  const highest = rows.reduce((max, row) => Math.max(max, labelOrdinal(row.label)), 0);
+  return `worker-${String(highest + 1).padStart(2, '0')}`;
+}
+
 export async function createWorker(input: CreateWorkerInput): Promise<Worker> {
   const id = newId('wkr');
   const at = nowIso();
   const name = normalizeWorkerName(input.name);
-  await getDb().run(
-    `INSERT INTO workers (id, name, display_name, worker_type, description, status,
-                          disabled_at, created_by_type, created_by_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'ACTIVE', NULL, ?, ?, ?, ?)`,
-    [
-      id,
-      name,
-      (input.displayName ?? input.name).trim(),
-      input.workerType ?? 'GENERIC',
-      input.description ?? null,
-      input.createdByType,
-      input.createdById,
-      at,
-      at,
-    ],
-  );
-  const created = await getWorker(id);
-  if (!created) throw new Error('The worker row disappeared immediately after being written.');
-  return created;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < MAX_LABEL_ATTEMPTS; attempt += 1) {
+    const label = await nextWorkerLabel();
+    try {
+      await getDb().run(
+        `INSERT INTO workers (id, label, name, display_name, worker_type, description, status,
+                              disabled_at, created_by_type, created_by_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', NULL, ?, ?, ?, ?)`,
+        [
+          id,
+          label,
+          name,
+          (input.displayName ?? input.name).trim(),
+          input.workerType ?? 'GENERIC',
+          input.description ?? null,
+          input.createdByType,
+          input.createdById,
+          at,
+          at,
+        ],
+      );
+      const created = await getWorker(id);
+      if (!created) throw new Error('The worker row disappeared immediately after being written.');
+      return created;
+    } catch (error) {
+      // A collision on `name` is the caller's problem and must surface; a
+      // collision on `label` is this loop's to resolve. Distinguished by asking
+      // the database rather than by parsing a driver's message, because the two
+      // backends word it differently.
+      const taken = await getDb().get<{ id: string }>('SELECT id FROM workers WHERE label = ?', [
+        label,
+      ]);
+      if (!taken) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Could not assign a neutral worker label after repeated collisions.');
 }
 
 export async function getWorker(id: string): Promise<Worker | null> {

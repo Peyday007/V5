@@ -130,6 +130,19 @@ export function isSecureRequest(req: Request): boolean {
 }
 
 /**
+ * What a worker is called, everywhere a caller can see.
+ *
+ * One function, so the answer cannot differ between two readers — and so the
+ * fallback to the legacy handle exists in exactly one place, for a row written
+ * before migration 074 that somehow escaped its backfill. It is a display
+ * decision and never an authorization one: nothing in this codebase branches on
+ * what a worker is called.
+ */
+export function workerIdentity(worker: { label: string | null; name: string }): string {
+  return worker.label ?? worker.name;
+}
+
+/**
  * A credential in a query string is refused, not accepted.
  *
  * Query strings are logged by proxies, kept in browser history and sent onward
@@ -248,8 +261,12 @@ async function authenticateWorker(presented: string, _req: Request): Promise<Aut
     principal: {
       type: 'WORKER',
       id: worker.id,
-      handle: worker.name,
-      displayName: worker.displayName,
+      // The neutral label, never the legacy handle. `brain_whoami` answers with
+      // this, so a worker that checks in says `worker-03` rather than somebody's
+      // first name — which readers took to be a statement about whose account
+      // had run the session, and never was. See migration 074.
+      handle: workerIdentity(worker),
+      displayName: workerIdentity(worker),
       isBrainAdmin: false,
       mustChangePassword: false,
       credentialId: credential.id,
@@ -292,8 +309,12 @@ async function authenticateOAuth(presented: string): Promise<AuthOutcome> {
     principal: {
       type: 'WORKER',
       id: worker.id,
-      handle: worker.name,
-      displayName: worker.displayName,
+      // The neutral label, never the legacy handle. `brain_whoami` answers with
+      // this, so a worker that checks in says `worker-03` rather than somebody's
+      // first name — which readers took to be a statement about whose account
+      // had run the session, and never was. See migration 074.
+      handle: workerIdentity(worker),
+      displayName: workerIdentity(worker),
       isBrainAdmin: false,
       mustChangePassword: false,
       // The token row, so an audit line points at the grant that can be revoked.

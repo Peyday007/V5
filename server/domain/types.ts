@@ -3472,6 +3472,9 @@ export interface WorkerRoutingRow {
 
 export interface WorkerRow {
   id: string;
+  label: string | null;
+  owner_user_id: string | null;
+  owner_evidence: string | null;
   name: string;
   display_name: string;
   worker_type: string;
@@ -3648,8 +3651,35 @@ export interface User {
 
 export interface Worker {
   id: string;
+  /**
+   * The neutral operational identity — `worker-01`, `worker-02`, and so on.
+   *
+   * Server-assigned, stable, unique, and opaque about people. This is the only
+   * worker identifier any surface prints and the value `Principal.handle`
+   * carries, because a label that reads like a person's name is read as a claim
+   * about whose account ran a session and never was one. See migration 074.
+   *
+   * Nullable in the type only for a row written before labels existed; the
+   * migration backfilled every one, and `createWorker` assigns one.
+   */
+  label: string | null;
+  /**
+   * The legacy operator handle. A lookup key and nothing else.
+   *
+   * Two modules resolve a worker by it — connected sites and capability readers
+   * — so it is kept rather than rewritten. It authorizes nothing, attributes
+   * nothing, and must never be printed as an identity.
+   */
   name: string;
   displayName: string;
+  /**
+   * Whose capacity this is, where Brain can actually prove it, and null
+   * otherwise. Filled only from the approver on an authorization code or from a
+   * connection a person completed themselves; never inferred from a name.
+   */
+  ownerUserId: string | null;
+  /** How `ownerUserId` was established, so a reader can judge it. */
+  ownerEvidence: string | null;
   workerType: string;
   description: string | null;
   status: WorkerStatus;

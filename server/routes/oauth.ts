@@ -64,6 +64,7 @@ import {
 import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
 import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
+import { workerIdentity } from '../services/identity/authenticate.ts';
 
 export const OAUTH_BASE = '/oauth';
 
@@ -398,7 +399,7 @@ export function oauthRouter(): Router {
         page(
           'Invitation accepted',
           card(`<h1>You are ready to connect</h1>
-           <p class="sub">This browser can now connect <strong>${esc(worker.displayName)}</strong>,
+           <p class="sub">This browser can now connect <strong>${esc(workerIdentity(worker))}</strong>,
              and nothing else. Leave this tab open and go back to Claude.</p>
            <div class="grant">
              <dt>Next</dt>
@@ -956,11 +957,11 @@ function invitedConsentPage(
 ): string {
   return page(
     'Connect',
-    card(`<h1>Connect ${esc(worker.displayName)}</h1>
+    card(`<h1>Connect ${esc(workerIdentity(worker))}</h1>
      <p class="sub"><strong>${esc(clientName)}</strong> is asking to act as this worker. It will get
        that worker's access — nothing more, and nothing of yours.</p>
      <div class="grant">
-       <dt>Worker</dt><dd><code>${esc(worker.name)}</code></dd>
+       <dt>Worker</dt><dd><code>${esc(workerIdentity(worker))}</code></dd>
        <dt>You are</dt>
        <dd>connecting on an invitation. No Brain account is created for you, and you are not signing
          in to anything.</dd>
@@ -1022,10 +1023,16 @@ async function consentPage(
   const options = described
     .map(
       ({ worker, projects }) =>
+        // Named by its neutral identity and by what it reaches, which is the
+        // honest basis for choosing one. A worker called after a person reads
+        // as a statement about whose capacity it is, and on *this* screen that
+        // is not a cosmetic problem: this is where somebody decides which
+        // identity a connector will authenticate as, and §27 records what it
+        // costs to choose an existing one by mistake.
         `<option value="${esc(worker.id)}"${worker.id === heldInvitationFor?.id ? ' selected' : ''}>${esc(
-          worker.displayName,
-        )} — ${esc(worker.name)}${
-          projects.length === 0 ? ' (no project yet)' : ` (${esc(projects.map((p) => p.name).join(', '))})`
+          workerIdentity(worker),
+        )}${
+          projects.length === 0 ? ' — no project yet' : ` — ${esc(projects.map((p) => p.name).join(', '))}`
         }</option>`,
     )
     .join('');
@@ -1034,7 +1041,7 @@ async function consentPage(
   // is the question this screen was quietly failing to answer.
   const invitationNote = heldInvitationFor
     ? `<div class="grant"><dt>Invitation</dt><dd>This browser holds an invitation for
-       <code>${esc(heldInvitationFor.name)}</code>, which is chosen below. You are a Brain
+       <code>${esc(workerIdentity(heldInvitationFor))}</code>, which is chosen below. You are a Brain
        administrator, so you may connect any worker here and the invitation is not used.</dd></div>`
     : '';
 
@@ -1042,7 +1049,7 @@ async function consentPage(
     .filter(({ projects }) => projects.length > 0)
     .map(
       ({ worker, projects }) =>
-        `<dt>${esc(worker.name)}</dt><dd>${projects
+        `<dt>${esc(workerIdentity(worker))}</dt><dd>${projects
           .map((p) => `${esc(p.name)} — <code>${esc(p.scopes.join(' '))}</code>`)
           .join('<br>')}</dd>`,
     )
