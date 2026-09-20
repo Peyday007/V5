@@ -50,7 +50,12 @@ import {
   settleAudit,
   settleExtraction,
 } from '../server/services/capability/extraction.ts';
-import { DEFINITION_KEYS, LIST_FIELDS } from '../server/domain/faculties.ts';
+import {
+  CONNECTION_KEYS,
+  DEFINITION_KEYS,
+  FACULTY_RELATIONSHIPS,
+  LIST_FIELDS,
+} from '../server/domain/faculties.ts';
 import { scanSections, sectionUnitKey } from '../server/services/capability/sections.ts';
 import {
   getFacultyBySlug,
@@ -490,6 +495,75 @@ describe('the capability kernel', () => {
       // candidate rather than being dropped.
       expect(outputs).toMatch(/no others/);
       expect(outputs).toMatch(/empty array/);
+
+      /*
+       * The nested shape, which this test did not reach and which is what
+       * actually broke.
+       *
+       * `connections` is in `DEFINITION_KEYS`, so the loop above passed on the
+       * word while the shape *inside* it was hand-written prose naming "kind",
+       * "faculty" and an optional "note" — three names `validateConnections`
+       * refuses. A fired Routine obeyed the contract, all fifteen candidates
+       * were rejected for obeying it, and the blueprint went to FAILED. The
+       * guard was one level too shallow: it proved the top level and stopped at
+       * the nesting.
+       */
+      for (const key of CONNECTION_KEYS) expect(outputs, key).toContain(key);
+      for (const rel of FACULTY_RELATIONSHIPS) expect(outputs, rel).toContain(rel);
+
+      /*
+       * And generically, so the next field group cannot drift either: every
+       * quoted identifier the outputs name must be a key the validator accepts.
+       * This is what fails on "kind", "faculty" and "note" without anybody
+       * having to remember they were the wrong three.
+       */
+      // The two envelope keys are named rather than the check loosened: they are
+      // a real part of the contract — a unit result is `{definition, quote}` —
+      // and a guard that allowed any unrecognised word would have allowed the
+      // three that broke this.
+      const envelope = ['definition', 'quote'];
+      const accepted = new Set<string>([...DEFINITION_KEYS, ...CONNECTION_KEYS, ...envelope]);
+      const quoted = [...outputs.matchAll(/"([A-Za-z][A-Za-z0-9]*)"/g)].map((m) => m[1] as string);
+      expect(quoted.length).toBeGreaterThan(4);
+      for (const name of quoted) {
+        expect(accepted.has(name), `the contract names "${name}", which the validator refuses`)
+          .toBe(true);
+      }
+    });
+
+    it('states a connection shape the validator actually accepts', async () => {
+      /*
+       * The strongest form of the guard above, and the one that would have
+       * caught this without anybody reading prose: build a definition out of
+       * exactly what the contract says a connection carries, and hand it to the
+       * thing that judges it. String matching proves the words are present;
+       * this proves the two agree.
+       */
+      const { sourceId } = await registerFixture();
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      const bin = await getBin(binId);
+      const outputs = (bin?.manifest.outputs ?? []).join('\n');
+
+      const connection: Record<string, unknown> = { relationship: FACULTY_RELATIONSHIPS[0] };
+      // Exactly one endpoint, which the contract has to say and did not.
+      expect(outputs).toContain('toFacultySlug');
+      expect(outputs).toContain('toComponent');
+      connection['toComponent'] = 'services/dispatch/loop.ts';
+      connection['rationale'] = 'The source states this faculty is activated by the tick.';
+
+      const definition = validateFacultyDefinition({
+        canonicalName: 'Research Intelligence',
+        purpose: 'p',
+        promisedPower: 'q',
+        centralQuestion: null,
+        ordinal: 1,
+        ...Object.fromEntries(LIST_FIELDS.map((field) => [field, []])),
+        connections: [connection],
+      });
+
+      expect(definition.connections).toHaveLength(1);
+      expect(definition.connections[0]?.relationship).toBe(FACULTY_RELATIONSHIPS[0]);
+      expect(definition.connections[0]?.toComponent).toBe('services/dispatch/loop.ts');
     });
 
     it('is handed out once, however many ticks read it', async () => {
