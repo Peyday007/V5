@@ -355,6 +355,26 @@ export const EVENT_TYPES = [
   'CAPABILITY_SOURCE_READ',
 
   /**
+   * A source that failed its reading was put back to be read again.
+   *
+   * It exists because the first real production run needed it and there was
+   * nothing: `FAILED` was terminal, `registerSource` dedupes on the content
+   * hash so the same bytes could never be registered a second time, and
+   * `advanceSources` only ever dispatches a `REGISTERED` source. So a blueprint
+   * that failed *because Brain's own extraction contract named the wrong field
+   * names* could never be re-read after the contract was corrected — a state
+   * saying FAILED that nothing could answer, which is §24's rule at a new
+   * altitude and worse than the usual case, because the remedy did not exist.
+   *
+   * It carries every candidate's refusal verbatim, and that is the point rather
+   * than decoration: `putCandidate` is an upsert on `(source_id, slug)`, so the
+   * second reading overwrites the first one's rejection reasons in place. The
+   * evidence that the contract was wrong would otherwise be destroyed by the
+   * fix for it — §5, at the one table where re-reading is the normal case.
+   */
+  'CAPABILITY_SOURCE_REOPENED',
+
+  /**
    * One faculty definition became canonical.
    *
    * Carries the audit that let it across. Promoting moves exactly one of the

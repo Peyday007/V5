@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { registerBlueprint, ensureArchitectureScope } from '../server/services/capability/ingest.ts';
+import { reopenFailedSource, failedSources } from '../server/services/capability/reopen.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import {
   advanceSources,
@@ -72,6 +73,8 @@ const USAGE = `
   register <file> --title <t> [--amends <sourceId>]   register a blueprint or amendment
   sources                                             every registered source and its state
   advance                                             run one ingestion tick
+  reopen <sourceId> --admin <e> --reason <words>      read a FAILED source again
+  failed                                              every source whose reading failed
   read <sourceId>                                     what Brain can see in one source
   candidates [<sourceId>]                             proposed definitions and their verdicts
   faculties                                           the canonical registry, all six dimensions
@@ -122,6 +125,12 @@ async function main(): Promise<void> {
       break;
     case 'advance':
       await advance();
+      break;
+    case 'reopen':
+      await reopen(rest);
+      break;
+    case 'failed':
+      await failed();
       break;
     case 'read':
       await read(rest);
@@ -208,6 +217,61 @@ async function register(argv: string[]): Promise<void> {
     // A command that changed nothing must not print success.
     fail('These exact bytes were already registered, so nothing changed.');
   }
+}
+
+async function reopen(argv: string[]): Promise<void> {
+  const sourceId = argv[0];
+  const admin = flag(argv, 'admin');
+  const reason = flag(argv, 'reason');
+  if (!sourceId || sourceId.startsWith('--') || !admin || !reason) {
+    fail(
+      'Usage: reopen <sourceId> --admin <email> --reason "…"\n' +
+        '  Reopening spends an activation, so it names the administrator whose authority it ' +
+        'carries and says why. It refuses anything that is not FAILED.',
+    );
+  }
+  const outcome = await reopenFailedSource({
+    sourceId: sourceId as string,
+    requestedByEmail: admin as string,
+    reason: reason as string,
+    channel: 'SHELL',
+  });
+  out('');
+  out(`  ${outcome.reopened ? 'Reopened' : 'Not reopened'}  ${sourceId}`);
+  if (outcome.source) out(`  State            ${outcome.source.ingestState}`);
+  out(`  Refusals kept    ${outcome.preserved}`);
+  for (const line of wrapLines(outcome.reason)) out(`  ${line}`);
+  out('');
+  if (!outcome.reopened) fail('Nothing was reopened.');
+}
+
+async function failed(): Promise<void> {
+  const rows = await failedSources();
+  out('');
+  if (rows.length === 0) out('  No source has failed its reading.');
+  for (const row of rows) {
+    out(`  ${row.id}  ${row.kind} v${row.version}  ${row.title}`);
+    out(`      bin    ${row.binId ?? '-'}`);
+    for (const line of wrapLines(row.ingestDetail ?? 'no detail recorded')) out(`      ${line}`);
+  }
+  out('');
+}
+
+/** Wrap a recorded sentence so a terminal reader sees all of it. */
+function wrapLines(text: string, width = 92): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if (line.length === 0) line = word;
+    else if (line.length + 1 + word.length <= width) line += ` ${word}`;
+    else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line.length > 0) lines.push(line);
+  return lines;
 }
 
 async function sources(): Promise<void> {
