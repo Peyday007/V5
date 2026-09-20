@@ -46,6 +46,7 @@ import { MCP_PATHS, mcpRouter } from './mcp/endpoint.ts';
 import { OAUTH_BASE, oauthRouter, wellKnownRouter } from './routes/oauth.ts';
 import { authRouter } from './routes/auth.ts';
 import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
+import { breakGlassArmed } from './services/identity/passwordDoor.ts';
 import { writeProjectState } from './services/runtimeState.ts';
 import { recomputeProject } from './services/stateEngine.ts';
 import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
@@ -405,6 +406,21 @@ function logBanner(
   } else if (identity.bootstrapNote) {
     console.log('');
     console.log(`    Bootstrap administrator not created: ${identity.bootstrapNote}`);
+  }
+  /*
+   * An emergency switch that is on has to be loud.
+   *
+   * `BRAIN_BREAK_GLASS` re-opens the password door for every account, which is
+   * exactly right while somebody is recovering an account whose device is gone
+   * and exactly wrong for a minute longer than that. The banner names it so a
+   * deployment that was left armed says so every time it starts, rather than
+   * quietly keeping a second way in that nobody is looking at.
+   */
+  if (breakGlassArmed()) {
+    console.log('');
+    console.log('    BREAK-GLASS IS ARMED. Any account with a password can sign in with it,');
+    console.log('    including accounts that ordinarily sign in with a device. Remove');
+    console.log('    BRAIN_BREAK_GLASS as soon as the account it was set for is back.');
   }
   if (!identity.accounts) {
     console.log('');

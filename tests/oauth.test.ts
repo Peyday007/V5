@@ -546,12 +546,23 @@ describe('client registration', () => {
 });
 
 describe('the consent screen', () => {
-  it('asks an unauthenticated visitor to sign in to the Brain', async () => {
+  it('sends an unauthenticated visitor to sign in with their device, and asks for nothing', async () => {
     const { challenge } = pkce();
     const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`);
     const html = await response.text();
     expect(response.status).toBe(200);
-    expect(html).toContain('Sign in to the Brain');
+    expect(html).toContain('Sign in with your device');
+    /*
+     * And it collects nothing. This page used to carry an address and a
+     * password and post them to `/api/auth/login`, which was the one surface
+     * still offering a password as an ordinary way in — see
+     * `services/identity/passwordDoor.ts`. The operator is in a browser on this
+     * Brain's own origin, so the Brain is one tab away and **Continue** is this
+     * same request re-asked with its parameters intact.
+     */
+    expect(html).not.toContain('type="password"');
+    expect(html).not.toContain('name="email"');
+    expect(html).toContain('/oauth/authorize');
   });
 
   it('shows the signed-in administrator what access it is granting', async () => {

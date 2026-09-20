@@ -713,6 +713,64 @@ async function anonymousIsRefused(fixtures: Fixtures): Promise<void> {
   );
 }
 
+/**
+ * What an unauthenticated person is actually served.
+ *
+ * The rest of this script asks the API questions. This asks the **bundle**,
+ * because the defect it exists for was a screen: `SignIn.tsx` rendered an
+ * address and a password under the device button, and no API check could ever
+ * have seen it — the route it posted to went on working perfectly, which is
+ * exactly why it survived.
+ *
+ * Read from the served assets rather than from the repository, so what is
+ * asserted is what this deployment hands a browser rather than what the tree it
+ * was built from says. §33 records why that distinction earns its place here:
+ * the one change that reached every fixture in `tests/` and not this script was
+ * the one that failed in production with the whole suite green.
+ *
+ * It classifies rather than bans. A bundle may contain the word *password* —
+ * the recovery screen is in it, deliberately — so what is looked for is the
+ * sign-in screen's own removed words, which nothing else composes.
+ */
+async function signInSurfaceIsDeviceOnly(): Promise<void> {
+  console.log('\nThe sign-in screen, as it is served');
+
+  const index = await fetch(`${base}/`, { redirect: 'manual' });
+  const html = await index.text();
+  const sources = [...html.matchAll(/src="([^"]+\.js)"/g)].map((match) => match[1]!);
+  record(
+    'the page names a script to read',
+    sources.length > 0,
+    sources.length > 0 ? sources.join(', ') : 'no module script in the served page',
+  );
+
+  let bundle = '';
+  for (const source of sources) {
+    const asset = await fetch(new URL(source, base).toString(), { redirect: 'manual' });
+    if (asset.ok) bundle += await asset.text();
+  }
+  record('the script itself is served', bundle.length > 0, `${bundle.length} bytes`);
+  if (bundle.length === 0) return;
+
+  record(
+    'the sign-in screen offers a device',
+    bundle.includes('SIGN IN WITH YOUR DEVICE'),
+    bundle.includes('SIGN IN WITH YOUR DEVICE') ? 'present' : 'the one way in is missing',
+  );
+  for (const phrase of ['OR WITH A PASSWORD', 'WAITING FOR YOUR DEVICE']) {
+    const present = bundle.includes(phrase);
+    if (phrase === 'OR WITH A PASSWORD') {
+      record(
+        'the sign-in screen offers no password beside it',
+        !present,
+        present ? 'the password alternative is still being served' : 'absent',
+      );
+    } else {
+      record('the device button reports what it is waiting for', present, present ? '' : 'absent');
+    }
+  }
+}
+
 async function humanAuthentication(fixtures: Fixtures): Promise<string> {
   console.log('\nSigning in');
 
@@ -3752,6 +3810,7 @@ async function main(): Promise<void> {
     if (phase === 'check' || phase === 'both') await checkFactoryBeacon(phase === 'check');
 
     await anonymousIsRefused(fixtures);
+    await signInSurfaceIsDeviceOnly();
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await sharedCashBoundary(fixtures, cookie);

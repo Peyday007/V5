@@ -3468,6 +3468,8 @@ export interface UserSessionRow {
   last_seen_at: string | null;
   user_agent: string | null;
   created_ip: string | null;
+  /** The device this session was opened by; null for the break-glass door. */
+  passkey_id: string | null;
 }
 
 /**
