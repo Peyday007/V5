@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 074. See that file for why a capability
+-- The Postgres half of SQLite migration 075. See that file for why a capability
 -- a product teaches is not a capability we hold, why demand pulls manufacturing,
 -- why the ladder is discovered rather than declared, and why nothing derivable
 -- is stored.
