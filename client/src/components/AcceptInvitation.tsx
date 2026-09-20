@@ -35,7 +35,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Api, ApiError, type AcceptedInvitation, type InvitationPreview } from '../lib/api.ts';
-import { PASSKEY_UNSUPPORTED, Passkeys, passkeysAvailable } from '../lib/passkeys.ts';
+import { Passkeys } from '../lib/passkeys.ts';
 
 function describe(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -66,6 +66,8 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [displayName, setDisplayName] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
 
   const look = useCallback(() => {
     if (token.length === 0) {
@@ -99,15 +101,23 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
    * The account it makes holds **no credential at all**, so stopping at the
    * acceptance would leave somebody a member of a project they cannot sign in
    * to. The enrollment link comes back in the reply, is spent here, and is
-   * never stored: `Passkeys.enrol` ends with them signed in, which is why the
-   * screen after this offers to open the Brain rather than to sign in.
+   * never stored: it ends with them signed in, which is why the screen after
+   * this offers to open the Brain rather than to sign in.
    *
-   * A device that refuses is not a failed acceptance. The membership is
-   * granted and the link is still live, so the sentence says so and points at
-   * the link they already have rather than at a retry that would be refused.
+   * **It is spent on a PIN rather than on a device, and that is a correction
+   * rather than a preference.** This step used to call `Passkeys.enrol`, and
+   * the identical step on the sign-in screen is what locked this Brain's owner
+   * out: WebAuthn answers every refusal with one sentence, and a browser that
+   * refuses cannot be argued with. An acceptance whose last step can be refused
+   * with no alternative is one that leaves somebody holding a membership they
+   * cannot reach.
    */
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
+    if (preview?.accountNeeded && pin !== confirmPin) {
+      setError('Those two PINs are not the same.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -116,7 +126,7 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
         ...(preview?.accountNeeded ? { displayName } : {}),
       });
       if (outcome.enrollment) {
-        await Passkeys.enrol(outcome.enrollment.token, 'This device');
+        await Passkeys.enrolWithPin(outcome.enrollment.token, pin);
       }
       setAccepted(outcome);
     } catch (problem) {
@@ -215,13 +225,41 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
                   onChange={(event) => setDisplayName(event.target.value)}
                   placeholder={preview.invitedEmail}
                 />
+                <label className="signin__label" htmlFor="invite-pin">
+                  CHOOSE A SIX-DIGIT PIN
+                </label>
+                <input
+                  id="invite-pin"
+                  className="signin__input signin__input--pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="new-password"
+                  maxLength={6}
+                  value={pin}
+                  onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                />
+                <label className="signin__label" htmlFor="invite-pin-confirm">
+                  CONFIRM PIN
+                </label>
+                <input
+                  id="invite-pin-confirm"
+                  className="signin__input signin__input--pin"
+                  type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="new-password"
+                  maxLength={6}
+                  value={confirmPin}
+                  onChange={(event) =>
+                    setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 6))
+                  }
+                  required
+                />
                 <p className="signin__hint">
-                  {passkeysAvailable()
-                    ? 'Accepting creates your account and registers this device. Your device ' +
-                      'will ask you for your fingerprint, your face or your screen lock. ' +
-                      'There is no password to choose.'
-                    : PASSKEY_UNSUPPORTED}
-                </p>
+                  Accepting creates your account. Your PIN is what you sign in with — there is no
+                  password to choose and no device to register.                </p>
               </>
             ) : (
               <p className="signin__hint">

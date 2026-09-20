@@ -1828,6 +1828,38 @@ legend {
   border-color: var(--accent, #4c8dff);
 }
 
+/*
+ * The PIN box. Six digits read as six digits rather than as a word.
+ *
+ * Wide tracking and a monospace face so a person can see at a glance how many
+ * they have typed — which matters here in a way it does not for a password,
+ * because the field is exactly six long and a miscount is the most likely way
+ * to spend an attempt.
+ */
+.signin__input--pin {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 20px;
+  letter-spacing: 0.5em;
+  text-align: center;
+}
+
+/*
+ * "Not you?" — a control that looks like the sentence it sits in.
+ *
+ * A button rather than an anchor, because it navigates nowhere: it forgets a
+ * remembered name and shows the box again. An anchor would be a link a browser
+ * offers to open in a new tab, which does nothing.
+ */
+.signin__linkbutton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent, #4c8dff);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .signin__hint {
   margin: 12px 0 0;
   font-size: 12px;

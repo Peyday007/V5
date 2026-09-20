@@ -74,6 +74,9 @@ function mapUser(row: UserRow): User {
     disabled: row.disabled_at !== null,
     disabledAt: row.disabled_at,
     passwordUpdatedAt: row.password_updated_at,
+    // A timestamp, never a verifier: "does this account have a PIN" is a
+    // question several screens need and none of them needs the PIN.
+    pinUpdatedAt: row.pin_updated_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -317,6 +320,119 @@ export async function getPasswordVerifierByEmail(
   // verifier that could never match and telling the caller the account exists.
   if (!row || row.password_verifier === null) return null;
   return { user: mapUser(row), verifier: row.password_verifier };
+}
+
+/**
+ * Who a typed identity names, for the PIN door and for nothing else.
+ *
+ * An address, or a display name when it is **unambiguous**. Members enrolled
+ * with a link hold no address at all — that is the whole of what migration 062
+ * made possible — so an email-only lookup would have a PIN they could never
+ * present. Two people sharing a display name resolve to nobody rather than to
+ * whichever row sorted first, because signing somebody in as the wrong person
+ * is worse than refusing them both.
+ *
+ * It returns the verifier, so it is named like the password one and for the
+ * same reason: nothing may reach a verifier while looking for a user.
+ */
+export async function getPinCredentialByIdentity(
+  identity: string,
+): Promise<{ user: User; verifier: string | null } | null> {
+  const typed = identity.trim();
+  if (typed.length === 0) return null;
+
+  const byEmail = await getDb().get<UserRow>('SELECT * FROM users WHERE email = ?', [
+    normalizeEmail(typed),
+  ]);
+  const row =
+    byEmail ??
+    (await (async (): Promise<UserRow | null> => {
+      // Exactly one, or none. `LIMIT 2` rather than `LIMIT 1` is the whole
+      // check: it is how ambiguity is *seen* rather than silently resolved.
+      const named = await getDb().all<UserRow>(
+        'SELECT * FROM users WHERE display_name = ? ORDER BY id LIMIT 2',
+        [typed],
+      );
+      return named.length === 1 ? (named[0] ?? null) : null;
+    })());
+
+  if (!row) return null;
+  // The row comes back even with no PIN set, because the caller still has to
+  // spend the same time on it as it would on a real one — see
+  // `UNMATCHABLE_PIN_VERIFIER`. What it must not do is say which this was.
+  return { user: mapUser(row), verifier: row.pin_verifier };
+}
+
+export interface PinThrottleState {
+  failures: number;
+  lockedUntil: string | null;
+}
+
+export async function readPinThrottle(userId: string): Promise<PinThrottleState> {
+  const row = await getDb().get<UserRow>(
+    'SELECT pin_failed_count, pin_locked_until FROM users WHERE id = ?',
+    [userId],
+  );
+  return {
+    failures: Number(row?.pin_failed_count ?? 0),
+    lockedUntil: row?.pin_locked_until ?? null,
+  };
+}
+
+/** One more failure, and the cooldown that failure earns. Returns the new count. */
+export async function recordPinFailure(
+  userId: string,
+  cooldownFor: (failures: number) => number,
+): Promise<PinThrottleState> {
+  const current = await readPinThrottle(userId);
+  const failures = current.failures + 1;
+  const cooldownMs = cooldownFor(failures);
+  const lockedUntil =
+    cooldownMs > 0 ? new Date(Date.now() + cooldownMs).toISOString() : null;
+  await getDb().run(
+    'UPDATE users SET pin_failed_count = ?, pin_locked_until = ?, updated_at = ? WHERE id = ?',
+    [failures, lockedUntil, nowIso(), userId],
+  );
+  return { failures, lockedUntil };
+}
+
+/** Cleared by a success, and by setting a new PIN. Nothing else clears it. */
+export async function clearPinThrottle(userId: string): Promise<void> {
+  await getDb().run(
+    'UPDATE users SET pin_failed_count = 0, pin_locked_until = NULL, updated_at = ? WHERE id = ?',
+    [nowIso(), userId],
+  );
+}
+
+export interface SetPinOptions {
+  /** The session doing the setting stays; every other one this person holds ends. */
+  keepSessionId?: string | null;
+}
+
+/**
+ * Set or replace this account's PIN.
+ *
+ * Every other session ends, for `setUserPassword`'s reason: setting a PIN is
+ * what somebody does when they believe the old one may be in the wrong hands,
+ * and leaving the other sessions alive would defeat it. The throttle is
+ * cleared in the same statement, because a cooldown earned against a PIN that
+ * no longer exists is a punishment for a credential nobody holds.
+ */
+export async function setUserPin(
+  id: string,
+  verifier: string,
+  options: SetPinOptions = {},
+): Promise<User | null> {
+  const at = nowIso();
+  await getDb().run(
+    `UPDATE users
+        SET pin_algorithm = ?, pin_verifier = ?, pin_updated_at = ?,
+            pin_failed_count = 0, pin_locked_until = NULL, updated_at = ?
+      WHERE id = ?`,
+    ['scrypt', verifier, at, at, id],
+  );
+  await revokeSessionsForUser(id, options.keepSessionId ?? null);
+  return await getUser(id);
 }
 
 export async function listUsers(): Promise<User[]> {
