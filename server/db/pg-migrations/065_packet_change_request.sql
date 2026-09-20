@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- The Postgres half of SQLite migration 071. See that file for why the column
+-- The Postgres half of SQLite migration 074. See that file for why the column
 -- exists and why `campaign_id` is not it.
 -- ---------------------------------------------------------------------------
 

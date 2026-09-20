@@ -146,6 +146,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 
 export interface TickReport {
@@ -191,6 +192,25 @@ export interface TickReport {
     recovered: number;
     /** Set when the self-model was re-read because the last one had gone stale. */
     selfModelDrift: number | null;
+    /**
+     * What one pass over the live realization packets did.
+     *
+     * `advanceSources` stops at the registry: a blueprint becomes a canonical
+     * definition without anybody typing anything, and then everything after it
+     * — deriving the gaps, asking the world, moving the dimensions, compiling
+     * the contract — waited for an operator to run six commands in order. A
+     * mechanism whose only caller is somebody's memory is not a mechanism.
+     *
+     * Every transition it performs is the identical function the CLI calls, so
+     * the two cannot drift; what this owns is the ordering and where to stop.
+     */
+    packets: {
+      considered: number;
+      advanced: number;
+      questionsRaised: number;
+      changeRequests: string[];
+      failed: number;
+    };
   };
   /**
    * Ideas the project's own archive already answered, judged and parked without
@@ -442,6 +462,7 @@ const EMPTY: TickReport = {
     promoted: 0,
     recovered: 0,
     selfModelDrift: null,
+    packets: { considered: 0, advanced: 0, questionsRaised: 0, changeRequests: [], failed: 0 },
   },
   answeredByArchive: [],
   planning: [],
@@ -544,6 +565,7 @@ export async function tick(owner: string): Promise<TickReport> {
       promoted: 0,
       recovered: 0,
       selfModelDrift: null,
+      packets: { considered: 0, advanced: 0, questionsRaised: 0, changeRequests: [], failed: 0 },
     },
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
@@ -817,6 +839,37 @@ export async function tick(owner: string): Promise<TickReport> {
       report.capability.recovered = advanced.recovered;
     } catch {
       /* a kernel that could not advance is left exactly as it was */
+    }
+
+    /*
+     * And the packets the registry produced, one step each.
+     *
+     * Beside `advanceSources` because it is the rest of the same chain: that
+     * one turns a blueprint into a canonical definition, and this one turns a
+     * canonical definition into a change request somebody can approve. Before
+     * this existed the join between them was a person running
+     * `npm run capability` six times in the right order — so a packet whose
+     * authority gap was answered on Tuesday sat exactly where it was until
+     * somebody remembered.
+     *
+     * It approves nothing, spends nothing, and answers no question a person
+     * owns: an authority gap becomes a card on the Needs You surface that
+     * already exists, and the packet waits. Swallowed for `advanceSources`'
+     * reason — a reading about Brain is never a precondition of Brain.
+     */
+    try {
+      const packets = await advanceCapabilityPackets(cycle.maxEventsPerCycle);
+      report.capability.packets.considered = packets.considered;
+      report.capability.packets.advanced = packets.advances.length;
+      report.capability.packets.failed = packets.failed.length;
+      for (const advance of packets.advances) {
+        report.capability.packets.questionsRaised += advance.questionsRaised;
+        if (advance.changeRequestId) {
+          report.capability.packets.changeRequests.push(advance.changeRequestId);
+        }
+      }
+    } catch {
+      /* a packet that could not be walked is left exactly as it was */
     }
 
     /*
