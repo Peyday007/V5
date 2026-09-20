@@ -465,6 +465,40 @@ function asCount(value: string | number | null | undefined): number | null {
 }
 
 /**
+ * The half of the reading this function cannot take, said rather than implied.
+ *
+ * **`max_connections` is the database's ceiling and it is not necessarily the
+ * binding one.** A connection pooler in front of the database has a client
+ * limit of its own, that limit is lower, it is shared with every other client
+ * of the same pooler, and it is not readable from a session on the far side of
+ * it — `current_setting('max_connections')` answers about Postgres, which is
+ * exactly the thing that is not refusing.
+ *
+ * Measured in production on 2026-09-20. The banner read
+ * `pool ceiling 10 of 57 usable (max_connections 60, 3 reserved for
+ * superusers)` while the pooler refused an ordinary operator read outright:
+ *
+ *     (EMAXCONNSESSION) max clients reached in session mode
+ *     - max clients are limited to pool_size: 15
+ *
+ * So the number on the banner was **57** and the number that was binding was
+ * **15**, and it is shared: the app holds up to `BRAIN_DATABASE_POOL_SIZE`,
+ * and every `flyctl ssh console` operator script beside it opens its own pool
+ * of two. Four concurrent readings and a busy app exhaust it, which is what a
+ * hosted verification hanging for ninety-five minutes on one step looks like
+ * from the inside.
+ *
+ * This says so and reads nothing extra to do it. Sniffing the host for
+ * `pooler.` would be deriving a deployment fact from a name — §25's rule about
+ * prose, at a connection string — and it would still not produce the pooler's
+ * number. An unknown ceiling reads as unknown rather than as headroom.
+ */
+const POOLER_CAVEAT =
+  'A pooler in front of the database has its own, lower client limit that is not readable ' +
+  'from here, and it is shared with every other client of that pooler — so this is the ' +
+  'database\'s ceiling rather than necessarily the binding one.';
+
+/**
  * The sentence an operator needs, or the honest absence of one.
  *
  * Pure, so both dialects test every branch it draws — the same reason
@@ -481,21 +515,23 @@ export function describeConnectionHeadroom(
   if (maxConnections === null) {
     return (
       `pool ceiling ${poolCeiling}; the server would not report max_connections, so how much ` +
-      'headroom there is above that ceiling is unknown rather than large.'
+      `headroom there is above that ceiling is unknown rather than large. ${POOLER_CAVEAT}`
     );
   }
   const reserved = superuserReserved ?? 0;
   const usable = maxConnections - reserved;
   const used = backendsInUse === null ? 'unknown' : String(backendsInUse);
   const head =
-    `pool ceiling ${poolCeiling} of ${usable} usable (max_connections ${maxConnections}` +
+    `pool ceiling ${poolCeiling} of ${usable} usable at the database (max_connections ` +
+    `${maxConnections}` +
     `${superuserReserved === null ? '' : `, ${reserved} reserved for superusers`}), ` +
     `${used} backend(s) connected now`;
   if (poolCeiling >= usable) {
     return (
-      `${head}. The ceiling is at or above what the server will give out, so raising ` +
-      'BRAIN_DATABASE_POOL_SIZE would be refused connections rather than more of them.'
+      `${head}. The ceiling is at or above what the database will give out, so raising ` +
+      `BRAIN_DATABASE_POOL_SIZE would be refused connections rather than more of them. ` +
+      POOLER_CAVEAT
     );
   }
-  return `${head}. BRAIN_DATABASE_POOL_SIZE sets the ceiling.`;
+  return `${head}. BRAIN_DATABASE_POOL_SIZE sets the ceiling. ${POOLER_CAVEAT}`;
 }
