@@ -166,8 +166,12 @@ laborRouter.post(
 
     const layerRaw = requiredString(body['productionLayer'], 'productionLayer');
     if (!isProductionLayer(layerRaw)) {
-      // An unknown field refuses the whole thing rather than being coerced:
-      // `proposal.ts`' rule, at the column that decides who does the work.
+      // A value outside the closed set refuses the whole thing rather than
+      // being coerced — `proposal.ts`' rule, at the column that decides who
+      // does the work. It is a *value* rather than a field: no route in this
+      // repository refuses an unknown body key, and §24's field rule is about
+      // a model's proposal, where an invented field means the thing that
+      // produced it cannot be trusted about the rest either.
       throw badRequest(
         `"${layerRaw}" is not a kind of producer this map holds. The set is fixed in code: ` +
           `${PRODUCTION_LAYERS.join(', ')}.`,
