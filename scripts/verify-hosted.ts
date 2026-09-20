@@ -53,6 +53,7 @@ import { describePersistence, persistenceConfig } from '../server/config.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ModernMcpClient } from './mcpModernClient.ts';
+import { boundedRequest, type BoundedReply } from './boundedRequest.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listBins, terminateUnleasedBin } from '../server/repos/bins.ts';
 import {
@@ -237,45 +238,46 @@ async function call(
   if (init.origin) headers['origin'] = init.origin;
 
   /*
-   * An explicit bound with a named failure, because the default one is silent.
+   * An explicit bound with a named failure — and `fetch` could not give one.
    *
-   * This helper passed no `signal`, so every request carried Node's own
-   * default — measured at **300.8 seconds**, throwing `fetch failed` with
-   * cause `UND_ERR_HEADERS_TIMEOUT`. Six deploys have died at the judge audit
-   * step, two of them reporting exactly that at 5m18s and 5m23s, and the
-   * repository recorded the shape as a work item losing a five-minute lease.
-   * It is not: the lease is the server's and this is the client giving up, and
-   * an unattributable `fetch failed` is what let the two readings look alike
-   * for five runs.
+   * This helper grew `signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)` after
+   * six deploys died at the judge audit step, on a comment that named the
+   * mechanism correctly: no bound meant Node's own default, measured at
+   * **300.8 seconds**, thrown as `fetch failed` with cause
+   * `UND_ERR_HEADERS_TIMEOUT`. What that change could not do is *apply*. An
+   * `AbortSignal` and undici's `headersTimeout` are two different bounds, the
+   * second defaults to five minutes, and it is the one that fires — so run 274
+   * gave up 320 seconds after the adversarial pass while reporting, in words,
+   * that it had waited nine hundred.
    *
-   * **This is not a fix for the slowness and must not be read as one.** The
-   * judge pass takes longer than five minutes and nobody knows how much
-   * longer, because nothing has ever waited long enough to find out. The bound
-   * is set where the next occurrence either finishes — and the timestamps say
-   * what it costs — or fails naming the request and the wait, which is a
-   * measurement rather than a mystery. Raising a timeout past a real slowness
-   * is how a slow thing becomes a permanent one nobody looks at.
+   * A bound that does not reach the request it exists for is not a bound, and
+   * one that reports a wait it never performed is a false measurement on top.
+   * `boundedRequest` is `node:https`, where the only clock is this one.
+   *
+   * **This is still not a fix for the slowness and must not be read as one.**
+   * The judge pass takes longer than five minutes and nobody yet knows how
+   * much longer, because until now nothing had actually waited past five. The
+   * bound is set where the next occurrence either finishes — and the
+   * timestamps say what it costs — or fails naming the request and the wait it
+   * really performed.
    */
-  let response: Response;
+  let response: BoundedReply;
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await boundedRequest(`${base}${path}`, {
       method: init.method ?? 'GET',
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      redirect: 'manual',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
   } catch (error) {
-    const cause = (error as { cause?: { code?: string } }).cause?.code;
     throw new Error(
-      `${init.method ?? 'GET'} ${path} did not answer within ` +
-        `${Math.round(REQUEST_TIMEOUT_MS / 1000)}s ` +
-        `(${error instanceof Error ? error.message : String(error)}` +
-        `${cause ? `, ${cause}` : ''}). The request was not refused; nothing answered it.`,
+      `${init.method ?? 'GET'} ${path}: ` +
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        'The request was not refused; nothing answered it.',
       { cause: error },
     );
   }
-  const body = await response.text();
+  const body = response.body;
   let json: unknown = null;
   try {
     json = JSON.parse(body);
@@ -285,7 +287,7 @@ async function call(
   return {
     status: response.status,
     body,
-    cookie: response.headers.get('set-cookie'),
+    cookie: response.headers['set-cookie'] ?? null,
     json,
   };
 }
