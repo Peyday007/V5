@@ -50,7 +50,12 @@ import {
   settleAudit,
   settleExtraction,
 } from '../server/services/capability/extraction.ts';
-import { DEFINITION_KEYS, LIST_FIELDS } from '../server/domain/faculties.ts';
+import {
+  CONNECTION_KEYS,
+  DEFINITION_KEYS,
+  FACULTY_RELATIONSHIPS,
+  LIST_FIELDS,
+} from '../server/domain/faculties.ts';
 import { scanSections, sectionUnitKey } from '../server/services/capability/sections.ts';
 import {
   getFacultyBySlug,
@@ -490,6 +495,38 @@ describe('the capability kernel', () => {
       // candidate rather than being dropped.
       expect(outputs).toMatch(/no others/);
       expect(outputs).toMatch(/empty array/);
+
+      /*
+       * The nested set, which is the one that actually drifted.
+       *
+       * This test was written for exactly this failure mode and stopped one
+       * level short: it held the *top-level* keys against their constant and
+       * described a connection's in prose. The prose said `kind`, `faculty` and
+       * an optional `note`; `CONNECTION_KEYS` says `relationship`,
+       * `toFacultySlug`, `toComponent`, `rationale`. Not one field in common.
+       *
+       * In production a fired Cowork session read all fifteen sections of the
+       * real blueprint correctly, followed the instruction exactly, and had
+       * every definition refused whole — `A connection carried unknown
+       * field(s): kind, faculty, note.` — because an unknown field refuses the
+       * candidate rather than the field, which is the right rule meeting the
+       * wrong contract. §27 records the same defect at `brain_check_in`'s
+       * `session_ref` and §33 at `brain_submit_claims`' `opportunity_signal`;
+       * this is the third, and all three survived for one reason: each half was
+       * correct on its own and nothing held them against each other.
+       */
+      for (const key of CONNECTION_KEYS) expect(outputs, key).toContain(key);
+      for (const relationship of FACULTY_RELATIONSHIPS) {
+        expect(outputs, relationship).toContain(relationship);
+      }
+      // Exactly one endpoint, which is a rule a worker cannot guess from the
+      // field names alone.
+      expect(outputs).toMatch(/exactly one endpoint/i);
+      // And the three names that were never fields are gone, so a reader
+      // correcting this cannot leave the old sentence beside the new one.
+      for (const wrong of ['"kind"', '"faculty"', '"note"']) {
+        expect(outputs, wrong).not.toContain(wrong);
+      }
     });
 
     it('is handed out once, however many ticks read it', async () => {

@@ -60,8 +60,10 @@ import {
   type FacultyCandidate,
 } from '../../repos/faculties.ts';
 import {
+  CONNECTION_KEYS,
   coverageProblems,
   DEFINITION_KEYS,
+  FACULTY_RELATIONSHIPS,
   facultySlug,
   InvalidFacultyDefinition,
   LIST_FIELDS,
@@ -339,9 +341,28 @@ export async function dispatchExtraction(sourceId: string): Promise<string | nul
           'ignored if you send one.',
         `These are arrays of strings, each present even when the source gives it nothing, in ` +
           `which case send an empty array rather than omitting it: ${LIST_FIELDS.join(', ')}.`,
-        '"connections" is an array of objects, each with "kind" and "faculty" — the related ' +
-          'faculty by its canonical name as the source writes it — and an optional "note". ' +
-          'Send an empty array when the section states none.',
+        /*
+         * Interpolated rather than described, because the hand-written version
+         * of this sentence named `kind`, `faculty` and `note` — and
+         * `CONNECTION_KEYS` declares `relationship`, `toFacultySlug`,
+         * `toComponent` and `rationale`. Not one field in common. A worker that
+         * did exactly as instructed had all fifteen of its definitions refused
+         * whole, because an unknown field refuses the candidate rather than the
+         * field, which is the right rule meeting the wrong contract.
+         *
+         * §27 records the same defect at `brain_check_in`'s `session_ref` and
+         * §33 at `brain_submit_claims`' `opportunity_signal`. This is the third,
+         * and the reason all three survived is identical: the validator and the
+         * sentence describing it were each correct on their own, and nothing
+         * held them against each other.
+         */
+        `"connections" is an array of objects carrying exactly these fields: ` +
+          `${CONNECTION_KEYS.join(', ')}. "relationship" is one of ` +
+          `${FACULTY_RELATIONSHIPS.join(', ')}. Name exactly one endpoint — ` +
+          `"toFacultySlug" for another faculty in this document, or "toComponent" for ` +
+          `something outside it — never both and never neither. "rationale" is a required ` +
+          `non-empty string saying why the source says they are related. Any other field ` +
+          `refuses the whole definition. Send an empty array when the section states none.`,
       ],
       authorizedActions: [
         'reading the registered source document',

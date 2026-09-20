@@ -237,7 +237,17 @@ export const DEFINITION_KEYS: readonly string[] = [
   'connections',
 ];
 
-const CONNECTION_KEYS: readonly string[] = [
+/**
+ * The exact key set of one connection, exported because the instruction a
+ * worker is given has to be built from it rather than describe it.
+ *
+ * It described it, and the description named `kind`, `faculty` and `note` —
+ * three fields this list does not hold. A production worker followed the
+ * instruction exactly and every one of its fifteen definitions was refused
+ * whole, because an unknown field refuses the candidate rather than the field.
+ * The rule is right; the sentence was wrong; and nothing held the two together.
+ */
+export const CONNECTION_KEYS: readonly string[] = [
   'relationship',
   'toFacultySlug',
   'toComponent',

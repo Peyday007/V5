@@ -5702,6 +5702,44 @@ the person cannot use.
   question a person owns — asserted against missions, goals, orchestrations and
   approved change requests rather than stated in a comment.
 
+- **The instruction named three fields the validator has never had, and a
+  production worker did exactly as it was told.** The extraction bin's manifest
+  said a connection is an object *"each with `kind` and `faculty` … and an
+  optional `note`"*; `CONNECTION_KEYS` says `relationship`, `toFacultySlug`,
+  `toComponent`, `rationale`. **Not one field in common.** A fired Cowork
+  session read all fifteen sections of the real blueprint, derived every slug
+  correctly, followed the sentence it was given, and had every definition
+  refused whole — `A connection carried unknown field(s): kind, faculty, note.`
+  — so the source went `FAILED` with *"no candidate survived validation"*. The
+  rule is right: an unknown field refuses the **candidate** rather than the
+  field, because a worker that sent one has misunderstood what it was asked for.
+  What was wrong is the thing that asked.
+
+  §27 records this at `brain_check_in`'s `session_ref` and §33 at
+  `brain_submit_claims`' `opportunity_signal`. **This is the third, and all
+  three survived for one reason: each half was correct on its own and nothing
+  held them against each other.** The instruction is built from
+  `CONNECTION_KEYS` and `FACULTY_RELATIONSHIPS` now rather than describing them,
+  which is what `LIST_FIELDS` two lines above it already did — the hand-written
+  sentence was the only part of that manifest a constant did not compose.
+
+  **The test for this existed, was written for exactly this failure mode, and
+  stopped one level short.** *"names every field the validator requires, so a
+  worker is not guessing"* holds the manifest against `DEFINITION_KEYS` and
+  `LIST_FIELDS`, and its own comment gives the reason — *"the assertion is
+  against the validator's constants rather than against a copied list, because
+  a copied list is the thing that drifts."* The **nested** set was the copied
+  list. It is held against its constant too now, with the three names that were
+  never fields asserted **absent**, so a later correction cannot leave the old
+  sentence standing beside the new one.
+
+  **Nothing in fifteen suites could have caught it**, and that is the durable
+  part: every fixture builds a candidate from the *declared* shape, so the
+  validator and the instruction were each proved correct against themselves. It
+  took a real worker reading a real document through a fired Routine — which is
+  the whole argument for §16's separation between an engine passing its tests
+  and a job having actually run.
+
 **What is still not true, and is not rounded up.** No faculty is implemented:
 `realized.ts` can now say one is, from rows, and on this repository every
 packet still holds unread gaps. Nothing has been deployed — the hosted tool
