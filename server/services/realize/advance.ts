@@ -57,7 +57,7 @@
  */
 import { getFaculty } from '../../repos/faculties.ts';
 import { askHuman } from '../../repos/russellMissions.ts';
-import { ensureArchitectureScope } from '../capability/ingest.ts';
+import { ARCHITECTURE_LAYER, ensureArchitectureScope } from '../capability/ingest.ts';
 import { listLayers } from '../../repos/layers.ts';
 import { gapsAwaitingAPerson } from './authority.ts';
 import { handOff } from './handoff.ts';
@@ -232,10 +232,31 @@ async function advanceOnePacket(packet: RealizationPacket): Promise<PacketAdvanc
    * what it already answers — §13's default outcome and the cheapest one. What
    * survives becomes an idea, which spends nothing.
    */
+  /*
+   * The layer is chosen **by name**, never by position. `ARCHITECTURE_LAYER` is
+   * what `ensureArchitectureScope` creates, so it is the one this work files
+   * under; `layers[0]` is the same answer today and stops being the same answer
+   * the moment somebody adds a second layer to this project. This file already
+   * has three recorded instances of an ordering that was true by accident
+   * (`binForOrchestration`, `linkFiledWork`, `workerSessionForBin`), and a
+   * fourth is not worth saving two lines for.
+   *
+   * With no such layer the pass stops and says so rather than passing an empty
+   * id down: §30 records exactly this — a project with no layer can open work
+   * and launch nothing, for ever, with every row reading healthy.
+   */
+  const layers = await listLayers(scope.id);
+  const architectureLayer = layers.find((layer) => layer.name === ARCHITECTURE_LAYER);
+  if (!architectureLayer) {
+    advance.stoppedBecause =
+      `the architecture scope has no "${ARCHITECTURE_LAYER}" layer for the work to file under`;
+    return advance;
+  }
+
   const asked = await askTheWorld({
     packetId: packet.id,
     projectId: scope.id,
-    layerId: (await listLayers(scope.id))[0]?.id ?? '',
+    layerId: architectureLayer.id,
   });
   advance.asked = asked.asked.length;
 

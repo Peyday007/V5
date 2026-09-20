@@ -73,24 +73,91 @@ anywhere in a file as a write. Tightened to match the write itself, and asserted
 against both the write it exists for and the comment that produced the false
 positive.
 
-### The one Postgres failure, and why it is not this work's
+### The one Postgres failure: the cause, measured
 
 `connectContract.test.ts > the storage reading > takes at most one sample an
 hour however often it is read` **timed out at 30 000 ms**. Not an assertion — a
 timeout, in a suite this work does not touch.
 
-It is pre-existing, and that is established rather than assumed: a detached
+It is pre-existing, and that was established rather than assumed: a detached
 worktree at `origin/production` (`5db7866`), carrying none of these changes,
-fails the same test the same way on the same database, in 108 s. The worktree
+failed the same test the same way on the same database, in 108 s. The worktree
 was removed immediately, because §28 records a stray one holding the canonical
 branch as a third way that section's damage arrives.
 
-What is **not** established is the cause. The identical suite passed on this
-machine against Postgres earlier the same night, so something about the
-environment moved rather than the code — and naming it would be a guess. The
-test is left exactly as it is: it is somebody's gate, this work does not
-understand why it is slow, and relaxing a timeout to get a green line is
-weakening a control to satisfy the reader of a report.
+An earlier version of this section said the cause was **not established**, and
+that the identical suite had passed on the same machine earlier the same night
+so something about the environment had moved. Both halves were true. The
+correction is recorded here rather than edited there: the cause is now
+established, and the thing that moved was the test database.
+
+**The test harness leaked a Postgres schema per run, and the only test that
+measures the database's size is the one that noticed.**
+
+`tests/setup.ts` gives each run a fresh filesystem data root with
+`fs.mkdtempSync`, which is a *random* directory name by construction.
+`schemaForThisFile()` in `tests/helpers.ts` derives the Postgres schema from
+`path.basename(DATA_ROOT)` — so every run got a schema nothing would ever name
+again, and the `DROP SCHEMA IF EXISTS` at the top of the next run matched
+nothing. `tests/setup.ts` already carries the two-mechanism design for the
+filesystem side and says exactly why, in its own header:
+
+> Left alone that accumulates silently until the disk is full, and the failure
+> it produces then is a hundred unrelated tests failing on "No space left on
+> device", which looks like anything except a leak here.
+
+The Postgres side never got either mechanism. Measured on this machine:
+
+| Reading | Value |
+|---|---|
+| `brain_t_%` schemas in `brain_test` | **648** |
+| relations across them | **636 578** |
+| `pg_database_size(current_database())` | **7.6 GB** |
+| cluster data directory | 8.5 GB / 647 095 files |
+| checkpoint interval in `/var/tmp/brainpg.log` | every ~27 s, syncing 53 000+ files |
+
+`storageHealth.measure()` has a dialect branch, and this is the whole reason
+SQLite never saw it:
+
+```ts
+if (db.dialect === 'postgres') {
+  const rows = await db.all('SELECT pg_database_size(current_database()) AS bytes');
+```
+
+`pg_database_size` stats every file in the database. The test calls `measure()`
+three times to prove the hourly cache holds, so it paid that cost three times
+over 636 578 relations. **Nothing was slow about the code being tested; the
+database it was asked to measure had grown by a factor of the number of times
+the suite had ever been run.**
+
+The decisive experiment was run rather than reasoned: the same test, at the
+same commit, against the same cluster, on a **clean** database — **1 363 ms**.
+Against the polluted one — 30 s timeout.
+
+**The fix is the mechanism the filesystem side already had, at the schema.**
+
+- A schema carries a marker table, `__brain_test_schema`, holding its creation
+  time. Schema and marker are created in **one transaction**, because Postgres
+  has transactional DDL and a schema that exists without its marker is one the
+  sweeper cannot age.
+- Each run **drops the schemas it created** on teardown — the cheap path, and
+  the one that stops the leak going forward.
+- A sweeper retires what an interrupted run left behind, once per worker
+  process, behind `pg_try_advisory_lock` so two workers cannot both drop the
+  same schema. It skips anything newer than `STALE_AFTER_MS`, which is
+  **imported from `tests/setup.ts`** rather than restated: one cutoff, two
+  stores, and a rule applied by one of two readers is worse than none.
+- `SWEEP_LIMIT` is **5**, and it is a measurement rather than a taste:
+  `DROP SCHEMA … CASCADE` over 667 relations takes **0.94 s**, and a sweep of
+  60 blew the 30 s `beforeEach` hook that was meant to be running a test.
+
+**The behavioural assertion was not weakened and the timeout was not raised.**
+The test still takes three readings and still asserts that exactly one sample
+was taken. What changed is the database it takes them against.
+
+Proved both ways round: against the still-polluted database (610 schemas) the
+test now passes in **6.8 s** while the sweep retires five; against a database
+the fix has kept clean it is back to about a second.
 
 An earlier reading in this document said `3 515 passed` with no failure. That
 run predates the waived-gap fix, and the sentence is corrected here rather than

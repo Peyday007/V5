@@ -5611,6 +5611,59 @@ not settable is who the answer is recorded as. `packet show` prints gap ids now,
 since a command taking one beside a listing that printed none is §24's remedy
 the person cannot use.
 
+- **Six commands in the right order is a runbook, not a mechanism — and that is
+  this section's own sentence arriving one altitude up.** Everything above
+  records a transition that existed, was tested, and could be reached by
+  nothing; the remedy each time was a *command*. `advanceSources` reached the
+  durable tick, so a blueprint became a canonical definition unattended, and
+  then the whole chain after it — deriving the gaps, asking the world, moving
+  the dimensions, compiling the contract, handing it off — waited for somebody
+  to remember the next line. A packet whose authority gap a person answered on
+  Tuesday sat exactly where it was, because nothing re-read the answer. **An
+  operator's memory is not a caller.**
+
+  `services/realize/advance.ts` is the ordering and nothing else, and what makes
+  it safe is what it does *not* contain. **Every transition it performs is the
+  identical function `scripts/capability.ts` calls** — `derivePacket`,
+  `readiness`, `askTheWorld`, `applyRealization`, `handOff`,
+  `answerAuthorityGap` — not reimplemented, not wrapped in a second policy, and
+  given no looser variant for the unattended path. A test holds both to the same
+  names, because a second implementation is exactly what passes a behavioural
+  test and drifts a month later. There is no new orchestrator, queue, policy
+  module or state machine, and the commands stay as the inspectable manual
+  recovery they always were.
+
+  **It re-derives only a packet with no gaps at all.** Re-deriving on a timer
+  would replace a reader's classifications with `NEEDS_A_READING` on a loop,
+  which is the one thing that would make the chain permanently unfinishable —
+  the derivation is cheap and the reading is not.
+
+  **The person-owned question gets the surface that already exists.** A
+  `REQUIRES_PERSON_AUTHORITY` gap becomes a `russell_human_requests` row: the
+  same table, the same Needs You card, the same route behind `requirePerson`,
+  the same `resumeAnsweredRequest` on the same tick. No second decision
+  framework, because §24 already built the one this is. Idempotent by
+  `resume_key`, so a restart mid-pass raises one card rather than a queue of
+  identical ones, and it offers a refusal as well as a grant — §33's rule that a
+  card with one answer is not a decision.
+
+  **And the resume had to come before the mission check, which is the defect
+  this whole section keeps correcting.** `resumeAnsweredRequest` returns
+  `settled: true` for any request with no mission — *"the request was not about a
+  mission"* — so a capability card a person answered would have been marked
+  RESUMED having carried out nothing: the gap still open, the card gone, and an
+  identical one raised on the next tick. **A person could have answered the same
+  question every day and never learned their decision was recorded and ignored.**
+  §24's own sentence, at a seventh altitude, reached through the surface built to
+  answer it.
+
+  It answers through `answerAuthorityGap` rather than around it, so the guard
+  stays on the gap kind in the statement that makes the change and the person is
+  re-resolved against `users` at the moment the effect happens rather than
+  trusted from the card. It approves nothing, spends nothing, and answers no
+  question a person owns — asserted against missions, goals, orchestrations and
+  approved change requests rather than stated in a comment.
+
 **What is still not true, and is not rounded up.** No faculty is implemented:
 `realized.ts` can now say one is, from rows, and on this repository every
 packet still holds unread gaps. Nothing has been deployed — the hosted tool
@@ -6242,6 +6295,7 @@ server/
       realized.ts       three dimensions derived from rows, and the one with no mover
       handoff.ts        the compiled contract becoming an ask somebody can approve
       askTheWorld.ts    a capability question becomes an idea, and never a packet
+      advance.ts        the ordering the tick runs, and no transition of its own
       prove.ts          what makes a capability exist, as opposed to built
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
@@ -6382,6 +6436,7 @@ tests/                  Vitest suites
   capabilityDirector.test.ts most gaps are not research, and the archive comes first
   capabilityCompile.test.ts  every clause traces to a gap, and it starts nothing
   facultyRealization.test.ts  the dimensions that move, the ask that stops, the question that spends nothing
+  capabilityTick.test.ts     the kernel advancing unattended, and the card a person answers
   capabilityProof.test.ts    a merge moves no dimension; each one needs its own evidence
   capabilityAuthority.test.ts  the escalation's answering transition, and every refusal in it
   step12bProduct.test.ts     the product decisions, where they are decided
