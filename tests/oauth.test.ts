@@ -806,7 +806,13 @@ describe('the invariant: a token is the worker, not the approver', () => {
     expect(who.isError).toBe(false);
     // The administrator approved it. The administrator is not who it is.
     expect(who.structured['principalType']).toBe('WORKER');
-    expect(who.structured['handle']).toBe('claude-max-worker-01');
+    // And what it answers with is the *neutral* identity, never the handle
+    // whoever created the row happened to type. A worker called after a person
+    // made every reader treat `brain_whoami` as a statement about whose Claude
+    // account had run the session, which it has never been — see migration 072.
+    expect(who.structured['handle']).toMatch(/^worker-\d\d$/);
+    expect(who.structured['handle']).not.toBe('claude-max-worker-01');
+    expect(who.structured['displayName']).not.toBe('claude-max-worker-01');
   });
 
   it('carries the workerscopes, not the administrator’s authority', async () => {
@@ -923,7 +929,10 @@ describe('lifecycle', () => {
     });
     const who = await callTool(issued.body.secret, 'brain_whoami');
     expect(who.isError).toBe(false);
-    expect(who.structured['handle']).toBe('claude-max-worker-01');
+    // Both eras answer with the same neutral identity: the label is a property
+    // of the worker row, so it cannot differ by which credential was presented.
+    expect(who.structured['handle']).toMatch(/^worker-\d\d$/);
+    expect(who.structured['handle']).not.toBe('claude-max-worker-01');
   });
 });
 

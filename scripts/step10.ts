@@ -95,6 +95,7 @@ import {
   WORKER_INSTRUCTIONS_VERSION,
 } from '../server/services/bins/workerInstructions.ts';
 import type { BinManifest, WorkerScope } from '../server/domain/types.ts';
+import { workerIdentity } from '../server/services/identity/authenticate.ts';
 
 const SLUG = 'step-10-acceptance';
 const STEP11_SLUG = 'step-11-acceptance';
@@ -2152,7 +2153,7 @@ async function main(): Promise<void> {
       const tokens = await listTokensForWorker(worker.id);
       if (tokens.length === 0) continue;
       console.log('');
-      console.log(`  worker ${worker.name} (${worker.id})`);
+      console.log(`  worker ${workerIdentity(worker)} (${worker.id})`);
       for (const token of tokens) {
         const rotated = token.parentTokenId !== null;
         if (token.kind === 'ACCESS') {
@@ -2162,6 +2163,10 @@ async function main(): Promise<void> {
         }
         console.log(
           `    ${token.kind.padEnd(7)} issued ${token.createdAt}  expires ${token.expiresAt}` +
+            // The client id, because a worker behind two connectors is the one
+            // thing this report was blind to and the thing that makes an
+            // attribution ambiguous. It is a public identifier, not a secret.
+            `  client ${token.clientId}` +
             `  used ${token.lastUsedAt ?? 'never'}` +
             `  ${rotated ? `rotated from ${token.parentTokenId}` : 'from an authorization code'}` +
             (token.revokedAt ? `  revoked ${token.revokedAt}` : ''),

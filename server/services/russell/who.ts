@@ -41,6 +41,7 @@ import {
 } from '../identity/invitations.ts';
 import type { InvitationSummary } from '../identity/invitations.ts';
 import type { FleetState, Principal, ProjectRole } from '../../domain/types.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 
 /**
  * How much of the machinery this caller may be told about.
@@ -267,7 +268,10 @@ export async function whoForProject(input: {
       // its name is a hint about the deployment and its digest is a fact about
       // a live credential.
       configured: routine.tokenDigest !== null,
-      boundWorker: worker ? worker.name : null,
+      // The neutral label. A People surface naming a worker after a person
+      // is how a label gets read as a claim about whose account ran a
+      // session, which is the defect migration 072 exists for.
+      boundWorker: worker ? workerIdentity(worker) : null,
       fires: routine.totalFires,
       refusals: routine.totalRefusals,
       noShows: routine.consecutiveNoShows,

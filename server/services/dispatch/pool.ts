@@ -46,6 +46,7 @@
 import type { Bin, BinDispatch, FleetAccount, FleetRoutine } from '../../domain/types.ts';
 import type { WorkerSession } from '../../repos/fleet.ts';
 import { proveSurface, type SurfaceChain } from './surfaceProof.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 
 /** What a surface is, once every row about it has been read. */
 export interface PoolSurfaceInput {
@@ -394,7 +395,9 @@ export async function readFactoryPool(input: {
     surfaces.push({
       routine,
       account,
-      worker: worker ? { id: worker.id, name: worker.name, archived: worker.archived } : null,
+      worker: worker
+        ? { id: worker.id, name: workerIdentity(worker), archived: worker.archived }
+        : null,
       routing: routing
         ? {
             families: routing.families,

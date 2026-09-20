@@ -27,6 +27,7 @@
 import { createHash } from 'node:crypto';
 import { createWorker, getWorkerByName, grantMembership } from '../../repos/identity.ts';
 import type { Principal, Worker, WorkerScope } from '../../domain/types.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 
 /**
  * What a capability bin's worker needs, and no more.
@@ -112,8 +113,10 @@ export async function ensureReaderWorker(input: {
     principal: {
       type: 'WORKER',
       id: worker.id,
-      handle: worker.name,
-      displayName: worker.displayName,
+      // The neutral label; a reader identity is printed beside audit
+      // lineage and must not read as a person's name. See migration 072.
+      handle: workerIdentity(worker),
+      displayName: workerIdentity(worker),
       isBrainAdmin: false,
       mustChangePassword: false,
       credentialId: sessionRef,

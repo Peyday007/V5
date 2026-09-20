@@ -99,6 +99,7 @@ import {
   repositoryIdOf,
 } from '../server/services/bins/routing.ts';
 import type { Principal, User } from '../server/domain/types.ts';
+import { workerIdentity } from '../server/services/identity/authenticate.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -235,7 +236,7 @@ async function main(): Promise<void> {
         // a dispatch row, a ledger entry — names a worker by id, and a listing you
         // cannot join to those is a listing you have to guess against.
         console.log(
-          `  ${worker.name.padEnd(28)} ${worker.id}  ${worker.status.padEnd(10)} ` +
+          `  ${workerIdentity(worker).padEnd(12)} ${worker.id}  ${worker.status.padEnd(10)} ` +
             `${memberships.length} project(s)`,
         );
       }
@@ -262,7 +263,7 @@ async function main(): Promise<void> {
         const worker = byId.get(row.workerId);
         const families = row.families.length > 0 ? row.families.join(',') : '(none — serves nothing)';
         console.log(
-          `  ${(worker?.name ?? row.workerId).padEnd(28)} ${row.workerId}  families=[${families}] ` +
+          `  ${(worker ? workerIdentity(worker) : row.workerId).padEnd(12)} ${row.workerId}  families=[${families}] ` +
             `repositories=[${row.repositories.join(',')}] ` +
             `capabilities=[${row.capabilities.join(',')}]`,
         );
@@ -277,7 +278,9 @@ async function main(): Promise<void> {
       const implicit = [...byId.values()].filter((w) => !explicit.has(w.id) && w.status === 'ACTIVE');
       if (implicit.length > 0) {
         console.log('  derived (no explicit row — scopes imply the family, never repository work):');
-        for (const worker of implicit) console.log(`      ${worker.name.padEnd(28)} ${worker.id}`);
+        for (const worker of implicit) {
+          console.log(`      ${workerIdentity(worker).padEnd(12)} ${worker.id}`);
+        }
       }
       break;
     }
@@ -298,8 +301,8 @@ async function main(): Promise<void> {
       const principal = {
         type: 'WORKER',
         id: worker.id,
-        handle: worker.name,
-        displayName: worker.name,
+        handle: workerIdentity(worker),
+        displayName: workerIdentity(worker),
         isBrainAdmin: false,
         mustChangePassword: false,
         credentialId: null,
@@ -314,7 +317,7 @@ async function main(): Promise<void> {
       const decision = decideBinRouting({ bin, principal, routing });
       console.log(`  bin        ${bin.id}  ${bin.kind}  ${bin.state}  class=${bin.workloadClass ?? '—'}`);
       console.log(`  family     ${familyOf(bin)}  repository=${repositoryIdOf(bin) ?? '—'}`);
-      console.log(`  worker     ${worker.name}  ${routing.explicit ? 'explicit' : 'derived'} ` +
+      console.log(`  worker     ${workerIdentity(worker)}  ${routing.explicit ? 'explicit' : 'derived'} ` +
         `families=[${routing.families.join(',')}] repositories=[${routing.repositories.join(',')}]`);
       console.log(`  decision   ${decision.ok ? 'WOULD BE HANDED IT' : decision.refusal}`);
       // A refusal names itself; an admission has nothing to explain beyond the
@@ -368,7 +371,7 @@ async function main(): Promise<void> {
         },
       });
       console.log(
-        `  ${worker.name} now serves [${families.join(',') || '(nothing)'}]` +
+        `  ${workerIdentity(worker)} now serves [${families.join(',') || '(nothing)'}]` +
           `${repositories.length > 0 ? ` for [${repositories.join(',')}]` : ''}.`,
       );
       break;
@@ -401,7 +404,7 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
         metadata: { before: before ? before.families : null, after: [], reason },
       });
-      console.log(`  ${worker.name} is retired from active dispatch: it may be handed nothing.`);
+      console.log(`  ${workerIdentity(worker)} is retired from active dispatch: it may be handed nothing.`);
       break;
     }
     case 'routing clear': {
@@ -418,8 +421,8 @@ async function main(): Promise<void> {
       });
       console.log(
         removed
-          ? `  ${worker.name} is back to the derived default: what its scopes imply, and no repository work.`
-          : `  ${worker.name} had no explicit routing scope.`,
+          ? `  ${workerIdentity(worker)} is back to the derived default: what its scopes imply, and no repository work.`
+          : `  ${workerIdentity(worker)} had no explicit routing scope.`,
       );
       break;
     }
@@ -437,7 +440,7 @@ async function main(): Promise<void> {
         targetId: worker.id,
         result: 'SUCCESS',
       });
-      console.log(`  ${worker.name} is now ${status}.`);
+      console.log(`  ${workerIdentity(worker)} is now ${status}.`);
       break;
     }
     case 'workers archive': {
@@ -452,7 +455,7 @@ async function main(): Promise<void> {
         targetId: worker.id,
         result: 'SUCCESS',
       });
-      console.log(`  ${worker.name} is archived. Its rows and its audit history stay.`);
+      console.log(`  ${workerIdentity(worker)} is archived. Its rows and its audit history stay.`);
       break;
     }
     /*
@@ -559,7 +562,7 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
         metadata: { name: worker.name },
       });
-      console.log(`  ${worker.id}  ${worker.name}  ${worker.displayName}`);
+      console.log(`  ${worker.id}  ${workerIdentity(worker)}  (legacy handle ${worker.name})`);
       console.log('  It is a member of no project and holds no credential yet.');
       break;
     }
@@ -855,7 +858,7 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
         metadata: { scopes: [...CONNECTOR_SCOPES].join(','), kind: 'RESEARCH' },
       });
-      console.log(`  ${worker.name} researches for ${project.name}.`);
+      console.log(`  ${workerIdentity(worker)} researches for ${project.name}.`);
       break;
     }
     case 'access revoke': {
@@ -872,7 +875,7 @@ async function main(): Promise<void> {
         projectId: project.id,
         result: 'SUCCESS',
       });
-      console.log(changed ? `  ${worker.name} no longer reaches ${project.name}.` : '  Nothing to revoke.');
+      console.log(changed ? `  ${workerIdentity(worker)} no longer reaches ${project.name}.` : '  Nothing to revoke.');
       break;
     }
     case 'queue list': {
