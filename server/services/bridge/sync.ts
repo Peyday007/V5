@@ -194,9 +194,9 @@ export async function syncConversation(input: SyncInput): Promise<SyncResult> {
   });
 
   const reservation = await reserveReceipt({ conversationId: conversation.id, requestKey });
-  if (!reservation.mine) {
-    // Somebody already did this exact delivery. Re-read and replay, which is
-    // what "the effect is present after either call" means.
+  if (!reservation.mine && reservation.receipt.completedAt !== null) {
+    // Somebody already did this exact delivery, and finished it. Re-read and
+    // replay, which is what "the effect is present after either call" means.
     const current = await getBridgeConversation(conversation.id);
     return {
       conversation: current ?? conversation,
@@ -204,6 +204,28 @@ export async function syncConversation(input: SyncInput): Promise<SyncResult> {
       performed: false,
     };
   }
+  /*
+   * A reservation somebody took and never finished is carried on with rather
+   * than replayed.
+   *
+   * The reservation is taken *before* the messages are written, because that is
+   * what makes two simultaneous deliveries produce one — and the two are not in
+   * one transaction, because the messages, the Russell turn and the bin it
+   * creates are not one write. A process that died between them therefore
+   * leaves a reserved receipt over a partly-written transcript, and replaying
+   * *that* would tell a client its delivery succeeded while messages were
+   * missing: the one thing a receipt exists to make impossible.
+   *
+   * Carrying on is safe because every message write below is idempotent by
+   * (conversation, ordinal, content hash) — a message that landed before the
+   * crash is recognised as a duplicate and the rest are written. So the effect
+   * is present after either call, which is exactly what §20 means, and nothing
+   * is performed twice.
+   *
+   * A second caller arriving while the first is still working does the same
+   * work concurrently and writes the same rows, which the content-hash check
+   * collapses. It cannot double anything; at worst it is wasted effort.
+   */
 
   let accepted = 0;
   let duplicates = 0;

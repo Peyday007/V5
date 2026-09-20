@@ -147,6 +147,10 @@ CREATE TABLE IF NOT EXISTS bridge_sync_receipts (
   missing         TEXT NOT NULL DEFAULT '[]',
   routing         TEXT NOT NULL DEFAULT '{}',
   created_at      TEXT NOT NULL,
+  -- NULL means the delivery this receipt reserved never finished. See the
+  -- SQLite file for why the reservation is taken before the writes and why a
+  -- retry carries on rather than replaying.
+  completed_at    TEXT,
   seq             BIGSERIAL
 );
 CREATE INDEX IF NOT EXISTS idx_bridge_receipts_conversation

@@ -251,6 +251,16 @@ not that the second call does nothing.** A replay returns the receipt the first
 attempt produced, with `performed: false` so a client can tell a replay from a
 delivery.
 
+**A delivery that never finished is carried on rather than replayed.** The
+reservation is taken before the messages are written — that is what makes two
+simultaneous deliveries produce one — and the writes that follow are not in one
+transaction, because the messages, the Russell turn and the bin it creates are
+not one write. A process that died between them leaves a reserved receipt over a
+partly-written transcript, and replaying *that* would report success over
+missing messages: the one thing a receipt exists to make impossible. So a
+receipt with no completion is finished rather than replayed, which is safe
+because every message write is already idempotent by position and content hash.
+
 Re-sending content that already exists is separately free: a message whose
 position, id and hash already match is counted as a duplicate and not written
 again, so a client that sends its whole transcript every turn is cheap and

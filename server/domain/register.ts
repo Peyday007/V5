@@ -324,6 +324,7 @@ export interface BridgeReceiptRow {
   missing: string;
   routing: string;
   created_at: string;
+  completed_at: string | null;
 }
 
 /**
@@ -348,6 +349,17 @@ export interface BridgeReceipt {
   missing: number[];
   routing: BridgeRouting;
   createdAt: string;
+  /**
+   * When the delivery this receipt reserved actually finished.
+   *
+   * `null` is a real state and means *not finished*. The reservation is taken
+   * before the messages are written — that is what makes two simultaneous
+   * deliveries produce one — and the two are not one transaction, so a process
+   * that died between them leaves this null over a partly-written transcript.
+   * A retry then carries on rather than replaying, which is safe because every
+   * message write is idempotent by position and content hash.
+   */
+  completedAt: string | null;
 }
 
 /**

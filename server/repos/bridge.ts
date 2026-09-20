@@ -383,6 +383,7 @@ function mapReceipt(row: BridgeReceiptRow): BridgeReceipt {
       reason: 'no routing was recorded',
     }),
     createdAt: row.created_at,
+    completedAt: row.completed_at,
   };
 }
 
@@ -432,7 +433,8 @@ export async function completeReceipt(input: {
   await getDb().run(
     `UPDATE bridge_sync_receipts
         SET accepted = ?, duplicates = ?, revisions = ?, branches = ?,
-            first_ordinal = ?, last_ordinal = ?, missing = ?, routing = ?
+            first_ordinal = ?, last_ordinal = ?, missing = ?, routing = ?,
+            completed_at = ?
       WHERE id = ?`,
     [
       input.accepted,
@@ -443,6 +445,7 @@ export async function completeReceipt(input: {
       input.lastOrdinal,
       toJson(input.missing),
       toJson(input.routing),
+      nowIso(),
       input.id,
     ],
   );

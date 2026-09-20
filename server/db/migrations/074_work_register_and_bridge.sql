@@ -319,6 +319,21 @@ CREATE TABLE bridge_sync_receipts (
   -- request it captured, or the reason it did neither.
   routing         TEXT NOT NULL DEFAULT '{}',
 
-  created_at      TEXT NOT NULL
+  created_at      TEXT NOT NULL,
+
+  -- When the delivery this receipt reserved actually finished.
+  --
+  -- The reservation is taken *before* the messages are written, because that is
+  -- what makes two simultaneous deliveries produce one — and the two are not in
+  -- one transaction, because the messages, the Russell turn and the bin it
+  -- creates are not one write. So a process that died between them leaves a
+  -- reserved receipt over a partly-written transcript, and a retry that replayed
+  -- it would tell the client a delivery succeeded while messages were missing.
+  --
+  -- NULL is therefore a real state and means *this is not finished*: a retry
+  -- carries on with it rather than replaying it, which is safe because every
+  -- message write is already idempotent by (conversation, ordinal, content
+  -- hash). §20's rule read precisely — the effect is present after either call.
+  completed_at    TEXT
 );
 CREATE INDEX idx_bridge_receipts_conversation ON bridge_sync_receipts (conversation_id, created_at);

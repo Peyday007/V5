@@ -233,6 +233,46 @@ describe('a retry is not a second delivery', () => {
     expect(await listBridgeMessages(again.conversation.id)).toHaveLength(1);
   });
 
+  it('carries on an unfinished delivery rather than replaying an empty receipt', async () => {
+    /*
+     * The window a receipt reserved before its writes leaves open.
+     *
+     * The reservation is taken first — that is what makes two simultaneous
+     * deliveries produce one — and the writes that follow are not in the same
+     * transaction, because the messages, the Russell turn and the bin it
+     * creates are not one write. So a process that died between them leaves a
+     * reserved receipt over a partly-written transcript, and replaying *that*
+     * would tell a client its delivery succeeded while messages were missing.
+     *
+     * The crash is simulated by clearing `completed_at`, which is exactly the
+     * row a dead process would have left, and then deleting one message the
+     * first call wrote. A replay would answer `accepted: 0` over a transcript
+     * with a hole in it; carrying on rewrites the missing one.
+     */
+    const batch = [
+      { ordinal: 0, role: 'USER' as const, content: 'first' },
+      { ordinal: 1, role: 'ASSISTANT' as const, content: 'second' },
+    ];
+    const first = await sync(batch);
+    expect(first.receipt.accepted).toBe(2);
+
+    await getDb().run(`UPDATE bridge_sync_receipts SET completed_at = NULL WHERE id = ?`, [
+      first.receipt.id,
+    ]);
+    await getDb().run(`DELETE FROM bridge_messages WHERE conversation_id = ? AND ordinal = 1`, [
+      first.conversation.id,
+    ]);
+
+    const resumed = await sync(batch);
+    // It did the work rather than replaying the reservation.
+    expect(resumed.performed).toBe(true);
+    expect(resumed.receipt.id).toBe(first.receipt.id);
+    // And the transcript is whole again, with nothing written twice.
+    const messages = await listBridgeMessages(resumed.conversation.id);
+    expect(messages.map((one) => one.content)).toEqual(['first', 'second']);
+    expect(resumed.receipt.missing).toEqual([]);
+  });
+
   it('recognises re-sent content in a larger batch without writing it twice', async () => {
     await sync([{ ordinal: 0, role: 'USER', content: 'one' }]);
     const grown = await sync([
