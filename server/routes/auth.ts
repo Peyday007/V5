@@ -41,14 +41,20 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { recordIdentityEvent } from '../repos/identity.ts';
 import {
+  clearPinThrottle,
   countLiveSessions,
   createSession,
   getPasswordVerifierByEmail,
+  getPinCredentialByIdentity,
   getUser,
+  readPinThrottle,
+  recordPinFailure,
   revokeSession,
   setUserPassword,
+  setUserPin,
 } from '../repos/identity.ts';
 import {
+  DEVICE_SESSION_TTL_MS,
   PASSWORD_SESSION_TTL_MS,
   clearedSessionCookie,
   isSecureRequest,
@@ -59,6 +65,16 @@ import {
   breakGlassArmed,
   passwordDoorOpenFor,
 } from '../services/identity/passwordDoor.ts';
+import {
+  PIN_LENGTH,
+  PIN_MALFORMED,
+  PIN_REFUSED,
+  UNMATCHABLE_PIN_VERIFIER,
+  cooldownAfter,
+  hashPin,
+  isWellFormedPin,
+  pinMatches,
+} from '../services/identity/pin.ts';
 import {
   MIN_PASSWORD_LENGTH,
   WeakPasswordError,
@@ -139,6 +155,7 @@ function publicUser(user: {
   displayName: string;
   isBrainAdmin: boolean;
   mustChangePassword: boolean;
+  pinUpdatedAt?: string | null;
 }): Record<string, unknown> {
   return {
     id: user.id,
@@ -146,6 +163,15 @@ function publicUser(user: {
     displayName: user.displayName,
     isBrainAdmin: user.isBrainAdmin,
     mustChangePassword: user.mustChangePassword,
+    /*
+     * Whether a PIN exists, never the PIN and never its verifier.
+     *
+     * The recovery screen needs it to say *create* or *replace*, and the
+     * client needs it to know whether signing in is possible yet. A boolean
+     * rather than the timestamp: when it was set is nobody's business but the
+     * account's, and this object is what a browser gets.
+     */
+    hasPin: (user.pinUpdatedAt ?? null) !== null,
   };
 }
 
@@ -448,6 +474,186 @@ authRouter.post(
       actorId: principal.id,
       credentialId: principal.credentialId,
       metadata: { minimumLength: MIN_PASSWORD_LENGTH },
+    });
+    return { ok: true };
+  }),
+);
+
+/* --------------------------------------------------------------- the PIN */
+
+/**
+ * Sign in with an identity and a six-digit PIN.
+ *
+ * This is the ordinary human door. It is on the guard's unauthenticated
+ * allowlist for `/api/auth/login`'s exact reason — it is how a credential is
+ * obtained — and it is written to give nothing away:
+ *
+ *   * **The work is the same whatever fails.** An unknown identity, an account
+ *     with no PIN and a wrong PIN all run one scrypt verification, against the
+ *     real verifier or against one that cannot match. Skipping it for the first
+ *     two would make them answer measurably faster, which enumerates who has an
+ *     account and who has set a PIN.
+ *   * **The refusal is one body.** `PIN_REFUSED`, for all of them.
+ *   * **A cooldown is the one thing it does say**, because that is a fact about
+ *     this caller's own recent attempts rather than about the account, and
+ *     somebody who has mistyped their own PIN four times is owed the reason
+ *     they are being made to wait. It names no identity and no remaining count.
+ *
+ * The session it opens is the **persistent** one — thirty days, the same
+ * `DEVICE_SESSION_TTL_MS` a passkey earns. The credential is different; how
+ * long a person should stay signed in to their own Brain is not.
+ */
+authRouter.post('/auth/pin', (req: Request, res: Response) => {
+  void (async (): Promise<void> => {
+    try {
+      const body = bodyOf(req);
+      const identity = requiredString(body['identity'], 'identity');
+      const pin = body['pin'];
+
+      if (!transportIsAcceptable(req)) {
+        await audit(req, { action: 'PIN_SIGN_IN', result: 'DENIED', reason: 'UNSAFE_TRANSPORT' });
+        res.status(400).json({
+          error: 'This Brain will not issue a session over an unencrypted connection. Use https.',
+        });
+        return;
+      }
+
+      /*
+       * Malformed is its own answer, and deliberately not the refusal.
+       *
+       * It reveals nothing — the rule is printed on the screen above the box —
+       * and telling somebody who typed five digits that their PIN is wrong is
+       * how they burn their own attempts on a typo.
+       */
+      if (!isWellFormedPin(pin)) {
+        res.status(400).json({ error: PIN_MALFORMED });
+        return;
+      }
+
+      const found = await getPinCredentialByIdentity(identity);
+
+      // The cooldown, read from rows. Checked before the verification so a
+      // locked-out attacker cannot keep spending the server's scrypt budget.
+      if (found) {
+        const throttle = await readPinThrottle(found.user.id);
+        if (throttle.lockedUntil !== null && throttle.lockedUntil > new Date().toISOString()) {
+          await audit(req, {
+            action: 'PIN_SIGN_IN',
+            result: 'DENIED',
+            actorId: found.user.id,
+            reason: 'INVALID_CREDENTIALS',
+            metadata: { category: 'COOLDOWN' },
+          });
+          res.status(429).json({
+            error: 'Too many attempts. Wait a moment and try again.',
+            retryAt: throttle.lockedUntil,
+          });
+          return;
+        }
+      }
+
+      const matches = await pinMatches(pin, found?.verifier ?? UNMATCHABLE_PIN_VERIFIER);
+
+      if (!found || !found.verifier || !matches || found.user.disabled) {
+        if (found) await recordPinFailure(found.user.id, cooldownAfter);
+        await audit(req, {
+          action: 'PIN_SIGN_IN',
+          result: 'DENIED',
+          actorId: found?.user.id ?? null,
+          reason: found?.user.disabled ? 'PRINCIPAL_DISABLED' : 'INVALID_CREDENTIALS',
+          // The category, never what was typed. §17's rule about denial records.
+          metadata: {
+            category: !found
+              ? 'NO_SUCH_IDENTITY'
+              : found.user.disabled
+                ? 'ACCOUNT_DISABLED'
+                : !found.verifier
+                  ? 'NO_PIN_SET'
+                  : 'WRONG_PIN',
+          },
+        });
+        res.status(401).json({ error: PIN_REFUSED });
+        return;
+      }
+
+      await clearPinThrottle(found.user.id);
+      const token = generateSessionToken();
+      const session = await createSession({
+        userId: found.user.id,
+        secret: token.secret,
+        ttlMs: DEVICE_SESSION_TTL_MS,
+        userAgent: req.header('user-agent') ?? null,
+        ip: req.ip ?? null,
+        // No device opened this one. Null keeps it out of reach of a per-device
+        // revocation that could not honestly reach it.
+        passkeyId: null,
+      });
+
+      await audit(req, {
+        action: 'PIN_SIGN_IN',
+        result: 'SUCCESS',
+        actorType: 'HUMAN',
+        actorId: found.user.id,
+        credentialId: session.sessionId,
+      });
+
+      res.setHeader(
+        'Set-Cookie',
+        sessionCookie(token.secret, {
+          secure: isSecureRequest(req),
+          maxAgeMs: DEVICE_SESSION_TTL_MS,
+        }),
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ user: publicUser(found.user), expiresAt: session.expiresAt });
+    } catch (error) {
+      if (error instanceof HttpError) {
+        res.status(error.status).json({ error: error.message });
+        return;
+      }
+      console.error('[brain] PIN sign-in failed:', error);
+      // Fail closed: an error inside authentication is a refusal, not a pass.
+      res.status(503).json({ error: 'Sign-in is unavailable right now.' });
+    }
+  })();
+});
+
+/**
+ * Set or replace your own PIN.
+ *
+ * Authenticated, by whatever got the caller here — the recovery screen's
+ * password session, or an ordinary PIN session changing it. It never takes an
+ * identity from the body: the account is the principal, so there is no shape of
+ * this request that could set somebody else's.
+ *
+ * Every other session that person holds ends, and the current one survives.
+ * That is `setUserPassword`'s rule for `setUserPassword`'s reason: replacing a
+ * credential is what somebody does when they think the old one may be in the
+ * wrong hands, and being signed out of the tab you are typing in is the
+ * friction that stops people doing it at all.
+ */
+authRouter.post(
+  '/auth/pin/set',
+  handler(async (req) => {
+    const principal = currentPrincipal();
+    if (!principal || principal.type !== 'HUMAN') throw badRequest('Not signed in.');
+
+    const pin = bodyOf(req)['pin'];
+    if (!isWellFormedPin(pin)) throw badRequest(PIN_MALFORMED);
+
+    await setUserPin(principal.id, await hashPin(pin), {
+      keepSessionId: principal.credentialId,
+    });
+
+    await audit(req, {
+      action: 'SET_PIN',
+      result: 'SUCCESS',
+      actorType: 'HUMAN',
+      actorId: principal.id,
+      credentialId: principal.credentialId,
+      // That it happened and when. Never the value, never its length beyond the
+      // rule everybody already knows, and never the verifier.
+      metadata: { digits: PIN_LENGTH },
     });
     return { ok: true };
   }),
