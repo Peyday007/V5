@@ -146,12 +146,44 @@ function scratchEnv(root: string): NodeJS.ProcessEnv {
   return env;
 }
 
+/**
+ * Every child is bounded, and that is not belt-and-braces.
+ *
+ * `execFileSync` blocks the worker thread, so vitest's own per-test timeout
+ * cannot interrupt one — a child that never exits hangs the entire suite with
+ * no failing test and no diagnosis, which is the shape this repository keeps
+ * correcting: an outcome reported as *still running* when it is actually
+ * stuck. The bound turns that into a named failure naming the command.
+ */
+const CHILD_TIMEOUT_MS = 90_000;
+
+function run(command: string, argv: string[], root: string): string {
+  try {
+    return execFileSync(command, argv, {
+      cwd: REPO,
+      env: scratchEnv(root),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: CHILD_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+    });
+  } catch (error) {
+    const failure = error as { signal?: string; stdout?: string; stderr?: string };
+    if (failure.signal === 'SIGKILL') {
+      throw new Error(
+        `\`${[command, ...argv].join(' ')}\` did not exit within ` +
+          `${CHILD_TIMEOUT_MS / 1000}s and was killed.`,
+      );
+    }
+    throw new Error(
+      `\`${[command, ...argv].join(' ')}\` failed: ` +
+        `${(failure.stderr ?? '').trim() || (failure.stdout ?? '').trim() || String(error)}`,
+    );
+  }
+}
+
 function admin(...argv: string[]): string {
-  return execFileSync(
-    path.join(REPO, 'node_modules/.bin/tsx'),
-    [path.join(REPO, 'scripts/admin.ts'), ...argv],
-    { cwd: REPO, env: scratchEnv(scratchRoot()), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-  );
+  return run(path.join(REPO, 'node_modules/.bin/tsx'), [path.join(REPO, 'scripts/admin.ts'), ...argv], scratchRoot());
 }
 
 describe('an operator reading the listing and using what it says', () => {
@@ -174,11 +206,7 @@ describe('an operator reading the listing and using what it says', () => {
       ].join('\n'),
       'utf8',
     );
-    execFileSync(path.join(REPO, 'node_modules/.bin/tsx'), [seed], {
-      cwd: REPO,
-      env: scratchEnv(root),
-      stdio: 'ignore',
-    });
+    run(path.join(REPO, 'node_modules/.bin/tsx'), [seed], root);
 
     admin('projects', 'create', 'Wedge', '--admin', ADMIN);
     admin('workers', 'create', 'airynworker2', '--admin', ADMIN);
