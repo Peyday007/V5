@@ -1826,6 +1826,36 @@ async function main(): Promise<void> {
         'Attempts spent on ordinary progress rather than on failure — the bin completed work ' +
         'items on them, and the budget was sized below what this packet legitimately needs, ' +
         'including one session per audit role. Not spent on the packet failing.',
+      /*
+       * The fourth code, and it exists because the third one's own comment says
+       * it must.
+       *
+       * That comment's rule is that an audit row recording the wrong cause is
+       * worse than one recording none, which cuts both ways: `platform-defect`
+       * names the queue confinement and the plan tool, so it is *false* of a
+       * bin whose attempts went somewhere else, and reaching for it because the
+       * category fits is the mistake it was written against.
+       *
+       * This is that category with a different mechanism under it, measured on
+       * `bin_a063e058e4ee40c5bb08`. A worker researched a fragment, submitted
+       * its claims, and released the bin **without completing its work item** —
+       * the shape §24 already records at the planning stage, arriving one stage
+       * along at research. Brain then held open work nothing could claim, said
+       * so on every arrival (`BIN_ITEM_WITHHELD`), and spent five assignments
+       * on workers that each read the state correctly and reported it. The
+       * reconciliation has since retired the abandoned item and `advancePacket`
+       * queued the verification, so what the bin lacks is a way to deliver work
+       * that now exists.
+       *
+       * `budget-too-small` is the near miss and is not true either: it says the
+       * bin *completed* work items on those attempts. This one completed none.
+       */
+      'nothing-claimable':
+        'Attempts spent on arrivals that found the bin holding open work none of them could ' +
+        'claim, and each reported that rather than failing at it — a work item left leased by ' +
+        'a worker that released without completing it, so no successor item existed yet. The ' +
+        'reconciliation has since retired that item and queued what comes next. Not spent on ' +
+        'the packet failing, and not spent completing anything either.',
     };
     const code = arg(2) ?? 'platform-defect';
     const reason = REASONS[code];
