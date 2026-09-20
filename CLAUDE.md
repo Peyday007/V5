@@ -2684,30 +2684,35 @@ remote.
 
   `AbortSignal.timeout` bounds the whole request and **does not raise undici's
   `headersTimeout`**, which is what actually ends a wait for a server that has
-  accepted the connection and not answered. **Measured here rather than
-  reasoned about** — a server that accepts and never replies, Node 22.22.2,
-  `AbortSignal.timeout(900_000)` — it throws after **300.9s**, which is §27's
-  own 300.8s default unchanged by the signal. Raising it needs a `dispatcher`,
-  which needs `undici` as a dependency, and this repository has none. So the
-  bound changed the *message* and nothing else.
+  accepted the connection and not answered. Two sessions measured it
+  independently that afternoon, against a server that accepts and never
+  replies: **300.9s** and **300.8s**, both `UND_ERR_HEADERS_TIMEOUT`, which is
+  §27's own recorded default unchanged by the signal. So the bound changed the
+  *message* and nothing else, and the message then asserted a wait nobody
+  waited — **worse than the unattributable `fetch failed` it replaced**,
+  because it sends the next reader looking for a fifteen-minute operation that
+  never existed. The cries-wolf defect again, in the one place somebody goes
+  when a deploy has gone wrong.
 
-  **A diagnostic that states a wait nobody waited is worse than the
-  unattributable `fetch failed` it replaced**, because it sends the next reader
-  looking for a fifteen-minute operation that never existed — the
-  cries-wolf defect §27 already records, in the one place somebody goes when a
-  deploy has gone wrong. `describeTimeout` is pure and reports the **observed**
-  elapsed time, which is the only number in the sentence that was measured, and
-  separates the two limits `fetch` collapses: undici's header wait, which this
-  client cannot raise, and this client's own bound genuinely being reached.
-  An unrecognised cause claims nothing about which fired.
+  **Two sessions fixed it in parallel, and the other one's is the one that
+  ships. The reconciliation is recorded rather than quietly applied**, the way
+  §37 already records the same thing happening to `reoffer.ts`. Mine made the
+  sentence honest — the observed elapsed time rather than the configured
+  bound — and said in its own comment that raising the wait would need a
+  `dispatcher`, which would need `undici`, which this repository does not have.
+  **That premise was wrong and the better answer was one import away:**
+  `scripts/boundedRequest.ts` is `node:https`, where the only clock is the one
+  passed, so the bound actually binds and no dependency is added. An honest
+  message about a wall you cannot move is strictly worse than moving the wall,
+  so `describeTimeout` and its suite are removed here rather than merged
+  beside it.
 
   Two things this establishes and one it does not. It refines *always the judge
   step* — the two failures are **two different methods**, so it is whichever
   long call comes next rather than one stage. It settles that every reading in
   this section from `fetch failed` onward is the 300s default rather than any
-  bound. And it still does **not** say how long the judge pass takes, because
-  the instrument that could answer that is a dispatcher rather than a signal,
-  and nothing here has one.
+  bound. And it still does **not** say how long the judge pass takes: that is
+  what the next occurrence under a bound that binds will finally measure.
 
   **What that run proved is separate from what it failed at.** `Deploy`
   succeeded and the image was released; the restart itself succeeded for once,
