@@ -510,7 +510,7 @@ async function anAdministrator(): Promise<{ id: string; email: string }> {
  */
 async function appendOnlyCounts(
   packetId: string,
-): Promise<{ cards: number; stateEvents: number; gaps: number }> {
+): Promise<{ cards: number; stateEvents: number; gaps: number; ideas: number }> {
   const one = async (sql: string, params: unknown[] = []): Promise<number> => {
     const rows = await getDb().all<{ n: number }>(sql, params as never[]);
     return Number(rows[0]?.n ?? 0);
@@ -519,6 +519,10 @@ async function appendOnlyCounts(
     cards: await one('SELECT COUNT(*) AS n FROM russell_human_requests'),
     stateEvents: await one('SELECT COUNT(*) AS n FROM faculty_state_events'),
     gaps: await one('SELECT COUNT(*) AS n FROM realization_gaps WHERE packet_id = ?', [packetId]),
+    // `askTheWorld` is idempotent because it moves a gap it captured to
+    // ASSIGNED and the director reads only OPEN ones — which is a comment in
+    // that file rather than something anything here held it to, until now.
+    ideas: await one('SELECT COUNT(*) AS n FROM russell_candidates'),
   };
 }
 
