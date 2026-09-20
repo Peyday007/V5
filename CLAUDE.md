@@ -5863,6 +5863,94 @@ harness's own acceptance project", which `regrant` is not and never was: it
 takes any bin id, and its own comments record raising a real research bin's
 ceiling to 100. The comment is the thing that is wrong.
 
+## 39. A view is not a sale, and the whole loop is built on that one distinction.
+
+The industry kernel gave the ten mechanism buckets an axis saying *where* in
+the economy to look, and it stops where a subject has produced an opening. An
+opening is a published fact about somebody else's transaction, and nothing in
+this Brain turned one into a thing **we** sell.
+
+The social commerce kernel (`server/services/commerce/`,
+`server/repos/commerce.ts`, `server/domain/commerce.ts`,
+`docs/COMMERCE-KERNEL.md`) is that loop, for one shape of transaction: bought
+from a supplier, discovered on a social channel, shipped without ever being
+held. Demand signal, product candidate, supplier validation, unit economics,
+offer, a bounded sales test, fulfilment, realized profit or loss, learning.
+Everything it adds is a new **entrance** to machinery Steps 4 to 12C already
+built, and none of it is a second set of rules.
+
+- **The channels are discovered, never declared, and TikTok is a seed.** There
+  is no list of platforms in this repository and a test reads the source of all
+  twelve modules to prove it. `CHECK (origin = 'SEED' OR source_claim_id IS NOT
+  NULL)` means a channel exists because a gated claim established it or because
+  a person said so, and there is no third way. That is the brief's *start with
+  TikTok, while letting evidence name a stronger channel* as a row rather than
+  as a constant — and on this subject a constant would be wrong within months,
+  because the platforms revise their commission, their eligibility and their
+  fulfilment obligations faster than anything else this Brain researches.
+- **Attention is never demand, and the separation is structural in four
+  places.** Two finding kinds, so a view count has somewhere to go that is not
+  where a purchase goes; two lanes, so a fragment cannot clear a demand bar on
+  view counts; the stage, so nine attention readings advance nothing; and the
+  rank, where *somebody is shown to have bought* is rule two and attention
+  never satisfies it. `ATTENTION_EVIDENCE` exists **so that** the honest
+  reading — many watched, nobody is shown to have paid — can be recorded
+  against a proposition rather than for it. A view filed as demand is the one
+  error that would make everything downstream confidently wrong, so it is
+  refused by construction rather than by a filter over prose.
+- **Eight inputs and one blank derives nothing.** §30 records this at the
+  opportunity card and here it is worse, because the number decides whether
+  somebody buys stock. Contradictory rates are withheld rather than clamped:
+  three published loss rates summing past the selling price cannot all be true,
+  and clamping would produce the most pessimistic figure the arithmetic allows
+  and report it as derived — a made-up number wearing a citation.
+- **A gated claim is an `ESTIMATE` and never a measurement**, however good its
+  source. A published platform fee is a fact about the platform and an estimate
+  about *our* economics, because nothing has charged us one. Only a settled
+  bounded test measures anything. The basis is **derived** from where a row came
+  from rather than stored beside it, and the **weakest input wins**: a margin
+  built from eight published fees and one guess is an assumption, because the
+  guess is load-bearing.
+- **The bounded test asks three gates in deny-by-default's own order** — may
+  this happen, could this happen, how much — and the first thing missing becomes
+  a named blocker on a row with its detail. Asking the capability first would
+  mean discovering that Brain *could* list something it was never authorized to
+  sell, which is a fact nobody should learn by nearly doing it. `NO_GRANT` and
+  `NO_CAPABILITY` are separate values because they have opposite remedies, and
+  one word for both sends somebody to fix the wrong one. **A blocked test does
+  not advance the stage**: the piece has not got further, and reporting an
+  obstacle as progress is the encouraging reading §29 removed.
+- **The self-expansion pass raises a capability need before the loop reaches
+  the step, and gates nothing.** A capability discovered when a piece needs it
+  is discovered too late. It refuses to raise a need for an `UNKNOWN`
+  capability, because a remedy nobody can carry out is the escalation-with-no-
+  transition defect manufactured by the pass that exists to name remedies.
+
+**Four envelopes rather than two, and running it is what found that.** The
+first version routed every non-economics round to one demand envelope, on the
+reasoning that channels, eligibility, products and supply are one question
+about one surface. `profileFor` is keyed by envelope and a profile carries the
+**required lane**, so an eligibility question compiled with `purchase` required
+— a lane a platform's terms page can never satisfy. A worker would have
+answered correctly and the fragment would have been blocked. §25's *wrong
+answer confidently derived*, arriving through a lane instead of through a
+scope, and invisible to every test of either half. The four share their
+permissions and their assignment template by reference, so none authorizes
+anything another does not; what differs is the completion standard, which is
+what the gate actually judges.
+
+**What is true today, said plainly.** The loop runs end to end against a real
+Brain: a sprint activated, TikTok Shop seeded, two rounds opened as ordinary
+Russell candidates, both compiling under their own envelopes. **No fleet worker
+has answered a commerce question**, because that needs a deploy and a fire —
+the separation Step 3 drew between an engine passing its tests and a real job
+having actually run. And **nothing has been measured**: every figure this
+kernel can hold is read from somebody else's published page, both
+`PUBLISH_A_LISTING` and `TAKE_A_PAYMENT` read `MISSING`, and every reading says
+so in those words. The loop is complete and its last two steps are blocked on
+connections a person has to make, which the kernel names on a row with the
+remedy.
+
 
 ## Repository map
 
@@ -5885,12 +5973,14 @@ server/
     pg-migrations/*.sql the Postgres schema, generated from it
   domain/
     types.ts            enums, row types, view types — the contract
+    commerce.ts         what a commerce finding means, and which figure column it owns
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
+    commerce.ts         channels, propositions, every reading, and the one test that spends
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     factory.ts          the contract, the campaign, and units that own a surface
@@ -5996,6 +6086,17 @@ server/
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
       probe.ts          the one bounded self-test that turns configured into proven
       lab.ts            the eight test modes, and the five this version refuses to run
+    commerce/
+      allocate.ts       which question the loop asks next, and the six rules in order
+      audit.ts          what this loop needs and does not have, raised before it is needed
+      economics.ts      whether the money works, and the blanks that withhold it entirely
+      expand.ts         opening the questions, and absorbing what a declaration establishes
+      kernel.ts         one pass: learn what finished, operate what is next, expand what is missing
+      questions.ts      what each round asks, with "a view is not a sale" in every one
+      reading.ts        what one proposition currently is, derived entirely from rows
+      seed.ts           a person naming a channel — the one origin Brain may not write
+      test.ts           the bounded sales test, and the precise blocker where it stops
+      view.ts           the loop's maturity, with no single number standing for it
     cash/
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
@@ -6155,11 +6256,13 @@ scripts/
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
   admin.ts                  emergency administration, on a terminal rather than a page
+  commerce-seed-run.ts      naming the first channel, and one pass of the loop
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
+  commerceKernel.test.ts     a view is not a sale, and one blank derives nothing
   capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
   systemSelfModel.test.ts    what a reading may claim, and the seven it may not
   realizationPacket.test.ts  derive what is readable; refuse to guess the rest

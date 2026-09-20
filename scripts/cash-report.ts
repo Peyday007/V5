@@ -33,6 +33,7 @@
  * where it is kept.
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { commerceView } from '../server/services/commerce/view.ts';
 import { industryView } from '../server/services/industry/view.ts';
 import { listProjects } from '../server/repos/projects.ts';
 import { getCashMode, listCashEvents } from '../server/repos/cashMode.ts';
@@ -381,6 +382,94 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       if (one.mechanisms.length > 0) console.log(`      structures: ${one.mechanisms.join(', ')}`);
       for (const constraint of one.constraints) console.log(`      constraint: ${trim(constraint)}`);
     }
+  }
+
+  /*
+   * And the social commerce loop, in the same place and for the same reason.
+   *
+   * "Which channels is Brain looking at" and "how far has any product got"
+   * are one question asked from two ends, and a second command is how a reader
+   * comes to see only one of them.
+   */
+  const commerce = await commerceView(projectId);
+  console.log('');
+  console.log(
+    `SOCIAL COMMERCE (${commerce.maturity.channels} channel(s), ` +
+      `${commerce.maturity.propositions} proposition(s)) — furthest stage ` +
+      `${commerce.maturity.furthestStage ?? 'nothing started'}`,
+  );
+  console.log(
+    `  with a purchase behind them: ${commerce.maturity.withPurchase}` +
+      `   attention only: ${commerce.maturity.attentionOnly}` +
+      `   with a supplier: ${commerce.maturity.withSupplier}`,
+  );
+  console.log(
+    `  margin derivable: ${commerce.maturity.withDerivableMargin}` +
+      `   of those positive: ${commerce.maturity.withPositiveMargin}` +
+      `   resting on a measurement: ${commerce.maturity.withMeasuredEvidence}`,
+  );
+  console.log(
+    `  bounded tests: ${commerce.maturity.testsPrepared} prepared, ` +
+      `${commerce.maturity.testsBlocked} blocked, ${commerce.maturity.testsSettled} settled`,
+  );
+  console.log(`  ${trim(commerce.maturity.measurement, 400)}`);
+  for (const channel of commerce.channels) {
+    console.log(
+      `  channel ${channel.name} [${channel.origin}] ` +
+        `products=${channel.propositions} terms=${channel.terms.length}` +
+        (channel.retiredReason ? ` RETIRED — ${trim(channel.retiredReason)}` : ''),
+    );
+    for (const term of channel.terms) {
+      console.log(`      ${term.kind}: ${term.figure ?? 'no figure'} (${term.basis})`);
+    }
+    for (const prohibited of channel.prohibits) {
+      console.log(`      PROHIBITED — ${trim(prohibited)}`);
+    }
+  }
+  if (commerce.best.length > 0) {
+    console.log('');
+    console.log(`STRONGEST ${commerce.best.length} (ranked; reading this creates nothing)`);
+    for (const [index, piece] of commerce.best.entries()) {
+      console.log(
+        `  ${index + 1}. ${trim(piece.product, 70)} on ${piece.channel ?? 'no channel'} ` +
+          `[${piece.stage}]`,
+      );
+      console.log(
+        `      purchases=${piece.purchaseReadings} attention=${piece.attentionReadings} ` +
+          `supplier=${piece.supplier ?? 'unknown'}`,
+      );
+      console.log(
+        '      contribution: ' +
+          (piece.contribution
+            ? `${piece.contribution.minor} minor units (${piece.contribution.basis}); ` +
+              `break-even acquisition ${piece.breakEvenAcquisition}`
+            : `WITHHELD — ${trim(piece.contributionWithheld ?? '', 220)}`),
+      );
+      if (piece.unknown.length > 0) {
+        console.log(`      still unknown: ${piece.unknown.join(', ')}`);
+      }
+      console.log(`      next: ${trim(piece.next.what, 260)} [${piece.next.owner}]`);
+      for (const line of piece.wouldChange.slice(0, 3)) {
+        console.log(`      would change it: ${trim(line, 220)}`);
+      }
+    }
+  }
+  for (const test of commerce.tests) {
+    console.log('');
+    console.log(`BOUNDED TEST ${test.id} — ${trim(test.product, 60)} [${test.state}]`);
+    if (test.blocker) console.log(`  blocked by ${test.blocker}: ${trim(test.blockerDetail ?? '', 400)}`);
+    console.log(`  stops at: ${trim(test.stopRule, 300)}`);
+  }
+  if (commerce.next.length > 0) {
+    console.log('');
+    console.log('WHAT THE COMMERCE LOOP WOULD ASK NEXT (reading this creates nothing)');
+    for (const next of commerce.next) {
+      console.log(`  ${next.purpose} — ${next.subject}`);
+      console.log(`    because: ${trim(next.why)}`);
+    }
+  }
+  for (const declined of commerce.declined.slice(0, 6)) {
+    console.log(`  not asked: ${declined.subject} — ${trim(declined.why, 200)}`);
   }
 
   const events = await listCashEvents(projectId);

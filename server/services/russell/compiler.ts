@@ -75,6 +75,7 @@ import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
+import { commerceRoundForCandidate } from '../../repos/commerce.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
   EvidenceLane,
@@ -182,6 +183,36 @@ async function envelopeIdFor(
       return 'RUSSELL_INDUSTRY_MAP_V1';
     }
     if (kernel.purpose === 'CAPITAL') return 'RUSSELL_CAPITAL_STRUCTURE_V1';
+  }
+  /*
+   * And a commerce question is decided by the round that asked it.
+   *
+   * `commerce_rounds` is the exact statement — this candidate is asking this
+   * purpose about this channel or this proposition — written by Brain when the
+   * round was opened, so nothing here has to reason about what the idea's
+   * prose looks like.
+   *
+   * **Four envelopes rather than two, and the correction is recorded rather
+   * than quietly applied.** The first version routed everything but ECONOMICS
+   * to `RUSSELL_COMMERCE_DEMAND_V1`, on the reasoning that CHANNELS, PRODUCTS,
+   * SUPPLY and ELIGIBILITY are all one question about one surface. They are
+   * not: `profileFor` is keyed by envelope and the profile carries the
+   * **required lane**, so an eligibility question compiled with `purchase`
+   * required — a lane a platform's terms page can never satisfy. A worker
+   * would have answered correctly and the fragment would have been blocked.
+   *
+   * The four share their permissions and their assignment template by
+   * reference, so none authorizes anything another does not. What differs is
+   * the completion standard, which is the thing the gate actually judges.
+   */
+  const commerce = await commerceRoundForCandidate(candidate.id);
+  if (commerce) {
+    if (commerce.purpose === 'ECONOMICS') return 'RUSSELL_COMMERCE_ECONOMICS_V1';
+    if (commerce.purpose === 'SUPPLY') return 'RUSSELL_COMMERCE_SUPPLY_V1';
+    if (commerce.purpose === 'CHANNELS' || commerce.purpose === 'ELIGIBILITY') {
+      return 'RUSSELL_COMMERCE_TERMS_V1';
+    }
+    return 'RUSSELL_COMMERCE_DEMAND_V1';
   }
   if (await opportunityForOwnCandidate(project.id, candidate.id)) {
     return 'RUSSELL_CASH_VALIDATION_V1';

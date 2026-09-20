@@ -57,6 +57,8 @@ import { getNode } from '../repos/industry.ts';
 import { seedSubject, retireSubject } from '../services/industry/seed.ts';
 import { industryView } from '../services/industry/view.ts';
 import { isIndustryNodeKind } from '../domain/industry.ts';
+import { seedChannel, seedProposition, retireChannelSubject, retirePropositionSubject } from '../services/commerce/seed.ts';
+import { commerceView } from '../services/commerce/view.ts';
 import { INDUSTRY_NODE_KINDS, type IndustryNodeKind } from '../domain/types.ts';
 import {
   ALWAYS_PROHIBITED_COMMERCIAL,
@@ -1156,6 +1158,153 @@ cashRouter.patch(
         'Brain stops offering it and reads it as a dead end with your reason. Nothing was ' +
         'destroyed: its evidence, its children and every round ever run against it are ' +
         'exactly where they were, which is what stops it arriving again as a fresh discovery.',
+    };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The social commerce loop
+ *
+ * Reading it is any project member's: which channels Brain is looking at,
+ * what it has established about each product, where the loop has actually got
+ * to, and what it would ask next. Naming a channel or a product and retiring
+ * one are ADMIN plus `requirePerson`, the same pair the industry map carries
+ * and for the same reason. `SEED` is the one origin Brain itself cannot write,
+ * because the schema requires every other origin to carry the claim that
+ * established it — a machine that could name its own channels would be
+ * choosing where commerce happens, which is §22's split at the table that
+ * decides where everything else looks.
+ *
+ * **This is how TikTok gets into a Brain that holds no list of platforms.**
+ * Somebody names it here. Seeding spends nothing and starts nothing: it
+ * creates a row, the allocator decides when the channel is asked about, the
+ * discovery grant decides whether that may run, the approval envelope decides
+ * whether the plan may start, and the evidence gate decides what may be
+ * claimed.
+ *
+ * A worker principal is refused at every one of these by principal type.
+ * ------------------------------------------------------------------------ */
+
+cashRouter.get(
+  '/projects/:projectId/cash/commerce',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return commerceView(project.id);
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/commerce/channels',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const result = await seedChannel({
+      projectId: project.id,
+      name: requiredString(body['name'], 'name'),
+      description: optionalString(body['description'], 'description') ?? null,
+      actorRef: principal.id,
+      reason: optionalString(body['reason'], 'reason') ?? null,
+    });
+
+    return {
+      channel: result.channel,
+      created: result.created,
+      message: result.created
+        ? `${result.channel.name} is on the channel map. Brain decides when to ask about it; ` +
+          'nothing has been spent and no research has started.'
+        : `${result.channel.name} was already on the map, so nothing changed. How Brain came ` +
+          'to know about it is history, and naming it again does not rewrite that.',
+    };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/commerce/propositions',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const channelId = requiredString(body['channelId'], 'channelId');
+    const result = await seedProposition({
+      projectId: project.id,
+      channelId,
+      product: requiredString(body['product'], 'product'),
+      audience: optionalString(body['audience'], 'audience') ?? null,
+      supplier: optionalString(body['supplier'], 'supplier') ?? null,
+      actorRef: principal.id,
+      reason: optionalString(body['reason'], 'reason') ?? null,
+    });
+    /*
+     * The same 404 a channel that never existed gives.
+     *
+     * A channel id in somebody else's operation must not be distinguishable
+     * from an invented one — invariant 23, at a foreign key. A project with no
+     * sprint answers the same way, because a proposition belongs to a sprint
+     * and there is nothing here for one to belong to.
+     */
+    if (!result) throw notFound('No channel with that id.');
+
+    return {
+      proposition: result.proposition,
+      created: result.created,
+      message: result.created
+        ? `${result.proposition.product} is on the list. It establishes nothing about demand: ` +
+          'it starts with no purchase evidence, exactly like one Brain found, and the kernel ' +
+          'asks whether anybody actually buys it.'
+        : 'That product was already on the list for that channel, so nothing changed.',
+    };
+  }),
+);
+
+cashRouter.patch(
+  '/projects/:projectId/cash/commerce/channels/:channelId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const channel = await retireChannelSubject({
+      projectId: project.id,
+      channelId: pathId(req, 'channelId'),
+      reason: requiredString(body['reason'], 'reason'),
+      actorRef: principal.id,
+    });
+    if (!channel) throw notFound('No channel with that id.');
+
+    return {
+      channel,
+      message:
+        'Brain stops offering it and reads it as a dead end with your reason. Nothing was ' +
+        'destroyed: its evidence, its products and every round ever run against it are exactly ' +
+        'where they were, which is what stops it arriving again as a fresh discovery.',
+    };
+  }),
+);
+
+cashRouter.patch(
+  '/projects/:projectId/cash/commerce/propositions/:propositionId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const proposition = await retirePropositionSubject({
+      projectId: project.id,
+      propositionId: pathId(req, 'propositionId'),
+      reason: requiredString(body['reason'], 'reason'),
+      actorRef: principal.id,
+    });
+    if (!proposition) throw notFound('No proposition with that id.');
+
+    return {
+      proposition,
+      message:
+        'Brain stops offering it and reads it as a dead end with your reason. Every reading ' +
+        'about it and every round ever run against it keep their rows.',
     };
   }),
 );
