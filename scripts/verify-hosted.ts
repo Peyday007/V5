@@ -52,7 +52,8 @@ import crypto from 'node:crypto';
 import { describePersistence, persistenceConfig } from '../server/config.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { describeTimeout, ModernMcpClient } from './mcpModernClient.ts';
+import { ModernMcpClient } from './mcpModernClient.ts';
+import { boundedRequest, type BoundedReply } from './boundedRequest.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listBins, terminateUnleasedBin } from '../server/repos/bins.ts';
 import {
@@ -206,13 +207,11 @@ let base = '';
 
 /**
  * How long any one request to the deployed Brain may take before this gate
- * stops waiting — **when it is what stops it**, which is usually not the case.
+ * stops waiting.
  *
- * Fifteen minutes was chosen to sit past the five-minute wall every previous
- * run hit. It does not reach it: `AbortSignal` does not raise undici's
- * `headersTimeout`, so a request to a server that has accepted the connection
- * and not answered still ends at 300.9s. See `describeTimeout`, which measures
- * which limit fired rather than assuming this one did.
+ * Fifteen minutes: comfortably past the five-minute wall every previous run
+ * hit, and far inside the job's own budget, so a slow judge pass gets to
+ * finish and be timed rather than being cut off and reported as nothing.
  */
 const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -239,53 +238,46 @@ async function call(
   if (init.origin) headers['origin'] = init.origin;
 
   /*
-   * A named failure, and **the bound in it does not bind.**
+   * An explicit bound with a named failure — and `fetch` could not give one.
    *
-   * This helper passed no `signal`, so every request carried Node's own
-   * default — measured at **300.8 seconds**, throwing `fetch failed` with
-   * cause `UND_ERR_HEADERS_TIMEOUT`, and an unattributable `fetch failed` is
-   * what let six deploys look like one condition. Adding the signal named the
-   * request, which was the point, and then the sentence started asserting a
-   * fifteen-minute wait that never happens: `AbortSignal` bounds the whole
-   * request and does not raise undici's `headersTimeout`. Measured rather than
-   * reasoned about, on Node 22.22.2 against a server that accepts and never
-   * replies, `AbortSignal.timeout(900_000)` throws at **300.9s** — the same
-   * default, unchanged by the signal.
+   * This helper grew `signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)` after
+   * six deploys died at the judge audit step, on a comment that named the
+   * mechanism correctly: no bound meant Node's own default, measured at
+   * **300.8 seconds**, thrown as `fetch failed` with cause
+   * `UND_ERR_HEADERS_TIMEOUT`. What that change could not do is *apply*. An
+   * `AbortSignal` and undici's `headersTimeout` are two different bounds, the
+   * second defaults to five minutes, and it is the one that fires — so run 274
+   * gave up 320 seconds after the adversarial pass while reporting, in words,
+   * that it had waited nine hundred.
    *
-   * So the sentence is `describeTimeout`'s, shared with the MCP client that
-   * submits the audit roles, because two printers of one sentence drift and
-   * the last time these two disagreed the gate was wrong in both places at
-   * once. The only number it asserts is the elapsed time it observed.
+   * A bound that does not reach the request it exists for is not a bound, and
+   * one that reports a wait it never performed is a false measurement on top.
+   * `boundedRequest` is `node:https`, where the only clock is this one.
    *
-   * **None of this is a fix for the slowness.** The judge pass takes longer
-   * than five minutes, nobody knows how much longer, and the instrument that
-   * could find out is a `dispatcher` rather than a signal.
+   * **This is still not a fix for the slowness and must not be read as one.**
+   * The judge pass takes longer than five minutes and nobody yet knows how
+   * much longer, because until now nothing had actually waited past five. The
+   * bound is set where the next occurrence either finishes — and the
+   * timestamps say what it costs — or fails naming the request and the wait it
+   * really performed.
    */
-  let response: Response;
-  const startedAt = Date.now();
+  let response: BoundedReply;
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await boundedRequest(`${base}${path}`, {
       method: init.method ?? 'GET',
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      redirect: 'manual',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
   } catch (error) {
-    const cause = (error as { cause?: { code?: string } }).cause?.code;
     throw new Error(
-      describeTimeout(
-        `${init.method ?? 'GET'} ${path}`,
-        {},
-        Date.now() - startedAt,
-        error,
-        cause,
-        REQUEST_TIMEOUT_MS,
-      ),
+      `${init.method ?? 'GET'} ${path}: ` +
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        'The request was not refused; nothing answered it.',
       { cause: error },
     );
   }
-  const body = await response.text();
+  const body = response.body;
   let json: unknown = null;
   try {
     json = JSON.parse(body);
@@ -295,7 +287,7 @@ async function call(
   return {
     status: response.status,
     body,
-    cookie: response.headers.get('set-cookie'),
+    cookie: response.headers['set-cookie'] ?? null,
     json,
   };
 }

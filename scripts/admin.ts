@@ -102,6 +102,7 @@ import {
 } from '../server/services/bins/routing.ts';
 import type { Principal, User } from '../server/domain/types.ts';
 import { workerIdentity } from '../server/services/identity/authenticate.ts';
+import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -185,16 +186,43 @@ async function projectFrom(ref: string) {
   return project;
 }
 
+/**
+ * The one place this script turns what somebody typed into a worker row.
+ *
+ * It resolves through `services/identity/workerRef.ts`, which accepts the two
+ * identifiers `workers list` actually prints — the label and the id — as well
+ * as the `workers.name` handle that used to be the only one. The defect it
+ * closes is small and was expensive: an operator read `worker-05  wkr_…` off
+ * the listing, typed either into `access grant`, and was told **No such
+ * worker** by a refusal that then offered a third spelling the listing had
+ * never shown them.
+ *
+ * So the refusal lists candidates the way the listing does, and for the same
+ * reason the resolver exists at all: a listing and the command that consumes
+ * it must not disagree about what a thing is called.
+ */
 async function workerFrom(ref: string) {
-  const worker = await getWorkerByName(ref);
-  if (!worker) {
-    console.error(`No worker ${ref}. This Brain holds:`);
-    for (const candidate of await listWorkers({ includeArchived: true })) {
-      console.error(`  ${candidate.name}  ${candidate.status}`);
+  const resolved = await resolveWorkerRef(ref);
+  if (resolved.kind === 'FOUND') return resolved.worker;
+
+  if (resolved.kind === 'AMBIGUOUS') {
+    console.error(`"${ref}" names more than one worker:`);
+    for (const candidate of resolved.matches) {
+      console.error(`  ${workerIdentity(candidate).padEnd(12)} ${candidate.id}  ${candidate.name}`);
     }
-    fail('No such worker.');
+    // Refused rather than chosen between: picking either would be a confident
+    // answer to the wrong question, with every row reading healthy.
+    fail('Ambiguous worker reference. Use the id.');
   }
-  return worker;
+
+  console.error(`No worker ${ref}. This Brain holds:`);
+  for (const candidate of await listWorkers({ includeArchived: true })) {
+    console.error(
+      `  ${workerIdentity(candidate).padEnd(12)} ${candidate.id}  ${candidate.status.padEnd(10)} ` +
+        `${candidate.name}`,
+    );
+  }
+  fail('No such worker.');
 }
 
 /** The checkout this command is running from — how it finds the render set. */
@@ -478,10 +506,17 @@ async function main(): Promise<void> {
         const state = user.disabledAt ? 'DISABLED' : user.isBrainAdmin ? 'ADMIN' : 'MEMBER';
         const passkeys = await countLivePasskeys(user.id);
         // What the page derives `READY` from, printed the same way it derives
-        // it: a device, or a password, or neither. A timestamp is evidence a
-        // password exists and says nothing about it.
+        // it, and in the same order: the PIN the sign-in screen asks for, the
+        // password `/recovery` takes, then a device, which reaches neither. A
+        // timestamp is evidence a credential exists and says nothing about it.
         const signIn =
-          passkeys > 0 ? 'device' : user.passwordUpdatedAt !== null ? 'password' : 'none';
+          user.pinUpdatedAt !== null
+            ? 'pin'
+            : user.passwordUpdatedAt !== null
+              ? 'password'
+              : passkeys > 0
+                ? 'device'
+                : 'none';
         console.log(
           `  ${user.id}  ${user.kind.padEnd(7)} ${state.padEnd(8)} ` +
             `passkeys=${passkeys} signs-in=${signIn.padEnd(8)} ${user.displayName}` +
@@ -491,7 +526,10 @@ async function main(): Promise<void> {
       console.log('');
       console.log('  kind=PERSON is somebody; kind=SYSTEM is machinery proving itself.');
       console.log('  Only PERSON rows, not disabled, reach the People & capacity page.');
-      console.log('  signs-in=none is a slot nobody has filled; device and password both count.');
+      console.log('  signs-in=none is a slot nobody has filled.');
+      console.log('  signs-in=pin and signs-in=password are ways in; the screen asks for a PIN.');
+      console.log('  signs-in=device holds a passkey the sign-in screen no longer offers:');
+      console.log('  that person needs a new link, which People has a control for.');
       break;
     }
     case 'projects list': {

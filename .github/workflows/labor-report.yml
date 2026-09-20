@@ -1,0 +1,58 @@
+# Reading one project's labor map from the authoritative rows, without a
+# terminal and without a person relaying them.
+#
+# `cash-report.yml` answers "where is the sprint"; this answers the question
+# §41 added the axis for: **who or what actually produces each piece of work
+# here, what is still standing between a task and Brain, and which of those is
+# waiting on a person.**
+#
+# It prints the running artifact's own `BRAIN_REVISION` before anything else.
+# That is the point rather than a header: a report read out of a container says
+# nothing about *which* container unless the container says which commit it was
+# built from, and a deployment system's label is a claim about what it was
+# asked to ship rather than a reading of what is serving.
+#
+# It is read-only: it opens the database, prints, and closes. No deploy, no
+# restart, no migration, no write — `scripts/labor-report.ts` performs no
+# INSERT, UPDATE or DELETE and starts no round. The one thing it can do to
+# production is read it.
+name: Labor report
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Optional project id (prj_...). Omit to report every project that has a labor map.'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a report that raced a restart would be reporting whichever half answered.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read the labor map
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          args=""
+          if [ -n "${{ inputs.project }}" ]; then
+            args="--project ${{ inputs.project }}"
+          fi
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/labor-report.sh $args" \
+            2>&1 | tee labor-report.txt
+          set -e
+          grep -q '^LABOR-REPORT: OK' labor-report.txt

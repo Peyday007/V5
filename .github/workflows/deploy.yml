@@ -38,7 +38,7 @@ on:
         required: false
         default: 'manual deploy'
       authorize_gap_orchestration:
-        description: 'Optional: orchestration id to authorize for RECORD_GAPS (one packet, once)'
+        description: 'Optional: orchestration id(s) to authorize for RECORD_GAPS, space or comma separated'
         required: false
         default: ''
       authorize_gap_admin:
@@ -331,11 +331,33 @@ jobs:
       # fixtures are created and disabled within the run, and every assertion
       # is still made from outside through the edge.
       #
-      # `continue-on-error` so that a failure here does not skip the secret
-      # removal below; the run is still failed, explicitly, at the end.
+      # **It is not `continue-on-error`, and it used to be.** The argument was
+      # that a failure here must not skip the secret removal below — correct,
+      # and no longer this step's job to arrange: every step that must survive
+      # a failed verification now guards itself with `always() && release ==
+      # success`, which is strictly better because it also survives this step
+      # crashing rather than failing.
+      #
+      # What the flag cost was the one thing a person actually reads. It sets
+      # the step's *conclusion* to `success` while its `outcome` stays
+      # `failure`, so the job summary, the step list and the API all showed a
+      # green tick on a verification that had just failed — and the run had to
+      # be opened, expanded and read to find out otherwise. The verdict below
+      # was always honest about it; nothing above it was.
+      #
+      # **And it is bounded, because an unbounded one holds everything else.**
+      # Run 275 sat on the post-restart probe for over an hour: `flyctl ssh
+      # console` keeps a session open with no clock of its own, and neither the
+      # step nor the job had one either. Every operator workflow in this
+      # repository shares the `deploy-brain` concurrency group, so a hung probe
+      # is not a slow deploy — it is every reading, tick and fleet command
+      # queued behind it until somebody notices. Forty-five minutes is past
+      # what a passing run has ever taken and far inside the job's own budget,
+      # so a slow pass still finishes and a stuck one stops being everybody's
+      # problem.
       - name: Prove the live Brain is actually shut
         id: hosted
-        continue-on-error: true
+        timeout-minutes: 45
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -473,7 +495,20 @@ jobs:
       # discovered.
       - name: Prove it survived the restart
         id: hosted_after
-        continue-on-error: true
+        # Bounded for the reason the pre-restart probe is, and this is the step
+        # that demonstrated the need.
+        timeout-minutes: 45
+        # `always()` because the step before it may have failed, and this one
+        # answers a different question: the pre-restart pass says what the new
+        # image refuses, this says what survived. A restart nobody checked is
+        # the erosion the restart step's own comment describes.
+        #
+        # It does depend on that pass in one way — `--leave-beacon` is what
+        # `--check-beacon` looks for — so a pre-restart failure early enough to
+        # skip the beacon makes this fail for a *derived* reason. That is why
+        # the verdict prints both files' own failure lines rather than a count:
+        # two red steps with one cause must not read as two causes.
+        if: always() && steps.release.outcome == 'success'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -485,8 +520,10 @@ jobs:
           set -e
           grep -q '^HOSTED-VERIFICATION: PASS' hosted-after-restart.txt
 
-      # Both verification steps are `continue-on-error` so that neither can skip
-      # the secret removal. The run's verdict is decided here instead.
+      # Neither verification step is `continue-on-error` any more: a failed
+      # check reads as failed, and the steps that must still run say so
+      # themselves. The run's verdict is still decided below, and it is still
+      # the only thing that decides it.
       # -------------------------------------------------------------------
       # A one-packet authorization, run from the release pipeline
       # -------------------------------------------------------------------
@@ -502,18 +539,58 @@ jobs:
       # them but the one. Idempotent by the packet's own state: a repeat run
       # reports the authorization that already exists and rewrites neither its
       # author nor its timestamp.
-      - name: Authorize one packet for RECORD_GAPS
-        if: inputs.authorize_gap_orchestration != '' && inputs.authorize_gap_admin != ''
+      #
+      # `always()` for the reason the two steps above it carry one: this is a
+      # decision somebody made about one packet, it is idempotent, and it has
+      # nothing to do with whether the hosted gate passed. Letting a failed
+      # probe skip it silently would be an authorization that looks applied and
+      # is not — which is worse than either outcome on its own.
+      #
+      # **More than one, because a programme parks more than one.** The live
+      # manufacturing programme runs three packets at a time and two of them
+      # were `NEEDS_HUMAN` at once, each holding a concurrency slot no worker
+      # could ever free — so a step that authorizes exactly one packet answers
+      # half a deadlock and leaves the programme stopped. Two full deploys is
+      # the alternative and it restarts a Brain holding leased work twice to
+      # apply two idempotent writes.
+      #
+      # Each id is authorized by its own call and each one's `GAP-POLICY: OK`
+      # is required, so a list where one id is wrong fails the step naming that
+      # id rather than reporting the ones that worked. The ids are validated
+      # against the shape the database uses before anything is sent, because
+      # they are interpolated into a remote command line.
+      - name: Authorize packets for RECORD_GAPS
+        if: >-
+          always() && steps.release.outcome == 'success'
+          && inputs.authorize_gap_orchestration != ''
+          && inputs.authorize_gap_admin != ''
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          GAP_ORCHESTRATIONS: ${{ inputs.authorize_gap_orchestration }}
+          GAP_ADMIN: ${{ inputs.authorize_gap_admin }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/authorize-gap-policy.sh --orchestration ${{ inputs.authorize_gap_orchestration }} --admin ${{ inputs.authorize_gap_admin }}" \
-            2>&1 | tee gap-policy.txt
-          set -e
-          grep -q '^GAP-POLICY: OK' gap-policy.txt
+          failed=''
+          for orc in $(echo "$GAP_ORCHESTRATIONS" | tr ',' ' '); do
+            # Exact rather than a prefix glob: `orc_[0-9a-f]*` accepts
+            # `orc_b` and anything after it, which is not a validation.
+            if ! printf '%s' "$orc" | grep -qE '^orc_[0-9a-f]{20}$'; then
+              echo "::error::\"$orc\" is not an orchestration id. Nothing was sent for it."
+              failed="$failed $orc"
+              continue
+            fi
+            echo "--- $orc ---"
+            set +e
+            flyctl ssh console --app "$app" \
+              -C "sh /app/scripts/authorize-gap-policy.sh --orchestration $orc --admin $GAP_ADMIN" \
+              2>&1 | tee "gap-policy-$orc.txt"
+            set -e
+            grep -q '^GAP-POLICY: OK' "gap-policy-$orc.txt" || failed="$failed $orc"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::The gap-policy authorization did not take for:$failed. Read the output above."
+            exit 1
+          fi
 
       # The release is asked about first, and separately.
       #
@@ -536,8 +613,31 @@ jobs:
             echo "::error::No new image was released, so nothing in this commit is live and the app is still serving the previous version. Read the Deploy step; the checks below it were skipped on purpose."
             exit 1
           fi
-          if [ "$before" != "success" ] || [ "$after" != "success" ]; then
-            echo "::error::The hosted verification did not pass. Read the two steps above."
+          # Name the condition, not the step. "Read the two steps above" is
+          # true and sends somebody to scroll through six hundred passing
+          # lines; the verification prints its own verdict line and the
+          # failures beneath it, so those are what this repeats. A verdict that
+          # carries its evidence is the difference between a red run somebody
+          # reads and one somebody re-runs.
+          failing=''
+          for pass in "before the restart:$before:hosted-verification.txt" "after the restart:$after:hosted-after-restart.txt"; do
+            when=${pass%%:*}
+            rest=${pass#*:}
+            outcome=${rest%%:*}
+            file=${rest#*:}
+            [ "$outcome" = 'success' ] && continue
+            failing="$failing${failing:+, }$when"
+            echo "--- $when, from $file ---"
+            if [ ! -s "$file" ]; then
+              echo "(no output was captured: the check did not run, or the console never opened)"
+              continue
+            fi
+            grep '^HOSTED-VERIFICATION' "$file" || echo "(it never printed a verdict line)"
+            grep -E '^ *(FAIL|Hosted verification could not complete)' "$file" | head -20 \
+              || echo "(no FAIL line: read the step for what it did print)"
+          done
+          if [ -n "$failing" ]; then
+            echo "::error::The hosted verification did not pass ($failing). The failing conditions are printed directly above."
             exit 1
           fi
           echo "The live Brain refused everything it should have, twice, either side of a real restart,"
