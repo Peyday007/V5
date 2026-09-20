@@ -472,6 +472,54 @@ submitting anything anywhere; making any commitment on anybody's behalf. This is
 read-only research into what is already published, and every action beyond reading needs
 a separate commercial authorization from a person.`;
 
+export const LABOR_ALLOCATION_ASSIGNMENT_TEMPLATE = `Establish, from published sources, who or what is actually permitted and available to
+produce this output:
+
+{QUESTION}
+
+Subject: the output named above, and work of that kind. Anything you establish about a
+different output is reported as being about something else rather than generalized.
+
+Market: {JURISDICTION}. A rule about who may do this work is usually jurisdictional, so
+say which jurisdiction each requirement is from — a licensing rule quoted without one is
+not a finding about anywhere.
+
+What to settle, as far as published sources allow: whether a statute, regulator, buyer's
+own terms or platform terms require a licensed, certified, registered or accountable
+person; whether any part of it must be performed in person; whether published evidence
+shows the interaction with a person is itself part of what is bought; which channels
+supply this capability, in which jurisdictions, at which published rates and on what
+basis each rate is quoted; and whether this work is published anywhere as being done by
+software rather than by a person.
+
+Every one of those becomes usable only if you declare it. Set labor_finding on the claim
+to the kind it is, and labor_subject to the value from that kind's own set. A claim with
+no labor_finding is ordinary context, which is most of them and is not a deficiency.
+
+An established absence is a finding and is often the most valuable one here. Where you
+searched the places a licensing or credential rule would be published and found none, say
+so as a negative claim naming exactly what you searched — that is what lets work stop
+needing a person, and an undocumented silence is not the same thing.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. A regulator, statute or
+licensing board is conclusive about what it requires. A vendor is conclusive about what
+the vendor claims and worth nothing as independent confirmation that the claim is true. A
+rate is read from a source and never produced: where none publishes one, record the
+channel with no rate rather than estimating.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found. Do not conclude
+from the absence of a rule that no rule exists unless you searched for it and say where.
+
+Out of scope: contacting any person or organisation, including any prospective worker,
+contractor, agency or employer; posting or responding to any job, tender or engagement;
+buying access, data, a subscription or a paid API; placing an advertisement; publishing,
+posting, listing, filing or submitting anything anywhere; making any commitment on
+anybody's behalf. This is read-only research into what is already published. Nothing here
+hires, engages, approaches or contracts with anybody, and every action beyond reading
+needs a separate commercial authorization from a person.`;
+
 export const CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what owner capital this actually requires — after the
 requirements have been taken apart:
 
@@ -817,6 +865,48 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'on what is found is authorized separately by a commercial grant a person makes, and ' +
       'never by this envelope.',
     assignmentTemplate: INDUSTRY_MAP_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * Who is permitted and available to produce one output.
+   *
+   * `RUSSELL_CASH_DISCOVERY_V1`'s permissions exactly — the same source
+   * classes, the same forbidden actions, the same zero external effect, taken
+   * by reference rather than written afresh so the four cannot drift into
+   * authorizing different things. What differs is only the assignment it pins,
+   * which is why it is a separate envelope at all: `planFitsEnvelope` pins one
+   * template per envelope, and a packet has to be judged against the rules for
+   * the question it is actually asking.
+   *
+   * **It authorizes no effect that discovery did not already authorize**, and
+   * that is worth saying plainly because the subject sounds like hiring.
+   * Nothing here approaches a contractor, answers a job posting, requests a
+   * quote, opens an account on a marketplace or engages anybody. It authorizes
+   * *reading about* who may lawfully do this work and what it is published to
+   * cost. Every one of those actions is a `COMMERCIAL_ACTION` a person grants
+   * separately, and the assignment template names them as out of scope so a
+   * worker is told rather than merely refused.
+   */
+  RUSSELL_LABOR_ALLOCATION_V1: Object.freeze({
+    id: 'RUSSELL_LABOR_ALLOCATION_V1',
+    authorization:
+      'The operator authorized standing read-only research inside this project: published ' +
+      'sources only, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing who or what may ' +
+      'lawfully produce one output and what published sources say it costs to obtain that ' +
+      'capability. It authorizes reading about labor and never engaging any: approaching, ' +
+      'hiring, contracting, posting, quoting and every other commitment is a commercial ' +
+      'action a person grants separately, and never this envelope.',
+    assignmentTemplate: LABOR_ALLOCATION_ASSIGNMENT_TEMPLATE,
     jurisdiction: 'the market this question names',
     maxFragments: null,
     geography: /\S/,

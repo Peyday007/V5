@@ -32,8 +32,10 @@ import {
   LANE_EVIDENCE_KINDS,
   type LaneEvidenceKind,
   type StructuralFinding,
+  type LaborFinding,
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
+import { validateLabor } from '../../domain/labor.ts';
 import {
   booleanField,
   confidenceField,
@@ -526,6 +528,14 @@ export interface ParsedClaim {
   structuralQualifier: string | null;
   /** A capital figure, where a source published one. Null means unknown. */
   structuralAmountCents: number | null;
+  /** What it establishes about who or what produces work of this kind, or null. */
+  laborFinding: LaborFinding | null;
+  /** Which reason, which channel, or what the source says performs the work. */
+  laborSubject: string | null;
+  /** The basis a sourcing channel's rate is quoted on. Null otherwise. */
+  laborQualifier: string | null;
+  /** A published rate, where a source published one. Null means unknown. */
+  laborRateCents: number | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -703,6 +713,23 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!structural.ok) return structural;
 
+  /*
+   * And what it establishes about who or what produces work of this kind.
+   *
+   * Delegated whole to `validateLabor` for the identical reason, and kept as
+   * its own call rather than folded into the structural one: the two answer
+   * different questions from different vocabularies, and one validator
+   * checking two closed sets is how a refusal stops naming the right thing.
+   */
+  const labor = validateLabor({
+    where,
+    finding: row['laborFinding'],
+    subject: row['laborSubject'],
+    qualifier: row['laborQualifier'],
+    rateCents: row['laborRateCents'],
+  });
+  if (!labor.ok) return labor;
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -738,6 +765,10 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       structuralSubject: structural.value.subject,
       structuralQualifier: structural.value.qualifier,
       structuralAmountCents: structural.value.amountCents,
+      laborFinding: labor.value.finding,
+      laborSubject: labor.value.subject,
+      laborQualifier: labor.value.qualifier,
+      laborRateCents: labor.value.rateCents,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

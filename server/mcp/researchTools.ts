@@ -90,7 +90,14 @@ import {
   subjectVocabularyFor,
   validateStructural,
 } from '../domain/industry.ts';
-import type { StructuralFinding } from '../domain/types.ts';
+import {
+  LABOR_FINDINGS,
+  LABOR_FINDING_GUIDE,
+  LABOR_SUBJECT_GUIDE,
+  validateLabor,
+} from '../domain/labor.ts';
+import { RATE_BASES } from '../domain/types.ts';
+import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
 import type { EvidenceLane, LaneNecessity } from '../domain/types.ts';
 import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
 import { planDependencies } from '../services/research/splitting.ts';
@@ -1113,6 +1120,38 @@ function structuralOf(
   };
 }
 
+/**
+ * The labor declaration on one submitted claim.
+ *
+ * `structuralOf`'s shape and its reasoning, delegated whole to `validateLabor`
+ * so that the wire door and the provider door cannot disagree about what a
+ * valid declaration is. A rename and nothing else.
+ */
+function laborOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  laborFinding: LaborFinding | null;
+  laborSubject: string | null;
+  laborQualifier: string | null;
+  laborRateCents: number | null;
+} {
+  const parsed = validateLabor({
+    where,
+    finding: row['labor_finding'],
+    subject: row['labor_subject'],
+    qualifier: row['labor_qualifier'],
+    rateCents: row['labor_rate_cents'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    laborFinding: parsed.value.finding,
+    laborSubject: parsed.value.subject,
+    laborQualifier: parsed.value.qualifier,
+    laborRateCents: parsed.value.rateCents,
+  };
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1132,8 +1171,11 @@ const submitClaimsTool: McpTool = {
     '. The kinds that add a subject to the industry map (SUB_INDUSTRY, VALUE_CHAIN_LAYER, ' +
     'BUYER_TYPE, FULFILMENT_SOURCE, TRANSACTION_TYPE, BOTTLENECK, ADJACENT_INDUSTRY) also ' +
     'require structural_subject, which is that subject\'s name; the other three must omit it. ' +
-    'A claim can carry both an opportunity_signal and a structural_finding, and most claims ' +
-    'carry neither. ' +
+    'Separately again, where a claim establishes who or what actually produces work of this ' +
+    'kind, set labor_finding: ' +
+    LABOR_FINDINGS.map((finding) => `${finding} — ${LABOR_FINDING_GUIDE[finding]}`).join('; ') +
+    '. All three axes are independent — a claim may carry an opportunity_signal, a ' +
+    'structural_finding and a labor_finding at once, and most claims carry none of them. ' +
     'One submission per work item; a redelivery replays it rather than adding to it.',
   inputSchema: {
     type: 'object',
@@ -1219,6 +1261,45 @@ const submitClaimsTool: McpTool = {
                 'withholds the minimum owner capital, which is the correct outcome; a guess ' +
                 'would understate it.',
             },
+            /*
+             * Declared here too, for §33's reason one axis along: a field
+             * named in prose and absent from the schema is dropped by every
+             * client that honours `additionalProperties: false`, and the
+             * failure reads exactly like a worker honestly finding nothing.
+             */
+            labor_finding: {
+              type: 'string',
+              enum: [...LABOR_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes who ' +
+                'or what actually produces work of this kind: ' +
+                LABOR_FINDINGS.map((one) => `${one} — ${LABOR_FINDING_GUIDE[one]}`).join('; ') +
+                '. Independent of the other two declarations — a claim may carry all three.',
+            },
+            labor_subject: {
+              type: 'string',
+              description:
+                'Required whenever labor_finding is set: what the finding is about. ' +
+                LABOR_SUBJECT_GUIDE +
+                '.',
+            },
+            labor_qualifier: {
+              type: 'string',
+              enum: [...RATE_BASES],
+              description:
+                'Only for SOURCING_CHANNEL, and required there whenever labor_rate_cents is ' +
+                'set: what the rate is quoted on. A figure with no basis compares to nothing, ' +
+                'and reading the basis out of the claim sentence would get an order of ' +
+                'magnitude wrong silently.',
+            },
+            labor_rate_cents: {
+              type: 'integer',
+              description:
+                'Only for SOURCING_CHANNEL, and optional there: what a source publishes this ' +
+                'channel charges, in minor units. Leave it out where none does — the channel ' +
+                'is still worth recording, and an unknown rate is recorded as unknown rather ' +
+                'than read as cheap.',
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
@@ -1303,6 +1384,15 @@ const submitClaimsTool: McpTool = {
          * answer can overwrite the other.
          */
         ...structuralOf(row, where),
+        /*
+         * And what it establishes about who or what produces the work.
+         *
+         * The third axis, and independent of the other two for the same
+         * reason they are independent of each other: that same subcontracting
+         * notice is an opening, a fulfilment source *and* a sourcing channel,
+         * and a shared column would make one of the three overwrite the rest.
+         */
+        ...laborOf(row, where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),
