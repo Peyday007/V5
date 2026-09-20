@@ -2684,11 +2684,24 @@ remote.
   minutes and forty-four seconds**, and it *succeeded* — `PASS  and only the
   judge records a verdict — verdict MORE_RESEARCH`.
 
-  So every earlier reading of this was the client giving up at 300 seconds, and
-  the two shapes the section could not tell apart were one slow pass seen from
-  either side of it. What the pass finishes into is the next refusal down:
-  `brain_complete_work: FENCE_LOST`, because `DEFAULT_LEASE_MS` is five minutes
-  and nothing was saying the worker was still alive. **The queue was right and
+  So the three runs that failed at 5m18s, 5m22s and 5m23s were the client
+  giving up at 300 seconds, which §27 had already measured directly. What is
+  new is what lies past that wall: the pass carries on to 9m44s, and what it
+  finishes into is the next refusal down — `brain_complete_work: FENCE_LOST`,
+  because `DEFAULT_LEASE_MS` is five minutes and nothing was saying the worker
+  was still alive.
+
+  **That chain is now observed once, and it is still not what the four earlier
+  `FENCE_LOST` runs are established to have been.** §27 refused that inference
+  deliberately — *"the tempting story is a mechanism rather than a reading"* —
+  and one instance of the mechanism actually occurring makes it plausible
+  rather than proven; none of those four was timed. Two further facts cut
+  against collapsing them: runs 252 and 253 both recorded
+  `HOSTED-VERIFICATION: PASS 198/198` pre-restart, so the judge pass *does*
+  finish inside 300 seconds on some runs, which means **its duration varies by
+  a factor of at least two** and 9m44s is one reading rather than the cost.
+  What the judge pass costs in general is still unmeasured, and the beat makes
+  the harness survive it rather than making it faster. **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so
   that a worker which stopped working cannot hold work for ever, and a worker
   still working says so by beating — which is what every other long-running

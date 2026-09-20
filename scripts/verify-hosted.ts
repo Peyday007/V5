@@ -1910,10 +1910,16 @@ const BEAT_EVERY_MS = 100_000;
  * after it was then refused with `FENCE_LOST`, correctly, because by then the
  * lease had lapsed and the item was claimable again.
  *
- * That is the number §27 asked for and never got: every earlier run threw
- * `fetch failed` at ~5m20s, because undici's own 300-second header timeout
- * pre-empted the bound the script thought it had set. With the bound actually
- * applied the pass finishes, and what it finishes into is this.
+ * That is the number §27 asked for and never got: three earlier runs threw
+ * `fetch failed` at 5m18s, 5m22s and 5m23s, because undici's own 300-second
+ * header timeout pre-empted the bound the script thought it had set. With the
+ * bound actually applied the pass finishes, and what it finishes into is this.
+ *
+ * **It is one reading rather than the cost of a judge pass.** Runs 252 and 253
+ * both recorded `PASS 198/198` pre-restart, so the same step also finishes
+ * inside 300 seconds sometimes — the duration varies by at least a factor of
+ * two and nothing here makes it faster. The beat is what lets the harness
+ * survive whichever end of that range it gets.
  *
  * So the queue was right and the harness was wrong: an at-least-once queue
  * expires a lease precisely so that a worker which stopped working cannot hold
