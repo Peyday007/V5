@@ -230,14 +230,75 @@ export function readingsExpression(
   }, []);
 
   /* Interactive boxes under the floor. A zero box is not a small target: it is
-     not on the screen, which is a different question again. */
+     not on the screen, which is a different question again.
+
+     The **target** is measured, not the control. A native radio is 13x13 in
+     every browser and nobody aims at it: it sits inside a <label>, and clicking
+     the words toggles it, so the thing a finger has to hit is the label's box.
+     Measuring the input alone reported every radio on Build as a small target
+     when the real target was the full width of the row — a false finding, and
+     §29 is explicit that one of those costs more than the defect it was looking
+     for, because somebody spends an hour on it.
+
+     Only a label that actually labels this control counts: one wrapping it, or
+     one whose for-attribute names it. A label merely sitting beside a control is not
+     part of its target and is not credited. */
   const smallTargets = take('smallTargets', () => {
     const bad = [];
+    const targetBox = (el) => {
+      const own = el.getBoundingClientRect();
+      let left = own.left, top = own.top, right = own.right, bottom = own.bottom;
+      const labels = [];
+      const wrapping = el.closest ? el.closest('label') : null;
+      if (wrapping) labels.push(wrapping);
+      if (el.id) {
+        try {
+          const forId = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+          if (forId) labels.push(forId);
+        } catch (error) { /* an id CSS.escape cannot express is not a label lookup */ }
+      }
+      for (const one of labels) {
+        const b = one.getBoundingClientRect();
+        if (b.width < 1 || b.height < 1) continue;
+        left = Math.min(left, b.left);
+        top = Math.min(top, b.top);
+        right = Math.max(right, b.right);
+        bottom = Math.max(bottom, b.bottom);
+      }
+      return { width: right - left, height: bottom - top, labelled: labels.length > 0 };
+    };
+
+    /* WCAG 2.2's own Inline exception, in its own words: a target *in a
+       sentence*, or whose size is otherwise constrained by the line-height of
+       non-target text, is exempt. Brain's product uses link-styled buttons
+       inside hint paragraphs — "People & capacity is who has joined this Brain
+       and how much capacity it can fire" — and a criterion that flagged those
+       would be asking for the sentence to be broken up to satisfy a rule that
+       explicitly excludes it. Measured rather than assumed: the parent must
+       hold real text of its own outside the control, and the control must fit
+       inside one line of it. */
+    const inSentence = (el, box) => {
+      const parent = el.parentElement;
+      if (!parent) return false;
+      let outside = '';
+      for (const node of parent.childNodes) {
+        if (node !== el && node.nodeType === 3) outside += node.textContent;
+      }
+      if (outside.trim().length < 2) return false;
+      const lineHeight = parseFloat(getComputedStyle(parent).lineHeight);
+      return !isFinite(lineHeight) || box.height <= lineHeight + 1;
+    };
+
     for (const el of scope.querySelectorAll(INTERACTIVE)) {
-      const box = el.getBoundingClientRect();
-      if (box.width < 1 || box.height < 1) continue;
+      const own = el.getBoundingClientRect();
+      if (own.width < 1 || own.height < 1) continue;
+      if (inSentence(el, own)) continue;
+      const box = targetBox(el);
       if (box.width >= ${floor} && box.height >= ${floor}) continue;
-      bad.push(label(el) + ': ' + Math.round(box.width) + 'x' + Math.round(box.height));
+      bad.push(
+        label(el) + ': ' + Math.round(box.width) + 'x' + Math.round(box.height) +
+          (box.labelled ? ' including its label' : ''),
+      );
     }
     return bad.slice(0, 12);
   }, []);
@@ -294,7 +355,18 @@ export function readingsExpression(
       const large = size >= 24 || (size >= 18.66 && weight >= 700);
       const floor = large ? ${LARGE_TEXT_CONTRAST_FLOOR} : ${CONTRAST_FLOOR};
       if (ratio + 0.01 < floor) {
-        bad.push(label(el) + ': ' + ratio.toFixed(2) + ':1 against ' + floor + ':1 (' + Math.round(size) + 'px)');
+        /* The two colours, not only the ratio.
+         *
+         * A finding reading "1.66:1" sends somebody back to the browser to find
+         * out which pair produced it, and the pair is the whole repair: the
+         * first real one here turned out to be a heading inheriting a rule
+         * colour rather than an ink one, which the number alone said nothing
+         * about. §29's rule that technical detail is what a reader is owed. */
+        const hex = (c) => '#' + [c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+        bad.push(
+          label(el) + ': ' + ratio.toFixed(2) + ':1 against ' + floor + ':1 (' + Math.round(size) +
+            'px, ' + hex(fg) + ' on ' + hex(bg) + ')',
+        );
       }
     }
     if (unmeasured > 0) partial.push('lowContrast: ' + unmeasured + ' element(s) had no opaque backdrop to measure against, so their contrast is unknown rather than acceptable');

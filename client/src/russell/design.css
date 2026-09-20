@@ -55,6 +55,18 @@
   --iron: #9c3b2c;
   --slate: #5b6b7c;
 
+  /* The ink companions, for the same reason `--verdigris-ink` has always
+     existed: a colour chosen to be a *surface* is not a colour that can be
+     read as text on one. The design kernel measured `--ochre` as text at
+     3.15:1 on `--paper` and 3.01:1 on its own wash, against a 4.5:1 floor;
+     `--moss` is 4.07:1 on its wash, which fails by less and fails. Both
+     surface tokens are untouched, so every background, border and chip is
+     the colour it was — these are used only where the colour is a word.
+     Measured, not chosen by eye: #8a6011 clears 4.74:1 on the worst light
+     surface and #42704f clears 4.79:1 on its wash. */
+  --moss-ink: #42704f;
+  --ochre-ink: #8a6011;
+
   --moss-wash: #e4ede6;
   --ochre-wash: #f6eedc;
   --iron-wash: #f4e4e1;
@@ -84,6 +96,13 @@
   --r-1: 4px;
   --r-2: 8px;
   --r-3: 14px;
+
+  /* The smallest a control may be and still be a target, which WCAG 2.2 puts
+     at 24 CSS pixels. A token rather than a number in three rules, because the
+     design kernel measures against the same figure from
+     `services/design/observe.ts` and two copies of a floor is a floor the two
+     eventually disagree about. */
+  --target-floor: 24px;
 
   /* The rail is a measurement other rules need, so it is a token rather than
      a number repeated in four places. */
@@ -115,6 +134,11 @@
 
     --moss: #7fb08b;
     --ochre: #d9a845;
+    /* Dark mode needs no separate ink: `--ochre` and `--moss` measure 7.03:1
+       and better on every dark surface, so the ink tokens simply resolve to
+       them and one rule serves both themes. */
+    --moss-ink: #7fb08b;
+    --ochre-ink: #d9a845;
     --iron: #d4705e;
     --slate: #8b9bab;
 
@@ -142,6 +166,8 @@
   --verdigris-ink: #7fcdb8;
   --moss: #7fb08b;
   --ochre: #d9a845;
+  --moss-ink: #7fb08b;
+  --ochre-ink: #d9a845;
   --iron: #d4705e;
   --slate: #8b9bab;
   --moss-wash: #17281c;
@@ -182,6 +208,90 @@
 
 .rs-shell > * {
   min-width: 0;
+}
+
+/*
+ * Russell's headings belong to Russell, and until this they did not.
+ *
+ * `client/src/main.tsx` imports `styles.css` and this file, globally and in that
+ * order, and `styles.css` is the legacy console's — *dark, dense,
+ * information-first*, by its own first paragraph. It styles bare elements, so
+ * its `h4 { font-size: 12px; color: var(--fg-dim); letter-spacing: 0.06em;
+ * text-transform: uppercase }` applies to **every** h4 in the application,
+ * including the ones on this surface. `--fg-dim` is `#b3c1d1`: a light
+ * grey-blue chosen to sit on a near-black background, painted here on
+ * `--paper` `#f2f4f6`.
+ *
+ * The design kernel measured what that costs. `h4.rs-collection-name` — the
+ * name of each conversation group on Home — rendered at **1.66:1** against a
+ * 4.5:1 floor, in capitals it was never given, with tracking nobody chose. It
+ * had no colour of its own to be wrong: `.rs-collection-name` sets only a font,
+ * and `.rs-view h4` (which does set one) does not reach Home.
+ *
+ * So the repair is the class rather than the instance. Patching that one
+ * selector would have left the next heading somebody adds outside `.rs-view`
+ * with exactly the same defect and no reason to expect it — and the same is
+ * true of every other bare-element rule in a stylesheet written for a different
+ * product. Headings inside the shell take their colour from what contains them
+ * and impose no case or tracking of their own; the class that styles a heading
+ * still decides its size, exactly as before.
+ *
+ * Repairing the headings then found the same leak one element along, which is
+ * why the list is not only headings. `label { font-size: 10.5px;
+ * letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted) }`
+ * put `#7d8ea1` on white — **3.36:1** — inside every scope-choice row on Build,
+ * measured after the heading fix rather than guessed at. Reading the legacy
+ * sheet for every bare-element rule that sets a colour, a case or a tracking
+ * gives exactly this list: `a`, `body`, `code`, `kbd`, `samp`, `legend`,
+ * `select`, `textarea`, `label` and the headings. Links, code and monospace
+ * samples are left out on purpose — this file styles those itself, and
+ * overriding them here would be two rules arguing about one element.
+ *
+ * Only colour, case and tracking are reset. **Size is not**, because size is
+ * what the Russell class that styles an element decides, and resetting it would
+ * change how a dozen screens read to fix how three of them measure.
+ *
+ * It is scoped to `.rs-shell`, so nothing about the legacy console at `/legacy`
+ * changes. That surface is still the one thing some operations only exist on
+ * (§29), and it is not this kernel's to restyle.
+ */
+.rs-shell :is(h1, h2, h3, h4, h5, h6, label, legend, select, textarea) {
+  color: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/*
+ * A button nobody styled is still a control somebody has to hit.
+ *
+ * Same family as the headings above and found the same way. `Build` renders
+ *   <button type="button" onClick={reload}>Try again</button>
+ * with no class, so it inherited nothing from this file, rendered at the
+ * browser default in the browser's own typeface, and measured **21px tall**
+ * against WCAG 2.2's 24px target floor. Not a taste question and not a
+ * borderline one: three pixels, on the control a person presses precisely when
+ * something has already gone wrong for them.
+ *
+ * `:not([class])` is the whole scope, deliberately. Every button this file
+ * already styles keeps exactly what it has; what this reaches is the set of
+ * buttons that were never given an appearance at all, which is the set that
+ * cannot be wrong to give one to. The alternative — styling every button and
+ * unwinding the collisions — would be a restyle of the product on the way to
+ * fixing three pixels.
+ */
+.rs-shell button:not([class]) {
+  min-height: var(--target-floor);
+  padding: 0 var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 var(--step--1) / 1.4 var(--body);
+  cursor: pointer;
+}
+
+.rs-shell button:not([class]):hover {
+  border-color: var(--rule-strong, var(--ink-faint));
 }
 
 .rs-shell-bar {
@@ -885,12 +995,12 @@ button.rs-card:hover {
 
 .rs-pill-good {
   background: var(--moss-wash);
-  color: var(--moss);
+  color: var(--moss-ink);
 }
 
 .rs-pill-watch {
   background: var(--ochre-wash);
-  color: var(--ochre);
+  color: var(--ochre-ink);
 }
 
 .rs-pill-bad {
@@ -995,7 +1105,7 @@ button.rs-card:hover {
 }
 
 .rs-hero-needs.is-needed {
-  color: var(--ochre);
+  color: var(--ochre-ink);
   font-weight: 600;
 }
 
@@ -1986,7 +2096,12 @@ button.rs-card:hover {
 
 .rs-repo-scope-choice {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  /* The label *is* the target: a native radio is 13x13 in every browser and
+     clicking the words is what people do. Measured at 23px, one short of the
+     floor — the kind of finding that only exists because something measured
+     it. */
+  min-height: var(--target-floor);
   gap: var(--gap-2);
   font-size: var(--step--1);
 }
