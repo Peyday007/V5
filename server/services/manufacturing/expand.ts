@@ -36,10 +36,11 @@
  */
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
-import { capabilityClaims, countDeclaredCapabilityClaims } from '../../repos/research.ts';
+import { capabilityClaims } from '../../repos/research.ts';
 import { recordEvent } from '../../repos/events.ts';
 import {
   closeManufacturingRound,
+  countFiledFromOrchestration,
   createCategory,
   ensureCapability,
   getProgram,
@@ -320,20 +321,23 @@ export async function absorb(input: { projectId: string; limit?: number }): Prom
   for (const [orchestrationId, { round, missionDone }] of byOrchestration) {
     if (!missionDone) continue;
     /*
-     * Derived from the claims rather than tallied from what this pass wrote.
+     * Derived from the rows this orchestration's findings filed, rather than
+     * tallied from what this pass wrote.
      *
      * Tallying is only correct while every pass that absorbs a round also
      * closes it, and a tick that dies between the two breaks exactly that: the
-     * claims are filed, the round is still OPEN, and the next pass writes
+     * findings are filed, the round is still OPEN, and the next pass writes
      * nothing because every insert conflicts. It would then record a round that
      * established five things as having established none — and `found` is what
      * barrenness is decided against, so the category would be declined as one
      * nobody should look at again.
      *
-     * Derived, it is the same number however many times it is asked, which is
-     * the property a crash window needs.
+     * Counting *rows* rather than declared claims is what keeps this identical
+     * to the tally on every path except the one it was wrong on: two claims
+     * naming the same category file one row, and counting claims would have
+     * counted two.
      */
-    const found = await countDeclaredCapabilityClaims(orchestrationId);
+    const found = await countFiledFromOrchestration(orchestrationId);
     if (await closeManufacturingRound({ id: round.id, to: 'HARVESTED', found })) {
       out.settled.push({ roundId: round.id, found });
     }

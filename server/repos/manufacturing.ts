@@ -643,3 +643,41 @@ export async function closeManufacturingRound(input: {
   );
   return result.changes === 1;
 }
+
+/**
+ * How many rows one orchestration's findings actually put on the ladder.
+ *
+ * What a programme round *found*, derived from what was filed rather than
+ * tallied from what a pass happened to write. `countFiledFromOrchestration` in
+ * `repos/industry.ts` is the same repair one kernel along and carries the full
+ * argument: tallying is correct only while every pass that absorbs a round also
+ * closes it, and a tick dying between the two would record a round that
+ * established five things as having established none — which is what barrenness
+ * is decided against.
+ *
+ * Counting *rows* rather than declared claims is what keeps this a repair
+ * rather than a change. Two claims naming the same category file one row, and
+ * the tally counted one; counting claims would have counted two and quietly
+ * moved a number on rounds that settled correctly.
+ *
+ * A capability row is deliberately not counted on its own — only the edge is. A
+ * capability with no edge to this category is not a finding *about* this
+ * category, and counting it would make a round that merely renamed something
+ * look productive.
+ */
+export async function countFiledFromOrchestration(orchestrationId: string): Promise<number> {
+  const row = await getDb().get<{ total: number }>(
+    `SELECT
+       (SELECT COUNT(*) FROM machine_categories m
+          JOIN research_claims c ON c.id = m.source_claim_id
+         WHERE c.orchestration_id = ?)
+     + (SELECT COUNT(*) FROM capability_edges e
+          JOIN research_claims c ON c.id = e.source_claim_id
+         WHERE c.orchestration_id = ?)
+     + (SELECT COUNT(*) FROM category_evidence v
+          JOIN research_claims c ON c.id = v.source_claim_id
+         WHERE c.orchestration_id = ?) AS total`,
+    [orchestrationId, orchestrationId, orchestrationId],
+  );
+  return Number(row?.total ?? 0);
+}

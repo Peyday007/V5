@@ -419,3 +419,45 @@ export async function listConstraintsForProject(
   );
   return rows.map(mapConstraint);
 }
+
+/**
+ * How many rows one orchestration's findings actually put on the map.
+ *
+ * What a kernel round *found*, derived from what was filed rather than tallied
+ * from what a pass happened to write — and the distinction is load-bearing.
+ *
+ * Tallying is correct only while every pass that absorbs a round also closes
+ * it. A tick that dies between the two leaves the findings filed and the round
+ * OPEN, so the next pass writes nothing (every insert conflicts on its unique
+ * index), tallies zero, and records a round that established five subjects as
+ * having established none. `found` is what `nextRoundFor` and `standingOf`
+ * decide barrenness against, so that subject is then documented as one nobody
+ * should look at again — from an accident of timing.
+ *
+ * Counting *rows* rather than declared claims is deliberate and is what keeps
+ * this a repair rather than a change. A round whose two claims name the same
+ * sub-industry files one node, and the tally counted one; counting claims would
+ * have counted two and quietly moved a number on rounds that settled correctly.
+ * This returns exactly what the tally returned on every path except the one it
+ * was wrong on.
+ *
+ * Openings are deliberately not counted here: `harvest` writes those and
+ * `absorb` already reads them from `cash_opportunities` by orchestration, which
+ * is the same derived shape one table along.
+ */
+export async function countFiledFromOrchestration(orchestrationId: string): Promise<number> {
+  const row = await getDb().get<{ total: number }>(
+    `SELECT
+       (SELECT COUNT(*) FROM industry_nodes n
+          JOIN research_claims c ON c.id = n.source_claim_id
+         WHERE c.orchestration_id = ?)
+     + (SELECT COUNT(*) FROM opportunity_constraints o
+          JOIN research_claims c ON c.id = o.source_claim_id
+         WHERE c.orchestration_id = ?)
+     + (SELECT COUNT(*) FROM capital_structures s
+          JOIN research_claims c ON c.id = s.source_claim_id
+         WHERE c.orchestration_id = ?) AS total`,
+    [orchestrationId, orchestrationId, orchestrationId],
+  );
+  return Number(row?.total ?? 0);
+}

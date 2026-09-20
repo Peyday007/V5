@@ -1088,37 +1088,6 @@ export async function capabilityClaims(input: {
 }
 
 /**
- * How many accepted, declared capability findings one orchestration produced.
- *
- * What a manufacturing round *found*, derived rather than tallied — and the
- * distinction is load-bearing rather than stylistic. Counting the rows a pass
- * newly wrote is only correct while every pass that absorbs a round also closes
- * it: a tick that dies in between leaves the claims filed and the round open,
- * and the next pass writes nothing (every insert conflicts), tallies zero, and
- * records a round that produced five findings as having produced none.
- *
- * `found` is what barrenness is decided against, so that reads as a category
- * nobody should look at again. Derived from the claims, it is the same number
- * however many times it is asked — which is the property a crash window
- * needs.
- *
- * It counts findings rather than rows written, and the difference is honest: a
- * declaration Brain could not file is still something the round established,
- * and where it went instead is reported in `refused`.
- */
-export async function countDeclaredCapabilityClaims(orchestrationId: string): Promise<number> {
-  const row = await getDb().get<{ total: number }>(
-    `SELECT COUNT(*) AS total FROM research_claims c
-       JOIN research_fragments f ON f.id = c.fragment_id
-      WHERE c.orchestration_id = ? AND c.accepted = 1
-        AND c.capability_finding IS NOT NULL
-        AND f.status IN ('ACCEPTED', 'BLOCKED')`,
-    [orchestrationId],
-  );
-  return Number(row?.total ?? 0);
-}
-
-/**
  * Which fragment each citable claim came from, and whether that fragment met
  * its bar — so the ledger can say so beside the claim rather than leaving a
  * reader to assume every cited claim rests on a settled question.
