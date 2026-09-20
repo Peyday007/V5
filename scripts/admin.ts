@@ -562,7 +562,8 @@ async function main(): Promise<void> {
         targetId: worker.id,
         projectId: null,
         result: 'SUCCESS',
-        metadata: { name: worker.name },
+        // The label is the identity; the handle is what was typed, kept as history.
+        metadata: { name: workerIdentity(worker), legacyName: worker.name },
       });
       console.log(`  ${worker.id}  ${workerIdentity(worker)}  (legacy handle ${worker.name})`);
       console.log('  It is a member of no project and holds no credential yet.');

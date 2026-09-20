@@ -418,7 +418,10 @@ export async function readFactoryPool(input: {
   }
 
   return {
-    expectedWorker: { id: expectedWorker.id, name: expectedWorker.name },
+    // The neutral identity: this string is printed in every pool problem, and
+    // a report naming a surface after a person reads as a claim about whose
+    // account it is. The lookup that found it is still by handle.
+    expectedWorker: { id: expectedWorker.id, name: workerIdentity(expectedWorker) },
     repository: input.repository,
     surfaces,
     boundElsewhere,

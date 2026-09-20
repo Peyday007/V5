@@ -838,7 +838,7 @@ async function main(): Promise<void> {
         grantedById: 'step10-harness',
       });
       granted += 1;
-      console.log(`  granted ${worker.name} access to ${SLUG}`);
+      console.log(`  granted ${workerIdentity(worker)} access to ${SLUG}`);
     }
     console.log(`STEP10: OK setup project=${projectId} workers=${granted}`);
     return;

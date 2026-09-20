@@ -197,6 +197,7 @@ import { projectRecord } from '../server/services/connect/projection.ts';
 import { findExternalRecord } from '../server/repos/externalRecords.ts';
 import { WORKER_SCOPES } from '../server/domain/types.ts';
 import type { ExistingClaim, Principal, Project } from '../server/domain/types.ts';
+import { workerIdentity } from '../server/services/identity/authenticate.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
@@ -2247,8 +2248,8 @@ async function inviteJourney(
   const workerPrincipal: Principal = {
     type: 'WORKER',
     id: worker.id,
-    handle: worker.name,
-    displayName: worker.displayName,
+    handle: workerIdentity(worker),
+    displayName: workerIdentity(worker),
     isBrainAdmin: false,
     mustChangePassword: false,
     credentialId: 'acceptance:worker',
