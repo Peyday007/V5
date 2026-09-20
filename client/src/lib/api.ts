@@ -236,6 +236,14 @@ export interface SessionUser {
   displayName: string;
   isBrainAdmin: boolean;
   mustChangePassword: boolean;
+  /**
+   * Whether this account has a six-digit PIN set.
+   *
+   * A boolean and never the PIN, its length or when it was set. The recovery
+   * screen reads it to say *create* or *replace*; nothing decides access on it,
+   * because the server decides that from the verifier it holds.
+   */
+  hasPin?: boolean;
 }
 
 export interface SessionResponse {
@@ -260,6 +268,22 @@ export const Api = {
 
   login(email: string, password: string): Promise<{ user: SessionUser }> {
     return post<{ user: SessionUser }>('/api/auth/login', { email, password });
+  },
+
+  /**
+   * The ordinary human door: an identity and six digits.
+   *
+   * The identity is an address or a display name — members enrolled with a
+   * link hold no address at all, so an email-only door would have a PIN they
+   * could never present. Which of the two it was is the server's to work out.
+   */
+  signInWithPin(identity: string, pin: string): Promise<{ user: SessionUser }> {
+    return post<{ user: SessionUser }>('/api/auth/pin', { identity, pin });
+  },
+
+  /** Set or replace the signed-in account's own PIN. Never takes an identity. */
+  setPin(pin: string): Promise<{ ok: boolean }> {
+    return post<{ ok: boolean }>('/api/auth/pin/set', { pin });
   },
 
   /*
