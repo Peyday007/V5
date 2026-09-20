@@ -312,6 +312,18 @@ interface Fixtures {
   expiredCredentialId: string;
   workerId: string;
   /**
+   * The neutral operational identity Brain assigned this worker, and the
+   * handle somebody typed when the row was created.
+   *
+   * Both, because the assertion that matters needs both halves: `brain_whoami`
+   * must answer with the label **and** must not answer with the name. A check
+   * that only required the label would pass with both on the page, and both on
+   * the page is the defect — the same reasoning `tests/oauth.test.ts` records,
+   * at the one surface a test in `tests/` cannot reach.
+   */
+  workerLabel: string | null;
+  workerLegacyName: string;
+  /**
    * A third worker, the only one granted the research scopes.
    *
    * Deliberately not the one above. That grant is read-only on purpose — it is
@@ -668,6 +680,8 @@ async function setUp(): Promise<Fixtures> {
     expiredCredential: expired.plaintext,
     expiredCredentialId: expired.credential.id,
     workerId: worker.id,
+    workerLabel: worker.label,
+    workerLegacyName: worker.name,
     researchCredential: researchIssued.plaintext,
     researchCredentialId: researchIssued.credential.id,
     researchWorkerId: researcher.id,
@@ -2748,6 +2762,44 @@ async function mcpChecks(fixtures: Fixtures): Promise<void> {
     'and calls a tool over TLS, through the load balancer',
     whoami.result?.isError === false && whoami.result?.resultType === 'complete',
     `resultType ${String(whoami.result?.resultType)}`,
+  );
+
+  /*
+   * What the deployed Brain calls the caller.
+   *
+   * `Principal.handle` used to carry `workers.name` — an operator handle
+   * somebody typed — so a check-in was answered with a person's first name and
+   * every reader took that for a claim about whose Claude account ran the
+   * session. It carries `workers.label` now, which is neutral and assigned by
+   * the server.
+   *
+   * Asserted here rather than only in `tests/`, because this is the one
+   * surface a test in `tests/` cannot reach: a *deployed* principal, resolved
+   * from a credential presented over TLS at the public URL. §33 records what
+   * happens when a contract change reaches every fixture in `tests/` and not
+   * this script — the whole suite passes and the released image refuses its
+   * own gate.
+   *
+   * Both halves, deliberately. A check that only required the label would pass
+   * with the typed name beside it, and both on the page is the defect.
+   */
+  const identity = whoami.result?.structuredContent as
+    | { handle?: unknown; displayName?: unknown; principalType?: unknown }
+    | undefined;
+  const expectedLabel = fixtures.workerLabel;
+  record(
+    'and names the caller by its neutral label, not by a handle somebody typed',
+    typeof expectedLabel === 'string' &&
+      expectedLabel.length > 0 &&
+      identity?.handle === expectedLabel &&
+      identity?.displayName === expectedLabel,
+    `handle ${String(identity?.handle)} · expected ${String(expectedLabel)}`,
+  );
+  record(
+    'and never answers with the legacy worker name, which attributes nothing',
+    identity?.handle !== fixtures.workerLegacyName &&
+      identity?.displayName !== fixtures.workerLegacyName,
+    `legacy handle ${fixtures.workerLegacyName} absent from the principal`,
   );
 
   /* --- The official SDK client, over the same URL ----------------------- */
