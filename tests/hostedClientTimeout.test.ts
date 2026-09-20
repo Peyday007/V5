@@ -79,3 +79,31 @@ describe('the sentence a stalled hosted verification prints', () => {
     expect(said).toContain('tools/list');
   });
 });
+
+describe('the release gate and the MCP client print one sentence', () => {
+  /*
+   * They were two printers of one sentence and drifted into being wrong in
+   * both places at once: `verify-hosted.ts` and `mcpModernClient.ts` each had
+   * their own `did not answer within ${REQUEST_TIMEOUT_MS}s`, and both were
+   * false for the same reason. A rule applied by one of two readers is worse
+   * than none, and so is a sentence composed by one of two printers.
+   */
+  it('has exactly one place that composes it', async () => {
+    const fs = await import('node:fs/promises');
+    const gate = await fs.readFile('scripts/verify-hosted.ts', 'utf8');
+    expect(gate).toContain('describeTimeout(');
+    expect(gate).not.toMatch(/did not answer within/);
+  });
+
+  it('lets the gate name its own bound, since the two need not be equal', () => {
+    const said = describeTimeout(
+      'POST /mcp',
+      {},
+      120_000,
+      new Error('The operation was aborted due to timeout'),
+      'TimeoutError',
+      120_000,
+    );
+    expect(said).toMatch(/own 120s limit ended it/);
+  });
+});

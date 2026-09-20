@@ -109,6 +109,8 @@ export function describeTimeout(
   elapsedMs: number,
   error: unknown,
   cause: string | undefined,
+  /** The caller's own bound, when it differs from this client's. */
+  limitMs: number = REQUEST_TIMEOUT_MS,
 ): string {
   const named = typeof params['name'] === 'string' ? ` (${params['name']})` : '';
   const waited = `${(elapsedMs / 1000).toFixed(1)}s`;
@@ -116,9 +118,9 @@ export function describeTimeout(
   const limit =
     cause === 'UND_ERR_HEADERS_TIMEOUT'
       ? " undici's own header wait ended it, which this client's bound does not raise, so " +
-        `the ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s limit below it was never reached.`
+        `the ${Math.round(limitMs / 1000)}s limit below it was never reached.`
       : cause === 'TimeoutError' || message.includes('timed out')
-        ? ` This client's own ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s limit ended it.`
+        ? ` This client's own ${Math.round(limitMs / 1000)}s limit ended it.`
         : '';
   return (
     `${method}${named} did not answer; nothing answered it after ${waited} ` +

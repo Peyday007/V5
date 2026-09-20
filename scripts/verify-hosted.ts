@@ -52,7 +52,7 @@ import crypto from 'node:crypto';
 import { describePersistence, persistenceConfig } from '../server/config.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { ModernMcpClient } from './mcpModernClient.ts';
+import { describeTimeout, ModernMcpClient } from './mcpModernClient.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listBins, terminateUnleasedBin } from '../server/repos/bins.ts';
 import {
@@ -206,11 +206,13 @@ let base = '';
 
 /**
  * How long any one request to the deployed Brain may take before this gate
- * stops waiting.
+ * stops waiting — **when it is what stops it**, which is usually not the case.
  *
- * Fifteen minutes: comfortably past the five-minute wall every previous run
- * hit, and far inside the job's own budget, so a slow judge pass gets to
- * finish and be timed rather than being cut off and reported as nothing.
+ * Fifteen minutes was chosen to sit past the five-minute wall every previous
+ * run hit. It does not reach it: `AbortSignal` does not raise undici's
+ * `headersTimeout`, so a request to a server that has accepted the connection
+ * and not answered still ends at 300.9s. See `describeTimeout`, which measures
+ * which limit fired rather than assuming this one did.
  */
 const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -237,26 +239,30 @@ async function call(
   if (init.origin) headers['origin'] = init.origin;
 
   /*
-   * An explicit bound with a named failure, because the default one is silent.
+   * A named failure, and **the bound in it does not bind.**
    *
    * This helper passed no `signal`, so every request carried Node's own
    * default — measured at **300.8 seconds**, throwing `fetch failed` with
-   * cause `UND_ERR_HEADERS_TIMEOUT`. Six deploys have died at the judge audit
-   * step, two of them reporting exactly that at 5m18s and 5m23s, and the
-   * repository recorded the shape as a work item losing a five-minute lease.
-   * It is not: the lease is the server's and this is the client giving up, and
-   * an unattributable `fetch failed` is what let the two readings look alike
-   * for five runs.
+   * cause `UND_ERR_HEADERS_TIMEOUT`, and an unattributable `fetch failed` is
+   * what let six deploys look like one condition. Adding the signal named the
+   * request, which was the point, and then the sentence started asserting a
+   * fifteen-minute wait that never happens: `AbortSignal` bounds the whole
+   * request and does not raise undici's `headersTimeout`. Measured rather than
+   * reasoned about, on Node 22.22.2 against a server that accepts and never
+   * replies, `AbortSignal.timeout(900_000)` throws at **300.9s** — the same
+   * default, unchanged by the signal.
    *
-   * **This is not a fix for the slowness and must not be read as one.** The
-   * judge pass takes longer than five minutes and nobody knows how much
-   * longer, because nothing has ever waited long enough to find out. The bound
-   * is set where the next occurrence either finishes — and the timestamps say
-   * what it costs — or fails naming the request and the wait, which is a
-   * measurement rather than a mystery. Raising a timeout past a real slowness
-   * is how a slow thing becomes a permanent one nobody looks at.
+   * So the sentence is `describeTimeout`'s, shared with the MCP client that
+   * submits the audit roles, because two printers of one sentence drift and
+   * the last time these two disagreed the gate was wrong in both places at
+   * once. The only number it asserts is the elapsed time it observed.
+   *
+   * **None of this is a fix for the slowness.** The judge pass takes longer
+   * than five minutes, nobody knows how much longer, and the instrument that
+   * could find out is a `dispatcher` rather than a signal.
    */
   let response: Response;
+  const startedAt = Date.now();
   try {
     response = await fetch(`${base}${path}`, {
       method: init.method ?? 'GET',
@@ -268,10 +274,14 @@ async function call(
   } catch (error) {
     const cause = (error as { cause?: { code?: string } }).cause?.code;
     throw new Error(
-      `${init.method ?? 'GET'} ${path} did not answer within ` +
-        `${Math.round(REQUEST_TIMEOUT_MS / 1000)}s ` +
-        `(${error instanceof Error ? error.message : String(error)}` +
-        `${cause ? `, ${cause}` : ''}). The request was not refused; nothing answered it.`,
+      describeTimeout(
+        `${init.method ?? 'GET'} ${path}`,
+        {},
+        Date.now() - startedAt,
+        error,
+        cause,
+        REQUEST_TIMEOUT_MS,
+      ),
       { cause: error },
     );
   }
