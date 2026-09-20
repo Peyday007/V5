@@ -33,6 +33,8 @@
  * it would stop the very work the document exists to start.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
@@ -48,6 +50,7 @@ import {
   settleAudit,
   settleExtraction,
 } from '../server/services/capability/extraction.ts';
+import { DEFINITION_KEYS, LIST_FIELDS } from '../server/domain/faculties.ts';
 import { scanSections, sectionUnitKey } from '../server/services/capability/sections.ts';
 import {
   getFacultyBySlug,
@@ -461,6 +464,32 @@ describe('the capability kernel', () => {
       // The worker is told what it may not do, and the list names the exact
       // over-reach this kernel exists to prevent.
       expect(bin?.manifest.prohibitedActions.join(' ')).toMatch(/implemented, evaluated/);
+    });
+
+    it('names every field the validator requires, so a worker is not guessing', async () => {
+      /*
+       * `validateFacultyDefinition` runs after the lease is gone, which is
+       * right: judging well-formedness inside the contract would charge an
+       * attempt against a worker whose *reading* was fine. The cost is that a
+       * worker which guesses the field names has its whole reading refused with
+       * nothing left to correct it with, having done the work — §27's own
+       * sentence, at a manifest: a contract that does not say what it takes
+       * refuses work and says nothing.
+       *
+       * So the assertion is against the validator's constants rather than
+       * against a copied list, because a copied list is the thing that drifts.
+       */
+      const { sourceId } = await registerFixture();
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      const bin = await getBin(binId);
+      const outputs = (bin?.manifest.outputs ?? []).join('\n');
+
+      for (const key of DEFINITION_KEYS) expect(outputs, key).toContain(key);
+      for (const field of LIST_FIELDS) expect(outputs, String(field)).toContain(String(field));
+      // And that the set is closed, because an unknown field refuses the whole
+      // candidate rather than being dropped.
+      expect(outputs).toMatch(/no others/);
+      expect(outputs).toMatch(/empty array/);
     });
 
     it('is handed out once, however many ticks read it', async () => {
@@ -1004,6 +1033,72 @@ describe('the capability kernel', () => {
       expect(report.recovered).toBe(1);
       // And it is handed out again in the same tick.
       expect(report.dispatched).toBe(1);
+    });
+  });
+
+  describe('something calls it', () => {
+    /*
+     * The correction this describe block exists for.
+     *
+     * `advanceSources` was written, tested and wired to nothing: the operator
+     * script called it and no tick did, so in a running Brain a registered
+     * blueprint would have sat at REGISTERED for ever with every row healthy.
+     * That is the *mechanism nothing calls* defect this repository records five
+     * times, committed a sixth — and the suite that proved the tick worked could
+     * not see it, because it called the tick directly.
+     *
+     * So this asserts the wiring rather than the function: the durable loop's
+     * own source has to reach it, and the report has to carry what it did.
+     */
+    it('is reached by the durable tick, and reports what it moved', () => {
+      const loop = fs.readFileSync(
+        path.join(process.cwd(), 'server/services/russell/loop.ts'),
+        'utf8',
+      );
+      expect(loop).toContain("from '../capability/extraction.ts'");
+      expect(loop).toContain('await advanceSources()');
+      // And the self-model beside it, so a long-running instance does not carry
+      // a reading taken before the last four migrations.
+      expect(loop).toContain("from '../selfmodel/refresh.ts'");
+      expect(loop).toContain('await scanIfStale()');
+      // Reported rather than silent: a tick that advanced the kernel and said
+      // nothing is one nobody can tell from a tick that did not.
+      expect(loop).toMatch(/report\.capability\.promoted/);
+    });
+
+    it('does not accumulate its counts into the report every tick shares', async () => {
+      // `{ ...EMPTY }` is a shallow spread, so a nested object inherited from
+      // the module constant is the *same reference* — and these fields are
+      // assigned one at a time rather than replaced whole, which would make
+      // every tick accumulate into it for the life of the process. A skipped
+      // tick would then report the last real one's counts.
+      const { tick } = await import('../server/services/russell/loop.ts');
+      // The first tick finds no reading at all and takes one, so it reports a
+      // drift number — zero, because a first reading is never drift.
+      const first = await tick('capability-test-owner');
+      expect(first.capability.selfModelDrift).toBe(0);
+
+      // The second finds that reading still standing and takes none, so it must
+      // report **null**. Inheriting the nested object from the module constant
+      // would carry the first tick's number here for the life of the process,
+      // and a skipped tick would report it too.
+      const second = await tick('capability-test-owner');
+      expect(second.capability.selfModelDrift).toBeNull();
+      expect(second.capability.dispatched).toBe(0);
+      expect(second.capability.promoted).toBe(0);
+    });
+
+    it('cannot stop the tick when it fails', () => {
+      const loop = fs.readFileSync(
+        path.join(process.cwd(), 'server/services/russell/loop.ts'),
+        'utf8',
+      );
+      // A kernel that could not advance must not stop Russell writing back a
+      // mission — it is a reading about Brain, never a precondition of Brain.
+      const advance = loop.slice(loop.indexOf('await advanceSources()'));
+      expect(advance.slice(0, 400)).toMatch(/} catch \{/);
+      const scan = loop.slice(loop.indexOf('await scanIfStale()'));
+      expect(scan.slice(0, 400)).toMatch(/} catch \{/);
     });
   });
 

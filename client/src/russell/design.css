@@ -594,6 +594,22 @@
   font: 600 var(--step-1) / 1.25 var(--body);
 }
 
+/*
+ * A subheading *inside* a card.
+ *
+ * The Claude connection panel is the first screen here that needs a level below
+ * `h3`: what Brain checked, what the connection is, what you can do and what to
+ * do when it goes wrong are four sections of one card rather than four cards,
+ * because they are four answers about one thing. Tokens only, so it sits inside
+ * the type scale rather than beside it — an unstyled `h4` would have rendered
+ * at the browser default and read as a different product.
+ */
+.rs-view h4 {
+  margin: var(--gap-4) 0 var(--gap-2);
+  font: 600 var(--step-0) / 1.3 var(--body);
+  color: var(--ink-soft);
+}
+
 .rs-lede {
   margin: 0 0 var(--gap-4);
   max-width: 62ch;

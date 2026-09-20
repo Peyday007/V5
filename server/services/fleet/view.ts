@@ -19,7 +19,16 @@
  * largest. An explanation derived from a clock, or from a worker's account of
  * itself, would be a guess with a confident voice.
  */
-import { listAccounts, listRoutines, currentPolicy, policyHistory } from '../../repos/fleet.ts';
+import {
+  currentPolicy,
+  effectiveTarget,
+  listAccounts,
+  listRoutines,
+  policyHistory,
+} from '../../repos/fleet.ts';
+import { getWorker } from '../../repos/identity.ts';
+import { inFlightByRoutine } from '../dispatch/candidates.ts';
+import { lastOutcomeOf } from '../dispatch/pool.ts';
 import { getDb } from '../../db/database.ts';
 import { workloadProfile } from '../dispatch/profiles.ts';
 import type { FleetAccount, FleetRoutine } from '../../domain/types.ts';
@@ -36,6 +45,26 @@ export interface CapacityReading {
 
 export interface SurfaceReading {
   routineId: string;
+  /**
+   * The Routine's own reference — the `trig_…` an operator typed into
+   * `register-routine` and can read back off the Routine in Cowork.
+   *
+   * It is here because a pool makes the name ambiguous in the one direction
+   * that matters. Several surfaces serving one logical worker all read
+   * `Factory Brain …`, and a person asked to fix one has to know *which
+   * Routine* — a name they chose is a label and this is the identifier
+   * `fleet set-state` and `bind-worker` are applied to.
+   *
+   * **Operator depth, matching `services/fleet/capacity.ts`.** It is not a
+   * credential — a trigger reference on its own fires nothing, because the
+   * bearer is a deployment secret nothing in this repository can read back —
+   * but §34 put it behind that line on the People surface deliberately, and
+   * this route admits any project member with technical detail reserved for
+   * ADMIN. Two surfaces disagreeing about where one identifier belongs is how
+   * the quieter of the two stops being a boundary. Null is *you are not told*,
+   * which is a different fact from *there is none*.
+   */
+  routineRef: string | null;
   name: string;
   accountId: string;
   accountName: string;
@@ -60,6 +89,27 @@ export interface SurfaceReading {
    */
   recordedReason: string | null;
   capabilities: string[];
+  /**
+   * The identity this surface is bound to, by **name**.
+   *
+   * One Brain worker may be served by a Routine in every connected account, and
+   * that arrangement is invisible from a list of Routines unless the binding is
+   * on it: three surfaces bound to `factory-brain` are one pool, and three bound
+   * to three workers are three pools that cannot cover for each other. The name
+   * rather than the id, because the name is what `bind-worker` takes.
+   */
+  boundWorker: string | null;
+  /**
+   * How much of this surface's own allowance is in use, from the same reading
+   * the router routes on — never a second count that could disagree with it.
+   *
+   * `limit` is null when nobody has set a target for this Routine or its
+   * account, which is *no ceiling recorded* rather than a ceiling of zero.
+   */
+  headroom: { used: number; limit: number | null };
+  /** What happened the last time Brain fired this surface, in a person's words. */
+  lastOutcome: string;
+  lastFiredAt: string | null;
   /** Present only at technical depth: the raw identifiers. */
   workerId: string | null;
   consecutiveFailures: number;
@@ -185,19 +235,54 @@ export async function fleetView(input: {
   now?: string;
 }): Promise<FleetView> {
   const now = input.now ?? new Date().toISOString();
-  const [accounts, routines, policy, history] = await Promise.all([
+  const [accounts, routines, policy, history, perRoutine] = await Promise.all([
     listAccounts(),
     listRoutines(),
     currentPolicy('FLEET', null),
     policyHistory('FLEET', null, 5),
+    /*
+     * The same in-flight reading the router routes on, rather than a second
+     * count beside it. Two numbers that must agree about how busy a surface is
+     * are a design where the one nobody reads is the one that drifts — §23's own
+     * argument for keeping the capacity ledger in `bin_events`.
+     */
+    inFlightByRoutine(Date.parse(now)),
   ]);
 
   const byAccount = new Map(accounts.map((account) => [account.id, account]));
+  /*
+   * Bound workers by name, resolved once. A pool is invisible from a list of
+   * Routines unless the binding is on it, and the same worker appears on every
+   * surface of one pool — so one lookup per distinct id rather than per row.
+   */
+  const workerNames = new Map<string, string | null>();
+  for (const id of new Set(routines.map((r) => r.workerId).filter((id): id is string => !!id))) {
+    workerNames.set(id, (await getWorker(id))?.name ?? null);
+  }
+
+  /*
+   * Each surface's own recorded ceiling, from `effectiveTarget` over its
+   * Routine policy and its account's — the same function the router applies, so
+   * the headroom a person reads and the headroom a fire is refused against are
+   * one derivation. Absent policy is a null limit: *no ceiling recorded* is not
+   * a ceiling of zero.
+   */
+  const routineTargets = new Map<string, number | null>();
+  for (const routine of routines) {
+    const [routinePolicy, accountPolicy] = await Promise.all([
+      currentPolicy('ROUTINE', routine.id),
+      currentPolicy('ACCOUNT', routine.accountId),
+    ]);
+    const target = routinePolicy ?? accountPolicy;
+    routineTargets.set(routine.id, target ? effectiveTarget(target, now).target : null);
+  }
+
   const surfaces: SurfaceReading[] = routines.map((routine) => {
     const account = byAccount.get(routine.accountId);
     const { usable, reason, recorded } = usability(routine, account, now);
     return {
       routineId: routine.id,
+      routineRef: input.includeTechnical ? routine.routineRef : null,
       name: routine.name,
       accountId: routine.accountId,
       accountName: account?.name ?? 'unregistered',
@@ -209,6 +294,13 @@ export async function fleetView(input: {
       // raw identifiers rather than with the plain sentence beside them.
       recordedReason: input.includeTechnical ? recorded : null,
       capabilities: routine.capabilities,
+      boundWorker: routine.workerId ? workerNames.get(routine.workerId) ?? null : null,
+      headroom: {
+        used: perRoutine.get(routine.id) ?? 0,
+        limit: routineTargets.get(routine.id) ?? null,
+      },
+      lastOutcome: lastOutcomeOf(routine),
+      lastFiredAt: routine.lastFiredAt,
       // Raw identifiers are technical detail. Null is "you are not told",
       // which is different from "there is none".
       workerId: input.includeTechnical ? routine.workerId : null,

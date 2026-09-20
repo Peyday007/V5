@@ -1,0 +1,41 @@
+-- One bin that may be fired at exactly one surface.
+--
+-- ---------------------------------------------------------------------------
+-- Why a pool cannot be verified without this
+-- ---------------------------------------------------------------------------
+--
+-- `proveSurface` asks for a chain of four rows Brain wrote itself — Brain fired
+-- *this* Routine, a session arrived and was attributed to the bound worker from
+-- that same dispatch row, it was handed a bin, and the bin reached COMPLETE.
+-- That is the right question and it has always had a missing half: something has
+-- to *cause* the fire, and `createProbeBin` makes an ordinary bin and lets the
+-- router choose.
+--
+-- With one Routine that was the same thing. With a pool it is not: several
+-- Factory Routines bound to one logical worker have identical project, family,
+-- repository and capability scope, so a probe made "for Routine B" is routed to
+-- whichever surface has the most headroom — which is very often A. Firing
+-- repeatedly and hoping each surface eventually gets one is not a verification,
+-- it is a sampling strategy, and it can report a pool proven while one member of
+-- it has never run anything.
+--
+-- ---------------------------------------------------------------------------
+-- What it is, and what it deliberately is not
+-- ---------------------------------------------------------------------------
+--
+-- It is **restrictive only**. A pinned bin is removed from every candidate but
+-- one; it is never added to a candidate it would not otherwise have been
+-- eligible for. The pinned Routine still has to pass state, project, family,
+-- repository, capability, rate-limit and target exactly as before, and the
+-- assigner still decides admission on the authenticated worker. So this cannot
+-- widen an authorization, cannot bypass a target and cannot hand work to a
+-- surface the router would have refused — the worst it can do is make a bin
+-- unroutable, which is an ordinary deferral that costs no attempt.
+--
+-- It is written by Brain, from the Routine an operator named, and never by a
+-- caller: no tool, no MCP argument and no request body reaches it. That is the
+-- same property every compare-and-swap in this codebase rests on.
+--
+-- Nullable, and null is the ordinary case: every bin that is not a surface
+-- probe has no pin and routes exactly as it did.
+ALTER TABLE bins ADD COLUMN pinned_routine_id TEXT;

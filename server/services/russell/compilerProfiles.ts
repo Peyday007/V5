@@ -36,7 +36,12 @@
  */
 import type { EvidenceLane } from '../../domain/types.ts';
 
-export type CompilerProfileId = 'PUBLIC_RECORDS' | 'MARKET_DISCOVERY' | 'COMMERCIAL_VALIDATION';
+export type CompilerProfileId =
+  | 'PUBLIC_RECORDS'
+  | 'MARKET_DISCOVERY'
+  | 'COMMERCIAL_VALIDATION'
+  | 'INDUSTRY_STRUCTURE'
+  | 'CAPITAL_STRUCTURE';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -517,6 +522,256 @@ const COMMERCIAL_VALIDATION: CompilerProfile = {
   ],
 };
 
+/**
+ * The question that builds the map rather than searching inside it.
+ *
+ * Its lanes are the thing to notice: not one of them is a demand signal.
+ * `MARKET_DISCOVERY` asks where money is moving and this asks how the place is
+ * organized, and giving them one set of lanes would make each question fail
+ * the other's coverage — which is precisely what happened when one broad
+ * discovery bucket was asked for a payer, a price and a delivery path and
+ * filed with half of them unresolved.
+ *
+ * Two lanes are REQUIRED and they are the two that make a map rather than an
+ * essay: the subject's own narrower parts, and how work actually reaches a
+ * buyer here. Everything else is CONDITIONAL, because a source that settles
+ * three of six levels has settled three, and forcing the other three produces
+ * invented ones — the symmetry that looks like understanding.
+ */
+const INDUSTRY_STRUCTURE: CompilerProfile = {
+  id: 'INDUSTRY_STRUCTURE',
+  fragmentKey: 'industry-structure',
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Ahead of a broad search and behind a deep dive on something already found.
+   *
+   * The map is what gives every later search a scope, so a subject with
+   * nothing underneath it makes ten mechanism questions ask about the whole
+   * economy again. It still yields to `COMMERCIAL_VALIDATION`, because
+   * finishing what has already been spent outranks knowing more about where
+   * to spend next.
+   */
+  launchOrdinal: 300,
+  proposedSources: [
+    'an industry classification system such as NAICS, ISIC, SIC or GICS, and its own ' +
+      'published definitions',
+    'a census, statistical or government publication',
+    'a government economic or occupational classification',
+    'a trade association, industry body or trade publication',
+    'a procurement or supply-chain category listing',
+    'an organisation’s own website, press release or announcement',
+    'a published price list, rate card or fee schedule',
+    'an official registry, filing, permit or licence record',
+    'a marketplace, job board, classified or auction listing',
+  ],
+  excludedSources: [
+    'a structure asserted with no source that names it',
+    'a level inferred to make a hierarchy symmetrical',
+    'a claim with no locatable source at all',
+    'a forecast or projection presented as a current fact',
+  ],
+  lanes: [
+    {
+      id: 'sub_structure',
+      // One classification naming a sub-industry proves that classification
+      // names it. Demanding a second publisher for "NAICS 512110 exists"
+      // demands something that does not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What sits underneath the subject: the narrower industries and the stages of ' +
+        'producing and delivering here, as the sources themselves name them. Each one must ' +
+        'be declared on its claim with structural_finding set to SUB_INDUSTRY or ' +
+        'VALUE_CHAIN_LAYER and structural_subject set to that subject’s own name — a claim ' +
+        'that describes a level without declaring it adds nothing to the map.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'money_path',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'How work reaches a buyer and money comes back: which kinds of organisation pay ' +
+        '(BUYER_TYPE), who actually performs the work (FULFILMENT_SOURCE), and what is ' +
+        'bought on what terms (TRANSACTION_TYPE). Declared the same way. This is the lane ' +
+        'that makes a map useful rather than decorative: a structure with no payer in it ' +
+        'cannot be searched for cash.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'constraint',
+      description:
+        'Where supply is constrained, as a documented shortage, queue, chokepoint or ' +
+        'capacity limit (BOTTLENECK) — and anything published that changes the economics ' +
+        'and is not obvious from outside (HIDDEN_CONSTRAINT). Not a risk every business ' +
+        'has; those are assumed and are not worth a claim.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'adjacency',
+      description:
+        'A different industry the sources name as connected to this one — a supplier of it, ' +
+        'a customer of it, or one that uses the same capability. Declared as ' +
+        'ADJACENT_INDUSTRY. This is how the map grows sideways rather than only downwards.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'economics',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'What this subject is worth and what work in it is published at, from a price list, ' +
+        'a rate card, a statistical publication or a stated figure — kept separate from the ' +
+        'structure, because "this layer exists" and "this is what it pays" are two claims ' +
+        'with two standards.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source names any structure underneath the subject — only descriptions of ' +
+      'the subject as a whole.',
+    'The classification systems and the trade sources describe incompatible structures, and ' +
+      'that is recorded as unresolved rather than resolved by choosing one.',
+    'Structure is found but nothing published says who pays for anything in it.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every level you establish is declared on its claim with structural_finding and, where ' +
+      'the kind names a subject, structural_subject. A level described in prose and not ' +
+      'declared is invisible to the map, however well sourced it is.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed.',
+    'Every claim carries the URL of the source it came from. A claim submitted without one ' +
+      'is rejected, and a fragment whose claims are mostly rejected is blocked outright. If ' +
+      'you found the source but could not read it, submit the claim with that URL and its ' +
+      'retrieval state, which is recorded as unresolved rather than rejected.',
+    'Nothing is added to make the structure tidy. A subject with three published ' +
+      'sub-industries has three, and a map that says so is worth more than a symmetrical ' +
+      'one that is partly guessed.',
+    'Where a classification and a trade source disagree about the structure, both are ' +
+      'recorded and the disagreement is named. They are not averaged and one is not ' +
+      'silently preferred.',
+    'Sources that are really one source are counted once, and the duplication is reported.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * Taking a capital requirement apart.
+ *
+ * The one profile whose completion standard is mostly about what *not* to
+ * produce. Every temptation here fails in the same direction — towards a
+ * smaller, tidier, more encouraging number — and every one of them is refused
+ * by name: no summing past an unknown, no mechanism assumed to apply because
+ * it exists, no residual invented for a structure whose source gives none, and
+ * no platitude filed as a constraint.
+ */
+const CAPITAL_STRUCTURE: CompilerProfile = {
+  id: 'CAPITAL_STRUCTURE',
+  fragmentKey: 'capital-structure',
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the deep dive: both are finishing work already paid for on one
+  // opening that already exists, and both outrank starting another search.
+  launchOrdinal: 120,
+  proposedSources: [
+    'a trade association, industry body or trade publication',
+    'an organisation’s own website, press release or announcement',
+    'a published price list, rate card or fee schedule',
+    'a supplier, lender or financier’s own published terms',
+    'an official registry, filing, permit or licence record',
+    'a government or regulator publication stating a capital, bonding or insurance rule',
+    'a census, statistical or government publication',
+    'a marketplace, job board, classified or auction listing',
+    'a tender, procurement notice, RFP, RFQ or public solicitation',
+  ],
+  excludedSources: [
+    'a headline startup-cost figure whose composition is not stated',
+    'a financing mechanism asserted generally with no source about this industry',
+    'a figure whose upstream source cannot be identified',
+    'a forecast or projection presented as a current fact',
+  ],
+  lanes: [
+    {
+      id: 'requirement',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'One specific thing this transaction requires owner capital for, declared with ' +
+        'structural_finding set to CAPITAL_REQUIREMENT, with what a published source says it ' +
+        'costs. Where nothing publishes an amount, submit the requirement with no amount and ' +
+        'say what would settle it — the minimum is then withheld rather than understated, ' +
+        'which is the correct outcome.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'restructuring',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A practice this industry actually uses that removes, defers or shifts one of those ' +
+        'requirements, declared with structural_finding set to CAPITAL_RESTRUCTURING, naming ' +
+        'which requirement it answers and what the owner still funds afterwards where the ' +
+        'source states it. That a mechanism exists somewhere is not evidence it is used ' +
+        'here.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'hidden_constraint',
+      description:
+        'Something published that changes the economics or the feasibility and is not ' +
+        'obvious from outside, declared with structural_finding set to HIDDEN_CONSTRAINT. ' +
+        'Not that staff must be paid, that contracts must be lawful or that customers might ' +
+        'not buy — those are assumed, and reporting them spends the reader’s attention on ' +
+        'what they already know.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'cycle',
+      description:
+        'What published terms say about when money actually arrives: deposits, milestones, ' +
+        'net terms, retention, payment on final acceptance. Recorded as unresolved where ' +
+        'nothing published settles it.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Only a headline startup cost can be found, with nothing published about what it is ' +
+      'composed of — which is recorded as the requirements being unestablished, never as ' +
+      'the headline being the answer.',
+    'Financing mechanisms can be described in general but nothing published shows this ' +
+      'industry using any of them.',
+    'Requirements are established but no source states an amount for one or more of them, ' +
+      'so the minimum owner capital is withheld.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every requirement is declared on its claim with structural_finding set to ' +
+      'CAPITAL_REQUIREMENT, and every restructuring with CAPITAL_RESTRUCTURING naming the ' +
+      'requirement it answers. A financing structure described in prose and not declared ' +
+      'changes no number.',
+    'A figure is read from a source and never produced. Where nothing publishes an amount, ' +
+      'the requirement is recorded with no amount. Do not estimate, do not interpolate, and ' +
+      'do not treat a blank as nothing to pay.',
+    'A mechanism is reported as available only where a source about this industry shows it ' +
+      'being used. That a structure exists in general is not evidence about here.',
+    'A restructuring states what the owner still funds afterwards, or states that no source ' +
+      'says. One with no published residual is available and reduces nothing.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    'Constraints reported are ones that change the economics and are not obvious from ' +
+      'outside the industry. Obligations every business has are assumed and are not ' +
+      'reported.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -524,6 +779,8 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   STEP11_AUDIT_INDEPENDENCE_V1: PUBLIC_RECORDS,
   RUSSELL_CASH_DISCOVERY_V1: MARKET_DISCOVERY,
   RUSSELL_CASH_VALIDATION_V1: COMMERCIAL_VALIDATION,
+  RUSSELL_INDUSTRY_MAP_V1: INDUSTRY_STRUCTURE,
+  RUSSELL_CAPITAL_STRUCTURE_V1: CAPITAL_STRUCTURE,
 });
 
 export function profileFor(envelopeId: string): CompilerProfile | null {

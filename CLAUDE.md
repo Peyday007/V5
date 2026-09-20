@@ -2760,6 +2760,38 @@ remote.
   for the reason directly above: the image is live, and a re-deploy restarts a
   Brain holding leased work to re-prove something the pre-restart run already
   proved.
+  **The measurement §27 asked for has been taken, and it refutes the lease
+  reading for this shape.** Run 254, `3a73bb1`: the ADVERSARIAL pass at
+  10:46:49, then silence, then `fetch failed` at **10:52:12** — **5m23s**,
+  against run 235's **5m18s**. Two commits, five seconds apart. *A
+  variable-length operation outrunning a fixed lease fails at variable times*,
+  and this does not, so the consistency itself is the evidence.
+
+  `scripts/verify-hosted.ts`'s `call()` passes no `signal` and no timeout, so
+  every request it makes carries Node's default — and that default, **measured
+  here rather than recalled** (a server that accepts a connection and never
+  answers, Node 22.22.2), is **300.8 seconds, throwing `fetch failed` with
+  cause `UND_ERR_HEADERS_TIMEOUT`**. 300s plus the surrounding logging is
+  5m18s and 5m23s. The client gave up; the lease had nothing to do with it.
+
+  **What that does and does not settle.** It settles the two `fetch failed`
+  runs. It does **not** settle the four that ended `brain_complete_work:
+  FENCE_LOST` — a different error, unmeasured, and the tempting story (the
+  client aborts, the server carries on, a later call finds the fence advanced)
+  is a mechanism rather than a reading. And it does not explain **why the judge
+  pass takes over five minutes**, which is now the actual question and was
+  invisible while the number looked like a lease. Nobody knows the pass's true
+  duration, because the gate has never waited long enough to see it.
+
+  So the change is to *learn* it rather than to hide it. `call()` takes an
+  explicit bound with a named failure — which request, and how long it
+  waited — because an unattributable `fetch failed` is what made six runs read
+  as one unexplained condition. **The bound is not a fix and must not be read
+  as one**: raising a timeout past a genuine slowness is how a slow thing
+  becomes a permanent slow thing nobody measures. It is set where the next
+  occurrence either completes, and the timestamps say what the pass costs, or
+  fails saying so in words.
+
 
   **It happened again on the very next deploy, which makes it reproducible
   rather than a bad minute.** Run 253, `beafc06`: release success,
@@ -2802,6 +2834,26 @@ remote.
   strings this change removed present in the first and absent in the second.
   The remedy is still `deploy.yml`'s own restart step and still deliberately
   left to whoever is editing that file.
+- **`flyctl`'s health-check wait was deciding whether the restart gate ran, and
+  the remedy §27 left to `deploy.yml` is taken here.** Three consecutive deploys
+  ended `after the restart: skipped` — not failing, *not running* — because
+  `flyctl apps restart` waits with a deadline shorter than this machine's cold
+  start, exits 126, and a failing step with no `if:` skips every step after it.
+  Run 35349935034 put the number on it: five minutes of
+  `Waiting for … to become healthy`, and the very next step answering
+  `healthy again after 1 attempt(s)` **twenty-four seconds later**. The machine
+  was already back.
+
+  The wait that polls the public URL from outside the machine is the judge now,
+  because it is what the next step actually depends on, and the restart step
+  tolerates **exactly** the health-check deadline — the same shape as the Depot
+  fallback beside it, and for the same reason: a failure that says nothing about
+  the commit must not read like one that does. A restart refused for any other
+  reason still fails, once. **A tolerance that matches everything is not a
+  tolerance, it is a removed check**, so that is the half the guard pins: the
+  step must still carry an `::error::` and an `exit 1`, and must not end in
+  `|| true`.
+
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
@@ -2809,6 +2861,93 @@ remote.
   reported `NO_SURFACE_SERVES_THIS_FAMILY`, sending an operator to write a
   routing row when the answer was `fleet set-state`. §23's rule about naming the
   right refusal, applied to the one condition that bypasses every test it names.
+- **One Factory worker is served by every account, and three things in the
+  dispatcher were true of one surface and false of a pool.** `factory-brain` is
+  an identity rather than an account: each Claude account holds its own `Factory
+  Brain` connector, its own Routine, its own `trig_…` and its own uniquely-named
+  deployment secret, and every one of those Routines is bound to that one
+  worker. Nothing about authorization changes — the routing row, the mutation
+  scope, the fencing, the independence floor and the review requirement are the
+  same rows they were — and nothing multiplies an allowance. What it adds is
+  surfaces. Three defects only a pool can show:
+
+  **A refusal about one bin ended the whole burst.** The loop `break`s on a
+  routing refusal, which is right for `NO_ROUTINES_REGISTERED` and wrong for
+  `NO_CAPABLE_SURFACE`: the first is a fact about the fleet and the second is a
+  fact about *this bin*, so one unroutable factory bin stopped the research bin
+  behind it. `REFUSAL_SCOPE` is a `Record` over the union, so a refusal added
+  later is a compile error until somebody says which it is — the same shape
+  `REFUSAL_WAIT` already has beside it, and for the same reason: two `Set`s that
+  must be total between them are not.
+
+  **A bin was charged for a surface's refusal.** `markDispatchFailed` spent an
+  attempt on an `AUTH 401` from a Routine Brain had just quarantined, so a pool
+  of five accounts with five stale tokens retired a perfectly good bin at
+  `max_attempts` for a condition that was never about the work. §23's *a refusal
+  is not misconduct*, one row along and about the bin rather than the surface.
+  `NOT_CONFIGURED` still charges: no trigger at all is not a fact about a surface
+  Brain chose.
+
+  **And the wait after that refusal was thirty seconds of nothing.** The comment
+  said the backoff was short "because the thing that refused has just been taken
+  out of routing" — which is the argument for *no* backoff, since the next
+  routing decision is a different surface. Failover that takes a tick per stale
+  token is failover on paper. It cannot spin: every arrival there removes one
+  surface from routing, so the sequence is bounded by the fleet and ends at
+  `ALL_SURFACES_INELIGIBLE`, which is fleet-wide.
+
+- **A probe that is not pinned proves a fleet, never a surface.** Several
+  Routines bound to one worker are interchangeable to the router, which is the
+  whole point of a pool and exactly what makes a per-surface proof impossible:
+  a probe made for B is fired at whichever has the most headroom, and
+  `proveSurface` then reports B unproven for ever while every fire it prompted
+  went to A. `bins.pinned_routine_id` narrows the candidate list to one and
+  changes nothing else — state, project, family, repository, capability, rate
+  limit and target are all still asked, admission is still decided on the
+  authenticated worker, and a pinned surface that cannot take it defers. It is
+  **restrictive only**, written by Brain from the surface under test and never by
+  a caller, so it can refuse a fire and can never authorize one.
+  `PINNED_SURFACE_UNAVAILABLE` is its refusal, named rather than reported as the
+  nearest available one.
+
+- **Registering a surface twice under one secret is one surface wearing two
+  rows.** `register-routine` took a secret name and a trigger token and asked
+  nothing about either, so two accounts pointed at one secret produced two
+  eligible-looking Routines that fire one surface — capacity that does not
+  exist, and two quarantines for one stale token. Both are refused by name now,
+  the second on the digest `fleet_routines` already stores, so the refusal costs
+  nothing and reads nothing back.
+
+- **`verify-pool` is the surface-proof read across a pool, and it refuses to
+  round anything up.** Per surface: the account, the Routine reference, the bound
+  worker, whether an arrival authenticated as the expected one, eligibility and
+  why not, headroom and cooldown, and the last fire's outcome. `PROVEN` is the
+  four-row chain; `UNPROVEN` is *nothing has happened*, which is not the same
+  fact; `FAULT` is an arrival under another identity, which is a connector
+  selection and is **skipped** by `--probe` rather than re-learned at the cost of
+  an activation. It refuses unless every surface is proven, and also when a
+  Routine declaring a repository capability is bound to some other worker — a
+  pool report that quietly left one out would be answering an easier question.
+  Its probe bin belongs to no campaign and forbids every repository operation, so
+  what it proves is **pooled dispatch and identity**; repository access is the
+  first real campaign's to prove, and reporting a green probe as a green campaign
+  would be the comfortable half-truth this file exists to refuse.
+
+  **Putting the Routine's reference in front of every project member was mine
+  and is corrected here rather than quietly.** A pool makes the *name*
+  ambiguous — three surfaces all reading `Factory Brain …` — so the Fleet page
+  gained the `trig_…` beside each, at ordinary depth. `/projects/:id/fleet`
+  admits any project member and reserves technical detail for ADMIN, and §34
+  had already decided the same identifier belongs behind that line on the
+  People surface: *"never the trigger ref and never the secret's name"*. It is
+  not a credential — the bearer is a deployment secret nothing in this
+  repository can read back — and that is exactly why it was easy to put in the
+  wrong place. **Two surfaces disagreeing about where one identifier belongs is
+  how the quieter of the two stops being a boundary.** Operator depth now, in
+  both, and `null` there says *you are not told* rather than *there is none*.
+  The binding, the headroom and the last outcome stay where a member can read
+  them, because those are what make a pool legible as a pool.
+
 - **A checkout is not a target, and noticing that a rule's reason is imprecise is
   not authority to reverse the rule.** A fired worker reads
   `.claude/settings.json` from the repository its Routine *attaches*, which is
@@ -4988,7 +5127,726 @@ the owner's *disposition* is absent entirely, being a recommendation to whoever
 owns the job rather than a fact about the frontier.
 
 
-## 35. Research is a decision about what to learn, and Brain had no place to make it.
+## 35. The setup is one screen, and a screen two accounts cannot compare is two screens.
+
+§34 gave a member a resumable way to connect their Claude account and stopped
+where it worked. Driving it from an ordinary member's browser rather than the
+owner's found that the half which is not the happy path was missing entirely,
+and — as usual — every row underneath read as healthy.
+
+**Nobody could start on their own, and the instructions did not say so.**
+`/oauth/authorize` looks for a signed-in Brain administrator *before* it looks
+for an invitation, which is correct: an invitation stands in for an
+administrator's approval, and folding them together would let a stale invitation
+approve anything. The consequence is that an ordinary member holding neither is
+refused at Claude's approval screen — and step one of the journey told them to
+go there. The link mints a worker identity and grants it a project membership,
+so issuing it stays an administrator's decision; what did not exist was any way
+to **ask**. §24's sentence at the first step rather than the last: an escalation
+with no answering transition is stuck rather than waiting.
+`INVITATION_REQUESTED` is that transition, idempotent by the stamp it writes,
+creating no identity, no membership and no surface — and the administrator's
+list carries it, because this Brain has no email and no notifications, so that
+row is the only channel a request travels down.
+
+**Nothing could be given back.** There was no revoke and no reconnect, so
+somebody who lost their Claude account had to find a person with a terminal.
+Revoking destroys nothing — the tokens go, the surface moves to `UNAVAILABLE`
+because *a person decided this* rather than health deciding it, and the trigger,
+the account, the Routine and the timestamp that says it was once proven all stay
+— which is what makes reconnecting one approval rather than a second setup. A
+reconnect re-enables the surface **only** when this member's own revoke is what
+took it out, compared against Brain's own marker string: a member undoing an
+operator's drain from a page that never mentions it is the same reach §34's
+shared projection already had to have taken out of it.
+
+**A surface answering as another worker had no name.** The refusal existed at
+submission and nowhere afterwards, so a Routine repointed later left the
+connection reading CONFIGURED while Brain fired a surface its own record no
+longer named — §27 records at length what that costs. `MISBOUND` is derived on
+the read path and **never acted on**: the Routine may be another member's, and
+disabling it from this page would be exactly that reach again. It is reported,
+it is refused as capacity, and the remedy named is `fleet repoint-worker`.
+
+**Proof is history; authorization is now.** A connector that authorized once and
+holds nothing live is reported *beside* the state rather than instead of it, so
+a proven surface stays proven and still says plainly that nothing fired at it
+can authenticate. Two facts, two fields — and the reading that separates them is
+*live* versus *ever used*, both from `oauth_tokens`, because a token that has
+been revoked still has a `last_used_at` and the first version of
+`connectorAuthenticated` read only that. A revoke the screen above it disagreed
+with would be §29's defect at the one place it would matter most.
+
+- **Parity is a property of the code, not a promise in a comment.** One
+  component, `client/src/russell/ClaudeConnection.tsx`, rendered by every
+  surface: the destination in full, and a compact card on Home, on Your devices
+  and named at enrolment that opens the same destination. It contains no role,
+  no membership and no capability check **at all** — asserted by a test that
+  reads the file, the way `operatorConsoleRemoved` reads the repository — so
+  there is nothing in it that *could* branch on a reader.
+- **A control somebody may not use is disabled with the server's reason, never
+  removed.** `ConnectionControl[]` is a fixed list in a fixed order and only
+  `enabled` and `disabledReason` move. A screen that removes a control has a
+  different shape per reader, and "there is no button" and "the button is not
+  for you yet" are answers a person reads very differently. The reason is
+  rendered rather than hidden in a `title`: an explanation only a mouse can
+  reach is no explanation on a phone, and this screen is read on a phone by
+  exactly the people who have just registered a device.
+- **The troubleshooting is a constant.** It describes the mechanism rather than
+  this connection, and a constant is the strongest parity there is. Deriving it
+  per state would mean two accounts at two steps reading two different documents
+  about one system.
+- **Verification is seven reads with three answers each.** *Not yet* is a third
+  answer on purpose, for §33's reason one altitude along: a check that reported
+  an unstarted setup as a failure would make a healthy half-finished journey
+  read as broken. Every one of the seven is a row Brain wrote — the worker, its
+  membership, the tokens minted against it, the registered Routine and its bound
+  worker, the deployment variable's presence, and the four-row chain — and none
+  is a claim a caller made about itself.
+- **A verified connection is visible to the Software Factory and is not usable
+  by it.** `services/capacity/contribution.ts` reports, per member, whether
+  their connection is usable capacity and names the refusal when it is not; the
+  factory's repository card reads it. It is a **projection and not a gate** —
+  nothing calls it to decide whether work may run, because a second place that
+  could authorize execution is the second security model §27 refuses. And it
+  reports `routing` exactly as `worker_routing` states it, `null` included: §27
+  is explicit that no worker without an explicit row may ever be handed
+  repository work, so a research connection is research capacity until somebody
+  authorizes a repository for it.
+
+**Three defects in this work were found by the tests rather than by reading, and
+all three are recorded rather than quietly fixed.**
+
+`reconcile` derived `WAITING_FOR_ADMIN` from a registered surface without asking
+whether the connector could authenticate — which was unreachable until
+`reconnect` existed, because `NOT_STARTED` had never before been a state a row
+with a Routine could be in. So the first read after a reconnect told somebody
+whose connector had just been de-authorized that Brain was waiting on an
+administrator, when the one outstanding thing was theirs.
+
+The headline for a lapsed authorization said *reconnect* — and `RECONNECT` is
+enabled only on a connection somebody took back, so every other state was
+telling a person to press the one button disabled beside it. §29's status
+contradicting the control, found by asserting the words rather than only the
+state.
+
+And the Postgres migration dropped `capacity_connections_check`, which is not
+what Postgres named it: the rule is the table **plus the column the constraint
+mentions**, so it is `capacity_connections_state_check`. It was written without
+`IF EXISTS` deliberately, so it failed the migration and failed the boot with
+the real name in the message — the tolerant form would have left the old
+constraint standing beside the new one and the first revoke in production would
+have been refused by a constraint nobody was looking at. **The fourth time this
+repository has been told something by the second backend and by nothing else.**
+
+**Two fixtures were typed, and that is the durable half of the repair.**
+`peopleSection`'s connection payload and `buildRepositories`' repository card
+were bare object literals, so TypeScript checked nothing about them: when the
+server's contract grew, both suites went on passing against payloads the real
+routes can no longer produce, until a component read a field that was not there
+and crashed. **A fixture the compiler does not check is a fixture that tests
+itself.**
+
+---
+
+## 36. A permission decides what is inside a section. It never decides which sections there are.
+
+The boundary §34 drew was right and the way the page expressed it was not. A
+member's Cash read answered `SHARED`, and `Cash.tsx` turned that into an early
+`return <SharedFrontier/>` — a **second page**. Nine sections against five. Not
+one heading in common. Not one section identifier in common, because every
+member card was a bare `.rs-card` with no `rs-cash-*` class at all, so nothing
+on the member's page was even addressable by the name the owner's page used for
+the same subject.
+
+Nothing was insecure about it. That is the point worth keeping: **the failure
+mode of a correct privacy boundary can be a layout.** Two people looking at one
+Brain saw two products, and a defect on either page was invisible from the
+other — which for one of the two is every person who could have reported it,
+since nobody holding the owner's view ever opens the member's.
+
+- **The role no longer chooses a tree.** One skeleton — the owner's, unchanged
+  in order and in name: the cash machine, the decisions, the best openings, the
+  money, five disclosures, the sprint. Ten sections, and a member gets all ten.
+  A section whose contents are entirely private renders and **says what is
+  true** rather than vanishing, because removing one takes its heading off the
+  page and moves every section after it. `tests/cashSection.test.tsx` reads the
+  two trees out of the document and holds them against each other; it was run
+  against a restored branch, and four of its assertions fail there.
+- **The shared sections are one object, not two that agree.** `sharedFrontier`
+  is embedded in the owner's payload as `CashView.frontier`, so both roles'
+  stage counts, opportunity list, roadmap, capability gaps and activity come
+  from the identical derivation. The alternative — the owner's page deriving its
+  own counts from `myCurrentWork` while a member's read `counts` — is the shape
+  this repository has been burned by at a column, a status line, a review card
+  and a projection: **two readers of one fact disagree eventually.** The
+  boundary test asserts the owner's `frontier` block is byte-identical to a
+  member's whole payload, which is a property no component test could reach.
+- **Reading it cost one honest widening, and one honest refusal.** The tier
+  crosses now, because the tier is what separates *evidence Brain found* from
+  *work somebody could do* (§33) and a member reading the frontier without it
+  cannot tell those apart. It is safe not by promise but by shape: a
+  `TierReading` is a tier, two static sentences, the open requirements as
+  `{ key, label, task, owner }` — every one a constant looked up per field — and
+  two counts, and **no branch of it interpolates a value**, which is asserted
+  against the live payload rather than against a reading of the source. What was
+  refused is the disposition, the economics and every figure, unchanged.
+- **`counts` and `byState` are two questions and were nearly one answer.**
+  `availability` deliberately collapses `DELIVERING` into `DELIVERED` so a
+  member cannot read how far somebody else's job has got. Reusing it for *how
+  many are executing* would have silently changed the owner's own numbers —
+  right for the first question, wrong for the second, and nobody choosing it.
+  Both are sent, and the page reads the one that answers what it is asking.
+- **The capabilities are the server's, and deriving them in the client was the
+  tempting mistake.** The browser holds one role flag: Brain administrator.
+  Administering the sprint, moving its lifecycle and granting commercial
+  authority are all project `ADMIN` — so a client deriving them would have
+  hidden a lifecycle control from the project administrator entitled to press
+  it, which is §24's *waiting nobody can resolve* wearing a permission, and
+  offered one where the level was the real question. `cashCapabilities` answers
+  with the same `decideProjectAccess` every route applies. There is no Cash
+  capability module and there must never be one. A payload carrying none is
+  **deny by default**, and a test asserts the model contains no `isBrainAdmin`
+  at all.
+- **A hidden control is still not authorization.** All four are re-decided at
+  the moment anything happens. What they are for is that a control which cannot
+  succeed should not be offered, because a refusal somebody could not have
+  predicted teaches them the refusal is arbitrary.
+- **`Authority` reads for everyone who has it and writes for whoever may.**
+  Gating the whole component on the grant permission was the first version and
+  was wrong: a project member who cannot change a grant is still owed the answer
+  to *what is Brain allowed to do here*, and the sentences are the server's, for
+  exactly that reading.
+- **Two nested elements shared one identifier, which is a structural problem
+  rather than a style one.** `rs-cash-portfolio` and `rs-cash-history` each sat
+  on a disclosure *and* on the card inside it, so `querySelector` answered
+  whichever came first and a parity check would have been comparing an ambiguous
+  name. The inner ones are `-body` now; the stylesheet's descendant rules are
+  unaffected.
+- **Theme is colour, and it was never a Brain decision.** Nothing in this
+  repository sets `data-theme`: there is no theme control, no theme preference —
+  `PREFERENCES` is four presentational keys and adding one is a code change
+  somebody reviews — and nothing stored to migrate. A viewer gets their own
+  browser's `prefers-color-scheme`, honoured identically whoever they are. So
+  the friend's dark screen is neither accidental nor selected in Brain, and
+  there is nothing to correct. What *could* have made the two structural is a
+  theme block declaring a layout property, or a rule keyed on a theme hiding a
+  section; `tests/step12bResponsive.test.tsx` now refuses both, and refuses any
+  rule that takes an `rs-cash-*` section off the page at any width — which is
+  the mobile More-menu defect (§29) asked of Cash before it happens rather than
+  after.
+
+**Nothing about Cash itself moved.** Not the research, the tiers, the jobs, the
+authority, the spending, the dispatch or any external action. `chooseBest` is
+the owner's own selection rule extracted so that one function serves both pages
+instead of two that agree today, and `assemble` calls it with the identical
+inputs it used inline. Every route, guard and refusal is where it was.
+
+---
+
+## 37. A definition is not an implementation, and Brain must never say it is.
+
+The self-expansion kernel (`server/services/capability/`,
+`server/services/selfmodel/`, `server/services/realize/`,
+`docs/CAPABILITY-KERNEL.md`) lets Brain hold a capability blueprint, say
+honestly how far it has got with it, and tell a sentence in a document from a
+mechanism that runs. Everything it adds is a new *entrance* to machinery Steps 4
+to 12C already built — bins, leases, fencing, the dispatcher, the evidence gate,
+the Factory's own approve-and-start — and none of it is a second set of rules.
+
+- **Six dimensions and no seventh.** The tempting shape is one `status` column
+  walking from "we wrote it down" to "it works". It is wrong at every value in
+  between and nobody can say which part is wrong. So definition, contract,
+  implementation, evaluation, availability and freshness are independent, each
+  moved by a different kind of evidence, and there is **no aggregate anywhere** —
+  no percentage, no rollup, no `isComplete`. The moment one exists every reader
+  uses it and the six become decoration; `describeFaculty` composes a sentence
+  out of all six instead.
+- **Ingesting a document may move exactly one of them.** `assertIngestionScope`
+  refuses the rest and a test holds it. A Brain that read a document about
+  Research Intelligence and then reported Research Intelligence as implemented
+  would be lying in the most expensive available direction: it would stop the
+  very work the document exists to start.
+- **Nothing canonical arrives without passing through a candidate.** A worker
+  reads the source and proposes; deterministic validation and an independent
+  audit are what move one across. There is no `createFaculty` beside
+  `promoteCandidate`, so that is a property of there being no other function
+  rather than a convention somebody follows — §8 at a new artifact.
+- **Every canonical statement traces to a passage.** Brain declares the bin's
+  units from the document's own `HEADING` blocks, so coverage is a question
+  about rows rather than about a summary, and a definition's quote must be
+  locatable in the extracted text — the page comes from the block Brain found it
+  in, never from the model, exactly as `findings.ts` already does it. A
+  definition filed under the wrong section is refused rather than reconciled:
+  §25's Westbrook defect at a section number.
+- **An amendment is a source, not an edit, and it is carried rather than
+  extracted.** The original keeps its bytes and its hash. Running it found the
+  correction: the Faculty 14 clarification registered cleanly, extracted
+  cleanly, and was marked FAILED for "declaring no sections this kernel
+  recognises" — a correct statement about a blueprint and a category error about
+  an amendment. An amendment does not define faculties; it changes what one of
+  them means, and the document it changes is the one with the numbering.
+- **The audit is independent by recorded lineage, the third kind of work in this
+  codebase to need that sentence.** The session comes from Brain's own
+  `bin_dispatch` row, never from what a worker says about itself, and the
+  credential is deliberately *not* compared — it is per-connector rather than
+  per-session, so comparing it would make every reviewer identical to every
+  extractor and refuse every audit for ever. Unknown lineage fails closed.
+- **Do not infer deployment or live behaviour from code existence.** The
+  self-model answers seven levels with three answers each, because `NO` is a
+  reading and `UNKNOWN` is the absence of one (§30's distinction, at a new
+  table). A module on disk reads UNKNOWN-connected, because whether anything
+  imports it is a static fact a running process cannot establish about itself —
+  §24's `reconcileAcceptedFragment` and §27's `reconcileRepairs` were both
+  exactly that, and neither would have been visible to a runtime check. A
+  migration file and a migration applied are two facts. A contract with no
+  evaluator reads as declared and unreachable. A suite reads as existing and
+  says nothing about whether it passes. Evaluation coverage is unreadable from a
+  deployment at all, because the image copies `server` and `client` and nothing
+  else.
+- **A scan decides nothing.** Nothing in `services/selfmodel/` queues work,
+  promotes a faculty or fires a surface, and a test holds five other tables'
+  counts across one. A self-model that acted on what it saw would be a control
+  loop whose input is its own output, and the first wrong reading would become a
+  decision.
+- **"Nothing matched" never becomes "this must be built."** The gap calculus
+  derives four kinds and refuses four, and the two sets are constants a test
+  holds. The matcher is one long non-stopword token a component's own name
+  contains; everything else is `NEEDS_A_READING` with the reason. A matcher that
+  tried harder would produce confident wrong answers, and missing a match costs
+  a reading while inventing one tells somebody a thing exists. A requirement
+  naming permission, authority, approval, consent, a credential or spending goes
+  to a person **whatever machinery matched it**.
+- **Most gaps are not research.** Exactly one kind is a question about the
+  world. Implementation, a person's decision, wiring and a reading are all real
+  gaps with real remedies, and every kind has a named remedy so a gap can never
+  be reported as real with nothing to do about it. The archive is asked first
+  through `coverBeforeWork` **reused whole** — a second copy would eventually
+  disagree with the first about what counts as answered.
+- **A compiled contract carries its gap id in every clause**, so a reviewer
+  walks back from a condition to the requirement, the definition, the candidate,
+  the quote and the block. It refuses a packet that is not decision-ready, never
+  chooses the repository — which repository a project may change is an
+  authorization in rows a person wrote — and **starts nothing**: approving is a
+  person's decision through the same `approveAndStartCampaign` every other
+  entrance uses.
+- **Two non-goals are added to every compiled contract**, both refusals of ways
+  a campaign could look finished without being it: a registry dimension moves
+  because code ran and was evaluated, never because something merged; and a new
+  mechanism is an entrance to existing machinery rather than a parallel universe
+  beside it.
+
+**`GENERAL` was expressible only as the absence of a class, and running the
+kernel is what found it.** `classesForFamilies` gave the GENERAL family
+`{ prefixes: [], allowsNull: true }`, so a bin declaring `GENERAL_…` matched
+nothing and the assigner answered `NO_READY_BINS` with the bin READY, the worker
+scoped and every row correct. It is a prefix now as well as the absence of one;
+null still means GENERAL, because rows written before `workload_class` existed
+carry none.
+
+**And the architecture scope was created with no layer**, on the strength of the
+blueprint document's own layer-lessness — which is a fact about the *document*
+(§11: a project source has `layer_id = NULL` on purpose) and not about the
+project. §30 records the identical defect one section along: a project with no
+layer can open work and launch nothing, for ever, with every row reading
+healthy.
+
+- **A merged pull request moves no dimension in the registry.** Without
+  something that says otherwise the registry can never leave `ABSENT` /
+  `UNTESTED`, and the obvious way to let it — move the implementation state when
+  a campaign merges — is exactly the lie the six dimensions exist to prevent. So
+  `services/realize/prove.ts` derives every move from a *different* source than
+  the build: the implementation state from the gaps' own closure rather than
+  from the campaign, because those come apart precisely when a campaign succeeds
+  at something narrower than the packet asked for; `LIVE` from the self-model
+  having **observed** the components, which is not a fact a build produces, and
+  where an `UNKNOWN` holds the faculty at `CONNECTED` because unknown is not a
+  reading; `PASSING` from the faculty's own declared evaluation requirements
+  rather than from a green suite, because a suite is evidence about the code and
+  not about the power; and `PRODUCTION_PROVEN` from rows in a project whose
+  purpose is somebody's work. A faculty that declares no evaluation requirements
+  can never pass, because calling that `PASSING` would be passing an exam nobody
+  set. Reading and applying are separate functions, so somebody can look before
+  anything moves.
+- **Availability is never moved, and is named as withheld rather than omitted.**
+  A realization that could switch on what it built would be granting itself the
+  one decision §27 reserves, and an absent line reads as *nothing to say about
+  it* when the honest answer is *this is not mine to say*.
+
+**And the kernel was reachable by nothing but a shell command, which is the
+sixth time this file has had to write that sentence.** `advanceSources` was
+written, tested and called by the operator script alone, so in a running Brain a
+registered blueprint would have sat at `REGISTERED` for ever with every row
+healthy — and the suite that proved the tick worked could not see it, because it
+called the tick directly. It is on the durable loop now, fleet-wide beside the
+other reconciliations, with the self-model refresh next to it; a test asserts
+the loop's own source reaches both, and both are wrapped so a kernel that cannot
+advance never stops Russell writing back a mission.
+
+- **A gap waiting on a person had no way for that person to answer it.**
+  `readiness` refuses a packet while any `REQUIRES_PERSON_AUTHORITY` gap is
+  open, which is correct — and `judgeGap` and `setGapState` were called by tests
+  and by nothing else, so the packet stopped at the one decision the whole
+  kernel waits for and no transition could record it. §24 writes *a state that
+  says "waiting for a person" which that person cannot resolve is not waiting;
+  it is stuck* at four altitudes and §27 at a fifth; this is the sixth, and it
+  is the one where the escalation is the entire point of the stage.
+  `services/realize/authority.ts` is the answering transition, and four
+  properties are what make it an answer rather than a way around the gate. It
+  answers **only a gap already waiting on a person** — the kind is a condition
+  *in the statement that makes the change*, because a caller that could
+  reclassify any gap could turn a `MUST_BE_RESEARCHED` into something needing no
+  research with somebody else's name on it. It **grants nothing**: the
+  authorizations Brain actually enforces are untouched, and approving the
+  objective and approving the release stay person-only decisions on the Build
+  surface. It is **attributed, and attribution is not authentication** — §23's
+  column pair, with the channel defaulting to the weaker unverifiable value
+  because Brain cannot check one. And a **refusal is recorded as a refusal**,
+  `WAIVED` with the words on it, which is a different fact from a grant and must
+  never read the same.
+
+- **The blueprint could not reach the deployed image, and the obvious fix was
+  wrong in a way a guard caught.** `.dockerignore` excludes `docs/`, and
+  `registerBlueprint` reads a source by path — so the first version copied
+  `docs/capability` to `docs/capability`. `readTextIndex` reads `docs/`, and
+  `documentedReading` answers `unknown(NO_DOCS_HERE)` **only while that
+  directory is absent**: a `docs/` tree holding one blueprint would have made
+  every component the blueprint does not name read a confident `NO`, which is
+  the exact reading corrected once already. So the bytes land at `blueprints/`,
+  outside the tree DOCUMENTED is read from, which is also what the `objectives/`
+  precedent actually records — the remedy there was to move the input out of
+  `docs/`, never to start copying `docs/` in. **A blueprint is a statement about
+  faculties Brain wants and is never documentation of components Brain has**,
+  which is §37's own first sentence arriving at a path.
+
+**What is true of this kernel today, said plainly.** Thirteen faculties are
+canonically defined from the real blueprint, each anchored to a named block in
+its extracted text, after an audit that refused two of fifteen with its reasons
+kept. **No faculty is implemented**, every one reports `ABSENT` and `UNTESTED`,
+and nothing here can move either. Nothing has been deployed, so no fired Routine
+has read a blueprint. No change request has been compiled, because the Research
+Intelligence packet correctly refuses on its remaining person clause.
+
+**Three of those sentences named one defect rather than three, and the
+correction is recorded rather than quietly applied.** *Nothing here can move
+either*, *no change request has been compiled* and *no research mission has been
+run for a capability gap* were all true, and each was true because a complete,
+tested mechanism had no caller — this file's most-recorded failure, arriving at
+the layer whose whole job is telling a sentence in a document from a mechanism
+that runs. `moveDimension` can write all six dimensions and `promoteCandidate`
+moved `DEFINITION`; `compile()` composed a complete `ObjectiveSubmission` and
+its only caller printed it; `directorPass` composed bounded questions and
+nothing turned one into work.
+
+- **`realized.ts` derives three dimensions and is worth having for what it
+  refuses.** A packet with an unclassified gap yields **no** implementation
+  reading — not `ABSENT` — because deriving one settles the exact question the
+  gap exists to ask somebody. An `UNKNOWN` may raise a state and may never lower
+  one: the deployed image carries no `tests/`, so a reading taken there would
+  otherwise walk every proven faculty back to untested on every scan and send
+  the next reader to rebuild something that works. `FAILING` is unreachable by
+  construction, because the self-model records that a suite *exists* and says
+  nothing about whether it passes. And **`AVAILABILITY` has no mover** — the
+  absence of a function rather than a check inside one, asserted by a test that
+  reads the file, because whether a faculty is switched on for real work is the
+  one dimension whose wrong answer is a wrong *action*, and a Brain that could
+  switch its own faculties on is §22's worker creating its own work one altitude
+  up.
+- **`handoff.ts` submits and stops.** It never imports the approval, never
+  chooses the repository or the project, and claims the packet with a guarded
+  `UPDATE` on `change_request_id IS NULL` — the one value that means nobody
+  holds this yet and is never what a winner leaves behind. §34's correction at
+  the probe claim, where a guard satisfied by the state it was claiming *into*
+  turned out to be no guard at all on the second backend.
+- **`askTheWorld.ts` makes a capability question an idea, never a packet.** The
+  obvious shape is `startPacket`, and it is wrong for the reason §25 settled at
+  the connected-site boundary: **a connector may ask, and only a person in
+  Russell may authorise the spending.** This is Brain reasoning about Brain,
+  which is the least supervised thing in this codebase and therefore the last
+  place to invent a second way of starting research. So a question becomes a
+  `russell_candidates` row, which spends nothing, and the archive check, the
+  standing authority, the approval envelope, the evidence gate, the verification
+  pass and the three audit roles all apply exactly as they were. There is no
+  authorization in the module and **no import that could grant one**, which a
+  test asserts against the import statements by name. The gap moves to
+  `ASSIGNED` carrying the candidate, so the next pass asks nothing twice and the
+  link from a gap to its work is a join rather than a search a merge could
+  answer wrongly.
+
+**Two holes in this work were found by looking rather than by the suite, and
+they were found in opposite ways.** A packet whose every gap was *waived* had
+nothing outstanding, an empty matched set and every count zero, so the
+implementation reading fell through to `LIVE` — and a waiver means *another
+faculty's packet owns this*, which is the opposite of a reading that the thing
+works. That one came out of re-reading the diff, §34's own discipline. There is
+no reading at all in that case now, rather than `CONNECTED`, which would be the
+same invention one rung lower.
+
+**The other came from writing the fixture, in my own module.**
+`judgeGap` could not record *which* component a reader matched — the column
+existed and only `classify` ever wrote it — so a reader answering
+`EXISTS_AND_LIVE` recorded that something serves the requirement and could not
+say what. The reach count then read an empty set of keys as *no unknowns* and
+walked straight to `LIVE`. A served requirement with no component behind it is
+an unknown now, which is the reading that cannot manufacture a reach nobody
+observed. And two assertions in the new suite failed on this work's **own
+prose** — the same matcher defect `operatorConsoleRemoved` had to be corrected
+for in the commit before it, which is how often a test that greps a file gets
+this wrong.
+
+**And all three were unreachable in practice, because the joint before them was
+a state nothing could leave.** `NEEDS_A_READING` is where a derivation leaves a
+gap whose requirement matched nothing; `judgeGap` is the only way out; and it
+had no route, tool or command calling it — four test suites and nothing else.
+Everything downstream is guarded on it, so `readiness`, `decisionReadiness`,
+`compile`, `handOff` and the implementation reading all refused for ever, and
+§37's own record of *a reader then classified the 25* was made through something
+that is not a shipped surface. Every part passed its own tests throughout, which
+is what makes this the same defect as the three it blocks rather than a
+different one. The reading is `npm run capability -- packet judge`, on a
+terminal because reaching the shell is the authentication — and a reader may
+answer **any** kind, because `DERIVABLE` bounds what *Brain* derives by itself
+while `NEEDS_JUDGEMENT` is exactly the set a person is there to supply. What is
+not settable is who the answer is recorded as. `packet show` prints gap ids now,
+since a command taking one beside a listing that printed none is §24's remedy
+the person cannot use.
+
+**What is still not true, and is not rounded up.** No faculty is implemented:
+`realized.ts` can now say one is, from rows, and on this repository every
+packet still holds unread gaps. Nothing has been deployed — the hosted tool
+list not carrying `brain_propose_plan_revision` is what says so. And no
+capability research has actually run: `askTheWorld` captures the idea, and
+whether a mission follows is the standing authority's decision, which nobody
+has granted on the architecture project.
+
+
+---
+
+## 38. A mechanism says how money is reachable. It never says where.
+
+Cash Mode's discovery holds ten search buckets and they are ten *mechanisms* —
+who published a paid request, where the same deliverable has two published
+prices, who has sold more work than they can deliver. Every one of them is a
+question about how money is reachable, and **not one of them is a question
+about where.** So production discovery searched an undifferentiated economy:
+thirty-one openings across transcription rates, stock-photo subscriptions,
+ticket resale, sneakers, trading cards, domain appraisals and bug bounties,
+with nothing anywhere saying which industries Brain had looked at, which it had
+never opened, or what lived underneath any of them. §29 asks *which
+economically important areas have we barely examined*; nothing held the
+question, so nothing could answer it.
+
+The kernel (`server/services/industry/`, `server/repos/industry.ts`,
+`server/domain/industry.ts`, `docs/INDUSTRY-KERNEL.md`) is the missing axis, and
+everything it adds is a new **entrance** to machinery Steps 4 to 12C already
+built. A kernel round is a Russell candidate: `judgeCandidate` asks the archive
+first, the compiler writes the specification, the approval envelope decides
+whether it may start, the evidence gate decides what may be claimed, and all
+three audit roles decide whether it stands.
+
+- **There is no list of industries in this repository, and that is asserted by
+  reading the source rather than by behaviour.** `operatorConsoleRemoved` reads
+  the repository for the same reason: what must not exist is not something a
+  behavioural test can see. The bootstrap is a *question* — which sectors do
+  NAICS, ISIC, SIC, GICS and the national statistical agencies declare — so the
+  classification systems are named as **sources**, exactly as `proposedSources`
+  already names source classes, and the sectors arrive as gated claims. A
+  constant holding them would answer the question the kernel exists to ask, and
+  would be wrong about every economy a classification system has revised since
+  somebody typed it. The schema is the other half: `CHECK (origin = 'SEED' OR
+  source_claim_id IS NOT NULL)`, so a node that traces to neither a passage nor
+  a person cannot be written by any path.
+- **A structural finding is declared by whoever read the source, from a closed
+  set.** §33's repair one axis along, for its exact reason: `harvest` decided
+  "is this an opening" by matching a lane id against a literal, planners name
+  their own lanes, and the bridge could never fire. So `structural_finding` is
+  one nullable column on `research_claims`, ten kinds, validated exactly on
+  submission, and anything outside it refuses the **whole submission** rather
+  than being stored and compared against nothing. Seven kinds add a subject to
+  the map; three are facts *about* a subject and carry a value from their own
+  closed set instead. One validator decides and **both doors call it** — the
+  wire door and the provider door — because a rule applied by one of two readers
+  is worse than none, for the fifth time.
+- **There is no kind for a platitude, and that is structural rather than a
+  filter over prose.** `CONSTRAINT_KINDS` holds fourteen entries and not one of
+  them is an obligation every business has, so *customers may not buy* and
+  *staff must be paid* have nowhere to go. §27 records what happens to a closed
+  list that must be complete over ordinary English — four widenings, each adding
+  the one word the last production message was declined for — so this list's
+  failure mode is fixed at **missing a real constraint**, never at admitting a
+  baseline one.
+- **A headline startup cost is a figure about a shape of the business, not an
+  answer.** One row per capital requirement; a restructuring is a second row
+  naming the requirement it answers, because a requirement can have several
+  published answers and the honest output is all of them rather than the
+  cheapest one silently chosen. `readCapital` **withholds the minimum owner
+  capital entirely** when any requirement's amount is unpublished, rather than
+  summing the rest — §30's rule at the margin, and worse here, because an
+  understated minimum makes something look executable today and *executable
+  today* is what starts spending. A restructuring with no published residual is
+  reported as available and reduces nothing, however plausible it sounds. Where
+  several structures answer one requirement the lowest published residual wins:
+  the one place the function chooses at all, and it chooses rather than averages
+  because you use one structure, not the mean of three.
+- **`NOT_DECOMPOSED` and `NO` are different answers with opposite remedies.**
+  One says nobody has looked, the other says the capital is established and out
+  of reach; the first waits for a question and the second waits for money.
+  Collapsing them would be *we could not tell* reading the same as *we checked*,
+  at the number that starts spending.
+- **Nothing derivable is stored.** No coverage score, no priority, no capital
+  tier, no path verdict — `tier.ts`' argument and `placements`' before it: a row
+  is not a decision, and a stored verdict is stale the moment the evidence it
+  was waiting on arrives. Two things are stored because no derivation could
+  recover them: that a person seeded a subject, and that a person killed a path.
+  `CAPITAL_TIERS` are presentation only; the decision is `executableNow`
+  comparing the derived minimum against `deployableCents`, which is measured.
+- **The allocator is pure over a recorded snapshot**, kept apart from the reads
+  for `services/dispatch/router.ts`' reason: *why did Brain research that* must
+  be answerable from an input rather than from a re-run against a database that
+  has moved. Being pure makes it useless as a safety mechanism, which is the
+  same split the dispatcher draws — the exclusion is the unique index on
+  `industry_rounds`, and two ticks both deciding correctly produce one round.
+  Seven rules in a fixed order and **no weighted score anywhere**, because a
+  score needs weights, weights are a judgement nobody made, and the number then
+  reads like a measurement.
+- **Decomposing a qualified opening's capital outranks starting the map, and the
+  first version had it the other way round.** Writing the map is the
+  longest-horizon question the kernel asks; an opening that is already qualified
+  has had the research that found it and the deep dive that qualified it both
+  paid for. On a pass with free slots both are asked, so the order decides only
+  what waits when they are scarce — and the thing that waits should be the map
+  rather than the money.
+- **It stops, and each bound is a bound rather than a preference.** One live
+  question per subject per purpose; a cool-off on a settled round; and a subject
+  searched `BARREN_ROUNDS` times for nothing *and* decomposed into nothing is
+  not offered again — because Brain has documented that there is nothing there,
+  and §13's rule about the archive applies to Brain's own history. `kindRecurses`
+  is the other half: a bottleneck, a buyer type and a transaction type are
+  leaves of understanding, and mapping them would produce a graph of adjectives.
+  They are still *scanned*, because a bottleneck is exactly where an opening
+  lives. `MAX_OPEN_KERNEL_ROUNDS` is concurrency and **not** a lifetime quota —
+  §24 removed exactly that kind of number and recorded why.
+- **`SEED` is the one origin Brain may never write.** A machine that could name
+  its own subjects would be deciding what the economy is — §22's split at the
+  table that decides where everything else looks. It is ADMIN plus
+  `requirePerson` on the Cash surface, a worker is refused by type, and seeding
+  spends nothing and starts nothing: it creates a row, and every gate downstream
+  still decides. Retiring destroys nothing, because a deleted subject arrives
+  again on the next expansion as a fresh discovery and the allowance is spent
+  learning what somebody already decided.
+- **Cash now and position later are two readings, never one.** The tempting
+  implementation is a blended figure, and it would need a rate of exchange
+  between *money this week* and *a relationship with a producer* that nobody has
+  set. Both are lists of established facts and named unknowns; the unknowns are
+  the half that matters, because a piece with three facts and six unknowns is
+  not a better bet than one with one fact and none, and a number would have said
+  it was.
+
+**Two defects in this work were found by running it rather than by reading it,
+and both are recorded rather than quietly fixed.** Every decline read
+`ind_d947baf680e046138443: there is no free slot` — technically true and
+useless, which is §29's status nobody can read. And eleven sectors with no
+evidence between them are genuinely equal, so the tie fell through to the
+generated node id: deterministic, meaningless, and leaving the same subjects at
+the back of the queue for ever. An ask carries its own subject and the age of
+the thing it is about now, so every subject gets a turn and every refusal names
+what it refused.
+
+**What has and has not run, said plainly.** The kernel operates end to end
+against a local Brain: a seeded subject, a bootstrap question carrying no
+sector, two specifications compiled against two reviewed envelopes, ten sectors
+absorbed from a real fetched source, and the allocator re-deciding over the
+larger map. **No fleet worker has answered a kernel question in production**,
+because that needs a deploy and a fire; until one has, the engine passing its
+tests says nothing about the research, which is the separation Step 3 drew
+between the research engine and a real job having actually run.
+
+**That paragraph was true when it was written and is corrected here rather than
+edited there.** The kernel is deployed, `Animation and anime production` is on
+the map as `ind_eb01b182ff4640358862` `[SECTOR/SEED]`, written through the
+terminal door by a real enabled administrator, and the durable tick opened the
+bootstrap question and the seeded subject's first scan by itself. What a fleet
+worker has answered is still pending on what follows.
+
+**An exhausted bin attempt budget is a deadlock with no answering transition,
+and production sat in one for fifty-one hours.** The kernel was doing exactly
+what it should and nothing could reach a worker, because the fleet had fired
+*nothing at all* — `in-flight counted=0 examined=0` over a thirty-minute
+window, eight eligible surfaces, zero in flight, and every Routine's fire count
+byte-identical across readings an hour apart.
+
+The cause is one clause. `DISPATCHABLE_SQL` is
+
+    ((state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))
+     AND attempt_count < max_attempts)
+
+so a dead lease is handled by design and **the attempt budget is not**.
+`bin_2e8710626ed84b3bbc88` held ten accepted claims and two claimable work
+items at `attempts 5/5`, on a lease that had expired fifty hours earlier. A
+`LEASED` bin is rescued by `assignNextBin`'s takeover — which needs a worker to
+arrive, which needs a fire, which the exhausted budget refuses. **The bin could
+only be rescued by a worker that could only arrive if the bin were rescued.**
+
+Nine such missions held all six of the standing grant's concurrency slots, so
+sixty-one ideas — including both kernel rounds — were queued behind work that
+could never finish. §24's sentence at a new altitude and the fifth time this
+file has had to write it: *a state that says waiting which nobody can resolve
+is not waiting, it is stuck.*
+
+**`creditBinAttempt` already fixed this forward and could not reach what was
+already stranded** — the fourth time that distinction has been the difference
+between a fix that reaches production and one that does not. The answering
+transition is `regrantBinAttempts`, whose own comment names the identical
+incident (`bin_75bea12e15534ba4b93f`, 5/5, document filed, primary audit done,
+adversarial and judge still claimable, *"no further activation could ever be
+fired at it"*). It raises the ceiling and never resets the count, refuses a
+terminal bin, only ever raises so it cannot strand one, and records
+`BIN_ATTEMPTS_REGRANTED` with a reason from a closed set. Raised 5/5 → 5/40
+under `budget-too-small`, the honest code: `refusals 0`, a SUCCEEDED fragment,
+and a packet that needs a synthesis, a verification and three separately
+sessioned audit roles against a budget of five.
+
+**The reading is what makes it a diagnosis rather than a story.** Three minutes
+after the ceiling moved, the same windowed query answered
+`in-flight counted=2 examined=2`. Nothing else was touched: no quarantine
+lifted, no concurrency raised, no attempt count reset, no lease revived, no
+packet re-planned.
+
+**The general case is `concludeUnworkablePackets`, and it is the mirror image
+of the sweep it sits beside.** `reconcileTerminalPackets` takes live work off a
+packet that has *finished*; this takes it off one that has **not**, holding
+only items past their own attempt ceilings. `reconcileArguedAuditRoles` already
+wrote the sentence one state along: *a reconciliation that only runs when
+something else happens cannot reach a state in which nothing is happening.*
+
+**It performs no dispatch, and that is the point.** Regranting the bin is the
+right answer when the items can still be attempted and the wrong one here: a
+worker fired at an item already past its ceiling arrives, claims, fails and
+retires it, spending an activation to learn what the rows already say. So this
+retires the dead work and calls `advancePacket`, which is the existing
+transition — what the packet *is* stays its answer, read from its own rows,
+rather than a new terminal path written here.
+
+Every condition is load-bearing and fails closed: live packets only, something
+must actually be stranded, **never while one outstanding item could still be
+attempted**, and **never under a live lease** — `retireTerminalWork` already
+records what retiring live work costs, a compliant worker told its completion
+is no longer current. The two refusals are what the tests pin, and they were
+run against a neutered guard to watch them fail before they were trusted to
+pass.
+
+**One thing it deliberately does not do.** A packet whose items can still be
+attempted but whose *bin* is spent is the other half, and that stays the
+operator's `regrant`: automatic bin regranting would put fires behind a packet
+that may simply keep failing, which is the loop that looks like progress.
+
+`step10.yml`'s header also claims its subcommands are "confined to the
+harness's own acceptance project", which `regrant` is not and never was: it
+takes any bin id, and its own comments record raising a real research bin's
+ceiling to 100. The comment is the thing that is wrong.
+
+
+## 39. Research is a decision about what to learn, and Brain had no place to make it.
 
 Research Intelligence (`server/services/research/intelligence/`,
 `server/repos/researchIntelligence.ts`, `docs/RESEARCH-INTELLIGENCE.md`) is the
@@ -5207,214 +6065,6 @@ rather than as a list of things it might be — `NEEDS_HUMAN` over a filed, audi
 report whose judge asked for more and whose repair ladder is spent, which is the
 honest outcome and not a packet that talked itself into "complete".
 
-## 36. A definition is not an implementation, and Brain must never say it is.
-
-The self-expansion kernel (`server/services/capability/`,
-`server/services/selfmodel/`, `server/services/realize/`,
-`docs/CAPABILITY-KERNEL.md`) lets Brain hold a capability blueprint, say
-honestly how far it has got with it, and tell a sentence in a document from a
-mechanism that runs. Everything it adds is a new *entrance* to machinery Steps 4
-to 12C already built — bins, leases, fencing, the dispatcher, the evidence gate,
-the Factory's own approve-and-start — and none of it is a second set of rules.
-
-- **Six dimensions and no seventh.** The tempting shape is one `status` column
-  walking from "we wrote it down" to "it works". It is wrong at every value in
-  between and nobody can say which part is wrong. So definition, contract,
-  implementation, evaluation, availability and freshness are independent, each
-  moved by a different kind of evidence, and there is **no aggregate anywhere** —
-  no percentage, no rollup, no `isComplete`. The moment one exists every reader
-  uses it and the six become decoration; `describeFaculty` composes a sentence
-  out of all six instead.
-- **Ingesting a document may move exactly one of them.** `assertIngestionScope`
-  refuses the rest and a test holds it. A Brain that read a document about
-  Research Intelligence and then reported Research Intelligence as implemented
-  would be lying in the most expensive available direction: it would stop the
-  very work the document exists to start.
-- **Nothing canonical arrives without passing through a candidate.** A worker
-  reads the source and proposes; deterministic validation and an independent
-  audit are what move one across. There is no `createFaculty` beside
-  `promoteCandidate`, so that is a property of there being no other function
-  rather than a convention somebody follows — §8 at a new artifact.
-- **Every canonical statement traces to a passage.** Brain declares the bin's
-  units from the document's own `HEADING` blocks, so coverage is a question
-  about rows rather than about a summary, and a definition's quote must be
-  locatable in the extracted text — the page comes from the block Brain found it
-  in, never from the model, exactly as `findings.ts` already does it. A
-  definition filed under the wrong section is refused rather than reconciled:
-  §25's Westbrook defect at a section number.
-- **An amendment is a source, not an edit, and it is carried rather than
-  extracted.** The original keeps its bytes and its hash. Running it found the
-  correction: the Faculty 14 clarification registered cleanly, extracted
-  cleanly, and was marked FAILED for "declaring no sections this kernel
-  recognises" — a correct statement about a blueprint and a category error about
-  an amendment. An amendment does not define faculties; it changes what one of
-  them means, and the document it changes is the one with the numbering.
-- **The audit is independent by recorded lineage, the third kind of work in this
-  codebase to need that sentence.** The session comes from Brain's own
-  `bin_dispatch` row, never from what a worker says about itself, and the
-  credential is deliberately *not* compared — it is per-connector rather than
-  per-session, so comparing it would make every reviewer identical to every
-  extractor and refuse every audit for ever. Unknown lineage fails closed.
-- **Do not infer deployment or live behaviour from code existence.** The
-  self-model answers seven levels with three answers each, because `NO` is a
-  reading and `UNKNOWN` is the absence of one (§30's distinction, at a new
-  table). A module on disk reads UNKNOWN-connected, because whether anything
-  imports it is a static fact a running process cannot establish about itself —
-  §24's `reconcileAcceptedFragment` and §27's `reconcileRepairs` were both
-  exactly that, and neither would have been visible to a runtime check. A
-  migration file and a migration applied are two facts. A contract with no
-  evaluator reads as declared and unreachable. A suite reads as existing and
-  says nothing about whether it passes. Evaluation coverage is unreadable from a
-  deployment at all, because the image copies `server` and `client` and nothing
-  else.
-- **A scan decides nothing.** Nothing in `services/selfmodel/` queues work,
-  promotes a faculty or fires a surface, and a test holds five other tables'
-  counts across one. A self-model that acted on what it saw would be a control
-  loop whose input is its own output, and the first wrong reading would become a
-  decision.
-- **"Nothing matched" never becomes "this must be built."** The gap calculus
-  derives four kinds and refuses four, and the two sets are constants a test
-  holds. The matcher is one long non-stopword token a component's own name
-  contains; everything else is `NEEDS_A_READING` with the reason. A matcher that
-  tried harder would produce confident wrong answers, and missing a match costs
-  a reading while inventing one tells somebody a thing exists. A requirement
-  naming permission, authority, approval, consent, a credential or spending goes
-  to a person **whatever machinery matched it**.
-- **Most gaps are not research.** Exactly one kind is a question about the
-  world. Implementation, a person's decision, wiring and a reading are all real
-  gaps with real remedies, and every kind has a named remedy so a gap can never
-  be reported as real with nothing to do about it. The archive is asked first
-  through `coverBeforeWork` **reused whole** — a second copy would eventually
-  disagree with the first about what counts as answered.
-- **A compiled contract carries its gap id in every clause**, so a reviewer
-  walks back from a condition to the requirement, the definition, the candidate,
-  the quote and the block. It refuses a packet that is not decision-ready, never
-  chooses the repository — which repository a project may change is an
-  authorization in rows a person wrote — and **starts nothing**: approving is a
-  person's decision through the same `approveAndStartCampaign` every other
-  entrance uses.
-- **Two non-goals are added to every compiled contract**, both refusals of ways
-  a campaign could look finished without being it: a registry dimension moves
-  because code ran and was evaluated, never because something merged; and a new
-  mechanism is an entrance to existing machinery rather than a parallel universe
-  beside it.
-
-**`GENERAL` was expressible only as the absence of a class, and running the
-kernel is what found it.** `classesForFamilies` gave the GENERAL family
-`{ prefixes: [], allowsNull: true }`, so a bin declaring `GENERAL_…` matched
-nothing and the assigner answered `NO_READY_BINS` with the bin READY, the worker
-scoped and every row correct. It is a prefix now as well as the absence of one;
-null still means GENERAL, because rows written before `workload_class` existed
-carry none.
-
-**And the architecture scope was created with no layer**, on the strength of the
-blueprint document's own layer-lessness — which is a fact about the *document*
-(§11: a project source has `layer_id = NULL` on purpose) and not about the
-project. §30 records the identical defect one section along: a project with no
-layer can open work and launch nothing, for ever, with every row reading
-healthy.
-
-**What is true of this kernel today, said plainly.** Thirteen faculties are
-canonically defined from the real blueprint, each anchored to a named block in
-its extracted text, after an audit that refused two of fifteen with its reasons
-kept. **No faculty is implemented**, every one reports `ABSENT` and `UNTESTED`,
-and nothing here can move either. Nothing has been deployed, so no fired Routine
-has read a blueprint. No change request has been compiled, because the Research
-Intelligence packet correctly refuses on its remaining person clause.
-
-**Three of those sentences named one defect rather than three, and the
-correction is recorded rather than quietly applied.** *Nothing here can move
-either*, *no change request has been compiled* and *no research mission has been
-run for a capability gap* were all true, and each was true because a complete,
-tested mechanism had no caller — this file's most-recorded failure, arriving at
-the layer whose whole job is telling a sentence in a document from a mechanism
-that runs. `moveDimension` can write all six dimensions and `promoteCandidate`
-moved `DEFINITION`; `compile()` composed a complete `ObjectiveSubmission` and
-its only caller printed it; `directorPass` composed bounded questions and
-nothing turned one into work.
-
-- **`realized.ts` derives three dimensions and is worth having for what it
-  refuses.** A packet with an unclassified gap yields **no** implementation
-  reading — not `ABSENT` — because deriving one settles the exact question the
-  gap exists to ask somebody. An `UNKNOWN` may raise a state and may never lower
-  one: the deployed image carries no `tests/`, so a reading taken there would
-  otherwise walk every proven faculty back to untested on every scan and send
-  the next reader to rebuild something that works. `FAILING` is unreachable by
-  construction, because the self-model records that a suite *exists* and says
-  nothing about whether it passes. And **`AVAILABILITY` has no mover** — the
-  absence of a function rather than a check inside one, asserted by a test that
-  reads the file, because whether a faculty is switched on for real work is the
-  one dimension whose wrong answer is a wrong *action*, and a Brain that could
-  switch its own faculties on is §22's worker creating its own work one altitude
-  up.
-- **`handoff.ts` submits and stops.** It never imports the approval, never
-  chooses the repository or the project, and claims the packet with a guarded
-  `UPDATE` on `change_request_id IS NULL` — the one value that means nobody
-  holds this yet and is never what a winner leaves behind. §34's correction at
-  the probe claim, where a guard satisfied by the state it was claiming *into*
-  turned out to be no guard at all on the second backend.
-- **`askTheWorld.ts` makes a capability question an idea, never a packet.** The
-  obvious shape is `startPacket`, and it is wrong for the reason §25 settled at
-  the connected-site boundary: **a connector may ask, and only a person in
-  Russell may authorise the spending.** This is Brain reasoning about Brain,
-  which is the least supervised thing in this codebase and therefore the last
-  place to invent a second way of starting research. So a question becomes a
-  `russell_candidates` row, which spends nothing, and the archive check, the
-  standing authority, the approval envelope, the evidence gate, the verification
-  pass and the three audit roles all apply exactly as they were. There is no
-  authorization in the module and **no import that could grant one**, which a
-  test asserts against the import statements by name. The gap moves to
-  `ASSIGNED` carrying the candidate, so the next pass asks nothing twice and the
-  link from a gap to its work is a join rather than a search a merge could
-  answer wrongly.
-
-**Two holes in this work were found by looking rather than by the suite, and
-they were found in opposite ways.** A packet whose every gap was *waived* had
-nothing outstanding, an empty matched set and every count zero, so the
-implementation reading fell through to `LIVE` — and a waiver means *another
-faculty's packet owns this*, which is the opposite of a reading that the thing
-works. That one came out of re-reading the diff, §34's own discipline. There is
-no reading at all in that case now, rather than `CONNECTED`, which would be the
-same invention one rung lower.
-
-**The other came from writing the fixture, in my own module.**
-`judgeGap` could not record *which* component a reader matched — the column
-existed and only `classify` ever wrote it — so a reader answering
-`EXISTS_AND_LIVE` recorded that something serves the requirement and could not
-say what. The reach count then read an empty set of keys as *no unknowns* and
-walked straight to `LIVE`. A served requirement with no component behind it is
-an unknown now, which is the reading that cannot manufacture a reach nobody
-observed. And two assertions in the new suite failed on this work's **own
-prose** — the same matcher defect `operatorConsoleRemoved` had to be corrected
-for in the commit before it, which is how often a test that greps a file gets
-this wrong.
-
-**And all three were unreachable in practice, because the joint before them was
-a state nothing could leave.** `NEEDS_A_READING` is where a derivation leaves a
-gap whose requirement matched nothing; `judgeGap` is the only way out; and it
-had no route, tool or command calling it — four test suites and nothing else.
-Everything downstream is guarded on it, so `readiness`, `decisionReadiness`,
-`compile`, `handOff` and the implementation reading all refused for ever, and
-§36's own record of *a reader then classified the 25* was made through something
-that is not a shipped surface. Every part passed its own tests throughout, which
-is what makes this the same defect as the three it blocks rather than a
-different one. The reading is `npm run capability -- packet judge`, on a
-terminal because reaching the shell is the authentication — and a reader may
-answer **any** kind, because `DERIVABLE` bounds what *Brain* derives by itself
-while `NEEDS_JUDGEMENT` is exactly the set a person is there to supply. What is
-not settable is who the answer is recorded as. `packet show` prints gap ids now,
-since a command taking one beside a listing that printed none is §24's remedy
-the person cannot use.
-
-**What is still not true, and is not rounded up.** No faculty is implemented:
-`realized.ts` can now say one is, from rows, and on this repository every
-packet still holds unread gaps. Nothing has been deployed — the hosted tool
-list not carrying `brain_propose_plan_revision` is what says so. And no
-capability research has actually run: `askTheWorld` captures the idea, and
-whether a mission follows is the standing authority's decision, which nobody
-has granted on the architecture project.
-
-
 ---
 
 ## Repository map
@@ -5511,7 +6161,8 @@ server/
       fire.ts           one POST to the Routine, and what a refusal means
       loop.ts           the tick: supersede, ensure, route, claim a slot, send
       candidates.ts     the fleet as numbers, read once per tick
-      router.ts         a pure decision, and seven named refusals
+      router.ts         a pure decision, and its named refusals: which wait, which end a burst
+      pool.ts           every surface serving one logical worker, and what each has proved
       scaler.ts         raise, lower, quarantine — proposals, never actions
       simulate.ts       a deterministic projection, structurally labelled
       profiles.ts       workload cost and activation traces, as queries
@@ -5539,6 +6190,7 @@ server/
       loop.ts           the tick that makes a state change visible to a poller
     capacity/
       connection.ts     connecting a Claude account, and the one step Brain cannot do
+      contribution.ts   whose connection is usable capacity, and why not when it is not
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
       shared.ts         what crosses between projects, and what may never
@@ -5583,12 +6235,14 @@ server/
       refresh.ts        when the reading stopped being about this system
     realize/
       gaps.ts           what Brain derives, and the four kinds it refuses to
+      authority.ts      the answer to a gap no amount of building closes
       packet.ts         the ten-section packet, versioned, as living state
       director.ts       what to research, and when to stop — with the reason
       compile.ts        the change request a decision-ready packet implies
       realized.ts       three dimensions derived from rows, and the one with no mover
       handoff.ts        the compiled contract becoming an ask somebody can approve
       askTheWorld.ts    a capability question becomes an idea, and never a packet
+      prove.ts          what makes a capability exist, as opposed to built
     russell/
       home.ts           the eight things home says, in the order S6 fixes them
       collections.ts    threads organized without inventing a category, ranked by meaning
@@ -5694,8 +6348,10 @@ client/                 React UI
   src/Root.tsx          which shell this address wants, and who is signed in
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
-  src/russell/Cash.tsx  one person's private sprint, and nobody else's
+  src/russell/Cash.tsx  one Cash page: one skeleton, and a role decides what is in it
+  src/russell/cashPage.ts  both payloads, normalized; the capabilities the server sent
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
+  src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
   src/russell/Devices.tsx    your own passkeys, and nobody else's
   src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate
   src/russell/Home.tsx  the command center: state, focus, maturity strip, collections
@@ -5705,7 +6361,7 @@ client/                 React UI
   src/russell/Search.tsx one search over everything this person may see
   src/russell/design.css the Step 12B design system: tokens, container reflow, both themes
   src/App.tsx           the legacy console, at /legacy
-docs/capability/        the blueprint and its amendments, preserved with their hashes
+blueprints/             the blueprint and its amendments, preserved with their hashes
 objectives/             software objectives a person approved, in the image by design
 scripts/
   capability.ts             the kernel's operator surface: register, advance, derive
@@ -5714,7 +6370,7 @@ scripts/
   connect-report.ts         what a connected site has done, read from inside
   admin.ts                  emergency administration, on a terminal rather than a page
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
-  fleet.ts                  the operator's fleet surface: register, target, explain
+  fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
@@ -5726,6 +6382,8 @@ tests/                  Vitest suites
   capabilityDirector.test.ts most gaps are not research, and the archive comes first
   capabilityCompile.test.ts  every clause traces to a gap, and it starts nothing
   facultyRealization.test.ts  the dimensions that move, the ask that stops, the question that spends nothing
+  capabilityProof.test.ts    a merge moves no dimension; each one needs its own evidence
+  capabilityAuthority.test.ts  the escalation's answering transition, and every refusal in it
   step12bProduct.test.ts     the product decisions, where they are decided
   step12bResponsive.test.ts  the widths that were clipping, and why they no longer do
   cashMode.test.ts           the lifecycle, and the off switch that is not the Brain's
@@ -5741,12 +6399,15 @@ tests/                  Vitest suites
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker
+  factoryPool.test.ts        one Factory worker, three accounts, and the failover between them
   sharedKnowledge.test.ts    one finding, two operations, and the wall between them
   webauthn.test.ts           a real P-256 credential, and every refusal that would not have been one
   passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits
   passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new
   sharedCashAccess.test.ts   a member reads the frontier; nobody reads somebody's job
   peopleAndCapacity.test.ts  a declared person, a counted Routine, a resumable setup
+  claudeConnectionLifecycle.test.ts  asking, checking, misbinding, lapsing, revoking, reconnecting
+  claudeConnectionParity.test.ts     three real accounts, one screen, compared field by field
   peopleSection.test.tsx     the two screens the defects were actually visible on
   migrationRebuild.test.ts   a rebuild over rows, and the cascade it must not fire
   cashConcurrency.test.ts    two commitments, forced to overlap, on both backends

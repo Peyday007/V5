@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 068. See that file for why there are
+-- The Postgres half of SQLite migration 070. See that file for why there are
 -- seven levels with three answers each, and why a derived reading is stored.
 --
 -- `seq BIGSERIAL` on every table: the identity column `dialect.ts` rewrites

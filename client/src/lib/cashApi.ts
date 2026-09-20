@@ -32,7 +32,23 @@ export type { CashReadiness, CashRoadmap, CashForecast, SharedCashView };
  * fields blanked: there is no shape of the access defect a screen could paper
  * over, because the private fields are absent from the wire.
  */
-export type CashViewReading = ({ scope: 'FULL' } & CashView) | SharedCashView;
+/**
+ * What may be *offered*, decided by the server's own `decideProjectAccess`.
+ *
+ * Optional because an older deployment does not send it, and the client fails
+ * closed rather than assuming: see `cashPage.ts`. It authorizes nothing — every
+ * route re-decides at the moment anything happens.
+ */
+export interface CashCapabilities {
+  mayAdminister: boolean;
+  mayGrantAuthority: boolean;
+  mayViewPrivateJob: boolean;
+  mayActOnJob: boolean;
+}
+
+export type CashViewReading = (({ scope: 'FULL' } & CashView) | SharedCashView) & {
+  capabilities?: CashCapabilities;
+};
 
 export type CashModeState = 'ACTIVE' | 'WINDING_DOWN' | 'ARCHIVED';
 
@@ -300,6 +316,13 @@ export interface CashView {
   roadmap: CashRoadmap;
   /** What the evidence supports saying about money, and what it does not. */
   forecast: CashForecast;
+  /**
+   * The same shared frontier a member is sent, produced by the same server
+   * function. The page's shared sections render from this for **both** roles,
+   * so there is no shape for a client to reconcile and no way for the two
+   * pages to disagree about one sprint.
+   */
+  frontier: Omit<SharedCashView, 'scope'>;
   decisionsForMe: { items: ReviewItem[]; underlyingCount: number; summary: string };
   vocabulary: {
     mechanisms: string[];

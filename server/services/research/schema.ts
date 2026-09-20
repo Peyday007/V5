@@ -31,7 +31,9 @@ import {
   type OpportunitySignal,
   LANE_EVIDENCE_KINDS,
   type LaneEvidenceKind,
+  type StructuralFinding,
 } from '../../domain/types.ts';
+import { validateStructural } from '../../domain/industry.ts';
 import {
   booleanField,
   confidenceField,
@@ -516,6 +518,14 @@ export interface ParsedClaim {
   evidenceLane: string | null;
   /** The kind of opening this claim establishes, or null for context. */
   opportunitySignal: OpportunitySignal | null;
+  /** The structural fact about an industry it establishes, or null. */
+  structuralFinding: StructuralFinding | null;
+  /** What the finding is about: a name, or a value from that kind's own set. */
+  structuralSubject: string | null;
+  /** For a restructuring, the requirement it answers. Null otherwise. */
+  structuralQualifier: string | null;
+  /** A capital figure, where a source published one. Null means unknown. */
+  structuralAmountCents: number | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -677,6 +687,22 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
     opportunitySignal = parsed.value;
   }
 
+  /*
+   * The structural fact about an industry, if this claim establishes one.
+   *
+   * Delegated whole to `validateStructural`, which is also what the MCP tool
+   * calls. Two readers of one rule is how they come to disagree, and this
+   * repository has had to record that four times already.
+   */
+  const structural = validateStructural({
+    where,
+    finding: row['structuralFinding'],
+    subject: row['structuralSubject'],
+    qualifier: row['structuralQualifier'],
+    amountCents: row['structuralAmountCents'],
+  });
+  if (!structural.ok) return structural;
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -708,6 +734,10 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       confidence: confidence.value ?? 0,
       evidenceLane: lane.value || null,
       opportunitySignal,
+      structuralFinding: structural.value.finding,
+      structuralSubject: structural.value.subject,
+      structuralQualifier: structural.value.qualifier,
+      structuralAmountCents: structural.value.amountCents,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

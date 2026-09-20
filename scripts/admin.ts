@@ -44,11 +44,13 @@
  *   npm run admin -- packets independence [project]
  *   npm run admin -- packets scope [project]
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
+ *   npm run admin -- cash seed-industry <project> "<subject name>" --admin someone@example.com
  */
 import { startPacket } from '../server/services/research/startPacket.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
 import { SEARCH_BUCKETS } from '../server/services/cash/discovery.ts';
 import { CASH_LAYER_NAME } from '../server/services/cash/lifecycle.ts';
+import { seedSubject } from '../server/services/industry/seed.ts';
 import { createLayer, listLayers } from '../server/repos/layers.ts';
 import { binForOrchestration, createBin } from '../server/repos/bins.ts';
 import fs from 'node:fs';
@@ -1085,6 +1087,64 @@ async function main(): Promise<void> {
       });
       console.log(`  recorded  ${recorded.decision} ${recorded.id} by ${actor.email}`);
       console.log('  Appended, never replacing: an earlier decision keeps its row.');
+      break;
+    }
+    /*
+     * Putting a subject on the industry map, from the terminal.
+     *
+     * §38 makes `SEED` the one node origin Brain may never write: the schema
+     * requires every other origin to carry the gated claim that established
+     * it, so a machine cannot name its own subjects. That invariant is about
+     * *Brain*, not about which door a person uses, and it is untouched here —
+     * `administrator()` resolves a real enabled Brain administrator out of
+     * `users` and refuses otherwise, which is the same authority
+     * `decideProjectAccess` at ADMIN asks for on the Cash surface.
+     *
+     * **Attribution is not authentication**, which §23 records at length. What
+     * this establishes is that such a person exists and may authorize this;
+     * reaching the shell is what authenticated it, and on this repository that
+     * shell is reached by a GitHub Actions job holding the deployment
+     * credential. Recording it as a browser approval would be undetectable
+     * afterwards, so the event says `TERMINAL` and names the administrator it
+     * carries the authority of.
+     *
+     * It spends nothing and starts nothing. A seed is a row; the allocator
+     * decides when the subject is asked about, the discovery grant decides
+     * whether that may run, and the evidence gate decides what may be claimed.
+     */
+    case 'cash seed-industry': {
+      const actor = await administrator();
+      const project = await projectFrom(rest[0] ?? fail('Name the project.'));
+      const name = rest.slice(1).join(' ').trim() || fail('Name the subject to seed.');
+
+      const result = await seedSubject({
+        projectId: project.id,
+        name,
+        actorRef: actor.id,
+        reason: `Seeded from the terminal by ${actor.email ?? actor.id}, on a recorded instruction.`,
+      });
+
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'UPDATE_PROJECT',
+        targetType: 'PROJECT',
+        targetId: project.id,
+        projectId: project.id,
+        result: 'SUCCESS',
+      });
+
+      console.log(
+        `  ${result.node.id}  ${result.node.name}  [${result.node.kind}/${result.node.origin}]` +
+          `  ${result.created ? 'seeded' : 'already on the map'}`,
+      );
+      // The verdict line is `main`'s own, at column zero, which is what the
+      // workflow greps for. This says what happened; it never claims the word.
+      console.log(
+        result.created
+          ? '  Brain decides when to ask about it. Nothing was spent and no research started.'
+          : '  It was already on the map, so nothing changed.',
+      );
       break;
     }
     case 'packets scope': {

@@ -43,6 +43,8 @@ import {
   livePacketFor,
   missingSections,
   openPacket,
+  PACKET_SECTIONS,
+  putSection,
   readiness,
 } from '../server/services/realize/packet.ts';
 import { decisionReadiness, directorPass } from '../server/services/realize/director.ts';
@@ -51,6 +53,11 @@ import { compile } from '../server/services/realize/compile.ts';
 import { handOff } from '../server/services/realize/handoff.ts';
 import { applyRealization, readRealization } from '../server/services/realize/realized.ts';
 import { askTheWorld, outstandingQuestions } from '../server/services/realize/askTheWorld.ts';
+import {
+  answerAuthorityGap,
+  gapsAwaitingAPerson,
+} from '../server/services/realize/authority.ts';
+import { applyProof, readProof } from '../server/services/realize/prove.ts';
 
 function out(line = ''): void {
   console.log(line);
@@ -84,6 +91,11 @@ const USAGE = `
   packet show <packetId>                              sections, gaps and readiness
   packet research <packetId>                          what it should research next, if anything
   packet compile <packetId>                           the change request it implies
+  packet prove <packetId> [--apply]                   what the evidence supports, and what it does not
+  packet section <packetId> <SECTION> <file.json>     write a design section a reader authored
+  packet awaiting <packetId>                          every gap waiting on a person
+  packet answer <gapId> --grant|--refuse --admin <e>  a person's answer to one of them
+           --statement <words>
   packets                                             every packet, and faculties with none
 
   submit <binId> <file.json> --worker <handle>        submit a reading through the worker path
@@ -451,6 +463,131 @@ async function packet(argv: string[]): Promise<void> {
       out('');
       break;
     }
+    case 'section': {
+      const id = rest[0];
+      const section = rest[1];
+      const file = rest[2];
+      if (!id || !section || !file) {
+        fail('Usage: packet section <packetId> <SECTION> <file.json>');
+      }
+      if (!(PACKET_SECTIONS as readonly string[]).includes(section as string)) {
+        fail(`"${section}" is not one of ${PACKET_SECTIONS.join(', ')}.`);
+      }
+      const absolute = path.resolve(file as string);
+      if (!fs.existsSync(absolute)) fail(`There is no file at ${absolute}.`);
+      const content: unknown = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+      /*
+       * `PROPOSED`, never `ACCEPTED`. A design somebody wrote is a proposal
+       * until a person accepts it, and a command that could write `ACCEPTED`
+       * would let whoever ran it accept their own work.
+       */
+      const written = await putSection({
+        packetId: id as string,
+        section: section as (typeof PACKET_SECTIONS)[number],
+        content,
+        authorKind: 'PROPOSED',
+        evidence: `Authored by a reader and supplied from ${absolute}.`,
+      });
+      out('');
+      out(`  ${written.section} v${written.version}  ${written.authorKind}`);
+      out('');
+      break;
+    }
+    case 'awaiting': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet awaiting <packetId>');
+      const waiting = await gapsAwaitingAPerson(id as string);
+      out('');
+      if (waiting.length === 0) {
+        out('  Nothing on this packet is waiting on a person.');
+        out('');
+        break;
+      }
+      out(`  ${waiting.length} gap(s) waiting on a person`);
+      for (const gap of waiting) {
+        out('');
+        out(`    ${gap.id}  ${gap.state}  ${gap.aspect}`);
+        out(`        ${gap.requirement}`);
+        if (gap.evidence) out(`        judged from: ${gap.evidence}`);
+      }
+      out('');
+      out('  Answer one with: packet answer <gapId> --grant|--refuse --admin <email> --statement "…"');
+      out('');
+      break;
+    }
+    /*
+     * A person's answer to a gap no amount of building closes.
+     *
+     * `readiness` refuses the packet while any `REQUIRES_PERSON_AUTHORITY` gap
+     * is open, correctly — and until this existed the only callers of the
+     * transition that answers one were tests, which is §24's *waiting nobody
+     * can resolve* landing on the single decision the whole packet stops at.
+     *
+     * `--grant` and `--refuse` are separate flags rather than a value, because
+     * a default here would be a default about somebody's authority. The service
+     * is what guards it: only a gap actually waiting on a person, only an
+     * enabled administrator, and the whole proof in the statement that makes
+     * the change.
+     */
+    case 'answer': {
+      const gapId = rest[0];
+      const grant = rest.includes('--grant');
+      const refuse = rest.includes('--refuse');
+      const admin = flag(rest, 'admin');
+      const statement = flag(rest, 'statement');
+      if (!gapId || !admin || !statement || grant === refuse) {
+        fail(
+          'Usage: packet answer <gapId> --grant|--refuse --admin <email> --statement "…"\n' +
+            '  Exactly one of --grant and --refuse: a default about somebody\u2019s authority is ' +
+            'not a default this may have.',
+        );
+      }
+      const outcome = await answerAuthorityGap({
+        gapId: gapId as string,
+        answer: grant ? 'GRANTED' : 'REFUSED',
+        statement: statement as string,
+        answeredByEmail: admin as string,
+        // Reaching this shell is what authenticated the call, and Brain cannot
+        // check that — so the weaker, unverifiable value, never the stronger.
+        channel: 'SHELL',
+        executedByRef: process.env['BRAIN_EXECUTED_BY'] ?? null,
+      });
+      out('');
+      out(`  ${outcome.answered ? 'Answered' : 'Not answered'}  ${gapId}`);
+      out(`  ${outcome.reason}`);
+      if (outcome.gap) out(`  Now: ${outcome.gap.state}  ${outcome.gap.kind}`);
+      out('');
+      if (!outcome.answered) fail('Nothing changed.');
+      break;
+    }
+    case 'prove': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet prove <packetId> [--apply]');
+      const apply = rest.includes('--apply');
+      const reading = apply
+        ? await applyProof({ packetId: id as string, actorType: 'PERSON', actorId: 'operator (shell)' })
+        : await readProof(id as string);
+      out('');
+      if (reading.moves.length === 0) out('  Nothing the evidence supports has changed.');
+      for (const move of reading.moves) {
+        out(`  ${move.dimension.padEnd(16)} ${move.from} -> ${move.to}`);
+        out(`      ${move.reason}`);
+      }
+      out('');
+      out('  Withheld');
+      for (const held of reading.withheld) out(`    ${held.dimension.padEnd(16)} ${held.needs}`);
+      out('');
+      if (apply) {
+        const applied = (reading as { applied?: number }).applied ?? 0;
+        out(`  Applied ${applied} move(s).`);
+        out('');
+        if (applied === 0) fail('Nothing moved.');
+      } else if (reading.moves.length > 0) {
+        out('  Reading only. Pass --apply to record them.');
+        out('');
+      }
+      break;
+    }
     case 'compile': {
       const id = rest[0];
       if (!id) fail('Usage: packet compile <packetId> [--project <id>]');
@@ -638,7 +775,10 @@ async function packet(argv: string[]): Promise<void> {
       break;
     }
     default:
-      fail('Usage: packet <open|derive|show|judge|research|compile|ask|outstanding|handoff|realize> …');
+      fail(
+        'Usage: packet <open|derive|show|judge|research|compile|prove|ask|outstanding|' +
+          'handoff|realize> …',
+      );
   }
 }
 

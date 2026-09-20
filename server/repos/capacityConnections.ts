@@ -41,6 +41,11 @@ function map(row: CapacityConnectionRow): CapacityConnection {
     probeBinId: row.probe_bin_id,
     probeSentAt: row.probe_sent_at,
     healthyAt: row.healthy_at,
+    invitationRequestedAt: row.invitation_requested_at,
+    invitationIssuedAt: row.invitation_issued_at,
+    revokedAt: row.revoked_at,
+    revokedReason: row.revoked_reason,
+    revokedByUserId: row.revoked_by_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -250,6 +255,113 @@ export async function releaseProbe(input: {
         SET probe_bin_id = NULL, probe_sent_at = NULL, state = ?, updated_at = ?
       WHERE id = ? AND probe_bin_id = ?`,
     [input.to, nowIso(), input.connectionId, input.binId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Record that the member has asked for their one-time connector link.
+ *
+ * Guarded on `invitation_requested_at IS NULL`, which is the value actually
+ * being claimed rather than the state beside it — the same correction
+ * `setTrigger` carries, for the same reason. Two tabs produce one request and
+ * one ordinary loser, and a member who presses it again after a week is told
+ * what they already asked for rather than moving an administrator's queue.
+ *
+ * It is deliberately not conditional on the state: a connection sitting at
+ * `REVOKED` or `MISBOUND` may still be waiting for a link, and a guard that
+ * named one state would have to name all of them.
+ */
+export async function requestInvitation(input: {
+  connectionId: string;
+  to: CapacityConnectionState;
+}): Promise<boolean> {
+  const at = nowIso();
+  const result = await getDb().run(
+    `UPDATE capacity_connections
+        SET invitation_requested_at = ?, state = ?, failure_reason = NULL, updated_at = ?
+      WHERE id = ? AND invitation_requested_at IS NULL`,
+    [at, input.to, at, input.connectionId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Record that an administrator issued one.
+ *
+ * Not guarded, and that is deliberate: issuing is a **rotation** as much as a
+ * setup — `issueConnectorInvitation` revokes what was live before minting the
+ * next — so the second issue is a real event and the stamp must move with it.
+ * What it must never do is move a state backwards, so it leaves `state` alone
+ * entirely and the reconciliation on the read path decides where the row is.
+ */
+export async function recordInvitationIssued(connectionId: string): Promise<void> {
+  const at = nowIso();
+  await getDb().run(
+    `UPDATE capacity_connections SET invitation_issued_at = ?, updated_at = ? WHERE id = ?`,
+    [at, at, connectionId],
+  );
+}
+
+/**
+ * Give a connection back.
+ *
+ * Guarded on `revoked_at IS NULL` so two presses revoke once, and on nothing
+ * else: every state is revocable, including a half-finished one, because the
+ * question a person is answering is *do I want this Brain firing my Claude
+ * account* and that has the same answer at every step of the setup.
+ *
+ * Nothing is deleted. The trigger, the account, the Routine, the probe and the
+ * proof timestamp all stay, which is what makes `reconnect` a resumption rather
+ * than a second registration.
+ */
+export async function revokeConnection(input: {
+  connectionId: string;
+  reason: string;
+  byUserId: string;
+}): Promise<boolean> {
+  const at = nowIso();
+  const result = await getDb().run(
+    `UPDATE capacity_connections
+        SET state = 'REVOKED', revoked_at = ?, revoked_reason = ?, revoked_by_user_id = ?,
+            failure_reason = NULL, updated_at = ?
+      WHERE id = ? AND revoked_at IS NULL`,
+    [at, input.reason, input.byUserId, at, input.connectionId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Put a revoked connection back into the journey.
+ *
+ * Guarded on the row still being `REVOKED`, so a reconnect cannot resurrect a
+ * connection somebody is mid-way through repairing. It clears `revoked_at`
+ * because that column is what `revokeConnection` claims on — leaving it set
+ * would make the next revoke a silent no-op — and keeps `revoked_reason` and
+ * `revoked_by_user_id`, which are history and do not stop having happened.
+ *
+ * It returns to `NOT_STARTED` rather than to wherever it was. The tokens were
+ * revoked, so the connector genuinely has to be approved again, and a state
+ * claiming otherwise would be the false-settled reading §29 keeps correcting.
+ *
+ * **Both invitation stamps are cleared with it, and that is the half a reading
+ * of this function alone would miss.** Revoking revokes the member's live
+ * invitation as well as their tokens, so after a reconnect the link that
+ * `invitation_issued_at` records no longer works — and leaving that stamp set
+ * would show the first step as *done* while the person holds nothing they can
+ * open, which is the step-that-cannot-be-taken this whole journey was rewritten
+ * to remove. Clearing `invitation_requested_at` beside it is what makes the ask
+ * available again; the request was answered, the answer was withdrawn, and the
+ * audit of both is on `identity_events` rather than on these two columns.
+ */
+export async function reconnectConnection(connectionId: string): Promise<boolean> {
+  const at = nowIso();
+  const result = await getDb().run(
+    `UPDATE capacity_connections
+        SET state = 'NOT_STARTED', revoked_at = NULL, failure_reason = NULL,
+            invitation_requested_at = NULL, invitation_issued_at = NULL, updated_at = ?
+      WHERE id = ? AND state = 'REVOKED'`,
+    [at, connectionId],
   );
   return result.changes === 1;
 }

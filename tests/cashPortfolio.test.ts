@@ -56,6 +56,7 @@ function opportunity(overrides: Partial<CashOpportunity> = {}): CashOpportunity 
     ownerUserId: 'usr_1',
     title: 'An opening',
     mechanism: 'EXPLICIT_PAID_REQUEST',
+    industryNodeId: null,
     industry: null,
     source: null,
     candidateId: null,

@@ -29,7 +29,9 @@ import {
   renameRoutine,
   policyHistory,
   repointRoutineWorker,
+  routineRegistrationCollision,
   setRoutineCapabilities,
+  setRoutineSecret,
   setAccountState,
   setPolicy,
   setRoutineState,
@@ -38,6 +40,16 @@ import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { proveSurface } from '../server/services/dispatch/surfaceProof.ts';
 import { resolveToken } from '../server/services/dispatch/fire.ts';
+import {
+  decidedPairs,
+  digestOfSecret,
+  planPairs,
+  recordPairAttempt,
+  seedFromRows,
+  stopsTrigger,
+  tryPair,
+  type DecidedPair,
+} from '../server/services/dispatch/secretReconcile.ts';
 import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scaler.ts';
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
@@ -158,13 +170,40 @@ async function main(): Promise<void> {
           'and a digest, never the value.',
       );
     }
+    /*
+     * One trigger token per Routine, and the digest is what actually says so.
+     *
+     * `UNIQUE (routine_ref)` already stops the same trigger being registered
+     * twice. It says nothing about the *token*, and a pool is exactly where that
+     * gap bites: the intended arrangement is one Claude account, one connector,
+     * one Routine and one deployment secret each, and the easy mistake is to
+     * point the second Routine at the first one's secret — or at a new secret
+     * name holding the same pasted value.
+     *
+     * Both are refused, and the digest check is the one that matters. A name
+     * collision is visible to anybody reading `fleet show`; two different names
+     * holding one token are indistinguishable there, and the fleet would look
+     * like two surfaces while being one trigger fired twice — over-firing one
+     * account while reporting headroom on another, which is `declared_plan_power`
+     * arithmetic-on-a-fiction in a new place.
+     *
+     * The digest is already stored at registration (`token_digest`), so this
+     * costs one read and reveals nothing: a digest is not recoverable to a value,
+     * and the refusal names the Routine rather than either secret's contents.
+     */
+    const digest = credentialDigest(value);
+    const collision = routineRegistrationCollision(await listRoutines(), {
+      tokenSecretName: secret,
+      tokenDigest: digest,
+    });
+    if (collision) return refuse(collision);
     if (flag('dry-run')) return ok(`dry-run register-routine ref=${ref} secret=${secret} (nothing written)`);
     const routine = await createRoutine({
       accountId: account.id,
       routineRef: ref,
       name: name!,
       tokenSecretName: secret,
-      tokenDigest: credentialDigest(value),
+      tokenDigest: digest,
       routineVersion: option('version'),
       baseUrl: option('base-url'),
       capabilities: (option('capabilities') ?? '').split(',').map((s) => s.trim()).filter(Boolean),
@@ -210,6 +249,215 @@ async function main(): Promise<void> {
     if (!updated) return refuse(`${ref} could not be updated.`);
     return ok(
       `set-capabilities ${ref} [${routine.capabilities.join(',')}] -> [${updated.capabilities.join(',')}]`,
+    );
+  }
+
+  /*
+   * Point a Routine at a different deployment secret.
+   *
+   * The companion to `set-capabilities`, and for the same reason: a row that is
+   * wrong in an ordinary way, with no remedy but manual SQL — which invariant 2
+   * forbids — or retiring a healthy surface. Here the wrongness is a trigger and
+   * a bearer paired by hand and paired wrongly, which a provider `AUTH 401`
+   * reports and does not diagnose.
+   *
+   * It moves no deployment variable and reads no value back: the named secret is
+   * resolved once to prove it exists and to take its digest, exactly as
+   * `register-routine` does. The digest is what keeps `routineRegistrationCollision`
+   * true of the row afterwards, so "two names, one token" stays visible.
+   */
+  if (command === 'set-secret') {
+    const ref = option('ref');
+    const secret = option('secret');
+    const reason = nameOption('reason') ?? option('reason');
+    if (!ref || !secret) return refuse('pass --ref <trig_…> --secret <ENV_VAR_NAME>.');
+    if (!reason) return refuse('pass --reason: a row that changed with no recorded why answers nothing later.');
+    const routine = await getRoutineByRef(ref);
+    if (!routine) return refuse(`no Routine registered with ref ${ref}.`);
+    if (routine.tokenSecretName === secret) {
+      return ok(`set-secret ${routine.id} already names ${secret}. Nothing changed.`);
+    }
+    const digest = digestOfSecret(secret);
+    if (!digest) {
+      return refuse(
+        `the deployment has no secret named ${secret}. Set it first; Brain stores only the name ` +
+          'and a digest, never the value.',
+      );
+    }
+    if (flag('dry-run')) {
+      return ok(`dry-run set-secret ${routine.id} ${routine.tokenSecretName} -> ${secret} (nothing written)`);
+    }
+    const after = await setRoutineSecret({
+      routineId: routine.id,
+      tokenSecretName: secret,
+      tokenDigest: digest,
+      actor: ACTOR,
+      reason,
+    });
+    if (!after) return refuse(`no Routine ${routine.id}.`);
+    return ok(
+      `set-secret ${after.id} ${routine.tokenSecretName} -> ${after.tokenSecretName} ` +
+        `digest=${after.tokenDigest?.slice(0, 12)}… state=${after.state}`,
+    );
+  }
+
+  /*
+   * Whether a named deployment variable is set, and nothing else about it.
+   *
+   * `register-routine` and `set-secret` both refuse when the named secret is
+   * absent, which makes them a presence check that writes a row on the way
+   * past — no use at all for the question an operator actually asks first:
+   * *are the four secrets somebody says they created really in this
+   * deployment?* Getting that wrong sends a person back to a browser to redo
+   * work that was already done, or has them hunt a typo in a variable name by
+   * watching fires fail.
+   *
+   * It answers `present` or `absent` and never a length, a prefix, a digest or
+   * a shape. A boolean about a secret is not a secret; anything that narrowed
+   * the value would be.
+   */
+  if (command === 'check-secret') {
+    const names = (option('secret') ?? '').split(',').map((one) => one.trim()).filter(Boolean);
+    if (names.length === 0) return refuse('pass --secret <ENV_VAR_NAME>[,<ENV_VAR_NAME>…].');
+    let present = 0;
+    for (const name of names) {
+      const there = resolveToken(name) !== null;
+      if (there) present += 1;
+      console.log(`  ${there ? 'present' : 'absent '}  ${name}`);
+    }
+    return ok(`check-secret present=${present} absent=${names.length - present}`);
+  }
+
+  /*
+   * Which of this account's bearers opens which of its triggers.
+   *
+   * See `services/dispatch/secretReconcile.ts` for why four refusals across four
+   * diagonal pairings prove four cells of sixteen and nothing else. This walks
+   * the rest of the square, once per cell for ever, locks a match out of the
+   * space on both axes, and repoints the row it proved.
+   *
+   * It re-enables nothing. A quarantine is a health state a person answers with
+   * `fleet set-state`, and a diagnostic that lifted one because it liked its own
+   * result would be grading its own exam.
+   */
+  if (command === 'reconcile-secrets') {
+    const accountName = nameOption('account');
+    if (!accountName) return refuse('pass --account <name>.');
+    const account = await accountByRef(option('account')) ?? (await getAccountByName(accountName));
+    if (!account) return refuse(`no account named "${accountName}".`);
+
+    const routines = (await listRoutines())
+      .filter((one) => one.accountId === account.id)
+      .filter((one) => one.state !== 'RETIRED');
+    if (routines.length === 0) return refuse(`account "${account.name}" has no live Routines.`);
+
+    /*
+     * The durable log first, then the rows — and anything the rows say that the
+     * log does not gets written down before a single repoint happens. After a
+     * repoint a row names a different secret and its recorded reason is about a
+     * pairing that no longer exists, so the log has to be the record by then.
+     */
+    const logged = await decidedPairs(routines.map((one) => one.id));
+    const known = new Set(logged.map((one) => `${one.routineId}\u0000${one.secretName}`));
+    for (const seed of seedFromRows(routines)) {
+      if (known.has(`${seed.routineId}\u0000${seed.secretName}`)) continue;
+      const routine = routines.find((one) => one.id === seed.routineId)!;
+      if (!flag('dry-run')) {
+        await recordPairAttempt(
+          {
+            routineId: routine.id,
+            routineRef: routine.routineRef,
+            routineName: routine.name,
+            secretName: seed.secretName,
+            outcome: 'ELIMINATED',
+            kind: 'AUTH',
+            detail: 'carried forward from the quarantine this row already records.',
+          },
+          ACTOR,
+        );
+      }
+      logged.push(seed);
+      known.add(`${seed.routineId}\u0000${seed.secretName}`);
+    }
+
+    const decided: DecidedPair[] = [...logged];
+    const plan = planPairs(routines, decided);
+    console.log(`RECONCILE  account ${account.name}`);
+    console.log(`  square     ${routines.length} trigger(s) x ${plan.cells / routines.length} secret name(s) = ${plan.cells} cell(s)`);
+    console.log(`  decided    ${plan.decided} already (${plan.locked.length} locked by a match)`);
+    console.log(`  remaining  ${plan.pairs.length} cell(s) to ask about`);
+    for (const pair of plan.pairs) console.log(`    would try  ${pair.routineName}  <-  ${pair.secretName}`);
+    if (flag('dry-run')) return ok(`dry-run reconcile-secrets account=${account.name} remaining=${plan.pairs.length}`);
+
+    const budget = Number(option('max') ?? String(plan.cells));
+    if (!Number.isFinite(budget) || budget < 0) return refuse('--max must be a non-negative number.');
+
+    const lockedRoutines = new Set(plan.locked.map((one) => one.routineId));
+    const lockedSecrets = new Set(plan.locked.map((one) => one.secretName));
+    const stopped = new Set<string>();
+    let spent = 0;
+    const matched: string[] = [];
+    const eliminated: string[] = [];
+    const inconclusive: string[] = [];
+    const absent: string[] = [];
+
+    console.log('');
+    for (const pair of plan.pairs) {
+      if (spent >= budget) break;
+      if (lockedRoutines.has(pair.routineId) || lockedSecrets.has(pair.secretName)) continue;
+      if (stopped.has(pair.routineId)) continue;
+      const routine = routines.find((one) => one.id === pair.routineId)!;
+      spent += 1;
+      const verdict = await tryPair(pair, routine);
+      await recordPairAttempt(verdict, ACTOR);
+      console.log(`  ${verdict.outcome.padEnd(14)} ${pair.routineName}  <-  ${pair.secretName}`);
+      console.log(`                 ${verdict.detail}`);
+      if (verdict.outcome === 'MATCHED') {
+        matched.push(`${pair.routineName} <- ${pair.secretName}`);
+        lockedRoutines.add(pair.routineId);
+        lockedSecrets.add(pair.secretName);
+        if (routine.tokenSecretName !== pair.secretName) {
+          const digest = digestOfSecret(pair.secretName);
+          if (digest) {
+            await setRoutineSecret({
+              routineId: routine.id,
+              tokenSecretName: pair.secretName,
+              tokenDigest: digest,
+              actor: ACTOR,
+              reason: `reconcile-secrets: the provider accepted this bearer for ${pair.routineRef}.`,
+            });
+            console.log(`                 repointed ${routine.tokenSecretName} -> ${pair.secretName}`);
+          }
+        }
+      } else if (verdict.outcome === 'ELIMINATED') {
+        eliminated.push(`${pair.routineName} <- ${pair.secretName}`);
+      } else if (verdict.outcome === 'SECRET_ABSENT') {
+        absent.push(pair.secretName);
+      } else {
+        inconclusive.push(`${pair.routineName} <- ${pair.secretName} (${verdict.kind})`);
+        if (stopsTrigger(verdict)) stopped.add(pair.routineId);
+      }
+    }
+
+    const after = planPairs(routines, await decidedPairs(routines.map((one) => one.id)));
+    console.log('');
+    console.log(`  matched      ${matched.length}`);
+    for (const line of matched) console.log(`    ${line}`);
+    console.log(`  eliminated   ${eliminated.length} this run`);
+    console.log(`  inconclusive ${inconclusive.length}${inconclusive.length > 0 ? ' — nothing was learned about these, and no cell was closed' : ''}`);
+    for (const line of inconclusive) console.log(`    ${line}`);
+    if (absent.length > 0) console.log(`  absent       ${[...new Set(absent)].join(', ')}`);
+    console.log(`  still open   ${after.pairs.length} cell(s)`);
+    for (const pair of after.pairs) console.log(`    ${pair.routineName}  <-  ${pair.secretName}`);
+    if (after.pairs.length === 0 && after.locked.length < routines.length) {
+      console.log('');
+      console.log('  EXHAUSTED  every remaining pairing of these bearers with these triggers was refused.');
+      console.log('             A bearer that opens none of them is not a mislabelling, and regenerating');
+      console.log('             the tokens in the Claude account that owns them is the remaining remedy.');
+    }
+    return ok(
+      `reconcile-secrets account=${account.name} tried=${spent} matched=${matched.length} ` +
+        `open=${after.pairs.length}`,
     );
   }
 
@@ -890,6 +1138,122 @@ async function probeBin(input: {
     return refuse(`verify-surface ${ref}: ${problems.length} problem(s) above.`);
   }
 
+  /*
+   * Is the Factory a pool, and is every member of it proven?
+   *
+   * `verify-surface` answers that about one Routine. This answers it about the
+   * set, and the difference is the whole reason it exists: a pool with one
+   * surface missing or one surface never run looks, per-Routine, exactly like a
+   * smaller healthy pool. The expected set is derived from rows — every Routine
+   * bound to the named logical worker — so a Routine somebody forgot to register
+   * is an absence this can see, and a Routine bound to the *wrong* worker is
+   * named rather than quietly skipped.
+   *
+   * **It refuses success unless every surface closed its own chain**: Brain
+   * fired that Routine, a session arrived and was attributed to the expected
+   * worker from that same dispatch row, it was handed the bin, and the bin
+   * reached COMPLETE. Nothing about a configured row counts, which is §23's
+   * CONFIGURED/OBSERVED split applied to a set instead of a single surface.
+   *
+   * `--probe` creates one bounded self-test per unproven surface, **pinned to
+   * that surface**. It proves pooled dispatch and identity and nothing else:
+   * the manifest forbids every repository operation, so repository access stays
+   * unproven until a real campaign does it.
+   */
+  if (command === 'verify-pool') {
+    const repository = (option('repository') ?? option('repo') ?? '').trim().toLowerCase();
+    const workerName = option('worker') ?? 'factory-brain';
+    if (!repository) {
+      return refuse('pass --repository <owner/name>, e.g. --repository peyday007/v5.');
+    }
+    const { verifyFactoryPool } = await import('../server/services/dispatch/pool.ts');
+    let report;
+    try {
+      report = await verifyFactoryPool({ workerName, repository });
+    } catch (error) {
+      return refuse(error instanceof Error ? error.message : String(error));
+    }
+
+    console.log(`POOL  ${report.repository}  as ${report.expectedWorkerName}`);
+    console.log(`  surfaces   ${report.surfaces.length}`);
+    for (const surface of report.surfaces) {
+      console.log('');
+      console.log(`  ${surface.verdict.padEnd(8)} ${surface.routineName}  (${surface.accountName})`);
+      console.log(`    ref       ${surface.routineRef}`);
+      console.log(`    worker    ${surface.boundWorker ?? '— (no binding)'}` +
+        (surface.authenticatesAsExpected ? '' : `  NOT ${report.expectedWorkerName}`));
+      console.log(
+        `    eligible  ${surface.eligible ? 'yes' : `no — ${surface.ineligibleBecause.join('; ')}`}`,
+      );
+      console.log(
+        `    headroom  ${surface.headroom.used}/${surface.headroom.limit ?? '∞'} in flight` +
+          (surface.cooldownUntil ? `  cooling until ${surface.cooldownUntil}` : ''),
+      );
+      console.log(`    fires     ${surface.lastOutcome}`);
+      if (surface.chain) {
+        console.log(`    proven    fired ${surface.chain.sentAt ?? 'recorded on the dispatch'}`);
+        console.log(`              arrived ${surface.chain.sessionRef} at ${surface.chain.observedAt}`);
+        console.log(`              assigned and completed ${surface.chain.binId}`);
+      }
+      for (const problem of surface.problems) console.log(`    PROBLEM   ${problem}`);
+    }
+
+    if (flag('probe')) {
+      const { createProbeBin, ProbeRefused } = await import('../server/services/fleet/probe.ts');
+      console.log('');
+      for (const surface of report.surfaces) {
+        if (surface.verdict === 'PROVEN') continue;
+        /*
+         * A faulted surface is not probed. Its connector authenticates as
+         * somebody else, so a fire would produce another foreign arrival and
+         * another row saying the same thing — spending an activation to
+         * re-learn a fact already on the screen. The remedy is to reconnect it
+         * against the right worker, and that is a person's.
+         */
+        if (surface.verdict === 'FAULT') {
+          console.log(`  SKIPPED   ${surface.routineName}: reconnect it as ${report.expectedWorkerName} first.`);
+          continue;
+        }
+        const routine = await getRoutineByRef(surface.routineRef);
+        const worker = routine?.workerId ? await getWorker(routine.workerId) : null;
+        const routing = routine?.workerId ? await getWorkerRouting(routine.workerId) : null;
+        if (!routine || !worker || !routing) {
+          console.log(`  SKIPPED   ${surface.routineName}: nothing to probe until it is bound and routed.`);
+          continue;
+        }
+        try {
+          const created = await createProbeBin({
+            worker,
+            repositories: routing.repositories,
+            routine,
+            family: 'FACTORY',
+            createdByType: 'SYSTEM',
+            createdById: 'fleet-cli:verify-pool',
+          });
+          console.log(`  PROBE     ${surface.routineName}: ${created} — pinned to this surface.`);
+        } catch (error) {
+          const why = error instanceof ProbeRefused ? error.message : String(error);
+          console.log(`  SKIPPED   ${surface.routineName}: ${why}`);
+        }
+      }
+      console.log('');
+      console.log('  Each probe names no objective, changes no repository and belongs to no');
+      console.log('  campaign. Brain fires its own surface for it within a tick; run');
+      console.log('  verify-pool again once they have been answered.');
+    }
+
+    console.log('');
+    if (report.ok) {
+      console.log(`  VERIFIED  ${report.surfaces.length} surface(s), each fired, each arrived as`);
+      console.log(`            ${report.expectedWorkerName}, each handed a bin and each completing it.`);
+      console.log('            This proves pooled dispatch and identity. It proves nothing about');
+      console.log('            repository access — the first real campaign does that.');
+      return ok(`verify-pool ${repository} VERIFIED surfaces=${report.surfaces.length}`);
+    }
+    for (const problem of report.problems) console.log(`  PROBLEM   ${problem}`);
+    return refuse(`verify-pool ${repository}: ${report.problems.length} problem(s) above.`);
+  }
+
   if (command === 'scale-advice') {
     const snapshot = await fleetSnapshot();
     const ready = (await listBins({ states: ['READY'], limit: 500 })).length;
@@ -970,7 +1334,8 @@ async function probeBin(input: {
   refuse(
     `unknown command "${command}". Try: show, register-account, register-routine, bind-worker, ` +
       'repoint-worker, rename, ' +
-      'set-state, set-target, boost, pause, resume, policy-history, explain-route, verify-surface, scale-advice, ' +
+      'set-state, set-target, boost, pause, resume, policy-history, explain-route, verify-surface, ' +
+      'verify-pool, scale-advice, ' +
       'profile, simulate.',
   );
 }

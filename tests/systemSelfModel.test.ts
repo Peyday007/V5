@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
+import { loadMigrationFiles, migrationsDirFor } from '../server/db/migrate.ts';
 import {
   DOCS_ROOT,
   observeSystem,
@@ -76,7 +77,13 @@ describe('the system self-model', () => {
     it('reads a migration file and a migration applied as two different facts', async () => {
       const pass = await observeSystem();
       const migrations = pass.components.filter((c) => c.kind === 'MIGRATION');
-      expect(migrations.length).toBeGreaterThan(60);
+      // Against the chain this dialect actually has, rather than a number. The
+      // two chains are numbered independently and a magic number here passes on
+      // SQLite and fails on Postgres, which is the shape of brittleness §25
+      // keeps finding in the other direction.
+      const chain = loadMigrationFiles(migrationsDirFor(getDb().dialect));
+      expect(chain.length).toBeGreaterThan(0);
+      expect(migrations).toHaveLength(chain.length);
       // A fresh database has applied the whole chain, so every file is deployed.
       for (const migration of migrations) {
         expect(migration.readings.IN_SOURCE?.answer).toBe('YES');
@@ -302,11 +309,84 @@ describe('the system self-model', () => {
       const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
       expect(dockerfile).toMatch(/COPY server \.\/server/);
       expect(dockerfile).not.toMatch(/COPY tests/);
-      // And neither `docs/` nor CLAUDE.md, which is what makes DOCUMENTED
+      // And nothing lands *at* `docs/`, which is what makes DOCUMENTED
       // unreadable from a deployment too. This assertion is the one that would
       // have caught the original defect: `documentedReading` answered NO.
-      expect(dockerfile).not.toMatch(/COPY docs/);
+      //
+      // The destination is what matters, not the source, and this caught a real
+      // change: the blueprint has to reach the image, because `registerBlueprint`
+      // reads a source by path — and the first version of that copy put it at
+      // `docs/capability`. A `docs/` tree holding one blueprint is worse than an
+      // absent one, because `index.docs.length === 0` is the only thing standing
+      // between this reading and a confident `NO` for every component that
+      // blueprint does not name. So a source under `docs/` may be copied, and
+      // never to a destination under `docs/`.
+      expect(dockerfile).not.toMatch(/COPY\s+\S+\s+\.\/docs/);
       expect(dockerfile).not.toMatch(/COPY CLAUDE\.md/);
+    });
+
+    it('carries the blueprint as an input, outside the tree DOCUMENTED is read from', () => {
+      // Two halves, and the reading above is only honest while both hold: the
+      // bytes are in the image at all, and they are not where `readTextIndex`
+      // looks. A blueprint is a statement about faculties Brain wants; it is
+      // never documentation of components Brain has.
+      const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
+      expect(dockerfile).toMatch(/COPY blueprints \.\/blueprints/);
+    });
+
+    it('copies nothing the build context does not contain', () => {
+      /*
+       * The assertion above says where the bytes are going. It cannot say
+       * whether they are reachable, and for a while they were not.
+       *
+       * `COPY docs/capability ./blueprints` names a destination outside `docs/`,
+       * which is the rule the comment beside it exists to enforce, and a *source*
+       * inside it — and `.dockerignore` excludes `docs`. So the build context
+       * never held the path, every deploy from that tree died at
+       *
+       *     #14 ERROR: failed to calculate checksum of ref …:
+       *          "/docs/capability": not found
+       *
+       * before any image was released, and this file's own Dockerfile test
+       * passed the whole time, because reading a Dockerfile tells you what it
+       * intends and never what it can reach.
+       *
+       * So the two files are read together. Every `COPY` source that comes from
+       * the build context is held against every exclusion in `.dockerignore`, and
+       * a source under an excluded path fails here rather than in a deploy.
+       */
+      const dockerfile = fs.readFileSync(path.join(REPO_ROOT, 'Dockerfile'), 'utf8');
+      const ignore = fs.readFileSync(path.join(REPO_ROOT, '.dockerignore'), 'utf8');
+
+      const excluded = ignore
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('!'))
+        .map((line) => line.replace(/\/+$/, ''));
+      const reincluded = ignore
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('!'))
+        .map((line) => line.slice(1).replace(/\/+$/, '').replace(/\/\*\*$/, ''));
+
+      // `--from=<stage>` copies from an earlier stage rather than the context, so
+      // it is not subject to `.dockerignore` and is deliberately skipped.
+      const sources = dockerfile
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('COPY ') && !line.includes('--from='))
+        .flatMap((line) => line.slice('COPY '.length).trim().split(/\s+/).slice(0, -1));
+
+      expect(sources.length).toBeGreaterThan(0);
+      for (const source of sources) {
+        const covers = (pattern: string) => source === pattern || source.startsWith(`${pattern}/`);
+        const blockedBy = excluded.find(covers);
+        const rescuedBy = reincluded.find((pattern) => covers(pattern) || pattern.startsWith(`${source}/`));
+        expect(
+          blockedBy === undefined || rescuedBy !== undefined,
+          `Dockerfile copies ${source}, which .dockerignore excludes via "${blockedBy}"`,
+        ).toBe(true);
+      }
     });
 
     it('answers DOCUMENTED unknown rather than no when nothing is readable', async () => {

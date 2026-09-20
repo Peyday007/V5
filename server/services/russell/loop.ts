@@ -101,6 +101,7 @@ import { reconcileIntegrityReopens } from '../audit/integrityReaudit.ts';
 import { listOpenReopens } from '../../repos/auditReopens.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import {
+  concludeUnworkablePackets,
   reconcileArguedAuditRoles,
   reconcileTerminalPackets,
 } from '../research/packetRunner.ts';
@@ -135,6 +136,7 @@ import { parseJson } from '../../repos/util.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
+import { runIndustryKernel } from '../industry/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -142,6 +144,9 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 
 /** How often the loop wakes when nothing else has woken it. */
 export const RUSSELL_TICK_MS = 30_000;
+
+import { advanceSources } from '../capability/extraction.ts';
+import { scanIfStale } from '../selfmodel/refresh.ts';
 
 export interface TickReport {
   ran: boolean;
@@ -169,6 +174,24 @@ export interface TickReport {
    * about. Never the same outcome, because they do not mean the same thing.
    */
   integrityReopens: { resolved: string[]; superseded: string[] };
+  /**
+   * The self-expansion kernel's own advance, fleet-wide.
+   *
+   * Beside the other reconciliations here for the same reason they are: it is
+   * derived from rows, it reaches whatever is already stranded, and it survives
+   * a tick that died halfway. Without it `advanceSources` would run only when
+   * an operator typed a command — which is the *mechanism nothing calls* defect
+   * this file records five times, committed a sixth.
+   */
+  capability: {
+    dispatched: number;
+    settled: number;
+    audited: number;
+    promoted: number;
+    recovered: number;
+    /** Set when the self-model was re-read because the last one had gone stale. */
+    selfModelDrift: number | null;
+  };
   /**
    * Ideas the project's own archive already answered, judged and parked without
    * anything being dispatched. §13's default outcome, and the cheapest one.
@@ -351,6 +374,23 @@ export interface TickReport {
    * itself, where the note says which it was — the distinction is the point,
    * so it must not be flattened into "it ran".
    */
+  /**
+   * What the industry kernel did: which questions it opened and why, and what
+   * the finished ones added to the map.
+   *
+   * `why` travels with the round because the allocator is a pure function over
+   * a snapshot that has since moved — `services/dispatch/router.ts`' promise,
+   * kept: "why did Brain research this" resolves to a sentence written when it
+   * was decided rather than to a re-run against a different database.
+   */
+  industryKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    subjects: string[];
+    constraints: string[];
+    capital: string[];
+    settled: string[];
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -395,6 +435,14 @@ const EMPTY: TickReport = {
   wroteBack: [],
   recovered: [],
   integrityReopens: { resolved: [], superseded: [] },
+  capability: {
+    dispatched: 0,
+    settled: 0,
+    audited: 0,
+    promoted: 0,
+    recovered: 0,
+    selfModelDrift: null,
+  },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -424,6 +472,7 @@ const EMPTY: TickReport = {
   frontier: [],
   lensInquiries: { dispatched: 0, settled: 0 },
   cashDiscovery: [],
+  industryKernel: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -477,8 +526,28 @@ export async function tick(owner: string): Promise<TickReport> {
     unresolvedAnswers: [],
   renewedReservations: [],
     frontier: [],
+    /*
+     * Re-initialised rather than inherited from the spread, and that is not
+     * decoration: `{ ...EMPTY }` is shallow, so a nested object would be the
+     * *same reference* as the module constant's — and the fields below are
+     * assigned one at a time rather than replaced wholesale, so every tick
+     * would accumulate into `EMPTY` for the life of the process and a skipped
+     * tick would report the last real one's counts.
+     *
+     * `integrityReopens` gets away without this because it is replaced whole;
+     * this one is not, which is exactly the difference.
+     */
+    capability: {
+      dispatched: 0,
+      settled: 0,
+      audited: 0,
+      promoted: 0,
+      recovered: 0,
+      selfModelDrift: null,
+    },
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
+    industryKernel: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -685,6 +754,23 @@ export async function tick(owner: string): Promise<TickReport> {
     }
 
     /*
+     * 1a-iv-b. And take dead work off a packet that has *not* finished.
+     *
+     * The mirror image of the sweep above, and the one nothing covered: a live
+     * packet holding only items past their own attempt ceilings. Nothing
+     * advances it, because `advancePacket` runs when something completes and
+     * that is exactly what has stopped. Production sat in it for fifty-one
+     * hours with nine missions `RUNNING` against a concurrency of six, sixty-one
+     * ideas queued behind them, and a healthy fleet firing nothing at all.
+     *
+     * It performs no dispatch: a worker fired at an item already past its
+     * ceiling spends an activation to learn what the rows already say.
+     */
+    for (const entry of await concludeUnworkablePackets(cycle.maxEventsPerCycle)) {
+      report.retiredPacketWork.push(entry);
+    }
+
+    /*
      * 1a-iv-c. Settle the integrity reopens whose condition has stopped holding.
      *
      * Derived on the tick rather than hooked to the judge's submission, for the
@@ -700,6 +786,55 @@ export async function tick(owner: string): Promise<TickReport> {
         await listOpenReopens(cycle.maxEventsPerCycle),
       );
       report.integrityReopens = settled;
+    }
+
+    /*
+     * 1a-iv-d. Advance the self-expansion kernel, fleet-wide.
+     *
+     * A registered blueprint waiting for its extraction bin, a finished bin
+     * waiting to be validated, a validated reading waiting for its audit and an
+     * audited one waiting to be promoted are four states nothing else moves.
+     * Every one of them is derived from rows — `advanceSources` reads states
+     * and bin outcomes and creates only what those imply — so it is safe here
+     * for the reason `reconcileTerminalPackets` is: it reaches what is already
+     * stranded, and a tick that dies halfway leaves nothing to clean up.
+     *
+     * It is deliberately fleet-wide rather than per-project. A capability
+     * blueprint describes Brain rather than somebody's work, which is why its
+     * registry is not project-scoped either.
+     *
+     * Failures are swallowed rather than allowed to end the tick. A kernel that
+     * could not advance must not stop Russell writing back a mission or
+     * reconciling a stranded lease — it is a reading about Brain, never a
+     * precondition of Brain.
+     */
+    try {
+      const advanced = await advanceSources();
+      report.capability.dispatched = advanced.dispatched;
+      report.capability.settled = advanced.settled;
+      report.capability.audited = advanced.audited;
+      report.capability.promoted = advanced.promoted;
+      report.capability.recovered = advanced.recovered;
+    } catch {
+      /* a kernel that could not advance is left exactly as it was */
+    }
+
+    /*
+     * And the self-model, when the last reading has stopped being about this
+     * system.
+     *
+     * `scanIfStale` answers null on nearly every tick, which is what makes it
+     * safe here: it compares the running revision and the applied schema
+     * against the last recorded reading and does nothing until one of them has
+     * moved or the floor has passed. Boot takes one too, a minute in; this is
+     * what keeps a long-running instance from carrying a reading taken before
+     * the last four migrations.
+     */
+    try {
+      const scan = await scanIfStale();
+      if (scan) report.capability.selfModelDrift = scan.drift.length;
+    } catch {
+      /* a reading that could not be taken is not a reason to stop the tick */
     }
 
     /*
@@ -976,6 +1111,55 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a sprint whose discovery could not run is left as it was */
+      }
+
+      try {
+        /*
+         * And the axis the ten buckets never had: *where* to look.
+         *
+         * The buckets are ten mechanisms — who published a paid request, where
+         * one deliverable has two prices, who has sold more than they can
+         * deliver — and not one of them says which part of the economy to ask.
+         * So production discovery searched an undifferentiated one: thirty-one
+         * openings across transcription, stock photography, ticket resale,
+         * sneakers and domains, with nothing saying which industries Brain had
+         * looked at or what lived underneath any of them.
+         *
+         * Its own `try`, for the reason the block below has one: a kernel pass
+         * that threw must not stop a sprint settling a need or harvesting what
+         * already ran. It is derived from rows on every tick, so a sprint that
+         * predates it gets a map with nobody pressing anything, and it is
+         * bounded by how many questions may be open at once rather than by any
+         * lifetime count — §24's correction, which this kernel does not undo.
+         *
+         * Nothing it creates bypasses anything. A kernel round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does.
+         */
+        const kernel = await runIndustryKernel(project.id);
+        if (
+          kernel.opened.length > 0 ||
+          kernel.absorbed.nodes.length > 0 ||
+          kernel.absorbed.constraints.length > 0 ||
+          kernel.absorbed.capital.length > 0 ||
+          kernel.absorbed.settled.length > 0
+        ) {
+          report.industryKernel.push({
+            projectId: project.id,
+            opened: kernel.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            subjects: kernel.absorbed.nodes.map((one) => one.id),
+            constraints: kernel.absorbed.constraints.map((one) => one.id),
+            capital: kernel.absorbed.capital.map((one) => one.id),
+            settled: kernel.absorbed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a map that could not be advanced is left exactly as it was */
       }
 
       try {

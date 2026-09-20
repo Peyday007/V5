@@ -204,6 +204,16 @@ interface Reply {
 
 let base = '';
 
+/**
+ * How long any one request to the deployed Brain may take before this gate
+ * stops waiting.
+ *
+ * Fifteen minutes: comfortably past the five-minute wall every previous run
+ * hit, and far inside the job's own budget, so a slow judge pass gets to
+ * finish and be timed rather than being cut off and reported as nothing.
+ */
+const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
+
 async function call(
   path: string,
   init: {
@@ -226,12 +236,45 @@ async function call(
   // check below for exactly that difference.
   if (init.origin) headers['origin'] = init.origin;
 
-  const response = await fetch(`${base}${path}`, {
-    method: init.method ?? 'GET',
-    headers,
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    redirect: 'manual',
-  });
+  /*
+   * An explicit bound with a named failure, because the default one is silent.
+   *
+   * This helper passed no `signal`, so every request carried Node's own
+   * default — measured at **300.8 seconds**, throwing `fetch failed` with
+   * cause `UND_ERR_HEADERS_TIMEOUT`. Six deploys have died at the judge audit
+   * step, two of them reporting exactly that at 5m18s and 5m23s, and the
+   * repository recorded the shape as a work item losing a five-minute lease.
+   * It is not: the lease is the server's and this is the client giving up, and
+   * an unattributable `fetch failed` is what let the two readings look alike
+   * for five runs.
+   *
+   * **This is not a fix for the slowness and must not be read as one.** The
+   * judge pass takes longer than five minutes and nobody knows how much
+   * longer, because nothing has ever waited long enough to find out. The bound
+   * is set where the next occurrence either finishes — and the timestamps say
+   * what it costs — or fails naming the request and the wait, which is a
+   * measurement rather than a mystery. Raising a timeout past a real slowness
+   * is how a slow thing becomes a permanent one nobody looks at.
+   */
+  let response: Response;
+  try {
+    response = await fetch(`${base}${path}`, {
+      method: init.method ?? 'GET',
+      headers,
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string } }).cause?.code;
+    throw new Error(
+      `${init.method ?? 'GET'} ${path} did not answer within ` +
+        `${Math.round(REQUEST_TIMEOUT_MS / 1000)}s ` +
+        `(${error instanceof Error ? error.message : String(error)}` +
+        `${cause ? `, ${cause}` : ''}). The request was not refused; nothing answered it.`,
+      { cause: error },
+    );
+  }
   const body = await response.text();
   let json: unknown = null;
   try {

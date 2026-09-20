@@ -103,7 +103,7 @@ import {
   ALWAYS_PROHIBITED_COMMERCIAL,
   COMMERCIAL_ACTIONS,
 } from '../server/services/cash/authority.ts';
-import { openDiscovery } from '../server/services/cash/discovery.ts';
+import { SEARCH_BUCKETS, openDiscovery } from '../server/services/cash/discovery.ts';
 import { advanceWithinAuthority, runNeedContinuations } from '../server/services/cash/operate.ts';
 import { readCapability } from '../server/services/cash/capabilities.ts';
 import { cashView } from '../server/services/cash/view.ts';
@@ -592,7 +592,18 @@ describe('one sprint, from activation to money in and winding down', () => {
     const discovery = opening.cashDiscovery.find((one) => one.projectId === projectId);
     expect(discovery?.opened).toHaveLength(1);
 
-    const bucket = (await listCandidates({ projectId }))[0]!;
+    /*
+     * The bucket this step is about, by name rather than by position.
+     *
+     * The same tick also opens the industry kernel's bootstrap question, so
+     * `[0]` stopped meaning "the search bucket" the moment a second kind of
+     * discovery existed. Selecting by the title `openDiscovery` writes keeps
+     * this step about the thing it is testing however many other entrances
+     * open beside it.
+     */
+    const candidates = await listCandidates({ projectId });
+    const bucket = candidates.find((one) => one.title === SEARCH_BUCKETS[0]!.title)!;
+    expect(bucket).toBeDefined();
     // Captured, so the archive is asked first and the judgment decides — this
     // is a new entrance to the existing path, not a second pipeline.
     expect(bucket.state).toBe('CAPTURED');

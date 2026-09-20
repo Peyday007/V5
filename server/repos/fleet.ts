@@ -227,6 +227,48 @@ export async function recordAccountRefusal(input: {
 /* Routines                                                                   */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * Why a second Routine may not be registered, or null when it may.
+ *
+ * Pure, over rows the caller already has, and applied at the operator surface
+ * rather than in the INSERT — the reason is that the damage is a *registration*
+ * mistake rather than a data one, and it is only refusable while somebody is
+ * standing there to be told what to do instead.
+ *
+ * Both collisions are the same fact wearing two shapes: **two Routines on one
+ * trigger token is one surface wearing two rows.** A pool built on it reports
+ * capacity that does not exist, fires one surface twice believing it fired two,
+ * and quarantines both rows when that one token goes stale. The name catches the
+ * copy-paste; the digest catches the same value stored twice under two names,
+ * which the name check cannot see.
+ *
+ * The digest is `token_digest`, already stored at registration, so this costs
+ * one read and reveals nothing: a digest is not recoverable to a value, and the
+ * refusal names the Routine rather than either secret's contents.
+ */
+export function routineRegistrationCollision(
+  registered: FleetRoutine[],
+  candidate: { tokenSecretName: string; tokenDigest: string },
+): string | null {
+  const sameName = registered.find((other) => other.tokenSecretName === candidate.tokenSecretName);
+  if (sameName) {
+    return (
+      `${candidate.tokenSecretName} is already the deployment secret for ${sameName.name} ` +
+      `(${sameName.routineRef}). Each Routine holds its own trigger token under its own secret ` +
+      'name — sharing one would make two surfaces one trigger fired twice.'
+    );
+  }
+  const sameToken = registered.find((other) => other.tokenDigest === candidate.tokenDigest);
+  if (sameToken) {
+    return (
+      `the value in ${candidate.tokenSecretName} is the same trigger token already registered ` +
+      `for ${sameToken.name} (${sameToken.routineRef}) under ${sameToken.tokenSecretName}. Two ` +
+      'names for one token is still one token; create a trigger for this Routine and store its own.'
+    );
+  }
+  return null;
+}
+
 export async function createRoutine(input: {
   accountId: string;
   routineRef: string;
@@ -442,6 +484,71 @@ export async function setRoutineCapabilities(input: {
     metadata: {
       from: before.capabilities,
       to: wanted,
+      reason: input.reason,
+    },
+  });
+  return await getRoutine(input.routineId);
+}
+
+/**
+ * Point a Routine at a different deployment secret, deliberately.
+ *
+ * `register-routine` takes the secret's *name* once and there was no way to
+ * change it afterwards, which is the same shape `setRoutineCapabilities` above
+ * was written to answer: a row that has become wrong, and the only remedies
+ * left being manual SQL — which invariant 2 forbids — or retiring a surface
+ * that is perfectly healthy. Here the row becomes wrong in one specific and
+ * entirely ordinary way: **a trigger and a bearer that were paired by hand,
+ * paired wrongly.**
+ *
+ * That is worth stating precisely, because a provider `AUTH 401` does *not*
+ * say a token is invalid. It says this token does not authorize this trigger.
+ * With four triggers and four secrets registered diagonally, four refusals
+ * eliminate four of sixteen pairings and prove nothing whatever about the other
+ * twelve — so a fleet can be one relabelling away from working while every row
+ * in it reads as permanently broken.
+ *
+ * What it does **not** touch is the deployment secret. Brain holds the name and
+ * a digest and has never been able to read a value back (§22, §23); this moves
+ * which *name* a row points at, and nothing about Fly, the variable, or the
+ * bearer inside it. The digest is recomputed from the newly-named secret so
+ * `routineRegistrationCollision`'s "two names, one token" reading stays true of
+ * the row afterwards.
+ *
+ * It is audited to the append-only `identity_events` with both secret **names**
+ * and both digest prefixes — an identifier of a value, never the value, and
+ * twelve hex characters of a sha-256 is not recoverable to one. A reader asking
+ * why a surface started working needs to know what the row said before.
+ *
+ * It changes no health state on purpose: a row pointing somewhere new is not a
+ * fire that succeeded, and re-enabling a quarantined surface stays the separate
+ * guarded transition `fleet set-state` already provides.
+ */
+export async function setRoutineSecret(input: {
+  routineId: string;
+  tokenSecretName: string;
+  tokenDigest: string;
+  actor: string;
+  reason: string;
+}): Promise<FleetRoutine | null> {
+  const before = await getRoutine(input.routineId);
+  if (!before) return null;
+  await getDb().run(
+    `UPDATE fleet_routines SET token_secret_name = ?, token_digest = ?, updated_at = ? WHERE id = ?`,
+    [input.tokenSecretName, input.tokenDigest, nowIso(), input.routineId],
+  );
+  await recordIdentityEvent({
+    actorType: 'SYSTEM',
+    actorId: input.actor,
+    action: 'SET_ROUTINE_SECRET',
+    targetType: 'FLEET_ROUTINE',
+    targetId: input.routineId,
+    result: 'SUCCESS',
+    metadata: {
+      fromSecretName: before.tokenSecretName,
+      toSecretName: input.tokenSecretName,
+      fromDigest: before.tokenDigest?.slice(0, 12) ?? null,
+      toDigest: input.tokenDigest.slice(0, 12),
       reason: input.reason,
     },
   });

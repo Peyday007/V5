@@ -31,10 +31,17 @@ import type { Principal, Worker, WorkerScope } from '../../domain/types.ts';
 /**
  * What a capability bin's worker needs, and no more.
  *
- * A constant rather than a picker, for `SITE_CONNECTOR_SCOPES`' reason: the
- * membership is the one with a silent wrong answer in it, because a worker
- * given the wrong scopes is refused with the same 404 a missing project gives
- * and that tells nobody anything.
+ * A constant rather than a picker, for the reason §25 gives about a connected
+ * site's scope set: the membership is the one with a silent wrong answer in it,
+ * because a worker given the wrong scopes is refused with the same 404 a
+ * missing project gives, and that tells nobody anything.
+ *
+ * It is deliberately its own constant and names no other. `tests/
+ * operatorConsoleRemoved.test.ts` asserts that exactly one module in this
+ * repository both mentions the site set and grants a membership, and it cannot
+ * tell prose from code — so an explanatory sentence here that named it would
+ * have tripped a guard on a security-relevant property to make a comment read
+ * better. The guard is right to be crude; the comment moved.
  *
  * `research:write` is deliberately absent. A capability reading writes no
  * claim, no verification and no audit row — it submits bin units, and the

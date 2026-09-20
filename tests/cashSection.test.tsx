@@ -237,8 +237,113 @@ const FORECAST = {
   humanHours: { total: null, fromRows: 0, unknown: ['Economics'] },
 };
 
+/**
+ * A tier reading, as the server derives it.
+ *
+ * Names, tasks and counts — and no value of any commercial term, which is why
+ * it may cross to a member at all. The fixture says so explicitly rather than
+ * relying on the reader noticing.
+ */
+function tier(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    tier: 'READY_TO_TEST',
+    establishes: 'that somebody published a paid request',
+    doesNotEstablish: 'that they would pay us',
+    toAdvance: [],
+    answered: 6,
+    required: 6,
+    summary: 'Everything a bounded test turns on is answered.',
+    ...over,
+  };
+}
+
+/** One record on the shared frontier: identity, evidence, progress. No values. */
+function sharedOpportunity(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'cop_1',
+    title: 'A paid intake repair',
+    mechanism: 'EXPLICIT_PAID_REQUEST',
+    industry: null,
+    state: 'READY',
+    availability: 'CLAIMED',
+    because: '2 of 2 execution slots are taken, so this waits on fulfilment capacity.',
+    validationState: null,
+    buyingSignal: 'A published request to pay for intake repair.',
+    signalObservedAt: '2026-09-14T00:00:00.000Z',
+    sourceClaimId: 'clm_1',
+    orchestrationId: 'orc_1',
+    fragmentId: 'frg_1',
+    discoveryRoundId: 'cdr_1',
+    expiresAt: null,
+    deadline: null,
+    qualification: { ready: true, missing: [], summary: 'Ready.' },
+    tier: tier(),
+    ...over,
+  };
+}
+
+/**
+ * The shared frontier — the **one object** both roles' shared sections render
+ * from. An owner's payload carries it under `frontier`; a member's payload *is*
+ * it. The fixture builds it once for exactly that reason.
+ */
+function frontier(over: Record<string, unknown> = {}): Record<string, unknown> {
+  const opportunities = (over['opportunities'] as unknown[]) ?? [sharedOpportunity()];
+  return {
+    mode: {
+      projectId: PROJECT,
+      state: 'ACTIVE',
+      currency: 'USD',
+      activatedAt: '2026-09-15T00:00:00.000Z',
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    },
+    discovery: { open: true, reason: 'Cash Mode is active.' },
+    commercialGrant: 'ABSENT',
+    opportunities,
+    best: opportunities,
+    bestAreNearlyQualified: false,
+    byTier: { SIGNAL: 0, CANDIDATE: 0, QUALIFIED: 0, READY_TO_TEST: 1 },
+    byState: {
+      DISCOVERED: 0,
+      EVIDENCE_CARD: 0,
+      READY: 1,
+      EXECUTING: 0,
+      DELIVERING: 0,
+      COLLECTED: 0,
+      DECLINED: 0,
+      ARCHIVED: 0,
+    },
+    counts: {
+      total: 1,
+      open: 0,
+      beingQualified: 0,
+      claimed: 1,
+      inExecution: 0,
+      delivered: 0,
+      closed: 0,
+    },
+    roadmap: ROADMAP,
+    needs: [],
+    activity: [
+      { kind: 'CASH_OPPORTUNITY_CAPTURED', count: 1, mostRecentAt: '2026-09-15T00:00:00.000Z' },
+    ],
+    ...over,
+  };
+}
+
+/** Everything a project administrator may do. */
+const ALL_CAPABILITIES = {
+  mayAdminister: true,
+  mayGrantAuthority: true,
+  mayViewPrivateJob: true,
+  mayActOnJob: true,
+};
+
 function view(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    scope: 'FULL',
+    capabilities: ALL_CAPABILITIES,
+    frontier: frontier(),
     mode: {
       id: 'csm_1',
       projectId: PROJECT,
@@ -272,8 +377,12 @@ function view(over: Record<string, unknown> = {}): Record<string, unknown> {
           disposition: 'WAIT_FOR_DEPENDENCY',
           because: '2 of 2 execution slots are taken, so this waits on fulfilment capacity.',
           missing: [],
+          tier: tier(),
         },
       ],
+      byTier: { SIGNAL: 0, CANDIDATE: 0, QUALIFIED: 0, READY_TO_TEST: 1 },
+      best: [],
+      bestAreNearlyQualified: false,
       executeNow: [],
       waiting: [],
       combinedContributionCents: 75_000,
@@ -1463,8 +1572,15 @@ describe('the money, and the work', () => {
   it('carries the server’s sentence for every disposition, so a wait names what it waits on', async () => {
     base();
     await mount();
+    /*
+     * Scoped to the portfolio, because the same piece legitimately appears in
+     * *Best opportunities* too — one page, one record, two sections that are
+     * both about it. A bare `getByText` here would be asserting that only one
+     * section mentions it, which was never the claim.
+     */
     await waitFor(() => expect(screen.getByText('Wait for a named dependency')).toBeTruthy());
-    expect(screen.getByText(/waits on fulfilment capacity/i)).toBeTruthy();
+    const portfolio = within(document.querySelector('details.rs-cash-portfolio') as HTMLElement);
+    expect(portfolio.getByText(/waits on fulfilment capacity/i)).toBeTruthy();
   });
 
   it('says an exhausted opening still counts for whatever it earned', async () => {
@@ -1513,14 +1629,18 @@ describe('the money, and the work', () => {
       'POST /api/cash/opportunities/cop_1/decline': { body: { opportunity: {}, message: 'Passed.' } },
     });
     await mount();
-    await waitFor(() => expect(screen.getByRole('button', { name: /pass on this/i })).toBeTruthy());
+    // Scoped for the same reason as above: the piece is in two sections.
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /pass on this/i }).length).toBeGreaterThan(0),
+    );
+    const portfolio = within(document.querySelector('details.rs-cash-portfolio') as HTMLElement);
 
-    fireEvent.click(screen.getByRole('button', { name: /pass on this/i }));
-    const field = screen.getByLabelText(/Why\?/i);
+    fireEvent.click(portfolio.getByRole('button', { name: /pass on this/i }));
+    const field = portfolio.getByLabelText(/Why\?/i);
     expect(field).toBeTruthy();
 
     // And it will not send an empty one.
-    expect((screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(
+    expect((portfolio.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement).disabled).toBe(
       true,
     );
     fireEvent.change(field, { target: { value: 'No capacity this month.' } });
@@ -1567,6 +1687,325 @@ describe('winding down', () => {
     await mount();
     await waitFor(() => expect(screen.getByRole('button', { name: /wind it down/i })).toBeTruthy());
     expect(screen.queryByRole('button', { name: /make it active/i })).toBeNull();
+  });
+});
+
+/**
+ * ---------------------------------------------------------------------------
+ * View parity: one page, two roles
+ * ---------------------------------------------------------------------------
+ *
+ * There used to be an early `return <SharedFrontier/>` in this component, and
+ * it was a **second page**: nine sections against five, no heading in common,
+ * and not one section identifier in common — every member card was a bare
+ * `.rs-card` with no `rs-cash-*` class, so nothing on the member's page was
+ * even addressable by the name the owner's page used for the same subject.
+ *
+ * The privacy boundary it protected was right and is asserted here too. What
+ * was wrong is that a permission chose a *layout*, which meant a defect on one
+ * of the two pages was invisible to anybody looking at the other — and one of
+ * them is the page nobody with access to the other ever opens.
+ *
+ * Every assertion below is deliberately about **structure** rather than about
+ * a sentence: the section order, the identifiers, the headings, the shared
+ * figures and the absence of private ones. A wording change must be free; a
+ * section appearing, vanishing or moving for one role must not be.
+ */
+
+/** The ordered section identifiers the page is contracted to render. */
+const SECTIONS = [
+  'rs-cash-status',
+  'rs-cash-decisions',
+  'rs-cash-best',
+  'rs-cash-money-row',
+  'rs-cash-portfolio',
+  'rs-cash-needs-detail',
+  'rs-cash-research',
+  'rs-cash-money-detail',
+  'rs-cash-history',
+  'rs-cash-lifecycle',
+];
+
+/**
+ * The page's own section tree, read from the document.
+ *
+ * Only the top-level cards under the view, so a nested `.rs-cash-portfolio`
+ * inside its own disclosure is not counted twice and a section that grew a
+ * child does not read as two sections.
+ */
+function sectionTree(): { id: string; heading: string }[] {
+  const root = document.querySelector('section.rs-view-cash') as HTMLElement;
+  return [...root.children]
+    .filter((node): node is HTMLElement => node instanceof HTMLElement)
+    .filter((node) => node.classList.contains('rs-card'))
+    .map((node) => ({
+      id: [...node.classList].find((one) => one.startsWith('rs-cash-')) ?? '(unnamed)',
+      heading: node.querySelector('h3')?.textContent?.trim() ?? '(none)',
+    }));
+}
+
+/** What a member's server answer looks like: the frontier, and no private block. */
+function memberBody(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    scope: 'SHARED',
+    capabilities: {
+      mayAdminister: false,
+      mayGrantAuthority: false,
+      mayViewPrivateJob: false,
+      mayActOnJob: false,
+    },
+    ...frontier(),
+    ...over,
+  };
+}
+
+describe('view parity between an administrator and an ordinary member', () => {
+  it('renders the same ordered section identifiers and headings for both roles', async () => {
+    base();
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const owner = sectionTree();
+
+    cleanup();
+    base({ [VIEW]: { body: memberBody() } });
+    await mount(PROJECT, false);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const member = sectionTree();
+
+    expect(owner.map((one) => one.id)).toEqual(SECTIONS);
+    expect(member).toEqual(owner);
+  });
+
+  it('renders the same shared counts and the same records, from one object', async () => {
+    /*
+     * The frontier is built once by the fixture and appears in both payloads —
+     * the owner's under `frontier`, the member's as the payload itself —
+     * because that is exactly how the server sends it. If the page ever went
+     * back to deriving the owner's stage counts from `myCurrentWork` and the
+     * member's from `counts`, the two would disagree the first time an
+     * availability word and a state stopped lining up, which is a defect this
+     * repository has already had twice.
+     */
+    const read = (): string[] =>
+      [...document.querySelectorAll('.rs-cash-status .rs-cash-tiers li')].map((node) =>
+        (node.textContent ?? '').trim(),
+      );
+
+    base();
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    const ownerTiers = read();
+    const ownerRecords = document.querySelectorAll('.rs-cash-portfolio .rs-list > li').length;
+
+    cleanup();
+    base({ [VIEW]: { body: memberBody() } });
+    await mount(PROJECT, false);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    expect(read()).toEqual(ownerTiers);
+    expect(document.querySelectorAll('.rs-cash-portfolio .rs-list > li').length).toBe(ownerRecords);
+    // And the counts are real rather than both being empty.
+    expect(ownerTiers.join(' ')).toMatch(/Ready to test/);
+    expect(ownerRecords).toBeGreaterThan(0);
+  });
+
+  it('sends a member no private field, at any depth, and offers them no control', async () => {
+    /*
+     * Matched as **JSON keys** rather than as words. `entries`, `commitments`
+     * and `provenance` are ordinary English and would match prose on the page;
+     * a false finding in a boundary test costs somebody an hour and teaches
+     * them to stop believing it — §29's defect, where it would do most damage.
+     */
+    const body = memberBody();
+    const json = JSON.stringify(body);
+    for (const forbidden of [
+      'myCash',
+      'entries',
+      'commitments',
+      'deployableCents',
+      'availableFundsCents',
+      'heldCents',
+      'maxCommittedCents',
+      'maxPerActionCents',
+      'committedCents',
+      'spentCents',
+      'allowedActions',
+      'decisionsForMe',
+      'engineCards',
+      'executionPaths',
+      'provenance',
+      'forecast',
+      'priceCents',
+    ]) {
+      expect(json).not.toContain(`"${forbidden}":`);
+    }
+
+    base({ [VIEW]: { body } });
+    await mount(PROJECT, false);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    for (const control of [
+      /wind it down/i,
+      /archive it/i,
+      /make it active/i,
+      /^approve$/i,
+      /withdraw/i,
+      /pass on this/i,
+      /mark .* ready/i,
+    ]) {
+      expect(screen.queryByRole('button', { name: control })).toBeNull();
+    }
+    /*
+     * And no money figure reaches the screen either. Matched on the rendered
+     * shape `money()` actually produces — a currency code then an amount —
+     * rather than on a dollar sign, which this sprint never renders and which
+     * would therefore have passed against a page full of figures.
+     */
+    expect(document.body.textContent ?? '').not.toMatch(/\b[A-Z]{3}\s?-?[\d,]+\.\d\d/);
+  });
+
+  it('keeps every administrator control on the administrator page', async () => {
+    base();
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    expect(screen.getByRole('button', { name: /wind it down/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /archive it/i })).toBeTruthy();
+    expect(screen.getByLabelText(/^why$/i)).toBeTruthy();
+    // The grant, which is the one thing nothing can proceed without.
+    expect(screen.getByText(/what Brain may spend here/i)).toBeTruthy();
+  });
+
+  it('withholds a control the server says may not be pressed, and keeps its section', async () => {
+    /*
+     * A project member who is not a project administrator. The server decided
+     * it — the client holds only a Brain-administrator flag, and every one of
+     * these three decisions is project `ADMIN`, so a client deriving them would
+     * have hidden a lifecycle control from the administrator entitled to press
+     * it.
+     *
+     * The section stays, which is the half that matters: removing a control
+     * must not remove or move a section, or the two pages diverge again one
+     * permission at a time.
+     */
+    base({
+      [VIEW]: {
+        body: view({
+          capabilities: {
+            mayAdminister: false,
+            mayGrantAuthority: false,
+            mayViewPrivateJob: true,
+            mayActOnJob: true,
+          },
+        }),
+      },
+    });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+
+    expect(sectionTree().map((one) => one.id)).toEqual(SECTIONS);
+    expect(screen.queryByRole('button', { name: /wind it down/i })).toBeNull();
+    expect(screen.getByText(/decisions for whoever administers this project/i)).toBeTruthy();
+    // The private figures are still theirs to read: the payload carries them.
+    expect(document.body.textContent ?? '').toMatch(/\b[A-Z]{3}\s?-?[\d,]+\.\d\d/);
+  });
+
+  it('fails closed when the server sent no capabilities at all', async () => {
+    /*
+     * An older server, a truncated response, or a shape this client did not
+     * expect. Deny by default: the page renders, every section is there, and
+     * nothing is offered. The cost of being wrong in this direction is a
+     * control somebody reloads to see; the cost in the other direction is a
+     * button that should not have been there.
+     */
+    const body = view();
+    delete (body as Record<string, unknown>)['capabilities'];
+    base({ [VIEW]: { body } });
+    await mount(PROJECT, true);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    expect(sectionTree().map((one) => one.id)).toEqual(SECTIONS);
+    expect(screen.queryByRole('button', { name: /wind it down/i })).toBeNull();
+  });
+
+  it('reads the frontier for a member and does not ask for a second thing', async () => {
+    /*
+     * Reading either page performs no effect. A member's Cash read is one GET
+     * and nothing else: no enqueue, no claim, no registration, no fire.
+     */
+    base({ [VIEW]: { body: memberBody() } });
+    await mount(PROJECT, false);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
+    expect(calls.every((one) => one.startsWith('GET '))).toBe(true);
+  });
+});
+
+/**
+ * A deleted branch comes back as a component.
+ *
+ * §26 makes the same argument about a deleted page, and tests it by reading the
+ * repository rather than by driving it: what must not exist is somewhere to go.
+ * Here what must not exist is a second render path — so this reads `Cash.tsx`
+ * and refuses one, because the parity assertions above hold only while both
+ * roles reach the same skeleton, and a fresh `if (scope === 'SHARED') return`
+ * would satisfy every one of them by making the member's tree its own.
+ *
+ * It classifies rather than bans, exactly as `operatorConsoleRemoved` does: the
+ * comment recording why the branch was wrong is history worth keeping, and this
+ * file's own name appears in it. What is refused is a `return` on the scope.
+ */
+describe('there is one render path, and no second one can be added quietly', () => {
+  it('has no early return keyed on the read scope', async () => {
+    const source = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    /*
+     * A `return` whose guard mentions the scope, on one line or across two.
+     * Prose about the scope is fine; a control-flow decision on it is not.
+     */
+    const branches = [...source.matchAll(/if\s*\([^)]*scope[^)]*\)\s*\{?\s*return/g)];
+    expect(branches).toEqual([]);
+  });
+
+  it('renders every section from one component, with no page-level alternative', async () => {
+    const source = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    /*
+     * Exactly one element carries the view class. Two would be two pages
+     * whatever chose between them, which is the thing that was wrong.
+     */
+    const views = [...source.matchAll(/className="rs-view rs-view-cash"/g)];
+    /*
+     * Four of them are the states a read can be in before there is anything to
+     * render — reading Cash Mode, reading the frontier, an error, and a
+     * forbidden answer — plus the page itself. None is a second *page*: they
+     * carry no section, and a state is not a layout.
+     */
+    expect(views.length).toBeLessThanOrEqual(5);
+
+    /*
+     * And each section identifier is rendered by exactly **one** component.
+     *
+     * Counting occurrences would be the wrong check: a component may
+     * legitimately have two branches — `Decisions` renders one card for an
+     * owner and one for a member, which is a permission changing what is
+     * inside a section. What must not happen is two *components* claiming one
+     * identifier, because that is a second page wearing the first one's names.
+     */
+    const bodies = source.split(/\nfunction /);
+    for (const id of SECTIONS) {
+      const owners = bodies.filter((body) => body.includes(`rs-card ${id}"`));
+      expect([id, owners.length]).toEqual([id, 1]);
+    }
+  });
+
+  it('reads the capabilities the server sent rather than deriving any', async () => {
+    const model = await readFile('client/src/russell/cashPage.ts', 'utf8');
+    /*
+     * The browser holds only a Brain-administrator flag, and administering the
+     * sprint, moving its lifecycle and granting commercial authority are all
+     * project `ADMIN` — so a client deriving them would hide a control from the
+     * project administrator entitled to press it, and offer one where the level
+     * was the real question. The server decides, in `services/cash/access.ts`,
+     * with the same `decideProjectAccess` every route applies.
+     */
+    expect(model).not.toMatch(/isBrainAdmin/);
+    expect(model).toMatch(/reading\.capabilities \?\? NOTHING/);
   });
 });
 
@@ -1700,7 +2139,13 @@ describe('no Cash card asks a person to narrate Brain-owned work', () => {
     for (const one of opened) fireEvent.click(one);
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /answer the who pays/i })).toBeTruthy(),
+      /*
+       * `getAll`, because one piece legitimately appears in two sections now —
+       * *Best opportunities* and *Everything Brain has found* — so its card
+       * renders twice. The claim here is that the control exists for a
+       * PERSON_ONLY entry, never that only one section carries it.
+       */
+      expect(screen.getAllByRole('button', { name: /answer the who pays/i }).length).toBeGreaterThan(0),
     );
   });
 
@@ -1762,13 +2207,22 @@ describe('no Cash card asks a person to narrate Brain-owned work', () => {
 
   it('prints the derived research status under a need whose research stalled', async () => {
     const view_ = view() as Record<string, unknown>;
-    view_['whatBrainNeeds'] = [
-      need({
-        researchStatus:
-          'Brain captured the question and no mission has launched for it yet — most often ' +
-          'because the project has no standing research authority, or the sprint has wound down.',
-      }),
-    ];
+    const stalled = need({
+      researchStatus:
+        'Brain captured the question and no mission has launched for it yet — most often ' +
+        'because the project has no standing research authority, or the sprint has wound down.',
+    });
+    /*
+     * Both lists, from one row.
+     *
+     * `Needs` renders the *frontier's* needs, which is what gives an ordinary
+     * member the section at all, and reads `setupEffort` and `researchStatus`
+     * off the owner's matching row. The server fills both from one identical
+     * `listNeeds({ states: ['OPEN'] })` call, so a fixture setting only one
+     * half would be describing a payload production cannot send.
+     */
+    view_['whatBrainNeeds'] = [stalled];
+    view_['frontier'] = { ...(view_['frontier'] as Record<string, unknown>), needs: [stalled] };
     base({ [VIEW]: { body: view_ } });
     await mount(PROJECT, true);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());
@@ -1793,7 +2247,9 @@ describe('no Cash card asks a person to narrate Brain-owned work', () => {
      * assumption, in the direction where the honest answer is silence.
      */
     const view_ = view() as Record<string, unknown>;
-    view_['whatBrainNeeds'] = [need()];
+    const running = need();
+    view_['whatBrainNeeds'] = [running];
+    view_['frontier'] = { ...(view_['frontier'] as Record<string, unknown>), needs: [running] };
     base({ [VIEW]: { body: view_ } });
     await mount(PROJECT, true);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Cash' })).toBeTruthy());

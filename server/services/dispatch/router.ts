@@ -43,6 +43,7 @@ export type RoutingRefusal =
   | 'NO_SURFACE_SERVES_THIS_FAMILY'
   | 'NO_SURFACE_SERVES_THIS_REPOSITORY'
   | 'NO_SURFACE_SERVES_THIS_PROJECT'
+  | 'PINNED_SURFACE_UNAVAILABLE'
   | 'ACCOUNT_TARGETS_REACHED';
 
 /**
@@ -85,11 +86,66 @@ export const REFUSAL_WAIT: Record<RoutingRefusal, RefusalWait> = {
   NO_CAPABLE_SURFACE: 'OPERATOR',
   NO_ROUTINES_REGISTERED: 'OPERATOR',
   ALL_SURFACES_INELIGIBLE: 'OPERATOR',
+  /*
+   * A pinned surface that is not a candidate is registered-but-secretless, or
+   * not registered at all, or quarantined — every one of them an operator write
+   * away, and none of them something a clock resolves.
+   */
+  PINNED_SURFACE_UNAVAILABLE: 'OPERATOR',
 };
 
 /** Would an operator's next write make this decision different? */
 export function waitsForOperator(refusal: RoutingRefusal): boolean {
   return REFUSAL_WAIT[refusal] === 'OPERATOR';
+}
+
+/**
+ * Is this refusal about the whole fleet, or about this one bin?
+ *
+ * The dispatcher walks a burst of intents and used to `break` on **any**
+ * refusal, justified as *"every intent in this burst faces the same fleet"*.
+ * That is true of exactly three of them and false of the rest, and the
+ * difference matters the moment a Brain runs more than one kind of work: a
+ * `FACTORY` bin whose surfaces are all at target would end the burst, so the
+ * research bins behind it were not even considered — and the reverse. One
+ * unroutable bin must never stop eligible ones, which is the whole point of
+ * having a pool.
+ *
+ * Fleet-wide means the answer cannot differ for the next intent: nothing is
+ * registered, the operator paused everything, or the fleet-level ceiling is
+ * reached. Everything else is computed against **this bin's** candidate set —
+ * its project, its family, its repository, its capabilities, its pin — or
+ * against targets that differ per account, so the next intent genuinely gets a
+ * different decision.
+ *
+ * A `Record` again rather than a set, so a refusal added later is a compile
+ * error until somebody says which kind it is.
+ */
+export const REFUSAL_SCOPE: Record<RoutingRefusal, 'FLEET' | 'BIN'> = {
+  NO_ROUTINES_REGISTERED: 'FLEET',
+  FLEET_PAUSED: 'FLEET',
+  FLEET_TARGET_REACHED: 'FLEET',
+  ALL_SURFACES_INELIGIBLE: 'FLEET',
+  // Per-bin: the candidate set is filtered by the bin's own scope before any of
+  // these is reached, so another bin may still find a surface.
+  ALL_SURFACES_RATE_LIMITED: 'BIN',
+  ACCOUNT_TARGETS_REACHED: 'BIN',
+  NO_CAPABLE_SURFACE: 'BIN',
+  NO_SURFACE_SERVES_THIS_FAMILY: 'BIN',
+  NO_SURFACE_SERVES_THIS_REPOSITORY: 'BIN',
+  NO_SURFACE_SERVES_THIS_PROJECT: 'BIN',
+  PINNED_SURFACE_UNAVAILABLE: 'BIN',
+};
+
+/**
+ * Does this refusal apply to every intent in the burst, or only to this one?
+ *
+ * `ALL_SURFACES_INELIGIBLE` is FLEET rather than BIN on purpose: it is returned
+ * only when no candidate got past its own **state**, which is a fact about the
+ * fleet and not about the bin that happened to ask.
+ */
+export function refusalEndsBurst(refusal: RoutingRefusal): boolean {
+  return REFUSAL_SCOPE[refusal] === 'FLEET';
 }
 
 /**
@@ -349,6 +405,16 @@ export function routeBin(input: RoutingInput): RoutingResult {
   // fire and the hand-over cannot disagree about what kind of work this is.
   const family = familyOf(bin);
   const repository = repositoryIdOf(bin);
+  /*
+   * The pin, read from the bin's own column and applied before anything else.
+   *
+   * Narrowing only: it removes candidates and never adds one, so a pinned bin
+   * is judged by exactly the same checks the unpinned one would have faced —
+   * just against a candidate list of one. See `067_routine_pin.sql` for why a
+   * pool cannot be verified without it.
+   */
+  const pinned = bin.pinnedRoutineId;
+  let sawPinned = false;
   let sawRoutable = false;
   let sawCapable = false;
   let sawServesProject = false;
@@ -360,6 +426,14 @@ export function routeBin(input: RoutingInput): RoutingResult {
   const eligible: RoutingCandidate[] = [];
   for (const candidate of candidates) {
     const { routine, account } = candidate;
+
+    if (pinned && routine.id !== pinned) {
+      // Deliberately not pushed onto `considered`: a pinned bin has one
+      // candidate by construction, and listing every surface it is not would
+      // bury the one line that matters in a fleet of any size.
+      continue;
+    }
+    sawPinned = true;
 
     if (!routable(account.state)) {
       considered.push({ routineId: routine.id, verdict: `account ${account.state}` });
@@ -455,6 +529,25 @@ export function routeBin(input: RoutingInput): RoutingResult {
   }
 
   if (eligible.length === 0) {
+    /*
+     * The pin first of all, because a pinned bin whose surface is not even a
+     * candidate never reached any other question — and the remedy is its own:
+     * the Routine is unregistered, or its deployment secret is not present, so
+     * `fleetSnapshot` left it out before the router saw anything.
+     */
+    if (pinned && !sawPinned) {
+      return {
+        ok: false,
+        refusal: 'PINNED_SURFACE_UNAVAILABLE',
+        reason:
+          `This bin may only be fired at Routine ${pinned}, and that Routine is not a routing ` +
+          'candidate: it is not registered, or its deployment secret is not present in this ' +
+          'deployment. Register it or set the secret; nothing is lost by waiting, and no ' +
+          'other surface will be tried for it.',
+        considered,
+        retryAt: null,
+      };
+    }
     /*
      * Asked first, because a surface that never got past its own state was never
      * asked any of the questions below — and the flags they set stay false, so

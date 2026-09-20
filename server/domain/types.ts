@@ -685,6 +685,323 @@ export const OPPORTUNITY_SIGNALS = [
 ] as const;
 export type OpportunitySignal = (typeof OPPORTUNITY_SIGNALS)[number];
 
+/**
+ * What a claim establishes about how an industry is put together.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is typed, and why it is one column rather than four
+ * ---------------------------------------------------------------------------
+ *
+ * `OPPORTUNITY_SIGNALS`' argument, one axis along. Deciding whether a claim
+ * establishes a sub-industry, a bottleneck or a capital requirement is a
+ * judgement only a reader of the source can make, and a Brain that read it out
+ * of the claim sentence would be deriving state from model prose — §8, at the
+ * table that decides what the economy looks like. So the reader declares one
+ * of these, it is matched exactly on submission, and anything outside the set
+ * refuses the whole submission rather than being stored and compared against
+ * nothing.
+ *
+ * One column rather than four because the kinds answer one question — *what
+ * does this source establish about how this industry works* — and two columns
+ * would be two places a finding is classified, with one of them eventually
+ * disagreeing with the other. That has happened in this repository often
+ * enough to be a rule.
+ *
+ * ---------------------------------------------------------------------------
+ * What each one is, and what it is not
+ * ---------------------------------------------------------------------------
+ *
+ * Every one of them is a fact about a *published source*, never a view about
+ * where money might be. A claim that reasons about what an industry probably
+ * needs carries none of these, and that is the common case rather than a
+ * deficiency.
+ */
+export const STRUCTURAL_FINDINGS = [
+  /** A narrower industry inside the subject, named by the source. */
+  'SUB_INDUSTRY',
+  /** A stage of producing or delivering in this industry. */
+  'VALUE_CHAIN_LAYER',
+  /** A kind of organisation that pays for work in this industry. */
+  'BUYER_TYPE',
+  /** Who or what actually performs the work that gets paid for. */
+  'FULFILMENT_SOURCE',
+  /** How money changes hands here: what is bought, on what terms. */
+  'TRANSACTION_TYPE',
+  /** A published constraint on supply — a shortage, a queue, a chokepoint. */
+  'BOTTLENECK',
+  /** A different industry the source names as connected to this one. */
+  'ADJACENT_INDUSTRY',
+  /**
+   * Something that materially changes the economics and is not visible from
+   * outside. Deliberately not a risk: there is no kind here for "customers may
+   * not buy", so the baseline observation has nowhere to go.
+   */
+  'HIDDEN_CONSTRAINT',
+  /** A specific thing that requires owner capital, and what it costs. */
+  'CAPITAL_REQUIREMENT',
+  /** A published practice that removes, defers or shifts a requirement. */
+  'CAPITAL_RESTRUCTURING',
+] as const;
+export type StructuralFinding = (typeof STRUCTURAL_FINDINGS)[number];
+
+/**
+ * What a node in the industry graph is.
+ *
+ * The same words as the structural findings that create nodes, and that is
+ * deliberate: two vocabularies for one idea are two vocabularies that drift.
+ * `HIDDEN_CONSTRAINT`, `CAPITAL_REQUIREMENT` and `CAPITAL_RESTRUCTURING` are
+ * absent because they are facts *about* a subject rather than subjects of
+ * their own — they go in their own tables, and a node kind for them would make
+ * the graph a place to put everything.
+ */
+export const INDUSTRY_NODE_KINDS = [
+  'SECTOR',
+  'SUB_INDUSTRY',
+  'VALUE_CHAIN_LAYER',
+  'BUYER_TYPE',
+  'FULFILMENT_SOURCE',
+  'TRANSACTION_TYPE',
+  'BOTTLENECK',
+  'ADJACENT_INDUSTRY',
+] as const;
+export type IndustryNodeKind = (typeof INDUSTRY_NODE_KINDS)[number];
+
+export const INDUSTRY_NODE_ORIGINS = ['SEED', 'BOOTSTRAP', 'DISCOVERED'] as const;
+export type IndustryNodeOrigin = (typeof INDUSTRY_NODE_ORIGINS)[number];
+
+export interface IndustryNodeRow {
+  id: string;
+  project_id: string;
+  parent_id: string | null;
+  kind: string;
+  name: string;
+  description: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IndustryNode {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  kind: IndustryNodeKind;
+  name: string;
+  description: string | null;
+  origin: IndustryNodeOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const INDUSTRY_ROUND_PURPOSES = ['BOOTSTRAP', 'MAP', 'SCAN', 'CAPITAL'] as const;
+export type IndustryRoundPurpose = (typeof INDUSTRY_ROUND_PURPOSES)[number];
+
+export interface IndustryRoundRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  node_id: string | null;
+  purpose: string;
+  bucket_id: string | null;
+  opportunity_id: string | null;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IndustryRound {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  nodeId: string | null;
+  purpose: IndustryRoundPurpose;
+  bucketId: string | null;
+  opportunityId: string | null;
+  round: number;
+  candidateId: string;
+  state: 'OPEN' | 'HARVESTED' | 'ABANDONED';
+  openedAt: string;
+  harvestedAt: string | null;
+  /** Null while OPEN. Not counted yet is a different fact from none found. */
+  found: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What owner capital is actually required *for*. */
+export const CAPITAL_REQUIREMENTS = [
+  'LABOR',
+  'EQUIPMENT',
+  'PROPERTY',
+  'INVENTORY',
+  'LICENSING',
+  'CUSTOMER_ACQUISITION',
+  'WORKING_CAPITAL',
+  'DEPOSIT',
+  'INSURANCE',
+  'COMPLIANCE',
+  'FULFILMENT',
+  'TRANSPORT',
+  'STORAGE',
+  'TECHNOLOGY',
+  'MINIMUM_ORDER',
+  'GUARANTEE',
+] as const;
+export type CapitalRequirement = (typeof CAPITAL_REQUIREMENTS)[number];
+
+/**
+ * How industry practice removes, defers or shifts a capital requirement.
+ *
+ * Long on purpose. The brief names these because a requirement is only fixed
+ * until somebody knows the mechanism that unfixes it, and a short list would
+ * make the headline startup cost look like a fact more often than it is.
+ * Every one of them still has to be established from a published source about
+ * *this* industry — the list says what to look for, never what is true.
+ */
+export const CAPITAL_MECHANISMS = [
+  'SUBCONTRACT',
+  'BROKERAGE',
+  'AGENCY',
+  'CUSTOMER_DEPOSIT',
+  'MILESTONE_BILLING',
+  'PRESALE',
+  'PURCHASE_ORDER_FINANCE',
+  'RECEIVABLES_FINANCE',
+  'SUPPLIER_CREDIT',
+  'CONSIGNMENT',
+  'LEASE',
+  'RENTAL',
+  'LICENSE_IN',
+  'REVENUE_SHARE',
+  'JOINT_VENTURE',
+  'PROJECT_FINANCE',
+  'OFFTAKE',
+  'DISTRIBUTION_ADVANCE',
+  'GOVERNMENT_INCENTIVE',
+  'CAPACITY_RESERVATION',
+  'MANAGEMENT_CONTRACT',
+  'CONTRACT_MANUFACTURE',
+  'THIRD_PARTY_LOGISTICS',
+  'WHITE_LABEL',
+  'MARKETPLACE',
+] as const;
+export type CapitalMechanism = (typeof CAPITAL_MECHANISMS)[number];
+
+export interface CapitalStructureRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string;
+  entry_kind: string;
+  requirement: string | null;
+  mechanism: string | null;
+  answers_id: string | null;
+  amount_cents: number | null;
+  residual_cents: number | null;
+  statement: string;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapitalStructure {
+  id: string;
+  projectId: string;
+  opportunityId: string;
+  entryKind: 'REQUIREMENT' | 'RESTRUCTURING';
+  requirement: CapitalRequirement | null;
+  mechanism: CapitalMechanism | null;
+  answersId: string | null;
+  /** What the source said it costs. Null is unknown and never zero. */
+  amountCents: number | null;
+  /** What the owner still funds after this restructuring, where stated. */
+  residualCents: number | null;
+  statement: string;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The constraints worth a row, as a closed set whose omissions are the point.
+ *
+ * Every entry is something that changes the economics or the feasibility and
+ * is not visible from outside the industry. There is deliberately no kind for
+ * an obligation any business has — paying people, honouring contracts, the
+ * possibility that nobody buys — so a baseline observation cannot be filed
+ * here at all. That is a structural separation rather than a filter over
+ * prose, and its failure mode is missing a real constraint rather than
+ * admitting a platitude, which is the direction §27 says to err in.
+ */
+export const CONSTRAINT_KINDS = [
+  /** The stated cycle excludes acceptance, retakes or review, and is longer. */
+  'CYCLE_LONGER_THAN_STATED',
+  /** The buyer forbids passing the work on, or passing it offshore. */
+  'SUBCONTRACTING_PROHIBITED',
+  /** A licence, certification or registration is required to be paid at all. */
+  'CREDENTIAL_REQUIRED',
+  /** The buyer requires prior credited work of this exact kind. */
+  'PRIOR_WORK_REQUIRED',
+  /** One reviewer, approver or supervisor caps throughput whatever is hired. */
+  'SUPERVISION_CEILING',
+  /** Security or confidentiality terms prevent distributed fulfilment. */
+  'SECURITY_RESTRICTION',
+  /** So few buyers exist that losing one ends the business. */
+  'BUYER_CONCENTRATION',
+  /** The headline margin does not survive the real revision rate. */
+  'MARGIN_ERODED_BY_REWORK',
+  /** Nothing is paid until final acceptance, so the whole cycle is floated. */
+  'PAYMENT_ON_FINAL_ACCEPTANCE',
+  /** The buyer requires bonding or insurance before awarding anything. */
+  'BONDING_OR_INSURANCE',
+  /** A regulator requires held capital, which no structure can restructure. */
+  'REGULATORY_CAPITAL',
+  /** The labour or cost spread disappears once management is counted. */
+  'ARBITRAGE_LOST_TO_OVERHEAD',
+  /** A platform's own terms forbid the arrangement the opening implies. */
+  'PLATFORM_TERMS',
+  /** The supply the opening depends on cannot currently be obtained. */
+  'SUPPLY_UNAVAILABLE',
+] as const;
+export type ConstraintKind = (typeof CONSTRAINT_KINDS)[number];
+
+export interface OpportunityConstraintRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  node_id: string | null;
+  kind: string;
+  statement: string;
+  effect: string | null;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OpportunityConstraint {
+  id: string;
+  projectId: string;
+  opportunityId: string | null;
+  nodeId: string | null;
+  kind: ConstraintKind;
+  statement: string;
+  /** What it does to the economics, where the source says. Null where not. */
+  effect: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const CLAIM_TYPES = [
   'SOURCED_FACT',
   'SELF_REPORT',
@@ -1364,6 +1681,10 @@ export interface ResearchClaimRow {
   evidence_locator: string | null;
   evidence_lane: string | null;
   opportunity_signal: string | null;
+  structural_finding: string | null;
+  structural_subject: string | null;
+  structural_qualifier: string | null;
+  structural_amount_cents: number | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -2487,6 +2808,43 @@ export interface ResearchClaim {
    * piece of work. Both are true of one claim and neither substitutes.
    */
   opportunitySignal: OpportunitySignal | null;
+  /**
+   * The structural fact about an industry this claim establishes, if any.
+   *
+   * `opportunitySignal` one axis along: that one says *this is a piece of
+   * work*, and this says *this is how the industry is put together*. A claim
+   * routinely carries neither, occasionally one, and can carry both — a
+   * subcontracting notice is an opening and a fulfilment source at once.
+   */
+  structuralFinding: StructuralFinding | null;
+  /**
+   * What the finding is about, where the claim names something narrower than
+   * the fragment's subject: the sub-industry, the layer, the buyer type.
+   *
+   * Required of a finding that creates a node, because reading the name out of
+   * the claim sentence would be the prose-parsing §25 records — and refused on
+   * a finding that creates none, so a caller cannot smuggle a subject past the
+   * kinds that have nothing to name.
+   */
+  structuralSubject: string | null;
+  /**
+   * For a restructuring, the requirement it answers. Null for everything else.
+   *
+   * Which requirement a structure removes decides whether its published
+   * residual reduces anything, so it is declared rather than read out of the
+   * claim sentence — the one place where getting it wrong would silently make
+   * a piece of work look cheaper than it is.
+   */
+  structuralQualifier: string | null;
+  /**
+   * A capital figure a source published, in minor units. Null means unknown.
+   *
+   * The nullability is the feature: `readCapital` withholds the minimum owner
+   * capital entirely when any requirement carries null, rather than summing
+   * the rest and producing a number that is wrong in the encouraging
+   * direction.
+   */
+  structuralAmountCents: number | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -4320,6 +4678,13 @@ export interface BinRow {
    */
   required_capabilities: string | null;
   workload_class: string | null;
+  /**
+   * The one surface this bin may be fired at, or null for every ordinary bin.
+   *
+   * Restrictive only, written by Brain, and read by the fire router alone — see
+   * `067_routine_pin.sql` for why a pool cannot be verified without it.
+   */
+  pinned_routine_id: string | null;
   created_by_type: string;
   created_by_id: string | null;
   created_at: string;
@@ -4372,6 +4737,17 @@ export interface Bin {
   requiredCapabilities: string[];
   /** What kind of work this is, for capacity attribution. */
   workloadClass: string | null;
+  /**
+   * The only Routine this bin may be fired at, when it has one.
+   *
+   * Null on every ordinary bin. Set on a surface probe, because proving that
+   * *this* Routine runs as the worker it is bound to requires firing that
+   * Routine rather than whichever one the pool happened to favour. It narrows
+   * the candidate list and does nothing else: the pinned surface still has to
+   * pass every check, and admission is still decided on the authenticated
+   * worker.
+   */
+  pinnedRoutineId: string | null;
   lastRefusal: string | null;
   refusalCount: number;
   createdByType: string;
@@ -5968,6 +6344,15 @@ export interface CashOpportunityRow {
    * `reconcileOpportunitySignals` fills the second case from the source claim.
    */
   opportunity_signal: string | null;
+  /**
+   * The industry node whose scan opened this, where one did.
+   *
+   * Null for the pieces that predate the axis and for anything a person
+   * entered by hand, which is honest rather than a gap: nothing said which
+   * industry it was in, and deriving one from the title would be a guess
+   * wearing a foreign key.
+   */
+  industry_node_id: string | null;
   payer: string | null;
   reachable_channel: string | null;
   buying_signal: string | null;
@@ -6067,6 +6452,8 @@ export interface CashOpportunity {
   validationRounds: number;
   /** What kind of opening its evidence establishes, or null where nothing said. */
   opportunitySignal: OpportunitySignal | null;
+  /** The industry node whose scan opened it, or null where nothing said. */
+  industryNodeId: string | null;
   payer: string | null;
   reachableChannel: string | null;
   buyingSignal: string | null;
@@ -6514,6 +6901,16 @@ export interface SharedFinding {
 
 export const CAPACITY_CONNECTION_STATES = [
   'NOT_STARTED',
+  /**
+   * The member asked for their one-time connector link.
+   *
+   * It exists because the link is a Brain administrator's to issue — it mints a
+   * worker identity and grants it a project membership — and a member who could
+   * not *ask* for one was reading "add a custom connector in Claude" as their
+   * next step and being refused at a consent screen. An escalation with no
+   * answering transition is stuck rather than waiting; this is the transition.
+   */
+  'INVITATION_REQUESTED',
   'CONNECTOR_AUTHORIZED',
   'ROUTINE_DETAILS_NEEDED',
   'WAITING_FOR_ADMIN',
@@ -6521,6 +6918,24 @@ export const CAPACITY_CONNECTION_STATES = [
   'PROBE_SENT',
   'ARRIVED',
   'HEALTHY',
+  /**
+   * The registered Routine is not the one this row names, or is bound to
+   * another worker.
+   *
+   * Derived on the read path and **never acted on**. Brain firing a surface its
+   * own record does not name is what §27 records at length, so it has to have a
+   * word; repointing it is `fleet repoint-worker`, an operator's decision,
+   * because the Routine in question may well be somebody else's.
+   */
+  'MISBOUND',
+  /**
+   * Given back. The tokens are revoked and the surface is not fired.
+   *
+   * Reversible by its owner: `reconnect` puts the journey back at the start
+   * with the trigger, the account and the Routine intact, and the reason this
+   * one was revoked stays on the row as history.
+   */
+  'REVOKED',
   'FAILED',
 ] as const;
 export type CapacityConnectionState = (typeof CAPACITY_CONNECTION_STATES)[number];
@@ -6539,6 +6954,11 @@ export interface CapacityConnectionRow {
   probe_bin_id: string | null;
   probe_sent_at: string | null;
   healthy_at: string | null;
+  invitation_requested_at: string | null;
+  invitation_issued_at: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+  revoked_by_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -6558,7 +6978,15 @@ export interface CapacityConnection {
   failureReason: string | null;
   probeBinId: string | null;
   probeSentAt: string | null;
+  /** When Brain last read the four-row chain and found it complete. */
   healthyAt: string | null;
+  /** When the member asked for their connector link, and when one was issued. */
+  invitationRequestedAt: string | null;
+  invitationIssuedAt: string | null;
+  /** Why it was given back, and by whom. Kept through a reconnect, as history. */
+  revokedAt: string | null;
+  revokedReason: string | null;
+  revokedByUserId: string | null;
   createdAt: string;
   updatedAt: string;
 }

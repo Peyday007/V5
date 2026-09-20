@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 069. See that file for why a packet is
+-- The Postgres half of SQLite migration 071. See that file for why a packet is
 -- a living state object rather than a generated report, and why a gap records
 -- whether its classification was a reading or a judgement.
 

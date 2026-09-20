@@ -83,6 +83,14 @@ import {
   isOpportunitySignal,
   type OpportunitySignal,
 } from '../domain/opportunitySignals.ts';
+import {
+  CAPITAL_REQUIREMENTS_GUIDE,
+  FINDING_GUIDE,
+  STRUCTURAL_FINDINGS,
+  subjectVocabularyFor,
+  validateStructural,
+} from '../domain/industry.ts';
+import type { StructuralFinding } from '../domain/types.ts';
 import type { EvidenceLane, LaneNecessity } from '../domain/types.ts';
 import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
 import { planDependencies } from '../services/research/splitting.ts';
@@ -1068,6 +1076,45 @@ function optionalSignal(row: Record<string, unknown>, where: string): Opportunit
   return raw;
 }
 
+/**
+ * The structural declaration on one submitted claim.
+ *
+ * Delegated whole to `validateStructural`, which is also what the provider
+ * path in `services/research/schema.ts` calls. The wire names are snake_case
+ * and the parsed names are not, so this is a rename and nothing else — a
+ * second copy of the *rule* here is how the two doors come to disagree about
+ * what a valid declaration is, which this repository has had to record four
+ * times.
+ *
+ * A refusal is an `INVALID_INPUT` tool error rather than a dropped field, so
+ * the worker corrects one value and submits the same claims again on the same
+ * item, with the attempt still there to spend.
+ */
+function structuralOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  structuralFinding: StructuralFinding | null;
+  structuralSubject: string | null;
+  structuralQualifier: string | null;
+  structuralAmountCents: number | null;
+} {
+  const parsed = validateStructural({
+    where,
+    finding: row['structural_finding'],
+    subject: row['structural_subject'],
+    qualifier: row['structural_qualifier'],
+    amountCents: row['structural_amount_cents'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    structuralFinding: parsed.value.finding,
+    structuralSubject: parsed.value.subject,
+    structuralQualifier: parsed.value.qualifier,
+    structuralAmountCents: parsed.value.amountCents,
+  };
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1081,6 +1128,14 @@ const submitClaimsTool: McpTool = {
     OPPORTUNITY_SIGNALS.map((signal) => `${signal} — ${SIGNAL_GUIDE[signal]}`).join('; ') +
     '. Leave it out for descriptive evidence, which is most claims. It does not lower any bar: ' +
     'a claim with a signal passes the same gate as every other. ' +
+    'Separately, where a claim establishes how the industry itself is put together, set ' +
+    'structural_finding to the kind it is: ' +
+    STRUCTURAL_FINDINGS.map((finding) => `${finding} — ${FINDING_GUIDE[finding]}`).join('; ') +
+    '. The kinds that add a subject to the industry map (SUB_INDUSTRY, VALUE_CHAIN_LAYER, ' +
+    'BUYER_TYPE, FULFILMENT_SOURCE, TRANSACTION_TYPE, BOTTLENECK, ADJACENT_INDUSTRY) also ' +
+    'require structural_subject, which is that subject\'s name; the other three must omit it. ' +
+    'A claim can carry both an opportunity_signal and a structural_finding, and most claims ' +
+    'carry neither. ' +
     'One submission per work item; a redelivery replays it rather than adding to it.',
   inputSchema: {
     type: 'object',
@@ -1118,6 +1173,53 @@ const submitClaimsTool: McpTool = {
                 OPPORTUNITY_SIGNALS.map((signal) => `${signal} — ${SIGNAL_GUIDE[signal]}`).join('; ') +
                 '. Descriptive evidence carries none, and that is not a deficiency. It lowers no ' +
                 'bar: a claim with a signal passes exactly the same gate as every other.',
+            },
+            /*
+             * Declared, not merely described.
+             *
+             * §33 records the defect this avoids: `opportunity_signal` was
+             * named in a tool's prose and left out of its schema, and
+             * `additionalProperties: false` meant a client honouring the
+             * schema dropped the one field that decided whether anything was
+             * ever created — a failure that reads exactly like a worker
+             * honestly finding nothing.
+             */
+            structural_finding: {
+              type: 'string',
+              enum: [...STRUCTURAL_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes how ' +
+                'the industry itself is put together: ' +
+                STRUCTURAL_FINDINGS.map((one) => `${one} — ${FINDING_GUIDE[one]}`).join('; ') +
+                '. Independent of opportunity_signal — a claim may carry both, one, or neither.',
+            },
+            structural_subject: {
+              type: 'string',
+              description:
+                'Required whenever structural_finding is set: what the finding is about. For ' +
+                'the seven map kinds it is the subject\'s own name as the source calls it — ' +
+                'not a sentence about it. For the other three it is a value from that kind\'s ' +
+                'own set: ' +
+                CAPITAL_REQUIREMENTS_GUIDE +
+                '.',
+            },
+            structural_qualifier: {
+              type: 'string',
+              enum: [...(subjectVocabularyFor('CAPITAL_REQUIREMENT') ?? [])],
+              description:
+                'Only for CAPITAL_RESTRUCTURING, where it is required: which requirement this ' +
+                'structure answers. A structure that does not say what it answers reduces ' +
+                'nothing. Omitted for every other kind.',
+            },
+            structural_amount_cents: {
+              type: 'integer',
+              description:
+                'Only for the two capital kinds, and optional there: the figure a source ' +
+                'publishes, in minor units of the sprint currency — the gross for a ' +
+                'requirement, what the owner still funds for a restructuring. Leave it out ' +
+                'where no source publishes one. An unknown is recorded as unknown and ' +
+                'withholds the minimum owner capital, which is the correct outcome; a guess ' +
+                'would understate it.',
             },
             retrieval_state: {
               type: 'string',
@@ -1194,6 +1296,15 @@ const submitClaimsTool: McpTool = {
          * claims are and is not a deficiency.
          */
         opportunitySignal: optionalSignal(row, where),
+        /*
+         * And what it establishes about how the industry is put together.
+         *
+         * A different question about the same claim, and a claim can answer
+         * both: a subcontracting notice is an opening *and* a fulfilment
+         * source. One column each rather than one shared column, so neither
+         * answer can overwrite the other.
+         */
+        ...structuralOf(row, where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),

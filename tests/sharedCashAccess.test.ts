@@ -476,6 +476,64 @@ describe('what a shared reader may never be handed', () => {
     expect(text).not.toMatch(/priceCents/);
   });
 
+  it('carries a tier reading, and the reading carries no value', async () => {
+    /*
+     * The tier is what separates *evidence Brain found* from *work somebody
+     * could do*, and a member reading the frontier without it is reading every
+     * record with no way to tell those two apart — the distinction §33 built
+     * `tier.ts` for. So it crosses.
+     *
+     * What makes that safe is not a promise, it is the shape: a `TierReading`
+     * is a tier, two static sentences from `SIGNAL_MEANING`, the requirements
+     * still open as `{ key, label, task, owner }` — every one of those a
+     * constant looked up per field — and two counts. **No branch of it
+     * interpolates a value.** This asserts it against the live payload rather
+     * than against a reading of the source, because the guarantee that matters
+     * is what actually left the server.
+     */
+    const view = await call<{ opportunities: { tier: Record<string, unknown> }[] }>(
+      'GET',
+      CASH(),
+      { cookie: memberCookie },
+    );
+    const tiers = view.body.opportunities.map((one) => one.tier);
+    expect(tiers.length).toBeGreaterThan(0);
+    for (const tier of tiers) {
+      expect(['SIGNAL', 'CANDIDATE', 'QUALIFIED', 'READY_TO_TEST']).toContain(tier['tier']);
+      expect(typeof tier['answered']).toBe('number');
+      /*
+       * No figure anywhere in a tier reading. A price, an exposure or a margin
+       * arriving inside a `summary` or a `task` would be the whole boundary
+       * leaking through the one field that was argued to be names and counts.
+       */
+      const text = JSON.stringify(tier);
+      expect(text).not.toMatch(/75000/);
+      expect(text).not.toMatch(/Marguerite Vance/);
+      expect(text).not.toMatch(/[$£€]\s?\d/);
+    }
+  });
+
+  it('counts the tiers, and counts them over the records it sent', async () => {
+    const view = await call<{
+      byTier: Record<string, number>;
+      opportunities: { id: string; tier: { tier: string } }[];
+      best: { id: string }[];
+    }>('GET', CASH(), { cookie: memberCookie });
+
+    for (const which of ['SIGNAL', 'CANDIDATE', 'QUALIFIED', 'READY_TO_TEST']) {
+      expect(view.body.byTier[which]).toBe(
+        view.body.opportunities.filter((one) => one.tier.tier === which).length,
+      );
+    }
+    /*
+     * And `best` is a subset of what was sent, rather than a separate answer:
+     * the server picks it with `chooseBest`, the same function the owner's
+     * `assemble` calls, so both pages name the same openings.
+     */
+    const ids = new Set(view.body.opportunities.map((one) => one.id));
+    for (const one of view.body.best) expect(ids.has(one.id)).toBe(true);
+  });
+
   it('carries no decisions belonging to one person', async () => {
     const text = await shared();
     expect(text).not.toMatch(/decisionsForMe/);
@@ -549,6 +607,71 @@ describe('what a shared reader may never be handed', () => {
     // take Brain's word for it, and the machine's own progress by field name.
     expect(view.body.opportunities[0]).toHaveProperty('sourceClaimId');
     expect(Array.isArray(view.body.opportunities[0]!.qualification.missing)).toBe(true);
+  });
+});
+
+/**
+ * View parity, at the boundary that decides it.
+ *
+ * The client's own suite asserts that the two roles render one skeleton. What
+ * it cannot assert is that they are rendering **one set of facts**, because a
+ * component test scripts both payloads itself. This does: it reads the live
+ * server as an administrator and as an ordinary member and holds the shared
+ * block of one against the whole of the other.
+ *
+ * This is the property the whole correction rests on. Two readers of one fact
+ * disagree eventually — that has been true of a column, a status line, a review
+ * card and a projection in this repository already — so the owner's page does
+ * not derive its shared sections from its private blocks. It is handed the same
+ * object a member is handed, by the same function, and this is what would fail
+ * the day somebody re-derived one of them.
+ */
+describe('both roles are shown the same shared frontier, byte for byte', () => {
+  it('embeds in the owner’s payload exactly what a member is sent', async () => {
+    const owner = await call<{ scope: string; frontier: Record<string, unknown> }>(
+      'GET',
+      CASH(),
+      { cookie: adminCookie },
+    );
+    const member = await call<Record<string, unknown>>('GET', CASH(), { cookie: memberCookie });
+
+    expect(owner.body.scope).toBe('FULL');
+    expect(member.body['scope']).toBe('SHARED');
+
+    /*
+     * `scope` and `capabilities` are the envelope rather than the frontier —
+     * they say how it was asked for and what may be pressed, and they are
+     * correctly different. Everything else must be identical.
+     */
+    const { scope: _s, capabilities: _c, ...frontier } = member.body;
+    expect(owner.body.frontier).toEqual(frontier);
+  });
+
+  it('tells each role what it may press, and tells a member it may press nothing', async () => {
+    const owner = await call<{ capabilities: Record<string, boolean> }>('GET', CASH(), {
+      cookie: adminCookie,
+    });
+    const member = await call<{ capabilities: Record<string, boolean> }>('GET', CASH(), {
+      cookie: memberCookie,
+    });
+
+    expect(owner.body.capabilities).toEqual({
+      mayAdminister: true,
+      mayGrantAuthority: true,
+      mayViewPrivateJob: true,
+      mayActOnJob: true,
+    });
+    /*
+     * All four false, including the two reads. A shared payload has no private
+     * block for a control to act on, so this is the boundary restated rather
+     * than a second opinion about it.
+     */
+    expect(member.body.capabilities).toEqual({
+      mayAdminister: false,
+      mayGrantAuthority: false,
+      mayViewPrivateJob: false,
+      mayActOnJob: false,
+    });
   });
 });
 
@@ -626,7 +749,21 @@ describe('People & capacity is its own door', () => {
     );
     expect(mine.status).toBe(200);
     const keys = mine.body.steps.map((one) => one.key);
-    expect(keys).toEqual(['CONNECTOR', 'ROUTINE', 'TRIGGER', 'SECRET', 'PROBE', 'HEALTHY']);
+    /*
+     * `INVITATION` first. The journey used to start at the connector, and a
+     * member who followed it was refused at a consent screen that looks for an
+     * administrator before it looks for an invitation — so the step that was
+     * genuinely first was the one nobody was told about.
+     */
+    expect(keys).toEqual([
+      'INVITATION',
+      'CONNECTOR',
+      'ROUTINE',
+      'TRIGGER',
+      'SECRET',
+      'PROBE',
+      'HEALTHY',
+    ]);
     // Every value a person has to paste is carried as its own copyable string,
     // never as a sentence they have to select part of.
     const connector = mine.body.steps.find((one) => one.key === 'CONNECTOR')!;
