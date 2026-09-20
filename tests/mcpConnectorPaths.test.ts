@@ -265,7 +265,7 @@ beforeAll(async () => {
 
   // The *label* Brain assigned, not the handle typed above: a worker's
   // operational identity is neutral by construction, so a test that expected
-  // the typed name back would be pinning the defect migration 073 removes.
+  // the typed name back would be pinning the defect migration 074 removes.
   const researchWorker = await makeWorker('paths-research-worker', researchProject, [
     'project:read',
     'queue:read',

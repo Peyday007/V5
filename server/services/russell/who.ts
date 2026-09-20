@@ -270,7 +270,7 @@ export async function whoForProject(input: {
       configured: routine.tokenDigest !== null,
       // The neutral label. A People surface naming a worker after a person
       // is how a label gets read as a claim about whose account ran a
-      // session, which is the defect migration 073 exists for.
+      // session, which is the defect migration 074 exists for.
       boundWorker: worker ? workerIdentity(worker) : null,
       fires: routine.totalFires,
       refusals: routine.totalRefusals,

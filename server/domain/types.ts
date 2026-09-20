@@ -3657,7 +3657,7 @@ export interface Worker {
    * Server-assigned, stable, unique, and opaque about people. This is the only
    * worker identifier any surface prints and the value `Principal.handle`
    * carries, because a label that reads like a person's name is read as a claim
-   * about whose account ran a session and never was one. See migration 073.
+   * about whose account ran a session and never was one. See migration 074.
    *
    * Nullable in the type only for a row written before labels existed; the
    * migration backfilled every one, and `createWorker` assigns one.

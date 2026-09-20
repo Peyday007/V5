@@ -1,7 +1,7 @@
 /**
  * Whose capacity a worker is, where Brain can actually prove it.
  *
- * The defect migration 073 corrects is a worker named after a person being read
+ * The defect migration 074 corrects is a worker named after a person being read
  * as a statement about whose Claude account ran a session. Removing the name
  * from every surface is half of that; the other half is that the question it was
  * pretending to answer is a real one, and it has a real answer for some workers.

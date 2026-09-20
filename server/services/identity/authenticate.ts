@@ -134,7 +134,7 @@ export function isSecureRequest(req: Request): boolean {
  *
  * One function, so the answer cannot differ between two readers — and so the
  * fallback to the legacy handle exists in exactly one place, for a row written
- * before migration 073 that somehow escaped its backfill. It is a display
+ * before migration 074 that somehow escaped its backfill. It is a display
  * decision and never an authorization one: nothing in this codebase branches on
  * what a worker is called.
  */
@@ -264,7 +264,7 @@ async function authenticateWorker(presented: string, _req: Request): Promise<Aut
       // The neutral label, never the legacy handle. `brain_whoami` answers with
       // this, so a worker that checks in says `worker-03` rather than somebody's
       // first name — which readers took to be a statement about whose account
-      // had run the session, and never was. See migration 073.
+      // had run the session, and never was. See migration 074.
       handle: workerIdentity(worker),
       displayName: workerIdentity(worker),
       isBrainAdmin: false,
@@ -312,7 +312,7 @@ async function authenticateOAuth(presented: string): Promise<AuthOutcome> {
       // The neutral label, never the legacy handle. `brain_whoami` answers with
       // this, so a worker that checks in says `worker-03` rather than somebody's
       // first name — which readers took to be a statement about whose account
-      // had run the session, and never was. See migration 073.
+      // had run the session, and never was. See migration 074.
       handle: workerIdentity(worker),
       displayName: workerIdentity(worker),
       isBrainAdmin: false,

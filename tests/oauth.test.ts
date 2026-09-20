@@ -51,7 +51,7 @@ let projectId = '';
 let workerId = '';
 let orphanWorkerId = '';
 // The neutral labels Brain assigned. Every screen names a worker by these;
-// the handles above are lookup keys and appear on no page. See migration 073.
+// the handles above are lookup keys and appear on no page. See migration 074.
 let workerLabel = '';
 let orphanLabel = '';
 let clientId = '';
@@ -835,7 +835,7 @@ describe('the invariant: a token is the worker, not the approver', () => {
     // And what it answers with is the *neutral* identity, never the handle
     // whoever created the row happened to type. A worker called after a person
     // made every reader treat `brain_whoami` as a statement about whose Claude
-    // account had run the session, which it has never been — see migration 073.
+    // account had run the session, which it has never been — see migration 074.
     expect(who.structured['handle']).toMatch(/^worker-\d\d$/);
     expect(who.structured['handle']).not.toBe('claude-max-worker-01');
     expect(who.structured['displayName']).not.toBe('claude-max-worker-01');

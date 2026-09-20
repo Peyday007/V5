@@ -114,7 +114,7 @@ export async function ensureReaderWorker(input: {
       type: 'WORKER',
       id: worker.id,
       // The neutral label; a reader identity is printed beside audit
-      // lineage and must not read as a person's name. See migration 073.
+      // lineage and must not read as a person's name. See migration 074.
       handle: workerIdentity(worker),
       displayName: workerIdentity(worker),
       isBrainAdmin: false,
