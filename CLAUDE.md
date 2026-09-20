@@ -179,6 +179,9 @@ There must be no workflow where the user has to remember "now go update the data
     read as a boundary, and no depth allocation that lowers a bar — a question is
     retired when it stops bearing on the decision and never when it stops being
     convenient.
+44. No human role kept without naming which reason makes it necessary, and no
+    work given to Brain on a question nobody answered — the burden is on
+    justifying the person, and an absence justifies neither.
 
 ## 8. Model prose never mutates project state.
 
@@ -6805,6 +6808,200 @@ honest outcome and not a packet that talked itself into "complete".
 
 ---
 
+## 41. Brain is the default producer. That is a burden of proof, not an assumption.
+
+Brain knew what it wanted to produce and held no row saying **who produces it**.
+The nearest thing was `cash_opportunities.fulfillment_owner` — one free-text
+line per opening, *"name the operator, contractor or tool that fulfils this"*,
+answered by whoever filled the card in, with no vocabulary, no test, no blocker
+and no way to ask the question across a portfolio. So *which of the things we do
+still need a person, and why* had no answer, and neither did *which of them has
+stopped needing one*.
+
+§38 added the axis that says **where** to look. This one
+(`server/services/labor/`, `server/repos/labor.ts`, `server/domain/labor.ts`,
+`docs/LABOR-KERNEL.md`) adds the axis that says **by whom the work is done**,
+and everything it adds is a new *entrance* to machinery Steps 4 to 12C already
+built.
+
+- **The prime directive is about where the burden sits, and reading it as a
+  licence to assume would be a disaster.** *Brain is the default production
+  layer and human labor is an escalation layer* means nothing stays with a
+  person because it always has. It does not mean an unassessed task is Brain's.
+  The two errors do not cost the same: a task wrongly left with a person costs
+  money, and a task wrongly taken from one is an output nobody produces, or one
+  produced without the licence, signature or physical presence somebody is
+  legally owed. So the asymmetry is in the schema — a human layer cannot be
+  written without naming which of six reasons justifies it, and there is
+  deliberately **no reason meaning "this is how it has always been done"**, so
+  the habit this kernel exists to stop inheriting has nowhere to be filed.
+- **An unknown is never a favourable assumption, and here the favourable
+  direction is *towards Brain*.** §30 and §38 both record this rule at a money
+  figure, where the cheap-looking answer understates a cost. `UNKNOWN` is a real
+  recorded answer — *we looked and nothing settles it* — and a different fact
+  from the absence of a row; neither may stand in for the answer that would move
+  a task, in either direction. On `NOT_ESTABLISHED`, which is most tasks most of
+  the time, Brain writes nothing at all and the task reads as undecided, because
+  that is what it is.
+- **Two of the twelve questions are read and can never be written down.**
+  *Can Brain produce this output* is `readCapability`; *could another session
+  verify it* is `separationCapacity`, the same reading `auditAdmission` uses.
+  `labor_necessity_answers.basis` has no `DERIVED` value, so the rule is
+  structural rather than remembered — a fleet that lost its last healthy surface
+  an hour ago must not still report that Brain can produce. `MISSING` and
+  `UNKNOWN` stay apart at both, for §30's reason: *we could not tell* must never
+  read the same as *we checked*.
+- **Three of the six reasons answer nothing, and that is a refusal rather than a
+  gap.** A trade body can tell you a notary must sign. It cannot tell you
+  whether *this* Brain verifies its own output well enough, so
+  `EXPERT_JUDGMENT`, `EXCEPTION_HANDLING` and `OVERSIGHT_VERIFICATION` are
+  recorded as evidence on their claims and move no question. `questionAnsweredBy`
+  is a `Record` over the whole union, so a reason added later is a compile error
+  until somebody says what it settles.
+- **A role is compressed by history, so history is never overwritten.** §7 of
+  the brief is the reason this is a kernel rather than a column: *where Brain
+  improvements have reduced human workload* is unanswerable from current state,
+  because current state is exactly what forgot. Both decision tables are
+  append-only with a superseding pointer, and the reading reports **both**
+  directions — a task that went back to a person is the most useful row in that
+  table, so it is not filtered out.
+- **A workflow has two origins and deliberately no third.** `SEED` is a person,
+  because §2 of the brief is a design act and no amount of reading rows answers
+  *how would this operate if it were invented today*. `DERIVED` reads exactly
+  one thing — an opening's own `required_capabilities` — which is a column that
+  already exists, that `readCapability` already answers and that `operate.ts`
+  already raises a need from. That second entrance is what stops this being
+  §29's *mechanism nothing calls*: a kernel waiting for somebody to type in a
+  workflow would have been correct, tested and reachable by nobody.
+- **The allocator asks first about work a person is doing today**, which is the
+  opposite of the obvious order and is where a role can actually be compressed.
+  Its `verdict !== 'HUMAN_REQUIRED'` clause is load-bearing and the first
+  version did not have it: a role whose reason is already established has no
+  open question, so asking again spends a slot to learn what the rows say *and*
+  takes it ahead of the question that actually follows. The suite found it by
+  asserting the sequence rather than the first ask.
+- **The standing authority is asked in the kernel rather than left to
+  `launch`.** A candidate that parks for want of authority launches no mission,
+  so its round never settles — and an open round is precisely what stops that
+  purpose being asked again, for ever. §24's *waiting nobody can resolve*,
+  arriving through a table nobody would think to look at. A round settles on any
+  terminal mission for the same reason, with `HARVESTED` and `ABANDONED` kept
+  apart because *it ran and found nothing* and *it never finished* have
+  different remedies.
+- **A cash sprint winding down does not bound it, and that is a decision.** A
+  labor question asks how work Brain has already committed to is produced; it
+  finds no opening and creates no obligation. §30 records its own correction on
+  exactly this point — an off switch that stopped work it did not own reached
+  past the thing it owns.
+- **Every figure is counted or it is `UNKNOWN`.** §11 asks for cost per output,
+  time per output, error rate and human hours; Brain holds rows for none of
+  them, so all four report `UNKNOWN` and name what would measure them. The
+  temptation is worse here than usual: an invented automation percentage is
+  exactly the figure somebody would quote in a decision about whether to keep
+  employing a person. What *is* counted names its denominator — **tasks that
+  have an allocation at all**, not units of work, not hours, not revenue — and a
+  task nobody has decided is counted apart from both sides, because a workflow
+  with two Brain tasks and eight nobody has looked at is not eighty per cent
+  automated.
+- **A labor round is judged against the labor envelope, and that check runs
+  before the project-slug map.** The only one that does. A caller cannot reach
+  it — `labor_rounds` is written by the kernel — and both alternatives are
+  worse: on `deal-dispatch` the declared envelope is scoped to Michigan public
+  records and lists every other state in its `forbiddenScope`, so a national
+  licensing question would be refused and its round stranded, and a labor
+  question compiled under a public-records profile would be answered as a
+  public-records question, which is §25's Westbrook defect. What it widens is
+  one thing, said plainly: which classes of published source that project may
+  cite for that question. What it does not widen is anything that acts.
+- **Nothing here hires anybody, and nothing here can become a hiring system.**
+  It records no person's name and holds no contact detail.
+  `RUSSELL_LABOR_ALLOCATION_V1` takes `CASH_FORBIDDEN_ACTIONS` verbatim, which
+  names `hire`, `engage a contractor` and `contact the` explicitly — *stricter*
+  than the alternative about the exact risk this subject carries — and the
+  assignment template lists them as out of scope so a worker is told rather than
+  merely refused. Recording that a person produces a task engages nobody.
+- **An established absence is the most valuable finding the `permission` lane
+  can return**, and the completion standard asks for the documented search
+  rather than for the conclusion. §14's own standard for a negative, at the
+  question that decides whether somebody is employed: the *absence* of a
+  licensing rule is exactly what lets a role be compressed, and a standard that
+  only asked for requirements would have made a barren search read as a failure.
+- **`AUTOMATION_PRECEDENT` was a third finding kind and was dropped before it
+  shipped**, recorded here rather than left as an absence. A published instance
+  of this work being done by software *is* a sourcing channel — `SOFTWARE_TOOL`
+  — and a separate kind would have had nowhere to be filed: it answers no
+  necessity question, because somebody else's tool establishes nothing about
+  this Brain's quality, and a finding with no home is one nobody reads. The
+  PRECEDENT round still asks the question, because *is this done without a
+  person* and *where is this sourced* are different questions; what they
+  establish lands in the same row.
+- **Two defects came out of driving it rather than reading it, and both are the
+  same shape: correct-looking code whose *sentence about the rows* was wrong.**
+  The report said *"established by a published source"* about an answer a person
+  had typed — `established` was a boolean read off the verdict, which says the
+  *test* settled it and nothing about what settled it; it is `backing` now, in
+  three values, and it was wrong on the very first row the report printed. And
+  the allocation chain was ordered by `created_at`, so two decisions in one
+  millisecond sorted arbitrarily and `roleCompression` reported half the time
+  that a person had been replaced by Brain when the opposite happened. §33
+  records the identical defect one module along. It follows `supersedes_id`
+  now, which the schema makes exact. **The regression test was measured against
+  the old implementation before it was trusted**: it failed 3 times in 8 while
+  it equalized the timestamps — a test that lets a defect back in half the time
+  — so it puts the clock backwards instead and fails on every run.
+- **A task that requires a person reported nothing standing in its way, and the
+  test that was supposed to catch it was vacuous. Both are recorded rather than
+  quietly fixed.** `ESTABLISHES` names four questions that each establish a
+  human role; `blockersFor` was a sequence of `if`s and three of the four were
+  written. So a task whose only positive answer was `HANDLES_ONLY_EXCEPTIONS`
+  came back `HUMAN_REQUIRED` with an **empty blocker list** — and the frontier
+  reads an empty list as *nothing is in the way*. A task that needs a person,
+  presented as ready to move to Brain, from the state that looks healthiest.
+  It is a `Record` keyed off `ESTABLISHES`' own questions now, so a reason added
+  there with no blocker here is a compile error rather than a silent gap; the
+  refusal was exercised by deleting the entry and reading the error back.
+
+  **The audit that found it had already passed once, against nothing.** Its
+  first version drove all 2 187 answer combinations through a task naming **no
+  capability** — and `deriveCanProduce` answers `UNKNOWN` for such a task, which
+  is a gating question, so `BRAIN_DEFENSIBLE` was unreachable in every single
+  reading. It asserted one half of a biconditional whose other half never
+  occurred, and it passed with `NECESSITY_UNANSWERED` deleted, which is how the
+  vacuity was noticed at all. **A vacuous guard is worse than none, because it
+  reads as coverage.** It registers a real healthy Routine and names a
+  capability that genuinely reads `PRESENT` now, and it asserts that all three
+  verdicts actually occur *before* it trusts the biconditional over them.
+- **Two of the brief's sections are not built, and saying so is the honest
+  report.** §5's elastic capacity and §10's pool of verified external operators
+  are a roster of real people with contact details and credentials, and building
+  one is a separate decision with its own authorization — every action it would
+  require is forbidden by the envelope here. What is built is the half that
+  decides *whether* a person is needed and *what published sources say that
+  capability costs*.
+
+**Reading it from production is `labor-report.yml`**, which runs the read-only
+script inside the released container and prints that container's own
+`BRAIN_REVISION` before anything else — because a report read out of a container
+says nothing about *which* container unless the container says which commit it
+was built from, and a deployment system's label is a claim about what it was
+asked to ship rather than a reading of what is serving.
+
+**There is no client surface**, which is a scope statement rather than an
+omission: §38's kernel shipped the same way, and §29's product surface has its
+own acceptance. The reading is `GET /api/projects/:id/labor` for any project
+member and `npm run report:labor` on a terminal.
+
+**What is true today, said plainly.** The schema, the vocabulary, the one
+validator both doors call, the necessity test, the allocator, the absorption,
+the envelope, the profile, the routes and the tick are built and covered on both
+backends; `tests/laborKernel.test.ts` walks the refusals rather than the
+successes, because the expensive mistake here is an acceptance. **No fleet
+worker has answered a labor question and no production task has been
+allocated**, because both need a deploy and a fire — the separation Step 3 drew
+between the research engine passing its tests and a real job having actually
+run, which §38 had to say about itself on the day it landed.
+
+
 ## Repository map
 
 ```
@@ -6831,6 +7028,8 @@ server/
     jurisdiction.ts     states, postal codes, and where each one may be read from
     manufacturing.ts    what a capability finding creates, and what it may never
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
+    industry.ts         what a structural finding means, and what it may create
+    labor.ts            what a labor finding means, and the one validator both doors call
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     auditReopens.ts     the record behind a re-audit, and its one reservation
@@ -6852,6 +7051,7 @@ server/
     capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
     manufacturing.ts  the ladder, the capability ledger, and the one write research cannot reach
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
+    labor.ts          workflows, tasks, who produces each, and what has been asked
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -6963,6 +7163,17 @@ server/
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
       readiness.ts      four people and four surfaces, counted from rows
+    labor/
+      necessity.ts      the twelve questions, and the two Brain reads from its own rows
+      derive.ts         where a workflow comes from when nobody types one in
+      assign.ts         who produces a task, and the two Brain may decide alone
+      allocate.ts       which labor question is next, and why — pure over a snapshot
+      questions.ts      what each round asks, composed from the output rather than a title
+      expand.ts         opening the questions, and filing what a gated claim declared
+      map.ts            the map as Brain can read it, with every reading derived
+      view.ts           §13's six readings, and the four figures nothing measures
+      declare.ts        a person naming a workflow; the one origin Brain may not write
+      kernel.ts         the tick, bounded by authority and concurrency and nothing else
     manufacturing/
       program.ts        starting a programme, and what pressing Start authorizes
       ladder.ts         the classes of machine, and how far Brain has got with each
@@ -7087,6 +7298,7 @@ server/
     factory.ts          the Software Factory: objective, stage, evidence, release
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
+    labor.ts            the labor kernel's door: workflows, tasks, who produces each
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     passkeys.ts         enrolling, signing in with a device, and your own devices
@@ -7125,6 +7337,8 @@ scripts/
   manufacturing.ts          the programme's terminal door, until a surface exists
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
+  labor-report.ts           §13's six readings, and the four figures nothing measures
+  labor-report.sh           the same, inside the deployed container, naming the revision serving it
   admin.ts                  emergency administration, on a terminal rather than a page
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
@@ -7177,6 +7391,8 @@ tests/                  Vitest suites
   cashHttp.test.ts           Cash Mode's door, driven as an attack
   cashSection.test.tsx       the Cash section in a browser: four states, one control
   connectorIsolation.test.ts one site, two private operations, two identities
+  laborKernel.test.ts        who produces the work, and what an absence may never conclude
+  laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

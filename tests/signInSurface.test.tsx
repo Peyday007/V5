@@ -467,6 +467,36 @@ describe('the rest of the shell', () => {
     expect(source).toContain('SIGN IN WITH YOUR DEVICE');
     expect(source).toContain('SIX-DIGIT PIN');
   });
+
+  /**
+   * A refusal that names a remedy has to name the remedy that exists.
+   *
+   * `PASSWORD_DOOR_REFUSED` said *"this Brain signs people in with their
+   * device"* — true when it was written, false from the moment the ordinary
+   * credential became a PIN, and asserted by nothing, which is how it drifted.
+   * The person most likely to read it is the one who has just mistyped their
+   * password **at the recovery door**, on their way to creating a PIN: telling
+   * them to use a device sends them back to the thing that locked them out.
+   *
+   * It is held to the credential rather than to a sentence, so rewording it is
+   * free and pointing it at a door the product does not offer is not.
+   */
+  it('refuses a password by naming the credential the screen actually asks for', async () => {
+    /*
+     * Read rather than imported: this suite runs under jsdom, where
+     * `server/env.ts` cannot resolve `import.meta.url` as a file URL, so the
+     * whole server module graph is unreachable from here. The string is what
+     * is being asserted, and the string is in the file.
+     */
+    const source = await readFile('server/services/identity/passwordDoor.ts', 'utf8');
+    const sentence = /export const PASSWORD_DOOR_REFUSED =\s*'([^']+)'/.exec(source)?.[1];
+    expect(sentence).toBeTruthy();
+    expect(sentence).toMatch(/PIN/);
+    expect(sentence).not.toMatch(/device|passkey|Face ID|Touch ID/i);
+    // Still one sentence that names no account and no reason: what failed is
+    // exactly what somebody probing would like to know.
+    expect(sentence).not.toMatch(/@|exist|disabled|unknown|wrong/i);
+  });
 });
 
 /** Every `.tsx` under the client, so a new screen is covered by being written. */

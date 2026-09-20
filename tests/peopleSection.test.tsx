@@ -19,7 +19,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PeopleAndCapacityView } from '../client/src/russell/People.tsx';
 import { CashSection } from '../client/src/russell/Cash.tsx';
-import type { ConnectionView } from '../client/src/lib/peopleApi.ts';
+import type { ConnectionView, PersonRow } from '../client/src/lib/peopleApi.ts';
 
 interface Reply {
   status?: number;
@@ -221,16 +221,62 @@ const CONNECTION: ConnectionView = {
   ],
 };
 
+/**
+ * The four shapes the live Brain actually holds.
+ *
+ * A member who chose a PIN, one whose link is outstanding, the bootstrap
+ * administrator's password account — and the row this credential change
+ * created: somebody holding a passkey the sign-in screen no longer offers.
+ */
+const ROWS: PersonRow[] = [
+  {
+    userId: 'usr_nadia',
+    displayName: 'Nadia',
+    state: 'READY',
+    signsInWith: 'PIN',
+    isYou: true,
+    isBrainAdmin: false,
+  },
+  {
+    userId: 'usr_caleb',
+    displayName: 'Caleb',
+    state: 'INVITED',
+    signsInWith: 'NONE',
+    isYou: false,
+    isBrainAdmin: false,
+  },
+  {
+    userId: 'usr_root',
+    displayName: 'Owner',
+    state: 'READY',
+    signsInWith: 'PASSWORD',
+    isYou: false,
+    isBrainAdmin: true,
+  },
+  {
+    userId: 'usr_airyn',
+    displayName: 'Airyn',
+    state: 'NEEDS_A_NEW_LINK',
+    signsInWith: 'DEVICE',
+    isYou: false,
+    isBrainAdmin: false,
+  },
+];
+
 const PAGE = (over: Record<string, unknown> = {}): unknown => ({
-  you: { userId: 'usr_airyn', isBrainAdmin: false },
+  you: { userId: 'usr_nadia', isBrainAdmin: false },
   people: {
-    rows: [
-      // The three shapes the live Brain actually holds: a device, an
-      // outstanding link, and the bootstrap administrator's password account.
-      { userId: 'usr_airyn', displayName: 'Airyn', state: 'READY', signsInWith: 'DEVICE', isYou: true, isBrainAdmin: false },
-      { userId: 'usr_caleb', displayName: 'Caleb', state: 'INVITED', signsInWith: 'NONE', isYou: false, isBrainAdmin: false },
-      { userId: 'usr_root', displayName: 'Owner', state: 'READY', signsInWith: 'PASSWORD', isYou: false, isBrainAdmin: true },
-    ],
+    /*
+     * Typed, because it was not and that is how it went stale.
+     *
+     * These rows were literals inside an `unknown` fixture, so when the server
+     * gained a credential and a state the compiler had nothing to check them
+     * against: `Airyn` went on claiming READY over a device, which is a shape
+     * the server can no longer produce. §35 records the same lesson about the
+     * connection payload beside this one — a fixture the compiler does not
+     * check is a fixture that tests itself.
+     */
+    rows: ROWS,
     joined: 2,
     invited: 1,
   },
@@ -335,10 +381,14 @@ describe('the default view answers four questions', () => {
      */
     expect(screen.getAllByText('Airyn').length).toBeGreaterThan(0);
     expect(screen.getByText('Caleb')).toBeTruthy();
-    // Two of three. Never `2 / 4`: four was the intended topology written down
-    // as a constant, and it made a working Brain read as half missing.
-    expect(screen.getByText('2 of 3')).toBeTruthy();
-    expect(screen.queryByText(/\/ 4/)).toBeNull();
+    expect(screen.getByText('Nadia')).toBeTruthy();
+    /*
+     * Two of four: Nadia's PIN and the owner's password are ways in, Caleb's
+     * link is outstanding, and Airyn holds only a device. The denominator is
+     * the rows rather than a constant — four was once the *intended topology*
+     * written down, and it made a working Brain read as half missing.
+     */
+    expect(screen.getByText('2 of 4')).toBeTruthy();
   });
 
   /**
@@ -349,24 +399,77 @@ describe('the default view answers four questions', () => {
    * they can sign in — and the row says `password`, because that is the row a
    * lost-device recovery does *not* apply to.
    */
-  it('distinguishes a password account from a registered device', async () => {
+  it('distinguishes a password account from a PIN, and neither from a device', async () => {
     await mountPeople();
     await waitFor(() => expect(screen.getByText('Owner')).toBeTruthy());
     const owner = screen.getByText('Owner').closest('li');
     expect(owner?.textContent).toMatch(/Joined/);
     expect(owner?.textContent).toMatch(/password/);
+
+    // The ordinary credential says only `Joined`: it is what the sign-in
+    // screen asks for, so there is nothing to distinguish it *from*.
+    const nadia = screen.getByText('Nadia').closest('li');
+    expect(nadia?.textContent).toMatch(/Joined/);
+    expect(nadia?.textContent).not.toMatch(/password/);
+    expect(nadia?.textContent).not.toMatch(/device/);
+
     /*
      * The row in the *people* list, picked by the state word beside it rather
-     * than by the name alone: the name now appears in two lists on this page —
+     * than by the name alone: the name appears in two lists on this page —
      * who has joined, and what their connection contributes — and the second
      * one carries no sign-in method at all.
+     *
+     * It must not say `Joined`. Airyn holds a passkey the sign-in screen no
+     * longer offers, so reporting them as joined would tell an administrator
+     * that a locked-out person needs nothing.
      */
     const airyn = screen
       .getAllByText('Airyn')
       .map((node) => node.closest('li'))
-      .find((row) => /Joined/.test(row?.textContent ?? ''));
+      .find((row) => /Needs a new link/.test(row?.textContent ?? ''));
     expect(airyn).toBeTruthy();
-    expect(airyn?.textContent).not.toMatch(/password/);
+    expect(airyn?.textContent).not.toMatch(/Joined/);
+    expect(airyn?.textContent).toMatch(/device only/);
+  });
+
+  /**
+   * The escalation's answering transition, on the screen.
+   *
+   * `issueRecovery` was a route and `CashApi.recoverMember` was a client
+   * function, and **nothing called either** — so the one remedy for a person
+   * who cannot get in existed everywhere except where somebody could press it.
+   * A state that says a person needs something, beside no way to give it to
+   * them, is stuck rather than waiting.
+   */
+  it('offers a new sign-in link beside the person who cannot get in', async () => {
+    routes[PEOPLE] = { body: PAGE({ you: { userId: 'usr_root', isBrainAdmin: true } }) };
+    routes[CONNECTIONS] = { body: { connections: [] } };
+    routes['GET /api/members'] = { body: { links: [] } };
+    routes['POST /api/members/usr_airyn/recovery'] = {
+      body: {
+        enrollment: {
+          displayName: 'Airyn',
+          token: 'enr_a_fresh_one',
+          expiresAt: '2026-09-27T00:00:00.000Z',
+        },
+      },
+    };
+    await mountPeople();
+    await waitFor(() => expect(screen.getByText('People')).toBeTruthy());
+
+    // Exactly one: the row that needs it. Not beside somebody who can
+    // already sign in, and not beside a slot nobody has filled.
+    const buttons = screen.getAllByRole('button', { name: /new sign-in link/i });
+    expect(buttons.length).toBe(1);
+
+    await act(async () => {
+      fireEvent.click(buttons[0]!);
+    });
+    await waitFor(() => expect(calls).toContain('POST /api/members/usr_airyn/recovery'));
+    // Shown once, and it ends in a PIN rather than in the device they are
+    // being recovered from.
+    expect(screen.getByText(/enr_a_fresh_one/)).toBeTruthy();
+    expect(screen.getByText(/six-digit PIN/)).toBeTruthy();
   });
 
   it('says how much capacity can be fired, and labels the readings apart', async () => {
@@ -422,7 +525,7 @@ describe('the default view answers four questions', () => {
     };
     routes[CONNECTIONS] = { body: { connections: [] } };
     routes['GET /api/members'] = { body: { links: [] } };
-    routes['POST /api/people/usr_airyn/claude/invitation'] = {
+    routes['POST /api/people/usr_nadia/claude/invitation'] = {
       body: {
         ...CONNECTION,
         invitationUrl: 'https://brain.example/oauth/invite/inv_abc.def',
@@ -444,7 +547,7 @@ describe('the default view answers four questions', () => {
     await waitFor(() =>
       expect(screen.getByText('https://brain.example/oauth/invite/inv_abc.def')).toBeTruthy(),
     );
-    expect(calls).toContain('POST /api/people/usr_airyn/claude/invitation');
+    expect(calls).toContain('POST /api/people/usr_nadia/claude/invitation');
   });
 
   it('offers it to nobody who is not an administrator', async () => {
