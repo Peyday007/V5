@@ -174,7 +174,7 @@ Nothing in `scripts/` can record an approval, and that is unchanged.
 against the real client, a real server, a real Chromium 141 and three widths.
 
 **It found a systemic, verified accessibility defect on its first pass.**
-`--ink-faint: #74838f` — used in 38 places across the product — measures:
+`--ink-faint: #74838f` — read by 35 rules across the product — measures:
 
 | against | ratio | floor |
 | --- | --- | --- |

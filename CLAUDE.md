@@ -5913,7 +5913,7 @@ questions it may not answer, and declared as the absent capability
 **What the first run actually established.** Against the real client, a real
 server and Chromium 141 at three widths, the kernel found that `--ink-faint`
 measured 3.90 / 3.54 / 3.31 against the three surface tokens — under the 4.5:1
-floor everywhere it is used, in thirty-eight places. The repair took the Russell
+floor everywhere it is used, and 35 rules read it. The repair took the Russell
 surface from seventeen open findings to five, measured by re-rendering rather
 than by anybody's say-so. What is left — `--ochre` at 3.15:1 on the *You are
 needed* line, which is also used as a background and is therefore an accent
