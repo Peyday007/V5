@@ -7,6 +7,7 @@ import path from 'node:path';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { DATA_ROOT } from '../server/env.ts';
 import { STALE_AFTER_MS } from './setup.ts';
+import { registerSchemaCleanup, releaseTestSchemas } from './pgSchemas.ts';
 import { seedDealDispatch } from '../server/seed.ts';
 import { createDocument } from '../server/repos/documents.ts';
 import { listLayers } from '../server/repos/layers.ts';
@@ -268,53 +269,17 @@ async function sweepStaleSchemas(admin: { query: (sql: string) => Promise<unknow
   }
 }
 
-/**
- * Tidy up after ourselves, which is the half that works when a file finishes.
+/*
+ * Tidying up after ourselves lives in `tests/pgSchemas.ts` now, and is
+ * registered by `setup.ts` as a global `afterAll` beside the filesystem root's.
  *
- * The counterpart to `setup.ts`'s `removeOwnRoot`, and held to the same modest
- * claim it makes: this is the convenience, and the sweep is the mechanism that
- * actually holds. A killed worker never reaches `teardown`, and a suite is not
- * required to call it — so nothing here is load-bearing, and a schema this
- * misses is one the next run's sweep collects.
+ * It was here, called from `teardown()`, and that was the wrong place: 47 of
+ * 169 test files call `teardown`. The other 122 leaked exactly as they had
+ * before and the sweep carried all of them — and the sweep skips anything
+ * younger than `STALE_AFTER_MS`, so it could not see a run's own leavings until
+ * an hour after the run finished. `teardown` still calls it, because a file
+ * that tears down explicitly should not have to wait for a hook.
  */
-function registerSchemaCleanup(schema: string): void {
-  schemasToRelease.add(schema);
-}
-
-const schemasToRelease = new Set<string>();
-
-/**
- * Drop the schemas this file opened.
- *
- * Called from `teardown`, which is what a suite already runs in `afterAll`.
- * Safe at any point: every entry into a schema goes through `openTestDatabase`,
- * which drops and recreates it anyway.
- */
-export async function releaseTestSchemas(): Promise<void> {
-  if (!POSTGRES_URL || schemasToRelease.size === 0) return;
-  const pg = await import('pg');
-  const admin = new pg.default.Client({ connectionString: POSTGRES_URL });
-  try {
-    await admin.connect();
-    for (const schema of schemasToRelease) {
-      if (!/^brain_t_[a-z0-9_]+$/.test(schema)) continue;
-      try {
-        await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
-      } catch {
-        /* the sweep will get it */
-      }
-    }
-    schemasToRelease.clear();
-  } catch {
-    /* best effort */
-  } finally {
-    try {
-      await admin.end();
-    } catch {
-      /* already closed */
-    }
-  }
-}
 
 /**
  * Close this file's database and open the same one again.
