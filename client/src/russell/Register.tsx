@@ -66,7 +66,18 @@ export function Register({ projectId }: { projectId: string | null }): JSX.Eleme
     loading: query.loading,
     error: query.error,
     items: view?.workstreams ?? null,
-    noun: 'workstream',
+    /*
+     * The noun a refusal names, and it has to be this section's rather than
+     * "workstream".
+     *
+     * The Work destination now renders two panels, and a reader who may open
+     * neither would otherwise get *"…for access to see the workstream"* stacked
+     * on *"…for access to see the work"* — two sentences that differ by one
+     * word and read as one page repeating itself. §36 refuses to remove a
+     * section because a reader may not see it, so the sections stay and the
+     * sentences have to be told apart.
+     */
+    noun: 'work register',
     /*
      * The sentence slot, not the noun. `noun` fills *"There is no ${noun}
      * yet."*, so a sentence passed there comes out as a sentence inside a
