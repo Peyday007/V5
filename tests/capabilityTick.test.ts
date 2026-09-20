@@ -14,7 +14,8 @@
  * runbook it replaces.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import fs from 'node:fs';
+import path from 'node:path';
 import { freshProject, teardown } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import {
@@ -216,8 +217,8 @@ describe('the kernel advancing on the tick', () => {
     // The property is that both reach the same functions. Asserted against the
     // import statements, because a second implementation is exactly the thing
     // that would pass a behavioural test and drift a month later.
-    const tick = readFileSync('server/services/realize/advance.ts', 'utf8');
-    const cli = readFileSync('scripts/capability.ts', 'utf8');
+    const tick = fs.readFileSync('server/services/realize/advance.ts', 'utf8');
+    const cli = fs.readFileSync('scripts/capability.ts', 'utf8');
     for (const shared of ['derivePacket', 'readiness', 'askTheWorld', 'applyRealization', 'handOff']) {
       expect(tick).toContain(shared);
       expect(cli).toContain(shared);
@@ -226,6 +227,46 @@ describe('the kernel advancing on the tick', () => {
     const imports = tick.match(/^import[\s\S]*?from\s+'[^']+';$/gm) ?? [];
     expect(imports.join('\n')).not.toContain('approveAndStartCampaign');
     expect(imports.join('\n')).not.toContain('factory/start.ts');
+  });
+
+  /*
+   * The assertion this whole module exists for, and the one no behavioural
+   * test can make: that something *calls* it. §37 records four transitions
+   * that existed, were tested, and were reached by nothing, and every one of
+   * them passed its own suite throughout.
+   */
+  it('is reached by the durable tick, and reports what it moved', () => {
+    const loop = fs.readFileSync(
+      path.join(process.cwd(), 'server/services/russell/loop.ts'),
+      'utf8',
+    );
+    expect(loop).toContain("from '../realize/advance.ts'");
+    expect(loop).toContain('await advanceCapabilityPackets(');
+    // Reported rather than silent: a tick that advanced a packet and said
+    // nothing is one nobody can tell from a tick that did not.
+    expect(loop).toMatch(/report\.capability\.packets\.considered/);
+    expect(loop).toMatch(/report\.capability\.packets\.changeRequests/);
+  });
+
+  /*
+   * And that it cannot take the tick down with it. A reading *about* Brain is
+   * never a precondition of Brain: the writeback, the request resumption and
+   * every other project's work run on this same tick, and a packet that could
+   * not be walked must cost them nothing.
+   */
+  it('cannot stop the tick when a packet cannot be walked', () => {
+    const loop = fs.readFileSync(
+      path.join(process.cwd(), 'server/services/russell/loop.ts'),
+      'utf8',
+    );
+    const call = loop.indexOf('await advanceCapabilityPackets(');
+    expect(call).toBeGreaterThan(-1);
+    // The nearest `try {` before the call, and a `catch` after it: the call is
+    // inside a guard rather than beside one.
+    const guard = loop.lastIndexOf('try {', call);
+    expect(guard).toBeGreaterThan(-1);
+    expect(loop.slice(guard, call)).not.toContain('catch');
+    expect(loop.slice(call, call + 900)).toContain('catch');
   });
 });
 
