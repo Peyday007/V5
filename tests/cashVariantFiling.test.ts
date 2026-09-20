@@ -40,6 +40,7 @@ import { getDocument } from '../server/repos/documents.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { buildNames } from '../server/domain/naming.ts';
 import { registerRunArtifact } from '../server/services/runArtifacts.ts';
+import { importFile } from '../server/services/importer.ts';
 import { initStorage, resetStorage } from '../server/services/storage/index.ts';
 import type { Layer, Project } from '../server/domain/types.ts';
 
@@ -181,6 +182,52 @@ async function fileWithVariant(variant: string | null): Promise<ReturnType<typeo
     notes: 'A cash packet filing into the bucket.',
   });
 }
+
+/**
+ * Import an arbitrary file, the way a person uploading one does.
+ *
+ * `importFile` with no layer and no version takes the unregistered branch,
+ * which stores the bytes under `_unfiled` with the *uploader's* filename — so
+ * this is the path where the name is not the platform's at all.
+ */
+async function uploadNamed(originalFilename: string): Promise<{ documentId: string | null; message: string }> {
+  const imported = await importFile({
+    projectId: project.id,
+    originalFilename,
+    contents: Buffer.from('bytes', 'utf8'),
+    notes: 'An ordinary upload.',
+  });
+  return { documentId: imported.documentId, message: imported.message };
+}
+
+describe('every filename the store is handed', () => {
+  it('accepts an accented upload filename', async () => {
+    // Supabase's key class is `\w` plus punctuation, and `\w` is ASCII — so a
+    // name nobody would think twice about is refused, which makes this a
+    // defect about every import rather than only about Cash Mode.
+    await uploadNamed('Résumé — 2026.pdf');
+    expect(bucket.refused, 'the store refused an ordinary accented filename').toEqual([]);
+    expect(bucket.objects.size).toBe(1);
+    // The extension survives, because a reader resolves the content type from it.
+    expect([...bucket.objects.keys()][0]).toMatch(/\.pdf$/);
+  });
+
+  it('leaves an ordinary ASCII filename exactly as it was', async () => {
+    await uploadNamed('Quarterly Review v2 (final).pdf');
+    expect(bucket.refused).toEqual([]);
+    expect([...bucket.objects.keys()][0]).toContain('Quarterly Review v2 (final).pdf');
+  });
+
+  it('separates two names that reduce to the same leaf', async () => {
+    // The repair is lossy on purpose, so two distinct titles can collide on one
+    // key. `uniqueKey` already answered that for two *identical* names; this
+    // asserts it still answers it for two names the repair makes identical.
+    await uploadNamed('Notes — draft.md');
+    await uploadNamed('Notes / draft.md');
+    expect(bucket.refused).toEqual([]);
+    expect(bucket.objects.size, 'one upload overwrote the other').toBe(2);
+  });
+});
 
 describe('a staged research report filed into object storage', () => {
   it('reaches the bucket when the packet carries a cash variant', async () => {
