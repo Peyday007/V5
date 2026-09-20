@@ -160,7 +160,7 @@ export async function runDesignKernel(): Promise<DesignKernelPass> {
   }
 
   try {
-    pass.ingested = await ingestFinishedReviews();
+    pass.ingested = await ingestFinishedReviews(pass);
   } catch (error) {
     pass.problems.push(`judged reviews could not be read back: ${message(error)}`);
   }
@@ -386,16 +386,41 @@ async function settleJudgedCycles(): Promise<DesignKernelPass['settled']> {
     if (!judged) continue;
 
     const open = await listFindings({ cycleId: cycle.id, state: 'OPEN', limit: 500 });
-    const stopReason = open.length === 0 ? 'SETTLED' : 'NEEDS_PERSON';
+
+    /*
+     * A REFUSED review is not a judgement, and the first version of this treated
+     * it as one.
+     *
+     * `design_reviews` records a refusal as a row — deliberately, because §8's
+     * rule is that a failure and its raw response are still persisted — so
+     * "there is a JUDGED row for this pass" is true of a review that established
+     * nothing at all. Closing on it read a cycle whose evidence had moved
+     * underneath its reviewer as *rendered, measured and judged*, which is the
+     * silent success this whole kernel exists not to produce. The walk found it;
+     * no unit test could, because none of them had a refusal and a cycle in the
+     * same story.
+     *
+     * It still closes, and that is the other half. Leaving it open would be a
+     * park: `ingestFinishedReviews` skips a pass that already has a JUDGED row,
+     * so nothing would ever ask again and the cycle would wait for a judgement
+     * that could not arrive. `NEEDS_PERSON` with the refusal's own words is the
+     * honest state — somebody has to decide, and the reason is on the row.
+     */
+    const stopReason = judged.verdict === 'REFUSED' ? 'NEEDS_PERSON' : open.length === 0 ? 'SETTLED' : 'NEEDS_PERSON';
     const stopDetail =
-      open.length === 0
-        ? `Pass ${cycle.passes} was rendered, measured and judged ${judged.verdict}, and nothing ` +
-          `is open. Capture set ${judged.captureDigest.slice(0, 12)}…, ` +
-          `independence ${judged.independenceTier ?? 'unrecorded'}.`
-        : `Pass ${cycle.passes} was rendered, measured and judged ${judged.verdict}. ` +
-          `${open.length} finding(s) are open and every repair for them is a change to code, ` +
-          'which is a person’s to authorize on Build. They stay open rather than being closed to ' +
-          'make this cycle read as finished.';
+      judged.verdict === 'REFUSED'
+        ? `Pass ${cycle.passes} was rendered and measured, and the judgement was refused: ` +
+          `${judged.detail ?? 'no reason was recorded, which is itself the problem'} ` +
+          `${open.length} finding(s) stay open — nothing judged this screen, so nothing may be ` +
+          'closed as though something had.'
+        : open.length === 0
+          ? `Pass ${cycle.passes} was rendered, measured and judged ${judged.verdict}, and nothing ` +
+            `is open. Capture set ${judged.captureDigest.slice(0, 12)}…, ` +
+            `independence ${judged.independenceTier ?? 'unrecorded'}.`
+          : `Pass ${cycle.passes} was rendered, measured and judged ${judged.verdict}. ` +
+            `${open.length} finding(s) are open and every repair for them is a change to code, ` +
+            'which is a person’s to authorize on Build. They stay open rather than being closed ' +
+            'to make this cycle read as finished.';
 
     const unresolved = await settleCycleNow(cycle, stopReason, stopDetail);
     out.push({ cycleId: cycle.id, stopReason, unresolved: unresolved.length });
@@ -413,7 +438,7 @@ async function settleJudgedCycles(): Promise<DesignKernelPass['settled']> {
  * skipped, which makes this idempotent by the round rather than by a flag — a
  * flag can be set by a tick that then dies.
  */
-async function ingestFinishedReviews(): Promise<DesignKernelPass['ingested']> {
+async function ingestFinishedReviews(report: DesignKernelPass): Promise<DesignKernelPass['ingested']> {
   const out: DesignKernelPass['ingested'] = [];
 
   for (const cycle of await listCycles({ limit: 100 })) {
@@ -434,13 +459,15 @@ async function ingestFinishedReviews(): Promise<DesignKernelPass['ingested']> {
       if (!bin || bin.state !== 'COMPLETE') continue;
 
       const captures = await listCaptures({ cycleId: cycle.id, pass, limit: 200 });
+      const written = await authorsOf(cycle);
+      if (written.problem) report.problems.push(written.problem);
       const outcome = await ingestDesignReview({
         binId: bin.id,
         cycle,
         pass,
         captures,
         surfaceKeys: cycle.surfaceKeys,
-        authors: await authorsOf(cycle),
+        authors: written.authors,
       });
       if (outcome.review) {
         out.push({
@@ -464,33 +491,62 @@ async function ingestFinishedReviews(): Promise<DesignKernelPass['ingested']> {
  * no such trigger, which `decideReviewIndependence` reports as `NOT_APPLICABLE`
  * rather than as separation it did not achieve.
  */
-async function authorsOf(cycle: DesignCycle): Promise<ReviewLineage[]> {
-  if (cycle.triggerKind !== 'UI_IMPACT' || cycle.triggerRef === null) return [];
+async function authorsOf(
+  cycle: DesignCycle,
+): Promise<{ authors: ReviewLineage[]; problem: string | null }> {
+  if (cycle.triggerKind !== 'UI_IMPACT' || cycle.triggerRef === null) {
+    return { authors: [], problem: null };
+  }
   try {
+    /*
+     * The columns `factory_sessions` actually has, which is a correction.
+     *
+     * The first version selected `session_ref, worker_id, account_id,
+     * routine_id`. Three of those four do not exist on that table: migration 037
+     * declares `external_session_id`, `worker_id` and `account_ref`, and records
+     * no Routine at all. So the statement threw on every UI-impact cycle, the
+     * `catch` below returned no authors, and `decideReviewIndependence` reported
+     * `NOT_APPLICABLE` — *nobody for the reviewer to be independent of* — about
+     * a change that a session had demonstrably written.
+     *
+     * That is the guard silently never running, which is worse than the guard
+     * being absent: the tier was recorded, it read as a deliberate answer, and
+     * it was wrong in the direction that admits a self-review. The old comment
+     * on the `catch` even said this must be said out loud rather than swallowed,
+     * and it was swallowed; the comment described behaviour the code did not
+     * have.
+     *
+     * `routineId` is null because that table holds no Routine. Null is the
+     * honest value: `decideReviewIndependence` reads it as unknown and declines
+     * to claim ROUTINE_SEPARATED, rather than inventing a separation.
+     */
     const rows = await getDb().all<{
-      session_ref: string | null;
+      external_session_id: string | null;
       worker_id: string | null;
-      account_id: string | null;
-      routine_id: string | null;
+      account_ref: string | null;
     }>(
-      `SELECT session_ref, worker_id, account_id, routine_id FROM factory_sessions
+      `SELECT external_session_id, worker_id, account_ref FROM factory_sessions
         WHERE campaign_id = ? ORDER BY created_at ASC, id ASC`,
       [cycle.triggerRef],
     );
-    return rows.map((row) => ({
-      sessionId: row.session_ref,
-      workerId: row.worker_id,
-      accountId: row.account_id,
-      routineId: row.routine_id,
-    }));
-  } catch {
+    return {
+      authors: rows.map((row) => ({
+        sessionId: row.external_session_id,
+        workerId: row.worker_id,
+        accountId: row.account_ref,
+        routineId: null,
+      })),
+      problem: null,
+    };
+  } catch (error) {
     /*
-     * A campaign whose sessions cannot be read contributes no authors, which
-     * `decideReviewIndependence` will report as NOT_APPLICABLE — and that is the
-     * one place here where failing open is wrong, so it is said out loud in the
-     * pass's problems rather than swallowed.
+     * A campaign whose sessions cannot be read contributes no authors, and
+     * `decideReviewIndependence` would then report NOT_APPLICABLE — which is
+     * exactly the wrong answer, because the sessions exist and could not be
+     * read. So it is said out loud in the pass's problems, which is what the
+     * previous version of this comment promised and did not do.
      */
-    return [];
+    return { authors: [], problem: `the authors of ${cycle.id} could not be read: ${message(error)}` };
   }
 }
 

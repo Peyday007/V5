@@ -51,7 +51,7 @@
  */
 import {
   createBin,
-  dispatchedSessionForBin,
+  dispatchedSessionForLease,
   listBinUnitResults,
   markBinReady,
   retireBin,
@@ -668,10 +668,6 @@ export async function ingestDesignReview(input: {
     return { review, findings: [], refused: detail };
   };
 
-  if (!submitted) {
-    return refuse('The review bin finished with no submission, so nothing was judged.');
-  }
-
   /*
    * The evidence has to be the evidence this reviewer was shown.
    *
@@ -688,7 +684,14 @@ export async function ingestDesignReview(input: {
    * the same answer this repository gives everywhere else it cannot tell.
    */
   const request = await getBinRequest(input.binId);
-  if (!request) {
+  if (!request || request.kind !== 'REVIEW') {
+    /*
+     * The kind matters as much as the presence. A bin carrying a RENDER request
+     * has a row — with no capture digest on it, because nothing had been
+     * rendered when it was asked — so checking only for a row would fall
+     * through to the digest comparison and report a *stale* judgement about a
+     * bin that was never a review at all. Two conditions, two sentences.
+     */
     return refuse(
       'No record says what this review was asked about, so there is nothing to hold its answer ' +
         'against. An unbound judgement could have been briefed on any capture set at all.',
@@ -701,6 +704,16 @@ export async function ingestDesignReview(input: {
         `${input.cycle.id} now holds ${digest.count} digesting ${digest.digest.slice(0, 12)}…. ` +
         'A judgement about one set may not settle another.',
     );
+  }
+
+  /*
+   * Only now, whether anything came back. Asked after the binding on purpose:
+   * if Brain has no record of what was asked, nothing about the answer matters,
+   * and reporting "no submission" about a bin nobody can place would send
+   * somebody to look at the worker.
+   */
+  if (!submitted) {
+    return refuse('The review bin finished with no submission, so nothing was judged.');
   }
 
   /*
@@ -788,9 +801,16 @@ function widestCaptureOf(
  *
  * `finishBin` clears the worker, the lease and the credential in one statement,
  * so a finished bin cannot say who finished it. The dispatch row it was fired
- * through can, keyed by the lease generation the unit result carries — §27's
- * `workerSessionForBin` reasoning, and the same refusal to read it off anything
- * the worker said about itself.
+ * through can — §27's `workerSessionForBin` reasoning, and the same refusal to
+ * read it off anything the worker said about itself.
+ *
+ * **Through `dispatchedSessionForLease`, which is a correction rather than a
+ * detail.** A unit result carries the generation it was submitted under, and a
+ * claim increments the generation, so the dispatch that produced that lease sits
+ * one below it. Asking at the lease's own generation resolved null every time
+ * and refused **every** judged review for "no resolvable lineage" — a whole lane
+ * that could never have worked, and no unit test could see it because none of
+ * them had a fired bin in the story. The walk did.
  */
 async function lineageFor(
   binId: string,
@@ -800,7 +820,7 @@ async function lineageFor(
   const workerId = result?.submittedBy ?? null;
   const sessionId =
     result?.leaseGeneration !== null && result?.leaseGeneration !== undefined
-      ? await dispatchedSessionForBin(binId, result.leaseGeneration)
+      ? await dispatchedSessionForLease(binId, result.leaseGeneration)
       : null;
 
   /*
