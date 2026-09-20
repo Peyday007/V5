@@ -2645,6 +2645,46 @@ remote.
   did not work" would send somebody to re-deploy a version that is already
   there.
 
+  **A ninth run produced both readings at once, and the first of them names a
+  mechanism rather than a shape.** 2026-09-20, `a2fd13c`: release success, the
+  restart step itself succeeded for the first time in four deploys, and both
+  verifications ran. Pre-restart it reached the audit roles and stopped at the
+  judge with a bare `fetch failed` — ADVERSARIAL at 11:21:43, failure at
+  11:27:05, **5m22s**, four seconds from run 235's 5m18s and run 254's 5m23s.
+
+  The bound §27 added was real and reached nothing. `verify-hosted.ts`'s own
+  `call()` carries `AbortSignal.timeout` and a named failure; the audit roles
+  are submitted through `scripts/mcpModernClient.ts`, whose `request()` did a
+  bare `fetch`, so every one of them carried Node's 300-second default and
+  threw the same unattributable sentence the bound existed to replace. **A
+  mechanism that does not reach the thing it exists for is not a mechanism**,
+  for the seventh time in this file, and it is why three more runs were needed
+  to learn nothing new. The client carries the same fifteen-minute bound now,
+  and names the method and the wait when it expires — which still measures the
+  slowness rather than fixing it: nobody yet knows what the judge pass costs,
+  because nothing has waited long enough to see.
+
+  **And post-restart the pool diagnostic finally produced the number §27 asked
+  for.** Not a seventh anecdote: `2/2 connection(s) in use, 0 idle, **380
+  caller(s) waiting**, ceiling 2`. So the eighth occurrence says what the
+  earlier seven could not — every connection checked out against a ceiling of
+  **two**, which is a deployment setting rather than the code's default of ten.
+  That is a reading of the pool and still **not** a reading of the server's own
+  connection limit, which is the fact that decides whether a higher `max` is
+  headroom or a failed boot. **The ceiling was again deliberately not raised**,
+  for §27's own reason and because it is the operator's to set; what has
+  changed is that the next person to look at it has a number instead of a
+  hunch, and a plausible reason the judge pass is slow in the first place.
+
+  What that run proved and what it did not, said plainly. The release is live
+  and was verified independently of the gate: the served bundle is
+  `index-3BnQIFmA.js`, byte-for-byte the hash the committed tree builds,
+  carrying `SIGN IN WITH YOUR DEVICE` and no `OR WITH A PASSWORD` where the
+  bundle served an hour earlier carried both; `/api/auth/login` answers the new
+  refusal sentence; and `people list` against the deployed image returns every
+  row intact. The scripted packet failed twice, in two places, for two
+  conditions this section already records.
+
   **A sixth has happened, and this one named itself — so what is recorded here
   is a narrowing, still not a cause.** Run 250, `8c75eb3`: release success, the
   pre-restart hosted verification `PASS 174/174` on the released image, the

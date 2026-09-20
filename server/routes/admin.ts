@@ -64,6 +64,7 @@ import { listMembershipsForPrincipal } from '../repos/identity.ts';
 import { generateInvitationToken, WeakPasswordError } from '../services/identity/secrets.ts';
 import { currentContext, currentPrincipal } from '../services/identity/context.ts';
 import { recordEvent } from '../repos/events.ts';
+import { workerIdentity } from '../services/identity/authenticate.ts';
 import {
   badRequest,
   bodyOf,
@@ -426,7 +427,10 @@ adminRouter.post(
       targetType: 'WORKER_CREDENTIAL',
       targetId: issued.credential.id,
       metadata: {
-        worker: worker.name,
+        // Both: the label is the stable identity an audit row should be read
+        // by, and the handle is what was typed, which history keeps.
+        worker: workerIdentity(worker),
+        workerLegacyName: worker.name,
         // The prefix, which identifies the credential without being it.
         prefix: issued.credential.prefix,
         expiresAt,
@@ -546,7 +550,10 @@ adminRouter.post(
       invitation: {
         id: invitation.id,
         workerId,
-        workerName: worker.name,
+        // The neutral identity. An invitation response is read by a person who
+        // is about to approve a connector, and that is the one screen where a
+        // worker named after somebody does the most damage.
+        workerName: workerIdentity(worker),
         projectId,
         expiresAt: invitation.expiresAt,
         ttlMs: INVITATION_TTL_MS,

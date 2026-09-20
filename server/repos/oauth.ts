@@ -382,3 +382,33 @@ export async function listTokensForWorker(workerId: string): Promise<OAuthToken[
   );
   return rows.map(mapToken);
 }
+
+/**
+ * Every authorization code ever issued for one worker, newest first.
+ *
+ * This is the only table in the OAuth chain that records *who approved* a
+ * grant, and §22 is emphatic that the approver is on the code for the audit and
+ * deliberately absent from the token. So it is also the only place that can
+ * answer "whose decision put this identity behind that connector" — which is
+ * exactly the question an attribution trace has to ask and must never guess at.
+ *
+ * Returns no digest and no challenge value: a report about credentials must not
+ * become a way to read them.
+ */
+export async function listAuthorizationCodesForWorker(
+  workerId: string,
+): Promise<OAuthAuthorizationCode[]> {
+  const rows = await getDb().all<OAuthAuthorizationCodeRow>(
+    'SELECT * FROM oauth_authorization_codes WHERE worker_id = ? ORDER BY created_at DESC',
+    [workerId],
+  );
+  return rows.map(mapCode);
+}
+
+/** Every registered client, newest first. Secrets are never returned; see `mapClient`. */
+export async function listClients(): Promise<OAuthClient[]> {
+  const rows = await getDb().all<OAuthClientRow>(
+    'SELECT * FROM oauth_clients ORDER BY created_at DESC',
+  );
+  return rows.map(mapClient);
+}

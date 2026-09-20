@@ -57,7 +57,14 @@ import { getBin, listBins, listDispatchesForBin } from '../server/repos/bins.ts'
 import { getWorker, getWorkerByName, getWorkerRouting } from '../server/repos/identity.ts';
 import { listTokensForWorker } from '../server/repos/oauth.ts';
 import { FLEET_STATES } from '../server/domain/types.ts';
-import type { FleetState } from '../server/domain/types.ts';
+import type { BinState, FleetState } from '../server/domain/types.ts';
+import { workerIdentity } from '../server/services/identity/authenticate.ts';
+import {
+  AMBIGUATES,
+  auditFleetAttribution,
+  FINDING_DETAIL,
+  traceWorkerSession,
+} from '../server/services/identity/attribution.ts';
 
 const argv = process.argv.slice(2);
 const command = argv[0] ?? 'show';
@@ -961,7 +968,11 @@ async function probeBin(input: {
     const worker = routine.workerId ? await getWorker(routine.workerId) : null;
     const routing = routine.workerId ? await getWorkerRouting(routine.workerId) : null;
     if (worker) {
-      console.log(`  worker      ${worker.name}  ${worker.id}${worker.archived ? '  ARCHIVED' : ''}`);
+      console.log(
+        `  worker      ${workerIdentity(worker)}  ${worker.id}` +
+          (worker.label && worker.label !== worker.name ? `  (legacy handle ${worker.name})` : '') +
+          (worker.archived ? '  ARCHIVED' : ''),
+      );
       console.log(`  families    ${routing ? `[${routing.families.join(',')}]` : 'no routing row (derived default)'}`);
       console.log(`  repos       ${routing ? `[${routing.repositories.join(',')}]` : '— (a worker with no row may never be handed repository work)'}`);
       if (worker.archived) problems.push('the bound worker is archived');
@@ -1110,7 +1121,10 @@ async function probeBin(input: {
       console.log(`  sessions    ${sessions.length} arrival(s) attributed to this Routine`);
       if (proven) {
         console.log(`    fired     ${proven.sentAt ?? 'recorded on the dispatch this arrival came from'}`);
-        console.log(`    arrived   ${proven.sessionRef} authenticated as ${worker.name} at ${proven.observedAt}`);
+        console.log(
+          `    arrived   ${proven.sessionRef} authenticated as ${workerIdentity(worker)} ` +
+            `at ${proven.observedAt}`,
+        );
         console.log(`    assigned  ${proven.binId}`);
         console.log(`    completed ${proven.binId} reached COMPLETE`);
       }
@@ -1160,6 +1174,197 @@ async function probeBin(input: {
    * the manifest forbids every repository operation, so repository access stays
    * unproven until a real campaign does it.
    */
+  if (command === 'work-audit') {
+    /*
+     * Every bin a worker could still be handed, fleet-wide, and the ones that
+     * have stopped being able to finish.
+     *
+     * Read-only. It exists because the bin surfaces that already exist are
+     * project-scoped — `step10 report` reads one slug — so the one question a
+     * person actually asks after a worker reports being handed the same item
+     * five times, *which item, in which packet, and why did it keep coming
+     * back*, had nowhere to be asked.
+     *
+     * The column that matters is `attempts`. `DISPATCHABLE_SQL` carries
+     * `attempt_count < max_attempts`, so a bin at its ceiling is neither
+     * fireable nor assignable — and a bin at its ceiling that is still READY is
+     * therefore a bin waiting for `reconcileBins` to turn it into one decision,
+     * not a bin that can be handed out again. Both are printed, because reading
+     * them as the same thing is how an exhausted bin gets "fixed" by hand.
+     */
+    const states: BinState[] = ['DRAFT', 'READY', 'LEASED', 'NEEDS_HUMAN'];
+    const bins = await listBins({ states, limit: 500 });
+    const now = new Date().toISOString();
+    let exhausted = 0;
+    let live = 0;
+    let claimable = 0;
+    console.log('WORK AUDIT');
+    console.log(`  ${bins.length} bin(s) in ${states.join(', ')}`);
+    console.log('');
+    for (const bin of bins) {
+      const spent = bin.attemptCount >= bin.maxAttempts;
+      const leaseLive =
+        bin.state === 'LEASED' && bin.leaseExpiresAt !== null && bin.leaseExpiresAt > now;
+      const offerable = !spent && (bin.state === 'READY' || (bin.state === 'LEASED' && !leaseLive));
+      if (spent) exhausted += 1;
+      if (leaseLive) live += 1;
+      if (offerable) claimable += 1;
+      console.log(
+        `  ${bin.id}  ${bin.state.padEnd(11)} attempts ${bin.attemptCount}/${bin.maxAttempts}` +
+          `  gen ${bin.leaseGeneration}  ${bin.completionContract}` +
+          (spent ? '  EXHAUSTED' : '') +
+          (leaseLive ? '  HELD' : '') +
+          (offerable ? '  CLAIMABLE' : ''),
+      );
+      console.log(`      ${bin.title}`);
+      console.log(
+        `      project ${bin.projectId}  packet ${bin.orchestrationId ?? '—'}` +
+          `  pinned ${bin.pinnedRoutineId ?? '—'}  refusals ${bin.refusalCount}`,
+      );
+      if (bin.terminalReason) console.log(`      reason ${bin.terminalReason.slice(0, 200)}`);
+      if (spent && (bin.state === 'READY' || bin.state === 'LEASED')) {
+        console.log(
+          '      NOTE this bin is out of attempts and not yet a decision. It cannot be fired or ' +
+            'assigned; the next reconcile turns it into one NEEDS_HUMAN with the contract\u2019s reason.',
+        );
+      }
+    }
+    console.log('');
+    console.log(`  claimable ${claimable}  held ${live}  exhausted ${exhausted}`);
+    return ok(
+      `work-audit bins=${bins.length} claimable=${claimable} held=${live} exhausted=${exhausted}`,
+    );
+  }
+
+  if (command === 'attribution') {
+    /*
+     * Can Brain prove which surface an arriving session came from?
+     *
+     * Read-only, and deliberately so: it fires nothing, binds nothing,
+     * repoints nothing and revokes nothing. §29's rule for the self-model at a
+     * new table — a reading that acted on what it saw would be a control loop
+     * whose input is its own output.
+     *
+     * Three facts per surface that no other command puts side by side: which
+     * worker the Routine is bound to, which OAuth clients have actually minted
+     * a token for that worker, and who approved those grants. The second is the
+     * one that decides everything: a credential identifies a *connector*, so a
+     * worker behind two connectors cannot tell its sessions apart however
+     * correct the rest of the chain is.
+     */
+    const report = await auditFleetAttribution();
+    console.log('FLEET ATTRIBUTION');
+    console.log(
+      `  surfaces ${report.surfaces.length}  proven ${report.proven}  ambiguous ${report.ambiguous}` +
+        `  unverified ${report.unverified}  unbound ${report.unbound}`,
+    );
+    console.log('');
+    console.log(
+      '  worker        account            routine               trigger                          status',
+    );
+    for (const surface of report.surfaces) {
+      console.log(
+        `  ${(surface.workerLabel ?? '—').padEnd(12)}  ${surface.accountName.padEnd(18)} ` +
+          `${surface.routineName.padEnd(20)} ${surface.routineRef.padEnd(32)} ${surface.status}`,
+      );
+      console.log(
+        `      secret ${surface.secretName}  bearer ${surface.bearerFingerprint ?? '—'}  ` +
+          `worker ${surface.workerId ?? '—'}  state ${surface.routineState}`,
+      );
+      if (surface.workerCreatedAt) {
+        console.log(
+          `      worker row written ${surface.workerCreatedAt} by ${surface.workerCreatedBy}` +
+            `  owner ${surface.ownerUserId ?? 'not established'}` +
+            (surface.ownerEvidence ? ` (${surface.ownerEvidence})` : ''),
+        );
+      }
+      if (surface.workerLegacyName && surface.workerLegacyName !== surface.workerLabel) {
+        console.log(
+          `      legacy handle ${surface.workerLegacyName} — a lookup key only; it attributes nothing`,
+        );
+      }
+      console.log(
+        `      connectors ${surface.clientIds.length === 0 ? '—' : surface.clientIds.join(', ')}` +
+          `  approvers ${surface.approverUserIds.length === 0 ? '—' : surface.approverUserIds.join(', ')}`,
+      );
+      for (const finding of surface.findings) {
+        console.log(
+          `      ${AMBIGUATES[finding] ? 'BLOCKING ' : 'note     '} ${finding}: ${FINDING_DETAIL[finding]}`,
+        );
+      }
+    }
+    if (report.orphanWorkerIds.length > 0) {
+      console.log('');
+      console.log(`  ORPHAN WORKERS (hold a credential, serve no registered Routine)`);
+      for (const id of report.orphanWorkerIds) console.log(`      ${id}`);
+    }
+    for (const span of report.clientsSpanningWorkers) {
+      console.log('');
+      console.log(
+        `  ONE CONNECTOR, ${span.workerIds.length} WORKERS  ${span.clientId} -> ${span.workerIds.join(', ')}`,
+      );
+    }
+    console.log('');
+    console.log(
+      '  PROVEN means the credential identifies one account. AMBIGUOUS means it cannot,',
+    );
+    console.log('  and the finding beside it says why. Nothing here was changed.');
+    return ok(
+      `attribution surfaces=${report.surfaces.length} proven=${report.proven} ` +
+        `ambiguous=${report.ambiguous} unbound=${report.unbound}`,
+    );
+  }
+
+  if (command === 'trace-session') {
+    /*
+     * Given a worker-session id, exactly which registered Routine and which
+     * credential produced it. Every link is a row Brain wrote itself; the only
+     * thing taken from the caller is the id being asked about.
+     */
+    const ref = option('ref');
+    if (!ref) return refuse('trace-session needs --ref <worker session id>');
+    const trace = await traceWorkerSession(ref);
+    if (!trace) {
+      return refuse(
+        `trace-session ${ref}: no worker_sessions row. Brain never observed that credential ` +
+          'arriving and taking a bin, so there is nothing to trace.',
+      );
+    }
+    console.log(`SESSION ${trace.sessionRef}`);
+    console.log(`  worker      ${trace.workerLabel ?? '—'}  ${trace.workerId}`);
+    if (trace.workerLegacyName && trace.workerLegacyName !== trace.workerLabel) {
+      console.log(`  legacy      ${trace.workerLegacyName} — a lookup key; it attributes nothing`);
+    }
+    console.log(`  routine     ${trace.routineName ?? '—'}  ${trace.routineRef ?? '—'}  ${trace.routineId}`);
+    console.log(`  account     ${trace.accountName ?? '—'}  ${trace.accountId}`);
+    console.log(`  secret      ${trace.secretName ?? '—'}  bearer ${trace.bearerFingerprint ?? '—'}`);
+    console.log(`  bin         ${trace.binId}  generation ${trace.leaseGeneration}`);
+    console.log(`  packet      ${trace.orchestrationId ?? '—'}`);
+    console.log(`  fired       ${trace.firedAt ?? '—'}  as ${trace.firedSessionRef ?? '—'}`);
+    console.log(`  checked in  ${trace.observedAt}`);
+    console.log(`  claimed     ${trace.claimedAt ?? '—'}`);
+    if (trace.credential) {
+      console.log(
+        `  credential  ${trace.credential.tokenId}  ${trace.credential.kind}  ` +
+          `client ${trace.credential.clientId}` +
+          (trace.credential.clientName ? ` (${trace.credential.clientName})` : ''),
+      );
+      console.log(
+        `              issued ${trace.credential.issuedAt}  used ${trace.credential.lastUsedAt ?? 'never'}` +
+          (trace.credential.revokedAt ? `  revoked ${trace.credential.revokedAt}` : '') +
+          (trace.credential.parentTokenId ? '  minted by a refresh' : '  from an authorization code'),
+      );
+    } else {
+      console.log('  credential  — the token row is gone, so only Brain\u2019s own dispatch record remains');
+    }
+    console.log(`  approvers   ${trace.approverUserIds.join(', ') || '—'}`);
+    console.log(`  status      ${trace.status}`);
+    for (const finding of trace.findings) {
+      console.log(`      ${AMBIGUATES[finding] ? 'BLOCKING ' : 'note     '} ${finding}: ${FINDING_DETAIL[finding]}`);
+    }
+    return ok(`trace-session ${trace.sessionRef} routine=${trace.routineRef ?? '—'} status=${trace.status}`);
+  }
+
   if (command === 'verify-pool') {
     const repository = (option('repository') ?? option('repo') ?? '').trim().toLowerCase();
     const workerName = option('worker') ?? 'factory-brain';
@@ -1335,6 +1540,7 @@ async function probeBin(input: {
     `unknown command "${command}". Try: show, register-account, register-routine, bind-worker, ` +
       'repoint-worker, rename, ' +
       'set-state, set-target, boost, pause, resume, policy-history, explain-route, verify-surface, ' +
+      'attribution, trace-session, work-audit, ' +
       'verify-pool, scale-advice, ' +
       'profile, simulate.',
   );
