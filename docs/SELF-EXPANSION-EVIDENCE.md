@@ -159,6 +159,27 @@ Proved both ways round: against the still-polluted database (610 schemas) the
 test now passes in **6.8 s** while the sweep retires five; against a database
 the fix has kept clean it is back to about a second.
 
+**Clearing the leak is not the same job as clearing what it left behind, and
+the second one is a `VACUUM FULL`.** Dropping all 605 remaining schemas took the
+database from 7.6 GB to 3.8 GB and left it *still* slow, because 636 578
+relations having been created and dropped bloats the catalogs themselves:
+`pg_attribute` measured **1 021 MB** and `pg_class` **358 MB**, and every
+`CREATE TABLE` and `DROP SCHEMA` reads both. A full Postgres suite run on that
+database did 42 files in 24 minutes against a recorded 160 files in 29 minutes
+before the bloat accumulated.
+
+| Relation | Before | After |
+|---|---|---|
+| `pg_attribute` | 1 021 MB | **41 MB** |
+| `pg_class` | 358 MB | **8.6 MB** |
+| the database | 3 366 MB | **662 MB** |
+
+That is a local development machine's artifact and nothing about the code: a CI
+Postgres starts empty and never had it. It is recorded because the *first*
+reading of this problem was taken on a database in that state, and somebody
+reproducing the measurement on a fresh one will get a different number for the
+same correct fix.
+
 An earlier reading in this document said `3 515 passed` with no failure. That
 run predates the waived-gap fix, and the sentence is corrected here rather than
 edited there.
