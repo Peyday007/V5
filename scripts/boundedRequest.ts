@@ -67,13 +67,29 @@ export async function boundedRequest(url: string, init: BoundedRequestInit): Pro
   const send = target.protocol === 'http:' ? httpRequest : httpsRequest;
   const started = Date.now();
 
+  /*
+   * `content-length` explicitly, because `fetch` set one for a string body and
+   * this must not quietly become a chunked request. Nothing on the far side
+   * requires it today — `express.json` counts what it buffers — but the point
+   * of replacing a client is that the request on the wire stays the request
+   * that was being sent.
+   *
+   * No `accept-encoding`: this client cannot decompress, and HTTP only lets a
+   * server compress what the client asked for. Saying nothing is what keeps
+   * that true.
+   */
+  const headers: Record<string, string> = { ...(init.headers ?? {}) };
+  if (init.body !== undefined) {
+    headers['content-length'] = String(Buffer.byteLength(init.body, 'utf8'));
+  }
+
   return await new Promise<BoundedReply>((resolve, reject) => {
     let settled = false;
     const waited = () => ((Date.now() - started) / 1000).toFixed(1);
 
     const req = send(
       target,
-      { method: init.method ?? 'GET', headers: init.headers ?? {} },
+      { method: init.method ?? 'GET', headers },
       (res) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -108,8 +124,6 @@ export async function boundedRequest(url: string, init: BoundedRequestInit): Pro
       req.destroy();
       reject(new Error(`nothing answered within ${Math.round(init.timeoutMs / 1000)}s`));
     }, init.timeoutMs);
-    // Do not hold the process open for a bound nobody is waiting on.
-    deadline.unref?.();
 
     req.on('error', (error: Error) => {
       if (settled) return;

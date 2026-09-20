@@ -344,8 +344,20 @@ jobs:
       # green tick on a verification that had just failed — and the run had to
       # be opened, expanded and read to find out otherwise. The verdict below
       # was always honest about it; nothing above it was.
+      #
+      # **And it is bounded, because an unbounded one holds everything else.**
+      # Run 275 sat on the post-restart probe for over an hour: `flyctl ssh
+      # console` keeps a session open with no clock of its own, and neither the
+      # step nor the job had one either. Every operator workflow in this
+      # repository shares the `deploy-brain` concurrency group, so a hung probe
+      # is not a slow deploy — it is every reading, tick and fleet command
+      # queued behind it until somebody notices. Forty-five minutes is past
+      # what a passing run has ever taken and far inside the job's own budget,
+      # so a slow pass still finishes and a stuck one stops being everybody's
+      # problem.
       - name: Prove the live Brain is actually shut
         id: hosted
+        timeout-minutes: 45
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -483,6 +495,9 @@ jobs:
       # discovered.
       - name: Prove it survived the restart
         id: hosted_after
+        # Bounded for the reason the pre-restart probe is, and this is the step
+        # that demonstrated the need.
+        timeout-minutes: 45
         # `always()` because the step before it may have failed, and this one
         # answers a different question: the pre-restart pass says what the new
         # image refuses, this says what survived. A restart nobody checked is
@@ -574,14 +589,14 @@ jobs:
           # carries its evidence is the difference between a red run somebody
           # reads and one somebody re-runs.
           failing=''
-          for pass in "before:$before:hosted-verification.txt" "after:$after:hosted-after-restart.txt"; do
+          for pass in "before the restart:$before:hosted-verification.txt" "after the restart:$after:hosted-after-restart.txt"; do
             when=${pass%%:*}
             rest=${pass#*:}
             outcome=${rest%%:*}
             file=${rest#*:}
             [ "$outcome" = 'success' ] && continue
-            failing="$failing $when"
-            echo "--- $when the restart, from $file ---"
+            failing="$failing${failing:+, }$when"
+            echo "--- $when, from $file ---"
             if [ ! -s "$file" ]; then
               echo "(no output was captured: the check did not run, or the console never opened)"
               continue
@@ -591,7 +606,7 @@ jobs:
               || echo "(no FAIL line: read the step for what it did print)"
           done
           if [ -n "$failing" ]; then
-            echo "::error::The hosted verification did not pass ($(echo $failing | tr ' ' ',') the restart). The failing conditions are printed directly above."
+            echo "::error::The hosted verification did not pass ($failing). The failing conditions are printed directly above."
             exit 1
           fi
           echo "The live Brain refused everything it should have, twice, either side of a real restart,"

@@ -52,8 +52,35 @@ describe('how much room the pool has above it', () => {
       17,
     );
 
-    expect(message).toContain('at or above what the server will give out');
+    expect(message).toContain('at or above what the database will give out');
     expect(message).toContain('refused connections rather than more of them');
+  });
+
+  /*
+   * The half the reading cannot take, and the reason it is said on every
+   * branch rather than only where it happens to matter.
+   *
+   * Production on 2026-09-20 printed `pool ceiling 10 of 57 usable
+   * (max_connections 60, 3 reserved for superusers)` while an ordinary
+   * operator read was refused by the pooler in front of it — *max clients are
+   * limited to pool_size: 15*. Fifty-seven was a true number about Postgres
+   * and a false one about what was binding, and nine runs of §27's
+   * investigation were spent on a banner that read as headroom. A sentence
+   * that only appeared when somebody already suspected a pooler would be a
+   * remedy for a reader who does not need one.
+   */
+  it('never presents the database limit as necessarily the binding one', () => {
+    const readings = [
+      describeConnectionHeadroom({ maxConnections: 60, superuserReserved: 3, backendsInUse: 18 }, 10),
+      describeConnectionHeadroom({ maxConnections: 20, superuserReserved: 3, backendsInUse: 17 }, 17),
+      describeConnectionHeadroom({ maxConnections: null, superuserReserved: null, backendsInUse: null }, 10),
+    ];
+
+    for (const message of readings) {
+      expect(message).toContain('pooler');
+      expect(message).toContain('not readable from here');
+      expect(message).toContain('shared with every other client');
+    }
   });
 
   /*
