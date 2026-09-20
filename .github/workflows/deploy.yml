@@ -38,7 +38,7 @@ on:
         required: false
         default: 'manual deploy'
       authorize_gap_orchestration:
-        description: 'Optional: orchestration id to authorize for RECORD_GAPS (one packet, once)'
+        description: 'Optional: orchestration id(s) to authorize for RECORD_GAPS, space or comma separated'
         required: false
         default: ''
       authorize_gap_admin:
@@ -545,21 +545,52 @@ jobs:
       # nothing to do with whether the hosted gate passed. Letting a failed
       # probe skip it silently would be an authorization that looks applied and
       # is not — which is worse than either outcome on its own.
-      - name: Authorize one packet for RECORD_GAPS
+      #
+      # **More than one, because a programme parks more than one.** The live
+      # manufacturing programme runs three packets at a time and two of them
+      # were `NEEDS_HUMAN` at once, each holding a concurrency slot no worker
+      # could ever free — so a step that authorizes exactly one packet answers
+      # half a deadlock and leaves the programme stopped. Two full deploys is
+      # the alternative and it restarts a Brain holding leased work twice to
+      # apply two idempotent writes.
+      #
+      # Each id is authorized by its own call and each one's `GAP-POLICY: OK`
+      # is required, so a list where one id is wrong fails the step naming that
+      # id rather than reporting the ones that worked. The ids are validated
+      # against the shape the database uses before anything is sent, because
+      # they are interpolated into a remote command line.
+      - name: Authorize packets for RECORD_GAPS
         if: >-
           always() && steps.release.outcome == 'success'
           && inputs.authorize_gap_orchestration != ''
           && inputs.authorize_gap_admin != ''
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          GAP_ORCHESTRATIONS: ${{ inputs.authorize_gap_orchestration }}
+          GAP_ADMIN: ${{ inputs.authorize_gap_admin }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/authorize-gap-policy.sh --orchestration ${{ inputs.authorize_gap_orchestration }} --admin ${{ inputs.authorize_gap_admin }}" \
-            2>&1 | tee gap-policy.txt
-          set -e
-          grep -q '^GAP-POLICY: OK' gap-policy.txt
+          failed=''
+          for orc in $(echo "$GAP_ORCHESTRATIONS" | tr ',' ' '); do
+            # Exact rather than a prefix glob: `orc_[0-9a-f]*` accepts
+            # `orc_b` and anything after it, which is not a validation.
+            if ! printf '%s' "$orc" | grep -qE '^orc_[0-9a-f]{20}$'; then
+              echo "::error::\"$orc\" is not an orchestration id. Nothing was sent for it."
+              failed="$failed $orc"
+              continue
+            fi
+            echo "--- $orc ---"
+            set +e
+            flyctl ssh console --app "$app" \
+              -C "sh /app/scripts/authorize-gap-policy.sh --orchestration $orc --admin $GAP_ADMIN" \
+              2>&1 | tee "gap-policy-$orc.txt"
+            set -e
+            grep -q '^GAP-POLICY: OK' "gap-policy-$orc.txt" || failed="$failed $orc"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::The gap-policy authorization did not take for:$failed. Read the output above."
+            exit 1
+          fi
 
       # The release is asked about first, and separately.
       #
