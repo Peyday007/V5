@@ -32,7 +32,7 @@
  * destroyed silently, and the same is true of a screen not looked at.
  */
 import type { DesignCycle, DesignTrigger } from '../../domain/design.ts';
-import { listCycles, openCycle } from '../../repos/design.ts';
+import { binRequestFor, listCycles, openCycle } from '../../repos/design.ts';
 import { classifyUiImpact, shouldOpenCycle, type UiImpact } from './impact.ts';
 
 export interface RouteRequest {
@@ -131,12 +131,65 @@ async function pendingCycleFor(triggerRef: string | null): Promise<DesignCycle |
 }
 
 /**
- * Cycles waiting for a machine that can render.
+ * Cycles waiting, and what each one is waiting for.
  *
  * The answering transition's other half: a request that nothing can find is a
  * request nobody will run. The operator surface prints this, which is what makes
  * "the cycle waits" a state with a way out rather than a park.
+ *
+ * **Two waits, not one, and they have different remedies.** A cycle with no
+ * capture and no render bin is waiting for somebody to *ask* — which the tick
+ * now does by itself, so seeing one means the tick is not running or could not
+ * ask. A cycle with a render bin outstanding is waiting for a worker with a
+ * browser to answer it, and one with a review bin outstanding is waiting for a
+ * reader. §24's sentence at a projection: naming the wrong wait sends somebody
+ * to fix a thing that is working.
+ *
+ * The first version guessed between them from `passes === 0`, which is a proxy
+ * rather than a reading — it called a cycle that had been rendered and was
+ * waiting on its judgement "waiting for a machine that can render". The
+ * outstanding request row *is* the distinction, so it is read rather than
+ * inferred.
  */
-export async function pendingCycles(): Promise<DesignCycle[]> {
-  return (await listCycles({ state: 'OPEN', limit: 200 })).filter((one) => one.passes === 0);
+export type DesignWaitKind = 'NOBODY_HAS_ASKED' | 'WAITING_FOR_A_RENDER' | 'WAITING_FOR_A_READER';
+
+export interface WaitingCycle {
+  cycle: DesignCycle;
+  waitingFor: DesignWaitKind;
+  /** What would move it, in the words somebody can act on. */
+  remedy: string;
+}
+
+export async function pendingCycles(): Promise<WaitingCycle[]> {
+  const out: WaitingCycle[] = [];
+  for (const cycle of await listCycles({ state: 'OPEN', limit: 200 })) {
+    const review = await binRequestFor({ cycleId: cycle.id, pass: cycle.passes, kind: 'REVIEW' });
+    if (review) {
+      out.push({
+        cycle,
+        waitingFor: 'WAITING_FOR_A_READER',
+        remedy: `bin ${review.binId} is open for a reader; nothing here can answer it`,
+      });
+      continue;
+    }
+    const render = await binRequestFor({ cycleId: cycle.id, pass: cycle.passes, kind: 'RENDER' });
+    if (render) {
+      out.push({
+        cycle,
+        waitingFor: 'WAITING_FOR_A_RENDER',
+        remedy:
+          `bin ${render.binId} is open for a machine with a browser: ` +
+          `npm run design -- render --pass ${render.pass} --surfaces ${render.surfaceKeys.join(',')}`,
+      });
+      continue;
+    }
+    out.push({
+      cycle,
+      waitingFor: 'NOBODY_HAS_ASKED',
+      remedy:
+        'no render has been asked for. The tick asks by itself, so this means it has not run ' +
+        'here, or it could not — check the pass’s problems.',
+    });
+  }
+  return out;
 }

@@ -220,6 +220,24 @@ export async function openDesignRender(input: OpenRenderInput): Promise<string> 
     },
     completionContract: DESIGN_RENDER_CONTRACT,
     createdByType: 'SYSTEM',
+    /*
+     * No `requiredCapabilities`, and that is a decision with a date on it.
+     *
+     * This bin genuinely needs a surface with a checkout and a browser, and the
+     * fire router would honour a declared capability — `repository` is exactly
+     * that mechanism for the factory. But a capability nothing declares refuses
+     * every surface, and §27 records the factory adding one, watching it refuse
+     * the only surface that could do the work, twice, and taking it out: **fail
+     * closed where the unknown could record something false, fail open where it
+     * could only waste a fire.** Nothing here can record anything false — a
+     * worker with no browser reports BLOCKED naming what it lacked, which the
+     * stage handles and the attempt budget bounds.
+     *
+     * So this is open until a surface declares one. The operator step is two
+     * things in either order: declare `browser` on a Routine whose worker has a
+     * checkout, and add it here. One line, and until it happens the cost is a
+     * fire spent learning what the fleet has not been told.
+     */
     createdById: renderCreator(input.cycle, input.pass),
     ready: false,
     priority: 5,

@@ -478,10 +478,13 @@ async function printReport(): Promise<void> {
   console.log(`  cycles             ${cycles.length}`);
   console.log('');
   if (waiting.length > 0) {
-    console.log('  WAITING FOR A MACHINE THAT CAN RENDER');
-    for (const cycle of waiting) {
-      console.log(`    ${cycle.id}  ${cycle.triggerKind}  ${cycle.surfaceKeys.join(', ')}`);
-      console.log('      npx tsx scripts/design.ts resume ' + cycle.id);
+    console.log('  OPEN, AND WHAT EACH ONE IS WAITING FOR');
+    for (const entry of waiting) {
+      console.log(
+        `    ${entry.cycle.id}  ${entry.waitingFor.padEnd(21)} ` +
+          `${entry.cycle.surfaceKeys.join(', ')}`,
+      );
+      console.log(`      ${entry.remedy}`);
     }
     console.log('');
   }
