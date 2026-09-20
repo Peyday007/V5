@@ -70,7 +70,15 @@ export const bridgeRouter: Router = Router();
  */
 function requireBrowserSession(): void {
   const principal = currentPrincipal();
-  if (!principal || principal.authMethod === 'BRIDGE_BEARER') {
+  /*
+   * Named positively, for the reason `/mcp`'s door had to be corrected.
+   *
+   * Written as *refuse `BRIDGE_BEARER`* this would be right today and wrong the
+   * day a fifth authentication method exists — a door that names its exception
+   * admits everything nobody thought of. So it names the one method it admits,
+   * and anything else is refused until somebody writes it in.
+   */
+  if (!principal || principal.authMethod !== 'SESSION_COOKIE') {
     throw notFound('No such route.');
   }
 }
