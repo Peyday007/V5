@@ -2691,11 +2691,16 @@ remote.
   because `DEFAULT_LEASE_MS` is five minutes and nothing was saying the worker
   was still alive.
 
-  **That chain is now observed once, and it is still not what the four earlier
-  `FENCE_LOST` runs are established to have been.** §27 refused that inference
-  deliberately — *"the tempting story is a mechanism rather than a reading"* —
-  and one instance of the mechanism actually occurring makes it plausible
-  rather than proven; none of those four was timed.
+  **That chain has now been observed twice, on two trees, and it is still not
+  what the four earlier `FENCE_LOST` runs are established to have been.** The
+  second is another workstream's deploy of `41f8741` the same evening, which
+  carried `boundedRequest` and not the beat: archive 397 documents, ADVERSARIAL
+  at 23:20:26, verdict at 23:29:48 — **9m22s** — and then
+  `brain_complete_work: FENCE_LOST This lease is no longer current.` Two
+  independent reproductions is a good deal more than the one instance this
+  paragraph first claimed, and it is still short of establishing the four:
+  §27 refused that inference deliberately — *"the tempting story is a mechanism
+  rather than a reading"* — and none of those four was timed.
 
   **And 9m44s is not "the cost of a judge pass" either — four runs' logs give
   four readings, and they are not close to each other.** Timed from the
@@ -2704,9 +2709,10 @@ remote.
 
   | run | archive read | ADVERSARIAL → verdict |
   |-----|--------------|-----------------------|
-  | 253 | 374 documents | **3m34s** |
   | 252 | 373 documents | **4m10s** |
+  | 253 | 374 documents | **3m34s** |
   | 274 | 396 documents | ≥5m20s — the client gave up, so this is a floor |
+  | `41f8741` | 397 documents | **9m22s** |
   | 277 | 399 documents | **9m44s** |
 
   So the two runs §27 records as `PASS 198/198` did not squeak under the
@@ -2715,11 +2721,14 @@ remote.
   them. **The pass used to fit inside the lease and now does not**, and the
   measured spread is a factor of **2.7** across two days.
 
-  The archive grew from 373 to 399 over the same span, which is a correlation
-  worth the next person's attention and **not** a cause: four points across two
-  days that also carried other changes is not a curve, and recording it as one
-  would be the comfortable half-truth this section exists to refuse. What is
-  established is the spread and the crossing. The beat makes the harness
+  The archive grew from 373 to 399 over the same span, and the five readings
+  sort cleanly by it: the two at 373-374 documents took three and four minutes,
+  and the three at 396-399 took at least five, then nine, then nine and a half.
+  That is a **correlation worth the next person's attention and still not a
+  cause** — five points across two days that also carried other changes is not
+  a curve, the two fast ones are two days older than the three slow ones, and
+  recording it as established would be the comfortable half-truth this section
+  exists to refuse. What *is* established is the spread and the crossing. The beat makes the harness
   survive whichever end of that range it gets; it makes nothing faster, and
   whatever is actually driving the growth is still unmeasured. **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so
