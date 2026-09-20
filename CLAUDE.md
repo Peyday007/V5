@@ -2710,6 +2710,44 @@ remote.
   callers queued, *then* the knob is the answer, from a reading rather than
   from a hunch.
 
+  **The number arrived, and it is the one that sentence was waiting for.**
+  Run 265, `b0b5fd7`, post-restart:
+
+      The database pool had no free connection within 10000ms:
+      2/2 connection(s) in use, 0 idle, 380 caller(s) waiting, ceiling 2.
+
+  A ceiling of **two** with **three hundred and eighty** callers queued is not
+  a slow query holding a client, and `BRAIN_DATABASE_POOL_SIZE` defaults to ten
+  by omission — so somebody set it, and every reading above was taken against a
+  pool a fifth the size of the untuned default. **The knob is the answer**, as
+  §27 said it would be if the number came out this way.
+
+  **It is still not turned here, and the reason is the same one that held for
+  seven occurrences.** The remaining unknown was never the pool's ceiling; it
+  was the *server's*, because raising one past the other turns a failed
+  verification into a failed boot. `readServerConnectionLimit` reads it once at
+  boot, after `verifyConnection` has already proved the database answers, and
+  `describeConnectionHeadroom` puts it on the banner — where a deploy log is
+  read after every release, instead of being learned from the failure it
+  causes. Every field is nullable and a refusal returns nulls rather than
+  throwing: §18 forbids cloud mode falling back, and a *diagnosis* that failed
+  a boot would be replacing the thing it exists to explain. The backend count
+  comes from `pg_stat_database` and deliberately not `pg_stat_activity`, where
+  a non-superuser sees only its own rows — a partial total reported as a whole
+  one under-reads in the direction that makes a server look idle, which is the
+  direction that would talk somebody into raising a ceiling on a server with no
+  room. An unreadable limit reads *unknown rather than large*. And it
+  recommends nothing: a deployment secret is not something this repository can
+  set, so a function proposing a value it cannot apply would be a remedy the
+  reader cannot use.
+
+  **Two conditions at one step are still two conditions, and run 265 held one
+  of each.** Its *pre-restart* failure was `fetch failed` at the judge step —
+  the 300-second header timeout measured directly above, which this tree
+  already bounds. Its *post-restart* failure was the pool. Reading the run as
+  one condition would have credited the bound with a fix it does not make, or
+  the ceiling with a failure it did not cause.
+
   **The gate that was meant to prove this timed out, I named the wrong
   suspect, and the correction matters more than the delay.** The Postgres run
   of that tree took its whole sixty-minute job bound while a run on its own

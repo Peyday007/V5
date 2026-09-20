@@ -282,6 +282,41 @@ decision was recorded and ignored.** §24 writes that sentence at six altitudes;
 this would have been the seventh, reached through the surface built to answer
 it.
 
+## 6c. The release gate, and two conditions at one step
+
+Eight consecutive `Deploy` runs report `failure`, and every one of them
+**released**. The API's job `conclusion` reads `success` for both hosted
+verification steps because they are `continue-on-error`; the verdict step reads
+`outcome`, which is the raw result, and that is what fails the run. Reading the
+job summary rather than the verdict would say the opposite of what happened.
+
+Run 265 (`b0b5fd7`) is the one traced here, and it held **one of each condition
+§27 separates**:
+
+| | Where | What |
+|---|---|---|
+| before the restart | judge audit step | `fetch failed` — Node's 300 s header timeout, measured in §27 at 300.8 s |
+| after the restart | first packet check | `2/2 connection(s) in use, 0 idle, 380 caller(s) waiting, ceiling 2` |
+
+The first is already bounded in this tree: `verify-hosted.ts`'s `call()` carries
+an explicit `AbortSignal.timeout`, so the next occurrence either completes and
+the timestamps say what the judge pass costs, or fails saying which request
+waited and for how long. **That bound is not this work's and is not a fix for
+the second condition.**
+
+The second is the number §27 said the eighth occurrence would have to produce.
+`BRAIN_DATABASE_POOL_SIZE` defaults to 10 and is not in `fly.toml`, so the
+ceiling of 2 is a deployment secret somebody set, and nothing in this repository
+can set one. What was missing was the *server's* own limit, without which
+raising the ceiling could turn a failed verification into a failed boot.
+`readServerConnectionLimit` reads it at boot and the banner prints it.
+
+**Production at rest is healthy**, which is the reading that keeps this in
+proportion: five `/healthz` in a row at 0.14–0.37 s, and an authenticated MCP
+read of an eight-layer project answered promptly. A ceiling of 2 is not a broken
+Brain; it is a ceiling the verification's own concurrent burst exhausts, on top
+of whatever the Russell tick, the dispatcher and the factory loop are doing.
+
 ## 7. What is still not true
 
 - **No faculty is implemented.** `realized.ts` can now say one is, from rows.
