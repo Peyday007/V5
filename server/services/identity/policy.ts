@@ -356,6 +356,26 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'PATCH', level: 'ADMIN' },
 
   // ---------------------------------------------------------------------
+  // The labor kernel (§41)
+  // ---------------------------------------------------------------------
+  //
+  // Naming a workflow, naming a task, recording who produces one and retiring
+  // any of them are ADMIN, for the split the section above already draws:
+  // these are decisions *about* how the operation is run rather than work
+  // inside it, and "who does this" is the shape of decision a membership
+  // change already carries. `SEED` is the one task origin Brain itself may
+  // never write.
+  //
+  // **No entry here names a worker scope, and that is the design.** An ADMIN
+  // route refuses a worker by level; every handler additionally calls
+  // `requirePerson`, which refuses one by principal *type*. A machine that
+  // could decide a person is unnecessary — or that one is — is precisely what
+  // §22's split exists to prevent.
+  //
+  // Reading is deliberately absent and takes the default READ, so every member
+  // of the project can see who does the work here and why.
+  { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'PATCH', level: 'ADMIN' },
   // The manufacturing kernel's programme (§39)
   // ---------------------------------------------------------------------
   //

@@ -404,6 +404,42 @@ export const EVENT_TYPES = [
    */
   'FACULTY_PROMOTED',
 
+  // -------------------------------------------------------------------------
+  // The labor kernel (§41)
+  //
+  // On the project's own history rather than on the cash section's, because a
+  // workflow is not a sprint. A project may run labor allocation with no Cash
+  // Mode at all — an operation Brain performs has tasks and a human remainder
+  // whether or not anybody is looking for openings — and putting these on
+  // `cash_events` would have made "who does the work here" a question only a
+  // sprint could answer.
+  // -------------------------------------------------------------------------
+
+  /** A person named a workflow or a task. The one origin Brain may not write. */
+  'LABOR_DECLARED',
+
+  /**
+   * A workflow or a task is no longer how the work is done.
+   *
+   * Never a delete: the allocation history and every necessity answer stay, so
+   * a retired workflow still answers what was decided and why.
+   */
+  'LABOR_RETIRED',
+
+  /** Brain asked a published question about who produces one task. */
+  'LABOR_ROUND_OPENED',
+
+  /** What a finished labor round established, and what it refused to file. */
+  'LABOR_FINDINGS_ABSORBED',
+
+  /**
+   * Who produces a task, and what it was before.
+   *
+   * Carries both ends of the move, because §7's role compression is read from
+   * the chain and an event naming only the new value would say a role had
+   * changed without saying what it changed from.
+   */
+  'LABOR_ALLOCATION_DECIDED',
   /* ----------------------------------------------------------------------- */
   /* The manufacturing empire kernel                                          */
   /* ----------------------------------------------------------------------- */
@@ -1064,6 +1100,363 @@ export interface OpportunityConstraint {
   /** What it does to the economics, where the source says. Null where not. */
   effect: string | null;
   sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// The labor kernel (§41)
+//
+// The axis that says who or what produces an output. §38's kernel says *where*
+// to look; this one says *by whom the work is done*, and the two vocabularies
+// are deliberately separate even where a word appears in both — a
+// `FULFILMENT_SOURCE` node is a fact about an industry, and a
+// `production_layer` is a decision about this operation.
+// ---------------------------------------------------------------------------
+
+/**
+ * What kind of producer performs a task.
+ *
+ * Seven, and the first three are not people. The split is what the CHECK on
+ * `labor_allocations` enforces: recording one of the last four without naming
+ * which of the six necessity reasons justifies it is impossible, which is the
+ * brief's prime directive expressed as a constraint rather than as a
+ * paragraph.
+ *
+ * `EXTERNAL_SERVICE` is a third-party service Brain calls, not an agency of
+ * people we engage — that is `AGENCY_OR_VENDOR`, a *sourcing channel*, and
+ * conflating the two is how "we use a vendor" comes to stand in for "a person
+ * is necessary here".
+ */
+export const PRODUCTION_LAYERS = [
+  'BRAIN',
+  'SOFTWARE_TOOL',
+  'EXTERNAL_SERVICE',
+  'OFFSHORE_HUMAN',
+  'DOMESTIC_HUMAN',
+  'SPECIALIST_PROFESSIONAL',
+  'PHYSICAL_OPERATOR',
+] as const;
+export type ProductionLayer = (typeof PRODUCTION_LAYERS)[number];
+
+/** The three layers that are not a person. Everything else needs a reason. */
+export const NON_HUMAN_LAYERS: readonly ProductionLayer[] = Object.freeze([
+  'BRAIN',
+  'SOFTWARE_TOOL',
+  'EXTERNAL_SERVICE',
+]);
+
+/**
+ * §3's six role classes, and there is no seventh.
+ *
+ * In particular there is no class meaning *this is how it has always been
+ * done*, so the historical answer has nowhere to go. §38's closed-vocabulary
+ * rule, whose failure mode is missing a real reason rather than admitting a
+ * habit — and a habit filed as a reason is precisely the human-first operating
+ * model this kernel exists to refuse to inherit.
+ */
+export const HUMAN_NECESSITY_REASONS = [
+  /** The interaction itself creates the value: selling, negotiating, trust. */
+  'HUMAN_INTERFACE',
+  /** A qualified person's judgement beats Brain's verified capability here. */
+  'EXPERT_JUDGMENT',
+  /** Somebody must legally or contractually sign, certify or be responsible. */
+  'ACCOUNTABILITY_LICENSING',
+  /** The task requires physical interaction with the world. */
+  'PHYSICAL_EXECUTION',
+  /** Brain handles the normal path; this is what exceeds its thresholds. */
+  'EXCEPTION_HANDLING',
+  /** A consequential or hard-to-verify output a person checks independently. */
+  'OVERSIGHT_VERIFICATION',
+] as const;
+export type HumanNecessityReason = (typeof HUMAN_NECESSITY_REASONS)[number];
+
+/**
+ * The eight necessity questions that need an answer from somewhere.
+ *
+ * The brief asks twelve. Four are not here and each is absent for a reason
+ * rather than by omission:
+ *
+ *   1  *what exact output* — `labor_tasks.output`, NOT NULL, because a task
+ *      whose output nobody can state cannot be asked any of the others.
+ *   2  *can Brain produce it* — derived from `readCapability` on every pass.
+ *   7  *can another agent verify it* — derived from `separationCapacity`, the
+ *      same reading `auditAdmission` uses, so the two cannot disagree.
+ *   12 *what prevents Brain eliminating this* — derived by `necessity.ts` from
+ *      the answers to the rest, which is what makes it a diagnosis rather than
+ *      a second place to record an opinion.
+ *
+ * Storing any of the derived three would be a memory of a reading rather than
+ * a reading: a fleet that lost its last healthy surface an hour ago would go
+ * on reporting that Brain can produce.
+ */
+export const NECESSITY_QUESTIONS = [
+  'BRAIN_IS_FASTER',
+  'BRAIN_IS_CHEAPER',
+  'BRAIN_QUALITY_AT_LEAST_EQUAL',
+  'BRAIN_CAN_SELF_VERIFY',
+  'REQUIRES_PHYSICAL_PRESENCE',
+  'REQUIRES_LICENSED_HUMAN',
+  'HUMAN_INTERACTION_ADDS_VALUE',
+  'HANDLES_ONLY_EXCEPTIONS',
+] as const;
+export type NecessityQuestion = (typeof NECESSITY_QUESTIONS)[number];
+
+export const NECESSITY_ANSWERS = ['YES', 'NO', 'UNKNOWN'] as const;
+export type NecessityAnswer = (typeof NECESSITY_ANSWERS)[number];
+
+/**
+ * Where a recorded answer came from.
+ *
+ * There is deliberately no `DERIVED`. An answer Brain reads from its own rows
+ * is re-read on every pass and can never be written down, so the rule that
+ * derived state is not stored is structural here rather than remembered.
+ */
+export const NECESSITY_BASES = ['RESEARCHED', 'PERSON'] as const;
+export type NecessityBasis = (typeof NECESSITY_BASES)[number];
+
+/**
+ * §4's sourcing channels: how a capability is engaged, once a person is
+ * established as necessary.
+ *
+ * Separate from `PRODUCTION_LAYERS` on purpose. The layer says what kind of
+ * producer; the channel says how they are engaged, and §4 is explicit that
+ * establishing a human is necessary settles nothing about whether that human
+ * is domestic, full-time or employed at all.
+ */
+export const LABOR_CHANNELS = [
+  'OFFSHORE_CONTRACTOR',
+  'OFFSHORE_EMPLOYEE',
+  'SPECIALIST_FREELANCER',
+  'DOMESTIC_CONTRACTOR',
+  'DOMESTIC_EMPLOYEE',
+  'LICENSED_PROFESSIONAL',
+  'FRACTIONAL_SPECIALIST',
+  'ON_DEMAND_OPERATOR',
+  'AGENCY_OR_VENDOR',
+  'MANAGED_SERVICE',
+  'SOFTWARE_TOOL',
+] as const;
+export type LaborChannel = (typeof LABOR_CHANNELS)[number];
+
+/** What a published rate is quoted on. A figure with no basis compares to nothing. */
+export const RATE_BASES = ['PER_HOUR', 'PER_UNIT', 'PER_MONTH', 'PER_ENGAGEMENT'] as const;
+export type RateBasis = (typeof RATE_BASES)[number];
+
+/**
+ * What a claim establishes about how work of this kind is produced.
+ *
+ * Two, and both are facts about a *published source*. There is no kind for
+ * "this could probably be automated" or "this seems to need a person", because
+ * those are views rather than findings and the gate has nothing to check them
+ * against.
+ *
+ * There was briefly a third, `AUTOMATION_PRECEDENT`, and dropping it is worth
+ * recording rather than leaving as an absence. A published instance of this
+ * work being done by software *is* a sourcing channel — `SOFTWARE_TOOL` — and
+ * a separate kind would have had nowhere to be filed: it answers no necessity
+ * question, because somebody else's tool establishes nothing about this
+ * Brain's quality, and a finding with no home is one nobody reads. The
+ * PRECEDENT round still asks the question, because "is this done without a
+ * person" and "where is this sourced" are different questions; what they
+ * establish lands in the same row.
+ */
+export const LABOR_FINDINGS = [
+  /** A published rule or practice requires a person, and which reason it is. */
+  'HUMAN_REQUIREMENT',
+  /** A published way this capability is obtained, and what it costs. */
+  'SOURCING_CHANNEL',
+] as const;
+export type LaborFinding = (typeof LABOR_FINDINGS)[number];
+
+/**
+ * The channels that are not a person doing the work for us.
+ *
+ * `SOFTWARE_TOOL` alone. `MANAGED_SERVICE` means nobody is on *our* payroll,
+ * which is what §4 optimizes and is a different question from whether a person
+ * performs the work — and a reading that counted it here would report a role
+ * as compressed because it had been moved rather than removed.
+ */
+export const AUTOMATED_CHANNELS: readonly LaborChannel[] = Object.freeze(['SOFTWARE_TOOL']);
+
+export const LABOR_ORIGINS = ['SEED', 'DERIVED'] as const;
+export type LaborOrigin = (typeof LABOR_ORIGINS)[number];
+
+export interface LaborWorkflowRow {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string | null;
+  origin: string;
+  opportunity_id: string | null;
+  declared_by_ref: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LaborWorkflow {
+  id: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  origin: LaborOrigin;
+  opportunityId: string | null;
+  declaredByRef: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LaborTaskRow {
+  id: string;
+  project_id: string;
+  workflow_id: string;
+  name: string;
+  output: string;
+  origin: string;
+  capability_id: string | null;
+  declared_by_ref: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LaborTask {
+  id: string;
+  projectId: string;
+  workflowId: string;
+  name: string;
+  /** Question 1 of the necessity test, and the reason it cannot be null. */
+  output: string;
+  origin: LaborOrigin;
+  capabilityId: string | null;
+  declaredByRef: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LaborAllocationRow {
+  id: string;
+  project_id: string;
+  task_id: string;
+  production_layer: string;
+  necessity_reason: string | null;
+  decided_by: string;
+  decided_by_ref: string | null;
+  rationale: string;
+  supersedes_id: string | null;
+  superseded_at: string | null;
+  created_at: string;
+}
+
+export interface LaborAllocation {
+  id: string;
+  projectId: string;
+  taskId: string;
+  productionLayer: ProductionLayer;
+  /** Present exactly when the layer is a person. Enforced by a CHECK. */
+  necessityReason: HumanNecessityReason | null;
+  decidedBy: 'BRAIN' | 'PERSON';
+  decidedByRef: string | null;
+  rationale: string;
+  supersedesId: string | null;
+  supersededAt: string | null;
+  createdAt: string;
+}
+
+export interface LaborNecessityAnswerRow {
+  id: string;
+  project_id: string;
+  task_id: string;
+  question: string;
+  answer: string;
+  basis: string;
+  statement: string;
+  source_claim_id: string | null;
+  answered_by_ref: string | null;
+  superseded_at: string | null;
+  created_at: string;
+}
+
+export interface LaborNecessityAnswer {
+  id: string;
+  projectId: string;
+  taskId: string;
+  question: NecessityQuestion;
+  answer: NecessityAnswer;
+  basis: NecessityBasis;
+  statement: string;
+  sourceClaimId: string | null;
+  answeredByRef: string | null;
+  supersededAt: string | null;
+  createdAt: string;
+}
+
+export interface LaborMarketOptionRow {
+  id: string;
+  project_id: string;
+  task_id: string;
+  channel: string;
+  jurisdiction: string | null;
+  rate_cents: number | null;
+  rate_basis: string | null;
+  statement: string;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LaborMarketOption {
+  id: string;
+  projectId: string;
+  taskId: string;
+  channel: LaborChannel;
+  jurisdiction: string | null;
+  /** Null is unknown, never free. */
+  rateCents: number | null;
+  rateBasis: RateBasis | null;
+  statement: string;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const LABOR_ROUND_PURPOSES = ['NECESSITY', 'MARKET', 'PRECEDENT'] as const;
+export type LaborRoundPurpose = (typeof LABOR_ROUND_PURPOSES)[number];
+
+export interface LaborRoundRow {
+  id: string;
+  project_id: string;
+  task_id: string;
+  purpose: string;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LaborRound {
+  id: string;
+  projectId: string;
+  taskId: string;
+  purpose: LaborRoundPurpose;
+  round: number;
+  candidateId: string;
+  state: 'OPEN' | 'HARVESTED' | 'ABANDONED';
+  openedAt: string;
+  harvestedAt: string | null;
+  /** Null while OPEN. Not counted yet is a different fact from none found. */
+  found: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1751,6 +2144,10 @@ export interface ResearchClaimRow {
   structural_subject: string | null;
   structural_qualifier: string | null;
   structural_amount_cents: number | null;
+  labor_finding: string | null;
+  labor_subject: string | null;
+  labor_qualifier: string | null;
+  labor_rate_cents: number | null;
   capability_finding: string | null;
   capability_subject: string | null;
   capability_observed_on: string | null;
@@ -2914,6 +3311,45 @@ export interface ResearchClaim {
    * direction.
    */
   structuralAmountCents: number | null;
+  /**
+   * What this claim establishes about who or what produces work of this kind,
+   * if it establishes anything.
+   *
+   * `structuralFinding` one axis along again. That one says *this is how the
+   * industry is put together*; this says *this is who actually does the work,
+   * and under what rule*. The three axes are independent and a claim may carry
+   * all three: a notice that an agency subcontracts transcription to licensed
+   * medical typists at a published per-line rate is an opening, a fulfilment
+   * source and a sourcing channel at once.
+   */
+  laborFinding: LaborFinding | null;
+  /**
+   * What the labor finding is about.
+   *
+   * From a closed set for the two kinds that have one — a HUMAN_REQUIREMENT
+   * names which of the six necessity reasons, a SOURCING_CHANNEL names which
+   * of the eleven channels — and free text for an AUTOMATION_PRECEDENT, which
+   * names whatever the source says performs the work.
+   */
+  laborSubject: string | null;
+  /**
+   * The basis a sourcing channel's rate is quoted on. Null for every other
+   * kind, and required wherever a rate is present.
+   *
+   * Declared rather than read out of the sentence, because "$40" against
+   * "$40 an hour" against "$40 a month" is a three-order-of-magnitude
+   * difference and the prose-parsing §25 records would get it wrong silently.
+   */
+  laborQualifier: string | null;
+  /**
+   * What a published source says a channel charges, in minor units. Null means
+   * no source published one.
+   *
+   * The nullability is the feature, in the same direction `structuralAmount`'s
+   * is: a blank read as cheap would make the option nobody had costed look
+   * like the best one.
+   */
+  laborRateCents: number | null;
   /**
    * What this claim establishes about building a machine, or null.
    *

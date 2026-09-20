@@ -32,9 +32,11 @@ import {
   LANE_EVIDENCE_KINDS,
   type LaneEvidenceKind,
   type StructuralFinding,
+  type LaborFinding,
   type CapabilityFinding,
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
+import { validateLabor } from '../../domain/labor.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
 import {
   booleanField,
@@ -528,6 +530,14 @@ export interface ParsedClaim {
   structuralQualifier: string | null;
   /** A capital figure, where a source published one. Null means unknown. */
   structuralAmountCents: number | null;
+  /** What it establishes about who or what produces work of this kind, or null. */
+  laborFinding: LaborFinding | null;
+  /** Which reason, which channel, or what the source says performs the work. */
+  laborSubject: string | null;
+  /** The basis a sourcing channel's rate is quoted on. Null otherwise. */
+  laborQualifier: string | null;
+  /** A published rate, where a source published one. Null means unknown. */
+  laborRateCents: number | null;
   /** What it establishes about what building a machine takes, or null. */
   capabilityFinding: CapabilityFinding | null;
   /** What that finding is about: a name, or a value from that kind's own set. */
@@ -712,6 +722,23 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   if (!structural.ok) return structural;
 
   /*
+   * And what it establishes about who or what produces work of this kind.
+   *
+   * Delegated whole to `validateLabor` for the identical reason, and kept as
+   * its own call rather than folded into the structural one: the two answer
+   * different questions from different vocabularies, and one validator
+   * checking two closed sets is how a refusal stops naming the right thing.
+   */
+  const labor = validateLabor({
+    where,
+    finding: row['laborFinding'],
+    subject: row['laborSubject'],
+    qualifier: row['laborQualifier'],
+    rateCents: row['laborRateCents'],
+  });
+  if (!labor.ok) return labor;
+
+  /*
    * What this claim establishes about building a machine, if anything.
    *
    * Delegated whole to `validateCapabilityFinding` for the reason directly
@@ -761,6 +788,10 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       structuralSubject: structural.value.subject,
       structuralQualifier: structural.value.qualifier,
       structuralAmountCents: structural.value.amountCents,
+      laborFinding: labor.value.finding,
+      laborSubject: labor.value.subject,
+      laborQualifier: labor.value.qualifier,
+      laborRateCents: labor.value.rateCents,
       capabilityFinding: capability.value.finding,
       capabilitySubject: capability.value.subject,
       capabilityObservedOn: capability.value.observedOn,

@@ -76,6 +76,7 @@ import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
+import { laborRoundForCandidate } from '../../repos/labor.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
   EvidenceLane,
@@ -146,6 +147,37 @@ async function envelopeIdFor(
   project: Project,
   candidate: RussellCandidate,
 ): Promise<string | null> {
+  /*
+   * A labor question is judged against the labor envelope, whatever project it
+   * is in, and like the manufacturing round below it that is read *before*
+   * the slug map. The two are mutually exclusive: a candidate is written into
+   * at most one kernel's rounds, by that kernel, so the order between them
+   * decides nothing and only their precedence over the map does.
+   *
+   * The map exists so that a free-form idea in a project cannot escape that
+   * project's reviewed limits, and nothing about that changes: a caller cannot
+   * reach this branch, because `labor_rounds` is written by the kernel and a
+   * row in it is Brain's own statement that this candidate is asking one
+   * templated question about one task.
+   *
+   * It has to be first because the alternative is worse in both directions. On
+   * `deal-dispatch` the declared envelope is scoped to Michigan public records
+   * and lists every other state in its `forbiddenScope`, so a labor question
+   * about a national licensing rule would be refused by `planFitsEnvelope` —
+   * the candidate parks, its round never settles, and that purpose can never be
+   * asked again. And a labor question compiled under a public-records profile
+   * would be answered as a public-records question, which is §25's Westbrook
+   * defect: the wrong answer confidently derived.
+   *
+   * What it widens is one thing, said plainly: the classes of published source
+   * a labor question in that project may cite. What it does not widen is
+   * anything that acts — `RUSSELL_LABOR_ALLOCATION_V1` carries
+   * `CASH_FORBIDDEN_ACTIONS`, which names hiring, engaging a contractor and
+   * contacting anybody explicitly, so it is *stricter* than the alternative
+   * about the exact risk this subject carries.
+   */
+  if (await laborRoundForCandidate(candidate.id)) return 'RUSSELL_LABOR_ALLOCATION_V1';
+
   /*
    * A manufacturing question is decided by the round that asked it, and that
    * is read **before** the project's declared envelope.
