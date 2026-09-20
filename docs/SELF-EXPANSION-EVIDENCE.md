@@ -53,6 +53,11 @@ the reading to a commit it cannot see — a local checkout legitimately has none
 
 ## 4. Gates
 
+The readings below are from the **reconciliation**, which is what the rest of
+this section describes. The gates that decide whether the tree merges are
+re-run on the final tree and reported after them, because a suite result is a
+claim about the commit it ran on and nothing else.
+
 | Gate | Result |
 |---|---|
 | `tsc --noEmit` | clean |
@@ -63,6 +68,18 @@ the reading to a commit it cannot see — a local checkout legitimately has none
 | Migrate from empty | 71 migrations applied in order |
 | Restart against existing | clean; no reapplication, checksums verified |
 | `deploymentOwnership` | 18 passed — no chain gap, no collision, no port collision |
+
+### On the tree that carries the tick step and the harness fix
+
+| Gate | Result |
+|---|---|
+| `tsc --noEmit` | clean |
+| SQLite suite | **169 files, 3 700 passed, 43 skipped**, exit 0 |
+| Migrate from empty | **74 migrations applied in order**, schema version 74 |
+| Restart against existing | `up to date (74 already applied)` — no reapplication |
+| `npm run build` | clean; bundle `index-BQcjABQy.js`, **byte-identical to what production serves**, so this change alters no client byte |
+| `deploymentOwnership` | 23 passed |
+| `operatorConsoleRemoved` | 10 passed |
 
 One failure came out of the merge and nothing else could have found it:
 `operatorConsoleRemoved` read `services/capability/reader.ts` as a second writer
