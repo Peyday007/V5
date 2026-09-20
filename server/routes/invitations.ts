@@ -66,7 +66,9 @@ invitationsRouter.post(
     const context = contextFromRequest(req);
     const outcome = await acceptInvitation({
       token: body['token'],
-      password: body['password'],
+      // No password is read here, and a body carrying one is simply ignored
+      // rather than refused: it is not a credential this route can spend, and
+      // an error naming it would tell a caller that one used to work.
       displayName: body['displayName'],
       requestId: context?.requestId ?? null,
       userAgent: context?.userAgent ?? null,

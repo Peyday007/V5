@@ -54,6 +54,15 @@ export interface AcceptedInvitation {
   email: string;
   createdAccount: boolean;
   signInRequired: boolean;
+  /**
+   * The enrollment link for an account this acceptance created, shown once.
+   *
+   * Present only when `createdAccount`, because an address that already had an
+   * account already holds a credential — and handing its enrollment link to
+   * whoever was carrying the invitation would be a second way into somebody
+   * else's account.
+   */
+  enrollment?: { token: string; expiresAt: string };
 }
 
 export type { ChatTurnResult, ProviderStatus, MigrationReport, IngestionReport };
@@ -278,7 +287,6 @@ export const Api = {
    */
   acceptInvitation(input: {
     token: string;
-    password?: string;
     displayName?: string;
   }): Promise<AcceptedInvitation> {
     return post<AcceptedInvitation>('/api/invitations/accept', input);

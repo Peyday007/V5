@@ -472,7 +472,7 @@ describe('accepting an invitation', () => {
     if (!issued.ok) throw new Error('the invitation was refused');
     const token = tokenOf(issued.issued.invitationUrl);
 
-    const refused = await acceptInvitation({ token, password: 'a-generated-test-password-01' });
+    const refused = await acceptInvitation({ token });
     expect(refused.ok).toBe(false);
     if (refused.ok) return;
     expect(refused.reason).toMatch(/Brain administrator/);
@@ -515,7 +515,6 @@ describe('accepting an invitation', () => {
 
     const outcome = await acceptInvitation({
       token: tokenOf(issued.issued.invitationUrl),
-      password: 'a-generated-test-password-03',
       displayName: 'A new collaborator',
       ...({ email: 'somebody-else@example.invalid', isBrainAdmin: true } as object),
     });
@@ -529,6 +528,15 @@ describe('accepting an invitation', () => {
     const made = await getUserByEmail('brand-new@example.invalid');
     // A project invitation confers project membership, never Brain-wide power.
     expect(made!.isBrainAdmin).toBe(false);
+    /*
+     * And the account it made holds no password, which is the property that
+     * makes this journey safe under `passwordDoor.ts`: the door is open for an
+     * account with no working device, so an invitation that chose a password
+     * would have handed an ordinary member exactly the credential they are not
+     * supposed to have. What comes back instead is one enrollment link.
+     */
+    expect(made!.passwordUpdatedAt).toBeNull();
+    expect(outcome.enrollment?.token).toMatch(/^brnv_/);
   });
 
   it('records a denial as a category, with no email and no token in it', async () => {
