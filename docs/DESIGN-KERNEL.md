@@ -277,8 +277,16 @@ npm run design -- cycle --surfaces russell/default,build/default
 npm run design -- resume <cycleId>   # a cycle the Factory opened when a change landed
 npm run design -- findings [--cycle <id>]
 npm run design -- impact --paths a,b --says "..."
+npm run design -- correction --admin you@example.com --says "..."
 npm run design -- report
 ```
+
+`correction` asks for the scope and refuses to choose one: it prints the
+narrowest reading of what was pointed at and what else it could reasonably be,
+and records nothing until told. The convenient answer is always the wider one,
+and the failure the owner described is a fix applied everywhere removing
+something useful somewhere else. Driven once for real against the proof
+database, it moved `LEARN_FROM_CORRECTION` from `ABSENT` to `LIVE / PASSING`.
 
 `cycle` and `resume` build the client, boot a server against a throwaway data
 directory, sign in and render. Set `BRAIN_DATA_DIR` to keep the rows so the

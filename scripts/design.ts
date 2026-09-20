@@ -35,6 +35,7 @@
  *   npx tsx scripts/design.ts resume <cycleId>
  *   npx tsx scripts/design.ts findings [--cycle <id>]
  *   npx tsx scripts/design.ts impact --paths a,b --says "..."
+ *   npx tsx scripts/design.ts correction --admin you@example.com --says "..."
  *   npx tsx scripts/design.ts report
  */
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
@@ -64,6 +65,7 @@ type ServerModules = {
   db: typeof import('../server/db/database.ts');
   repo: typeof import('../server/repos/design.ts');
   capabilities: typeof import('../server/services/design/capabilities.ts');
+  corrections: typeof import('../server/services/design/corrections.ts');
   impact: typeof import('../server/services/design/impact.ts');
   kernel: typeof import('../server/services/design/kernel.ts');
   runtime: typeof import('../server/services/design/renderRuntime.ts');
@@ -81,6 +83,7 @@ async function load(): Promise<ServerModules> {
     db: await import('../server/db/database.ts'),
     repo: await import('../server/repos/design.ts'),
     capabilities: await import('../server/services/design/capabilities.ts'),
+    corrections: await import('../server/services/design/corrections.ts'),
     impact: await import('../server/services/design/impact.ts'),
     kernel: await import('../server/services/design/kernel.ts'),
     runtime: await import('../server/services/design/renderRuntime.ts'),
@@ -128,7 +131,12 @@ function flag(argv: string[], name: string): string | undefined {
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
-  if (!command) fail('Usage: design <surfaces|capabilities|next|expand|cycle|resume|findings|impact|report>');
+  if (!command) {
+    fail(
+      'Usage: design <seed|surfaces|capabilities|next|expand|cycle|resume|findings|impact|' +
+        'correction|report>',
+    );
+  }
 
   /*
    * The rendering commands run against their own server and their own database,
@@ -169,6 +177,9 @@ async function main(): Promise<void> {
         break;
       case 'impact':
         await printImpact(rest);
+        break;
+      case 'correction':
+        await recordCorrectionFromTerminal(rest);
         break;
       case 'report':
         await printReport();
@@ -357,6 +368,84 @@ async function printImpact(argv: string[]): Promise<void> {
   if (impact.unrepresented.length > 0) {
     console.log(`  no surface is registered about: ${impact.unrepresented.join(', ')}`);
   }
+}
+
+/**
+ * Record what the owner said, at the scope they gave it.
+ *
+ * On a terminal for §26's reason — reaching the shell is the authentication —
+ * and `--admin` is the *attribution*, resolved against `users` rather than
+ * trusted, because a correction with no author answers nothing later. §23 draws
+ * the distinction this rests on: attribution is not authentication.
+ *
+ * The scope is **asked for, never defaulted**. `suggestScope` prints the
+ * narrowest reading of what was pointed at and what else it could reasonably
+ * be, and a caller that gives none is refused rather than quietly filed as a
+ * one-off — the convenient answer here is always the wider one, and the failure
+ * the owner described is a fix applied everywhere removing something useful.
+ */
+async function recordCorrectionFromTerminal(argv: string[]): Promise<void> {
+  const { repo, corrections } = await load();
+  const email = flag(argv, 'admin');
+  const says = flag(argv, 'says');
+  if (!email || !says) {
+    fail('Usage: design correction --admin <email> --says "<their words>" [--surface k] ' +
+      '[--components a,b] [--scope ONE_OFF|COMPONENT|SCREEN|FACULTY|GLOBAL] [--scope-ref r] ' +
+      '[--before <captureId>] [--after <captureId>] [--confidence LOW|MEDIUM|HIGH]');
+  }
+
+  const { getUserByEmail } = await import('../server/repos/identity.ts');
+  const person = await getUserByEmail(email);
+  if (!person) fail(`No account for ${email}. A correction with no author answers nothing later.`);
+
+  const surfaceKey = flag(argv, 'surface') ?? null;
+  const components = (flag(argv, 'components') ?? '').split(',').filter(Boolean);
+  const surface = surfaceKey ? await repo.getSurface(surfaceKey) : null;
+
+  const suggestion = corrections.suggestScope({
+    components,
+    surfaceKey,
+    faculty: surface?.faculty ?? null,
+  });
+
+  const scope = flag(argv, 'scope');
+  if (!scope) {
+    console.log('HOW FAR DOES THIS REACH? Brain will not choose for you.');
+    console.log('');
+    console.log(`  suggested  --scope ${suggestion.scope}` +
+      (suggestion.scopeRef ? ` --scope-ref ${suggestion.scopeRef}` : ''));
+    console.log(`             ${suggestion.because}`);
+    for (const alternative of suggestion.alternatives) {
+      console.log(`  or         --scope ${alternative.scope}` +
+        (alternative.scopeRef ? ` --scope-ref ${alternative.scopeRef}` : ''));
+      console.log(`             ${alternative.because}`);
+    }
+    console.log('');
+    console.log('  Re-run with --scope. Nothing was recorded.');
+    return;
+  }
+
+  const outcome = await corrections.recordOwnerCorrection({
+    correction: says,
+    surfaceKey,
+    beforeCaptureId: flag(argv, 'before') ?? null,
+    afterCaptureId: flag(argv, 'after') ?? null,
+    components,
+    scope: scope as Parameters<typeof corrections.recordOwnerCorrection>[0]['scope'],
+    scopeRef: flag(argv, 'scope-ref') ?? (scope === suggestion.scope ? suggestion.scopeRef : null),
+    confidence:
+      (flag(argv, 'confidence') ?? 'MEDIUM') as
+        Parameters<typeof corrections.recordOwnerCorrection>[0]['confidence'],
+    lesson: null,
+    recordedByUserId: person.id,
+  });
+
+  if (!outcome.ok) fail(outcome.refusal);
+  console.log(`Recorded ${outcome.correction.id} at ${outcome.correction.scope} scope.`);
+  console.log(`  "${outcome.correction.correction}"`);
+  console.log('');
+  console.log('  It is evidence now. Whether it becomes a rule is a second decision, and a');
+  console.log('  one-off can never become one — see docs/DESIGN-KERNEL.md.');
 }
 
 async function printReport(): Promise<void> {
