@@ -46,6 +46,7 @@ import { getDb } from '../../db/database.ts';
 import { listCaptures, listCycles, listReviews } from '../../repos/design.ts';
 import type { DesignCycle } from '../../domain/design.ts';
 import { ingestDesignReview, reviewCreator, type ReviewLineage } from './judge.ts';
+import { absorbFinishedResearch, type AbsorbedResearch } from './absorb.ts';
 import { learnFleetWide, learnFromCycle, type LearningReport } from './learn.ts';
 import { runExpansionPass, type ExpansionPass } from './expand.ts';
 import { seedDesignCapabilities } from './capabilities.ts';
@@ -64,6 +65,8 @@ export interface DesignKernelPass {
    * construction, so asking it per cycle gives the same answer N times.
    */
   fleetWide: Awaited<ReturnType<typeof learnFleetWide>> | null;
+  /** Design research that came back and became proposed patterns. */
+  absorbed: AbsorbedResearch[];
   expansion: ExpansionPass | null;
   /** Anything a section could not do, so a quiet pass is not a silent one. */
   problems: string[];
@@ -73,6 +76,7 @@ const EMPTY: DesignKernelPass = {
   ingested: [],
   learned: [],
   fleetWide: null,
+  absorbed: [],
   expansion: null,
   problems: [],
 };
@@ -113,6 +117,7 @@ export async function runDesignKernel(): Promise<DesignKernelPass> {
     ingested: [],
     learned: [],
     fleetWide: null,
+    absorbed: [],
     expansion: null,
     problems: [],
   };
@@ -133,6 +138,20 @@ export async function runDesignKernel(): Promise<DesignKernelPass> {
     pass.fleetWide = await learnFleetWide();
   } catch (error) {
     pass.problems.push(`what recurred across cycles could not be read: ${message(error)}`);
+  }
+
+  /*
+   * Research that came back, before the expansion pass decides anything.
+   *
+   * Absorbing first for the industry kernel's reason: a piece of research that
+   * settled has changed what the ranking sees — the expansion it answered is no
+   * longer live, so its slot is free — and deciding before reading it would make
+   * every discovery a tick late, for ever.
+   */
+  try {
+    pass.absorbed = await absorbFinishedResearch();
+  } catch (error) {
+    pass.problems.push(`finished design research could not be absorbed: ${message(error)}`);
   }
 
   try {

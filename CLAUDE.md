@@ -5857,6 +5857,21 @@ nowhere.
   settles is left alone for a cool-off, which was a defect the tests found: a
   parked expansion is not *live*, so the partial unique index allowed another and
   every tick wrote two more rows about the same three gaps for ever.
+- **Research that came back becomes knowledge, or it was a pile of links.**
+  `design_patterns.origin` declared `RESEARCH` and nothing wrote it, so an
+  expansion could run the whole research pipeline and what came back sat in
+  `research_claims` while the next design problem was assembled from the same
+  seven seed patterns — the *mechanism nothing calls* defect at the one place
+  the brief names it. `absorb.ts` turns each **citable** claim into one pattern:
+  the statement verbatim, because composing a nicer sentence out of a claim
+  would be prose becoming a rule with the citation still attached; the claim id,
+  the URL and the publisher as its evidence; the claim's own geography,
+  timeframe and population as the scope outside which it is *unestablished*
+  rather than false; `MEDIUM` at most, because a well-sourced statement about
+  interfaces in general is not a lesson this product has paid for; and
+  `PROPOSED`, like everything else the kernel compiles for itself. The expansion
+  settles `EVALUATED` rather than `PROMOTED`, because knowing how something is
+  done is not being able to do it.
 - **Nothing is promoted because the work it was routed to finished.** A
   capability dimension moves only when a *reading* of that capability says it
   moved — §37's sentence, and the reason it matters is that a campaign routinely

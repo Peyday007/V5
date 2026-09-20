@@ -87,12 +87,36 @@ be complained about, and nobody has to name a capability.
 | Route | Where it goes |
 | --- | --- |
 | `READING` | Brain can settle it from its own rows. Costs nothing, so it is always preferred. |
-| `RESEARCH` | A Russell candidate on the architecture project: archive check, compiler, approval envelope, evidence gate, three audit roles. |
+| `RESEARCH` | A Russell candidate on the architecture project: archive check, compiler, approval envelope, evidence gate, three audit roles. What comes back is absorbed — see below. |
 | `SOFTWARE` | An objective a person authorizes on Build. §27 reserves that decision. |
 | `PERSON` | A decision no amount of building closes. |
 
 There is deliberately **no route meaning "the design kernel will build this
 itself"**.
+
+#### And research that came back becomes knowledge — `services/design/absorb.ts`
+
+`design_patterns.origin` declared `RESEARCH` and, until this module, nothing
+wrote it: an expansion could run the whole research pipeline and what came back
+sat in `research_claims` as a report, with the next design problem assembled
+from the same seven seed patterns as before. A pile of links, exactly as the
+brief warns.
+
+Each **citable** claim — accepted, on a fragment that reached `ACCEPTED` or
+`BLOCKED`, the same read a filed report uses — becomes one pattern:
+
+- the statement is the claim **verbatim**; composing a nicer sentence out of it
+  would be prose becoming a rule with the citation still attached;
+- the evidence is the claim id, its source URL and its publisher;
+- the scope note carries the claim's geography, timeframe and population, so
+  outside them it is *unestablished* rather than false;
+- confidence is `MEDIUM` at most, because a well-sourced statement about
+  interfaces in general is not a lesson this product has paid for;
+- it is `PROPOSED`, like everything else the kernel compiles for itself.
+
+And the expansion settles **`EVALUATED`, not `PROMOTED`**: knowing how something
+is done is not being able to do it, and the capability dimension moves only on a
+reading of the capability itself.
 
 ---
 

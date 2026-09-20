@@ -1443,3 +1443,165 @@ describe('learning compiles a rule from what kept happening', () => {
     expect((await listPatterns({ state: 'PROPOSED' })).length).toBe(first);
   });
 });
+
+describe('research that came back becomes knowledge, not a pile of links', () => {
+  beforeEach(async () => {
+    await freshProject();
+    await seedDesignKernel();
+  });
+
+  /**
+   * `design_patterns.origin` declared `RESEARCH` and nothing wrote it, which is
+   * the defect this repository keeps recording: a vocabulary with an unreachable
+   * value is worse than one without it, because a reader assumes the path
+   * exists. Here the whole path is walked — expansion, candidate, mission,
+   * orchestration, gated claim, pattern — through the real repositories, because
+   * a fixture that handed the absorption a claim directly would pass against an
+   * absorption that read prose.
+   */
+  it('turns a gated claim into a proposed pattern carrying its claim id and source', async () => {
+    const { createProject, listProjects } = await import('../server/repos/projects.ts');
+    const { listLayers } = await import('../server/repos/layers.ts');
+    const { runExpansionPass } = await import('../server/services/design/expand.ts');
+    const { absorbFinishedResearch } = await import('../server/services/design/absorb.ts');
+    const { launchMission, linkMission, transitionMission } = await import(
+      '../server/repos/russellMissions.ts'
+    );
+    const { createRun } = await import('../server/repos/runs.ts');
+    const {
+      createFragments,
+      createOrchestration,
+      currentFragments,
+      decideClaim,
+      insertClaims,
+      updateFragment,
+    } = await import('../server/repos/research.ts');
+
+    await createProject({ name: 'Brain architecture', purpose: 'TECHNICAL' });
+    const pass = await runExpansionPass('PROACTIVE');
+    const routed = pass.opened.find((one) => one.route === 'RESEARCH' && one.routeRef !== null);
+    expect(routed).toBeTruthy();
+
+    /*
+     * The packet runs against the seeded project, because that is the one with a
+     * layer to file under — the architecture project has none, which is the
+     * condition `standingAuthority` already refuses and `activate` already
+     * creates one for. What is under test is the absorption, not the launch.
+     */
+    const project = (await listProjects()).find((one) => one.purpose !== 'TECHNICAL')!;
+    const layer = (await listLayers(project.id))[0]!;
+    const run = await createRun({
+      projectId: project.id,
+      layerId: layer.id,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'how handheld interaction is solved elsewhere',
+    });
+    const orchestration = await createOrchestration({
+      projectId: project.id,
+      layerId: layer.id,
+      runId: run.id,
+      title: 'Handheld interaction',
+      assignment: 'How other interfaces handle interaction on a handheld screen.',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+
+    const { mission } = await launchMission({
+      projectId: project.id,
+      visibility: 'SHARED',
+      objective: 'Design capability research',
+      whyNow: 'the design kernel asked',
+      idempotencyKey: `design-test-${routed!.id}`,
+      candidateId: routed!.routeRef,
+    });
+    await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+
+    // Nothing is absorbed while the packet has established nothing citable.
+    expect(await absorbFinishedResearch()).toHaveLength(0);
+
+    await createFragments([
+      {
+        orchestrationId: orchestration.id,
+        projectId: project.id,
+        layerId: layer.id,
+        requiredEvidence: [
+          { id: 'practice', description: 'what interfaces actually do', necessity: 'REQUIRED' },
+        ],
+        acceptableSourceTypes: ['published interface research'],
+        excludedSourceTypes: ['an assertion with no source'],
+        completionCriteria: ['a named practice with a stated tradeoff'],
+        minIndependentSources: 1,
+        maxRepairs: 2,
+        fragmentIndex: 0,
+        fragmentKey: 'handheld-reach',
+        question: 'How is a sheet made dismissible one-handed?',
+        dependsOn: [],
+        attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    const fragment = (await currentFragments(orchestration.id))[0]!;
+    await updateFragment(fragment.id, {
+      status: 'ACCEPTED',
+      completedAt: new Date().toISOString(),
+      blockedReason: null,
+    });
+
+    const statement =
+      'A bottom sheet dismissed by a downward drag is reachable one-handed on a phone where a ' +
+      'top-right close control is not.';
+    const [claim] = await insertClaims([
+      {
+        orchestrationId: orchestration.id,
+        fragmentId: fragment.id,
+        passId: null,
+        passKey: 'BROAD_SCAN' as const,
+        claim: statement,
+        sourceUrl: 'https://example.invalid/reach-zones',
+        sourceTitle: 'Reach zones on handheld screens',
+        sourcePublisher: 'Example Interface Research',
+        sourceDate: '2026-08-01',
+        evidenceExcerpt: statement,
+        evidenceLocator: 'section 3',
+        evidenceLane: 'practice',
+        retrievedAt: '2026-09-01',
+        confidence: 0.9,
+        validationState: 'SOURCED' as const,
+        validationDetail: null,
+        sourced: true,
+        primarySource: true,
+        claimType: 'SOURCED_FACT' as const,
+        contentHash: statement,
+      },
+    ] as unknown as Parameters<typeof insertClaims>[0]);
+    await decideClaim(claim!.id, { accepted: true });
+
+    const absorbed = await absorbFinishedResearch();
+    expect(absorbed).toHaveLength(1);
+    expect(absorbed[0]?.patterns).toHaveLength(1);
+
+    const pattern = absorbed[0]!.patterns[0]!;
+    // The claim verbatim: composing a nicer sentence would be prose becoming a
+    // rule with the citation still attached.
+    expect(pattern.statement).toBe(statement);
+    expect(pattern.origin).toBe('RESEARCH');
+    expect(pattern.state).toBe('PROPOSED');
+    expect(pattern.evidence.some((one) => one === `research_claim:${claim!.id}`)).toBe(true);
+    expect(pattern.evidence).toContain('https://example.invalid/reach-zones');
+
+    /*
+     * EVALUATED, not PROMOTED. Knowing how something is done is not being able
+     * to do it, and §37's rule is that a dimension moves only on a reading of
+     * the capability itself.
+     */
+    const settled = (await listExpansions({ limit: 50 })).find((one) => one.id === routed!.id);
+    expect(settled?.state).toBe('EVALUATED');
+    expect((await getCapability(routed!.capabilityKey))?.abilityState).toBe('ABSENT');
+
+    // Absorbing twice is the same pattern, not a second copy of it.
+    await absorbFinishedResearch();
+    expect((await listPatterns({})).filter((one) => one.origin === 'RESEARCH')).toHaveLength(1);
+  });
+});
