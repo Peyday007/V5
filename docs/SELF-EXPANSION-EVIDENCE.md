@@ -211,6 +211,50 @@ its own tests.
 All three commands were driven against a real database rather than only against
 tests, and each refuses correctly on an unknown packet.
 
+### And the join between them, which was a person's memory
+
+All four of those are **commands**, and the fifth defect is what that means:
+running the chain was six invocations in the right order, so a packet whose
+authority gap somebody answered on Tuesday sat exactly where it was until
+somebody remembered the next line. An operator's memory is not a caller.
+
+`services/realize/advance.ts` is reached from the durable Russell tick, beside
+`advanceSources`, and it is the ordering and nothing else.
+
+| Property | How it is held |
+|---|---|
+| Every transition is the CLI's own function | a test reads both files and holds them to the same names |
+| No second orchestrator, queue, policy module or state machine | `advance.ts` imports the transitions and nothing else |
+| No approval of its own | asserted against its import statements by name |
+| Approves nothing, spends nothing | asserted against `russell_missions`, `russell_goals`, `research_orchestrations` and approved `factory_change_requests` |
+| A person-owned gap reaches the surface that already exists | a `russell_human_requests` row, the same card, the same route, the same resume |
+| One card per gap, however many ticks | `ON CONFLICT (resume_key) DO NOTHING`, asserted twice |
+| Answering it closes the **gap**, not only the card | walked from the tick through `answerHumanRequest` to `resumeAnsweredRequest` |
+| A refusal is `WAIVED`, never `CLOSED` | asserted as two different states |
+| It cannot take the tick down | the call is inside a guard, asserted by position |
+
+**Five of those were proved by neutralising the guard, watching the test fail,
+and restoring it** — in a copy of the tree, so a Postgres suite running beside
+it could not read a half-neutered file:
+
+| Neutralised | The failure it produced |
+|---|---|
+| the waived-gap guard in `realized.ts` | `expected 'LIVE' not to be 'LIVE'` |
+| the branch ordering in `resumeAnsweredRequest` | `expected 'OPEN' to be 'CLOSED'` |
+| the resume key's derivation from the gap | `expected +0 to be 1` |
+| the tick's call | `expected … to contain 'await advanceCapabilityPackets('` |
+| the guard around the call | `expected 'try {…}' not to contain 'catch'` |
+
+The second of those is the one worth naming. `resumeAnsweredRequest` returns
+`settled: true` for any request with no mission — *"the request was not about a
+mission"* — so without the ordering a capability card a person answered would
+have been marked RESUMED having carried out nothing: the gap still open, the
+card gone from the surface, and an identical one raised on the next tick. **A
+person could have answered the same question every day and never learned their
+decision was recorded and ignored.** §24 writes that sentence at six altitudes;
+this would have been the seventh, reached through the surface built to answer
+it.
+
 ## 7. What is still not true
 
 - **No faculty is implemented.** `realized.ts` can now say one is, from rows.
