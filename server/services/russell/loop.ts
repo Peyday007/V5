@@ -101,6 +101,7 @@ import { reconcileIntegrityReopens } from '../audit/integrityReaudit.ts';
 import { listOpenReopens } from '../../repos/auditReopens.ts';
 import { TERMINAL_ORCHESTRATION } from '../research/outcome.ts';
 import {
+  concludeUnworkablePackets,
   reconcileArguedAuditRoles,
   reconcileTerminalPackets,
 } from '../research/packetRunner.ts';
@@ -730,6 +731,23 @@ export async function tick(owner: string): Promise<TickReport> {
      * the same reason.
      */
     for (const entry of await reconcileTerminalPackets(cycle.maxEventsPerCycle)) {
+      report.retiredPacketWork.push(entry);
+    }
+
+    /*
+     * 1a-iv-b. And take dead work off a packet that has *not* finished.
+     *
+     * The mirror image of the sweep above, and the one nothing covered: a live
+     * packet holding only items past their own attempt ceilings. Nothing
+     * advances it, because `advancePacket` runs when something completes and
+     * that is exactly what has stopped. Production sat in it for fifty-one
+     * hours with nine missions `RUNNING` against a concurrency of six, sixty-one
+     * ideas queued behind them, and a healthy fleet firing nothing at all.
+     *
+     * It performs no dispatch: a worker fired at an item already past its
+     * ceiling spends an activation to learn what the rows already say.
+     */
+    for (const entry of await concludeUnworkablePackets(cycle.maxEventsPerCycle)) {
       report.retiredPacketWork.push(entry);
     }
 

@@ -5715,14 +5715,38 @@ after the ceiling moved, the same windowed query answered
 lifted, no concurrency raised, no attempt count reset, no lease revived, no
 packet re-planned.
 
-**What is still owed is the general case.** One regrant answers one bin, and
-what stranded these was a budget sized below the length of legitimate work — so
-the honest remedy is a derivation on the tick that regrants a bin whose budget
-is spent while its packet still holds claimable items, rather than an operator
-finding each one. `step10.yml`'s header also claims its subcommands are
-"confined to the harness's own acceptance project", which `regrant` is not and
-never was: it takes any bin id, and its own comments record raising a real
-research bin's ceiling to 100. The comment is the thing that is wrong.
+**The general case is `concludeUnworkablePackets`, and it is the mirror image
+of the sweep it sits beside.** `reconcileTerminalPackets` takes live work off a
+packet that has *finished*; this takes it off one that has **not**, holding
+only items past their own attempt ceilings. `reconcileArguedAuditRoles` already
+wrote the sentence one state along: *a reconciliation that only runs when
+something else happens cannot reach a state in which nothing is happening.*
+
+**It performs no dispatch, and that is the point.** Regranting the bin is the
+right answer when the items can still be attempted and the wrong one here: a
+worker fired at an item already past its ceiling arrives, claims, fails and
+retires it, spending an activation to learn what the rows already say. So this
+retires the dead work and calls `advancePacket`, which is the existing
+transition — what the packet *is* stays its answer, read from its own rows,
+rather than a new terminal path written here.
+
+Every condition is load-bearing and fails closed: live packets only, something
+must actually be stranded, **never while one outstanding item could still be
+attempted**, and **never under a live lease** — `retireTerminalWork` already
+records what retiring live work costs, a compliant worker told its completion
+is no longer current. The two refusals are what the tests pin, and they were
+run against a neutered guard to watch them fail before they were trusted to
+pass.
+
+**One thing it deliberately does not do.** A packet whose items can still be
+attempted but whose *bin* is spent is the other half, and that stays the
+operator's `regrant`: automatic bin regranting would put fires behind a packet
+that may simply keep failing, which is the loop that looks like progress.
+
+`step10.yml`'s header also claims its subcommands are "confined to the
+harness's own acceptance project", which `regrant` is not and never was: it
+takes any bin id, and its own comments record raising a real research bin's
+ceiling to 100. The comment is the thing that is wrong.
 
 
 ## Repository map
