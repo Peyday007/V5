@@ -5749,6 +5749,236 @@ takes any bin id, and its own comments record raising a real research bin's
 ceiling to 100. The comment is the thing that is wrong.
 
 
+## 39. A deal has two sides, and everything hard about it lives between them.
+
+The cross-border industrial dealflow kernel (`server/services/dealflow/`,
+`server/repos/dealflow.ts`, `server/domain/dealflow.ts`, `docs/DEALFLOW.md`)
+converts an industrial equipment transaction into rows: who has published a
+need, who publishes the capability to supply it, whether the goods may lawfully
+enter and be used in that market, what it costs to land them, how that trade
+pays somebody in the middle, and what every attempt taught. It is the same
+shape every kernel since §37 has had — an entrance to machinery Steps 4 to 12C
+already built, never a second set of rules.
+
+**§38 gave Cash Mode the axis it was missing — *where* in the economy to look.
+This one adds the axis a `cash_opportunities` row cannot hold.** That row is
+one-sided by construction and correctly so: a payer, a price, an offer, an
+exposure. It cannot say that a mine in Zambia published a fleet expansion, that
+a manufacturer in Shandong builds the trailers, that the trailer is
+unregistrable there without an approval neither party has mentioned, that the
+duty is nineteen per cent, and that the money in it is a commission rather than
+the quarter-million-dollar asset. Those are five tables of fact about one
+transaction, and one card with a `price` field flattens them into a number that
+is wrong.
+
+- **The seed is an example, not the taxonomy, and that is asserted by reading
+  the repository.** The operator's brief starts from tankers and trailers and
+  says in as many words that they are the first example from which the kernel
+  should learn the broader structure. So there is no list of equipment classes
+  anywhere in this kernel; a class exists because a gated claim named it. The
+  check strips comments first, because the rule is that no *code* names a
+  class — prose examples are how this file documents, and the seed question
+  names tankers deliberately. **A narrowing is not a removed check**: what it
+  still catches is executable code that knows what a tanker is.
+- **The classes converge because Brain supplies the vocabulary, not because a
+  matcher tries harder.** `equipmentKey` is case and whitespace and nothing
+  else — §37's rule, where an invented match pairs a buyer with a supplier that
+  cannot build what they need and every row around it reads healthy. What makes
+  two workers write one class is that the question carries the class **verbatim
+  from Brain's own rows** and asks for it back unchanged, which is a mechanism
+  somebody can read rather than a similarity threshold nobody can audit.
+- **The third declaration axis, and it is a third column rather than more
+  values on an existing one.** `opportunity_signal` says *this is a piece of
+  work*, `structural_finding` says *this is how the industry is put together*,
+  and `deal_finding` says *this is what a source establishes about a
+  transaction between two parties in two countries*. Three questions about one
+  claim; a column with two masters is invariant 31. One validator, called by
+  **both** submission doors, and every field **declared in the tool schema**
+  rather than only described in its prose — §33's defect, which cost production
+  every opportunity it could have created.
+- **A jurisdiction is a column, never a sentence.** §25's Westbrook defect at
+  its sharpest: cross-border trade is (product × jurisdiction) keyed end to
+  end, the same trailer is legal in one market and unregistrable in the next,
+  and a requirement whose destination was recovered from prose is a confidently
+  wrong answer that every row around it agrees with — in the one place where
+  being wrong means the equipment is built before anybody finds out.
+- **The five compliance layers do not collapse.** A factory quality certificate
+  is not a product approval, a product approval is not a market registration,
+  and neither is the buyer's own acceptance standard. `envelopeFor` refuses to
+  compose them into a single yes, and a query that wants "can this be sold
+  there" must ask all five.
+- **"Nobody has looked" and "somebody looked and there is nothing" needed a
+  whole finding to tell apart.** §30's rule that an unknown is never a
+  favourable assumption, at the question that decides whether a deal is lawful:
+  the absence of requirement rows looks exactly like the absence of
+  requirements. So `REQUIREMENT_ABSENCE` writes a row with posture
+  `NONE_FOUND`, the validator refuses one that does not name where the worker
+  searched (§14), and a layer with no rows at all reads `NOT_ESTABLISHED` — a
+  **task**, never a clearance.
+- **A total past an unknown is withheld, and the reason is named.** A landed
+  cost that silently skips the duty line is wrong by nineteen per cent in the
+  direction that makes the deal look worth doing, and nobody checks a number
+  that flatters them. Three named reasons rather than a silence: a missing
+  load-bearing line, two currencies (converting would put a rate nobody
+  published inside a number presented as published arithmetic), or two bases
+  (reconciling a per-container rate with a per-unit price needs a load plan
+  Brain does not have). The buyer's own current cost sits in the same table
+  with its own component name and is **never summed with the rest**, because it
+  is the only figure that says whether the saving is real — and the saving is
+  withheld unless both halves are comparable.
+- **Transaction value is not our capital, and the surface reports no revenue
+  figure at all.** A quarter-million-dollar tanker is a quarter-million-dollar
+  *transaction*; it is a quarter-million dollars of ours only under one of the
+  thirteen structures, and most of them require nothing of our balance sheet. A
+  kernel that declined large transactions because the equipment is expensive
+  would decline every deal in this trade worth doing. So `CAPITAL_CLASS` is
+  answered once per structure from its own mechanics — which do not depend on
+  the deal — and **nothing ranks the structures**, because a weighted score
+  needs weights nobody set and the number would read like a measurement. A
+  published rate stays the source's own words: turning "three to five per cent"
+  into a figure and multiplying it by a transaction value converts somebody
+  else's range into our revenue and presents it as arithmetic. **Expected time
+  to cash is the same question one field along**, and it is answered in words:
+  the attested structure's own payment schedule, looked up from the same
+  constant, never a number of days. Brain holds no lead time, no sailing
+  schedule and no payment term for a given deal, so a figure there would be
+  composed from nothing — and it would be the most quoted number on the screen.
+- **The stage is derived through `OUTREACH_READY` and read from rows after
+  it.** `tier.ts`' reason, unchanged. Each rung asks one question and the deal
+  stops at the first unanswered one, with no partial credit: a deal with a
+  supplier, a price and no idea whether the goods may enter the country is not
+  most of the way there, it is one fact away from being worth nothing, and a
+  percentage would say the opposite. `QUOTING` and `NEGOTIATING` are reported
+  **only** from a recorded commercial action of the matching kind — with none,
+  an executing deal reads `ENGAGED` and stays there, because a status more
+  precise than the evidence teaches a person to stop believing it.
+- **Finishing a deal outranks starting one.** §38 records making that ordering
+  the other way round and correcting it, and the reasoning is the same here:
+  the research that found the opening has already been paid for. The allocator
+  is pure over a recorded snapshot so "why did Brain research this" resolves to
+  a sentence written when it was decided; being pure makes it useless as a
+  safety mechanism, which is correct — the exclusion is the unique index on
+  `deal_rounds`. Demand-first and supply-first run **together** rather than as
+  a mode somebody selects, and account expansion fires off a *recorded outcome*
+  rather than off optimism, because the brief asks for verified adjacent needs
+  rather than for everything a buyer might plausibly want.
+- **A lesson is derived with its sample shown, never stored.** One observation
+  per row; whether several amount to a rule is computed on the read path with
+  the count beside it, because a stored rule is a generalization nobody can see
+  the sample behind. One observation is reported as an anecdote and **never
+  hidden** — a single certification surprise is often the most valuable thing
+  in the table. Brain's own derivations are counted separately from a person's,
+  because four derivations about one deal are one observation four times over.
+  Grouping is by (kind, jurisdiction, class) exactly, and **a lesson informs
+  and never gates**.
+- **Nothing here authorizes an effect the sprint's grant did not already
+  authorize, which is nothing beyond reading.** Two envelopes rather than one,
+  because the two halves have opposite completion standards — one deliverable
+  is a *name*, the other is often a documented *absence* — and both take their
+  source classes and forbidden actions verbatim from the discovery envelope so
+  they cannot drift. Which envelope applies is decided by the round, a row
+  Brain wrote, and the default is the stricter of the two so a purpose added
+  later and forgotten is judged by the deliverable that demands a name.
+- **Seeding a party is a person's, structurally rather than conventionally.** A
+  CHECK requires every `DISCOVERED` row to carry its claim, so there is no code
+  path by which Brain could write a `SEED` party — §22's split at the table
+  that decides who the market is. Retiring one destroys nothing, because a
+  deleted party arrives again on the next round as a fresh discovery.
+- **Pursuit is Cash Mode's, and there is no second lifecycle here.** A deal
+  that reaches `OUTREACH_READY` is promoted into a `cash_opportunities` row and
+  pursued by the standing commercial authority, the recorded `cash_actions`
+  row, the money ledger and the jobs that already exist. The promotion
+  deliberately does **not** write `price_cents`: a card's price means what *we*
+  are paid, so putting the landed cost there would put the largest number in
+  the deal into the field that decides what Brain thinks we earn — §13's whole
+  distinction, at the one column where collapsing it would be invisible.
+
+**What is true today, said plainly.** The kernel operates end to end against a
+local Brain and the suite passes on both backends. **No fleet worker has
+answered a dealflow question in production**, because that needs a deploy and a
+fire — the separation Step 3 drew between the research engine and a real job
+having actually run, which §38 had to say about its own kernel too. **No deal
+has been attempted**, so `deal_observations` is empty and every lesson the
+learning loop can produce is a shape rather than a reading: the loop is built
+and has nothing to learn from yet.
+
+**Six defects in this work were found by running it or by reading it against
+rules this file already holds, and every one is recorded rather than quietly
+fixed.**
+
+**The declaration reached the tool and not the table, which is §33's defect one
+layer along.** `validateDealFinding` ran at the door, `brain_submit_claims`
+accepted the claim, the insert had the columns — and every claim landed with
+`deal_finding` NULL, because `services/research/submission.ts` is the mapper
+between them and it carried only the fields it had been told about. The comment
+directly above the line that was missing already warns about exactly this
+shape: *the fact reached one reader and not the other, and both looked
+healthy.* The unit suite could not see it, because it wrote the columns
+directly. **That is the whole argument for
+`tests/dealflowIntegrationPass.test.ts`**: a test that hands the filing a claim
+row is testing the filing, and only a walk that submits over the wire can tell
+a mechanism from a function nothing calls.
+
+**A cost line was filed against the wrong end of the lane.** `expand.ts` took
+the declared market as the *destination* and read the round's purpose to decide
+whether it was also an origin — a proxy that is wrong exactly where it matters,
+because a supply question routinely turns up a published factory price, and an
+ex-works price stamped with the supplier's country as a destination is
+invisible to every lane out of that class. It is `costEndFor` now, a `Record`
+over the whole component union, so a component added later is a compile error
+until somebody says which end it belongs to. Freight, insurance and financing
+are filed against the *destination* deliberately: a rate to one market says
+nothing about a rate to another, so treating them as origin-side would carry
+one market's freight into another market's landed cost.
+
+**And a `CHECK` in the schema was right where the allocator was wrong.** A
+decision-maker round was built with no equipment class, on the reasoning that
+the *finding* carries none — which is true and is a different question. The
+round is the scope of the asking, and one that named no class would be a
+question about the organisation in general. The database refused it, which is
+what a CHECK is for.
+
+**A fourth was found by reading this kernel against a vocabulary it does not
+own, and it is the one I would have shipped.** The map from a recorded
+commercial action to a pursuit stage keyed on `SEND_QUOTE`, `NEGOTIATE_TERMS`
+and `SIGN_AGREEMENT` — plausible names for things this trade does, and not one
+of them in `COMMERCIAL_ACTIONS`, so no grant could authorize them and no row
+could ever carry one. A branch nothing can reach, added by me, in a file whose
+own header is about not claiming more than the evidence supports. It keys on
+`CONTACT_BUYER` and `QUOTE_AND_INVOICE` now, and the test asserts the keys
+**are** that vocabulary rather than asserting the two that happen to be there.
+
+The consequence is worth stating rather than hiding: **`NEGOTIATING` is a stage
+Brain cannot observe.** There is no commercial action for negotiating, so no
+row establishes it, and inferring it from a quote having gone out would be a
+status more precise than the evidence. It stays in `DEAL_STAGES` because the
+trade has it and the brief names it, it is never derived, and both the type and
+the deriving module say so — a reader should be able to see that it is a gap in
+what Brain can observe rather than a stage somebody forgot.
+
+**A fifth was found by reading this kernel against §38's own recorded defect,
+and it was the same defect.** A round's claims are filed on the pass they are
+gated, and the round settles on the pass its mission reaches `DONE` — routinely
+a later one. `found` counted what *that* pass created, so a round that had
+produced every party it produced would settle recording nought, and
+`BARREN_ROUNDS` of those retires the question that was working best. §38 hit it
+from the other direction, with a scan whose output went to `harvest` instead.
+`file` returns three answers now — `CREATED`, `EXISTS`, `REFUSED` — and `found`
+counts the first two, because a claim that collided with a row an earlier pass
+wrote still established that row.
+
+**And a sixth was caught by the suite rather than by the compiler, which is the
+one worth remembering.** Adding the declaration columns to the claims insert
+left the bound parameter list one `?` short of its column list — a silent
+off-by-one that shifted every value after it by one position. It did not fail
+to compile, it did not fail a typecheck, and the repository layer reported
+nothing: 140 tests failed across thirteen files with symptoms that looked like
+thirteen unrelated regressions. **A parameter list is the one place in this
+codebase where the compiler cannot help**, and the only thing that catches it is
+running everything.
+
+---
+
 ## Repository map
 
 ```
@@ -5774,6 +6004,7 @@ server/
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
+    dealflow.ts         what a claim establishes about a transaction, and where it lands
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     auditReopens.ts     the record behind a re-audit, and its one reservation
@@ -5788,6 +6019,7 @@ server/
     cashActions.ts    what was actually done, and under which grant
     cashLock.ts       where two cash decisions stop being concurrent
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
+    dealflow.ts       both sides of a transaction, and everything hard between them
     faculties.ts      sources, candidates, faculties and their typed edges
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
@@ -5903,6 +6135,20 @@ server/
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
       readiness.ts      four people and four surfaces, counted from rows
+    dealflow/
+      compliance.ts     the five layers, and why no rows is not a clearance
+      economics.ts      the landed cost, and every reason it is withheld
+      structures.ts     thirteen ways to be paid, and what each one costs us
+      maturity.ts       the derived ladder, and what it declines to guess
+      graph.ts          everything the kernel knows, read once per pass
+      questions.ts      what each round actually asks
+      allocate.ts       a pure decision, in the order the trade fails in
+      expand.ts         opening the questions, and filing what comes back
+      lessons.ts        observations into rules, with the sample shown
+      promote.ts        where a deal becomes work Cash Mode already pursues
+      seed.ts           the two things a person does to this kernel directly
+      view.ts           the operator surface: what exists, what is next, what blocks
+      kernel.ts         the tick: file, pair, promote, allocate
     capability/
       ingest.ts         a blueprint becomes a registered, readable source
       sections.ts       the sections a document declares, from its own headings
@@ -6042,6 +6288,8 @@ scripts/
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
+  dealflowKernel.test.ts     two sides, five layers, and every figure it refuses to invent
+  dealflowIntegrationPass.test.ts  one deal, walked the whole way, over the wire
   capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
   systemSelfModel.test.ts    what a reading may claim, and the seven it may not
   realizationPacket.test.ts  derive what is readable; refuse to guess the rest

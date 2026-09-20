@@ -114,6 +114,26 @@ export async function recordFragmentClaims(input: {
         structuralSubject: claim.structuralSubject ?? null,
         structuralQualifier: claim.structuralQualifier ?? null,
         structuralAmountCents: claim.structuralAmountCents ?? null,
+        /*
+         * And the dealflow declaration, for the reason directly above — which
+         * this mapper then proved by omission.
+         *
+         * The unit suite wrote these fields straight into the claims table and
+         * passed; the walk that submits through `brain_submit_claims` found
+         * every one of them arriving as NULL, because the validator ran, the
+         * tool accepted the claim, the insert had the columns, and *this*
+         * mapper stood between them carrying only what it had been told about.
+         * §33's defect one layer along and with the same signature: a healthy
+         * worker, a healthy submission, a healthy row, and the one column that
+         * decides whether anything is created silently empty.
+         */
+        dealFinding: claim.dealFinding ?? null,
+        dealSubject: claim.dealSubject ?? null,
+        dealEquipment: claim.dealEquipment ?? null,
+        dealJurisdiction: claim.dealJurisdiction ?? null,
+        dealValue: claim.dealValue ?? null,
+        dealAmountCents: claim.dealAmountCents ?? null,
+        dealCurrency: claim.dealCurrency ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though

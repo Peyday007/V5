@@ -41,6 +41,13 @@ function found(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
   return {
     claimType: 'SOURCED_FACT',
     structuralFinding: null,
+    dealFinding: null,
+    dealSubject: null,
+    dealEquipment: null,
+    dealJurisdiction: null,
+    dealValue: null,
+    dealAmountCents: null,
+    dealCurrency: null,
     structuralSubject: null,
     structuralQualifier: null,
     structuralAmountCents: null,

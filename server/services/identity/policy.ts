@@ -354,6 +354,25 @@ const OVERRIDES: Override[] = [
   // READ, so every member of the project can see where Brain is looking.
   { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'PATCH', level: 'ADMIN' },
+
+  // ---------------------------------------------------------------------
+  // The cross-border dealflow kernel
+  // ---------------------------------------------------------------------
+  //
+  // The same split, one kernel along. Seeding a party, retiring one and
+  // recording what an attempt taught are ADMIN: the first two decide who the
+  // market is — and `SEED` is the one party origin Brain itself may never
+  // write — while an observation is the one fact in that kernel no source
+  // publishes, so it is somebody's account of an attempt they made and
+  // `recorded_by` carries their id.
+  //
+  // Reading is deliberately absent and takes the default READ, so every member
+  // can see both sides of the map, every deal and how far it has got. No entry
+  // names a worker scope, for the reason above: a worker is refused at the
+  // ADMIN routes by level, at the reads by `requirePerson`, and at everything
+  // by principal type.
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/dealflow/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/dealflow/, method: 'PATCH', level: 'ADMIN' },
 ];
 
 export interface Requirement {
