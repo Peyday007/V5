@@ -337,9 +337,22 @@ routes call. §26's rule: reaching the shell is the authentication, and
 which establishes that such a person exists and nothing about who typed the
 command.
 
-**There is no client surface for this kernel yet**, and that is the honest state
-rather than a gap to be quietly filled. The routes exist so one can be built
-without a second, weaker path appearing beside them.
+**The Russell surface** is `/machines` — secondary in the rail for Cash's
+reason read the other way round: Cash is secondary because it is temporary, this
+is secondary because its horizon is decades and nobody steers it hourly.
+
+It shows the programme's state, every category with its verdict and the exact
+reason, all four conditions, demand and route evidence, required against held
+capabilities side by side, the chain and what each capability unlocks, the
+running round, the next question with the allocator's recorded reason, the
+declarations Brain could not file, every round including barren ones, and the
+decisions genuinely waiting on a person.
+
+**Every string on it is the server's.** The screen re-derives no status, re-orders
+no ladder and composes no explanation. And it adds no back door: there is no
+control that marks a capability held from what research established, and the one
+control that records a holding appears only against a decision the service
+itself raised.
 
 ---
 

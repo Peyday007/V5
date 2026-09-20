@@ -2875,3 +2875,216 @@ details.rs-card > section.rs-card {
   font-size: var(--step--2);
   overflow-wrap: anywhere;
 }
+
+/* ---------------------------------------------------------------------------
+ * The manufacturing programme (§39)
+ *
+ * Laid out with `container-type: inline-size` rather than a viewport media
+ * query, for §29's reason: the element that clips is a column inside a rail,
+ * and a media query asks the viewport. The one horizontal scroll is the rounds
+ * table, which is a table and is allowed to.
+ *
+ * The capability split is the load-bearing piece of layout here. Required and
+ * held sit side by side at width and stack under each other on a phone, because
+ * the *difference* between them is the whole kernel — a person has to be able
+ * to see at a glance that a column is empty.
+ * ------------------------------------------------------------------------ */
+.rs-machines {
+  container-type: inline-size;
+}
+
+.rs-machines-status {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-warn {
+  color: var(--ochre);
+}
+
+.rs-machines-counts {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+}
+
+.rs-machines-decision + .rs-machines-decision {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-machines-decision-what {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-declare {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-machines-declare label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rs-machines-declare textarea,
+.rs-machines-declare select {
+  width: 100%;
+  font: inherit;
+}
+
+.rs-machines-gap {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.rs-machines-category + .rs-machines-category {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-machines-category header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.rs-machines-category h4 {
+  margin: 0;
+}
+
+.rs-machines-verdict {
+  font-size: 0.85em;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* Only ENTER is coloured as an affirmative. Everything else is neutral: a
+ * palette that made "being researched" look like progress and "no demand
+ * found" look like failure would be editorialising a derivation. */
+.rs-machines-verdict-ENTER {
+  color: var(--moss);
+}
+
+.rs-machines-because {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.rs-machines-conditions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.rs-machines-answer {
+  display: inline-block;
+  min-width: 8.5ch;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.rs-machines-MET .rs-machines-answer {
+  color: var(--moss);
+}
+
+/* `not established` is deliberately not styled as a failure. An unknown is a
+ * task, not a refusal — invariant 39, at a colour. */
+.rs-machines-UNKNOWN .rs-machines-answer {
+  opacity: 0.7;
+}
+
+.rs-machines-capsplit {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.rs-machines-capsplit h5 {
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-capsplit ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+@container (min-width: 34rem) {
+  .rs-machines-capsplit {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.rs-machines-caps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rs-machines-held,
+.rs-machines-notheld {
+  display: inline-block;
+  min-width: 7ch;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+}
+
+.rs-machines-held {
+  color: var(--moss);
+}
+
+.rs-machines-notheld {
+  opacity: 0.7;
+}
+
+.rs-machines-open,
+.rs-machines-asks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-machines-purpose {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+/* A table, which is one of the three things allowed to scroll sideways. */
+.rs-machines-rounds {
+  width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.rs-machines-rounds th,
+.rs-machines-rounds td {
+  text-align: left;
+  padding: 0.3rem 0.75rem 0.3rem 0;
+  white-space: nowrap;
+}
+
+/* A barren round is dimmed and never hidden: a market Brain looked at and found
+ * nothing in is a reading of that market. */
+.rs-machines-barren {
+  opacity: 0.65;
+}

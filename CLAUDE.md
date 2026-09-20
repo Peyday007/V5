@@ -6063,11 +6063,36 @@ when the brief's whole optimization rule is that it is not.**
   reads. **There is no manufacturing policy module and there must never be
   one.**
 
-**There is no client surface for this kernel yet**, and saying so is the honest
-report rather than a gap to be quietly filled. The routes exist so one can be
-built without a second, weaker path appearing beside them, and
-`npm run manufacturing` is the door that works today, calling exactly what the
-routes call.
+- **The screen shows the service's own verdict, and composes none of its own.**
+  `client/src/russell/Machines.tsx` at `/machines` renders the programme's
+  state, every category with its verdict and the sentence the server wrote for
+  it, all four conditions with their own reasons, required against held side by
+  side, the chain and what each capability unlocks, the running round, the next
+  question with the allocator's recorded reason, the declarations Brain could
+  not file, every round including the barren ones, and the decisions genuinely
+  waiting on a person. Every one of those strings is the server's: a screen that
+  paraphrased a verdict would eventually paraphrase it wrongly, and then a
+  person is reading one thing while the machinery acts on another.
+
+  **It adds no back door, and that is asserted rather than promised.** There is
+  no control that marks a capability held from what research established, and
+  the one control that records a holding at all appears only against a decision
+  the *service* raised — a category where everything research can settle is
+  settled and only holding is not. `tests/machinesBrowserToDatabase.test.ts`
+  drives the real screen over the real route over the real database, because
+  §33 records that a scripted-`fetch` suite and a screenless service suite both
+  pass for a control that posts a field the route does not take.
+
+  **The route stopped pre-empting the service's refusal**, which that seam test
+  found. `requiredString` refused an empty note with *"note" is required and
+  must be a non-empty string* — true, and useless about why — while
+  `declareHeld` says what a note is *for*. At the one control that records the
+  most consequential fact in this kernel, the sentence a person reads should be
+  the one the rule actually applies, so the route reads the field as optional
+  and lets the rule speak. Nothing is weakened: the service refuses either way.
+
+`npm run manufacturing` remains the terminal door, calling exactly what the
+routes call, for the operations a browser is not needed for.
 
 **What has and has not happened, said plainly.** The kernel operates end to end
 against both backends: a programme started, the opening question opened by the

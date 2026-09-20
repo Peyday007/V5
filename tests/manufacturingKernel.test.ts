@@ -70,7 +70,7 @@ import {
   startProgramme,
 } from '../server/services/manufacturing/program.ts';
 import { ladderSnapshot } from '../server/services/manufacturing/ladder.ts';
-import { readLadder, bridgesTo } from '../server/services/manufacturing/readiness.ts';
+import { readLadder, bridgesTo, ENTRY_VERDICTS } from '../server/services/manufacturing/readiness.ts';
 import { allocate, MAX_OPEN_PROGRAMME_ROUNDS } from '../server/services/manufacturing/allocate.ts';
 import { planFrom, runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
 import {
@@ -79,7 +79,7 @@ import {
   seedCategory,
   withdrawHeld,
 } from '../server/services/manufacturing/declare.ts';
-import { programmeView } from '../server/services/manufacturing/view.ts';
+import { programmeView, VERDICT_ORDER } from '../server/services/manufacturing/view.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { CAPABILITY_FINDINGS } from '../server/domain/types.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
@@ -1201,5 +1201,131 @@ describe('the view', () => {
       candidates: (await listCandidates({ projectId })).length,
     }).toEqual(before);
     expect(categoryId).toBeTruthy();
+  });
+});
+
+describe('the dangerous boundaries', () => {
+  /**
+   * A verdict added later cannot slip past the ordering.
+   *
+   * `VERDICT_ORDER` is a `Record` over the union, so an unnamed verdict is a
+   * compile error — and this asserts it at runtime too, because a `as` cast
+   * anywhere would defeat the type and `indexOf` on an array would have sorted
+   * the unnamed one silently to the top, which is where a reader looks first.
+   */
+  it('ranks every verdict explicitly, with none falling through', () => {
+    expect(Object.keys(VERDICT_ORDER).sort()).toEqual([...ENTRY_VERDICTS].sort());
+    const ranks = Object.values(VERDICT_ORDER);
+    expect(new Set(ranks).size).toBe(ranks.length);
+    // ENTER is what a reader is looking for, so it is first.
+    expect(VERDICT_ORDER.ENTER).toBe(Math.min(...ranks));
+  });
+
+  /**
+   * Replaying the same declarations changes nothing.
+   *
+   * The queue is at-least-once, so a redelivered submission, a retried tick and
+   * a restart mid-absorb all have to land on the same rows. The arbiter is the
+   * unique index rather than anything this pass remembers.
+   */
+  it('files one row however many times the same finding is absorbed', async () => {
+    await started();
+    await seedCategory({ projectId, name: 'Utility vehicles', actorRef: userId });
+    await runManufacturingKernel(projectId);
+    const candidate = await candidateFor('DEMAND');
+    await finishedRound({
+      candidateId: candidate!,
+      claims: [
+        {
+          claim: 'A fleet operator published a purchase of eleven units.',
+          finding: 'DEMAND_EVIDENCE',
+          subject: 'FLEET_PURCHASE',
+          observedOn: '2026-04-02',
+        },
+      ],
+    });
+
+    const program = await getProgram(projectId);
+    for (let i = 0; i < 4; i += 1) await runManufacturingKernel(projectId);
+
+    const evidence = await listCategoryEvidence(program!.id);
+    expect(evidence.filter((one) => one.kind === 'DEMAND_EVIDENCE')).toHaveLength(1);
+    // And the round's own record of what it produced does not drift either.
+    const round = (await listManufacturingRounds(program!.id)).find(
+      (one) => one.purpose === 'DEMAND' && one.state === 'HARVESTED',
+    )!;
+    expect(round.found).toBe(1);
+  });
+
+  /**
+   * A paused programme re-arms when it is resumed, and not for anything else.
+   *
+   * The half that matters is the second: a deferral that cleared on any change
+   * at all would wake work whose condition still holds, which is the "fire
+   * spent on work nobody can do" §27 corrects one system along.
+   */
+  it('re-arms from the state change that actually answers it, and not from noise', async () => {
+    await started();
+    await seedCategory({ projectId, name: 'Utility vehicles', actorRef: userId });
+    await moveProgramme({ projectId, actorUserId: userId, to: 'PAUSED' });
+
+    const paused = await runManufacturingKernel(projectId);
+    expect(paused.opened).toHaveLength(0);
+
+    // Something unrelated changes: another category is named. Still paused.
+    await seedCategory({ projectId, name: 'Compact loaders', actorRef: userId });
+    const stillPaused = await runManufacturingKernel(projectId);
+    expect(stillPaused.opened).toHaveLength(0);
+    expect(stillPaused.declined[0]!.why).toContain('paused');
+
+    // The one change that answers it.
+    await moveProgramme({ projectId, actorUserId: userId, to: 'ACTIVE' });
+    const resumed = await runManufacturingKernel(projectId);
+    expect(resumed.opened.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Nothing a worker can send marks a capability held — including a claim that
+   * says so in as many words.
+   *
+   * The vocabulary has no value for it, so the submission is refused at the
+   * door rather than stored and ignored. Refused is what lets the worker
+   * correct it; stored-and-ignored is what looks like success.
+   */
+  it('has no declaration a worker could use to claim a capability is held', () => {
+    for (const invented of ['CAPABILITY_HELD', 'CAPABILITY_ACQUIRED', 'RESEARCHED']) {
+      const result = validateCapabilityFinding({
+        where: 'claims[0]',
+        finding: invented,
+        subject: 'chassis engineering',
+        observedOn: null,
+      });
+      expect(result.ok, invented).toBe(false);
+    }
+    // And the closed set itself contains no such value.
+    expect(CAPABILITY_FINDINGS.some((one) => /HELD|ACQUIRED|HAVE/i.test(one))).toBe(false);
+  });
+
+  /**
+   * Holding is attributed, and an unattributed one cannot be written.
+   *
+   * `held_at`, `held_evidence` and `held_by` move together or not at all — a
+   * schema CHECK, not a convention — so a capability recorded as held for no
+   * stated reason by nobody is not a row this database can hold.
+   */
+  it('records who said so and what they said, or records nothing', async () => {
+    await started();
+    const held = await declareHeld({
+      projectId,
+      name: 'chassis engineering',
+      note: 'We acquired a frame shop in April.',
+      actorRef: userId,
+    });
+    const capability = (held as { capability: { id: string } }).capability;
+    const row = await getCapability(capability.id);
+    expect(row!.heldAt).not.toBeNull();
+    expect(row!.heldEvidence).toBe('DECLARED');
+    expect(row!.heldBy).toBe(userId);
+    expect(row!.heldNote).toContain('frame shop');
   });
 });

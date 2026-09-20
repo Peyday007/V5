@@ -202,11 +202,26 @@ manufacturingRouter.post(
     const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
+    /*
+     * The note is read as optional here and required by the service, which is
+     * deliberate rather than lax.
+     *
+     * `requiredString` refuses an empty one with *"note" is required and must
+     * be a non-empty string* — true, and useless about why. `declareHeld` says
+     * what a note is for: *say what was hired, bought, built or delivered; a
+     * capability held for no stated reason is indistinguishable afterwards from
+     * one somebody guessed.* That is the sentence a person should read at the
+     * one control that records the most consequential fact in this kernel, so
+     * the route stops pre-empting the rule and lets the rule speak.
+     *
+     * Nothing is weakened: the service refuses either way, and the refusal is
+     * still the server's rather than the screen's.
+     */
     const outcome = await declareHeld({
       projectId: project.id,
       capabilityId: optionalString(body['capabilityId'], 'capabilityId') ?? null,
       name: optionalString(body['name'], 'name') ?? null,
-      note: requiredString(body['note'], 'note'),
+      note: optionalString(body['note'], 'note') ?? '',
       actorRef: principal.id,
     });
     if ('error' in outcome) throw unprocessable(outcome.error);
