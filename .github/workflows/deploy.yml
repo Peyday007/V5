@@ -331,11 +331,21 @@ jobs:
       # fixtures are created and disabled within the run, and every assertion
       # is still made from outside through the edge.
       #
-      # `continue-on-error` so that a failure here does not skip the secret
-      # removal below; the run is still failed, explicitly, at the end.
+      # **It is not `continue-on-error`, and it used to be.** The argument was
+      # that a failure here must not skip the secret removal below — correct,
+      # and no longer this step's job to arrange: every step that must survive
+      # a failed verification now guards itself with `always() && release ==
+      # success`, which is strictly better because it also survives this step
+      # crashing rather than failing.
+      #
+      # What the flag cost was the one thing a person actually reads. It sets
+      # the step's *conclusion* to `success` while its `outcome` stays
+      # `failure`, so the job summary, the step list and the API all showed a
+      # green tick on a verification that had just failed — and the run had to
+      # be opened, expanded and read to find out otherwise. The verdict below
+      # was always honest about it; nothing above it was.
       - name: Prove the live Brain is actually shut
         id: hosted
-        continue-on-error: true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -473,7 +483,17 @@ jobs:
       # discovered.
       - name: Prove it survived the restart
         id: hosted_after
-        continue-on-error: true
+        # `always()` because the step before it may have failed, and this one
+        # answers a different question: the pre-restart pass says what the new
+        # image refuses, this says what survived. A restart nobody checked is
+        # the erosion the restart step's own comment describes.
+        #
+        # It does depend on that pass in one way — `--leave-beacon` is what
+        # `--check-beacon` looks for — so a pre-restart failure early enough to
+        # skip the beacon makes this fail for a *derived* reason. That is why
+        # the verdict prints both files' own failure lines rather than a count:
+        # two red steps with one cause must not read as two causes.
+        if: always() && steps.release.outcome == 'success'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -485,8 +505,10 @@ jobs:
           set -e
           grep -q '^HOSTED-VERIFICATION: PASS' hosted-after-restart.txt
 
-      # Both verification steps are `continue-on-error` so that neither can skip
-      # the secret removal. The run's verdict is decided here instead.
+      # Neither verification step is `continue-on-error` any more: a failed
+      # check reads as failed, and the steps that must still run say so
+      # themselves. The run's verdict is still decided below, and it is still
+      # the only thing that decides it.
       # -------------------------------------------------------------------
       # A one-packet authorization, run from the release pipeline
       # -------------------------------------------------------------------
@@ -502,8 +524,17 @@ jobs:
       # them but the one. Idempotent by the packet's own state: a repeat run
       # reports the authorization that already exists and rewrites neither its
       # author nor its timestamp.
+      #
+      # `always()` for the reason the two steps above it carry one: this is a
+      # decision somebody made about one packet, it is idempotent, and it has
+      # nothing to do with whether the hosted gate passed. Letting a failed
+      # probe skip it silently would be an authorization that looks applied and
+      # is not — which is worse than either outcome on its own.
       - name: Authorize one packet for RECORD_GAPS
-        if: inputs.authorize_gap_orchestration != '' && inputs.authorize_gap_admin != ''
+        if: >-
+          always() && steps.release.outcome == 'success'
+          && inputs.authorize_gap_orchestration != ''
+          && inputs.authorize_gap_admin != ''
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -536,8 +567,31 @@ jobs:
             echo "::error::No new image was released, so nothing in this commit is live and the app is still serving the previous version. Read the Deploy step; the checks below it were skipped on purpose."
             exit 1
           fi
-          if [ "$before" != "success" ] || [ "$after" != "success" ]; then
-            echo "::error::The hosted verification did not pass. Read the two steps above."
+          # Name the condition, not the step. "Read the two steps above" is
+          # true and sends somebody to scroll through six hundred passing
+          # lines; the verification prints its own verdict line and the
+          # failures beneath it, so those are what this repeats. A verdict that
+          # carries its evidence is the difference between a red run somebody
+          # reads and one somebody re-runs.
+          failing=''
+          for pass in "before:$before:hosted-verification.txt" "after:$after:hosted-after-restart.txt"; do
+            when=${pass%%:*}
+            rest=${pass#*:}
+            outcome=${rest%%:*}
+            file=${rest#*:}
+            [ "$outcome" = 'success' ] && continue
+            failing="$failing $when"
+            echo "--- $when the restart, from $file ---"
+            if [ ! -s "$file" ]; then
+              echo "(no output was captured: the check did not run, or the console never opened)"
+              continue
+            fi
+            grep '^HOSTED-VERIFICATION' "$file" || echo "(it never printed a verdict line)"
+            grep -E '^ *(FAIL|Hosted verification could not complete)' "$file" | head -20 \
+              || echo "(no FAIL line: read the step for what it did print)"
+          done
+          if [ -n "$failing" ]; then
+            echo "::error::The hosted verification did not pass ($(echo $failing | tr ' ' ',') the restart). The failing conditions are printed directly above."
             exit 1
           fi
           echo "The live Brain refused everything it should have, twice, either side of a real restart,"

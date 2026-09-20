@@ -641,6 +641,19 @@ export async function getWorkerByName(name: string): Promise<Worker | null> {
   return row ? mapWorker(row) : null;
 }
 
+/**
+ * The neutral operational label migration 074 assigns, which is what every
+ * surface prints. Unique by index, so this can never answer with two rows.
+ *
+ * Matched exactly, not normalized: a label is server-assigned rather than
+ * typed, so there is no casing anybody has to guess at, and lower-casing here
+ * would quietly widen what an operator reference matches.
+ */
+export async function getWorkerByLabel(label: string): Promise<Worker | null> {
+  const row = await getDb().get<WorkerRow>('SELECT * FROM workers WHERE label = ?', [label.trim()]);
+  return row ? mapWorker(row) : null;
+}
+
 /* ------------------------------------------------------------------------- */
 /* Worker routing scope                                                       */
 /* ------------------------------------------------------------------------- */
