@@ -80,6 +80,8 @@ import {
 } from '../../repos/design.ts';
 import { rankCapabilities, runtimeAvailability, type CapabilityRanking } from './priority.ts';
 import { readAbility, refreshCapabilities } from './capabilities.ts';
+import { ARCHITECTURE_SLUG } from '../capability/ingest.ts';
+import { getProjectBySlug } from '../../repos/projects.ts';
 import { getDb } from '../../db/database.ts';
 
 /**
@@ -423,14 +425,27 @@ async function sendSomewhere(expansion: DesignExpansion, route: RouteChoice): Pr
 /**
  * The project Brain's own architecture work is filed against.
  *
- * `purpose = 'TECHNICAL'`, which migration 028 declares for exactly this and
- * whose comment is *declared, not inferred*. Null when there is none, which is a
- * real state on a fresh Brain and is parked rather than guessed at — filing
- * architecture research into somebody's research project would be the
- * cross-project reach §31 draws a line under.
+ * `ARCHITECTURE_SLUG` first, which is the capability kernel's own answer to the
+ * same question. Two kernels resolving *Brain's architecture scope* by two
+ * different rules would eventually file into two different projects, and the
+ * disagreement would look like research going missing — the "a rule applied by
+ * one of two readers is worse than none" this repository has recorded five
+ * times, at a project id.
+ *
+ * `purpose = 'TECHNICAL'` is the fallback, because migration 028 declares that
+ * column for exactly this and a Brain whose architecture scope somebody named
+ * differently still has one.
+ *
+ * **It reads and never creates.** `ensureArchitectureScope` exists and is
+ * deliberately not called: creating a project is a person's decision on
+ * `npm run admin` (§22, §26), and a loop that made one to have somewhere to put
+ * its own work would be a machine creating its own scope. Null is a real state
+ * on a fresh Brain, and the expansion parks naming the remedy.
  */
 async function architectureProject(): Promise<string | null> {
   try {
+    const named = await getProjectBySlug(ARCHITECTURE_SLUG);
+    if (named) return named.id;
     const row = await getDb().get<{ id: string }>(
       `SELECT id FROM projects WHERE purpose = 'TECHNICAL' ORDER BY created_at ASC, id ASC`,
     );
