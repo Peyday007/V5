@@ -106,6 +106,7 @@ import {
   reconcileArguedAuditRoles,
   reconcileTerminalPackets,
 } from '../research/packetRunner.ts';
+import { reconcileRetrospectives } from '../research/intelligence/retrospective.ts';
 import { recoverExecutionLineage } from '../dispatch/lineageRecovery.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
@@ -147,6 +148,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 
 export interface TickReport {
@@ -192,6 +194,34 @@ export interface TickReport {
     recovered: number;
     /** Set when the self-model was re-read because the last one had gone stale. */
     selfModelDrift: number | null;
+    /**
+     * What one pass over the live realization packets did.
+     *
+     * `advanceSources` stops at the registry: a blueprint becomes a canonical
+     * definition without anybody typing anything, and then everything after it
+     * — deriving the gaps, asking the world, moving the dimensions, compiling
+     * the contract — waited for an operator to run six commands in order. A
+     * mechanism whose only caller is somebody's memory is not a mechanism.
+     *
+     * Every transition it performs is the identical function the CLI calls, so
+     * the two cannot drift; what this owns is the ordering and where to stop.
+     */
+    packets: {
+      /**
+       * Packets opened this tick, which until now was a command.
+       *
+       * Nothing opened a packet for a faculty that had just become canonical,
+       * so the walk below had an empty list to walk for ever — and both
+       * functions that could have done it carry a comment naming the tick as
+       * their caller. One per pass, in the blueprint's own order.
+       */
+      opened: string[];
+      considered: number;
+      advanced: number;
+      questionsRaised: number;
+      changeRequests: string[];
+      failed: number;
+    };
   };
   /**
    * Ideas the project's own archive already answered, judged and parked without
@@ -290,6 +320,8 @@ export interface TickReport {
    * a packet that had already finished, so nothing ever cleared it.
    */
   retiredPacketWork: { orchestrationId: string; retired: number }[];
+  /** Campaigns whose lessons were written this tick. See `retrospective.ts`. */
+  researchLessons: { orchestrationId: string; lessons: number }[];
   abandonedParks: { orchestrationId: string; missionId: string; missionState: string }[];
   /** Parks put back after being cancelled while a reopen was their asker. */
   restoredParks: { orchestrationId: string; reopenId: string }[];
@@ -460,6 +492,14 @@ const EMPTY: TickReport = {
     promoted: 0,
     recovered: 0,
     selfModelDrift: null,
+    packets: {
+      opened: [],
+      considered: 0,
+      advanced: 0,
+      questionsRaised: 0,
+      changeRequests: [],
+      failed: 0,
+    },
   },
   answeredByArchive: [],
   planning: [],
@@ -479,6 +519,7 @@ const EMPTY: TickReport = {
   lineageRecovered: [],
   lineageUnresolved: [],
   retiredPacketWork: [],
+  researchLessons: [],
   abandonedParks: [],
   restoredParks: [],
   followOns: [],
@@ -535,6 +576,7 @@ export async function tick(owner: string): Promise<TickReport> {
     lineageUnresolved: [],
     linksUnreconciled: [],
     retiredPacketWork: [],
+  researchLessons: [],
     abandonedParks: [],
     restoredParks: [],
     followOns: [],
@@ -561,6 +603,14 @@ export async function tick(owner: string): Promise<TickReport> {
       promoted: 0,
       recovered: 0,
       selfModelDrift: null,
+      packets: {
+      opened: [],
+      considered: 0,
+      advanced: 0,
+      questionsRaised: 0,
+      changeRequests: [],
+      failed: 0,
+    },
     },
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
@@ -758,6 +808,20 @@ export async function tick(owner: string): Promise<TickReport> {
     }
 
     /*
+     * 1a-iv-b. Write the lessons a finished campaign's rows already support.
+     *
+     * Derived on the tick rather than hooked to the moment a packet ends, for
+     * the reason every other reconciliation here is: a hook reaches only what
+     * finishes after it is deployed, and this reaches the packets that finished
+     * already. Idempotent by `lesson_key`, so a healthy Brain does the work once
+     * and then finds nothing, and no provider is called — every lesson is a
+     * count of rows.
+     */
+    for (const entry of await reconcileRetrospectives(cycle.maxEventsPerCycle)) {
+      report.researchLessons.push(entry);
+    }
+
+    /*
      * 1a-iv-b. And take dead work off a packet that has *not* finished.
      *
      * The mirror image of the sweep above, and the one nothing covered: a live
@@ -821,6 +885,38 @@ export async function tick(owner: string): Promise<TickReport> {
       report.capability.recovered = advanced.recovered;
     } catch {
       /* a kernel that could not advance is left exactly as it was */
+    }
+
+    /*
+     * And the packets the registry produced, one step each.
+     *
+     * Beside `advanceSources` because it is the rest of the same chain: that
+     * one turns a blueprint into a canonical definition, and this one turns a
+     * canonical definition into a change request somebody can approve. Before
+     * this existed the join between them was a person running
+     * `npm run capability` six times in the right order — so a packet whose
+     * authority gap was answered on Tuesday sat exactly where it was until
+     * somebody remembered.
+     *
+     * It approves nothing, spends nothing, and answers no question a person
+     * owns: an authority gap becomes a card on the Needs You surface that
+     * already exists, and the packet waits. Swallowed for `advanceSources`'
+     * reason — a reading about Brain is never a precondition of Brain.
+     */
+    try {
+      const packets = await advanceCapabilityPackets(cycle.maxEventsPerCycle);
+      if (packets.opened) report.capability.packets.opened.push(packets.opened.packetId);
+      report.capability.packets.considered = packets.considered;
+      report.capability.packets.advanced = packets.advances.length;
+      report.capability.packets.failed = packets.failed.length;
+      for (const advance of packets.advances) {
+        report.capability.packets.questionsRaised += advance.questionsRaised;
+        if (advance.changeRequestId) {
+          report.capability.packets.changeRequests.push(advance.changeRequestId);
+        }
+      }
+    } catch {
+      /* a packet that could not be walked is left exactly as it was */
     }
 
     /*

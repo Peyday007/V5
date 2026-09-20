@@ -16,7 +16,12 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import express from 'express';
 import type { Express, NextFunction, Request, Response } from 'express';
-import { closeDatabase, initDatabase, activeDatabaseConfig } from './db/database.ts';
+import {
+  closeDatabase,
+  initDatabase,
+  activeDatabaseConfig,
+  databaseConnectionHeadroom,
+} from './db/database.ts';
 import { DatabaseConfigurationError } from './db/types.ts';
 import { describePersistence, persistenceConfig } from './config.ts';
 import type { MigrationReport } from './db/migrate.ts';
@@ -338,6 +343,18 @@ function logBanner(
   console.log(`  Schema version  ${migrations.schemaVersion}`);
   console.log(`  Database        ${persistence.database.provider} · ${persistence.database.target}`);
   console.log(`  Documents       ${persistence.storage.provider} · ${persistence.storage.target}`);
+  /*
+   * The pool's headroom, on every cloud boot rather than only when it runs out.
+   *
+   * Eight production deploys have now failed a post-restart verification at a
+   * pool checkout, and §27 refused to raise the ceiling each time because the
+   * server's own limit was unknown. Printing it here is the cheapest place it
+   * could possibly go: a deploy log is already read after every release, and
+   * the alternative is discovering the number from the failure it causes.
+   * Null on SQLite, where there is no pool.
+   */
+  const headroom = databaseConnectionHeadroom();
+  if (headroom) console.log(`  Connections     ${headroom}`);
   console.log(
     `  Sign-in         ${
       identity.accounts

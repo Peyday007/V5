@@ -37,6 +37,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
+import { createUser } from '../server/repos/identity.ts';
 import {
   ensureArchitectureScope,
   registerBlueprint,
@@ -688,6 +689,18 @@ describe('the capability kernel', () => {
     });
   });
 
+  /*
+   * The answering transition for the one state Brain's own wrong contract puts
+   * a source into.
+   *
+   * `advanceSources` never looks at `FAILED`, `registerSource` is idempotent by
+   * `(content_hash, kind)` so re-registering the same bytes returns the failed
+   * row unchanged, and `recoverExtraction` only reaches an assignment whose bin
+   * has vanished. So a source that failed had no way back — which was fine
+   * while `FAILED` meant *the document is not evidence*, and stopped being fine
+   * the moment a real worker followed a real instruction and had every reading
+   * refused for naming fields the validator has never had.
+   */
   describe('the schema a worker is held to', () => {
     it('refuses the whole candidate for an unknown field', () => {
       let thrown: unknown;

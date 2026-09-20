@@ -121,6 +121,8 @@ import {
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { readObject, storageKeyOf } from '../server/services/storage.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
+import { listUncertainties } from '../server/repos/researchIntelligence.ts';
+import { researchIntelligenceView } from '../server/services/research/intelligence/view.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import type { Project, WorkerScope } from '../server/domain/types.ts';
 
@@ -1481,6 +1483,65 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   await worker.call('brain_complete_work', { ...proofOf(verifyClaim), summary: 'gated' });
 
+  /* --- The judgement layer, on the released image ----------------------- */
+  /*
+   * Read from rows rather than asserted about code, and read *here* because
+   * this is the first moment the runner has advanced a real packet on this
+   * server: the questions were seeded when the plan landed and the disposition
+   * moved when the gate answered.
+   *
+   * §33's lesson is the reason it is in this script at all. A change that
+   * reaches every fixture in `tests/` and not the scripted worker is a change
+   * whose release gate cannot see it — which is how a required field reached
+   * production and refused the very packet the gate submits.
+   */
+  {
+    const questions = await listUncertainties(orchestrationId);
+    record(
+      'the packet carries a decision-relevant question per planned fragment',
+      questions.length >= planned.length,
+      `${questions.length} question(s) for ${planned.length} fragment(s)`,
+    );
+    const settled = questions.filter((one) => one.disposition === 'RESOLVED');
+    record(
+      'and the gate answering a fragment settles the question it was asking',
+      settled.length >= 1 && settled.every((one) => one.beliefBasis === 'EVIDENCE'),
+      settled.length >= 1
+        ? `${settled.length} settled on evidence`
+        : `none settled of ${questions.length}`,
+    );
+    record(
+      'every closed question says why it closed, rather than only that it did',
+      questions
+        .filter((one) => one.disposition !== 'OPEN' && one.disposition !== 'INVESTIGATING')
+        .every((one) => (one.dispositionReason ?? '').length > 0),
+      `${questions.filter((one) => one.dispositionReason).length} of ${questions.length} carry a reason`,
+    );
+
+    /*
+     * Reading the mental state performs nothing. Asserted against the queue
+     * rather than stated in a comment, because a projection that enqueued
+     * something would make opening a page a decision.
+     */
+    const before = (await listWorkItems(fixtures.scope.id, { limit: 200 })).length;
+    const orchestration = await getOrchestration(orchestrationId);
+    const view = orchestration ? await researchIntelligenceView(orchestration) : null;
+    const after = (await listWorkItems(fixtures.scope.id, { limit: 200 })).length;
+    record(
+      'reading what Brain thinks it is researching changes nothing',
+      view !== null && before === after,
+      `${before} work item(s) before and ${after} after`,
+    );
+    record(
+      'and reports decisive coverage with its denominator rather than a bare percentage',
+      view !== null && view.sufficiency.decisive.total >= 0 && view.understanding !== null,
+      view
+        ? `${view.sufficiency.decisive.settled}/${view.sufficiency.decisive.total} decisive · ` +
+          `${view.sufficiency.verdict}`
+        : 'no view',
+    );
+  }
+
   /* --- The synthesis, and what it may cite ------------------------------ */
 
   const synthClaim = await claimResearch(fixtures, 'RESEARCH_SYNTHESIZE', orchestrationId);
@@ -2710,6 +2771,11 @@ async function mcpChecks(fixtures: Fixtures): Promise<void> {
     'brain_submit_synthesis',
     'brain_get_audit_brief',
     'brain_submit_audit',
+    // The one door a worker's judgement about the *plan* comes through. Named
+    // here for the same reason as the rest: a count passes when a tool is
+    // renamed, and renaming one the connector already knows is exactly the
+    // change that breaks a live worker and nothing else.
+    'brain_propose_plan_revision',
   ];
   const missingResearch = RESEARCH_TOOL_NAMES.filter((name) => !modernNames.includes(name));
   record(
