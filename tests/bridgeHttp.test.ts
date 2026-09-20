@@ -87,7 +87,7 @@ function worker(): Principal {
         principalType: 'WORKER',
         principalId: workerId,
         role: null,
-        scopes: ['project:read', 'project:write'],
+        scopes: ['project:read', 'research:write'],
         grantedByType: 'SYSTEM',
         grantedById: 'test',
         grantedAt: '2026-01-01T00:00:00.000Z',
@@ -144,7 +144,7 @@ beforeEach(async () => {
     principalType: 'WORKER',
     principalId: workerId,
     role: null,
-    scopes: ['project:read', 'project:write'],
+    scopes: ['project:read', 'research:write'],
     grantedByType: 'SYSTEM',
     grantedById: 'test',
   });
