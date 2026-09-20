@@ -2999,9 +2999,11 @@ remote.
   GitHub sets a `continue-on-error` step's **`conclusion` to `success`** while
   leaving `outcome` at `failure`, so both hosted verification probes showed
   green ticks in the UI and in every API listing, and only the verdict — which
-  read `outcome` — knew. Three consecutive deploys reported
-  `beforeRestart: false` / `afterRestart: false` underneath a step table with
-  no red in it. **That is worse than the skipped gate above it**: a gate that
+  read `outcome` — knew. Deploys **272, 273 and 274** each carry
+  `conclusion: success` on both probes and `conclusion: failure` on the verdict
+  beneath them, and each reported `beforeRestart: false` /
+  `afterRestart: false` to the acceptance reporter — three consecutive runs
+  where nothing red appeared above the line a reader scrolls to. **That is worse than the skipped gate above it**: a gate that
   does not run leaves a gap somebody notices, and a gate that renders as passed
   is read as evidence.
 
@@ -3013,8 +3015,10 @@ remote.
   each failing probe's own `HOSTED-VERIFICATION` and `FAIL` lines before it
   names the condition — because a red run whose only message is "read the two
   steps above" sends somebody to scroll through six hundred passing lines.
-  Proved on deploy 277: the same failing probe that rendered `success` on 276
-  rendered `failure`, and both `always()` steps ran after it.
+  Measured on deploys 273 and 274, whose probe steps both read
+  `conclusion: success` while `The verdict` beneath them read `failure`; and
+  proved on 277, where the same failing probe read `conclusion: failure` and
+  both `always()` steps ran after it regardless.
 
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
