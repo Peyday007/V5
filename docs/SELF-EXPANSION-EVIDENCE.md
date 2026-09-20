@@ -74,7 +74,7 @@ claim about the commit it ran on and nothing else.
 | Gate | Result |
 |---|---|
 | `tsc --noEmit` | clean |
-| SQLite suite | **169 files, 3 700 passed, 43 skipped**, exit 0 |
+| SQLite suite | **169 files, 3 707 passed, 43 skipped**, exit 0 |
 | Migrate from empty | **74 migrations applied in order**, schema version 74 |
 | Restart against existing | `up to date (74 already applied)` — no reapplication |
 | `npm run build` | clean; bundle `index-BQcjABQy.js`, **byte-identical to what production serves**, so this change alters no client byte |
@@ -333,6 +333,71 @@ proportion: five `/healthz` in a row at 0.14–0.37 s, and an authenticated MCP
 read of an eight-layer project answered promptly. A ceiling of 2 is not a broken
 Brain; it is a ceiling the verification's own concurrent burst exhausts, on top
 of whatever the Russell tick, the dispatcher and the factory loop are doing.
+
+## 6d. What running it on the deployed Brain found
+
+The kernel was already deployed at `b0b5fd7`, so the blueprint could be run
+through production without waiting on this branch. It was, and it failed — for a
+defect in Brain rather than in the document, the worker or the validator.
+
+| | |
+|---|---|
+| project | `Brain Architecture` `prj_ac780d726f394a8ca81d`, created by `ensureArchitectureScope` |
+| blueprint | `cps_66b6eb8302814c9f820d`, 63 586 bytes, sha-256 `da524c64…f7ca3ef0` |
+| amendment | `cps_5b6f5eaea6434027b38c`, 3 342 bytes, sha-256 `78d42f34…faf5fe7` |
+| sections declared | **15** — 1 `SHARED_EXECUTIVE` + 14 `FACULTY` (5.1–5.14) |
+| numbered chapters excluded | §7.1–7.10, §9.1–9.10, §10.1–10.5 |
+| bin | `bin_2720ea1bde3a45769ef1`, 15 units, **created by the durable tick** |
+| routing | `ROUTED` — *"Selected Airyn 2-A on Airyn: 0/∞ on the Routine, 0/∞ on the account"* |
+
+Both hashes are **byte-identical** to the local files and to what §2 recorded for
+the kernel branch, so this is the same artifact rather than a copy sharing a
+title. The one operator step was `access grant airynworker2 brain-architecture`;
+without it `routeBin` has no surface for the project and the bin sits READY.
+
+### The contract named three fields the validator has never had
+
+A fired Cowork session read all fifteen sections, derived every slug correctly,
+followed the instruction it was given exactly, and had **every** definition
+refused:
+
+```
+A connection carried unknown field(s): kind, faculty, note.
+```
+
+| | |
+|---|---|
+| the manifest said | `connections` objects have `"kind"`, `"faculty"`, optional `"note"` |
+| `CONNECTION_KEYS` says | `relationship`, `toFacultySlug`, `toComponent`, `rationale` |
+
+Not one field in common. The source went `FAILED` with *"no candidate survived
+validation, so there is nothing to audit"*.
+
+**The rule is right and stays.** An unknown field refuses the *candidate* rather
+than the field, because a worker that sent one has misunderstood what it was
+asked for and dropping it silently leaves that belief in place. What was wrong is
+the thing that asked. §27 records this at `brain_check_in`'s `session_ref` and
+§33 at `brain_submit_claims`' `opportunity_signal`; this is the third, and all
+three survived because each half was correct on its own and nothing held them
+against each other.
+
+**The test for it existed and stopped one level short.** It held the manifest
+against `DEFINITION_KEYS` and `LIST_FIELDS` and described the *nested* set in
+prose — and its own comment says why that is the risk: *"a copied list is the
+thing that drifts."* No fixture could have caught it: every one builds a
+candidate from the declared shape, so the validator and the instruction were each
+proved correct against themselves.
+
+### And the failure had no way back
+
+`advanceSources` never looks at `FAILED`; `registerSource` is idempotent by
+`(content_hash, kind)`, so re-registering the same bytes returns the failed row;
+`recoverExtraction` only reaches an assignment whose bin has vanished. A source
+that failed **because Brain was wrong** was therefore terminal.
+`services/capability/reoffer.ts` is the answering transition, and it refuses by
+name the failure it is not for — an unreadable document is the bytes rather than
+the contract, and re-offering one would hand out a bin, spend a fire and fail
+identically for ever.
 
 ## 7. What is still not true
 
