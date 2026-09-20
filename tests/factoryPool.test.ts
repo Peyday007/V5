@@ -60,7 +60,7 @@ import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { decideBinRouting } from '../server/services/bins/routing.ts';
-import { judgePool, verifyFactoryPool } from '../server/services/dispatch/pool.ts';
+import { judgePool, readFactoryPool, verifyFactoryPool } from '../server/services/dispatch/pool.ts';
 import { createProbeBin } from '../server/services/fleet/probe.ts';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
 
@@ -380,6 +380,8 @@ describe('several accounts serving one logical Factory worker', () => {
     // Unproven rather than faulted: nothing has been fired at them yet.
     expect(report.surfaces.map((s) => s.verdict)).toEqual(['UNPROVEN', 'UNPROVEN', 'UNPROVEN']);
     expect(report.problems.join(' ')).toContain('no fire to this Routine has ever produced');
+    // Three surfaces, so nothing to say about being unpooled.
+    expect(report.notes).toEqual([]);
   });
 });
 
@@ -871,6 +873,32 @@ describe('proving each surface, one at a time', () => {
       sessionRef: `cse_${surfaces[1]!.routineRef}`,
     });
     expect((await elsewhere(bin)).ok).toBe(true);
+  });
+
+  it('says a one-surface Factory is not a pool on the run that passes, not only on one that fails', async () => {
+    /*
+     * The caveat used to be a `problem`, and `ok` never counted it — so the
+     * only run that ever printed it was one that had already failed for some
+     * other reason, and the green run, which is the single place somebody
+     * could read "VERIFIED" as "pooled", said nothing. It is a note now, and
+     * this pins both halves: present when there is one surface, and never
+     * counted as a reason to refuse.
+     */
+    for (const surface of surfaces) await completeChainFor(surface);
+    const read = await readFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
+
+    const whole = judgePool(read);
+    expect(whole.ok).toBe(true);
+    expect(whole.notes).toEqual([]);
+
+    const alone = judgePool({
+      expectedWorker: read.expectedWorker,
+      repository: read.repository,
+      surfaces: read.surfaces.slice(0, 1),
+    });
+    expect(alone.ok).toBe(true);
+    expect(alone.notes.join(' ')).toContain('nothing here is pooled');
+    expect(alone.problems).toEqual([]);
   });
 
   it('judges from rows it is handed, so a verdict can be argued with afterwards', () => {

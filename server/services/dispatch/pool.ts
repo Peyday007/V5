@@ -106,6 +106,16 @@ export interface PoolReport {
   ok: boolean;
   /** One sentence per thing that stops this being a pool. */
   problems: string[];
+  /**
+   * One sentence per thing a reader is owed that is **not** a failure.
+   *
+   * These used to live in `problems`, which made them invisible exactly when
+   * they mattered: `ok` never counted them, so the only run that printed them
+   * was one that had already failed for some other reason. A caveat you see
+   * only after something else went wrong is not a caveat, and it also made the
+   * refusal line over-count — "2 problem(s)" over one problem and one note.
+   */
+  notes: string[];
 }
 
 export interface PoolInput {
@@ -135,14 +145,19 @@ export function judgePool(input: PoolInput): PoolReport {
         'no pool to verify. Onboard the repository and register one Routine per Claude account.',
     );
   }
+  const notes: string[] = [];
   if (surfaces.length === 1) {
     /*
      * Said rather than counted as a failure. One surface is a working Factory
      * and a complete answer to "can this run at all"; it is not a pool, and a
      * command that reported a pool verified over a single account would be
      * exactly the rounding-up §23 refuses everywhere else.
+     *
+     * So it is a note rather than a problem: it must be printed on the green
+     * run, which is the only run where somebody could otherwise read
+     * "VERIFIED" as "pooled".
      */
-    problems.push(
+    notes.push(
       'Only one surface is registered for this repository, so nothing here is pooled: there is ' +
         'no second account to run in parallel with, and no failover. That is a complete ' +
         'single-surface Factory and it is reported as one.',
@@ -162,6 +177,7 @@ export function judgePool(input: PoolInput): PoolReport {
     // a pool that will hand work to something nothing has ever run on.
     ok: surfaces.length > 0 && surfaces.every((surface) => surface.verdict === 'PROVEN'),
     problems,
+    notes,
   };
 }
 

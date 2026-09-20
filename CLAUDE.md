@@ -2877,6 +2877,17 @@ remote.
   first real campaign's to prove, and reporting a green probe as a green campaign
   would be the comfortable half-truth this file exists to refuse.
 
+  **And the one caveat it exists to say was printed only by runs that had
+  already failed.** *"Only one surface is registered, so nothing here is
+  pooled"* was pushed onto `problems`, which `ok` deliberately does not count —
+  so a single-surface pool that proved itself returned green, the reporter
+  returned on `ok` before it reached the loop, and the sentence never appeared
+  on the one run where somebody could read `VERIFIED` as *pooled*. It also made
+  the refusal over-count: *"2 problem(s)"* over one problem and one caveat.
+  Found by running it against the first real surface rather than by reading it.
+  `notes` is its own channel, printed on both paths, and the failure mode is
+  fixed at *said too often* rather than *said only when it is too late*.
+
   **Putting the Routine's reference in front of every project member was mine
   and is corrected here rather than quietly.** A pool makes the *name*
   ambiguous — three surfaces all reading `Factory Brain …` — so the Fleet page
