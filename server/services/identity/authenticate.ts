@@ -35,10 +35,33 @@ import { findLiveToken, touchToken } from '../../repos/oauth.ts';
 /** The cookie a signed-in person carries. */
 export const SESSION_COOKIE = 'brain_session';
 
-/** Eight hours. Long enough for a working day, short enough that a forgotten
- *  laptop is not an open session next week. Refreshed on use is deliberately
- *  *not* done: a rolling session never ends. */
-export const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+/**
+ * How long a session lives, and why there are two answers.
+ *
+ * Both are **absolute**. Neither is refreshed on use, and that is deliberate
+ * for the reason it has always been: a rolling session never ends, so the only
+ * thing that would eventually close it is somebody remembering to sign out.
+ *
+ * **A device session lasts thirty days.** The credential behind it is a
+ * passkey: bound to this origin, held by a device, and released only after that
+ * device has verified the person — a fingerprint, a face, or the screen lock.
+ * An eight-hour session on top of that asked somebody holding a strong
+ * credential to re-present it twice a day, which is friction that buys nothing:
+ * the session is a row this server can revoke on any request, the account is
+ * re-read on every one of them, and a disabled person is refused mid-sentence.
+ * Thirty days is long enough that ordinary use never reaches it and short
+ * enough that a browser nobody opens again is not an open session next quarter.
+ * It is carried in the cookie's `Max-Age`, so it survives closing the browser —
+ * which is the point — and nothing about it is stored where a script can read
+ * it.
+ *
+ * **A password session lasts eight hours**, unchanged. That door is
+ * break-glass now (see `passwordDoor.ts`): a session opened by somebody using
+ * an emergency credential is not a working session, and the first thing they
+ * are there to do is register a device.
+ */
+export const DEVICE_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const PASSWORD_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 export type AuthOutcome =
   | { ok: true; principal: Principal }

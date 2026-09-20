@@ -240,6 +240,53 @@ export async function createUser(input: CreateUserInput): Promise<User> {
   return created;
 }
 
+/**
+ * A person with no credential of any kind, waiting for a device.
+ *
+ * The one place this row shape is written. Both journeys that bring somebody
+ * into this Brain produce it — an administrator creating a member slot, and a
+ * project invitation accepted by an address with no account yet — and having
+ * two copies of the `INSERT` is how one of them would eventually acquire a
+ * password column the other does not have.
+ *
+ * `password_verifier` and `password_algorithm` are NULL on purpose rather than
+ * set to something unusable: "passkey-only" is then a property of the row that
+ * `getPasswordVerifierByEmail` cannot answer for, rather than a policy some
+ * later code path has to remember to apply.
+ *
+ * The address is optional because the two journeys differ on exactly that. A
+ * member slot has none — there is nothing to send a reset to and nothing to
+ * collect it for. An invitation names one, and it is the invitation's own, so
+ * it is kept: it is how the *next* invitation to the same person finds them.
+ */
+export async function createCredentiallessUser(input: {
+  email: string | null;
+  displayName: string;
+  createdByType: ActorType;
+  createdById: string | null;
+}): Promise<User> {
+  const id = newId('usr');
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO users (id, email, display_name, kind, password_algorithm, password_verifier,
+                        password_updated_at, must_change_password, is_brain_admin, disabled_at,
+                        created_by_type, created_by_id, created_at, updated_at)
+     VALUES (?, ?, ?, 'PERSON', NULL, NULL, NULL, 0, 0, NULL, ?, ?, ?, ?)`,
+    [
+      id,
+      input.email === null ? null : normalizeEmail(input.email),
+      input.displayName.trim(),
+      input.createdByType,
+      input.createdById,
+      at,
+      at,
+    ],
+  );
+  const created = await getUser(id);
+  if (!created) throw new Error('The user row disappeared immediately after being written.');
+  return created;
+}
+
 export async function getUser(id: string): Promise<User | null> {
   const row = await getDb().get<UserRow>('SELECT * FROM users WHERE id = ?', [id]);
   return row ? mapUser(row) : null;
@@ -369,6 +416,15 @@ export interface CreateSessionInput {
   ttlMs: number;
   userAgent?: string | null;
   ip?: string | null;
+  /**
+   * The device this session was opened by, where one was.
+   *
+   * Null is an answer rather than a gap: the break-glass password door opens a
+   * session from no device at all, and a session that names none is correctly
+   * out of reach of a per-device revocation while still being reached by the
+   * per-person one.
+   */
+  passkeyId?: string | null;
 }
 
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
@@ -377,8 +433,8 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
   const expiresAt = new Date(Date.now() + input.ttlMs).toISOString();
   await getDb().run(
     `INSERT INTO user_sessions (id, user_id, token_verifier, issued_at, expires_at,
-                                revoked_at, last_seen_at, user_agent, created_ip)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+                                revoked_at, last_seen_at, user_agent, created_ip, passkey_id)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
     [
       id,
       input.userId,
@@ -388,6 +444,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
       at,
       (input.userAgent ?? '').slice(0, 200) || null,
       input.ip ?? null,
+      input.passkeyId ?? null,
     ],
   );
   return { sessionId: id, secret: input.secret, expiresAt };
@@ -449,6 +506,29 @@ export async function revokeSessionsForUser(
     `UPDATE user_sessions SET revoked_at = ?
       WHERE user_id = ? AND revoked_at IS NULL AND id <> ?`,
     [nowIso(), userId, exceptSessionId ?? ''],
+  );
+  return result.changes;
+}
+
+/**
+ * End every session one device opened.
+ *
+ * What a revocation of *that credential* can honestly reach. Revoking a
+ * passkey and leaving the session it opened alive would mean a retired device
+ * keeps working until its session expires — which, now that a device session is
+ * measured in weeks rather than hours, is not a rounding error.
+ *
+ * It deliberately does not touch the person's other sessions: the ones their
+ * remaining devices opened are not the ones being taken out of service, and
+ * ending them would make losing one phone a reason to sign in again everywhere.
+ * Where *every* session has to go — a recovery, a password change — the
+ * per-person revocation above is the one to call.
+ */
+export async function revokeSessionsForPasskey(passkeyId: string): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE user_sessions SET revoked_at = ?
+      WHERE passkey_id = ? AND revoked_at IS NULL`,
+    [nowIso(), passkeyId],
   );
   return result.changes;
 }

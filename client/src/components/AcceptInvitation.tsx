@@ -20,12 +20,22 @@
  * the distinction the server spent effort refusing to make. What it does instead
  * is show that sentence, which already names the remedy.
  *
- * **It never says what will happen; it asks.** Whether a password is needed is
+ * **It never says what will happen; it asks.** Whether an account is needed is
  * the server's answer from rows, carried in the preview, so the form cannot ask
- * a new person for nothing or an existing one for a password they already have.
+ * a new person for nothing or an existing one for a device they already hold.
+ *
+ * **An account it creates holds no password, and never did hold one for long.**
+ * This screen used to ask an invited person to choose one, which was the last
+ * path in the application that could mint a password-backed human — and under
+ * `services/identity/passwordDoor.ts` that password would have *worked*, which
+ * is precisely the credential no member is meant to have. The account is
+ * created credential-less now, and the enrollment link that comes back with
+ * the acceptance is spent here, so the journey still ends with somebody signed
+ * in rather than holding a membership they cannot reach.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Api, ApiError, type AcceptedInvitation, type InvitationPreview } from '../lib/api.ts';
+import { PASSKEY_UNSUPPORTED, Passkeys, passkeysAvailable } from '../lib/passkeys.ts';
 
 function describe(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -56,8 +66,6 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
 
   const look = useCallback(() => {
     if (token.length === 0) {
@@ -84,23 +92,33 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
 
   useEffect(look, [look]);
 
+  /**
+   * Accept, and — for an account this acceptance creates — register the device
+   * in the same breath.
+   *
+   * The account it makes holds **no credential at all**, so stopping at the
+   * acceptance would leave somebody a member of a project they cannot sign in
+   * to. The enrollment link comes back in the reply, is spent here, and is
+   * never stored: `Passkeys.enrol` ends with them signed in, which is why the
+   * screen after this offers to open the Brain rather than to sign in.
+   *
+   * A device that refuses is not a failed acceptance. The membership is
+   * granted and the link is still live, so the sentence says so and points at
+   * the link they already have rather than at a retry that would be refused.
+   */
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
-    if (preview?.accountNeeded && password !== confirm) {
-      setError('Those two passwords are not the same.');
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
-      setAccepted(
-        await Api.acceptInvitation({
-          token,
-          ...(preview?.accountNeeded ? { password, displayName } : {}),
-        }),
-      );
-      setPassword('');
-      setConfirm('');
+      const outcome = await Api.acceptInvitation({
+        token,
+        ...(preview?.accountNeeded ? { displayName } : {}),
+      });
+      if (outcome.enrollment) {
+        await Passkeys.enrol(outcome.enrollment.token, 'This device');
+      }
+      setAccepted(outcome);
     } catch (problem) {
       setError(describe(problem));
     } finally {
@@ -129,11 +147,12 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
           </p>
           <p className="signin__hint">
             {accepted.createdAccount
-              ? `Your account is ${accepted.email}. Sign in with the password you just chose.`
-              : `Sign in as ${accepted.email} to see it.`}
+              ? 'Your device is registered, and it is how you sign in from now on. There is no ' +
+                'password and no address to remember.'
+              : `Sign in with your device to see it.`}
           </p>
           <button type="button" className="btn btn--primary signin__submit" onClick={onAccepted}>
-            SIGN IN
+            {accepted.createdAccount ? 'OPEN THE BRAIN' : 'SIGN IN'}
           </button>
         </div>
       </div>
@@ -196,35 +215,12 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
                   onChange={(event) => setDisplayName(event.target.value)}
                   placeholder={preview.invitedEmail}
                 />
-                <label className="signin__label" htmlFor="invite-password">
-                  CHOOSE A PASSWORD
-                </label>
-                <input
-                  id="invite-password"
-                  className="signin__input"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={12}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                />
-                <label className="signin__label" htmlFor="invite-confirm">
-                  PASSWORD AGAIN
-                </label>
-                <input
-                  id="invite-confirm"
-                  className="signin__input"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={12}
-                  value={confirm}
-                  onChange={(event) => setConfirm(event.target.value)}
-                  required
-                />
                 <p className="signin__hint">
-                  At least 12 characters. Your account will be {preview.invitedEmail} — the
-                  address you were invited at, which is not something this page can change.
+                  {passkeysAvailable()
+                    ? 'Accepting creates your account and registers this device. Your device ' +
+                      'will ask you for your fingerprint, your face or your screen lock. ' +
+                      'There is no password to choose.'
+                    : PASSKEY_UNSUPPORTED}
                 </p>
               </>
             ) : (
