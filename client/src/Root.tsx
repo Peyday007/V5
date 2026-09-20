@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Api } from './lib/api.ts';
 import type { SessionUser } from './lib/api.ts';
 import { SignIn } from './components/SignIn.tsx';
+import { Recovery } from './components/Recovery.tsx';
 import { AcceptInvitation } from './components/AcceptInvitation.tsx';
 import { Enrol } from './components/Enrol.tsx';
 import { useRoute } from './lib/router.ts';
@@ -74,11 +75,30 @@ export default function Root(): JSX.Element {
     );
   }
 
+  /*
+   * The break-glass door, ahead of the gate for the enrollment link's reason:
+   * the person who needs it cannot sign in, which is the whole of why they are
+   * here. Nothing links to it, and the sign-in screen does not mention it.
+   */
+  if (navigation.route.name === 'RECOVERY') {
+    return <Recovery onSignedIn={ask} pendingUser={user ?? null} />;
+  }
+
   if (user === undefined) {
     return <div className="rs-boot">Starting…</div>;
   }
-  if (user === null || user.mustChangePassword) {
-    return <SignIn onSignedIn={ask} pendingUser={user} />;
+  if (user === null) {
+    return <SignIn onSignedIn={ask} />;
+  }
+  /*
+   * A password somebody else chose is replaced on the recovery screen rather
+   * than in front of the door everybody uses. The account carrying that flag is
+   * a bootstrapped or administrator-created one — never a member, who has no
+   * password to be handed — so this is not a screen a person who signed in with
+   * a device can reach.
+   */
+  if (user.mustChangePassword) {
+    return <Recovery onSignedIn={ask} pendingUser={user} />;
   }
   // The legacy console owns its own boot, health check and project loading, so
   // it is handed the whole screen rather than wrapped. That is deliberate: it

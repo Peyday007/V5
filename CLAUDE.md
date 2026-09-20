@@ -4298,6 +4298,121 @@ The marker is deliberately narrow: one capability, no way for an ordinary
 migration to opt out of its transaction, and nothing on the Postgres chain,
 which has `ALTER COLUMN ... DROP NOT NULL` and needs none of it.
 
+### The password was still on the screen, because the owner still needed it.
+
+Step 12D built the passkey journey and stopped one account short. The sign-in
+screen carried SIGN IN WITH YOUR DEVICE, then OR WITH A PASSWORD, then EMAIL and
+PASSWORD, with a comment saying the password half was "what the owner's own
+account still uses" and was deliberately not hidden because a fallback somebody
+cannot find is a lockout. Both halves of that were true and the conclusion was
+wrong.
+
+**The cause was one row, and it was read from production rather than assumed.**
+`people list` against the live Brain: `usr_1443…` — `PERSON`, `ADMIN`,
+`passkeys=0 signs-in=password`. Two members beside it at `passkeys=1
+signs-in=device`, so nothing structural required a password; the owner simply
+had no device, and removing the form without doing anything else would have
+locked out the one account that can administer this Brain. **An alternative that
+is on the screen is not a fallback, it is a way in** — and what a person reads
+on a sign-in screen is what they believe the system is, so a password under the
+device button taught every member that this Brain has passwords, while the two
+who had actually joined never had one.
+
+**The rule is derived from rows, per account, and it closes by itself.**
+`services/identity/passwordDoor.ts`: a password is accepted only from an account
+that **cannot sign in with a device** — one holding no live passkey it has
+actually *signed in with*. Registered is not enough, deliberately: a credential
+bound to an origin that later turns out to be wrong registers perfectly and
+asserts never, so the weaker reading is the safe direction to be wrong in. That
+single sentence answers three accounts that each needed something different, and
+a rule naming any of them would have been wrong about the others. The owner's
+door was open for exactly as long as it was their only way in and shut the first
+time a device signed them in — which is "verify the passkey works before
+disabling the password" expressed as a derivation rather than as a step somebody
+has to remember. The members were already shut, by their own enrollment. And the
+hosted verification identities keep working **without this module knowing they
+exist**: nothing in it mentions `kind`, and what keeps `verify-hosted`'s
+`SYSTEM` rows signing in is that machinery holds no passkey. A rule that said
+"refuse every person" would have needed a second place to answer "is this a
+human", which is a second place for that to be answered differently.
+
+**A refusal is byte-identical to a wrong password, and the check sits after the
+verification rather than before it.** "That account signs in with a device" says
+both that the account exists and that it holds one, so it is the same sentence,
+the same status and the same elapsed work as an unknown address — checking the
+door first would answer faster for an enrolled account, which is a way to learn
+who has enrolled. The category is on the audit row, which is where a distinction
+belongs.
+
+**Every escalation has an answering transition, and this one has two.**
+`/recovery` is an address nothing links to, for an account with no working
+device yet; it ends by registering one rather than by opening the Brain, because
+the point of getting in that way is to stop needing to. And `BRAIN_BREAK_GLASS`
+is what answers the sharp edge the rule would otherwise leave: the sole
+administrator who loses their only device, whose ordinary remedy is an
+administrator issuing a recovery link and who *is* the administrator. It is a
+deployment secret — §26's rule that reaching the shell is the authentication,
+the same ground `BRAIN_BOOTSTRAP_ADMIN_RESET` already stands on — read per
+request so an emergency switch cannot need a redeploy to turn *off*, and named
+in the boot banner every time the machine starts while it is set. It grants
+nothing: the password is still verified, the throttle still applies, a disabled
+account is still refused, and the session is the short one.
+
+**The last path that could mint a password-backed person was not the sign-in
+screen, and a test found it rather than a reading.** `AcceptInvitation.tsx`
+asked an invited person to choose a password, and `acceptInvitation` created the
+account with it — which under the rule above is a password that **works**, since
+that account has no device. An ordinary member would have ended up holding
+exactly the credential no member is supposed to have. It creates a
+credential-less row now, through the same `createCredentiallessUser` the member
+slot uses, and hands back one enrollment link that the screen spends
+immediately — so the journey still ends signed in rather than with a membership
+somebody cannot reach. Nothing about the invitation's own guarantees moved: the
+address is still the invitation's, Brain administration is still never
+conferred, and creating the principal at all is still `decideBrainAdmin`'s to
+authorize. What changed is which credential the account ends up holding.
+
+**The consent screen was the second place a password was collected**, posting to
+`/api/auth/login` from a server-rendered form. It is now the instruction
+instead: the operator is in a browser on this Brain's own origin at the moment
+they pressed *connect*, so the Brain is one tab away, and **Continue** is the
+same request re-asked with its parameters intact. Reproducing a WebAuthn
+exchange in a page with no application behind it would have been a second
+authentication surface for a journey that already works.
+
+**Friction was the other half of the complaint, and the session was where it
+lived.** Two constants disagreed — eight hours at the password door, twelve at
+the passkey one — and both were short enough that ordinary use hit them. A
+device session is **thirty days** now, absolute and not refreshed on use,
+carried in the cookie's `Max-Age` so it survives closing the browser; the
+credential behind it is a device-held passkey released only after the person
+verified themselves to it, the session is a row the server re-reads on every
+request, and asking for that credential twice a day bought nothing. A password
+session stays at eight hours, because a break-glass session is not a working
+session.
+
+**And a revocation has to be able to reach the session it retired.**
+`user_sessions.passkey_id` (migration 073 / pg 064) records which device opened
+one, so revoking a device ends its sessions and leaves the person's other
+devices alone — losing one phone is not a reason to sign in again everywhere —
+while a recovery, where nothing that person holds can be trusted, ends all of
+them. Without that column a retired credential kept working until its session
+expired, which was a rounding error at twelve hours and is not at thirty days.
+
+**The screen is what was wrong, so the screen is what is asserted.** Every
+server test passed while the form was there and would have gone on passing if it
+had simply been left, because a form nobody is required to post is invisible
+from the API. `tests/signInSurface.test.tsx` reads the rendered document —
+no input of any kind, the word *password* absent, no link to anywhere — and
+`tests/passkeyOnlyAuth.test.ts` walks the owner's own migration: signed in with
+the password they have, a device against **the same user id**, no second
+account, administration and memberships intact, and the password refused for
+ever after in the same words a wrong one gets. Both were run against a neutered
+rule to watch them fail before they were trusted to pass. `verify-hosted` reads
+the **served bundle** rather than the repository, because §33 already records
+what it costs when a change reaches every fixture in `tests/` and not the script
+that runs against production.
+
 ## 33. A pipeline is what actually ran, not what each stage would do if it were reached.
 
 A production audit of the four research surfaces — *Brain Research A*, *1-B*,
@@ -6039,6 +6154,7 @@ server/
       webauthn.ts       a registration and an assertion, verified against Node crypto
       enrollment.ts     a member slot, its one link, and the recovery that retires first
       passkeyAuth.ts    the relying party, the challenge, and one refusal for everything
+      passwordDoor.ts   who may still present a password, derived per account from rows
       context.ts        the request's principal, and why it is also on the request
       policy.ts         roles, scopes, and the one authorization decision
       authenticate.ts   cookie or bearer -> principal, from server rows only
@@ -6252,6 +6368,8 @@ client/                 React UI
   src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
   src/russell/Devices.tsx    your own passkeys, and nobody else's
   src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate
+  src/components/SignIn.tsx  one button; no address, no password, no alternative
+  src/components/Recovery.tsx  the break-glass door, unlinked, ending in a device
   src/russell/Home.tsx  the command center: state, focus, maturity strip, collections
   src/russell/Fleet.tsx capacity, surfaces, policy as rows, and the lab beside it
   src/russell/Frontier.tsx  the five regions, each item naming what it came from
@@ -6301,6 +6419,8 @@ tests/                  Vitest suites
   webauthn.test.ts           a real P-256 credential, and every refusal that would not have been one
   passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits
   passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new
+  passkeyOnlyAuth.test.ts    the owner's own migration, and the door shutting behind it
+  signInSurface.test.tsx     the screen an unauthenticated person is actually served
   sharedCashAccess.test.ts   a member reads the frontier; nobody reads somebody's job
   peopleAndCapacity.test.ts  a declared person, a counted Routine, a resumable setup
   claudeConnectionLifecycle.test.ts  asking, checking, misbinding, lapsing, revoking, reconnecting
