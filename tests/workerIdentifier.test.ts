@@ -147,13 +147,20 @@ function scratchEnv(root: string): NodeJS.ProcessEnv {
 }
 
 /**
- * Every child is bounded, and that is not belt-and-braces.
+ * Every child is bounded, on a property rather than on an incident.
  *
  * `execFileSync` blocks the worker thread, so vitest's own per-test timeout
- * cannot interrupt one — a child that never exits hangs the entire suite with
- * no failing test and no diagnosis, which is the shape this repository keeps
- * correcting: an outcome reported as *still running* when it is actually
- * stuck. The bound turns that into a named failure naming the command.
+ * cannot interrupt one: a child that never exits produces no failing test, no
+ * message and no end — the run simply does not finish, which reads as *still
+ * going*. That is true of the API regardless of whether it has ever happened
+ * here, and it is the reason to bound it.
+ *
+ * **It has not happened here, and an earlier version of this comment said it
+ * had.** That version cited a CI job "hung for ninety minutes"; measured from
+ * the run's own timestamps afterwards, the step had been going about five
+ * minutes when it was cancelled. The estimate came from how long the work had
+ * *felt*, which is not a measurement. The bound stays because the property is
+ * real; the incident is withdrawn.
  */
 const CHILD_TIMEOUT_MS = 90_000;
 

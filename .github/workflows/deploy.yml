@@ -345,16 +345,26 @@ jobs:
       # be opened, expanded and read to find out otherwise. The verdict below
       # was always honest about it; nothing above it was.
       #
-      # **And it is bounded, because an unbounded one holds everything else.**
-      # Run 275 sat on the post-restart probe for over an hour: `flyctl ssh
-      # console` keeps a session open with no clock of its own, and neither the
-      # step nor the job had one either. Every operator workflow in this
-      # repository shares the `deploy-brain` concurrency group, so a hung probe
-      # is not a slow deploy — it is every reading, tick and fleet command
-      # queued behind it until somebody notices. Forty-five minutes is past
-      # what a passing run has ever taken and far inside the job's own budget,
-      # so a slow pass still finishes and a stuck one stops being everybody's
-      # problem.
+      # **And it is bounded, because nothing else bounds it.** `flyctl ssh
+      # console` keeps a session open with no clock of its own, the step had
+      # none, and the job's is GitHub's six-hour default — while every operator
+      # workflow in this repository shares the `deploy-brain` concurrency
+      # group, so a probe that never returns is not a slow deploy but every
+      # reading, tick and fleet command queued behind it.
+      #
+      # Forty-five minutes is set from the one number that was measured rather
+      # than from an incident: run 274's post-restart probe ran **22 minutes**
+      # and completed, and the pre-restart probe before it reached the judge
+      # step in about ten. Double the longest observed pass leaves a slow one
+      # room to finish and still stops an indefinite one.
+      #
+      # **No such indefinite probe has actually been observed**, and an earlier
+      # version of this comment said one had — it claimed run 275 sat here for
+      # over an hour. Measured from the run's own timestamps afterwards, that
+      # step had been going **5.3 minutes** when it was cancelled, which is
+      # ordinary. The bound is a precaution with an argument, not a fix with an
+      # incident behind it, and saying otherwise would be inventing the
+      # measurement this file exists to insist on.
       - name: Prove the live Brain is actually shut
         id: hosted
         timeout-minutes: 45
