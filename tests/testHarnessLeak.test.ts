@@ -44,6 +44,43 @@ describe('the test harness does not leak a Postgres schema', () => {
   });
 
   /*
+   * First, and the order is the assertion.
+   *
+   * `releaseTestSchemas` drops everything the *process* registered, and
+   * `openTestDatabase` registers this file's own schema the moment anything
+   * opens a database. A release test running after one would drop the schema
+   * it is still standing on, and pass only because nothing came after it —
+   * a fixture destroyed by luck rather than a test.
+   */
+  it('drops a schema it registered, and says nothing when there is none', async () => {
+    const postgres = postgresTestConnection();
+    if (!postgres) return;
+    const pg = await import('pg');
+    const admin = new pg.default.Client({ connectionString: postgres.connectionString });
+    await admin.connect();
+    // A name of the harness's own shape, so the release's own guard admits it.
+    const scratch = `brain_t_leakcheck_${Math.random().toString(36).slice(2, 10)}`;
+    try {
+      await admin.query(`CREATE SCHEMA ${scratch}`);
+      registerSchemaCleanup(scratch);
+      await releaseTestSchemas();
+
+      const left = await admin.query(
+        'SELECT 1 FROM information_schema.schemata WHERE schema_name = $1',
+        [scratch],
+      );
+      expect(left.rowCount).toBe(0);
+
+      // Idempotent: a second release with nothing registered is a no-op rather
+      // than an error, because it runs from a global hook on every file.
+      await expect(releaseTestSchemas()).resolves.toBeUndefined();
+    } finally {
+      await admin.query(`DROP SCHEMA IF EXISTS ${scratch} CASCADE`).catch(() => undefined);
+      await admin.end();
+    }
+  });
+
+  /*
    * The marker is what lets a sweep tell a leak from a live sibling, and it has
    * to be created in the same transaction as the schema: Postgres DDL is
    * transactional, so the schema becomes visible at COMMIT with the row already
@@ -72,34 +109,6 @@ describe('the test harness does not leak a Postgres schema', () => {
       );
       expect(marked.rows[0]?.marked).toBe(true);
     } finally {
-      await admin.end();
-    }
-  });
-
-  it('drops a schema it registered, and says nothing when there is none', async () => {
-    const postgres = postgresTestConnection();
-    if (!postgres) return;
-    const pg = await import('pg');
-    const admin = new pg.default.Client({ connectionString: postgres.connectionString });
-    await admin.connect();
-    // A name of the harness's own shape, so the release's own guard admits it.
-    const scratch = `brain_t_leakcheck_${Math.random().toString(36).slice(2, 10)}`;
-    try {
-      await admin.query(`CREATE SCHEMA ${scratch}`);
-      registerSchemaCleanup(scratch);
-      await releaseTestSchemas();
-
-      const left = await admin.query(
-        'SELECT 1 FROM information_schema.schemata WHERE schema_name = $1',
-        [scratch],
-      );
-      expect(left.rowCount).toBe(0);
-
-      // Idempotent: a second release with nothing registered is a no-op rather
-      // than an error, because it runs from a global hook on every file.
-      await expect(releaseTestSchemas()).resolves.toBeUndefined();
-    } finally {
-      await admin.query(`DROP SCHEMA IF EXISTS ${scratch} CASCADE`).catch(() => undefined);
       await admin.end();
     }
   });
