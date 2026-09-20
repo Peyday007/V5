@@ -205,6 +205,15 @@ export interface TickReport {
      * the two cannot drift; what this owns is the ordering and where to stop.
      */
     packets: {
+      /**
+       * Packets opened this tick, which until now was a command.
+       *
+       * Nothing opened a packet for a faculty that had just become canonical,
+       * so the walk below had an empty list to walk for ever — and both
+       * functions that could have done it carry a comment naming the tick as
+       * their caller. One per pass, in the blueprint's own order.
+       */
+      opened: string[];
       considered: number;
       advanced: number;
       questionsRaised: number;
@@ -462,7 +471,14 @@ const EMPTY: TickReport = {
     promoted: 0,
     recovered: 0,
     selfModelDrift: null,
-    packets: { considered: 0, advanced: 0, questionsRaised: 0, changeRequests: [], failed: 0 },
+    packets: {
+      opened: [],
+      considered: 0,
+      advanced: 0,
+      questionsRaised: 0,
+      changeRequests: [],
+      failed: 0,
+    },
   },
   answeredByArchive: [],
   planning: [],
@@ -565,7 +581,14 @@ export async function tick(owner: string): Promise<TickReport> {
       promoted: 0,
       recovered: 0,
       selfModelDrift: null,
-      packets: { considered: 0, advanced: 0, questionsRaised: 0, changeRequests: [], failed: 0 },
+      packets: {
+      opened: [],
+      considered: 0,
+      advanced: 0,
+      questionsRaised: 0,
+      changeRequests: [],
+      failed: 0,
+    },
     },
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
@@ -859,6 +882,7 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     try {
       const packets = await advanceCapabilityPackets(cycle.maxEventsPerCycle);
+      if (packets.opened) report.capability.packets.opened.push(packets.opened.packetId);
       report.capability.packets.considered = packets.considered;
       report.capability.packets.advanced = packets.advances.length;
       report.capability.packets.failed = packets.failed.length;

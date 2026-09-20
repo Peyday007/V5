@@ -65,9 +65,11 @@ import { askTheWorld } from './askTheWorld.ts';
 import { applyRealization } from './realized.ts';
 import {
   derivePacket,
+  facultiesWithoutPackets,
   getPacket,
   listGaps,
   listPackets,
+  openPacket,
   readiness,
 } from './packet.ts';
 import type { RealizationPacket } from './packet.ts';
@@ -119,6 +121,10 @@ export interface PacketAdvance {
 export interface AdvanceReport {
   considered: number;
   advances: PacketAdvance[];
+  /** The packet this pass opened, if the chain had reached a faculty with none. */
+  opened: { packetId: string; facultySlug: string } | null;
+  /** Why none was opened, which is usually that every faculty already has one. */
+  notOpenedBecause: string;
   /** Packets a pass threw on, left exactly as they were. */
   failed: Array<{ packetId: string; reason: string }>;
 }
@@ -134,7 +140,35 @@ const LIVE: RealizationPacket['state'][] = ['DRAFT', 'RESEARCHING', 'READY'];
  * the tick has.
  */
 export async function advanceCapabilityPackets(limit = 5): Promise<AdvanceReport> {
-  const report: AdvanceReport = { considered: 0, advances: [], failed: [] };
+  const report: AdvanceReport = {
+    considered: 0,
+    advances: [],
+    opened: null,
+    notOpenedBecause: '',
+    failed: [],
+  };
+
+  /*
+   * Open one first, if the chain has run out of packets to walk.
+   *
+   * `openPacket`'s own comment says asking twice for one faculty is one packet,
+   * "which is what makes this safe to call from a tick" — and nothing called it
+   * from one. `facultiesWithoutPackets`' comment says it exists "so a tick can
+   * see what has not been started", and its only production caller was the CLI
+   * listing. So a blueprint could become a canonical definition unattended and
+   * then stop, with `listPackets` returning an empty list for ever, because
+   * opening the packet was a seventh command in front of the six this module
+   * exists to stop being a runbook.
+   *
+   * It fails soft, for the reason every other step here does.
+   */
+  try {
+    const opening = await openNextPacket();
+    report.opened = opening.opened;
+    report.notOpenedBecause = opening.because;
+  } catch (error) {
+    report.notOpenedBecause = error instanceof Error ? error.message : String(error);
+  }
 
   const live = (await listPackets(LIVE)).slice(0, limit);
   for (const packet of live) {
@@ -151,6 +185,87 @@ export async function advanceCapabilityPackets(limit = 5): Promise<AdvanceReport
   }
 
   return report;
+}
+
+/**
+ * Open a packet for the next canonical faculty that has never had one.
+ *
+ * **One per pass, and that is a rate rather than a ceiling.** The obvious shape
+ * was a concurrency bound — realize one faculty at a time, because a packet
+ * ends in a Software Factory campaign against *this* repository and two
+ * campaigns moving one tree is the surface collision §27 refuses one altitude
+ * down. It is the wrong shape here and the reason is worth recording rather
+ * than discovering later: **nothing in `server/` ever moves a realization
+ * packet's state.** `advance` in `packet.ts` is a compare-and-swap with no
+ * production caller, so `TERMINAL` has no writer and every packet is `DRAFT`
+ * for ever. A ceiling of one against that is a ceiling nothing can ever
+ * release, which is §24's *waiting nobody can resolve* built deliberately. A
+ * rate needs no release: the second faculty gets its packet on the next pass
+ * whatever happened to the first.
+ *
+ * **The document's own order.** `facultiesWithoutPackets` walks `listFaculties`,
+ * which orders by `ordinal` — the blueprint's own numbering — so §5.1 goes
+ * first because the source put it first, and not because Brain formed a view
+ * about which faculty is worth most. Nothing here ranks, scores or prioritises.
+ *
+ * **Never a second packet for one faculty.** A faculty with *any* packet is
+ * skipped, terminal ones included, so an `ABANDONED` packet is not retried on a
+ * timer — a person reopening one deliberately is `npm run capability -- packet
+ * open`, which is what §26 says a terminal is for. That the condition is
+ * unreachable today, because nothing writes a terminal state, is exactly why it
+ * is written down now: it is the guard that stops this becoming a loop the day
+ * something does.
+ *
+ * It spends, approves and decides nothing: opening a packet writes one row, and
+ * a faculty whose definition is not canonical is refused by `openPacket` itself
+ * — a packet planned against a draft holds the system against a definition
+ * nobody audited.
+ */
+async function openNextPacket(): Promise<{
+  opened: { packetId: string; facultySlug: string } | null;
+  because: string;
+}> {
+  /*
+   * `facultiesWithoutPackets` is the shared reader of "what has not been
+   * started", and asking the same question a second way here is the rule this
+   * repository has had to write four times: two readers of one fact disagree
+   * eventually. What the tick adds on top of it is the one condition that is
+   * about being *automatic* rather than about the faculty.
+   */
+  const everHad = new Set((await listPackets()).map((packet) => packet.facultyId));
+  const candidates = await facultiesWithoutPackets();
+  if (candidates.length === 0) {
+    return {
+      opened: null,
+      because:
+        'no canonical faculty is without a live packet — one whose definition is not canonical ' +
+        'is skipped, because a packet planned against a draft holds the system against a ' +
+        'definition nobody audited',
+    };
+  }
+
+  for (const faculty of candidates) {
+    if (everHad.has(faculty.id)) continue;
+    const { packet, created } = await openPacket({
+      facultyId: faculty.id,
+      createdByType: 'TICK',
+      createdById: null,
+    });
+    return {
+      opened: created ? { packetId: packet.id, facultySlug: faculty.slug } : null,
+      because: created
+        ? ''
+        : `${faculty.canonicalName} already had a live packet, which is the idempotency rather ` +
+          'than a refusal',
+    };
+  }
+
+  return {
+    opened: null,
+    because:
+      'every canonical faculty has already had a packet; the ones with none live went terminal, ' +
+      'and reopening those is a person’s decision rather than a timer’s',
+  };
 }
 
 async function advanceOnePacket(packet: RealizationPacket): Promise<PacketAdvance | null> {

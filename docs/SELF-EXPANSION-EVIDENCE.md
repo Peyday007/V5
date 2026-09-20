@@ -75,8 +75,8 @@ claim about the commit it ran on and nothing else.
 |---|---|
 | `tsc --noEmit` | clean |
 | SQLite suite | **169 files, 3 707 passed, 43 skipped**, exit 0 |
-| Migrate from empty | **74 migrations applied in order**, schema version 74 |
-| Restart against existing | `up to date (74 already applied)` — no reapplication |
+| Migrate from empty | **75 migrations applied in order**, schema version 75 |
+| Restart against existing | 75 applied, max version 75 — no reapplication |
 | `npm run build` | clean; bundle `index-BQcjABQy.js`, **byte-identical to what production serves**, so this change alters no client byte |
 | `deploymentOwnership` | 23 passed |
 | `operatorConsoleRemoved` | 10 passed |
@@ -399,18 +399,171 @@ name the failure it is not for — an unreadable document is the bytes rather th
 the contract, and re-offering one would hand out a bin, spend a fire and fail
 identically for ever.
 
+## 6e. The `reoffer` command, driven against a real database
+
+The service had seven tests and the **command** had none — which is the gap
+§6d's own evidence section warns about for the other three, and it matters here
+because production gets one attempt. A local Brain was driven into production's
+exact state through the real transitions — register the real 63 586-byte
+blueprint, `advanceSources` to dispatch, finish the bin with no unit results,
+`settleExtraction`, `dispatchAudit` — reaching `FAILED` with the identical
+detail string production carries:
+
+    No candidate survived validation, so there is nothing to audit.
+    The refusals are on the candidate rows with their reasons.
+
+| Drive | Exit | What it said |
+|---|---|---|
+| no arguments | 1 | `Usage: reoffer <sourceId> --admin <email> --reason "…"` |
+| unknown source | 1 | `Not offered … No source with id cps_doesnotexist.` |
+| unknown administrator | 1 | resolves to no enabled administrator of this Brain |
+| **the real one** | **0** | `Offered again … Now: REGISTERED` |
+| the same one again | 1 | `That source is REGISTERED, not FAILED.` |
+
+And what it left behind, read back from the rows:
+
+- one `identity_events` row, `CAPABILITY_SOURCE_REOFFERED` / `SUCCESS`, carrying
+  the reason, the previous bin id and the previous detail
+- `FAILED → REGISTERED`
+- the next `advanceSources` reporting `dispatched: 1`, a **new** extraction bin
+  `READY`, and the old bin still `COMPLETE` — nothing destroyed (§5)
+
+The candidate count is 0 in this fixture because it never had any. Production
+holds fifteen `REJECTED` rows, and they stay: `settleExtraction` reads
+`listBinUnitResults(bin.id)` scoped to the new bin, and `dispatchAudit` lists
+`states: ['VALIDATED']`, which a refused candidate is not.
+
+
+## 6f. The last command in the chain, and its own comment named the caller it never got
+
+`advance.ts` exists because running the kernel was six invocations in the right
+order. It could not run at all until somebody typed a seventh — `npm run
+capability -- packet open <slug>` — because **nothing opened a realization
+packet for a faculty that had just become canonical.** So `listPackets` returned
+an empty list for ever and the walk had nothing to walk.
+
+Two functions had already been written for the caller they never got:
+
+| Function | Its own comment | Its only production caller |
+|---|---|---|
+| `openPacket` | idempotency is *"what makes this safe to call from a tick"* | `scripts/capability.ts` |
+| `facultiesWithoutPackets` | exists *"so a tick can see what has not been started"* | `scripts/capability.ts` |
+
+That is the seventh instance of this repository's most-recorded defect, found
+inside the module written to correct the sixth.
+
+### The bound is a rate, and refusing a ceiling is a third finding
+
+One faculty at a time was the obvious shape, and it was nearly built: a packet
+ends in a Software Factory campaign against *this* repository, and two campaigns
+moving one tree is the surface collision §27 refuses one altitude down.
+
+It is wrong here, because **nothing in `server/` ever moves a realization
+packet's state.** `advance` in `packet.ts` is a compare-and-swap imported only by
+`tests/realizationPacket.test.ts`, so `TERMINAL` has no writer and every packet
+is `DRAFT` for ever. A ceiling of one against that is a ceiling nothing can ever
+release — §24's *waiting nobody can resolve*, built deliberately. **A rate needs
+no release:** the second faculty gets its packet on the next pass whatever
+happened to the first.
+
+That third finding is **reported and not fixed.** Inventing terminal semantics
+nobody specified would be deciding when a faculty counts as realized, and §37
+gives that to the six dimensions rather than to a packet's state column.
+
+### What it refuses
+
+- **The blueprint's own order.** `facultiesWithoutPackets` walks `listFaculties`,
+  which orders by `ordinal`. §5.1 goes first because the source put it first.
+  Nothing ranks, scores or prioritises.
+- **Never a second packet for one faculty**, terminal ones included.
+- **One reader, not two.** It calls `facultiesWithoutPackets` rather than asking
+  the same question a second way, and a test reads the source to hold it there.
+- **It spends, approves and decides nothing**, asserted against
+  `russell_missions`, `russell_goals`, `research_orchestrations` and approved
+  `factory_change_requests`.
+- **It cannot take the tick down**; the call is inside a guard, asserted by
+  position.
+
+### The rest of the chain was audited and is whole
+
+Every exported function in `services/realize/`, `services/capability/` and
+`services/selfmodel/` was checked for a production call site. `advanceSources`
+covers the whole ingestion chain — REGISTERED → dispatch, EXTRACTING → settle,
+PROPOSED → dispatchAudit, AUDITING → settleAudit and promote, then
+`settleAmendments` — so a re-offered source re-enters it with nothing else to
+call. Capability audit independence is enforced in `services/bins/service.ts`'s
+admission hook, ahead of the lease, with its retry clamped to the credential's
+own expiry.
+
+Two exports have no caller anywhere, tests included, and **neither is a
+transition**: `capability/independence.ts`'s `sourcesAwaitingAudit` and
+`realize/director.ts`'s `readingContext` are read-only helpers, so nothing is
+stranded by their being unreached. Reported rather than removed.
+
+### Three of the new guards were proved by neutralising them
+
+In an isolated copy, so nothing running beside it could read a half-neutered
+file.
+
+| Neutralised | The failure it produced |
+|---|---|
+| the rate turned back into the ceiling that was rejected | `opens one per pass …` fails — the second faculty never gets a packet |
+| the never-a-second-packet skip | `expected { …(2) } to be null` — a terminal faculty reopened on the next tick |
+| the shared reader, inlined as a second copy | `expected … not to contain 'definitionState !== \'CANONICAL\''` |
+
+The second is the one worth naming. `facultiesWithoutPackets` asks for faculties
+with no *live* packet, so while every packet is `DRAFT` the skip is redundant and
+no ordinary assertion can reach it. The test moves a packet to `ABANDONED`
+through `packet.ts`'s own compare-and-swap — the transition that exists and has
+no production caller — which is what makes the faculty a candidate again and the
+guard the only thing between a timer and a fresh packet every tick. **A guard
+whose test cannot fail is a claim**, and the first version of that test was one.
+
+## 6g. Production moved under this branch, and the collision it would have been
+
+At 11:06Z `origin/production` gained `a2fd13c` from another workstream — the
+passkey-only sign-in door — while the Postgres gate for this branch was running.
+It lands `073_device_sessions.sql` and `064_device_sessions.sql`, **the exact two
+numbers this branch had renumbered to.** `loadMigrationFiles` refuses a duplicate
+version rather than applying one and skipping the other, so a merge would have
+been a boot failure with a sentence in it: §25's lesson, third occurrence, and
+§28's reason for `deploymentOwnership.test.ts` in one event.
+
+Theirs is already deployed, so theirs owns `073`/`064`. This branch moved to
+`074`/`075` and `065`/`066` — contiguous, because a *gap* is the other thing that
+test refuses. `origin/production` was merged in before either gate was re-run:
+**a suite result is a claim about the commit it ran on**, and a gate that ran on
+a tree missing a commit production already carries is a claim about something
+that will never be deployed.
+
+| After the merge and the renumbering | |
+|---|---|
+| `tsc --noEmit` | clean |
+| `deploymentOwnership` | 23 tests — no chain gap, no collision, no port collision |
+| migrate from empty | **75 applied, max version 75** |
+| restart against existing | 75 applied, max version 75 — no reapplication |
+
 ## 7. What is still not true
 
 - **No faculty is implemented.** `realized.ts` can now say one is, from rows.
   On this repository every packet still holds unread gaps, so it says nothing.
-- **Nothing here has been deployed.** Every reading above is local.
+- **This branch has not been deployed.** §6d is a reading of the *deployed*
+  Brain at `b0b5fd7`, which already carries the kernel and carries none of this
+  branch's corrections. So it establishes what the deployed kernel does and
+  says nothing about what this branch does. An earlier version of this line read
+  *"nothing here has been deployed; every reading above is local"*, which was
+  true when it was written and stopped being true when §6d was added — corrected
+  here rather than edited there.
+- **The deployed registry is empty, and that is measured rather than inferred.**
+  `npm run capability -- faculties` on production (run 35505935344, head
+  `b0b5fd7`, 2026-09-20T10:45:27Z) answers *"The registry is empty. Nothing has
+  been promoted."* So the fifteen readings §6d records produced no canonical
+  definition anywhere: every candidate was refused by Brain's own contract, the
+  source is `FAILED`, and nothing downstream of a definition exists on the
+  deployed Brain to be wrong about.
 - **No capability research has run.** A question becomes an idea; whether a
   mission follows is the standing authority's decision, and none has been
   granted on the architecture project.
-- **The fifteen faculty readings were not re-run.** The kernel branch did that
-  once and recorded it; the hashes above establish the artifacts are identical,
-  so a second reading of the same bytes by the same session would produce the
-  same thirteen promotions and no new information. What it would *not* produce
-  is the independence the kernel branch already declined to claim: two handles
-  are two workers and two sessions, and whether two model contexts were behind
-  them is a fact no row can establish.
+- **No independence has been claimed for any reading.** Two handles are two
+  workers and two sessions; whether two model contexts were behind them is a
+  fact no row can establish, and the kernel branch declined to claim it.

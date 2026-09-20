@@ -27,8 +27,17 @@ import {
   authorityResumeKey,
   CAPABILITY_AUTHORITY_CHOICES,
 } from '../server/services/realize/advance.ts';
-import { derivePacket, judgeGap, listGaps, openPacket, setGapState } from '../server/services/realize/packet.ts';
-import { getFaculty, promoteCandidate, putCandidate } from '../server/repos/faculties.ts';
+import {
+  advance as advancePacket,
+  derivePacket,
+  facultiesWithoutPackets,
+  judgeGap,
+  listGaps,
+  listPackets,
+  openPacket,
+  setGapState,
+} from '../server/services/realize/packet.ts';
+import { getFaculty, moveDimension, promoteCandidate, putCandidate } from '../server/repos/faculties.ts';
 import { validateFacultyDefinition, type FacultyDefinition } from '../server/domain/faculties.ts';
 import { registerBlueprint } from '../server/services/capability/ingest.ts';
 import { readRealization } from '../server/services/realize/realized.ts';
@@ -472,6 +481,207 @@ describe('the kernel advancing on the tick', () => {
     expect(guard).toBeGreaterThan(-1);
     expect(loop.slice(guard, call)).not.toContain('catch');
     expect(loop.slice(call, call + 900)).toContain('catch');
+  });
+});
+
+/**
+ * The seventh command, which stood in front of the six.
+ *
+ * `advance.ts` exists because running the chain was six invocations in the
+ * right order. It could not run at all until somebody typed a seventh —
+ * `packet open <slug>` — because nothing opened a packet for a faculty that
+ * had just become canonical. Two functions had already been written for the
+ * caller they never got: `openPacket`, whose comment says idempotency is
+ * "what makes this safe to call from a tick", and `facultiesWithoutPackets`,
+ * whose comment says it exists "so a tick can see what has not been started".
+ *
+ * The refusals below matter more than the advance. An opener that ranked
+ * faculties, opened all fourteen at once, or reopened an abandoned packet on a
+ * timer would each be worse than the command it replaces.
+ */
+describe('opening the packet the chain has reached', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  it('opens one for a canonical faculty nobody opened, without a command', async () => {
+    const facultyId = await promoteFaculty(definition());
+    expect(await listPackets()).toHaveLength(0);
+
+    const report = await advanceCapabilityPackets();
+
+    expect(report.opened).not.toBeNull();
+    expect(report.opened?.facultySlug).toBe('RESEARCH_INTELLIGENCE');
+    const packets = await listPackets();
+    expect(packets).toHaveLength(1);
+    expect(packets[0]?.facultyId).toBe(facultyId);
+    expect(report.failed).toHaveLength(0);
+
+    // The author is recorded as the tick rather than as a person, because a
+    // row that cannot say who opened it answers nothing later.
+    const rows = await getDb().all<{ created_by_type: string }>(
+      'SELECT created_by_type FROM realization_packets WHERE id = ?',
+      [packets[0]!.id] as never[],
+    );
+    expect(rows[0]?.created_by_type).toBe('TICK');
+  });
+
+  it('walks the same pass it opened, so a new packet is not idle for a tick', async () => {
+    await promoteFaculty(definition());
+    const report = await advanceCapabilityPackets();
+
+    const opened = report.opened?.packetId;
+    if (!opened) throw new Error('nothing was opened');
+    // Opened and then considered in the one pass: the gaps exist already.
+    expect(report.advances.some((advance) => advance.packetId === opened)).toBe(true);
+    expect((await listGaps(opened)).length).toBeGreaterThan(0);
+  });
+
+  it('takes the blueprint’s own order rather than one it chose', async () => {
+    // Promoted out of order on purpose: the opener must read `ordinal`, which
+    // is the document's numbering, and not creation order or the slug.
+    await promoteFaculty(
+      definition({ canonicalName: 'Simulation and Modeling Intelligence', ordinal: 2 }),
+    );
+    await promoteFaculty(definition({ canonicalName: 'Research Intelligence', ordinal: 1 }));
+
+    const first = await advanceCapabilityPackets();
+    expect(first.opened?.facultySlug).toBe('RESEARCH_INTELLIGENCE');
+  });
+
+  it('opens one per pass, which is a rate rather than a ceiling nothing releases', async () => {
+    await promoteFaculty(definition({ canonicalName: 'Research Intelligence', ordinal: 1 }));
+    await promoteFaculty(
+      definition({ canonicalName: 'Simulation and Modeling Intelligence', ordinal: 2 }),
+    );
+
+    const first = await advanceCapabilityPackets();
+    expect(first.opened?.facultySlug).toBe('RESEARCH_INTELLIGENCE');
+    expect(await listPackets()).toHaveLength(1);
+
+    /*
+     * The second one arrives on the next pass with nothing released in
+     * between. A concurrency ceiling would have withheld it for ever, because
+     * nothing in `server/` writes a terminal packet state — `advance` in
+     * `packet.ts` has no production caller, so every packet is DRAFT always.
+     * That is the trap this rate exists to avoid, and the assertion is that
+     * the first packet is still live when the second opens.
+     */
+    const second = await advanceCapabilityPackets();
+    expect(second.opened?.facultySlug).toBe('SIMULATION_AND_MODELING_INTELLIGENCE');
+    const packets = await listPackets();
+    expect(packets).toHaveLength(2);
+    expect(packets.every((packet) => packet.state === 'DRAFT')).toBe(true);
+  });
+
+  it('never opens a second packet for a faculty that already has one', async () => {
+    await promoteFaculty(definition());
+
+    await advanceCapabilityPackets();
+    await advanceCapabilityPackets();
+    await advanceCapabilityPackets();
+
+    expect(await listPackets()).toHaveLength(1);
+  });
+
+  it('never reopens a faculty whose packet went terminal, which a live packet cannot pin', async () => {
+    await promoteFaculty(definition());
+    const first = await advanceCapabilityPackets();
+    const opened = first.opened?.packetId;
+    if (!opened) throw new Error('nothing was opened');
+
+    /*
+     * `facultiesWithoutPackets` asks for faculties with no *live* packet, so
+     * while every packet is DRAFT the skip that stops a second one is
+     * redundant and no assertion above can reach it. Moving this one to
+     * ABANDONED through `packet.ts`'s own compare-and-swap — the transition
+     * that exists and has no production caller — is what makes the faculty a
+     * candidate again, and therefore what makes the guard the only thing
+     * standing between a timer and a fresh packet every tick.
+     */
+    expect(await advancePacket({ id: opened, from: 'DRAFT', to: 'ABANDONED' })).toBe(true);
+    expect(await facultiesWithoutPackets()).toHaveLength(1);
+
+    const again = await advanceCapabilityPackets();
+    expect(again.opened).toBeNull();
+    expect(await listPackets()).toHaveLength(1);
+    expect(again.notOpenedBecause).toContain('terminal');
+  });
+
+  it('says why it opened nothing, rather than reporting an empty pass', async () => {
+    await promoteFaculty(definition());
+    await advanceCapabilityPackets();
+
+    const again = await advanceCapabilityPackets();
+    expect(again.opened).toBeNull();
+    expect(again.notOpenedBecause).not.toBe('');
+  });
+
+  it('refuses a faculty whose definition is not canonical', async () => {
+    const facultyId = await promoteFaculty(definition());
+    await moveDimension({
+      facultyId,
+      dimension: 'DEFINITION',
+      to: 'DRAFT',
+      reason: 'the reading was reopened, so the definition is no longer canonical',
+      actorType: 'SYSTEM',
+      actorId: 'test',
+    });
+
+    const report = await advanceCapabilityPackets();
+
+    // A packet planned against a draft holds the system against a definition
+    // nobody audited, so there is nothing to open and nothing to walk.
+    expect(report.opened).toBeNull();
+    expect(await listPackets()).toHaveLength(0);
+    expect(report.failed).toHaveLength(0);
+  });
+
+  it('opens nothing at all against an empty registry, and does not throw', async () => {
+    const report = await advanceCapabilityPackets();
+    expect(report.opened).toBeNull();
+    expect(report.considered).toBe(0);
+    expect(report.failed).toHaveLength(0);
+  });
+
+  it('approves nothing, spends nothing and starts nothing by opening one', async () => {
+    await promoteFaculty(definition());
+    const before = await counts();
+
+    const report = await advanceCapabilityPackets();
+    expect(report.opened).not.toBeNull();
+
+    const after = await counts();
+    expect(after.missions).toBe(before.missions);
+    expect(after.goals).toBe(before.goals);
+    expect(after.orchestrations).toBe(before.orchestrations);
+    expect(after.approvedRequests).toBe(before.approvedRequests);
+  });
+
+  it('asks the shared reader rather than a second copy of the same question', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'server/services/realize/advance.ts'),
+      'utf8',
+    );
+    // Two readers of "which faculties have not been started" disagree
+    // eventually, which is the rule this repository has had to write four
+    // times. The opener must call the one in `packet.ts` and must not rebuild
+    // the canonical filter beside it.
+    expect(source).toContain('facultiesWithoutPackets');
+    expect(source).not.toContain("definitionState !== 'CANONICAL'");
+  });
+
+  it('cannot take the tick down when opening one throws', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'server/services/realize/advance.ts'),
+      'utf8',
+    );
+    const call = source.slice(
+      source.indexOf('const opening = await openNextPacket()') - 400,
+      source.indexOf('const opening = await openNextPacket()') + 400,
+    );
+    expect(call).toContain('try {');
+    expect(call).toContain('catch');
   });
 });
 

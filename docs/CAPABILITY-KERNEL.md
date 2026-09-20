@@ -269,6 +269,7 @@ npm run capability -- packet open <slug> | derive <id> | show <id> | research <i
 npm run capability -- packet compile <id> | prove <id> [--apply] | realize <id> [--apply]
 npm run capability -- packet judge <gapId> --kind <k> --evidence "…"
 npm run capability -- packet outstanding <id> | ask <id> | handoff <id>
+npm run capability -- reoffer <sourceId> --admin <email> --reason "…"
 npm run capability -- packet awaiting <id> | answer <gapId> --grant|--refuse --admin <e> --statement "…"
 npm run capability -- packets
 npm run capability -- submit <binId> <file.json> --worker <handle>
@@ -317,8 +318,24 @@ drifts a month later. There is no second orchestrator, queue, policy module or
 state machine, and the commands stay as the inspectable manual recovery beside
 it.
 
-Two properties of the pass are worth stating because they are what make running
-it every thirty seconds safe:
+**And it opens the packet the chain has reached, which was a seventh command in
+front of the six.** Nothing opened a realization packet for a faculty that had
+just become canonical, so the walk above had an empty list to walk for ever —
+and both functions that could have done it carry a comment naming the tick as
+their caller: `openPacket`'s idempotency is *"what makes this safe to call from
+a tick"*, and `facultiesWithoutPackets` exists *"so a tick can see what has not
+been started"*. Each had one production caller and it was `scripts/capability.ts`.
+
+**One per pass, which is a rate rather than a ceiling.** A concurrency bound of
+one was the obvious shape and is wrong here, because nothing in `server/` moves
+a realization packet's state — `advance` in `packet.ts` is a compare-and-swap
+with no production caller, so every packet is `DRAFT` for ever and a ceiling of
+one is a ceiling nothing can release. The order is the blueprint's own
+`ordinal`; a faculty with any packet is skipped, terminal ones included; and
+`openPacket` itself refuses a definition that is not canonical.
+
+Two further properties of the pass are worth stating because they are what make
+running it every thirty seconds safe:
 
 - **It re-derives only a packet with no gaps at all.** Re-deriving on a timer
   would replace a reader's classifications with `NEEDS_A_READING` on a loop,

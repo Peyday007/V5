@@ -5879,6 +5879,41 @@ the person cannot use.
   `(source_id, slug)`. `FAILED` is a condition of the `UPDATE`, so two callers
   produce one re-offer.
 
+- **The chain had a seventh command, and it stood in front of the six.**
+  `advance.ts` was written because running the kernel was six invocations in the
+  right order, and it could not run at all until somebody typed `packet open
+  <slug>`: nothing opened a realization packet for a faculty that had just
+  become canonical, so `listPackets` returned an empty list for ever and the
+  walk had nothing to walk. **Two functions had already been written for the
+  caller they never got** — `openPacket`, whose comment says idempotency is
+  *"what makes this safe to call from a tick"*, and `facultiesWithoutPackets`,
+  whose comment says it exists *"so a tick can see what has not been started"*.
+  Both had one production caller and it was the CLI. That is the seventh
+  instance of this file's most-recorded defect, found inside the module written
+  to correct the sixth.
+
+  **The bound is a rate and deliberately not a ceiling, and the reason is a
+  third finding.** One faculty at a time was the obvious shape — a packet ends
+  in a Software Factory campaign against *this* repository, and two campaigns
+  moving one tree is the surface collision §27 refuses one altitude down. It is
+  wrong here because **nothing in `server/` ever moves a realization packet's
+  state**: `advance` in `packet.ts` is a compare-and-swap with no production
+  caller, so `TERMINAL` has no writer and every packet is `DRAFT` for ever. A
+  ceiling of one against that is a ceiling nothing can ever release — §24's
+  *waiting nobody can resolve*, built deliberately. One packet opened per pass
+  needs no release: the second faculty gets its packet on the next tick whatever
+  happened to the first. The third finding is **reported and not fixed**, because
+  inventing terminal semantics nobody specified would be deciding when a faculty
+  counts as realized, which §37 gives to the six dimensions rather than to a
+  state column.
+
+  The order is the blueprint's own `ordinal` and nothing ranks, scores or
+  prioritises. A faculty with **any** packet is skipped, terminal ones included,
+  so an abandoned packet is never retried on a timer — that guard is unreachable
+  today, which is exactly why it is written now rather than the day something
+  starts writing a terminal state, and why the test that pins it has to reach
+  for `packet.ts`'s own uncalled transition to make the condition exist at all.
+
 **What is still not true, and is not rounded up.** No faculty is implemented:
 `realized.ts` can now say one is, from rows, and on this repository every
 packet still holds unread gaps. Nothing has been deployed — the hosted tool
