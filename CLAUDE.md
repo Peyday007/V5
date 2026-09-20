@@ -2695,13 +2695,33 @@ remote.
   `FENCE_LOST` runs are established to have been.** §27 refused that inference
   deliberately — *"the tempting story is a mechanism rather than a reading"* —
   and one instance of the mechanism actually occurring makes it plausible
-  rather than proven; none of those four was timed. Two further facts cut
-  against collapsing them: runs 252 and 253 both recorded
-  `HOSTED-VERIFICATION: PASS 198/198` pre-restart, so the judge pass *does*
-  finish inside 300 seconds on some runs, which means **its duration varies by
-  a factor of at least two** and 9m44s is one reading rather than the cost.
-  What the judge pass costs in general is still unmeasured, and the beat makes
-  the harness survive it rather than making it faster. **The queue was right and
+  rather than proven; none of those four was timed.
+
+  **And 9m44s is not "the cost of a judge pass" either — four runs' logs give
+  four readings, and they are not close to each other.** Timed from the
+  ADVERSARIAL pass to the judge's recorded verdict, in the runs' own
+  timestamps, beside the archive each one read:
+
+  | run | archive read | ADVERSARIAL → verdict |
+  |-----|--------------|-----------------------|
+  | 253 | 374 documents | **3m34s** |
+  | 252 | 373 documents | **4m10s** |
+  | 274 | 396 documents | ≥5m20s — the client gave up, so this is a floor |
+  | 277 | 399 documents | **9m44s** |
+
+  So the two runs §27 records as `PASS 198/198` did not squeak under the
+  300-second wall: they finished in three and four minutes, comfortably inside
+  the five-minute lease as well, which is exactly why nothing was refused on
+  them. **The pass used to fit inside the lease and now does not**, and the
+  measured spread is a factor of **2.7** across two days.
+
+  The archive grew from 373 to 399 over the same span, which is a correlation
+  worth the next person's attention and **not** a cause: four points across two
+  days that also carried other changes is not a curve, and recording it as one
+  would be the comfortable half-truth this section exists to refuse. What is
+  established is the spread and the crossing. The beat makes the harness
+  survive whichever end of that range it gets; it makes nothing faster, and
+  whatever is actually driving the growth is still unmeasured. **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so
   that a worker which stopped working cannot hold work for ever, and a worker
   still working says so by beating — which is what every other long-running

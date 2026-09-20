@@ -1915,11 +1915,13 @@ const BEAT_EVERY_MS = 100_000;
  * header timeout pre-empted the bound the script thought it had set. With the
  * bound actually applied the pass finishes, and what it finishes into is this.
  *
- * **It is one reading rather than the cost of a judge pass.** Runs 252 and 253
- * both recorded `PASS 198/198` pre-restart, so the same step also finishes
- * inside 300 seconds sometimes — the duration varies by at least a factor of
- * two and nothing here makes it faster. The beat is what lets the harness
- * survive whichever end of that range it gets.
+ * **It is one reading rather than the cost of a judge pass.** Timed from the
+ * ADVERSARIAL pass to the judge's verdict in four runs' own logs: 3m34s (run
+ * 253), 4m10s (252), at least 5m20s (274, where the client gave up), and
+ * 9m44s here. The first two finished inside the five-minute lease, which is
+ * why nothing was refused on them — **the pass used to fit and now does not**,
+ * across a measured spread of 2.7x. The beat is what lets the harness survive
+ * whichever end of that range it gets; nothing here makes it faster.
  *
  * So the queue was right and the harness was wrong: an at-least-once queue
  * expires a lease precisely so that a worker which stopped working cannot hold
