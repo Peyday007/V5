@@ -20,7 +20,7 @@ import { freshProject, teardown } from './helpers.ts';
 import { getHumanRequest, answerHumanRequest } from '../server/repos/russellMissions.ts';
 import type { RussellHumanRequest } from '../server/domain/types.ts';
 import { createUser } from '../server/repos/identity.ts';
-import { resumeAnsweredRequest } from '../server/services/russell/needsHuman.ts';
+import { reopenAnswered, resumeAnsweredRequest } from '../server/services/russell/needsHuman.ts';
 import { getDb } from '../server/db/database.ts';
 import {
   advanceCapabilityPackets,
@@ -252,6 +252,86 @@ describe('the kernel advancing on the tick', () => {
     expect(after?.state).toBe('WAIVED');
     expect(after?.state).not.toBe('CLOSED');
     expect(after?.stateReason).toContain('Refused by');
+  });
+
+  /*
+   * An answer that cannot be carried out goes back in front of the person, and
+   * it has to go back as the card it was.
+   *
+   * `answerAuthorityGap` resolves an **enabled Brain administrator** against
+   * `users` at the moment the effect happens — authority read per request
+   * rather than baked into the card when it was written. So an ordinary member
+   * with write access to the project can press the button and the transition
+   * will refuse, which is correct and is exactly the case `reopenAnswered`
+   * exists for.
+   *
+   * What it must not do is come back as a *different* card. Everything in that
+   * function derives the offer and the words from a packet's shape, and a
+   * capability question has no packet: `packetShape` of nothing is `{0, 0, 0}`,
+   * `choicesFor` of that is `[STOP]`, and `stopWords` writes about an evidence
+   * bar and a repair ladder. The person would have been offered to stop a
+   * mission that never existed, under an explanation of a research failure that
+   * never happened.
+   *
+   * Newly reachable rather than newly wrong: until the capability branch
+   * started returning a real failure, `resumeAnsweredRequest` answered
+   * `settled: true` for everything with no mission and nothing ever arrived
+   * there.
+   */
+  it('puts an answer it could not carry out back as the card it was', async () => {
+    const facultyId = await promoteFaculty(definition());
+    const { packet } = await openPacket({
+      facultyId,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await advanceCapabilityPackets();
+
+    const gap = (await listGaps(packet.id)).find(
+      (row) => row.kind === 'REQUIRES_PERSON_AUTHORITY',
+    );
+    if (!gap) throw new Error('the fixture produced no person-owned gap');
+    const request = await cardFor(gap.id);
+
+    // Somebody who may read the project and is not an administrator of this
+    // Brain. The route would let them press it; the transition will not.
+    const member = await createUser({
+      email: `capability-tick-member-${Math.random().toString(36).slice(2, 10)}@example.test`,
+      displayName: 'Member',
+      password: 'correct horse battery staple',
+    });
+    const answered = await answerHumanRequest({
+      requestId: request.id,
+      actorUserId: member.id,
+      choice: 'GRANT_AUTHORITY',
+      reason: 'I think this is fine.',
+    });
+    expect(answered.ok).toBe(true);
+
+    const resumed = await resumeAnsweredRequest(answered.request!);
+    expect(resumed.settled).toBe(false);
+    expect(resumed.reason).toContain('administrator');
+
+    // What the tick does with an unsettled answer.
+    expect(await reopenAnswered(answered.request!, resumed.reason)).toBe(true);
+
+    const back = await getHumanRequest(request.id);
+    expect(back?.state).toBe('OPEN');
+    // Its own offer, not a packet's.
+    expect(back?.choices.map((choice) => choice.key).sort()).toEqual([
+      'GRANT_AUTHORITY',
+      'REFUSE_AUTHORITY',
+    ]);
+    // Its own words, not a packet's.
+    expect(back?.authorityNeeded).toBe(request.authorityNeeded);
+    expect(back?.whyNotRussell).toBe(request.whyNotRussell);
+    expect(back?.whyNotRussell).not.toContain('repair ladder');
+    // And the reason it came back.
+    expect(back?.recommendation).toContain('administrator');
+
+    // The gap is untouched: a refused answer closes nothing.
+    const still = (await listGaps(packet.id)).find((row) => row.id === gap.id);
+    expect(still?.state).toBe('OPEN');
   });
 
   it('offers a refusal as well as a grant, because a card with one answer is not a decision', () => {

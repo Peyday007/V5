@@ -740,7 +740,35 @@ export async function reopenAnswered(
   request: RussellHumanRequest,
   reason: string,
 ): Promise<boolean> {
-  const mission = request.missionId ? await getMission(request.missionId) : null;
+  /*
+   * A request that is not about a mission keeps its own words and its own
+   * offer, and only gains the reason.
+   *
+   * Everything below this derives the card from a *packet's* shape, which is
+   * the right thing for the request this function was written for and nonsense
+   * for any other: `packetShape` of nothing is `{0, 0, 0}`, `choicesFor` of
+   * that is `[STOP]`, and `stopWords` composes a sentence about an evidence bar
+   * and a repair ladder. A capability packet's authority question would have
+   * come back offering to stop a mission it never had, explaining a research
+   * failure that never happened — §33's *a card must not argue with itself*,
+   * reached by replacing both halves at once with another domain's.
+   *
+   * It is newly reachable rather than newly wrong. `resumeAnsweredRequest`
+   * answered `settled: true` for every request with no mission, so nothing ever
+   * arrived here without one until the capability branch above started
+   * returning a real failure.
+   */
+  if (!request.missionId) {
+    return reopenRequest({
+      requestId: request.id,
+      choices: request.choices,
+      recommendation: reason,
+      authorityNeeded: request.authorityNeeded,
+      whyNotRussell: request.whyNotRussell,
+    });
+  }
+
+  const mission = await getMission(request.missionId);
   const orchestrationId = mission?.orchestrationId ?? null;
   const shape = orchestrationId
     ? await packetShape(orchestrationId)
