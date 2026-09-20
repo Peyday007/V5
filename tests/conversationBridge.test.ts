@@ -43,6 +43,8 @@ import { syncConversation } from '../server/services/bridge/sync.ts';
 import { statusFor } from '../server/services/bridge/status.ts';
 import { parseTranscript } from '../server/services/bridge/import.ts';
 import { getMessage, listTurns } from '../server/repos/russellConversations.ts';
+import { getBin, terminateUnleasedBin } from '../server/repos/bins.ts';
+import { applyTurn } from '../server/services/russell/turn.ts';
 
 let userId = '';
 let projectId = '';
@@ -379,6 +381,43 @@ describe('what Brain does with it', () => {
     const result = await sync([{ ordinal: 0, role: 'USER', content: 'ancient history' }], false);
     expect(result.receipt.routing.outcome).toBe('NOTHING');
     expect(result.receipt.routing.reason).toContain('back-fill');
+  });
+
+  it('tells a client a turn failed, rather than leaving it waiting for a reply', async () => {
+    /*
+     * The one recovery path the bridge adds, and it is the one a client feels.
+     *
+     * A browser watching a thread sees a turn go FAILED. A conversation client
+     * holds a *receipt* that said `TURN_OPENED` with a bin id, and will come
+     * back asking what happened — so if the status projection did not carry the
+     * turn's state, that client would poll forever for a reply nobody is going
+     * to write. §24's spinner that never ends, at a surface that cannot see the
+     * thread.
+     *
+     * The turn machinery itself is unchanged and is what closes it:
+     * `beginTurn` is the same call a browser makes, so a bridge-opened turn
+     * inherits `applyTurn`'s handling of a bin that died. What this asserts is
+     * that the answer *reaches* the client.
+     */
+    const result = await syncConversation({
+      principal: member(),
+      ...CONVERSATION,
+      messages: [{ ordinal: 0, role: 'USER', content: 'Has the Deal Dispatch export been fixed?' }],
+      interpret: true,
+    });
+    const binId = result.receipt.routing.binId;
+    expect(binId).toBeTruthy();
+
+    const dying = (await getBin(binId!))!;
+    expect(await terminateUnleasedBin(dying.id, dying.leaseGeneration, 'CANCELLED', 'test')).toBe(true);
+    const applied = await applyTurn(binId!);
+    expect(applied.ok).toBe(false);
+
+    const status = await statusFor(result.conversation);
+    const russell = status.turns.find((one) => one.role === 'RUSSELL');
+    expect(russell?.status).toBe('FAILED');
+    // And it is not still presented as something being worked on.
+    expect(status.turns.some((one) => one.status === 'PENDING')).toBe(false);
   });
 
   it('answers the return path from rows', async () => {
