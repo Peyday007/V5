@@ -138,6 +138,7 @@ import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
+import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -421,6 +422,25 @@ export interface TickReport {
     capital: string[];
     settled: string[];
   }[];
+  /**
+   * What the manufacturing kernel did: which questions it opened and why, and
+   * what the finished ones added to the ladder.
+   *
+   * `capabilitiesHeld` is deliberately absent from this report, and its absence
+   * is the point: nothing a tick does can change it. A capability this company
+   * holds is recorded by a person, and no pass, claim or round reaches that
+   * column — so a field here would be a number that never moved for a reason a
+   * reader could not see.
+   */
+  manufacturingKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    categories: string[];
+    capabilities: string[];
+    edges: string[];
+    evidence: string[];
+    settled: string[];
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -511,6 +531,7 @@ const EMPTY: TickReport = {
   lensInquiries: { dispatched: 0, settled: 0 },
   cashDiscovery: [],
   industryKernel: [],
+  manufacturingKernel: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -594,6 +615,7 @@ export async function tick(owner: string): Promise<TickReport> {
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
     industryKernel: [],
+    manufacturingKernel: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -1238,6 +1260,55 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a map that could not be advanced is left exactly as it was */
+      }
+
+      try {
+        /*
+         * And the long-horizon question the sprints run underneath.
+         *
+         * §38's kernel answers *where in the economy money is reachable*; this
+         * one answers *which machine to build next, and what building it makes
+         * possible*. They are independent on purpose — a project may run either,
+         * both or neither — so this pass asks about every project rather than
+         * only the ones holding a sprint, and one read of
+         * `manufacturing_programs` answers it for the many that hold neither.
+         *
+         * Its own `try`, for the reason every block around it has one: a kernel
+         * pass that threw must not stop a sprint settling a need or harvesting
+         * what already ran.
+         *
+         * Nothing it creates bypasses anything. A programme round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does. And nothing it does can record
+         * that this company holds a capability: that is a person's, and there
+         * is no path to it from here.
+         */
+        const programme = await runManufacturingKernel(project.id);
+        if (
+          programme.opened.length > 0 ||
+          programme.absorbed.categories.length > 0 ||
+          programme.absorbed.capabilities.length > 0 ||
+          programme.absorbed.edges.length > 0 ||
+          programme.absorbed.evidence.length > 0 ||
+          programme.absorbed.settled.length > 0
+        ) {
+          report.manufacturingKernel.push({
+            projectId: project.id,
+            opened: programme.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            categories: programme.absorbed.categories.map((one) => one.id),
+            capabilities: programme.absorbed.capabilities.map((one) => one.id),
+            edges: programme.absorbed.edges.map((one) => one.id),
+            evidence: programme.absorbed.evidence.map((one) => one.id),
+            settled: programme.absorbed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a ladder that could not be advanced is left exactly as it was */
       }
 
       try {

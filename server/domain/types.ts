@@ -403,6 +403,52 @@ export const EVENT_TYPES = [
    * implemented would be lying in the most expensive available direction.
    */
   'FACULTY_PROMOTED',
+
+  /* ----------------------------------------------------------------------- */
+  /* The manufacturing empire kernel                                          */
+  /* ----------------------------------------------------------------------- */
+
+  /**
+   * A programme started, and every later move of its lifecycle.
+   *
+   * Project history rather than kernel telemetry, for `RUSSELL_AUTHORITY_GRANTED`'s
+   * reason: starting one is the moment the project agreed that Brain may
+   * research what building machines takes, and "who allowed this, and what did
+   * it allow" is a question about the project long after the screen that asked
+   * has scrolled away.
+   */
+  'MANUFACTURING_PROGRAMME_STARTED',
+  'MANUFACTURING_PROGRAMME_MOVED',
+
+  /** A question opened about a category, with the reason the allocator gave. */
+  'MANUFACTURING_ROUND_OPENED',
+
+  /** What the finished questions established, filed into the ladder. */
+  'MANUFACTURING_FINDINGS_ABSORBED',
+
+  /**
+   * A person naming a category to start from, or deciding not to pursue one.
+   *
+   * `SEED` is the one category origin Brain may not write, so this is the row
+   * that says a human chose it. Retiring is the one verdict no derivation could
+   * reach, and it destroys nothing.
+   */
+  'MANUFACTURING_CATEGORY_SEEDED',
+  'MANUFACTURING_CATEGORY_RETIRED',
+
+  /**
+   * This company was recorded as holding a capability, or that was withdrawn.
+   *
+   * The single most consequential row this kernel can write, and the one
+   * research may never produce: a capability a product *teaches* is not a
+   * capability this company *holds*, and everything downstream — what is
+   * enterable, what is missing, what to build next — turns on the difference.
+   * The payload carries which of the two kinds of evidence established it and
+   * who or what supplied that evidence, because a capability recorded as held
+   * for no stated reason is indistinguishable from one somebody guessed.
+   */
+  'MANUFACTURING_CAPABILITY_HELD',
+  'MANUFACTURING_CAPABILITY_WITHDRAWN',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -1705,6 +1751,9 @@ export interface ResearchClaimRow {
   structural_subject: string | null;
   structural_qualifier: string | null;
   structural_amount_cents: number | null;
+  capability_finding: string | null;
+  capability_subject: string | null;
+  capability_observed_on: string | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -2865,6 +2914,25 @@ export interface ResearchClaim {
    * direction.
    */
   structuralAmountCents: number | null;
+  /**
+   * What this claim establishes about building a machine, or null.
+   *
+   * A third question beside the opening signal and the industry structure, and
+   * a claim can answer all three: a trade report on excavator shipments is a
+   * demand signal about a machine category *and* a fact about an industry.
+   */
+  capabilityFinding: CapabilityFinding | null;
+  /** What that finding is about: a name, or a value from that kind's own set. */
+  capabilitySubject: string | null;
+  /**
+   * When the source observed a demand signal.
+   *
+   * Required of `DEMAND_EVIDENCE` and refused of everything else. §30's rule:
+   * an undated buying signal cannot be told apart from one somebody remembers
+   * from years ago, and this is the column that decides whether a category may
+   * be entered.
+   */
+  capabilityObservedOn: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -7044,7 +7112,7 @@ export interface CapacityConnection {
 }
 
 // ---------------------------------------------------------------------------
-// Research Intelligence (migration 067)
+// Research Intelligence (migration 076 / pg 067)
 // ---------------------------------------------------------------------------
 //
 // The judgement layer above the research engine. None of these types carries
@@ -7239,6 +7307,184 @@ export interface ResearchUncertaintyRow {
   updated_at: string;
 }
 
+// THE MANUFACTURING EMPIRE KERNEL
+//
+// A second graph beside the industry map, answering a question containment
+// cannot hold: which machine to build next, and what building it makes
+// possible. See `domain/manufacturing.ts` for what each finding creates and
+// `docs/MANUFACTURING-KERNEL.md` for why a capability a product teaches is
+// never a capability this company holds.
+// ---------------------------------------------------------------------------
+
+/**
+ * What a source can establish about building a machine.
+ *
+ * Nine kinds, and the split between them is what makes the brief's core
+ * principle enforceable: two of them say somebody is buying and there is a
+ * route to them, two say what building takes and what it teaches, and the rest
+ * are what stands in the way. A category is enterable only when the first two
+ * are established, which is *demand pulling manufacturing* expressed as rows
+ * rather than as a sentence in a prompt.
+ */
+export const CAPABILITY_FINDINGS = [
+  /** A narrower or more specific class of machine inside the subject. */
+  'PRODUCT_CATEGORY',
+  /** A class of machine the sources name as reached sideways from this one. */
+  'ADJACENT_CATEGORY',
+  /** Producing in this category requires this capability, per the source. */
+  'CAPABILITY_REQUIRED',
+  /** Producing in this category develops this capability, per the source. */
+  'CAPABILITY_TAUGHT',
+  /** Published evidence that buyers in this category are actually buying. */
+  'DEMAND_EVIDENCE',
+  /** A route by which product in this category actually reaches a buyer. */
+  'DISTRIBUTION_CHANNEL',
+  /** A documented failure, gap or unmet need in what incumbents supply. */
+  'INCUMBENT_WEAKNESS',
+  /** Something that must be obtained, certified or built before entering. */
+  'ENTRY_BARRIER',
+  /** A component or subsystem producers in this category buy rather than make. */
+  'BOUGHT_IN_COMPONENT',
+] as const;
+export type CapabilityFinding = (typeof CAPABILITY_FINDINGS)[number];
+
+/**
+ * What kind of demand signal a source published.
+ *
+ * Closed, because "demand exists" asserted in prose is exactly the claim the
+ * brief refuses — it wants the observation, and each of these names an
+ * observation somebody published rather than an impression somebody formed.
+ */
+export const DEMAND_SIGNAL_KINDS = [
+  'UNIT_SHIPMENTS',
+  'REGISTRATIONS',
+  'FLEET_PURCHASE',
+  'TENDER_OR_CONTRACT',
+  'REPLACEMENT_CYCLE',
+  'PRICE_REALIZED',
+  'BACKLOG_OR_LEAD_TIME',
+  'INSTALLED_BASE',
+] as const;
+export type DemandSignalKind = (typeof DEMAND_SIGNAL_KINDS)[number];
+
+/** How product in a category actually reaches whoever pays for it. */
+export const DISTRIBUTION_CHANNEL_KINDS = [
+  'DEALER_NETWORK',
+  'DISTRIBUTOR',
+  'DIRECT_TO_BUYER',
+  'FLEET_OR_CONTRACT_SALE',
+  'RETAIL',
+  'MARKETPLACE',
+  'RENTAL_FLEET',
+  'OEM_SUPPLY',
+  'AFTERMARKET_AND_PARTS',
+  'SERVICE_NETWORK',
+] as const;
+export type DistributionChannelKind = (typeof DISTRIBUTION_CHANNEL_KINDS)[number];
+
+/**
+ * Where what is on the market today is documented to fall short.
+ *
+ * The brief's step 5 — *determine where existing manufacturers are weak* — and
+ * every value is something a source records rather than something a reader
+ * concludes. There is deliberately no `GENERALLY_POOR` or `EXPENSIVE`, so an
+ * impression has nowhere to go.
+ */
+export const INCUMBENT_WEAKNESS_KINDS = [
+  'FAILURE_MODE',
+  'RECALL_OR_SAFETY_ACTION',
+  'SERVICE_COVERAGE_GAP',
+  'PARTS_AVAILABILITY',
+  'LEAD_TIME',
+  'PRICE_GAP',
+  'UNMET_REQUIREMENT',
+  'SUPPORT_QUALITY',
+  'DURABILITY_IN_SERVICE',
+] as const;
+export type IncumbentWeaknessKind = (typeof INCUMBENT_WEAKNESS_KINDS)[number];
+
+/**
+ * What stands between this company and producing in a category.
+ *
+ * Kept apart from `CAPITAL_REQUIREMENTS`, which answers *what needs owner
+ * money*. These answer *what needs to exist at all* — a certification nobody
+ * can buy their way past is not a capital requirement, and filing it as one
+ * would make an unreachable category look like an expensive one.
+ */
+export const ENTRY_BARRIER_KINDS = [
+  'TYPE_APPROVAL_OR_HOMOLOGATION',
+  'SAFETY_CERTIFICATION',
+  'EMISSIONS_COMPLIANCE',
+  'AIRWORTHINESS_CERTIFICATION',
+  'PRODUCTION_LICENCE',
+  'TOOLING_LEAD_TIME',
+  'MINIMUM_PRODUCTION_SCALE',
+  'SUPPLIER_QUALIFICATION',
+  'DEALER_OR_SERVICE_REQUIREMENT',
+  'INTELLECTUAL_PROPERTY',
+  'TEST_FACILITY',
+  'SKILLED_LABOUR_AVAILABILITY',
+] as const;
+export type EntryBarrierKind = (typeof ENTRY_BARRIER_KINDS)[number];
+
+export const MACHINE_CATEGORY_KINDS = ['PRODUCT_CATEGORY', 'ADJACENT_CATEGORY'] as const;
+export type MachineCategoryKind = (typeof MACHINE_CATEGORY_KINDS)[number];
+
+export const MACHINE_CATEGORY_ORIGINS = ['SEED', 'BOOTSTRAP', 'DISCOVERED'] as const;
+export type MachineCategoryOrigin = (typeof MACHINE_CATEGORY_ORIGINS)[number];
+
+/**
+ * How Brain came to record that this company holds a capability.
+ *
+ * One value, because today there is exactly one thing that could establish it:
+ * a person with ADMIN on the project saying so. Nothing in this Brain can
+ * observe that a company built a machine — Cash Mode delivers services and the
+ * Software Factory delivers code, and neither is evidence of that — so a
+ * derived second value would be a mechanism nothing calls, wearing an enum.
+ *
+ * There is deliberately no `RESEARCHED`, and there never will be. A source
+ * establishing that ATV production develops chassis engineering is a fact about
+ * ATVs; it is not evidence about this company, and a value here is the only way
+ * the two could ever be confused.
+ */
+export const CAPABILITY_HELD_EVIDENCE = ['DECLARED'] as const;
+export type CapabilityHeldEvidence = (typeof CAPABILITY_HELD_EVIDENCE)[number];
+
+export const CAPABILITY_RELATIONS = ['REQUIRES', 'TEACHES'] as const;
+export type CapabilityRelation = (typeof CAPABILITY_RELATIONS)[number];
+
+export const CATEGORY_EVIDENCE_KINDS = [
+  'DEMAND_EVIDENCE',
+  'DISTRIBUTION_CHANNEL',
+  'INCUMBENT_WEAKNESS',
+  'ENTRY_BARRIER',
+  'BOUGHT_IN_COMPONENT',
+] as const;
+export type CategoryEvidenceKind = (typeof CATEGORY_EVIDENCE_KINDS)[number];
+
+export const MANUFACTURING_ROUND_PURPOSES = [
+  'BOOTSTRAP',
+  'MAP',
+  'DEMAND',
+  'CAPABILITY',
+  'INTEGRATION',
+] as const;
+export type ManufacturingRoundPurpose = (typeof MANUFACTURING_ROUND_PURPOSES)[number];
+
+export const MANUFACTURING_PROGRAM_STATES = ['ACTIVE', 'PAUSED', 'ARCHIVED'] as const;
+export type ManufacturingProgramState = (typeof MANUFACTURING_PROGRAM_STATES)[number];
+
+export interface ManufacturingProgramRow {
+  id: string;
+  project_id: string;
+  objective: string;
+  state: string;
+  owner_user_id: string;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ResearchUncertainty {
   id: string;
   orchestrationId: string;
@@ -7267,6 +7513,17 @@ export interface ResearchUncertainty {
   origin: UncertaintyOrigin;
   originRef: string | null;
   planVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManufacturingProgram {
+  id: string;
+  projectId: string;
+  objective: string;
+  state: ManufacturingProgramState;
+  ownerUserId: string;
+  createdByUserId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -7382,4 +7639,154 @@ export interface ResearchRetrospective {
   evidence: string[];
   metrics: Record<string, number>;
   createdAt: string;
+}
+
+export interface MachineCategoryRow {
+  id: string;
+  program_id: string;
+  project_id: string;
+  parent_id: string | null;
+  kind: string;
+  name: string;
+  description: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MachineCategory {
+  id: string;
+  programId: string;
+  projectId: string;
+  parentId: string | null;
+  kind: MachineCategoryKind;
+  name: string;
+  description: string | null;
+  origin: MachineCategoryOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CapabilityRow {
+  id: string;
+  program_id: string;
+  project_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  held_at: string | null;
+  held_evidence: string | null;
+  held_by: string | null;
+  held_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Capability {
+  id: string;
+  programId: string;
+  projectId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  origin: 'SEED' | 'DISCOVERED';
+  sourceClaimId: string | null;
+  /** Null unless something outside research established that we hold it. */
+  heldAt: string | null;
+  heldEvidence: CapabilityHeldEvidence | null;
+  heldBy: string | null;
+  heldNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CapabilityEdgeRow {
+  id: string;
+  program_id: string;
+  category_id: string;
+  capability_id: string;
+  relation: string;
+  statement: string;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapabilityEdge {
+  id: string;
+  programId: string;
+  categoryId: string;
+  capabilityId: string;
+  relation: CapabilityRelation;
+  statement: string;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CategoryEvidenceRow {
+  id: string;
+  program_id: string;
+  category_id: string;
+  kind: string;
+  subject: string;
+  statement: string;
+  observed_on: string | null;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CategoryEvidenceEntry {
+  id: string;
+  programId: string;
+  categoryId: string;
+  kind: CategoryEvidenceKind;
+  subject: string;
+  statement: string;
+  observedOn: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManufacturingRoundRow {
+  id: string;
+  program_id: string;
+  project_id: string;
+  category_id: string | null;
+  purpose: string;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManufacturingRound {
+  id: string;
+  programId: string;
+  projectId: string;
+  categoryId: string | null;
+  purpose: ManufacturingRoundPurpose;
+  round: number;
+  candidateId: string;
+  state: 'OPEN' | 'HARVESTED' | 'ABANDONED';
+  openedAt: string;
+  harvestedAt: string | null;
+  /** Null while OPEN. Not counted yet is a different fact from none found. */
+  found: number | null;
+  createdAt: string;
+  updatedAt: string;
 }

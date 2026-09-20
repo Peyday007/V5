@@ -15,7 +15,7 @@ Three branches held parts of one workstream and none contained the others.
 |---|---|
 | `origin/production` | the canonical tree, at `5db7866` |
 | `claude/brain-self-expansion-kernel-yoxx30` | the kernel: blueprint ingestion, the self-model, realization packets |
-| `claude/lucid-bardeen-r57iw7` | Research Intelligence (§35) |
+| `claude/lucid-bardeen-r57iw7` | Research Intelligence (§40) |
 
 Both feature branches took migration `067` on the SQLite chain and `058` on the
 Postgres one. `loadMigrationFiles` refuses a duplicate version rather than

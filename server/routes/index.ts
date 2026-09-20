@@ -22,6 +22,7 @@ import { russellRouter } from './russell.ts';
 import { factoryRouter } from './factory.ts';
 import { connectRouter } from './connect.ts';
 import { cashRouter } from './cash.ts';
+import { manufacturingRouter } from './manufacturing.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
@@ -91,6 +92,7 @@ export function createApiRouter(): Router {
   // an opportunity, a commitment or a need directly. Before the projects router
   // so its own `/:projectId/...` routes do not swallow them.
   router.use(cashRouter);
+  router.use(manufacturingRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

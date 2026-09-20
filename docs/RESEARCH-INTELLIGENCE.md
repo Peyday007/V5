@@ -133,8 +133,8 @@ synthesis, and refuses on exactly two readings — see §6.
 
 ## 4. Data contracts
 
-Migration `075_research_intelligence.sql` (SQLite) and
-`066_research_intelligence.sql` (Postgres). Additive only; nothing existing is
+Migration `076_research_intelligence.sql` (SQLite) and
+`067_research_intelligence.sql` (Postgres). Additive only; nothing existing is
 altered, backfilled or rewritten.
 
 | Table | What it holds | Idempotent by |

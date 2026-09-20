@@ -74,6 +74,7 @@ import { opportunityForOwnCandidate } from '../../repos/cashPortfolio.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
+import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
@@ -145,8 +146,52 @@ async function envelopeIdFor(
   project: Project,
   candidate: RussellCandidate,
 ): Promise<string | null> {
+  /*
+   * A manufacturing question is decided by the round that asked it, and that
+   * is read **before** the project's declared envelope.
+   *
+   * `manufacturing_rounds` is the exact statement — this candidate is asking
+   * this purpose about this category — written by Brain when the round was
+   * opened. The project map is a default somebody wrote about the project's
+   * *ordinary* research. §27 settles the same precedence one system along: the
+   * family comes from the bin's manifest first and its label second, because
+   * the manifest is the work and the label is something somebody wrote.
+   *
+   * **The first version read the project map first, and production would have
+   * been the Westbrook defect again.** On the seeded project, which declares
+   * `PUBLIC_RECORDS`, the question *"Who is actually buying commercial pressure
+   * washers, and how does product reach them?"* compiled with geography
+   * `Michigan` and acceptable sources *"county register of deeds, county clerk,
+   * municipal clerk"*. Every row around it was healthy, the fragment queued,
+   * and a worker would have researched that specification correctly and
+   * answered a completely different question. Nothing below the compiler could
+   * have caught it: the gate judges evidence against the fragment's declared
+   * scope, and the scope was the thing that was wrong.
+   *
+   * **It changes no pre-existing authorization, which is the property §33
+   * protects.** That rule exists so activating a section cannot re-scope ideas
+   * a project already had. Nothing here does: a kernel round is work this
+   * kernel created, it did not exist before the programme was started, and an
+   * ordinary idea in the same project still compiles under the project's own
+   * declared envelope. What is refused is judging a question by the completion
+   * standard of a question nobody asked.
+   *
+   * Three envelopes rather than one, because `planFitsEnvelope` pins one
+   * assignment template per envelope and the three questions have three
+   * completion standards.
+   */
+  const programme = await manufacturingRoundForCandidate(candidate.id);
+  if (programme) {
+    if (programme.purpose === 'BOOTSTRAP' || programme.purpose === 'MAP') {
+      return 'RUSSELL_MACHINE_LADDER_V1';
+    }
+    if (programme.purpose === 'DEMAND') return 'RUSSELL_MACHINE_DEMAND_V1';
+    return 'RUSSELL_MACHINE_CAPABILITY_V1';
+  }
+
   const declared = ENVELOPE_BY_PROJECT[project.slug];
   if (declared) return declared;
+
   const mode = await getCashMode(project.id);
   if (!mode) return null;
   /*
