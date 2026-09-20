@@ -463,7 +463,7 @@ describe('a worker', () => {
     expect(me.status).toBe(200);
     expect(me.body.principal.type).toBe('WORKER');
     // A worker is named by its neutral label, never by the handle whoever
-    // created the row typed. See migration 072.
+    // created the row typed. See migration 073.
     expect(me.body.principal.handle).toMatch(/^worker-\d\d$/);
     expect(me.body.principal.handle).not.toBe('test-runner');
 

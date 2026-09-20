@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 072. See that file for why a worker's
+-- The Postgres half of SQLite migration 073. See that file for why a worker's
 -- operational identity is a neutral server-assigned label and why the legacy
 -- human name is kept but participates in nothing.
 

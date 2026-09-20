@@ -809,7 +809,7 @@ describe('the invariant: a token is the worker, not the approver', () => {
     // And what it answers with is the *neutral* identity, never the handle
     // whoever created the row happened to type. A worker called after a person
     // made every reader treat `brain_whoami` as a statement about whose Claude
-    // account had run the session, which it has never been — see migration 072.
+    // account had run the session, which it has never been — see migration 073.
     expect(who.structured['handle']).toMatch(/^worker-\d\d$/);
     expect(who.structured['handle']).not.toBe('claude-max-worker-01');
     expect(who.structured['displayName']).not.toBe('claude-max-worker-01');
