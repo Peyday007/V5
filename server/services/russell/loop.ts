@@ -91,6 +91,7 @@ import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
 import { openProbe, runProbe } from './probe.ts';
 import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
 import { reconcileBins, reopenParkedBin } from '../bins/service.ts';
+import { reconcileWorkerOwnership } from '../identity/ownership.ts';
 import { getBin } from '../../repos/bins.ts';
 import {
   handoffCandidates,
@@ -1519,6 +1520,22 @@ export async function tick(owner: string): Promise<TickReport> {
       binId: detail.binId,
       reason: detail.reason,
     }));
+
+    /*
+     * And whose capacity each worker is, where a row can prove it.
+     *
+     * Derived here rather than hooked to the moment a connection completes, for
+     * the reason every other reconciliation on this tick is: it reaches the
+     * workers already registered, and a hook fixes one entrance while the rows
+     * reach every entrance plus the ones already stranded. It authorizes
+     * nothing and is wrapped for the same reason the rest of this block is —
+     * metadata must never stop a mission writing back.
+     */
+    try {
+      await reconcileWorkerOwnership();
+    } catch {
+      // A reading that could not be taken is not a reason to fail the tick.
+    }
 
     await completeCycle({ owner, generation: claim.generation, cursorAt: cycleNow() });
     return report;

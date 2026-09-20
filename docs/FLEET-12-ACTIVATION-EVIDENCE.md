@@ -11,6 +11,23 @@ production row, a workflow run, or a timestamp taken from one. Where something
 is not known it says so; where it is blocked on a person it names the person and
 the exact action.
 
+**Where it stands, as at 2026-09-19T18:24Z.** Eight surfaces registered and
+**all eight individually VERIFIED**. Fleet concurrency **8, measured** across two
+accounts under saturation, against a policy target of 12 — the policy is not the
+constraint, the surface count is. Four surfaces are not registered at all.
+
+| | Registered | Chain closed | What is in the way |
+| --- | --- | --- | --- |
+| Account 1 — `airynworker2` | 4 | **4** | nothing |
+| Caleb — `calebworker1` | 4 | **4** | nothing — proved one per credential window across four windows (Phases 19 to 21) |
+| Airyn | 0 | — | one Brain-side worker identity, which only she can mint, in her own Claude account (Phase 16) |
+
+Two earlier conclusions in this file are **wrong and are corrected in place
+rather than deleted**: that Caleb's four bearers were invalid, and that Airyn's
+Routines had to be created. Both had the same shape — a refusal read as proof of
+a stronger claim than it carried. See the superseded banner on *What is blocked,
+and on whom*.
+
 ---
 
 ## Phase 0 — the authoritative inventory
@@ -887,6 +904,15 @@ only a person holding those Claude accounts can take.**
 
 ## What is blocked, and on whom
 
+> **Superseded by Phases 11 to 16, and kept rather than deleted.** Item 1 below
+> is **wrong**: no bearer was invalid and no human ever had to touch a Claude
+> account for Caleb — the four tokens were registered against the wrong four
+> triggers, which Brain established by itself in fourteen seconds (Phase 13).
+> Item 2 is **half wrong**: Airyn's Routines and deployment secrets exist, and
+> what is missing is one Brain-side worker identity (Phases 12 and 16). The
+> reasoning that produced both is worth keeping, because both mistakes have the
+> same shape — a refusal was read as proof of a stronger claim than it carried.
+
 Two things, both genuinely human-only, both outside what any credential in the
 deployed environment can reach.
 
@@ -1109,3 +1135,614 @@ before a row exists.
 So nothing about Airyn's deployment secrets needs redoing. The four
 `trig_…` references are hers to supply and the four bearers are already in
 place; what is missing is one Brain-side identity for them to be bound to.
+
+### Re-read at 15:04:42Z, and the answer has not changed
+
+`admin workers list`,
+[run 35450657088](https://github.com/Peyday007/V5/actions/runs/35450657088) —
+ten identities, the same ten:
+
+```
+airynworker1                         wkr_80f386d4d53d4679bf1a  ARCHIVED  0 project(s)
+airynworker2                         wkr_1cdd82cfb2a54faf8edd  ACTIVE    8 project(s)
+calebworker1                         wkr_1db1193323454ee69bb1  ACTIVE    3 project(s)
+deal-dispatch                        wkr_02392cb548e14f8e96db  ACTIVE    1 project(s)
+factory-brain                        wkr_f8e118e87fd141689adc  ACTIVE    1 project(s)
+verification-worker                  wkr_60e23daeff4d4da1a966  ACTIVE    1 project(s)
+verification-worker-research         wkr_f3b260bc47f44ea9969e  ACTIVE    1 project(s)
+verification-worker-research-audit-a wkr_f316703921d14060ae2c  ACTIVE    1 project(s)
+verification-worker-research-audit-b wkr_a1b5b1d1cd4c472e8632  ACTIVE    1 project(s)
+verification-worker-rival            wkr_4d80121e6312435aa4f2  ACTIVE    1 project(s)
+```
+
+This is re-read rather than remembered on purpose: an authorization that
+arrived while this session was working would change the answer, and §1 says an
+AI memory of a row is not a reading of one. It did not. The blocker below is
+therefore a current fact and not a stale one.
+
+---
+
+## Phase 13 — the four bearers were valid the whole time
+
+`fleet reconcile-secrets --account Caleb`, 14:52:33–14:52:38Z,
+[run 35450044574](https://github.com/Peyday007/V5/actions/runs/35450044574).
+Fourteen seconds, seven fires, and the answer:
+
+```
+  ELIMINATED     Caleb 3-B  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_A   401 req_011CfCzEmCyJQzz79qVUTW1k
+  MATCHED        Caleb 3-B  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_C   session cse_01HdafpjCUNWn7myUp8xywWH
+                 repointed BRAIN_ROUTINE_TOKEN_CALEB_3_B -> BRAIN_ROUTINE_TOKEN_CALEB_3_C
+  ELIMINATED     Caleb 3-A  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_B   401 req_011CfCzEugxyVwsxLfueRifC
+  MATCHED        Caleb 3-A  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_D   session cse_012ZiYotSgkY6Cz5F7yKJEpy
+                 repointed BRAIN_ROUTINE_TOKEN_CALEB_3_A -> BRAIN_ROUTINE_TOKEN_CALEB_3_D
+  ELIMINATED     Caleb 3-C  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_A   401 req_011CfCzEzB5ezfN5LKBPtWyr
+  MATCHED        Caleb 3-C  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_B   session cse_01QbkWheYEmqWsRhzE8BWr9p
+                 repointed BRAIN_ROUTINE_TOKEN_CALEB_3_C -> BRAIN_ROUTINE_TOKEN_CALEB_3_B
+  MATCHED        Caleb 3-D  <-  BRAIN_ROUTINE_TOKEN_CALEB_3_A   session cse_01R4kYsgJWrqjuqXjyDokysM
+                 repointed BRAIN_ROUTINE_TOKEN_CALEB_3_D -> BRAIN_ROUTINE_TOKEN_CALEB_3_A
+
+  matched      4
+  eliminated   3 this run
+  inconclusive 0
+  still open   0 cell(s)
+FLEET: OK reconcile-secrets account=Caleb tried=7 matched=4 open=0
+```
+
+**The true mapping is a reversal**: 3-A↔3-D and 3-B↔3-C. Not one bearer was
+invalid, revoked, expired, or from another account. Four tokens had been written
+down against four triggers in the opposite order, and every `AUTH 401` this
+Brain ever recorded about Caleb was the provider saying so accurately.
+
+The search cost **seven** of the twelve open cells rather than twelve, because a
+match leaves the space on both axes: once `3-C`'s bearer was proved to open
+`3-B`, it stopped being a candidate for `3-A`, `3-C` and `3-D`. The last
+trigger, `3-D`, matched on its first attempt with no elimination at all — by
+then only one bearer was left.
+
+**The report in Phase 10 was wrong and is corrected here.** It said the four
+secrets "hold a token that is not authorized for the trigger it is registered
+against" — true, and then drew from it *"regenerating the tokens in the Claude
+account that owns them is the remaining remedy"*, which did not follow. No
+person needed to touch a Claude account. The remedy was a relabelling that Brain
+could establish on its own in fourteen seconds, and the only reason it took a
+day is that nobody asked the other twelve questions.
+
+### Re-enabled as a separate, recorded decision
+
+Four `fleet set-state --kind routine --to ENABLED` calls, 14:53:28–14:54:51Z,
+each carrying the same reason on the row:
+
+> reconcile-secrets proved the provider accepts the bearer now registered
+> against this trigger; the earlier 401 was a wrong pairing, not a bad token.
+
+The diagnostic did not do this and must not: a quarantine is a health state a
+person answers, and a diagnostic that lifted its own would be grading its own
+exam. Every earlier refusal keeps its row, its `request_id` and its timestamp —
+nothing was rewritten to make this come out right.
+
+## Phase 14 — the eighth pool reading, and the first one with a number in it
+
+Deploy [run 35447977114](https://github.com/Peyday007/V5/actions/runs/35447977114)
+carried this branch to production. Release: success. Pre-restart hosted
+verification: success, on the released image. Restart: success. `/healthz`:
+healthy. **Post-restart verification: failure**, and the line it failed on is
+the reason this is recorded rather than re-deployed:
+
+```
+The database pool had no free connection within 10000ms:
+2/2 connection(s) in use, 0 idle, 379 caller(s) waiting, ceiling 2.
+```
+
+§27 records seven earlier occurrences of this condition and says, twice, that
+raising `BRAIN_DATABASE_POOL_SIZE` blind could exhaust the server's own
+connection limit and turn a failed verification into a failed boot — so
+*instrument first, size from the reading*. `describePoolExhaustion` is that
+instrument, and this is the first run in which it produced the numbers rather
+than `pg-pool`'s eight bare words.
+
+Three things are now established that were not:
+
+- **The pool was genuinely at its ceiling**, not refused by the server:
+  `2/2 in use, 0 idle` against `ceiling 2` is the first branch of the two the
+  diagnostic separates, and its remedy is the opposite of the second's.
+- **The ceiling was 2, not 10.** That is the operator script's own self-imposed
+  pool size, not the application default. So seven earlier readings that assumed
+  the app's untuned 10 were reasoning about the wrong number, and the condition
+  is reachable far more cheaply from a script than from the server.
+- **379 callers were waiting.** A queue that deep is not contention over a
+  slow statement; it is a fan-out with no bound on it.
+
+**No knob was turned, and that is deliberate.** This is still a reading rather
+than a cause, the release itself is proved — the image is live and the
+verification that ran against it before the restart passed in full — and §27's
+rule holds: a ceiling nobody has observed stays UNKNOWN. Re-deploying to
+"fix" it would restart a Brain holding leased work to re-prove something the
+pre-restart run already proved.
+
+## Phase 15 — all four Caleb surfaces run; only one of them can be *proved* right now
+
+The four repointed Routines were each given a bounded `DETERMINISTIC_CHECK`
+probe. Three of the four produced the whole chain, read from `step10 trace` —
+Brain's own rows, not a worker's account of itself:
+
+| Surface | Fired | Arrived (BIN_ASSIGNED) | Bin | Completed | Elapsed |
+| --- | --- | --- | --- | --- | --- |
+| Caleb 3-A | 14:55:24.418 | 14:55:37.390 | `bin_1e77dcf850544dd4b932` | 14:55:59.951 | **35.5s** |
+| Caleb 3-B | 14:55:47.314 | 14:55:54.833 | `bin_07f44b66f79648d7a201` | 14:56:02.571 | **15.3s** |
+| Caleb 3-D | 15:02:04.832 | 15:02:14.250 | `bin_36da3cf5814c42e0a420` | 15:02:28.754 | **23.9s** |
+| Caleb 3-C | 15:01:34.722 | — | `bin_9be8aa842a36495e8133` | — | still READY |
+
+Every arrival authenticated as `wkr_1db1193323454ee69bb1` (calebworker1), every
+bin carries a submitted unit and `DETERMINISTIC_UNITS_V1 v1 evaluated true`, and
+every one of those rows was written by Brain rather than reported by a worker.
+**The four bearers are not merely accepted by the provider; three of the four
+surfaces have now done a piece of work Brain accepted.**
+
+### Two Caleb surfaces ran at the same time, and the overlap is measured
+
+3-A held `bin_1e77…` from 14:55:37.390 to 14:55:59.951. 3-B held `bin_07f4…`
+from 14:55:54.833 to 14:56:02.571. The intersection is
+**14:55:54.833 → 14:55:59.951 — 5.118 seconds** of two *different* sessions
+(`session_01Wpkyz98ZWTGLw5tUPeLEUV` and `session_01YDFxc4qTNszNoXQrrXCSMq`) on
+two *different* Routines of one account, each holding its own bin.
+
+The router says the same thing from the other side, and it is the account
+arithmetic §23 asks for rather than a sum of declared capacity:
+
+```
+14:55:23.327  DISPATCH_ROUTED  Selected Caleb 3-A on Caleb: 0/∞ on the Routine, 0/4 on the account.
+14:55:45.311  DISPATCH_ROUTED  Selected Caleb 3-B on Caleb: 0/∞ on the Routine, 1/4 on the account.
+15:01:33.649  DISPATCH_ROUTED  Selected Caleb 3-C on Caleb: 0/∞ on the Routine, 0/4 on the account.
+15:02:03.650  DISPATCH_ROUTED  Selected Caleb 3-D on Caleb: 0/∞ on the Routine, 1/4 on the account.
+```
+
+`1/4 on the account` is Brain counting an activation already in flight at the
+moment it chose the second surface. **Measured concurrency on Caleb: 2.** Not 4
+— nothing here observed four at once, and §23 forbids reporting a ceiling
+nobody has seen.
+
+### `verify-surface` reports VERIFIED for 3-A alone, and the reason is a property rather than a fault
+
+```
+FLEET: OK verify-surface trig_016dyf9oueMd7zQLY2pGrQFt VERIFIED
+  sessions  1 arrival(s) attributed to this Routine
+    fired     2026-09-19T14:55:24.418Z
+    arrived   oat_d8c4695c841047f2aa30 authenticated as calebworker1 at 14:55:37.790Z
+    assigned  bin_1e77dcf850544dd4b932
+    completed bin_1e77dcf850544dd4b932 reached COMPLETE
+```
+
+3-B and 3-D report `0 arrival(s) attributed to this Routine` over bins that
+demonstrably completed. That is not a contradiction; it is `worker_sessions`
+saying what it is able to say. The table is
+`INSERT … ON CONFLICT (session_ref) DO NOTHING`, and `session_ref` there is the
+**credential the request authenticated with** — which §27 already records is
+*per connector*, not per session:
+
+> `worker_sessions` is keyed by the credential and the credential is
+> per-connector rather than per-session — every session an account fires
+> presents the same one, so the row describes the fleet and cannot describe the
+> arrival.
+
+All four Caleb Routines are bound to one worker and therefore reached Brain
+through one connector. 3-A arrived first at 14:55:37 and took the row; 3-B's
+arrival seventeen seconds later, and 3-D's seven minutes after that, collided
+with it and wrote nothing.
+
+**So `proveSurface` can close at most one surface per connector credential per
+access-token lifetime**, and `ACCESS_TOKEN_TTL_MS` is an hour. Four probes in
+seven minutes can therefore never yield four proofs, however healthy the four
+surfaces are. That is a rate limit on *proving*, not on running, and it is
+worth writing down because the reading it produces — three healthy surfaces
+reported as unproven — looks exactly like the failure this command exists to
+catch.
+
+**What is established and what is inferred, kept apart.** Established from
+rows: the three chains completed; no `worker_sessions` row exists for 3-B or
+3-D; the table's key is the credential and its conflict clause is a silent
+no-op. Inferred: that the collision is *why*. The other candidate is a null
+`credentialId` on those arrivals, which `creditDispatchArrival` also treats as
+"write nothing". **The decisive test is one probe fired after the credential
+has rotated**, and it is the one being run rather than a conclusion being
+asserted.
+
+**Nothing was changed to make this come out green.** Re-keying
+`worker_sessions` on the provider session would close all four chains this
+afternoon and would also make the table stop meaning what `proveSurface` reads
+it as meaning — weakening a control to satisfy the evaluator, which
+`independenceEvidence.ts` re-checks its own guard to prevent.
+
+### 3-C was fired, and the pin refused three arrivals that were not its own
+
+```
+15:01:34.755  DISPATCH_SENT           session cse_01Xm75ttxZuXUyaoyeV8DDJ2
+15:01:46.692  BIN_ASSIGNMENT_REFUSED  PINNED_TO_ANOTHER_SESSION  (caller reported no session at all)
+15:02:14.045  BIN_ASSIGNMENT_REFUSED  PINNED_TO_ANOTHER_SESSION  session_01N6uJ4khcyTQ1R38DPLdKpU
+15:02:30.765  BIN_ASSIGNMENT_REFUSED  PINNED_TO_ANOTHER_SESSION  session_01N6uJ4khcyTQ1R38DPLdKpU
+```
+
+The pin added earlier in this session is doing exactly its job: `session_01N6uJ…`
+is **3-D's** session, awake and eligible, and without the pin it would have taken
+3-C's probe and completed it — which is the substitution that left two of
+Account 1's surfaces reading unproven for thirty-five fires. It costs no
+attempt: the bin is still `0/2`.
+
+The first refusal is the one worth noting. The caller **reported no session at
+all**, twelve seconds after 3-C was fired, which is the shape of 3-C's own
+session arriving from a client that omitted `session_ref`. The pin cannot fall
+back to `bin_dispatch` the way §27's independence floor does — there the
+question is *which session is this*, and here it is *is this the one I fired*,
+which an unidentified caller cannot answer. It fails closed, correctly: an
+unproven surface reported as proven is the one outcome a surface proof may
+never produce. The bin keeps both attempts and `reopenNoShowDispatches` will
+put it back thirty minutes after the fire.
+
+## Phase 16 — the one thing left that a person has to do, and exactly what it is
+
+Everything about Airyn that can be established from rows has been, twice, most
+recently at 15:04:42Z. The state is:
+
+| | |
+| --- | --- |
+| Airyn as a Brain member | **exists** — `usr_72e1236be8f04f4d9aa2`, PERSON, MEMBER, one passkey, signs in with a device |
+| Her four Claude Routines | **exist** — created by her; their `trig_…` references are hers to supply |
+| Her four deployment secrets | **exist and are four distinct bearers** — `BRAIN_ROUTINE_TOKEN_AIRYN_2_A…D`, proved by four non-mutating `--dry-run` registrations (Phase 12) |
+| A distinct Airyn **worker** | **does not exist** — ten identities, none of them new |
+| `airynworker2` | **is Account 1's worker**, bound to all four `Brain Research` surfaces and holding eight project memberships |
+
+So the missing piece is one Brain-side identity, and it cannot be made from
+here for a reason that is the whole of §22's split: **Brain owns dispatch; the
+surface owns whether a worker may act.** A worker's token is minted by the
+OAuth consent screen, in a browser, on a person's approval, inside the Claude
+account that will run it. A Brain that could mint its own workers would be
+exactly the back door that separation exists to prevent — and the invitation
+that stands in for the approval is a single-use credential, which §17 forbids
+putting in a workflow log.
+
+**And `airynworker2` must not be reused, however convenient its name.** Binding
+Airyn's four Routines to it would produce four more surfaces resolving to one
+worker, so an audit spanning them would read `SESSION_SEPARATED` and never
+`WORKER_SEPARATED` or `ACCOUNT_SEPARATED` — the second capacity bucket would be
+a relabelling of the first. §23 is explicit that a same-account result is never
+described as cross-account independent; a same-*worker* one must not be either.
+
+### The trap that has to be named, because it is what happened already
+
+Airyn has evidently authorized a Brain connector at some point, and **no new
+worker came out of it**. §27 records why: Claude keys its connector registry by
+URL, so a second connector at a URL an existing one already holds is refused
+outright — and *selecting an existing connector* in a new Routine hands it the
+**old** worker. That is the one action that looks like it worked and separates
+nothing. The consent screen must name the new worker, and each of her four
+Routines must have *that* connector attached.
+
+### What Brain does the moment it exists
+
+Nothing further is asked of anybody. Registering her four existing triggers
+against her four existing secret names is operator work with no browser and no
+deploy — and if it is done before her connector is right, `verify-surface` will
+say so by name rather than quietly passing: an arrival under another identity
+is reported as a **fault**, not as a missing proof.
+
+## Phase 17 — five of twelve are individually VERIFIED, and the count is stated as five
+
+All four Account 1 surfaces, re-read at 15:17–15:21Z under the pin-bound claim
+added earlier today. Each prints its own closed chain:
+
+| Surface | Fires | Arrivals attributed | The chain `proveSurface` accepted |
+| --- | --- | --- | --- |
+| Brain Research A | 328 sent, 2 refused | **20** | fired 08:50:33.784 → `oat_56fc29a3118a43b19985` arrived 08:51:06.973 → `bin_94a474cb442544ee85d0` COMPLETE |
+| Brain Research 1-B | 49 sent, 0 refused | **6** | fired 09:45:13.876 → `oat_f93edc036d9944eab32b` arrived 13:23:26.393 → `bin_e04839c28e9f4cda908a` COMPLETE |
+| Brain Research 1-C | 49 sent, 0 refused | **5** | fired 09:15:07.141 (17 Sep) → `oat_7f277d8c3a68473589d8` arrived 09:15:30.948 → `bin_f1ea8de040334864893f` COMPLETE |
+| Brain Research 1-D | 50 sent, 0 refused | **5** | fired 09:08:17.228 → `oat_7055fa59e3584ccdb5ce` arrived 12:03:01.924 → `bin_7024d12474c949129a0c` COMPLETE |
+
+`FLEET: OK verify-surface … VERIFIED`, four times, plus Caleb 3-A. **Five of
+twelve.** Not twelve, not "effectively twelve", and not eight-with-four-pending:
+seven surfaces have not closed the chain and are named as such below.
+
+### These four also settle the question Phase 15 left open
+
+Thirty-six arrivals are attributed across four Routines that share **one**
+worker and therefore one connector — and every credential above is a different
+`oat_…`. So the credential does rotate, `worker_sessions` does accumulate one
+row per rotation, and a pooled account's surfaces are individually provable
+**over hours rather than within one**. Account 1's four proofs are spread across
+two days and four separate token lifetimes; Caleb's four probes were spent
+inside seven minutes of one.
+
+That is the reading Phase 15 said would settle it, arrived at from rows that
+were already there rather than by waiting: the mechanism is rotation, not a
+null credential. The remaining Caleb surfaces need one probe each in separate
+token lifetimes, which is a clock rather than a repair.
+
+### Where the twelve actually stand
+
+| | Surfaces | Chain closed |
+| --- | --- | --- |
+| Account 1 (`airynworker2`) | 4 | **4** |
+| Caleb (`calebworker1`) | 4 | **1** — 3-B and 3-D ran and completed bins, unattributed; 3-C awaiting its own fire |
+| Airyn | 0 registered | — blocked on one worker identity (Phase 16) |
+
+## Phase 18 — the no-show reopen ran by itself, and 3-C was refused again for the same reason
+
+Thirty minutes after the unanswered fire, with nobody watching:
+
+```
+15:31:43.653  DISPATCH_INTENT   PENDING
+15:31:43.818  DISPATCH_ROUTED   Selected Caleb 3-C on Caleb: 0/∞ on the Routine, 0/4 on the account.
+15:31:44.889  DISPATCH_SENT     session cse_01TQH1kdT68NGt1Qs5Ytqy9K
+```
+
+and the first intent now carries its own verdict rather than silence:
+
+```
+gen 0  SENT  attempt 2/5  sent 2026-09-19T15:31:44.857Z
+  NO_SHOW: Fired, and no worker ever claimed the bin before the in-flight window closed.
+```
+
+`reopenNoShowDispatches` did exactly what §27 says it is for — derived the
+condition from rows rather than scheduling it, spent a *dispatch* attempt and
+not a *bin* attempt (the bin is still `0/2`), and left three fires in hand.
+
+**And ten seconds later the same refusal, in the same shape as the first time:**
+
+| Fire | First refusal | Gap | Caller reported |
+| --- | --- | --- | --- |
+| 15:01:34.755 | 15:01:46.692 ×3 | 11.9s | **no session at all** |
+| 15:31:44.889 | 15:31:54.894 ×3 | 10.0s | **no session at all** |
+
+`sameProviderSession` returns false when either side is null, so a caller that
+identifies itself as nothing cannot be matched to the session Brain fired. The
+pin refuses, records both values, and costs the bin nothing.
+
+**This is the guard working, and it is also the limit of what the guard can
+do.** The question it asks is *are you the session I fired*, and an
+unidentified caller cannot answer it — the `bin_dispatch` fallback §27 uses for
+the independence floor is circular here, because that row is Brain's record of
+who it *fired*, not of who has just turned up. Failing closed is the only
+correct answer: an unproven surface reported as proven is the one outcome a
+surface proof may never produce.
+
+**What is not established, and is worth somebody measuring.** Whether those
+unidentified arrivals *are* 3-C's own session. Two readings fit and the rows do
+not separate them: the fired session arriving from a client that omitted
+`brain_check_in`'s optional `session_ref`, or some other calebworker1 session
+that happened to be awake. What makes the first plausible is the timing — ten
+to twelve seconds after each fire, twice, which is exactly the 7–13 second
+arrival latency 3-A, 3-B and 3-D each showed. What argues against it is that
+those three *did* report a ref, so the field is not universally omitted by this
+client.
+
+If it is the first reading, then a surface whose client omits `session_ref`
+cannot be proved by a pinned probe at all, and the remedy is at the worker
+rather than in Brain. Three dispatch attempts remain on this bin, so the next
+arrival that identifies itself will close it.
+
+## Phase 19 — 3-C closed on the third fire, and the rotation reading is now conclusive
+
+The second reopen fired at **16:01:54.989Z** and this time the arrival
+identified itself:
+
+```
+16:01:53.873  DISPATCH_ROUTED   Selected Caleb 3-C on Caleb: 0/∞ on the Routine, 0/4 on the account.
+16:01:54.989  DISPATCH_SENT     session cse_01ULb3BkRMEeYF2PcT4x7erZ
+16:02:07.232  BIN_ASSIGNED      wkr_1db1193323454ee69bb1  session session_01ULb3BkRMEeYF2PcT4x7erZ
+16:02:27.045  BIN_UNIT_SUBMITTED
+16:02:29.731  BIN_COMPLETION_ACCEPTED   COMPLETE
+```
+
+Same suffix on both sides of the fire, so `sameProviderSession` matched and the
+pin let it through — on the **same bin**, at **0/2 attempts still**, after two
+earlier fires it had refused. `FLEET: OK verify-surface trig_016yNPUw8BpoiYa5S8tU3bG3 VERIFIED`.
+
+**Phase 18's open question is answered, and the answer is the less comfortable
+of the two.** The arrivals at 15:01:46 and 15:31:54 that reported nothing were
+*not* a property of this Routine and not a permanent client defect: the third
+fire to the same Routine, in the same hour, reported its session normally. So
+`brain_check_in`'s optional `session_ref` is **sometimes** omitted by this
+client and sometimes not, which is worse than either fixed answer — it means a
+pinned probe's success is partly a coin toss, and the honest expectation is
+"one to three fires per surface" rather than one. It cost nothing here because
+the pin spends dispatch attempts and not bin attempts, which is exactly the
+distinction §27 drew for a surface-blocked stage.
+
+**And the credential rotation is now measured rather than inferred.**
+
+| Reading | `oauth` on calebworker1 | Credential the arrival used |
+| --- | --- | --- |
+| 15:00:26Z (3-A VERIFIED) | 48 minted, 24 used | `oat_d8c4695c841047f2aa30` |
+| 16:04Z (3-C VERIFIED) | **50 minted, 25 used** | **`oat_49d459502a2d4b9a88e5`** |
+
+Two more tokens minted and one more used across the hour, and the arrival that
+closed 3-C carried a different `oat_` from the one that closed 3-A. That is the
+test Phase 15 named: the connector refreshed, `worker_sessions` accepted a
+second row for this worker, and the earlier collisions were the mechanism.
+Nothing was re-keyed and no control was relaxed to get here — the only thing
+that changed is the hour.
+
+**Six of twelve individually VERIFIED**: Brain Research A, 1-B, 1-C, 1-D, Caleb
+3-A, Caleb 3-C. 3-B and 3-D each need one probe in a credential window of their
+own.
+
+## Phase 20 — 3-B closed on the first fire of its own window
+
+One probe, one window, one fire:
+
+```
+17:07:33.926  DISPATCH_ROUTED   Selected Caleb 3-B on Caleb: 0/∞ on the Routine, 0/4 on the account.
+17:07:34.944  DISPATCH_SENT     session cse_01Mnn8duTtkWF4JatzVGtwwL
+17:07:46.349  BIN_ASSIGNED      wkr_1db1193323454ee69bb1  session session_01Mnn8duTtkWF4JatzVGtwwL
+17:08:05.531  BIN_UNIT_SUBMITTED
+17:08:08.130  BIN_COMPLETION_ACCEPTED   COMPLETE
+```
+
+**42 seconds, ready to terminal**, and `FLEET: OK verify-surface
+trig_012DkgiTnPr799Le6iL4HEPt VERIFIED`. The arrival identified itself this
+time, so the pin matched on the first attempt — which is the intermittency
+Phase 19 named, seen from the lucky side.
+
+The credential count moves again, and the arrival carries a third distinct one:
+
+| Reading | `oauth` on calebworker1 | Credential that closed the chain |
+| --- | --- | --- |
+| 15:00:26Z (3-A) | 48 minted, 24 used | `oat_d8c4695c841047f2aa30` |
+| 16:04Z (3-C) | 50 minted, 25 used | `oat_49d459502a2d4b9a88e5` |
+| **17:09Z (3-B)** | **52 minted, 26 used** | **`oat_e542824f696248029397`** |
+
+Three windows, three credentials, three closed chains, two tokens minted per
+window. The pattern Phase 15 could only infer is now a measured series.
+
+**Seven of twelve individually VERIFIED**: Brain Research A, 1-B, 1-C, 1-D,
+Caleb 3-A, 3-B, 3-C. Caleb 3-D needs one probe in a window of its own, and
+Airyn's four are unchanged — blocked on one worker identity only she can mint.
+
+## Phase 21 — Caleb 3-D closes the account. Eight of twelve.
+
+```
+18:13:04.000  DISPATCH_ROUTED   Selected Caleb 3-D on Caleb: 0/∞ on the Routine, 0/4 on the account.
+18:13:05.040  DISPATCH_SENT     session cse_016LcqRa3Fuijwcisabgz3cT
+18:13:14.346  BIN_ASSIGNED      wkr_1db1193323454ee69bb1  session session_016LcqRa3Fuijwcisabgz3cT
+18:13:27.640  BIN_UNIT_SUBMITTED
+18:13:29.443  BIN_COMPLETION_ACCEPTED   COMPLETE
+```
+
+**35 seconds ready to terminal**, first fire, `FLEET: OK verify-surface
+trig_01YAGrc58yyaYXHh4Zpfrvzt VERIFIED`.
+
+The credential series closes with the count landing exactly where the previous
+three windows predicted it would:
+
+| Window | `oauth` on calebworker1 | Credential that closed the chain | Surface |
+| --- | --- | --- | --- |
+| 15:00Z | 48 minted, 24 used | `oat_d8c4695c841047f2aa30` | 3-A |
+| 16:04Z | 50 minted, 25 used | `oat_49d459502a2d4b9a88e5` | 3-C |
+| 17:09Z | 52 minted, 26 used | `oat_e542824f696248029397` | 3-B |
+| **18:14Z** | **54 minted, 27 used** | **`oat_8286dc53997f4720a1ba`** | **3-D** |
+
+Four windows, four distinct credentials, four closed chains, two tokens minted
+and one used per window, and the fourth reading was **predicted before it was
+taken**. §23 asks for a measurement rather than a projection; this is a
+measurement that also happens to have been a successful prediction, which is
+the strongest form the reading could take.
+
+### All four of Caleb's surfaces are now individually proven
+
+| Surface | Secret it fires with | Chain | Fires to close it |
+| --- | --- | --- | --- |
+| Caleb 3-A | `BRAIN_ROUTINE_TOKEN_CALEB_3_D` | 14:55:24 → 14:55:59, 35.5s | 1 |
+| Caleb 3-B | `BRAIN_ROUTINE_TOKEN_CALEB_3_C` | 17:07:34 → 17:08:08, 42s | 1 |
+| Caleb 3-C | `BRAIN_ROUTINE_TOKEN_CALEB_3_B` | 16:01:54 → 16:02:29, 35s | 3 |
+| Caleb 3-D | `BRAIN_ROUTINE_TOKEN_CALEB_3_A` | 18:13:05 → 18:13:29, 24.5s | 1 |
+
+Every one of those secret names is the *reversed* mapping Phase 13 established.
+So the reconciliation is not merely accepted by the provider — **all four
+repointed pairings have each produced a session that authenticated as
+calebworker1, was handed a bin and completed it.** The claim in Phase 10 that
+these four bearers were invalid and needed a human to regenerate them is
+refuted four times over, by four separate closed chains.
+
+**Eight of twelve individually VERIFIED.** That is every surface that exists.
+The remaining four are Airyn's and are not registered at all, for the one reason
+Phase 16 names.
+
+## Phase 22 — the cross-account wave, measured
+
+Eight surfaces exist, so the twelve-way wave the objective asks for cannot be
+run. What can be run is the same instrument at the size the fleet actually is:
+`step10 ramp 10 3 600` — ten `DETERMINISTIC_CHECK` bins seeded at once, and a
+harness whose only actions are **create and read**, because the dispatcher is
+the thing under test.
+
+```
+STEP10 RAMP rung=10 units=3 deadline=600s
+  +20s  3 bins  READY -> LEASED
+  +30s  5 bins  READY -> LEASED   (and the first COMPLETE)
+  +40s  2 bins  READY -> LEASED
+  ...
+  rung wall clock  61.1s
+  complete         10/10
+  still open       0
+  dispatch intents 10  sent 8
+```
+
+| | |
+| --- | --- |
+| assignments | 10 |
+| takeovers | 0 |
+| duplicate activations | 0 |
+| completion refusals | 0 |
+| lease expiries | 0 |
+| fenced stale writes | 0 |
+| not complete | 0 |
+| provider errors | **`ACCOUNT_TARGETS_REACHED` ×2** |
+
+**Ten bins, sixty-one seconds, nothing lost.** Median ready→done 42.5s, min
+26.7s, max 53.5s; median ready→fired 11.3s; median queue wait 25.6s.
+
+### The ceiling is 8, and Brain refused the ninth itself
+
+`dispatch intents 10 sent 8` with `ACCOUNT_TARGETS_REACHED ×2` is the whole
+reading. The router refuses with that reason only when **no** account has
+headroom, and the two targets are 4 and 4 — so at the moment of each refusal
+both accounts were holding four in-flight activations. **Measured fleet
+concurrency: 8, across two accounts.** Not a sum of declared capacity, not a
+projection, and not inferred from a clock: Brain's own refusal is the
+measurement, which is the form §23 requires.
+
+Both accounts were filling at once, from the router's own arithmetic three
+seconds apart:
+
+```
+18:18:24.181  DISPATCH_ROUTED  Selected Brain Research 1-B on Brain Research A: 0/∞ on the Routine, 2/4 on the account.
+18:18:27.312  DISPATCH_ROUTED  Selected Caleb 3-D on Caleb: 0/∞ on the Routine, 3/4 on the account.
+```
+
+That is the fact Step 11 closed without: §23 records V1 and V2 both being
+*fired*, and says in terms that cross-account **diversity** was not proven.
+Distribution across two accounts under saturation now is.
+
+**Two of the ten were never fired and still completed**, which is not a fault:
+`bin_a760…` and `bin_ff8f…` show `ready→fired —` and were assigned at 34.5s and
+38s to sessions already awake that had finished their own bin and asked for
+another. §23's sentence — *a worker that finishes one asks for another* — at a
+new rung. It is why ten bins drained through eight activations.
+
+**And it is a throughput reading, not an independence one.** These bins are
+unpinned by design, so one account's session may take a bin Brain fired at the
+other — `bin_292c3a…` was routed to Caleb 3-D and assigned to Account 1's
+worker. That is correct for measuring drain and useless for proving a surface,
+which is exactly why the surface proofs in Phases 19 to 21 used pinned probes
+one credential window apart.
+
+### The fleet as it stands, 18:24Z
+
+```
+FLEET
+  accounts    5
+  routines    13
+  target      12
+  in flight   0
+  candidates  11 considered, 8 eligible now
+
+  Brain Research A  target=4
+      Brain Research A    fires=329  refusals=2  no-shows=0
+      Brain Research 1-B  fires=50   refusals=0  no-shows=0
+      Brain Research 1-C  fires=50   refusals=0  no-shows=0
+      Brain Research 1-D  fires=51   refusals=0  no-shows=0
+  Caleb  target=4
+      Caleb 3-A  fires=3  refusals=1  no-shows=0   secret=…CALEB_3_D
+      Caleb 3-B  fires=4  refusals=1  no-shows=0   secret=…CALEB_3_C
+      Caleb 3-C  fires=5  refusals=1  no-shows=0   secret=…CALEB_3_B
+      Caleb 3-D  fires=4  refusals=1  no-shows=0   secret=…CALEB_3_A
+```
+
+Every Caleb surface still carries exactly **one** refusal — the single historic
+`AUTH 401` from the wrong pairing, preserved. Not one refusal has been recorded
+against any of them since the reconciliation, across sixteen fires.
+
+**The honest summary of the objective.** Twelve Routines were asked for; eight
+exist and all eight are individually VERIFIED. Per-account concurrency of 4 is
+measured on both accounts. Fleet concurrency is **8 measured against a policy
+target of 12** — the policy is not the constraint, the surface count is. The
+remaining four are Airyn's and are blocked on one worker identity only she can
+mint (Phase 16).
