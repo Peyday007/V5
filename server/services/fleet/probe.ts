@@ -66,6 +66,37 @@ export async function createProbeBin(
      * READY. Defaults to true, which is what the terminal command wants.
      */
     ready?: boolean;
+    /**
+     * Whether the bin may only be fired at the Routine it names.
+     *
+     * True by default, because that is what a *surface* probe is for, and the
+     * absence of it is what made a pool unverifiable: a probe made for B is
+     * otherwise routed to whichever surface has the most headroom, and
+     * `proveSurface` then reports B unproven for ever while every fire it
+     * prompted went elsewhere.
+     *
+     * The capacity kernel passes false, and the distinction is the whole
+     * difference between the two questions. A probe asks *does this surface
+     * work*, so it must reach exactly one. A concurrency step asks *can the
+     * fleet run one more at once*, so it must let the router distribute —
+     * pinning there would measure one surface serializing rather than the
+     * fleet's concurrency, and would report a ceiling of one on a healthy pool.
+     */
+    pinned?: boolean;
+    /**
+     * The workload class, when the caller has its own.
+     *
+     * Capacity canary load carries its own so it can be told apart from a
+     * surface proof in the ledger, never counted as validated useful work, and
+     * held constant across a reading — §29's rule that a batch of shorter work
+     * must not read as a capacity improvement.
+     *
+     * The family is still derived from the prefix by `familyOf`, so a class not
+     * beginning with one the candidate query scopes by makes the bin unroutable
+     * with every row correct — the defect §37 records. Both the default below and
+     * `CANARY_WORKLOAD_CLASS` therefore begin `SURFACE_PROBE`.
+     */
+    workloadClass?: string;
   },
 ): Promise<string> {
   const memberships = (await listMembershipsForPrincipal('WORKER', input.worker.id)).filter(
@@ -138,7 +169,15 @@ export async function createProbeBin(
      * proving, or it routes to a surface other than the one under test and
      * proves nothing about it.
      */
-    workloadClass: input.family === 'FACTORY' ? 'FACTORY_SURFACE_PROBE' : 'SURFACE_PROBE_RESEARCH_V1',
+    /*
+     * The caller's class when it has one, and otherwise the family's own.
+     * `familyOf` keys on the prefix either way, so a caller supplying one must
+     * keep the prefix or the bin classifies as a family its surface does not
+     * serve — which is why `CANARY_WORKLOAD_CLASS` begins `SURFACE_PROBE`.
+     */
+    workloadClass:
+      input.workloadClass ??
+      (input.family === 'FACTORY' ? 'FACTORY_SURFACE_PROBE' : 'SURFACE_PROBE_RESEARCH_V1'),
     requiredCapabilities: [...input.routine.capabilities],
     /*
      * Pinned to the surface it is proving, which is the difference between a
@@ -153,7 +192,7 @@ export async function createProbeBin(
      * target, and admission is still decided on the authenticated worker. A
      * pinned surface that cannot take it defers, which is the honest answer.
      */
-    pinnedRoutineId: input.routine.id,
+    pinnedRoutineId: input.pinned === false ? null : input.routine.id,
     createdByType: input.createdByType ?? 'SYSTEM',
     createdById: input.createdById ?? 'capacity-probe',
     ready: input.ready ?? true,

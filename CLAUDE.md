@@ -5864,6 +5864,172 @@ takes any bin id, and its own comments record raising a real research bin's
 ceiling to 100. The comment is the thing that is wrong.
 
 
+## 39. A capacity number is a claim, and a claim carries whether it is a floor.
+
+The capacity kernel (`server/services/capacity/`, `server/repos/capacityKernel.ts`,
+`server/domain/capacity.ts`, `docs/CAPACITY-KERNEL.md`) measures how much of this
+fleet can run at once, records what it has established with the evidence behind it,
+runs the smallest experiment that would reduce the largest remaining uncertainty,
+and rolls back anything that makes things worse. It is a new **entrance** to
+machinery Steps 4 to 12C already built: `bin_events` is still the capacity ledger,
+`fleet_policy` is still the only thing that changes how hard Brain pushes,
+`createProbeBin` is still the only thing that makes isolated load, and the
+dispatcher is still the only thing that fires.
+
+- **"How many Routines can we run" has fifteen different true answers, and the
+  ones that get conflated are the ones that cost something.** A definition existing
+  is not a Routine enabled, and neither is a Routine eligible. A fire Brain
+  *offered* is not one the provider *admitted*, and an admitted fire is not a
+  session that *overlapped* another. And overlapping sessions are not **productive**
+  concurrency: five that overlap and finish one bin between them are one unit of
+  useful work wearing five activations. §23 already separates an account from a
+  Routine and warns that arithmetic ignoring the distinction is arithmetic on a
+  fiction; this is that sentence at thirteen more places. There is **no aggregate**
+  — no percentage, no rollup, no `isComplete` — for §29's reason: the moment one
+  exists every reader uses it and the parts it was made of become decoration.
+
+- **`bound` is the honesty requirement, and without it "we created a fifth"
+  becomes "the limit is five" by the time it reaches a report.** Creating a tenth
+  Routine establishes definition capacity **AT_LEAST** ten and nothing whatever
+  about eleven. A repeated refusal establishes an **AT_MOST**. The number of
+  surfaces eligible right now is an **EXACT** reading of a present fact rather than
+  a limit at all. One integer cannot carry that difference.
+
+- **`PROVIDER_ENFORCED` requires the provider, and the local guardrails must be
+  shown not to have been what refused.** An internal constant, a UI default, a
+  schema restriction, a scheduler bug, a timeout, an absence of work or an
+  unexplained failure is never it. Even a real 429 is refused the label while
+  Brain's own target was already binding at that concurrency — the honest answer
+  there is that Brain stopped before the provider did. Without that condition a
+  target of four plus a refusal reads as a provider limit of four, which is the
+  exact mistake the dimension exists to prevent.
+
+- **UNKNOWN carries no value, and the database enforces it.**
+  `CHECK ((evidence_class = 'UNKNOWN') = (value IS NULL))`. A rate whose denominator
+  is empty is null rather than zero, because a rate of zero says *this happened no
+  times out of many* and null says *nothing happened to divide by* — they read
+  identically on a screen and mean opposite things. Invariant 39 at a number.
+
+- **Overlap is computed, never counted.** A count of activations in a window is a
+  count of *starts*: Step 10's rung 20 finished twenty bins from thirteen
+  activations because a worker that finishes one asks for another. So a session
+  becomes an interval — its start from `worker_sessions.observed_at`, written at
+  arrival from the dispatch row *Brain* sent — and the peak is found by a sweep in
+  which an end is processed before a start at the same instant, so a handover is not
+  two sessions at once. **A session with no observed end is dropped rather than
+  extended to now**, because the favourable assumption there inflates the headline
+  figure. And throughput counts `DISTINCT bin_id`, so a redelivered completion
+  callback appends an event and moves nothing.
+
+- **The kernel's conclusions may grow without limit; its authority may not grow at
+  all.** There are exactly two effects it can have: one `fleet_policy` row, and
+  isolated `DETERMINISTIC_CHECK` canary bins whose manifest forbids every
+  repository operation and every external effect. It cannot create an account, a
+  Routine, a credential, a membership or a scope; it cannot enable a paid API; it
+  cannot raise a spending ceiling; and it cannot fire anything. §22's split holds —
+  **Brain owns dispatch, the surface owns whether a worker may act** — and a kernel
+  that minted its own surfaces to measure them would be measuring something it had
+  authorized itself. `EXPERIMENT_AUTHORITY` is a constant, so nothing supplies the
+  limits its own work is judged against.
+
+- **The instrument is `fleet_policy.explore_ceiling`, which 026 added for exactly
+  this and which nothing had ever written.** It is the right field for one reason
+  beyond tidiness: it carries its own expiry and `effectiveTarget` compares that
+  expiry to the clock, so **a kernel that never gets another tick leaves a ceiling
+  that stops applying by itself** and the fleet falls back to the operator's target
+  with no rollback having to run. §23's rule that a boost expires by being compared
+  to the clock rather than by anything running. The base `target` is carried through
+  unchanged, so the row records a temporary departure rather than replacing what a
+  person set.
+
+- **Every transition is a compare-and-swap naming the state it moves from — the
+  sixth time this codebase has needed that sentence.** Two ticks reading one
+  `PROPOSED` row produce one transition. A restart mid-experiment resumes rather
+  than starting a second canary, because the bins an experiment creates are recorded
+  in the same statement that moves its state: a tick finding `CANARY_RUNNING` reads
+  the bins that already exist instead of making more. There is no in-memory state to
+  lose — §27's rule that a flag can be set by a tick that then dies and rows cannot.
+  **The rollback point is captured when the experiment is authorized**, not read
+  back when a rollback runs, because by then the current policy row is the
+  experiment's own and "revert to current" would quietly adopt the thing it was
+  reverting.
+
+- **The one experiment Brain cannot run names the exact action and carries on with
+  everything else.** The deployed Brain holds a per-Routine bearer that fires one
+  named trigger and nothing that can create one, so `DEFINITION_STAIRCASE` is always
+  `PERSON`. `user_action` is NOT NULL for `NEEDS_USER`, enforced by a CHECK: §24's
+  rule that an escalation with no answering transition is stuck rather than waiting,
+  made unsayable rather than merely discouraged. Its answering transition is derived
+  from rows — the moment `fleet_routines` holds more than the baseline it was
+  proposed against — so it reaches an action taken days ago by somebody who never
+  came back to say so. The fourth time this repository has needed the distinction
+  between a hook on the moment and a derivation from the rows.
+
+- **Running it found three defects reading had not, and all three failed in the
+  understating direction.** An observational experiment was proposed on a fleet with
+  no eligible surface — authorized, started, and left in `CANARY_RUNNING` measuring
+  nothing, then proposed again, while crowding out the one experiment that names
+  that condition. §24's sentence at the selector, and stuck *while looking busy*.
+  An **inference was overriding a measurement downwards**: `recommendedTarget` took
+  the plain minimum of {demonstrated, failure−1, knee}, and a knee of 1 over a fleet
+  whose productive overlap had just been measured at 2 produced a recommendation of
+  1. A knee is an inference; a demonstrated safe bound is a measurement; the
+  measurement wins and the disagreement is recorded as a contradiction rather than
+  silently resolved. And the knee itself was a line through two single events, so a
+  level now needs three completions before it counts. **A fleet talked down from a
+  level it can demonstrably run loses throughput nobody ever measures back**, which
+  is why all three mattered.
+
+- **And an off-by-one the test for the second fix found.** Counting the sessions
+  open at a refusal gives the level that was *working* when a further start was
+  refused, so calling that the failure point labels a level Brain had just run as
+  the point where things break — and `failure − 1` then lands one below the
+  demonstrated bound. Three open and a fourth refused means three worked and four
+  did not exist.
+
+- **The answering transition this section argues for was itself unreachable, and a
+  test found it.** `settleExperiment` allowed `ADOPTED` only from `EVALUATING`, on
+  the correct reasoning that adopting out of a running canary would be adopting
+  before the window closed. A definition staircase has no canary — its evidence is
+  rows — so it settles straight from `NEEDS_USER`, which matched nothing: it would
+  have parked for ever with its action re-reported every tick. §24's own defect,
+  written by the code arguing against it, and invisible to reading because the
+  guard looked deliberate and was. Beside it, the outstanding actions were read
+  *before* the tick's transitions ran, so an experiment settled by the very tick
+  that noticed still had its action reported — asking somebody to do a thing
+  already done, which is the stale status §29 records in the direction that wastes
+  their time.
+
+- **The report separates what Brain is doing from what a person must do, and an
+  internal task never appears in the second list.** If Brain has the authority it
+  belongs under *Brain is doing now*; putting it under *You need to do* would ask
+  somebody to do a thing Brain was already doing. An empty user-action list is
+  rendered as a sentence rather than left as an empty heading, because an absent
+  list reads as a section that failed. Every diagnosis carries its own
+  counter-evidence and the cheapest observation that would separate the two, so no
+  bottleneck is printed as a certainty.
+
+**What the fleet actually is, measured rather than recalled.** The provider's own
+Routine listing holds **10 definitions on one account with 7 enabled
+simultaneously**, and it refused none of them — the tenth was created as a bounded
+experiment, verified against the listing, then disabled. Four of those surfaces'
+most recent runs overlap: between 11:46:42Z and 11:46:56Z on 2026-09-20, three
+sessions were live at once on that single account with zero refusals. So
+**provider-admitted concurrency is MEASURED ≥ 3 per account**, and "four Routines
+per account" was never a provider limit — it is a registration count an operator
+chose, and the number four appears five times in this repository without once being
+about Routines.
+
+**What is not established, said plainly.** Productive concurrency in production is
+UNKNOWN, because whether those three sessions each produced distinct validated work
+is a question about `worker_sessions` and bin states that needs production database
+access. `SUSTAINABLE_CAPACITY` is UNKNOWN and stays so until overlapping activity
+spans a representative period. `PROVIDER_ENFORCED_CEILING` is UNKNOWN because
+nothing has refused. And no *concurrency* canary has run against the deployed
+fleet, because that needs this commit deployed — the engine passing its tests says
+nothing about the fleet, which is the separation Step 3 drew and this section does
+not get to skip.
+
 ## Repository map
 
 ```
@@ -5885,6 +6051,7 @@ server/
     pg-migrations/*.sql the Postgres schema, generated from it
   domain/
     types.ts            enums, row types, view types — the contract
+    capacity.ts         the fifteen dimensions, and whether a number is a floor or a ceiling
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
@@ -5907,6 +6074,7 @@ server/
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
     capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
+    capacityKernel.ts   what Brain has concluded about its own capacity, and the experiments behind it
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
   services/
     storage.ts          document keys, confinement, and writing through the store
@@ -5996,6 +6164,13 @@ server/
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
       probe.ts          the one bounded self-test that turns configured into proven
       lab.ts            the eight test modes, and the five this version refuses to run
+    capacity/
+      observe.ts        the lifecycle, read from the ledger; overlap computed, never counted
+      envelope.ts       fifteen answers, each with a bound and what kind of fact it is
+      diagnose.ts       which stage is the constraint, with the case against it
+      experiments.ts    what is worth running next, and when a running one must stop
+      kernel.ts         the loop, and the two effects it is allowed to have
+      report.ts         the snapshot, and the report that separates Brain's work from yours
     cash/
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
@@ -6160,6 +6335,8 @@ scripts/
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
+  capacityKernel.test.ts     a capacity figure held to the thing it exists to stop
+  fleetCapacitySurface.test.tsx  the capacity block in a browser: null is not zero
   capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
   systemSelfModel.test.ts    what a reading may claim, and the seven it may not
   realizationPacket.test.ts  derive what is readable; refuse to guess the rest

@@ -75,6 +75,7 @@ import {
 } from '../services/russell/inquiry.ts';
 import { SAVED_VIEWS, SEARCH_KINDS, search, type SearchKind } from '../services/russell/search.ts';
 import { explainSlowness, fleetView } from '../services/fleet/view.ts';
+import { capacitySnapshot } from '../services/capacity/report.ts';
 import {
   LAB_MODES,
   applyFinding,
@@ -548,6 +549,33 @@ russellRouter.get(
         projectId: project.id,
       }),
     };
+  }),
+);
+
+/**
+ * The whole capacity reading: fifteen dimensions, their evidence and their age.
+ *
+ * The concise form already travels down with `GET …/fleet`. This is the
+ * structured one — every claim with its bound, evidence class, sample count,
+ * confidence, first-observed and last-verified dates, the ledger ids behind it and
+ * the conditions that would make it stale — for a reader who needs to argue with a
+ * number rather than read it.
+ *
+ * `requirePerson` and `requireProject`, exactly as the fleet view beside it: a
+ * worker principal is refused by type, and a caller who may not read the project
+ * gets the same 404 a project that does not exist gives.
+ *
+ * It performs no effect. No fire, no enqueue, no claim, no registration and no
+ * policy write — reading what the kernel knows is not running it, and
+ * `tests/capacityKernel.test.ts` asserts that against the queue, the bins and the
+ * fire counters rather than trusting this paragraph.
+ */
+russellRouter.get(
+  '/projects/:projectId/fleet/capacity',
+  handler(async (req) => {
+    requirePerson();
+    await requireProject(pathId(req, 'projectId'));
+    return { capacity: await capacitySnapshot() };
   }),
 );
 

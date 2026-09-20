@@ -53,6 +53,10 @@ import {
 import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scaler.ts';
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
+import { capacityReportFrom, capacitySnapshot } from '../server/services/capacity/report.ts';
+import { capacityKernelTick } from '../server/services/capacity/kernel.ts';
+import { claimHistory } from '../server/repos/capacityKernel.ts';
+import { CAPACITY_DIMENSIONS, DIMENSION_MEANING } from '../server/domain/capacity.ts';
 import { getBin, listBins, listDispatchesForBin } from '../server/repos/bins.ts';
 import { getWorker, getWorkerByName, getWorkerRouting } from '../server/repos/identity.ts';
 import { listTokensForWorker } from '../server/repos/oauth.ts';
@@ -1276,6 +1280,165 @@ async function probeBin(input: {
       if (verdict.quarantine) console.log(`  QUARANTINE CANDIDATE ${routine.routineRef}: ${verdict.reason}`);
     }
     return ok(`scale-advice ${proposal.direction} ${proposal.from}->${proposal.to}`);
+  }
+
+  /*
+   * What the capacity kernel has established, in the report an operator reads.
+   *
+   * A pure read: it takes the same reading the kernel tick takes, composes the
+   * concise report from it, and performs no transition at all. `capacity-kernel`
+   * below is the one that acts, and they are two commands rather than one flag so
+   * that reading cannot become acting by a typo.
+   */
+  if (command === 'capacity') {
+    const snapshot = await capacitySnapshot({
+      windowHours: option('window') ? Number(option('window')) : undefined,
+    });
+    const report = capacityReportFrom(snapshot);
+
+    console.log('ROUTINE CAPACITY');
+    console.log('');
+    console.log('  Current configuration');
+    for (const line of report.currentConfiguration) console.log(`    ${line.line}`);
+    console.log('');
+    console.log('  What is proven');
+    for (const row of report.proven) console.log(`    ${row.label}: ${row.value}`);
+    console.log('');
+    console.log('  Main bottleneck');
+    console.log(`    ${report.mainBottleneck.stage}`);
+    console.log(`    for:     ${report.mainBottleneck.evidenceFor}`);
+    console.log(`    against: ${report.mainBottleneck.evidenceAgainst}`);
+    console.log('');
+    console.log('  Brain is doing now');
+    for (const line of report.brainIsDoingNow) console.log(`    - ${line}`);
+    console.log('');
+    console.log('  You need to do');
+    if (report.youNeedToDo.length === 0) {
+      // Said in words rather than left as an empty heading. An absent list reads
+      // as "this section failed to render"; the sentence reads as the answer.
+      console.log('    No user action is needed for the next experiment.');
+    } else {
+      for (const line of report.youNeedToDo) console.log(`    - ${line}`);
+    }
+    console.log('');
+    console.log('  Next experiment');
+    if (!report.nextExperiment) {
+      console.log('    none: every dimension the kernel could reduce is established or already owned.');
+    } else {
+      console.log(`    change:    ${report.nextExperiment.change}`);
+      console.log(`    hypothesis:${report.nextExperiment.hypothesis}`);
+      console.log(`    success:   ${report.nextExperiment.successEvidence}`);
+      console.log(`    stop:      ${report.nextExperiment.stopCondition}`);
+      console.log(`    resolves:  ${report.nextExperiment.resolves}`);
+    }
+    console.log('');
+    console.log('  Measurement health');
+    console.log(
+      `    ${snapshot.measurementHealth.sessionsObserved} session(s) observed, ` +
+        `${snapshot.measurementHealth.sessionsWithNoRecordedEnd} with no recorded end (not counted), ` +
+        `${snapshot.measurementHealth.validatedCompletions} validated completion(s), ` +
+        `${snapshot.measurementHealth.providerRefusals} provider refusal(s)`,
+    );
+    for (const gap of snapshot.measurementHealth.missing) console.log(`    MISSING  ${gap}`);
+    console.log('');
+    console.log('  Remaining unknowns');
+    if (report.remainingUnknowns.length === 0) console.log('    none.');
+    for (const line of report.remainingUnknowns) console.log(`    - ${line}`);
+
+    if (option('verbose')) {
+      console.log('');
+      console.log('  Every dimension, with its evidence');
+      for (const dimension of CAPACITY_DIMENSIONS) {
+        const reading = snapshot.envelope.readings[dimension];
+        console.log(
+          `    ${dimension}  ${reading.value === null ? 'UNKNOWN' : reading.bound + ' ' + String(reading.value)}  ` +
+            `${reading.evidenceClass}  n=${reading.sampleCount}  ${reading.confidence}`,
+        );
+        console.log(`        ${DIMENSION_MEANING[dimension]}`);
+        console.log(`        ${reading.explanation}`);
+      }
+      console.log('');
+      console.log('  Claim freshness');
+      for (const one of snapshot.freshness) {
+        console.log(
+          `    ${one.dimension}  first ${one.firstObservedAt}  verified ${one.lastVerifiedAt}  ` +
+            `${one.stale ? 'STALE: ' + (one.staleBecause ?? '') : 'current'}`,
+        );
+      }
+    }
+    return ok(
+      `capacity bottleneck=${snapshot.diagnosis.bottleneck} unknowns=${report.remainingUnknowns.length} ` +
+        `actions=${report.youNeedToDo.length}`,
+    );
+  }
+
+  /*
+   * Run one kernel pass deliberately, rather than waiting for the durable tick.
+   *
+   * `--dry-run` observes and concludes and moves nothing, which is the honest
+   * default for a command somebody is running to find out what it would do.
+   * Without it, it is exactly the pass the tick runs — same function, same guards,
+   * same idempotency — so running it by hand cannot produce a state the tick
+   * could not.
+   */
+  if (command === 'capacity-kernel') {
+    const dryRun = flag('dry-run');
+    const result = await capacityKernelTick({ act: !dryRun });
+    console.log(`  bottleneck   ${result.diagnosis.bottleneck}`);
+    console.log(`  for          ${result.diagnosis.evidenceFor}`);
+    console.log(`  against      ${result.diagnosis.evidenceAgainst}`);
+    console.log(`  next look  ${result.diagnosis.discriminator}`);
+    console.log(`  claims       ${result.claims.length}`);
+    for (const claim of result.claims) console.log(`      ${claim.action.padEnd(10)} ${claim.dimension}`);
+    console.log(`  transitions  ${result.transitions.length}`);
+    for (const move of result.transitions) {
+      console.log(`      ${move.from} -> ${move.to}  ${move.experimentId}`);
+      console.log(`          ${move.why}`);
+    }
+    console.log(`  live         ${result.live.length} experiment(s)`);
+    for (const one of result.live) {
+      console.log(`      ${one.state.padEnd(15)} ${one.kind}  ${one.dimension}`);
+    }
+    if (result.userActions.length > 0) {
+      console.log('  USER ACTION REQUIRED');
+      for (const action of result.userActions) console.log(`      ${action}`);
+    }
+    for (const gap of result.missing) console.log(`  MISSING      ${gap}`);
+    return ok(
+      `capacity-kernel ${dryRun ? 'dry-run ' : ''}claims=${result.claims.length} ` +
+        `transitions=${result.transitions.length} live=${result.live.length}`,
+    );
+  }
+
+  /*
+   * The history of one capacity question, including what was superseded and why.
+   *
+   * The reason the claims table exists rather than re-deriving from the ledger on
+   * every read: "we believed six since the 14th, then a refusal moved it to four
+   * on the 19th" is a sentence no amount of re-derivation can produce, because the
+   * re-derivation only ever knows the present.
+   */
+  if (command === 'capacity-history') {
+    const name = (option('name') ?? '').toUpperCase();
+    const dimension = CAPACITY_DIMENSIONS.find((one) => one === name);
+    if (!dimension) {
+      return refuse(
+        `pass --name with one of: ${CAPACITY_DIMENSIONS.join(', ')}.`,
+      );
+    }
+    const rows = await claimHistory(dimension, 'FLEET', null, 20);
+    if (rows.length === 0) console.log('  nothing has ever been concluded about this dimension.');
+    for (const row of rows) {
+      console.log(
+        `  ${row.supersededAt ? 'superseded' : 'live      '}  ` +
+          `${row.value === null ? 'UNKNOWN' : row.bound + ' ' + String(row.value)}  ${row.evidenceClass}  ` +
+          `n=${row.sampleCount}  ${row.confidence}`,
+      );
+      console.log(`      first ${row.firstObservedAt}  verified ${row.lastVerifiedAt}`);
+      console.log(`      ${row.explanation}`);
+      if (row.supersededReason) console.log(`      superseded: ${row.supersededReason}`);
+    }
+    return ok(`capacity-history ${dimension} rows=${rows.length}`);
   }
 
   if (command === 'profile') {

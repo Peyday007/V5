@@ -100,6 +100,108 @@ export function FleetCentre({ projectId }: { projectId: string | null }): JSX.El
         </ul>
       </section>
 
+      {/* What the capacity kernel has established.
+ 
+          Null when a reading could not be taken, and that renders as a sentence
+          rather than as zeroes: "we could not tell" and "there is no capacity"
+          are opposite facts, and a block of zeroes says the second when it means
+          the first. Every value carries its own evidence label, because a figure
+          without one is what this whole section exists to stop producing. */}
+      {fleet.capacity === null ? (
+        <section className="rs-panel">
+          <h3 className="rs-group-title">Routine capacity</h3>
+          <p className="rs-hint">
+            A capacity reading could not be taken just now. That is not a fleet with no
+            capacity — it is Brain being unable to say, and the surfaces above are still
+            the live answer to what can run.
+          </p>
+        </section>
+      ) : (
+        <section className="rs-panel">
+          <h3 className="rs-group-title">Routine capacity</h3>
+
+          <ul className="rs-item-meta">
+            {fleet.capacity.currentConfiguration.map((line) => (
+              <li key={line.line} title={line.evidence}>
+                {line.line}
+              </li>
+            ))}
+          </ul>
+
+          <h4 className="rs-group-title">What is proven</h4>
+          <ul className="rs-list">
+            {fleet.capacity.proven.map((row) => (
+              <li key={row.label}>
+                <span className="rs-item-title">{row.label}</span>
+                <span className="rs-count">{row.value}</span>
+                {/* The evidence is rendered rather than hidden in a title:
+                    §35's rule that an explanation only a mouse can reach is no
+                    explanation on a phone, and this page is read on one. */}
+                <p className="rs-hint">{row.evidence}</p>
+              </li>
+            ))}
+          </ul>
+
+          <h4 className="rs-group-title">Main bottleneck</h4>
+          <p className="rs-maturity-word">{fleet.capacity.mainBottleneck.stage}</p>
+          <p className="rs-hint">For: {fleet.capacity.mainBottleneck.evidenceFor}</p>
+          {/* Always shown. A diagnosis printed without its counter-evidence
+              reads as a certainty, and none of these is one. */}
+          <p className="rs-hint">Against: {fleet.capacity.mainBottleneck.evidenceAgainst}</p>
+
+          <h4 className="rs-group-title">Brain is doing now</h4>
+          <ul className="rs-list">
+            {fleet.capacity.brainIsDoingNow.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+
+          <h4 className="rs-group-title">You need to do</h4>
+          {fleet.capacity.youNeedToDo.length === 0 ? (
+            /* Said in words rather than left as an empty list. An absent list
+               reads as a section that failed to render; the sentence is the
+               answer, and it is usually the right one. */
+            <p className="rs-hint">No user action is needed for the next experiment.</p>
+          ) : (
+            <ul className="rs-list">
+              {fleet.capacity.youNeedToDo.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+
+          <h4 className="rs-group-title">Next experiment</h4>
+          {fleet.capacity.nextExperiment === null ? (
+            <p className="rs-hint">
+              Nothing is worth running: every dimension the kernel could reduce is either
+              established or already being tested.
+            </p>
+          ) : (
+            <ul className="rs-item-meta">
+              <li>Change: {fleet.capacity.nextExperiment.change}</li>
+              <li>Hypothesis: {fleet.capacity.nextExperiment.hypothesis}</li>
+              <li>Success: {fleet.capacity.nextExperiment.successEvidence}</li>
+              <li>Stop: {fleet.capacity.nextExperiment.stopCondition}</li>
+              <li>Resolves: {fleet.capacity.nextExperiment.resolves}</li>
+            </ul>
+          )}
+
+          {fleet.capacity.remainingUnknowns.length > 0 && (
+            <>
+              <h4 className="rs-group-title">
+                Still unknown
+                <span className="rs-count">{fleet.capacity.remainingUnknowns.length}</span>
+              </h4>
+              <ul className="rs-list">
+                {fleet.capacity.remainingUnknowns.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
+
       <section className="rs-group">
         <h3 className="rs-group-title">
           Surfaces

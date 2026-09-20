@@ -31,6 +31,7 @@ import { inFlightByRoutine } from '../dispatch/candidates.ts';
 import { lastOutcomeOf } from '../dispatch/pool.ts';
 import { getDb } from '../../db/database.ts';
 import { workloadProfile } from '../dispatch/profiles.ts';
+import { capacityReportFrom, capacitySnapshot, type CapacityReport } from '../capacity/report.ts';
 import type { FleetAccount, FleetRoutine } from '../../domain/types.ts';
 
 /** How well grounded a number is. The same vocabulary the ledger already uses. */
@@ -143,6 +144,21 @@ export interface FleetView {
 
   /** What adding capacity would change — said honestly, or not said. */
   ifWeAddedCapacity: string;
+
+  /**
+   * What the capacity kernel has established, and what it is doing about it.
+   *
+   * Composed from `capacitySnapshot` rather than derived here, so this page and
+   * the kernel that acts on the numbers cannot disagree about them — the defect
+   * `services/fleet/capacity.ts` exists to end, where a screen and the dispatcher
+   * each computed their own answer to one question and printed `1 / 4` over a
+   * healthy fleet.
+   *
+   * Null when the kernel could not take a reading. Null is *we could not tell*,
+   * which is a different fact from a fleet with no capacity, and the renderer must
+   * say so rather than drawing zeroes.
+   */
+  capacity: CapacityReport | null;
 
   /** The policy in force, and the last few changes, so a revert has a target. */
   policy: {
@@ -384,6 +400,21 @@ export async function fleetView(input: {
       ready: backlog.ready,
     }),
 
+    /*
+     * Swallowed rather than allowed to fail the page.
+     *
+     * The fleet view is what an operator opens when something is wrong, and a
+     * capacity reading that could not be taken must not be the reason they cannot
+     * see the surfaces. Null carries that honestly; a zeroed report would not.
+     */
+    capacity: await (async (): Promise<CapacityReport | null> => {
+      try {
+        return capacityReportFrom(await capacitySnapshot());
+      } catch {
+        return null;
+      }
+    })(),
+
     policy: {
       target: policy?.target ?? null,
       paused: policy?.paused ?? false,
@@ -454,8 +485,17 @@ function capacityAdvice(input: {
   if (input.ready === 0) {
     return 'Nothing is waiting, so more capacity would change nothing today.';
   }
-  // §23's rule: never infer capacity from account count.
-  return 'Brain has not measured what another surface would add. A calibration run in the Capability Lab would answer it.';
+  /*
+   * §23's rule: never infer capacity from account count.
+   *
+   * This used to end "a calibration run in the Capability Lab would answer it",
+   * which was true when it was written and is not now: the capacity kernel
+   * measures exactly this, from the ledger, on every tick, and reports the bound
+   * it has actually demonstrated beside the one it has not. Leaving the old
+   * sentence would send a reader to a surface that does not answer the question
+   * while the answer sits in the block directly below it.
+   */
+  return 'Brain has not measured what another surface would add from *this* reading. The capacity block below reports what has actually been demonstrated, and names the next experiment that would move it.';
 }
 
 /* ==========================================================================

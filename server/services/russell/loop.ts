@@ -145,6 +145,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { capacityKernelTick } from '../capacity/kernel.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 
 export interface TickReport {
@@ -190,6 +191,23 @@ export interface TickReport {
     recovered: number;
     /** Set when the self-model was re-read because the last one had gone stale. */
     selfModelDrift: number | null;
+  };
+  /**
+   * What the capacity kernel concluded and moved this tick.
+   *
+   * Its own block rather than folded into `capability`, because they answer
+   * different questions about different subjects: that one is what Brain can
+   * *do*, this one is how much of it can run at once. `userActions` is the half
+   * that must never be silent — an experiment parked on a person's action is
+   * §24's escalation, and a tick that knew about one and did not surface it
+   * would be the stuck state rather than the waiting one.
+   */
+  capacity: {
+    bottleneck: string;
+    claimsWritten: number;
+    transitions: number;
+    liveExperiments: number;
+    userActions: string[];
   };
   /**
    * Ideas the project's own archive already answered, judged and parked without
@@ -440,6 +458,13 @@ const EMPTY: TickReport = {
     recovered: 0,
     selfModelDrift: null,
   },
+  capacity: {
+    bottleneck: 'NONE',
+    claimsWritten: 0,
+    transitions: 0,
+    liveExperiments: 0,
+    userActions: [],
+  },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -539,6 +564,13 @@ export async function tick(owner: string): Promise<TickReport> {
       promoted: 0,
       recovered: 0,
       selfModelDrift: null,
+    },
+    capacity: {
+      bottleneck: 'NONE',
+      claimsWritten: 0,
+      transitions: 0,
+      liveExperiments: 0,
+      userActions: [],
     },
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
@@ -816,6 +848,37 @@ export async function tick(owner: string): Promise<TickReport> {
       if (scan) report.capability.selfModelDrift = scan.drift.length;
     } catch {
       /* a reading that could not be taken is not a reason to stop the tick */
+    }
+
+    /*
+     * 1a-iv-e. Advance the capacity kernel, fleet-wide.
+     *
+     * The same shape as the two above and for the same reasons. It observes the
+     * ledger, records what it concludes, moves any live experiment at most one
+     * guarded step, and proposes at most one new one — all derived from rows, so
+     * it reaches what is already stranded, a tick that dies halfway leaves
+     * nothing half-written, and two instances ticking at once produce one of
+     * everything.
+     *
+     * Fleet-wide rather than per-project, because how many workers may run at
+     * once is a fact about the fleet. A per-project capacity kernel would be four
+     * kernels competing to set one number.
+     *
+     * Failures are swallowed for `advanceSources`' reason, and it matters more
+     * here: this is a *measurement* of Brain, never a precondition of it. A
+     * capacity reading that could not be taken must not stop Russell writing back
+     * a mission, and a kernel that could stop the tick would be a monitor able to
+     * take down the thing it monitors.
+     */
+    try {
+      const capacity = await capacityKernelTick();
+      report.capacity.bottleneck = capacity.diagnosis.bottleneck;
+      report.capacity.claimsWritten = capacity.claims.length;
+      report.capacity.transitions = capacity.transitions.length;
+      report.capacity.liveExperiments = capacity.live.length;
+      report.capacity.userActions = capacity.userActions;
+    } catch {
+      /* a capacity reading that could not be taken changes nothing */
     }
 
     /*
