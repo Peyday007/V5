@@ -141,6 +141,23 @@ jobs:
           fi
           echo "LOGS: OK app=$app seconds=$LOG_SECONDS lines=$(wc -l < all.txt)"
 
+
+  # The durable record of the failure, which needs the `production` environment
+  # because that is where `BRAIN_DATABASE_URL` lives. It is a **read**, not a
+  # deployment — but the environment is the same one §28's deployment branch
+  # policy protects, so from a non-canonical branch GitHub may refuse this job
+  # before a runner is ever allocated. That refusal is the control working, and
+  # it is the answer rather than something to route around: the alternative is
+  # pushing a workflow to `production` to read a row, which is the trade §28
+  # exists to stop people making casually.
+  #
+  # Its own job, so the log capture beside it is unaffected either way.
+  effects:
+    name: What the failed effects recorded
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
       # What the Brain wrote down about the failure, as opposed to what it said
       # out loud.
       #
