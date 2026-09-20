@@ -4769,6 +4769,64 @@ and a suite that exercises the stage cannot see that.**
   the production constant, because a test sharing that constant would pass
   whatever it became.
 
+
+- **That repair hardened a function the live path does not call, and the
+  correction is recorded rather than quietly applied.** `safeSegment` is
+  correct and tested. `storeFile` reaches it only through `documentKey`, on the
+  branch taken when an `identity` is supplied — and **no caller in this
+  repository supplies one**, so the branch is dead and every stored document
+  took the other one, where the leaf is `sanitizeFilename`'d alone. `ae6f682`
+  touched `storage/keys.ts` and never `storage.ts`: the two halves of one
+  repair written at two layers with nothing holding them against each other,
+  which is the sentence the bullet above had already written about this exact
+  pair of functions. Every cash-variant report since has thrown `400
+  InvalidKey` — eleven of them, each collapsing to *"That call could not be
+  completed"* — and the defect was never only Cash Mode's, because Supabase's
+  key class is `\w` plus punctuation and `\w` is ASCII, so an accented upload
+  filename fails the same way.
+
+  Nothing in the suite could see it, because the Supabase stand-in accepts any
+  key its caller sends. **A fake that answers 200 to a key the real store
+  answers 400 to is not standing in for the store; it is standing in for a
+  store that cannot fail.** The one that found it enforces object storage's own
+  character class, written out rather than imported from `keys.ts` — a fake
+  reading Brain's copy of the rule agrees with Brain by construction and can
+  never disagree with the store.
+
+- **A failure nobody can read is one nobody fixes.** The exception was written
+  down the whole time: `runIdempotent` closes the attempt row with it, outside
+  the transaction it rolls back, so it survives the rollback that destroys the
+  synthesis pass and the report text. Three things kept it unread. The row kept
+  `error.message` and dropped the `detail` carrying the store's own answer,
+  which named the offending key. The caller's sentence led nowhere, so a worker
+  reporting it verbatim gave whoever read it no way to join the two — it
+  carries the request id now, which is Brain's own identifier and already on
+  the audit row. And `packet-report` never joined the row at all: it printed
+  the packet, the bin, the items, the claims and the documents, and the reason
+  eleven packets sat at `NEEDS_HUMAN` for three days was one join away. The
+  comment claiming the real error "is left to the process log, which is Brain's
+  to read" is corrected in place rather than deleted — it was true, and a
+  host's log buffer is measured in minutes, so by the time anybody reads a
+  worker's report of an opaque failure it is gone.
+
+- **A stage whose evidence survived needs an answering transition, and
+  `reissueMissingVerification` refuses everything that is not a verification by
+  name.** So `services/research/synthesisRecovery.ts` is that transition, and
+  it inherits the whole safety argument: a replacement is issued only for an
+  item that recorded nothing, and an item that recorded nothing has no ledger
+  for a second Step 6 scope to duplicate. **A rollback is evidence about
+  Brain's rows and nothing else** — the upload happens inside the transaction,
+  so there is a window where the bucket took the bytes and the transaction then
+  failed, and a recovery reasoning from the absent document row alone would
+  file a second copy under a second key. The store is asked: bytes that look
+  like this packet's report with no row pointing at them are
+  `AMBIGUOUS_EXTERNAL_FILING` and a person's decision, and a store that cannot
+  be read is `STORE_UNREADABLE`, because unknown must never read as absent.
+  It resets nothing, it refuses a bin with no attempts left, and every verdict
+  comes from one `assessSynthesisRecovery` that both the action and the
+  enumeration read — because a report with its own idea of eligibility is the
+  two-readers defect this file keeps correcting.
+
 - **A card told a person Brain would not be asking them, directly above the
   control asking them.** Production rendered *"29 blocked actions, one
   remedy"* whose explanation read *"it is a fact about the world rather than a
