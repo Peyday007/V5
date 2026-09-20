@@ -863,7 +863,9 @@ export async function tick(owner: string): Promise<TickReport> {
     try {
       const design = await runDesignKernel();
       report.design.ingested = design.ingested.length;
-      report.design.learned = design.learned.length;
+      report.design.learned =
+        design.learned.length +
+        (design.fleetWide ? design.fleetWide.compiled.length + design.fleetWide.moved.length : 0);
       report.design.expansionsOpened = design.expansion?.opened.length ?? 0;
       report.design.expansionsSettled = design.expansion?.settled.length ?? 0;
       report.design.problems = design.problems;

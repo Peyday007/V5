@@ -92,6 +92,13 @@ export interface LearningReport {
  * the evidence accumulated once. That matters because it runs on a tick, and a
  * tick that dies halfway must leave the next one able to finish rather than
  * double.
+ *
+ * **What it does *not* do is the fleet-wide half**, and that was a correction:
+ * `compileRecurrences`, `emergingBranches` and the self-model refresh are all
+ * questions about every finding rather than about this cycle, so calling them
+ * per cycle meant a tick with twenty closed cycles scanned every finding twenty
+ * times and refreshed ten capabilities twenty times, every thirty seconds, to
+ * reach the same answer. `learnFleetWide` is that half, called once per pass.
  */
 export async function learnFromCycle(cycle: DesignCycle): Promise<LearningReport> {
   const report: LearningReport = {
@@ -136,46 +143,47 @@ export async function learnFromCycle(cycle: DesignCycle): Promise<LearningReport
     report.limitations.push({ capabilityKey: 'JUDGE_COMPOSITION', limitation });
   }
 
-  /* ---------------------------------------------------------------------
-   * What kept happening
-   * ------------------------------------------------------------------ */
-  report.compiled.push(...(await compileRecurrences()));
-
-  /* ---------------------------------------------------------------------
-   * What the owner said, turned into a sentence Brain can apply
-   * ------------------------------------------------------------------ */
-  for (const correction of await listCorrections({ limit: 200 })) {
-    if (correction.lesson !== null) continue;
-    const lesson = lessonFrom(correction);
-    if (lesson === null) continue;
-    report.lessons.push({ correctionId: correction.id, lesson });
-  }
-
-  report.branches = await emergingBranches();
-
-  /* ---------------------------------------------------------------------
-   * The self-model, re-read against what now exists
-   * ------------------------------------------------------------------ */
-  const refresh = await refreshCapabilities('DESIGN_LEARN');
-  report.moved = refresh.moved;
-
-  if (
-    report.compiled.length === 0 &&
-    report.lessons.length === 0 &&
-    report.moved.length === 0 &&
-    report.limitations.length === 0
-  ) {
+  if (report.limitations.length === 0) {
     report.nothingLearned.push(
       findings.length === 0
-        ? 'The cycle found nothing, so there was nothing to generalise from. That is the right ' +
-          'outcome for a healthy surface and is not a failure of the loop.'
-        : `${findings.length} finding(s) were recorded and none of their kinds has yet appeared in ` +
-          `${RECURRENCE_THRESHOLD} distinct cycles, which is the bar for calling one a rule rather ` +
-          'than an instance.',
+        ? 'The cycle found nothing about itself, which is the right outcome for a pass in which ' +
+          'every reader answered.'
+        : `${findings.length} finding(s) were recorded and every reader answered, so this cycle ` +
+          'revealed nothing about the kernel itself.',
     );
   }
 
   return report;
+}
+
+/**
+ * The half of learning that is about every finding rather than about one cycle.
+ *
+ * Called once per kernel pass. A recurrence is *by construction* a question
+ * across cycles — three distinct ones is the bar — so asking it per cycle
+ * produces the same answer N times at N times the cost, and a tick that did
+ * that with twenty closed cycles would scan every finding twenty times every
+ * thirty seconds.
+ */
+export async function learnFleetWide(): Promise<{
+  compiled: DesignPattern[];
+  lessons: { correctionId: string; lesson: string }[];
+  branches: { primitive: string; branch: string; count: number }[];
+  moved: LearningReport['moved'];
+}> {
+  const compiled = await compileRecurrences();
+
+  const lessons: { correctionId: string; lesson: string }[] = [];
+  for (const correction of await listCorrections({ limit: 200 })) {
+    if (correction.lesson !== null) continue;
+    const lesson = lessonFrom(correction);
+    if (lesson === null) continue;
+    lessons.push({ correctionId: correction.id, lesson });
+  }
+
+  const branches = await emergingBranches();
+  const refresh = await refreshCapabilities('DESIGN_LEARN');
+  return { compiled, lessons, branches, moved: refresh.moved };
 }
 
 /**

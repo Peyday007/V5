@@ -46,7 +46,7 @@ import { getDb } from '../../db/database.ts';
 import { listCaptures, listCycles, listReviews } from '../../repos/design.ts';
 import type { DesignCycle } from '../../domain/design.ts';
 import { ingestDesignReview, reviewCreator, type ReviewLineage } from './judge.ts';
-import { learnFromCycle, type LearningReport } from './learn.ts';
+import { learnFleetWide, learnFromCycle, type LearningReport } from './learn.ts';
 import { runExpansionPass, type ExpansionPass } from './expand.ts';
 import { seedDesignCapabilities } from './capabilities.ts';
 import { seedDesignPatterns } from './patterns.ts';
@@ -57,12 +57,25 @@ export interface DesignKernelPass {
   ingested: { binId: string; cycleId: string; verdict: string; findings: number }[];
   /** Cycles that closed and have now been learned from. */
   learned: { cycleId: string; report: LearningReport }[];
+  /**
+   * What was learned across every cycle rather than from one.
+   *
+   * Separate because a recurrence is a question about three distinct cycles by
+   * construction, so asking it per cycle gives the same answer N times.
+   */
+  fleetWide: Awaited<ReturnType<typeof learnFleetWide>> | null;
   expansion: ExpansionPass | null;
   /** Anything a section could not do, so a quiet pass is not a silent one. */
   problems: string[];
 }
 
-const EMPTY: DesignKernelPass = { ingested: [], learned: [], expansion: null, problems: [] };
+const EMPTY: DesignKernelPass = {
+  ingested: [],
+  learned: [],
+  fleetWide: null,
+  expansion: null,
+  problems: [],
+};
 
 /**
  * Write the seed.
@@ -96,7 +109,13 @@ export async function seedDesignKernel(): Promise<{
  * discovery a tick late, for ever.
  */
 export async function runDesignKernel(): Promise<DesignKernelPass> {
-  const pass: DesignKernelPass = { ingested: [], learned: [], expansion: null, problems: [] };
+  const pass: DesignKernelPass = {
+    ingested: [],
+    learned: [],
+    fleetWide: null,
+    expansion: null,
+    problems: [],
+  };
 
   try {
     pass.ingested = await ingestFinishedReviews();
@@ -108,6 +127,12 @@ export async function runDesignKernel(): Promise<DesignKernelPass> {
     pass.learned = await learnFromClosedCycles();
   } catch (error) {
     pass.problems.push(`closed cycles could not be learned from: ${message(error)}`);
+  }
+
+  try {
+    pass.fleetWide = await learnFleetWide();
+  } catch (error) {
+    pass.problems.push(`what recurred across cycles could not be read: ${message(error)}`);
   }
 
   try {
@@ -228,14 +253,7 @@ async function learnFromClosedCycles(): Promise<DesignKernelPass['learned']> {
   const out: DesignKernelPass['learned'] = [];
   for (const cycle of await listCycles({ state: 'CLOSED', limit: 20 })) {
     const report = await learnFromCycle(cycle);
-    if (
-      report.compiled.length > 0 ||
-      report.lessons.length > 0 ||
-      report.moved.length > 0 ||
-      report.limitations.length > 0
-    ) {
-      out.push({ cycleId: cycle.id, report });
-    }
+    if (report.limitations.length > 0) out.push({ cycleId: cycle.id, report });
   }
   return out;
 }

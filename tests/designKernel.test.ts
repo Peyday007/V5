@@ -1364,3 +1364,82 @@ describe('a research gap goes down the path that already exists', () => {
     expect(parked[0]?.outcome).toMatch(/npm run admin/);
   });
 });
+
+describe('learning compiles a rule from what kept happening', () => {
+  beforeEach(async () => {
+    await freshProject();
+    await seedDesignKernel();
+  });
+
+  /** One cycle with the same defect is one observation, whatever it wrote. */
+  async function cycleWithOverflow(surfaceKey: string, hash: string): Promise<string> {
+    const cycle = await openCycle({
+      triggerKind: 'OWNER_REQUEST',
+      triggerRef: null,
+      surfaceKeys: [surfaceKey],
+      revision: null,
+    });
+    const made = await capture({
+      cycleId: cycle.id,
+      surfaceKey,
+      contentHash: hash.repeat(64).slice(0, 64),
+      artifactRef: `${hash}.png`,
+      readings: cleanReadings({ horizontalOverflow: true }),
+    });
+    await evaluateCaptures({ cycleId: cycle.id, pass: 0, captures: [made] });
+    return cycle.id;
+  }
+
+  it('needs three distinct cycles, not three findings in one', async () => {
+    const { learnFleetWide, RECURRENCE_THRESHOLD } = await import(
+      '../server/services/design/learn.ts'
+    );
+    expect(RECURRENCE_THRESHOLD).toBe(3);
+
+    await cycleWithOverflow('russell/default', 'a');
+    await cycleWithOverflow('russell/default', 'b');
+    expect((await learnFleetWide()).compiled).toHaveLength(0);
+
+    await cycleWithOverflow('build/default', 'c');
+    const compiled = (await learnFleetWide()).compiled;
+    expect(compiled).toHaveLength(1);
+
+    const pattern = compiled[0]!;
+    // PROPOSED: a kernel that activated its own rules would be generalising
+    // from its own output.
+    expect(pattern.state).toBe('PROPOSED');
+    expect(pattern.origin).toBe('OPERATION');
+    // Across surfaces, so the lesson is about the product rather than a screen.
+    expect(pattern.scope).toBe('GLOBAL');
+    // The statement is composed from the *kind*, so it carries no one screen's
+    // specifics — and it says what to do, not that something keeps happening.
+    expect(pattern.statement).toMatch(/Constrain against the container/);
+    // The evidence names the cycles it rests on.
+    expect(pattern.evidence.filter((one) => one.startsWith('design_cycle:')).length).toBe(3);
+    // And the branch it created is real rather than invented.
+    expect(pattern.branch).toBe('horizontal overflow');
+  });
+
+  it('files a recurrence on one screen as a fact about that screen', async () => {
+    const { learnFleetWide } = await import('../server/services/design/learn.ts');
+    await cycleWithOverflow('russell/default', 'a');
+    await cycleWithOverflow('russell/default', 'b');
+    await cycleWithOverflow('russell/default', 'c');
+
+    const pattern = (await learnFleetWide()).compiled[0]!;
+    expect(pattern.scope).toBe('SCREEN');
+    expect(pattern.scopeRef).toBe('russell/default');
+  });
+
+  it('compiles the same recurrence once however often the pass runs', async () => {
+    const { learnFleetWide } = await import('../server/services/design/learn.ts');
+    await cycleWithOverflow('russell/default', 'a');
+    await cycleWithOverflow('build/default', 'b');
+    await cycleWithOverflow('fleet/default', 'c');
+
+    await learnFleetWide();
+    const first = (await listPatterns({ state: 'PROPOSED' })).length;
+    await learnFleetWide();
+    expect((await listPatterns({ state: 'PROPOSED' })).length).toBe(first);
+  });
+});
