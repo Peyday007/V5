@@ -513,6 +513,80 @@ describe('what a shared reader may never be handed', () => {
     }
   });
 
+  it('carries the possibility space, and no value of any answer in it', async () => {
+    /*
+     * The whole ledger crosses in names and counts, for the reason the tier
+     * does one line up: a member reading a list of openings with no way to see
+     * that one of them has nine live ways of being taken and another has one is
+     * reading half the frontier. What makes it safe is the same shape argument
+     * — the shared projection is built from the columns it names, and every one
+     * of them is a name, a status, a rank or a count.
+     *
+     * Asserted against the **live payload** rather than against a reading of
+     * the source, because the guarantee that matters is what actually left the
+     * server.
+     */
+    /*
+     * The space is populated first, so this is not vacuously true.
+     *
+     * An empty ledger carries no figure either, and a boundary assertion that
+     * passes because nothing was sent is the kind of green that teaches
+     * somebody to stop believing it — §29's own rule about a warning that
+     * cries wolf, read the other way round.
+     *
+     * Seeded over HTTP rather than by calling the enumeration, because the
+     * enumeration runs on the durable tick and this suite drives a server it
+     * does not share a database handle with. The case where a *figure* reaches
+     * a path — the discovery's own price, carried onto the one method its old
+     * `mechanism` column stood for — is proved against the composed projection
+     * in `tests/monetizationLedger.test.ts`, which does hold the rows.
+     */
+    for (const method of ['REFERRAL_FEE', 'INTELLIGENCE_REPORT']) {
+      const seeded = await call('POST', `/api/projects/${root}/cash/monetization/paths`, {
+        cookie: adminCookie,
+        body: { method, opportunityId },
+      });
+      expect(seeded.status, `seeding ${method}`).toBe(200);
+    }
+
+    const view = await call<{
+      monetization: {
+        total: number;
+        paths: { id: string; status: string; rank: number; openQuestions: unknown[] }[];
+        topPathIds: string[];
+        byStatus: Record<string, number>;
+      };
+    }>('GET', CASH(), { cookie: memberCookie });
+
+    const space = view.body.monetization;
+    expect(space).toBeTruthy();
+    expect(space.total).toBeGreaterThan(1);
+    expect(space.topPathIds.length).toBeGreaterThan(0);
+    expect(typeof space.total).toBe('number');
+    expect(Array.isArray(space.paths)).toBe(true);
+    expect(space.total).toBe(space.paths.length);
+    expect(space.topPathIds.length).toBeLessThanOrEqual(5);
+
+    const text = JSON.stringify(space);
+    for (const forbidden of [
+      'amountCents',
+      'days',
+      'margin',
+      'economics',
+      'risks',
+      'basis',
+      'assumptions',
+      'uncertainty',
+      'value',
+    ]) {
+      expect(text, forbidden).not.toContain(`"${forbidden}":`);
+    }
+    // And none of the owner's own figures by their literal values.
+    expect(text).not.toMatch(/75000/);
+    expect(text).not.toMatch(/Marguerite Vance/);
+    expect(text).not.toMatch(/[$£€]\s?\d/);
+  });
+
   it('counts the tiers, and counts them over the records it sent', async () => {
     const view = await call<{
       byTier: Record<string, number>;
@@ -949,9 +1023,30 @@ describe('the live proof is in the gate that runs on the deployed image', () => 
     // The money keys are the ones the first version of the projection leaked,
     // by passing `deployableCents` into a function that composes a sentence
     // out of it. A shape assertion that named no field would not have caught it.
-    for (const forbidden of ['myCash', 'deployableCents', 'commitments', 'decisionsForMe']) {
+    for (const forbidden of [
+      'myCash',
+      'deployableCents',
+      'commitments',
+      'decisionsForMe',
+      // The possibility ledger's own private half: the structured figure every
+      // money answer carries, the derived margin, and the risks quoted out of
+      // answers.
+      'amountCents',
+      'margin',
+      'risks',
+    ]) {
       expect(script, forbidden).toContain(`'${forbidden}'`);
     }
+  });
+
+  it('reads the possibility space positively, not only by its absences', () => {
+    /*
+     * "No figure crossed" is also true of a projection that sent nothing, so
+     * the gate reads that the space is there as well as that its values are
+     * not — the same reason the grant is asserted PRESENT-or-ABSENT rather
+     * than merely being absent.
+     */
+    expect(script).toContain('the monetization possibility space crossed, in names and counts');
   });
 
   it('proves the refusals are still refusals, and the decisions still the owner’s', () => {

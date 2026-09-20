@@ -20,8 +20,23 @@ import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
 import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
 import type { SharedCashView } from '../../../server/services/cash/shared.ts';
+import type {
+  MonetizationSurface,
+  TopEntry,
+} from '../../../server/services/cash/monetization/surface.ts';
+import type { LedgerEntry } from '../../../server/services/cash/monetization/ledger.ts';
+import type { RankExplanation } from '../../../server/services/cash/monetization/rank.ts';
 
-export type { CashReadiness, CashRoadmap, CashForecast, SharedCashView };
+export type {
+  CashReadiness,
+  CashRoadmap,
+  CashForecast,
+  SharedCashView,
+  MonetizationSurface,
+  LedgerEntry,
+  TopEntry,
+  RankExplanation,
+};
 
 /**
  * Two readers of one section, told apart by the server rather than by the page.
@@ -323,6 +338,18 @@ export interface CashView {
    * pages to disagree about one sprint.
    */
   frontier: Omit<SharedCashView, 'scope'>;
+  /**
+   * The whole possibility ledger with the figures on it.
+   *
+   * The frontier above carries the same space in names and counts, which is
+   * what a member is sent. This is the owner's reading, and it is absent from a
+   * member's payload rather than blanked in it — so there is no arrangement of
+   * the page that could render a figure somebody may not read.
+   *
+   * Optional for the same deploy reason `byTier` is: an older server does not
+   * send it, and the section renders what it has rather than crashing.
+   */
+  monetization?: MonetizationSurface;
   decisionsForMe: { items: ReviewItem[]; underlyingCount: number; summary: string };
   vocabulary: {
     mechanisms: string[];
@@ -439,6 +466,51 @@ export const CashApi = {
 
   view: (projectId: string): Promise<CashViewReading> =>
     api(`/api/projects/${p(projectId)}/cash`),
+
+  /*
+   * The possibility ledger's own two questions, and its four decisions.
+   *
+   * The ledger itself is **not** fetched here: it travels with the section, so
+   * the page and the ranking cannot disagree about it. What these add is what a
+   * payload cannot carry — a comparison somebody asks for, and the decisions
+   * only a person makes.
+   */
+  whyRanked: (
+    projectId: string,
+    pathId: string,
+    against?: string,
+  ): Promise<{
+    criteria: { id: string; label: string }[];
+    comparison?: RankExplanation;
+    toEnterTop?: {
+      conditions: { criterion: string; label: string; now: string; needed: string; sentence: string }[];
+      against: string | null;
+      note: string | null;
+    };
+  }> =>
+    api(
+      `/api/projects/${p(projectId)}/cash/monetization/compare?a=${p(pathId)}` +
+        (against ? `&b=${p(against)}` : ''),
+    ),
+
+  judgePath: (
+    pathId: string,
+    judgment: 'WATCH' | 'INVALIDATE' | 'ARCHIVE' | 'REVIVE',
+    reason: string,
+  ): Promise<{ message: string }> =>
+    api(`/api/cash/monetization/paths/${p(pathId)}/judgment`, {
+      method: 'POST',
+      body: JSON.stringify({ judgment, reason }),
+    }),
+
+  seedPath: (
+    projectId: string,
+    body: { method: string; opportunityId?: string; industryNodeId?: string; thesis?: string },
+  ): Promise<{ message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/monetization/paths`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   activate: (
     projectId: string,

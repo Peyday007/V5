@@ -107,6 +107,38 @@ import {
   type CashMoneyKind,
 } from '../domain/types.ts';
 import type { Outcome } from '../services/cash/opportunities.ts';
+import { composeLedger, rankableOf } from '../services/cash/monetization/ledger.ts';
+import {
+  composeSurface,
+  conditionsToEnterTop,
+  filterLedger,
+  type LedgerQuery,
+} from '../services/cash/monetization/surface.ts';
+import { explainRanking } from '../services/cash/monetization/rank.ts';
+import { criteriaInOrder } from '../services/cash/monetization/movement.ts';
+import {
+  judgePath,
+  linkPaths,
+  mergePaths,
+  seedPath,
+  splitPath,
+  unmergePath,
+} from '../services/cash/monetization/decisions.ts';
+import { getPath, snapshotsFor } from '../repos/monetization.ts';
+import {
+  isMonetizationEdgeKind,
+  isMonetizationMethod,
+  isPathJudgment,
+  METHOD,
+} from '../domain/monetization.ts';
+import {
+  MONETIZATION_EDGE_KINDS,
+  MONETIZATION_METHODS,
+  MONETIZATION_STATUSES,
+  PATH_JUDGMENTS,
+  type MonetizationMethod,
+  type MonetizationStatus,
+} from '../domain/types.ts';
 
 export const cashRouter: Router = Router();
 
@@ -1157,5 +1189,360 @@ cashRouter.patch(
         'destroyed: its evidence, its children and every round ever run against it are ' +
         'exactly where they were, which is what stops it arriving again as a fresh discovery.',
     };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The monetization possibility ledger
+ *
+ * Reading it is any project member's, through the same `decideCashRead` seam
+ * the section itself uses: the possibility space of a discovery is *discovery*,
+ * so a member reads it in names and counts on the shared frontier, and the
+ * owner reads it with the figures on. There is no separate read route for the
+ * space — it travels with the section, so the two can never disagree about it.
+ *
+ * What is here is what a page cannot carry: the two comparisons a person asks
+ * for by name, and the four decisions only a person makes. Every one of the
+ * four is `requirePerson` plus `requireProject`, and a worker is refused by
+ * type at all of them — §22's rule at the table that decides what is worth
+ * doing, where a machine that could invalidate a possibility could quietly
+ * narrow the space nobody else is looking at.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Why is this one below that one, and what would move it.
+ *
+ * Both answers come from the same lexicographic order the page ranks on, so
+ * there is no second opinion here: the first criterion two paths differ on
+ * **is** why one is above the other, and the chain of criteria a path is behind
+ * on is the whole of what would have to become true.
+ *
+ * It reads and writes nothing.
+ */
+cashRouter.get(
+  '/projects/:projectId/cash/monetization/compare',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const ledger = await composeLedger({ projectId: project.id });
+
+    const a = optionalString(req.query['a'], 'a');
+    const b = optionalString(req.query['b'], 'b');
+    if (!a) throw badRequest('Name the possibility to explain, as "a".');
+
+    const left = ledger.entries.find((one) => one.path.id === a);
+    if (!left) throw notFound('No possibility with that id.');
+
+    if (b) {
+      const right = ledger.entries.find((one) => one.path.id === b);
+      if (!right) throw notFound('No possibility with that id.');
+      return {
+        criteria: criteriaInOrder(),
+        comparison: explainRanking(rankableOf(left), rankableOf(right)),
+      };
+    }
+
+    return {
+      criteria: criteriaInOrder(),
+      toEnterTop: conditionsToEnterTop(ledger, left.path.id),
+    };
+  }),
+);
+
+/**
+ * The operator's own questions, answered from the retained ledger.
+ *
+ * "Everything under five thousand", "everything that could pay inside a week",
+ * "everything discovered this week", "everything that moved today". Each one
+ * reads rows that are already there rather than reconstructing a possibility
+ * space nobody kept, which is what the brief means by answering from retained
+ * state.
+ *
+ * **An unknown never passes a bound.** A path with no established capital
+ * requirement is not in the answer to *under five thousand*, because it is not
+ * known to be under five thousand — the favourable assumption would put an
+ * uncosted possibility in front of somebody who asked for cheap ones.
+ */
+cashRouter.get(
+  '/projects/:projectId/cash/monetization',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const ledger = await composeLedger({ projectId: project.id });
+
+    const statuses = optionalStringArray(req.query['status'], 'status');
+    for (const one of statuses ?? []) {
+      if (!(MONETIZATION_STATUSES as readonly string[]).includes(one)) {
+        throw badRequest(`"status" must be one of: ${MONETIZATION_STATUSES.join(', ')}.`);
+      }
+    }
+    const methods = optionalStringArray(req.query['method'], 'method');
+    for (const one of methods ?? []) {
+      if (!isMonetizationMethod(one)) {
+        throw badRequest('That is not a monetization method this Brain has a word for.');
+      }
+    }
+
+    const query: LedgerQuery = {
+      maxCapitalCents: optionalInteger(req.query['maxCapitalCents'], 'maxCapitalCents', { min: 0 }),
+      maxDaysToCash: optionalInteger(req.query['maxDaysToCash'], 'maxDaysToCash', { min: 0 }),
+      discoveredSince: optionalString(req.query['discoveredSince'], 'discoveredSince'),
+      movedSince: optionalString(req.query['movedSince'], 'movedSince'),
+      statuses: statuses as MonetizationStatus[] | undefined,
+      methods: methods as MonetizationMethod[] | undefined,
+      subjectId: optionalString(req.query['subjectId'], 'subjectId'),
+    };
+
+    const matched = filterLedger(ledger.entries, query);
+    return {
+      /*
+       * The surface is composed over the **whole** ledger and the filter is
+       * reported beside it, rather than the five being recomputed over the
+       * matches. "Show me everything under five thousand" is a question about
+       * the space; it is not an instruction to re-rank the world as though the
+       * rest of it did not exist, and a top five computed over a filtered
+       * ledger would quietly mean something different on every request.
+       */
+      surface: composeSurface({ ledger }),
+      filter: { query, matchedPathIds: matched.map((one) => one.path.id) },
+      vocabulary: {
+        methods: MONETIZATION_METHODS.map((method) => ({
+          id: method,
+          label: METHOD[method].label,
+          what: METHOD[method].what,
+        })),
+        statuses: MONETIZATION_STATUSES,
+        judgments: PATH_JUDGMENTS,
+        criteria: criteriaInOrder(),
+      },
+    };
+  }),
+);
+
+/** One possibility, with its whole movement history. */
+cashRouter.get(
+  '/cash/monetization/paths/:pathId',
+  handler(async (req) => {
+    requirePerson();
+    const path = await resolveInProject(
+      await getPath(pathId(req, 'pathId')),
+      'No possibility with that id.',
+    );
+    const ledger = await composeLedger({ projectId: path.projectId });
+    const entry = ledger.entries.find((one) => one.path.id === path.id);
+    if (!entry) throw notFound('No possibility with that id.');
+    return {
+      entry,
+      /** Every position it has held, oldest first. Nothing is ever removed. */
+      history: await snapshotsFor(path.id),
+      toEnterTop: conditionsToEnterTop(ledger, path.id),
+    };
+  }),
+);
+
+/**
+ * Name a possibility the enumeration could not produce.
+ *
+ * `SEED` is the one origin Brain may never write, so this is the only way one
+ * gets into the ledger without a claim behind it. It spends nothing and starts
+ * nothing: it writes a row, and every gate downstream still decides.
+ */
+cashRouter.post(
+  '/projects/:projectId/cash/monetization/paths',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const method = requiredString(body['method'], 'method');
+    if (!isMonetizationMethod(method)) {
+      throw badRequest(
+        'That is not a monetization method this Brain has a word for. Adding one is a code ' +
+          'change somebody reviews, which is where "is this a distinct way of being paid" gets ' +
+          'asked.',
+      );
+    }
+
+    const outcome = await seedPath({
+      projectId: project.id,
+      method,
+      opportunityId: optionalString(body['opportunityId'], 'opportunityId') ?? null,
+      industryNodeId: optionalString(body['industryNodeId'], 'industryNodeId') ?? null,
+      title: optionalString(body['title'], 'title') ?? null,
+      thesis: optionalString(body['thesis'], 'thesis') ?? null,
+      seededByUserId: principal.id,
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+
+    return {
+      path: outcome.value.path,
+      message: outcome.value.created
+        ? 'It is in the ledger with every question still open, and it ranks where its answers ' +
+          'put it.'
+        : 'That shape of transaction was already in the ledger for this discovery, so nothing ' +
+          'was duplicated.',
+    };
+  }),
+);
+
+/**
+ * Record what a person decided about a possibility.
+ *
+ * Four judgements and not one of them sets a status: `WATCH`, `INVALIDATE` and
+ * `ARCHIVE` are the three things no derivation could establish, and `REVIVE` is
+ * the answering transition for the last two — because an escalation with no way
+ * out is stuck rather than waiting. Everything else about where a path stands
+ * is read from rows, so there is no shape of this route that marks something
+ * healthy over evidence that says otherwise.
+ *
+ * The reason is required, and that is not ceremony: a possibility put away with
+ * no reason is one nobody can reconsider when the thing that made it wrong
+ * stops being true.
+ */
+cashRouter.post(
+  '/cash/monetization/paths/:pathId/judgment',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const path = await resolveInProject(
+      await getPath(pathId(req, 'pathId')),
+      'No possibility with that id.',
+    );
+    const body = bodyOf(req);
+    const judgment = requiredString(body['judgment'], 'judgment');
+    if (!isPathJudgment(judgment)) {
+      throw badRequest(`"judgment" is one of: ${PATH_JUDGMENTS.join(', ')}.`);
+    }
+
+    const outcome = await judgePath({
+      projectId: path.projectId,
+      pathId: path.id,
+      judgment,
+      reason: requiredString(body['reason'], 'reason'),
+      decidedByUserId: principal.id,
+      /*
+       * The stronger channel, asserted only here because only here is it true:
+       * this call carries an authenticated browser principal that
+       * `requirePerson` resolved from server rows. Everything else defaults to
+       * the weaker value, because Brain cannot check a channel and must never
+       * assume the stronger one.
+       */
+      channel: 'BROWSER_SESSION',
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+
+    return {
+      judgment: outcome.value,
+      message:
+        judgment === 'REVIVE'
+          ? 'It is live again, and the judgement that put it away stays on its record.'
+          : 'Recorded. Nothing was deleted: the possibility, its answers and its whole ranking ' +
+            'history are exactly where they were, and it comes back the moment somebody revives ' +
+            'it.',
+    };
+  }),
+);
+
+/** Say that two possibilities are one, or that one is several. Both reversible. */
+cashRouter.post(
+  '/cash/monetization/paths/:pathId/lineage',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const path = await resolveInProject(
+      await getPath(pathId(req, 'pathId')),
+      'No possibility with that id.',
+    );
+    const body = bodyOf(req);
+    const action = requiredString(body['action'], 'action');
+
+    if (action === 'MERGE') {
+      const outcome = await mergePaths({
+        projectId: path.projectId,
+        absorbedId: path.id,
+        survivorId: requiredString(body['into'], 'into'),
+        reason: requiredString(body['reason'], 'reason'),
+        decidedByUserId: principal.id,
+      });
+      if (!outcome.ok) throw unprocessable(outcome.reason);
+      return {
+        path: outcome.value.absorbed,
+        message:
+          'It points at the one that carries it now. Its answers, its judgements and its whole ' +
+          'ranking history are untouched, and un-merging it is one field.',
+      };
+    }
+
+    if (action === 'UNMERGE') {
+      const outcome = await unmergePath({
+        projectId: path.projectId,
+        pathId: path.id,
+        decidedByUserId: principal.id,
+      });
+      if (!outcome.ok) throw unprocessable(outcome.reason);
+      return { path: outcome.value, message: 'It is a separate possibility again.' };
+    }
+
+    if (action === 'SPLIT') {
+      const raw = Array.isArray(body['into']) ? body['into'] : [];
+      const into: { method: MonetizationMethod; title?: string | null; thesis?: string | null }[] =
+        [];
+      for (const one of raw) {
+        const shape = (one ?? {}) as Record<string, unknown>;
+        const method = requiredString(shape['method'], 'into[].method');
+        if (!isMonetizationMethod(method)) {
+          throw badRequest('That is not a monetization method this Brain has a word for.');
+        }
+        into.push({
+          method,
+          title: optionalString(shape['title'], 'into[].title') ?? null,
+          thesis: optionalString(shape['thesis'], 'into[].thesis') ?? null,
+        });
+      }
+      const outcome = await splitPath({
+        projectId: path.projectId,
+        pathId: path.id,
+        into,
+        reason: requiredString(body['reason'], 'reason'),
+        decidedByUserId: principal.id,
+      });
+      if (!outcome.ok) throw unprocessable(outcome.reason);
+      return {
+        paths: outcome.value,
+        message:
+          'Each one names the possibility it came out of, and the one it came out of is exactly ' +
+          'as it was — whether it is still worth pursuing alongside them is a question the ' +
+          'ledger answers rather than something this decided for you.',
+      };
+    }
+
+    if (action === 'LINK') {
+      /*
+       * The one thing here that can make a possibility blocked by another, and
+       * the reason it is a person's: a *derived* requirement is a statement
+       * about two methods and blocks nothing, because letting it would put a
+       * fresh ledger entirely into a state nobody established. A recorded one
+       * is a statement about this situation with somebody behind it.
+       */
+      const kind = requiredString(body['kind'], 'kind');
+      if (!isMonetizationEdgeKind(kind)) {
+        throw badRequest(`"kind" is one of: ${MONETIZATION_EDGE_KINDS.join(', ')}.`);
+      }
+      const outcome = await linkPaths({
+        projectId: path.projectId,
+        fromPathId: path.id,
+        toPathId: requiredString(body['to'], 'to'),
+        kind,
+        rationale: requiredString(body['rationale'], 'rationale'),
+        decidedByUserId: principal.id,
+      });
+      if (!outcome.ok) throw unprocessable(outcome.reason);
+      return {
+        created: outcome.value.created,
+        message: outcome.value.created
+          ? 'Recorded, and it reads as yours rather than as something the method table says.'
+          : 'That relation was already recorded between these two.',
+      };
+    }
+
+    throw badRequest('"action" is MERGE, UNMERGE, SPLIT or LINK.');
   }),
 );

@@ -866,6 +866,7 @@ describe('an ordinary member reading the shared frontier', () => {
       'rs-cash-status',
       'rs-cash-decisions',
       'rs-cash-best',
+      'rs-cash-monetization',
       'rs-cash-money-row',
       'rs-cash-portfolio',
       'rs-cash-needs-detail',

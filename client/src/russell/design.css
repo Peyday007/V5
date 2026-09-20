@@ -2875,3 +2875,93 @@ details.rs-card > section.rs-card {
   font-size: var(--step--2);
   overflow-wrap: anywhere;
 }
+
+/* ---------------------------------------------------------------------------
+ * The monetization possibility ledger
+ *
+ * One section, two roles, and the layout does not know which is reading it —
+ * §36's rule, so there is no rule here keyed on a permission and none that
+ * takes any part of this section off the page at any width. The counts strip
+ * reuses `.rs-cash-tiers`, which already reflows on its own container rather
+ * than on the viewport.
+ * ------------------------------------------------------------------------- */
+
+.rs-cash-monetization {
+  container-type: inline-size;
+}
+
+.rs-cash-paths {
+  margin: var(--gap-3) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-3);
+}
+
+.rs-cash-path {
+  padding: var(--gap-3);
+  border-radius: var(--r-1);
+  background: var(--surface-sunk);
+  min-width: 0;
+}
+
+.rs-cash-path > h4 {
+  margin: 0 0 var(--gap-2);
+  font-size: var(--step-0);
+  /* A long method and a long discovery title meet here, so it wraps rather
+     than pushing the card sideways at a phone width. */
+  overflow-wrap: anywhere;
+}
+
+.rs-cash-path-rank {
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  margin-right: var(--gap-1);
+}
+
+.rs-cash-path > p {
+  margin: 0 0 var(--gap-2);
+}
+
+.rs-cash-path-risks {
+  margin: 0 0 var(--gap-2);
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+.rs-cash-paths-all {
+  margin-top: var(--gap-3);
+}
+
+.rs-cash-paths-all > summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--gap-2);
+  min-height: 44px;
+}
+
+.rs-cash-groups > section {
+  margin-top: var(--gap-3);
+}
+
+.rs-cash-groups h4,
+.rs-cash-sequences h4 {
+  margin: 0 0 var(--gap-1);
+  font-size: var(--step-0);
+}
+
+.rs-cash-groups ul,
+.rs-cash-sequences ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: var(--step--1);
+}
+
+.rs-cash-groups li,
+.rs-cash-sequences li {
+  overflow-wrap: anywhere;
+}

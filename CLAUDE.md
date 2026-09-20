@@ -171,6 +171,9 @@ There must be no workflow where the user has to remember "now go update the data
     a sprint down ends new discovery and never a customer's obligation.
 41. No identity shared between two private operations, and no credential that
     resolves a project its holder was not connected to.
+42. No possibility discarded for ranking poorly — a rank is a view of the space
+    and never the space, simplification happens in the presentation, and what
+    is not in the top five is not thereby worthless.
 
 ## 8. Model prose never mutates project state.
 
@@ -5749,6 +5752,139 @@ takes any bin id, and its own comments record raising a real research bin's
 ceiling to 100. The comment is the thing that is wrong.
 
 
+## 39. A discovery has many ways of being paid. Recording one destroys the rest.
+
+The monetization ledger (`server/domain/monetization.ts`,
+`server/repos/monetization.ts`, `server/services/cash/monetization/`,
+`docs/MONETIZATION.md`) is the breadth axis §38's map is the *where* axis of. It
+adds a new **entrance** to machinery Steps 4 to 12C already built — no second
+identity model, no second queue, no second policy module — and the thing it
+actually fixes is a collapse that happens at promotion, before anybody has
+established anything.
+
+A discovery arrives and Brain records **one** way of making money from it:
+`cash_opportunities.mechanism`, mapped from the claim's declared
+`opportunity_signal`. Production's thirty-one records are thirty-one single
+answers to a question that has dozens. A published request for transcription is
+a direct sale *and* a subcontracted fulfilment *and* a productized service *and*
+a lead worth referring *and* a data point about what that buyer pays, and which
+of those is best is a question about facts nobody has yet. **Picking one and
+writing nothing about the rest destroys the alternatives before the evidence
+that would have chosen between them exists.**
+
+- **The space is enumerated, never invented.** The obvious implementation is to
+  ask a model for forty ways to make money from a discovery, and that is §8's
+  rule broken at the most expensive altitude in this codebase: forty plausible
+  sentences, indistinguishable from forty researched ones the moment they are
+  rendered, each then ranked and put in front of somebody as work. So a closed
+  method table declares what each shape of transaction *requires*, what it
+  *produces*, which role it puts you in and which kinds of evidence it applies
+  to at all, and the space is that table intersected with what the subject's own
+  rows already say. It reads no prose and forms no view. A subject whose signal
+  nothing recorded gets **only** the methods that need no particular kind of
+  opening — deny by default at an enumeration, because the alternative produces
+  the largest possibility space for the discovery Brain understands least.
+- **`SEED` is the one origin Brain may never write**, and `EVIDENCED` carries
+  the claim, by a CHECK rather than by a convention. §22's split at the table
+  that decides what is worth doing.
+- **§20's "are there paths I could not see before" is a declaration, not
+  prose.** `research_claims.monetization_method` is one value from the closed
+  set, chosen by the worker that read the source, and it is in
+  `brain_submit_claims`' **schema** as well as its description — §33 records
+  what the other way costs, and a column with no writer is the same defect a
+  step earlier. **The subject is never guessed**: a method is admitted only on
+  a claim that also carries an `opportunity_signal`, so what it is a way of
+  monetizing is the opening that same claim established, resolved through
+  `opportunityForClaim` rather than read out of a sentence. Most declarations
+  name a method the table produces anyway, and then the claim is recorded *on*
+  the existing row as the passage a reader can check, with the origin left
+  saying how that row actually came to exist.
+- **Brain does not produce a probability, and that is enforced rather than
+  described.** The brief asks every path to carry a probability of success;
+  `probabilityOfSuccess` is the one attribute `RECOMMENDATION` may not answer,
+  `mayAnswer` is asked by `recordPathFact` before it writes, and a proposal
+  there is refused with the reason. A 40% close rate nobody measured reads
+  exactly like one somebody did, and everything downstream would then be
+  arithmetic over it. The same refusal one layer up: *confidence* on the
+  operator surface is three counts — answered from a source, proposed by Brain,
+  unanswered — and never a percentage.
+- **The ranking is lexicographic, and that is what makes the brief's three
+  questions answerable at all.** A weighted score can produce a number and a
+  list of contributions, and the honest answer to *why is #17 below #4* is
+  *because the weights say so* — weights nobody set. A lexicographic order needs
+  only the criteria in order, and **the first criterion two paths differ on is
+  the whole reason** one is above the other; nothing below it was consulted.
+  *What would have to become true* is the chain of criteria a path is behind on,
+  read top down, stopping at the first one where it is already ahead. *Why did
+  this move* is the criterion by which it now differs from whatever it passed.
+  An unknown sorts last on every criterion, in both directions —
+  `conservativeContribution`'s own recorded defect at a new table.
+- **Nothing derivable is stored, and three things are.** No status column, no
+  rank column, no score, no margin. What a derivation cannot recover is that a
+  person named a possibility, that a person judged one, and that a position
+  *moved* — the third being §29's argument for the frontier table, and exactly
+  the brief's *previous rank* and *reason for ranking movement*. A snapshot is
+  appended when the derived position differs from the last recorded one and
+  **nothing at all is written when it does not**, which is what keeps it a
+  history rather than a log of ticks.
+- **Nothing is ever deleted.** `repos/monetization.ts` holds no `DELETE FROM`,
+  no `DROP TABLE` and no `TRUNCATE`, and a test reads the file to keep it that
+  way. Invalidating appends a row, archiving appends a row, merging sets one
+  pointer that clearing reverses, and a split leaves the parent exactly as it
+  was. A revival is its own row, because deleting the doubt would make the
+  ledger claim nobody ever had any. A possibility ranked fortieth today is the
+  one ranked second the week a supplier is found.
+- **The graph is a consequence of the vocabulary rather than a second graph.**
+  §21's chain falls out of `produces` against `requires`; competes-with and
+  coexists-with fall out of the role; viable-only-at-scale-of falls out of one
+  boolean. Only what a derivation could not have — a source's edge, a person's
+  edge — is stored.
+- **A derived `REQUIRES` is not a blocker, and the first version had it as one.
+  The correction is recorded rather than quietly applied.** A derived
+  requirement exists wherever exactly one possibility on a discovery produces
+  something another needs, and none of them is proven on day one — so **every
+  possibility in a fresh ledger read BLOCKED**, on a condition nobody had
+  established and nobody could act on. §24's *waiting nobody can resolve*,
+  arriving through a status column, and it was found by running the thing rather
+  than by reading it. Only a recorded edge blocks. What a method requires is a
+  question, and it already has one.
+- **And for a while nothing could record one**, which is the same audit one
+  table along: `monetization_path_edges` had no writer at all, so the one thing
+  that can make a possibility BLOCKED by another was unreachable. A mechanism
+  nothing calls is not a mechanism, for the seventh time in this file. The
+  entrance is a person's — `action: 'LINK'` — because a derived requirement is
+  a statement about two methods and a recorded one is a statement about this
+  situation with somebody behind it.
+- **A split whose child already existed recorded no lineage**, which is the same
+  shape one door along: `recordPath` is idempotent by (subject, method), so
+  splitting into a method the table had already enumerated correctly found that
+  row — and left the split unrecorded on it, so the history §20 asks to be
+  preserved was preserved only for children that happened not to exist yet. The
+  lineage is written onto the existing row, guarded on the column being empty.
+- **The five are a view of the space and the screen says so.** The count of the
+  whole space is beside them, every group under them is ids into one entry list
+  that carries everything, and no branch drops a row. A bounded query never
+  returns an unknown — a path with no established capital requirement is not in
+  the answer to *under five thousand*, because it is not known to be under five
+  thousand. And the five are computed over the **whole** ledger with the filter
+  reported beside them: a top five computed over a filtered ledger would quietly
+  mean something different on every request.
+- **The possibility space is discovery, so it crosses.** §34's line, one table
+  along: a member reading a list of openings with no way to see that one has
+  nine live ways of being taken and another has one is reading half the
+  frontier. It is a **third projection** written field by field rather than a
+  filter over the owner's, so an attribute added next month is absent until
+  somebody decides it belongs. Names, statuses, ranks, open questions by name
+  and counts cross; the **value** of an answer does not — and a member is given
+  the deciding *criterion* rather than the owner's ranking sentence, because two
+  of the criteria read money. The owner's `statusBecause` is not reused for the
+  same reason: *the established revenue does not cover the established direct
+  costs* is a statement about two private numbers even though it quotes neither.
+- **It is one section on one page, for both roles.** `rs-cash-monetization` is
+  in the skeleton `tests/cashSection.test.tsx` declares, so a permission changes
+  what is inside it and never whether it is there — §36's rule, at a new
+  section.
+
 ## Repository map
 
 ```
@@ -5774,6 +5910,7 @@ server/
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
+    monetization.ts     every shape of transaction, what it needs and what it leaves
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     auditReopens.ts     the record behind a re-audit, and its one reservation
@@ -5793,6 +5930,7 @@ server/
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
     capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
+    monetization.ts   the possibility ledger; nothing in it is ever deleted
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -5903,6 +6041,15 @@ server/
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
       readiness.ts      four people and four surfaces, counted from rows
+      monetization/
+        enumerate.ts    the possibility space, from a closed table rather than a model
+        status.ts       where one possibility stands, and what decided it
+        rank.ts         lexicographic, so it can say exactly why — and what would move it
+        movement.ts     that a position moved, which is the one thing no derivation recovers
+        graph.ts        §21's chain, as a consequence of what each method produces
+        ledger.ts       every answer the brief asks for, composed from one read
+        surface.ts      the five, the groups, and the operator's own questions
+        decisions.ts    naming, judging, merging, splitting — and destroying nothing
     capability/
       ingest.ts         a blueprint becomes a registered, readable source
       sections.ts       the sections a document declares, from its own headings
@@ -6061,6 +6208,7 @@ tests/                  Vitest suites
   cashIntegrationPass.test.ts  one sprint, walked the whole way, entrances only
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
   cashOpportunityStandard.test.ts  what is an opportunity, and whose question is whose
+  monetizationLedger.test.ts   forty ways preserved, ranked, and never rounded to one
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker

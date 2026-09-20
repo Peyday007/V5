@@ -28,6 +28,7 @@ and the authority to spend it**.
 | `cash_needs` | A blocked action, its completion condition, and what waits on it. |
 | `cash_discovery_rounds` | Which question discovery asked, and which idea asked it. |
 | `cash_card_facts` | Where each card answer came from, and what kind of answer it is. |
+| `monetization_*` | Every way money could come out of a discovery, not just the one its `mechanism` column named. See **[docs/MONETIZATION.md](MONETIZATION.md)**. |
 | `cash_locks` | Where two cash decisions stop being concurrent. |
 | `cash_actions` | Append-only. What was actually done, and under which grant. |
 | `cash_events` | Append-only history, no foreign keys. |

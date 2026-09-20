@@ -78,6 +78,12 @@ import { assignmentFor } from '../services/research/assignment.ts';
 import { explainLaneProblems, laneProblems } from '../services/research/lanes.ts';
 import { isLaneId, laneIdFrom, LANE_NECESSITIES } from '../domain/evidenceLanes.ts';
 import {
+  isMonetizationMethod,
+  METHOD,
+  MONETIZATION_METHODS,
+} from '../domain/monetization.ts';
+import type { MonetizationMethod } from '../domain/types.ts';
+import {
   OPPORTUNITY_SIGNALS,
   SIGNAL_GUIDE,
   isOpportunitySignal,
@@ -1075,6 +1081,42 @@ function optionalSignal(row: Record<string, unknown>, where: string): Opportunit
 }
 
 /**
+ * How a claim says money would be made from the opening it establishes.
+ *
+ * Refused rather than ignored when it is outside the closed set, for
+ * `optionalSignal`'s reason — a method stored as an unrecognised string would
+ * compare against nothing for ever.
+ *
+ * And refused when it arrives **without** a signal, which is the part worth
+ * stating: a way of monetizing something has to say what it is a way of
+ * monetizing, and the only unambiguous anchor is the opening this same claim
+ * establishes. Reading the subject out of the claim's prose is the guess §25
+ * records the cost of, at the field that decides what a possibility is about.
+ */
+function optionalMethod(
+  row: Record<string, unknown>,
+  signal: OpportunitySignal | null,
+  where: string,
+): MonetizationMethod | null {
+  const raw = row['monetization_method'];
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (!isMonetizationMethod(raw)) {
+    throw invalidInput(
+      `${where}: monetization_method must be one of ${MONETIZATION_METHODS.join(', ')}, ` +
+        'or omitted.',
+    );
+  }
+  if (signal === null) {
+    throw invalidInput(
+      `${where}: monetization_method needs an opportunity_signal on the same claim. A way of ` +
+        'being paid has to say what it is a way of being paid for, and the opening this claim ' +
+        'establishes is the only thing that says so.',
+    );
+  }
+  return raw;
+}
+
+/**
  * The structural declaration on one submitted claim.
  *
  * Delegated whole to `validateStructural`, which is also what the provider
@@ -1134,6 +1176,12 @@ const submitClaimsTool: McpTool = {
     'require structural_subject, which is that subject\'s name; the other three must omit it. ' +
     'A claim can carry both an opportunity_signal and a structural_finding, and most claims ' +
     'carry neither. ' +
+    'And where a source says how money would actually be made from an opening it establishes, ' +
+    'set monetization_method alongside that claim\'s opportunity_signal — only alongside one, ' +
+    'because a way of being paid has to say what it is a way of being paid for. Brain already ' +
+    'works out every shape of transaction that could structurally apply to an opening of that ' +
+    'kind, so this is for the one the source names and Brain would not have produced. Almost ' +
+    'every claim carries none. ' +
     'One submission per work item; a redelivery replays it rather than adding to it.',
   inputSchema: {
     type: 'object',
@@ -1161,6 +1209,20 @@ const submitClaimsTool: McpTool = {
                 'exactly one of the strings brain_get_assignment returns as `requiredEvidence`, ' +
                 'verbatim. The gate asks per lane whether any accepted claim filled it, so an ' +
                 'untagged claim cannot answer the question it was found for, however good it is.',
+            },
+            monetization_method: {
+              type: 'string',
+              enum: [...MONETIZATION_METHODS],
+              description:
+                'Optional, and absent for almost every claim. Set it only alongside an ' +
+                'opportunity_signal, when the source says how money would actually be made ' +
+                'from that opening and it is a shape Brain would not have worked out for ' +
+                'itself: ' +
+                MONETIZATION_METHODS.map((one) => `${one} — ${METHOD[one].what}`).join('; ') +
+                '. Brain already enumerates every shape of transaction that could structurally ' +
+                'apply to an opening of that kind, so this is for the one the source names and ' +
+                'the table would not produce. It lowers no bar: the claim passes the same gate ' +
+                'as every other.',
             },
             opportunity_signal: {
               type: 'string',
@@ -1294,6 +1356,15 @@ const submitClaimsTool: McpTool = {
          * claims are and is not a deficiency.
          */
         opportunitySignal: optionalSignal(row, where),
+        /*
+         * And how it says money would be made from that opening, where the
+         * source says something the method table would not have produced.
+         *
+         * §20's *are there paths I could not see before*, as a declaration
+         * rather than as prose: Brain enumerates the shapes of transaction it
+         * knows, and a worker that read a source may name one it did not.
+         */
+        monetizationMethod: optionalMethod(row, optionalSignal(row, where), where),
         /*
          * And what it establishes about how the industry is put together.
          *

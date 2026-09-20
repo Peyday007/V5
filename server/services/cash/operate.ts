@@ -66,6 +66,8 @@ import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
 import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
 import { runValidations, type ValidationProgress } from './validation.ts';
+import { enumeratePossibilities } from './monetization/enumerate.ts';
+import { recordMovements } from './monetization/movement.ts';
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
@@ -731,6 +733,7 @@ export async function operate(
   dependentWork: DependentWork[];
   validations: ValidationProgress;
   authority: AuthorityAdvance;
+  monetization: MonetizationPass;
 }> {
   if (!(await getCashMode(projectId))) {
     return {
@@ -742,6 +745,7 @@ export async function operate(
       dependentWork: [],
       validations: { started: [], settled: [] },
       authority: { took: [], withheld: [] },
+      monetization: { pathsAdded: [], figuresCarried: [], evidenced: [], moved: 0, evaluated: 0 },
     };
   }
   /*
@@ -775,6 +779,23 @@ export async function operate(
    * card and defer every decision by one pass.
    */
   const authority = await advanceWithinAuthority(projectId);
+  /*
+   * And the possibility ledger, last, reading everything the passes above
+   * wrote.
+   *
+   * Two halves with different jobs. The enumeration gives every live discovery
+   * its complete space of monetization methods, idempotently, so a discovery
+   * that arrived since the last pass stops being one answer to a question that
+   * has dozens. The movement pass re-reads the derived ranking and records only
+   * what actually moved, which is the one thing about a rank no derivation can
+   * recover later.
+   *
+   * It is last for `advanceWithinAuthority`'s own reason: everything above it
+   * changes what the ledger says, and asking first would rank last tick's
+   * evidence. And it gates nothing — no pass here refuses a piece, charges an
+   * attempt, starts work or spends anything.
+   */
+  const monetization = await runMonetizationLedger(projectId, now);
   return {
     capabilities,
     gaps,
@@ -784,6 +805,34 @@ export async function operate(
     dependentWork,
     validations,
     authority,
+    monetization,
+  };
+}
+
+export interface MonetizationPass {
+  /** Possibilities added this pass. Empty on a pass over an unchanged project. */
+  pathsAdded: string[];
+  /** Paths that inherited a figure from the discovery their method stood for. */
+  figuresCarried: string[];
+  /** Possibilities a source named that the method table would not have produced. */
+  evidenced: string[];
+  /** Positions that changed. A ledger nothing moved in records nothing. */
+  moved: number;
+  evaluated: number;
+}
+
+async function runMonetizationLedger(
+  projectId: string,
+  now?: string,
+): Promise<MonetizationPass> {
+  const enumerated = await enumeratePossibilities(projectId);
+  const movements = await recordMovements({ projectId, now });
+  return {
+    pathsAdded: enumerated.added.flatMap((one) => one.pathIds),
+    figuresCarried: enumerated.carried.map((one) => one.pathId),
+    evidenced: enumerated.evidenced,
+    moved: movements.movements.length,
+    evaluated: movements.evaluated,
   };
 }
 

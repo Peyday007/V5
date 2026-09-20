@@ -249,6 +249,15 @@ export function CashView_({
       <Status page={page} />
       <Decisions page={page} projectId={rootId} onChanged={view.reload} />
       <BestOpportunities page={page} onChanged={view.reload} />
+      {/*
+        * How each of those could actually be monetized, in full.
+        *
+        * Directly under the best openings because the two answer consecutive
+        * questions — *which discovery* and *which way of being paid from it* —
+        * and because the possibility space is the thing this section exists to
+        * stop being collapsed into one answer at promotion.
+        */}
+      <Monetization page={page} onChanged={view.reload} />
       <MoneyRow page={page} />
       <Details page={page} onChanged={view.reload} />
       {/*
@@ -2806,3 +2815,384 @@ function Lifecycle({
 }
 
 export { CashView_ as CashSection };
+
+/**
+ * The monetization possibility ledger, as a person reads it.
+ *
+ * ---------------------------------------------------------------------------
+ * The five are a view and the section says so
+ * ---------------------------------------------------------------------------
+ *
+ * The brief's own instruction is that reducing forty possibilities to five and
+ * forgetting the rest is the failure. So the count of the whole space is on the
+ * screen beside the five, the disclosure under them carries every group with
+ * its own count, and there is no branch here that drops a path: a possibility
+ * that is invalidated, archived, weak or unproven is rendered with its reason,
+ * because what made one of those wrong is a fact and a fact can stop being
+ * true.
+ *
+ * ---------------------------------------------------------------------------
+ * One section, two roles
+ * ---------------------------------------------------------------------------
+ *
+ * Everything structural — which possibilities exist, where each stands, where
+ * it ranks, which of its questions are open, how much of it rests on a source —
+ * comes from `page.frontier.monetization`, which is the **same object the
+ * server builds for a member**. The figures, the risks quoted from answers and
+ * the full ranking sentences come from `page.full`, which a member's payload
+ * does not contain at all. A permission changes what is inside this section and
+ * never whether it is here.
+ *
+ * Nothing is derived here. The ranking, the status, the margin and the reason
+ * one path outranks another are all the server's, for §29's reason: a client
+ * deriving any of them would be a second opinion about one ledger.
+ */
+function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }): JSX.Element {
+  const shared = page.frontier.monetization ?? null;
+  const owner = page.full?.monetization ?? null;
+  const byId = new Map((shared?.paths ?? []).map((one) => [one.id, one]));
+  const ownerTop = new Map((owner?.top ?? []).map((one) => [one.pathId, one]));
+
+  return (
+    <section className="rs-card rs-cash-monetization">
+      <h3>Monetization paths</h3>
+      {!shared || shared.total === 0 ? (
+        <p className="rs-hint">
+          Nothing is in the possibility ledger yet. Brain gives every discovery its complete set of
+          ways money could come out of it &mdash; one per shape of transaction that could apply, all
+          of them kept, none of them a claim that it works.
+        </p>
+      ) : (
+        <>
+          <p className="rs-hint">
+            {shared.total} {shared.total === 1 ? 'way' : 'ways'} of being paid are in the ledger.
+            The {shared.topPathIds.length} below are a view of that and never the whole of it
+            &mdash; everything else is under <em>All monetization paths</em>, with its reason.
+          </p>
+          <ul className="rs-cash-tiers">
+            <li>
+              <strong>{shared.byStatus.ACTIVE}</strong>
+              <span>Active</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.WATCH}</strong>
+              <span>Watching</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.BLOCKED}</strong>
+              <span>Blocked</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.WEAK}</strong>
+              <span>Weak</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.UNPROVEN}</strong>
+              <span>Unproven</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.INVALIDATED + shared.byStatus.ARCHIVED}</strong>
+              <span>Put away</span>
+            </li>
+          </ul>
+
+          <ol className="rs-cash-paths">
+            {shared.topPathIds.map((pathId) => {
+              const path = byId.get(pathId);
+              if (!path) return null;
+              const detail = ownerTop.get(pathId) ?? null;
+              const why = shared.whyEachTop.find((one) => one.pathId === pathId) ?? null;
+              const openQuestion = path.openQuestions[0] ?? null;
+              return (
+                <li key={pathId} className="rs-cash-path">
+                  <h4>
+                    {/*
+                      * Its rank in the **ledger**, not its position in this
+                      * list. The five are the best *live* possibilities, so an
+                      * invalidated one at rank two makes those two numbers
+                      * differ — and a page that showed a rank a path does not
+                      * have would disagree with every other reading of it,
+                      * including the movement history that says where it came
+                      * from.
+                      */}
+                    <span className="rs-cash-path-rank">#{path.rank}</span> {path.title}
+                  </h4>
+                  <p className="rs-decision-why">{detail?.what ?? path.methodWhat}</p>
+                  <p className="rs-hint">
+                    <strong>{path.status}</strong> &mdash; {path.statusNote}
+                  </p>
+
+                  {/*
+                    * Why it ranks highly. The owner's sentence quotes both
+                    * sides of the comparison and two of the criteria read
+                    * money, so a member is told the *criterion* instead: it is
+                    * the whole of why, and it carries no figure at all.
+                    */}
+                  <p className="rs-hint">
+                    {detail
+                      ? detail.whyItRanksHighly
+                      : why?.label
+                        ? `It is above the best one not shown on ${why.label}.`
+                        : 'Nothing is ranked below it, so it is not being preferred over anything.'}
+                  </p>
+
+                  {detail ? (
+                    <>
+                      <p className="rs-hint">
+                        Revenue {detail.economics.revenue ?? 'unknown'} &middot; costs{' '}
+                        {detail.economics.costs ?? 'unknown'} &middot;{' '}
+                        {detail.economics.margin !== null
+                          ? `margin ${detail.economics.margin}`
+                          : detail.economics.withheld}
+                      </p>
+                      <p className="rs-hint">{detail.timeToCash}</p>
+                    </>
+                  ) : (
+                    <p className="rs-hint">
+                      What this would pay, what it would cost and when the money would arrive belong
+                      to whoever owns an execution job, and no figure of them is sent to this page.
+                    </p>
+                  )}
+
+                  <p className="rs-hint">
+                    <strong>Next:</strong>{' '}
+                    {detail?.requiredAction ??
+                      openQuestion?.task ??
+                      'Everything load-bearing is answered. What is left is a decision only a person can make.'}
+                  </p>
+
+                  {/*
+                    * Confidence, as three counts. There is no percentage here
+                    * and there must not be one: a confidence figure nobody
+                    * measured reads exactly like one somebody did.
+                    */}
+                  <p className="rs-hint">
+                    {path.answered.fromASource} answered from a source &middot;{' '}
+                    {path.answered.brainsOwnProposal} proposed by Brain &middot;{' '}
+                    {path.answered.unanswered} unanswered
+                  </p>
+
+                  {detail && detail.risks.length > 0 ? (
+                    <ul className="rs-cash-path-risks">
+                      {detail.risks.map((risk, index) => (
+                        <li key={index}>{risk}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  <p className="rs-hint">
+                    {path.previousRank === null
+                      ? 'It has not moved since it entered the ledger.'
+                      : `It moved from ${path.previousRank} to ${path.rank}${
+                          path.movedAt ? ` on ${path.movedAt}` : ''
+                        }.`}
+                  </p>
+
+                  {page.capabilities.mayActOnJob ? (
+                    <PathJudgment pathId={pathId} status={path.status} onChanged={onChanged} />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+
+          <details className="rs-cash-paths-all">
+            <summary>
+              <strong>All monetization paths</strong>
+              <span className="rs-hint">
+                {' '}
+                every one of the {shared.total}, grouped, with nothing removed
+              </span>
+            </summary>
+            {shared.sequences.length > 0 ? (
+              <div className="rs-cash-sequences">
+                <h4>Sequences</h4>
+                <p className="rs-hint">
+                  Chains where running one produces something the next one needs. That is what these
+                  claim and all they claim &mdash; not that the chain is worth running.
+                </p>
+                <ul>
+                  {shared.sequences.map((sequence, index) => (
+                    <li key={index}>{sequence.titles.join(' → ')}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {(owner?.groups ?? []).length > 0 || shared.paths.length > 0 ? (
+              <div className="rs-cash-groups">
+                {(owner?.groups ?? derivedGroups(shared)).map((group) => (
+                  <section key={group.id}>
+                    <h4>
+                      {group.label} ({group.pathIds.length})
+                    </h4>
+                    <p className="rs-hint">{group.what}</p>
+                    <ul>
+                      {group.pathIds.map((id) => {
+                        const path = byId.get(id);
+                        if (!path) return null;
+                        return (
+                          <li key={id}>
+                            <strong>#{path.rank}</strong> {path.title} &mdash; {path.status}
+                            {path.openQuestions.length > 0 ? (
+                              <span className="rs-hint">
+                                {' '}
+                                ({path.openQuestions.length} open:{' '}
+                                {path.openQuestions.map((one) => one.label).join(', ')})
+                              </span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            ) : null}
+          </details>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The groups a member gets, from the shared projection alone.
+ *
+ * The owner's payload carries the server's own groups; a member's does not,
+ * because the group list is composed alongside the figures. Rather than leave a
+ * member with no grouping at all — which would take the *All monetization
+ * paths* content off half the pages and is exactly the divergence §36 removed
+ * — the three groups that need nothing but a status are composed here from the
+ * shared paths.
+ *
+ * It derives no status, no rank and no order: every one of those is read off
+ * the server's own projection, which is already sorted.
+ */
+function derivedGroups(shared: {
+  paths: { id: string; status: string }[];
+}): { id: string; label: string; what: string; pathIds: string[] }[] {
+  const withStatus = (...statuses: string[]): string[] =>
+    shared.paths.filter((one) => statuses.includes(one.status)).map((one) => one.id);
+  return [
+    {
+      id: 'ALL_ACTIVE',
+      label: 'All active',
+      what: 'Every possibility whose load-bearing questions are answered and whose way is clear.',
+      pathIds: withStatus('ACTIVE'),
+    },
+    {
+      id: 'BLOCKED',
+      label: 'Blocked',
+      what: 'Something named has to happen first.',
+      pathIds: withStatus('BLOCKED'),
+    },
+    {
+      id: 'UNPROVEN',
+      label: 'Unproven',
+      what: 'Nothing has established enough about these yet.',
+      pathIds: withStatus('UNPROVEN'),
+    },
+    {
+      id: 'INVALIDATED_OR_ARCHIVED',
+      label: 'Invalidated or archived',
+      what: 'Put away or established as not working. Never deleted.',
+      pathIds: withStatus('INVALIDATED', 'ARCHIVED'),
+    },
+  ];
+}
+
+/**
+ * The three judgements about a possibility that nothing can derive, and the one
+ * that answers them.
+ *
+ * This is the legitimate case for a person-answer control, and it is worth
+ * saying why given how many of them §33 removed. Every one of those asked
+ * somebody to attest to a *fact about the world* that Brain researches. These
+ * four are not facts: whether to keep an eye on something, whether it has been
+ * established as not working, whether to put it away, and whether to bring it
+ * back are decisions with no row that could answer them.
+ *
+ * The reason is required by the server and by this control. A possibility put
+ * away with no reason is one nobody can reconsider when the thing that made it
+ * wrong stops being true — and the ledger derives *worth reconsidering* by
+ * comparing the judgement's date against what has been established since.
+ */
+function PathJudgment({
+  pathId,
+  status,
+  onChanged,
+}: {
+  pathId: string;
+  status: string;
+  onChanged(): void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [judgment, setJudgment] = useState<'WATCH' | 'INVALIDATE' | 'ARCHIVE' | 'REVIVE'>(
+    status === 'INVALIDATED' || status === 'ARCHIVED' ? 'REVIVE' : 'WATCH',
+  );
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (!open) {
+    return (
+      <div className="rs-cash-actions">
+        <button type="button" className="rs-button-quiet" onClick={() => setOpen(true)}>
+          Record a decision
+        </button>
+        {message ? <span className="rs-hint">{message}</span> : null}
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="rs-cash-actions"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (busy) return;
+        setBusy(true);
+        CashApi.judgePath(pathId, judgment, reason)
+          .then((answer) => {
+            setMessage(answer.message);
+            setOpen(false);
+            setReason('');
+            onChanged();
+          })
+          .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'It did not go through.'))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <label>
+        <span>Decision</span>
+        <select
+          value={judgment}
+          onChange={(event) =>
+            setJudgment(event.target.value as 'WATCH' | 'INVALIDATE' | 'ARCHIVE' | 'REVIVE')
+          }
+        >
+          <option value="WATCH">Watch it</option>
+          <option value="INVALIDATE">It does not work</option>
+          <option value="ARCHIVE">Put it away</option>
+          <option value="REVIVE">Bring it back</option>
+        </select>
+      </label>
+      <label>
+        <span>Why</span>
+        <input
+          value={reason}
+          required
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="What you know that the ledger does not."
+        />
+      </label>
+      <button type="submit" disabled={busy || reason.trim().length === 0}>
+        {busy ? 'Recording…' : 'Record'}
+      </button>
+      <button type="button" className="rs-button-quiet" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+      {message ? <span className="rs-hint">{message}</span> : null}
+    </form>
+  );
+}

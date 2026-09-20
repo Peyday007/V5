@@ -312,6 +312,19 @@ const MARKET_DISCOVERY: CompilerProfile = {
       'claims are descriptive evidence and carry none, which is not a deficiency. It lowers ' +
       'no bar: a signalled claim passes exactly the same evidence gate as every other, and ' +
       'an unsignalled one is still evidence.',
+    /*
+     * And the same instruction one column along, at the same end of the job.
+     *
+     * Brain enumerates every shape of transaction that structurally applies to
+     * an opening of a given kind, so this is only for the one a source names
+     * and the table would not produce. A worker notices that while reading the
+     * source rather than while filling in a claim, which is why it is here as
+     * well as on the tool.
+     */
+    'If that same source also says how money would actually be made from the opening, and it ' +
+      'is a shape worth naming, set the claim\'s monetization_method as well — only ' +
+      'alongside an opportunity_signal, because a way of being paid has to say what it is a ' +
+      'way of being paid for. Almost every claim carries none, and it lowers no bar either.',
     'Sources that are really one source are counted once, and the duplication is reported: ' +
       'two pages of one site, one release carried by three outlets, three publishers ' +
       'restating one upstream estimate.',
