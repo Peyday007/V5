@@ -54,7 +54,8 @@ import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scal
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
 import { getBin, listBins, listDispatchesForBin } from '../server/repos/bins.ts';
-import { getWorker, getWorkerByName, getWorkerRouting } from '../server/repos/identity.ts';
+import { getWorker, getWorkerRouting } from '../server/repos/identity.ts';
+import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
 import { listTokensForWorker } from '../server/repos/oauth.ts';
 import { FLEET_STATES } from '../server/domain/types.ts';
 import type { BinState, FleetState } from '../server/domain/types.ts';
@@ -479,12 +480,25 @@ async function main(): Promise<void> {
      * shows the id. A runbook that has to say "find the id" is a runbook with a
      * step somebody invents; `factory-<grant>` is a value the operator already
      * has in front of them.
+     *
+     * Through the shared resolver rather than the two lookups this used to do
+     * inline, so the label `workers list` prints resolves here too — and so
+     * there is one answer to "what may somebody type" rather than one per
+     * command. Its own header says why the third case is refused instead of
+     * chosen between.
      */
-    const named = await getWorkerByName(given);
-    const workerId = named?.id ?? given;
-    if (!named && !(await getWorker(workerId))) {
-      return refuse(`no worker "${given}" — pass its id or the name onboarding gave it.`);
+    const resolved = await resolveWorkerRef(given);
+    if (resolved.kind === 'AMBIGUOUS') {
+      return refuse(
+        `"${given}" names more than one worker (${resolved.matches
+          .map((one) => one.id)
+          .join(', ')}) — pass the id.`,
+      );
     }
+    if (resolved.kind === 'NONE') {
+      return refuse(`no worker "${given}" — pass its id, its label, or the name onboarding gave it.`);
+    }
+    const workerId = resolved.worker.id;
     const changed = await bindRoutineWorker(routine.id, workerId);
     if (!changed) {
       return refuse(

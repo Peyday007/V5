@@ -102,6 +102,7 @@ import {
 } from '../server/services/bins/routing.ts';
 import type { Principal, User } from '../server/domain/types.ts';
 import { workerIdentity } from '../server/services/identity/authenticate.ts';
+import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -185,16 +186,43 @@ async function projectFrom(ref: string) {
   return project;
 }
 
+/**
+ * The one place this script turns what somebody typed into a worker row.
+ *
+ * It resolves through `services/identity/workerRef.ts`, which accepts the two
+ * identifiers `workers list` actually prints — the label and the id — as well
+ * as the `workers.name` handle that used to be the only one. The defect it
+ * closes is small and was expensive: an operator read `worker-05  wkr_…` off
+ * the listing, typed either into `access grant`, and was told **No such
+ * worker** by a refusal that then offered a third spelling the listing had
+ * never shown them.
+ *
+ * So the refusal lists candidates the way the listing does, and for the same
+ * reason the resolver exists at all: a listing and the command that consumes
+ * it must not disagree about what a thing is called.
+ */
 async function workerFrom(ref: string) {
-  const worker = await getWorkerByName(ref);
-  if (!worker) {
-    console.error(`No worker ${ref}. This Brain holds:`);
-    for (const candidate of await listWorkers({ includeArchived: true })) {
-      console.error(`  ${candidate.name}  ${candidate.status}`);
+  const resolved = await resolveWorkerRef(ref);
+  if (resolved.kind === 'FOUND') return resolved.worker;
+
+  if (resolved.kind === 'AMBIGUOUS') {
+    console.error(`"${ref}" names more than one worker:`);
+    for (const candidate of resolved.matches) {
+      console.error(`  ${workerIdentity(candidate).padEnd(12)} ${candidate.id}  ${candidate.name}`);
     }
-    fail('No such worker.');
+    // Refused rather than chosen between: picking either would be a confident
+    // answer to the wrong question, with every row reading healthy.
+    fail('Ambiguous worker reference. Use the id.');
   }
-  return worker;
+
+  console.error(`No worker ${ref}. This Brain holds:`);
+  for (const candidate of await listWorkers({ includeArchived: true })) {
+    console.error(
+      `  ${workerIdentity(candidate).padEnd(12)} ${candidate.id}  ${candidate.status.padEnd(10)} ` +
+        `${candidate.name}`,
+    );
+  }
+  fail('No such worker.');
 }
 
 /** The checkout this command is running from — how it finds the render set. */
