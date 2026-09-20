@@ -6979,6 +6979,13 @@ built.
   decides *whether* a person is needed and *what published sources say that
   capability costs*.
 
+**Reading it from production is `labor-report.yml`**, which runs the read-only
+script inside the released container and prints that container's own
+`BRAIN_REVISION` before anything else — because a report read out of a container
+says nothing about *which* container unless the container says which commit it
+was built from, and a deployment system's label is a claim about what it was
+asked to ship rather than a reading of what is serving.
+
 **There is no client surface**, which is a scope statement rather than an
 omission: §38's kernel shipped the same way, and §29's product surface has its
 own acceptance. The reading is `GET /api/projects/:id/labor` for any project
@@ -7331,6 +7338,7 @@ scripts/
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
   labor-report.ts           §13's six readings, and the four figures nothing measures
+  labor-report.sh           the same, inside the deployed container, naming the revision serving it
   admin.ts                  emergency administration, on a terminal rather than a page
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
