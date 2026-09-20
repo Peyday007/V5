@@ -92,11 +92,26 @@ const USAGE = `
   packet research <packetId>                          what it should research next, if anything
   packet compile <packetId>                           the change request it implies
   packet prove <packetId> [--apply]                   what the evidence supports, and what it does not
+  packet realize <packetId> [--apply]                 the dimensions the packet's own rows support
   packet section <packetId> <SECTION> <file.json>     write a design section a reader authored
+  packet judge <gapId> --kind <k> --evidence <words>  a reader's classification of one gap
+  packet outstanding <packetId>                       the questions the director has open
+  packet ask <packetId>                               turn the researchable ones into ideas
+  packet handoff <packetId>                           hand the compiled contract to Build
   packet awaiting <packetId>                          every gap waiting on a person
   packet answer <gapId> --grant|--refuse --admin <e>  a person's answer to one of them
            --statement <words>
   packets                                             every packet, and faculties with none
+
+  Five of those were missing from this list while the commands existed, and
+  "packet judge" is the one that mattered: it is the only way out of
+  NEEDS_A_READING, everything downstream of an unread gap refuses, and an
+  operator reading this text could not find it. A remedy nobody can reach is
+  the defect this whole surface was added to correct, one layer up.
+
+  Nothing here runs the chain. The durable tick does that by itself — deriving,
+  asking, moving the dimensions, compiling and handing off — and these are the
+  inspectable manual recovery beside it, reaching the identical functions.
 
   submit <binId> <file.json> --worker <handle>        submit a reading through the worker path
   verdicts <binId> <file.json> --worker <handle>      submit audit verdicts, as a second session

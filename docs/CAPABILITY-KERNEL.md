@@ -266,7 +266,11 @@ npm run capability -- register <file> --title <t> [--amends <id>]
 npm run capability -- sources | advance | read <id> | candidates | faculties | history <slug>
 npm run capability -- scan | model | staleness
 npm run capability -- packet open <slug> | derive <id> | show <id> | research <id>
-npm run capability -- packet compile <id> | prove <id> [--apply]
+npm run capability -- packet compile <id> | prove <id> [--apply] | realize <id> [--apply]
+npm run capability -- packet judge <gapId> --kind <k> --evidence "…"
+npm run capability -- packet outstanding <id> | ask <id> | handoff <id>
+npm run capability -- packet awaiting <id> | answer <gapId> --grant|--refuse --admin <e> --statement "…"
+npm run capability -- packets
 npm run capability -- submit <binId> <file.json> --worker <handle>
 npm run capability -- verdicts <binId> <file.json> --worker <handle>
 ```
@@ -295,6 +299,53 @@ healthy. It is the *mechanism nothing calls* defect this repository records five
 times, committed a sixth, and the suite that proved the tick worked could not
 see it because it called the tick directly. `capabilityKernel.test.ts` now
 asserts the loop's own source reaches it.
+
+**And the rest of the chain, which was six commands in the right order.**
+`advanceSources` stops at the registry: a blueprint becomes a canonical
+definition and then nothing happens, because deriving the gaps, asking the
+world, moving the dimensions, compiling the contract and handing it off were
+each an invocation somebody had to remember. A packet whose authority gap a
+person answered on Tuesday sat exactly where it was. That is the same defect
+the paragraph above records, one altitude up, and the remedy it had been given
+four times was itself a command — **an operator's memory is not a caller.**
+
+`services/realize/advance.ts` runs beside `advanceSources` on the same tick and
+is the ordering and nothing else. Every transition it performs is the identical
+function this section's commands call, and a test holds both to the same names,
+because a second implementation is exactly what passes a behavioural test and
+drifts a month later. There is no second orchestrator, queue, policy module or
+state machine, and the commands stay as the inspectable manual recovery beside
+it.
+
+Two properties of the pass are worth stating because they are what make running
+it every thirty seconds safe:
+
+- **It re-derives only a packet with no gaps at all.** Re-deriving on a timer
+  would replace a reader's classifications with `NEEDS_A_READING` on a loop,
+  which is the one thing that would make the chain permanently unfinishable.
+- **It is idempotent by its own effects rather than by a cursor or a flag** — a
+  flag can be set by a tick that then dies. `moveDimension` records nothing when
+  a faculty is already in the state; `askHuman` is `ON CONFLICT (resume_key) DO
+  NOTHING`; `handOff` claims on `change_request_id IS NULL`; `askTheWorld` moves
+  the gap to `ASSIGNED` carrying its candidate. Four passes over the same rows
+  produce one reading, and that is asserted on the append-only rows.
+
+**A person-owned gap reaches the surface that already exists.** A
+`REQUIRES_PERSON_AUTHORITY` gap becomes a `russell_human_requests` row: the same
+Needs You card, the same route behind `requirePerson`, the same
+`resumeAnsweredRequest`. No second decision framework, because §24 already built
+the one this is. It offers a grant *and* a refusal, because a card with one
+answer is not a decision, and a refusal is recorded as `WAIVED` rather than
+`CLOSED` — the packet then correctly stays short of whatever that requirement
+was load-bearing for.
+
+The resume had to be placed **before** that function's mission check, and this
+is the part worth keeping: `resumeAnsweredRequest` returns `settled: true` for
+any request with no mission — *"the request was not about a mission"* — so a
+capability card somebody answered would have been marked RESUMED having carried
+out nothing, vanished from the surface, and been raised again identically on the
+next tick. A person could have answered the same question every day and never
+learned their decision was recorded and ignored.
 
 ---
 
