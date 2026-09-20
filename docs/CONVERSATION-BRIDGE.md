@@ -39,6 +39,22 @@ worker. Three properties bound it, and each is a refusal rather than a promise:
 
 A worker principal is refused **by type** at every bridge route, reads included.
 
+### One consequence worth knowing before you connect
+
+A bridge credential resolves to the person **and drops Brain administration**,
+which means it reaches exactly the projects that person holds a *membership row*
+on — not the ones they can reach by being an administrator.
+
+That is the intended trade and not an oversight: a key pasted into a chat client
+should not be able to read every project in the Brain. It has a visible
+consequence for an owner who administers projects they never explicitly joined —
+Brain will answer *"I am not sure which project this is about yet"* however
+clearly the message names one, because the project is not a candidate for that
+credential at all.
+
+The remedy is one membership grant, and it is the same one every other member
+already has.
+
 Revoking is immediate: the credential is resolved from rows on every request, so
 it stops working on the next call rather than when a token happens to expire.
 
