@@ -1,9 +1,9 @@
 {
-  "revision": "b0b5fd74af5eacae072fc75f48ec1c617ce19115",
-  "treeDirtyAtManifestTime": true,
+  "revision": "3c4274559ed0afcebdb2370847f0c2fd37ad5725",
+  "treeDirtyAtManifestTime": false,
   "renderSetDigest": "17d9a70a3d9b1c6ee4615c21e27fd018dca66454172b3c226970d62dc52a2c6d",
   "renderCount": 9,
-  "generatedAt": "2026-09-20T10:03:27.229Z",
+  "generatedAt": "2026-09-20T10:23:01.366Z",
   "renders": [
     {
       "screen": "russell/default",
