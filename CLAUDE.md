@@ -5740,6 +5740,30 @@ the person cannot use.
   the whole argument for §16's separation between an engine passing its tests
   and a job having actually run.
 
+- **A source that failed because Brain's contract was wrong had no way back,
+  which is the same sentence one state along.** `advanceSources` walks
+  `REGISTERED → EXTRACTING → PROPOSED → AUDITING` and never looks at `FAILED`;
+  `registerSource` is idempotent by `(content_hash, kind)`, so re-registering
+  the same bytes returns the failed row unchanged; and `recoverExtraction` only
+  reaches an assignment whose bin has vanished. That was tolerable while
+  `FAILED` meant *the document is not evidence*. It stopped being tolerable the
+  moment a source failed for a defect in Brain: the blueprint was fine, the
+  worker was fine, the validator was fine, and the source was terminal.
+
+  `services/capability/reoffer.ts` is the answering transition, and three things
+  make it a recovery rather than a way around the gate. **It refuses the failure
+  it is not for, by name** — `surfaceRecovery`'s own division, at a document: a
+  source whose extraction never became evidence failed because of its bytes, and
+  re-offering it would hand out a bin, spend a fire and fail identically for
+  ever. **It is a person's reading on a terminal**, because Brain cannot tell a
+  manifest it has since corrected from one it has not; deriving it from the
+  running revision was the tempting alternative and is refused for exactly that
+  reason. **It destroys nothing** — every refused candidate keeps its row and
+  its reason, the spent bin keeps its attempts, and a corrected reading lands
+  over the refusal because `putCandidate` already replaces per
+  `(source_id, slug)`. `FAILED` is a condition of the `UPDATE`, so two callers
+  produce one re-offer.
+
 **What is still not true, and is not rounded up.** No faculty is implemented:
 `realized.ts` can now say one is, from rows, and on this repository every
 packet still holds unread gaps. Nothing has been deployed — the hosted tool
@@ -6357,6 +6381,7 @@ server/
       extraction.ts     the bin, the validation, the audit, the promotion
       independence.ts   a reading is not audited by the session that produced it
       reader.ts         the identity a reading is submitted under; it grants no tier
+      reoffer.ts        the way back from a failure that was Brain's own contract
     selfmodel/
       levels.ts         seven kinds of evidence, three answers each
       observe.ts        what Brain can honestly read about itself, from here

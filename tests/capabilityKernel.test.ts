@@ -37,6 +37,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
+import { createUser } from '../server/repos/identity.ts';
+import { reofferSource } from '../server/services/capability/reoffer.ts';
 import {
   ensureArchitectureScope,
   registerBlueprint,
@@ -648,6 +650,158 @@ describe('the capability kernel', () => {
       await finish(binId);
       const settled = await settleExtraction(sourceId);
       expect(settled?.problems.join(' ')).toMatch(/"faculty_99" was submitted and is not a declared/);
+    });
+  });
+
+  /*
+   * The answering transition for the one state Brain's own wrong contract puts
+   * a source into.
+   *
+   * `advanceSources` never looks at `FAILED`, `registerSource` is idempotent by
+   * `(content_hash, kind)` so re-registering the same bytes returns the failed
+   * row unchanged, and `recoverExtraction` only reaches an assignment whose bin
+   * has vanished. So a source that failed had no way back — which was fine
+   * while `FAILED` meant *the document is not evidence*, and stopped being fine
+   * the moment a real worker followed a real instruction and had every reading
+   * refused for naming fields the validator has never had.
+   */
+  describe('offering a source again', () => {
+    async function anAdministrator(): Promise<string> {
+      const email = `reoffer-${Math.random().toString(36).slice(2, 10)}@example.test`;
+      await createUser({
+        email,
+        displayName: 'Administrator',
+        password: 'correct horse battery staple',
+        isBrainAdmin: true,
+      });
+      return email;
+    }
+
+    /** A source that failed the way production's did: nothing survived validation. */
+    async function aFailedSource(): Promise<string> {
+      const { sourceId } = await registerFixture();
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      // A quote the extracted text does not hold, which is the other way a
+      // reading is refused whole — the production one was an unknown field, and
+      // both land on the same "no candidate survived validation".
+      await submit(binId, 'faculty_01', {
+        definition: definition(),
+        quote: 'nowhere in the text at all here',
+      });
+      await finish(binId);
+      await settleExtraction(sourceId);
+      // The settle leaves it PROPOSED; the audit dispatch is what records that
+      // there is nothing to audit, which is the state production reached.
+      expect(await dispatchAudit(sourceId)).toBeNull();
+      const failed = await getSource(sourceId);
+      expect(failed?.ingestState).toBe('FAILED');
+      expect(failed?.ingestDetail).toMatch(/No candidate survived validation/);
+      return sourceId;
+    }
+
+    it('puts a failed source back, and the next tick dispatches a new bin', async () => {
+      const sourceId = await aFailedSource();
+      const before = await getSource(sourceId);
+
+      const outcome = await reofferSource({
+        sourceId,
+        reason: 'The manifest named connection fields the validator has never had.',
+        requestedByEmail: await anAdministrator(),
+      });
+
+      expect(outcome.reoffered).toBe(true);
+      expect(outcome.source?.ingestState).toBe('REGISTERED');
+      // The next pass hands it out again, which is the whole point.
+      const again = await dispatchExtraction(sourceId);
+      expect(again).not.toBeNull();
+      expect(again).not.toBe(before?.binId);
+    });
+
+    it('destroys nothing: every refusal keeps its row and its reason', async () => {
+      const sourceId = await aFailedSource();
+      const refused = await listCandidates({ sourceId });
+      expect(refused.length).toBeGreaterThan(0);
+      expect(refused.every((row) => row.state === 'REJECTED')).toBe(true);
+
+      await reofferSource({
+        sourceId,
+        reason: 'Brain’s own contract was wrong.',
+        requestedByEmail: await anAdministrator(),
+      });
+
+      const after = await listCandidates({ sourceId });
+      expect(after.map((row) => row.id).sort()).toEqual(refused.map((row) => row.id).sort());
+      expect(after.every((row) => (row.rejectionReason ?? '').length > 0)).toBe(true);
+    });
+
+    /*
+     * The division `surfaceRecovery` draws, at a document. A source whose
+     * extraction never became evidence failed because of its own bytes, and no
+     * correction to a manifest changes that — re-offering it would hand out a
+     * bin, spend a fire and fail identically for ever.
+     */
+    it('refuses a source whose document Brain cannot read, by name', async () => {
+      const sourceId = await aFailedSource();
+      const source = await getSource(sourceId);
+      await getDb().run(
+        `UPDATE extraction_runs SET status = 'BLOCKED' WHERE document_id = ?`,
+        [source?.documentId] as never[],
+      );
+
+      const outcome = await reofferSource({
+        sourceId,
+        reason: 'Trying to recover an unreadable document.',
+        requestedByEmail: await anAdministrator(),
+      });
+
+      expect(outcome.reoffered).toBe(false);
+      expect(outcome.reason).toMatch(/not evidence/);
+      expect(outcome.reason).toMatch(/reprocess or replace/);
+      expect((await getSource(sourceId))?.ingestState).toBe('FAILED');
+    });
+
+    it('refuses a source that is not FAILED, because anything else is already moving', async () => {
+      const { sourceId } = await registerFixture();
+      const outcome = await reofferSource({
+        sourceId,
+        reason: 'Nothing is wrong with this one.',
+        requestedByEmail: await anAdministrator(),
+      });
+      expect(outcome.reoffered).toBe(false);
+      expect(outcome.reason).toMatch(/REGISTERED, not FAILED/);
+    });
+
+    it('is one re-offer however many callers, because FAILED is in the statement', async () => {
+      const sourceId = await aFailedSource();
+      const email = await anAdministrator();
+      const both = await Promise.all([
+        reofferSource({ sourceId, reason: 'first', requestedByEmail: email }),
+        reofferSource({ sourceId, reason: 'second', requestedByEmail: email }),
+      ]);
+      expect(both.filter((one) => one.reoffered)).toHaveLength(1);
+      expect((await getSource(sourceId))?.ingestState).toBe('REGISTERED');
+    });
+
+    it('refuses anybody who is not an enabled administrator of this Brain', async () => {
+      const sourceId = await aFailedSource();
+      const email = `reoffer-member-${Math.random().toString(36).slice(2, 10)}@example.test`;
+      await createUser({
+        email,
+        displayName: 'Member',
+        password: 'correct horse battery staple',
+      });
+
+      await expect(
+        reofferSource({ sourceId, reason: 'let me', requestedByEmail: email }),
+      ).rejects.toThrow(/no enabled administrator/);
+      expect((await getSource(sourceId))?.ingestState).toBe('FAILED');
+    });
+
+    it('refuses a re-offer with no reason, because one records nothing', async () => {
+      const sourceId = await aFailedSource();
+      await expect(
+        reofferSource({ sourceId, reason: '   ', requestedByEmail: await anAdministrator() }),
+      ).rejects.toThrow(/say why/);
     });
   });
 
