@@ -26,6 +26,8 @@
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listProjects } from '../server/repos/projects.ts';
 import { laborView, describeRate } from '../server/services/labor/view.ts';
+import { listOpportunities } from '../server/repos/cashPortfolio.ts';
+import { DELIVERABLE } from '../server/services/labor/derive.ts';
 import { laborSnapshot } from '../server/services/labor/map.ts';
 
 function flag(name: string): string | null {
@@ -48,9 +50,74 @@ function trim(value: string | null | undefined, width = 96): string {
   return flat.length > width ? `${flat.slice(0, width - 1)}…` : flat;
 }
 
+/**
+ * Why this project has no labor map, and what would give it one.
+ *
+ * A report that says *no labor map yet* and stops is the shape this repository
+ * keeps correcting: a state that reads as waiting, with nothing saying what it
+ * is waiting for. There are only four reasons, they are all readable from
+ * rows, and the last of them is the answering transition — a person naming the
+ * work, which is the one origin Brain may never write for itself.
+ *
+ * It reads the portfolio directly rather than through `deriveFromPortfolio`,
+ * because it must say why that function produced nothing without producing
+ * anything itself. The two conditions it reports are the two that function
+ * tests, in its order.
+ */
+async function whyNoMap(projectId: string): Promise<string[]> {
+  const opportunities = await listOpportunities({ projectId });
+  const out: string[] = [];
+
+  if (opportunities.length === 0) {
+    out.push('This project holds no openings, so there is nothing to derive a workflow from.');
+  } else {
+    const deliverable = opportunities.filter((one) => DELIVERABLE.includes(one.state));
+    const states = new Map<string, number>();
+    for (const one of opportunities) states.set(one.state, (states.get(one.state) ?? 0) + 1);
+    const spread = [...states.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([state, count]) => `${state}=${count}`)
+      .join(' ');
+
+    out.push(`${opportunities.length} opening(s): ${spread}.`);
+    if (deliverable.length === 0) {
+      out.push(
+        'None of them has reached a state where the work is committed to — derivation starts ' +
+          `at ${DELIVERABLE[0]}, and an opening below that is evidence about a market ` +
+          'rather than something being produced. There is nothing to allocate yet, and saying ' +
+          'so is the answer rather than a gap.',
+      );
+    } else {
+      const named = deliverable.filter((one) => one.requiredCapabilities.length > 0);
+      out.push(`${deliverable.length} of them is/are past that line.`);
+      if (named.length === 0) {
+        out.push(
+          'None of those names a required capability, and the capability is what a task is ' +
+            'derived from. Answering the card is what fills it.',
+        );
+      }
+    }
+  }
+
+  out.push(
+    'A person may name the work directly instead: POST /api/projects/<id>/labor/workflows, ' +
+      'at ADMIN. SEED is the one origin Brain may never write for itself, because what work ' +
+      'this operation performs is a statement about the world rather than a reading of rows.',
+  );
+  return out;
+}
+
 async function reportProject(projectId: string, projectName: string): Promise<boolean> {
   const view = await laborView(projectId);
-  if (view.tasks === 0 && view.workflows === 0) return false;
+  if (view.tasks === 0 && view.workflows === 0) {
+    const why = await whyNoMap(projectId);
+    console.log('');
+    console.log('='.repeat(100));
+    console.log(`LABOR — ${projectName} (${projectId}) — no map`);
+    console.log('='.repeat(100));
+    for (const line of why) console.log(`  ${line}`);
+    return false;
+  }
 
   console.log('');
   console.log('='.repeat(100));

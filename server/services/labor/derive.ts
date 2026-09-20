@@ -54,7 +54,7 @@ import type { CashOpportunity, CashOpportunityState, LaborTask, LaborWorkflow } 
  * `COLLECTED` is present because a delivered opening is exactly the one whose
  * human remainder is worth measuring afterwards.
  */
-const DELIVERABLE: readonly CashOpportunityState[] = Object.freeze([
+export const DELIVERABLE: readonly CashOpportunityState[] = Object.freeze([
   'EVIDENCE_CARD',
   'READY',
   'EXECUTING',
