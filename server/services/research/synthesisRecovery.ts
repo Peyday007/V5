@@ -67,7 +67,12 @@ import { layerPrefix } from '../storage.ts';
 import { getStorage } from '../storage/index.ts';
 import { safeSegment } from '../storage/keys.ts';
 import { workType } from '../queue/workTypes.ts';
-import { runIdempotent, type OperationNamespace } from '../effects/engine.ts';
+import {
+  OperationConflict,
+  OperationInProgress,
+  runIdempotent,
+  type OperationNamespace,
+} from '../effects/engine.ts';
 import { targetVersionForRun } from '../runArtifacts.ts';
 
 /**
@@ -430,7 +435,24 @@ export async function recoverFailedSynthesis(input: {
   /* ---------------------------------------------------------------------- */
 
   const definition = workType('RESEARCH_SYNTHESIZE');
-  const outcome = await runIdempotent<{ workItemId: string }>(
+  /*
+   * Concurrency has three outcomes here, and all three must be sentences.
+   *
+   * `runIdempotent` *returns* a replay and *throws* for a key already taken or
+   * an equivalent operation still running — which is right for a tool call, and
+   * wrong for an operator command, because a second administrator pressing this
+   * a second apart would get a stack trace instead of an answer. The
+   * requirement is that a repeated or concurrent request returns the existing
+   * replacement or a clear refusal, so the two throws are caught here and
+   * turned into one.
+   *
+   * SQLite serialises its writers, so this branch is only genuinely reachable
+   * on Postgres — which is the seam this repository has been caught by four
+   * times, most recently at the probe claim in §34.
+   */
+  let outcome: Awaited<ReturnType<typeof runIdempotent<{ workItemId: string }>>>;
+  try {
+    outcome = await runIdempotent<{ workItemId: string }>(
     {
       namespace: RECOVER_NAMESPACE,
       projectId: orchestration.projectId,
@@ -460,8 +482,23 @@ export async function recoverFailedSynthesis(input: {
         resultSummary: `Reissued the synthesis for ${orchestration.id}`,
         value: { workItemId: created.id },
       };
-    },
-  );
+      },
+    );
+  } catch (error) {
+    if (error instanceof OperationInProgress || error instanceof OperationConflict) {
+      return {
+        ok: true,
+        status: 'ALREADY_RECOVERED',
+        reason:
+          'Another recovery of this same synthesis is already running or has already run. One ' +
+          'replacement exists for this item and a second would put two live items on one target.',
+        originalWorkItemId: original.id,
+        replacementWorkItemId: error.operation.resultRef,
+        orchestrationId: orchestration.id,
+      };
+    }
+    throw error;
+  }
 
   if (outcome.status !== 'EXECUTED') {
     return {
