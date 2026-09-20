@@ -4538,6 +4538,16 @@ export const COMPLETION_CONTRACTS = [
   // promoted: an unjudged definition that became canonical because nobody got to
   // it is exactly the vacuous satisfaction the candidate stage exists to prevent.
   'BLUEPRINT_AUDIT_V1',
+  // A rendered interface, judged by somebody who did not build it. The measured
+  // lane has already reported everything geometry settles — clipping, overflow,
+  // a control covered at its own centre — so this contract is only for the half
+  // that needs a reader: whether the screen emphasises what matters, whether the
+  // grouping follows the material, and whether a sentence on the screen
+  // contradicts a control beside it. The submission is validated exactly, and a
+  // judgement submitted under a *measured* kind's name is refused, because a
+  // view wearing a measurement's name cannot be argued with afterwards. See
+  // `services/design/judge.ts`.
+  'DESIGN_REVIEW_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 

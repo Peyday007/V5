@@ -849,7 +849,58 @@ const EVALUATORS: Record<string, Evaluator> = {
   FACTORY_UNITS_V1: evaluateFactoryUnits,
   FACTORY_INTEGRATION_V1: evaluateFactoryIntegration,
   FACTORY_DELIVERY_V1: evaluateFactoryDelivery,
+  DESIGN_REVIEW_V1: evaluateDesignReview,
 };
+
+/**
+ * One design review, answered.
+ *
+ * Shallow, for `evaluateRussellLens`' reason and with the same consequence: this
+ * decides only whether the *bin* may finish, and every judgement about whether a
+ * finding survives happens in `services/design/judge.ts` after the lease is
+ * gone. Validating the findings here would charge an attempt against a worker
+ * whose review was fine and whose third finding named a field this contract does
+ * not define.
+ *
+ * A `CLEAN` verdict with an empty `findings` array is a **pass**. "I read it and
+ * there is nothing worth changing" is the answer a healthy screen has, and a
+ * contract that refused it would be paying for pessimism — the same mistake in
+ * the opposite direction from the one the lens evaluator names.
+ */
+async function evaluateDesignReview(bin: Bin): Promise<ContractVerdict> {
+  const results = await listBinUnitResults(bin.id);
+  const submitted = results.find((row) => row.unitKey === 'design_review');
+  const observed = { unitsSubmitted: results.length, hasReview: Boolean(submitted) };
+
+  if (!submitted) {
+    return refuse(
+      'RETRY',
+      ['No review was submitted, so nothing was judged about the rendered surfaces.'],
+      observed,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(submitted.value);
+  } catch {
+    return refuse('RETRY', ['The review was not valid JSON.'], observed);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return refuse('RETRY', ['The review was not a structured object.'], observed);
+  }
+  const body = parsed as Record<string, unknown>;
+  if (body['verdict'] !== 'CLEAN' && body['verdict'] !== 'CHANGES_REQUIRED') {
+    return refuse(
+      'RETRY',
+      ['The review named no verdict, so it does not say whether anything should change.'],
+      observed,
+    );
+  }
+  if (!Array.isArray(body['findings'])) {
+    return refuse('RETRY', ['The review carried no "findings" array.'], observed);
+  }
+  return satisfied(observed);
+}
 
 /**
  * One conversation turn: is there a proposal, and is it structurally a proposal?

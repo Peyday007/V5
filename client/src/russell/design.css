@@ -34,7 +34,12 @@
   --surface-sunk: #e9edf1;
   --ink: #141c26;
   --ink-soft: #44535f;
-  --ink-faint: #74838f;
+  /* 5.48:1 on --surface, 4.97:1 on --paper, 4.66:1 on --surface-sunk.
+     Raised from #74838f, which measured 3.90 / 3.54 / 3.31 — under the 4.5:1
+     floor on all three, at every size this token is used at. Found by the
+     design kernel's first real run and verified against the computed
+     luminances rather than by eye; see docs/DESIGN-KERNEL.md. */
+  --ink-faint: #5c6b78;
   --rule: #d3dae1;
   --rule-soft: #e3e8ed;
 
@@ -100,7 +105,7 @@
     --surface-sunk: #111923;
     --ink: #e6ebf0;
     --ink-soft: #a3b1be;
-    --ink-faint: #74838f;
+    --ink-faint: #8b99a5;
     --rule: #2a3744;
     --rule-soft: #1f2a35;
 
@@ -129,7 +134,7 @@
   --surface-sunk: #111923;
   --ink: #e6ebf0;
   --ink-soft: #a3b1be;
-  --ink-faint: #74838f;
+  --ink-faint: #8b99a5;
   --rule: #2a3744;
   --rule-soft: #1f2a35;
   --verdigris: #55b49c;
