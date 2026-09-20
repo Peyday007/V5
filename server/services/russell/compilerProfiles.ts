@@ -42,6 +42,7 @@ export type CompilerProfileId =
   | 'COMMERCIAL_VALIDATION'
   | 'INDUSTRY_STRUCTURE'
   | 'CAPITAL_STRUCTURE'
+  | 'LABOR_ALLOCATION'
   | 'MACHINE_LADDER'
   | 'MACHINE_DEMAND'
   | 'MACHINE_CAPABILITY';
@@ -776,6 +777,140 @@ const CAPITAL_STRUCTURE: CompilerProfile = {
 };
 
 /**
+ * Who may produce one output, and what obtaining that capability costs.
+ *
+ * The profile whose most valuable lane is the one that can come back empty.
+ * `permission` asks what rule requires a person, and an established *absence*
+ * of such a rule is what lets a role be compressed — so the lane's description
+ * says so, and the completion standard asks for the search rather than for the
+ * conclusion. §14's own standard for a negative, at the question that decides
+ * whether somebody is employed.
+ */
+const LABOR_ALLOCATION: CompilerProfile = {
+  id: 'LABOR_ALLOCATION',
+  fragmentKey: 'labor-allocation',
+  // A rule about who may do this work is jurisdictional, and a question about
+  // two jurisdictions is a question about two rules rather than an
+  // indecipherable one. Described rather than refused, for the reason market
+  // discovery describes: refusing would refuse work the envelope exists to
+  // permit.
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Behind the industry map and ahead of a broad search.
+   *
+   * It is downstream of finding the work — there is nothing to allocate until
+   * something is being delivered — and upstream of looking for more, because
+   * every opening already found is being produced by somebody today.
+   */
+  launchOrdinal: 350,
+  proposedSources: [
+    'a statute, regulation or administrative rule stating who may perform work of this kind',
+    'a licensing board, registrar or professional body’s own published requirements',
+    'a government occupational classification or labour-statistics publication',
+    'a trade association, industry body or trade publication',
+    'a buyer’s own published terms, procurement rules or supplier requirements',
+    'a platform’s or marketplace’s published terms of service',
+    'a published rate card, price list, fee schedule or salary survey',
+    'a marketplace, job board, agency or staffing listing stating a published rate',
+    'a vendor’s or service’s own published pricing page',
+  ],
+  excludedSources: [
+    'a requirement asserted with no source that states it',
+    'a rule quoted without the jurisdiction it applies in',
+    'a vendor claim about its own product used as evidence that the product works',
+    'a rate with no stated basis, or one inferred from a total',
+    'a forecast or projection presented as a current fact',
+  ],
+  lanes: [
+    {
+      id: 'permission',
+      // One regulator stating a rule proves that regulator states it. Demanding
+      // a second publisher for "this board requires a licence" demands
+      // something that does not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What published rules say about who may produce this: a licence, certification, ' +
+        'registration, signature or accountable human review required by a statute, a ' +
+        'regulator, a buyer’s own terms or a platform’s terms, and whether any part must be ' +
+        'performed in person. Declare each with labor_finding set to HUMAN_REQUIREMENT and ' +
+        'labor_subject set to which reason it is. An established absence — you searched the ' +
+        'places such a rule would be published and found none — is a finding here and often ' +
+        'the most valuable one, so name what you searched.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'sourcing',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Where this capability is actually obtained and what a source says it costs: which ' +
+        'channels supply it, in which jurisdictions, at which published rates and on what ' +
+        'basis. Declare each with labor_finding set to SOURCING_CHANNEL, labor_subject set to ' +
+        'the channel, and labor_rate_cents with labor_qualifier only where a source publishes ' +
+        'a figure. A channel with no published rate is still worth recording.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'automation',
+      description:
+        'Whether this work is published anywhere as being done by software rather than by a ' +
+        'person, and what those sources say about how the output was checked and what ' +
+        'remained for a person. Declared as a SOURCING_CHANNEL of SOFTWARE_TOOL or ' +
+        'MANAGED_SERVICE. A vendor’s claim about its own product is conclusive about what the ' +
+        'vendor says and is not evidence that it works.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'total_cost',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'What published sources say about the things that decide total cost rather than ' +
+        'headline rate: supervision burden, turnover, rework and revision rates, timezone and ' +
+        'communication overhead, training time, and any regulatory or data-access restriction ' +
+        'on who may do this work from where. Kept separate from the rate, because "this ' +
+        'channel charges X" and "this is what it actually costs to use" are two claims with ' +
+        'two standards.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source states any rule about who may perform this work, and the places such ' +
+      'a rule would be published were searched and named — which is recorded as an established ' +
+      'absence rather than as a failure.',
+    'Rules can be found but every one of them is quoted without the jurisdiction it applies ' +
+      'in, so nothing establishes anything about anywhere.',
+    'Channels can be described in general but nothing published states a rate for any of them.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which jurisdiction each ` +
+        'requirement is from; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every requirement is declared on its claim with labor_finding set to HUMAN_REQUIREMENT ' +
+      'and labor_subject set to which of the six reasons it is, and every channel with ' +
+      'SOURCING_CHANNEL naming which channel. A rule described in prose and not declared moves ' +
+      'nothing.',
+    'Every requirement says which jurisdiction it applies in. A licensing rule quoted without ' +
+      'one is not a finding about anywhere.',
+    'A rate is read from a source and never produced. Where nothing publishes one, the channel ' +
+      'is recorded with no rate and no basis. Do not estimate, do not convert, and do not ' +
+      'infer a basis from a total.',
+    'An absence is established by a documented search rather than by silence: say which ' +
+      'registers, boards, statutes or terms you looked in and what you did not find. Do not ' +
+      'conclude that no rule exists because you did not encounter one.',
+    'A vendor or platform is conclusive about what it says and is not independent confirmation ' +
+      'that what it says is true. Say which it is for every claim resting on one.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market or jurisdiction it is about. Where that is not ${scope}, ` +
+      'it is reported as being about somewhere else rather than generalized.',
+    'Nothing here contacts, approaches, quotes for or engages anybody. If answering a question ' +
+      'would require doing any of that, it is recorded as unresolved with the reason.',
+  ],
+};
+
+/**
  * Which classes of machine the sources recognise, and how they relate.
  *
  * The shortest of the three manufacturing profiles, because its job is narrow:
@@ -1120,6 +1255,7 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_CASH_VALIDATION_V1: COMMERCIAL_VALIDATION,
   RUSSELL_INDUSTRY_MAP_V1: INDUSTRY_STRUCTURE,
   RUSSELL_CAPITAL_STRUCTURE_V1: CAPITAL_STRUCTURE,
+  RUSSELL_LABOR_ALLOCATION_V1: LABOR_ALLOCATION,
   RUSSELL_MACHINE_LADDER_V1: MACHINE_LADDER,
   RUSSELL_MACHINE_DEMAND_V1: MACHINE_DEMAND,
   RUSSELL_MACHINE_CAPABILITY_V1: MACHINE_CAPABILITY,

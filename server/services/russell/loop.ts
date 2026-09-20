@@ -138,6 +138,7 @@ import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
+import { runLaborKernel } from '../labor/kernel.ts';
 import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
@@ -423,6 +424,24 @@ export interface TickReport {
     settled: string[];
   }[];
   /**
+   * What the labor kernel did: what the portfolio produced, what Brain could
+   * settle from its own rows, what it asked and why, and what came back.
+   *
+   * `decided` carries both the layer and the reason, because a task that
+   * became Brain's and a task whose human role was finally established are two
+   * different events and a count of "decisions" would read as one.
+   */
+  laborKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    workflows: string[];
+    tasks: string[];
+    decided: { taskId: string; layer: string; reason: string | null }[];
+    answers: string[];
+    options: string[];
+    settled: string[];
+  }[];
+  /**
    * What the manufacturing kernel did: which questions it opened and why, and
    * what the finished ones added to the ladder.
    *
@@ -531,6 +550,7 @@ const EMPTY: TickReport = {
   lensInquiries: { dispatched: 0, settled: 0 },
   cashDiscovery: [],
   industryKernel: [],
+  laborKernel: [],
   manufacturingKernel: [],
   cashOperations: [],
   sharedPromoted: [],
@@ -615,6 +635,7 @@ export async function tick(owner: string): Promise<TickReport> {
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
     industryKernel: [],
+    laborKernel: [],
     manufacturingKernel: [],
     cashOperations: [],
     sharedPromoted: [],
@@ -1260,6 +1281,62 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a map that could not be advanced is left exactly as it was */
+      }
+
+      try {
+        /*
+         * And the axis that says who or what actually produces the work.
+         *
+         * §38's kernel says *where* to look; this one says *by whom it is
+         * done*. Brain knew what it wanted to produce and held no row saying
+         * who produced it — the nearest thing was one free-text line per
+         * opening, with no vocabulary, no test and no way to ask the question
+         * across a portfolio.
+         *
+         * Its own `try`, for the reason the block above has one: a labor pass
+         * that threw must not stop a sprint harvesting or settling a need. It
+         * is derived from rows on every tick, so a portfolio qualified before
+         * it existed gets a labor map with nobody pressing anything, and it is
+         * bounded by how many questions may be open at once rather than by any
+         * lifetime count.
+         *
+         * Nothing it creates bypasses anything, and nothing it decides engages
+         * anybody: a labor round is a Russell candidate that goes through the
+         * archive check, the compiler, the approval envelope, the evidence
+         * gate and all three audit roles, and its envelope forbids contacting,
+         * quoting for or hiring anyone by name.
+         */
+        const labor = await runLaborKernel(project.id);
+        if (
+          labor.opened.length > 0 ||
+          labor.decided.length > 0 ||
+          labor.derived.workflows.length > 0 ||
+          labor.derived.tasks.length > 0 ||
+          labor.absorbed.answers.length > 0 ||
+          labor.absorbed.options.length > 0 ||
+          labor.absorbed.settled.length > 0
+        ) {
+          report.laborKernel.push({
+            projectId: project.id,
+            opened: labor.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            workflows: labor.derived.workflows.map((one) => one.id),
+            tasks: labor.derived.tasks.map((one) => one.id),
+            decided: labor.decided.map((one) => ({
+              taskId: one.taskId,
+              layer: one.productionLayer,
+              reason: one.necessityReason,
+            })),
+            answers: labor.absorbed.answers.map((one) => one.id),
+            options: labor.absorbed.options.map((one) => one.id),
+            settled: labor.absorbed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a labor map that could not be advanced is left exactly as it was */
       }
 
       try {

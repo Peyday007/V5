@@ -75,11 +75,21 @@ import { countProvenPasskeys } from '../../repos/passkeys.ts';
  * One sentence for every way of failing at the password door.
  *
  * It names the ordinary way in rather than the reason this attempt failed, so
- * somebody who has simply forgotten that this Brain moved to devices is told
- * what to do, and somebody probing is told nothing.
+ * somebody who has simply forgotten how this Brain signs people in is told what
+ * to do, and somebody probing is told nothing.
+ *
+ * **It named the wrong way in for a while, and that is worth recording rather
+ * than quietly editing.** It said *"this Brain signs people in with their
+ * device"* — true when it was written, and false from the moment the ordinary
+ * credential became a PIN. A refusal that names a remedy has to be re-read
+ * every time the remedy moves, or it becomes the most confidently wrong
+ * sentence on the surface: the person most likely to see it is the one who has
+ * mistyped their password *at the recovery door*, on their way to creating a
+ * PIN, and telling them to use a device is sending them back to the thing that
+ * locked them out.
  */
 export const PASSWORD_DOOR_REFUSED =
-  'Those credentials were not accepted. This Brain signs people in with their device.';
+  'Those credentials were not accepted. This Brain signs people in with a six-digit PIN.';
 
 /** Set in the deployment's own secrets, read per request, off by default. */
 export function breakGlassArmed(): boolean {
