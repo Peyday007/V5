@@ -188,6 +188,19 @@ export const Passkeys = {
     });
   },
 
+  /**
+   * Spend the link on a PIN instead of a device.
+   *
+   * It lives here beside `enrol` because it is the same link being spent, and
+   * a second module for it would be a second place the token travels through.
+   * The token is in the body, never a path — it reached this browser in the URL
+   * fragment, which is not sent to any server and not written to any access
+   * log, and putting it into a path here would undo that.
+   */
+  enrolWithPin(token: string, pin: string): Promise<{ user: { id: string; displayName: string } }> {
+    return call<{ user: { id: string; displayName: string } }>('/api/enroll/pin', { token, pin });
+  },
+
   async signIn(): Promise<{ user: { id: string; displayName: string } }> {
     const options = await call<AuthenticationOptions>('/api/auth/passkey/options', {});
     const assertion = await getAssertion(options);

@@ -3973,6 +3973,21 @@ export interface UserRow {
   password_algorithm: string | null;
   password_verifier: string | null;
   password_updated_at: string | null;
+  /**
+   * The six-digit PIN, as a verifier. Null until this account has set one.
+   *
+   * Beside the password rather than instead of it: the password is what
+   * `/recovery` accepts to let somebody set or reset this, and the PIN is what
+   * the ordinary sign-in screen asks for. See migration 078.
+   */
+  pin_algorithm: string | null;
+  pin_verifier: string | null;
+  pin_updated_at: string | null;
+  /** Consecutive failures since the last success. Rows, not memory: a restart
+   *  must not hand an attacker their budget back. */
+  pin_failed_count: number;
+  /** When the cooldown ends, or null. Compared to the clock, never scheduled. */
+  pin_locked_until: string | null;
   must_change_password: number;
   is_brain_admin: number;
   disabled_at: string | null;
@@ -4189,6 +4204,8 @@ export interface User {
   disabledAt: string | null;
   /** Null when this account has never had a password. */
   passwordUpdatedAt: string | null;
+  /** Null when this account has never set a PIN; never the PIN or its verifier. */
+  pinUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

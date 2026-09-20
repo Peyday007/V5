@@ -17,14 +17,18 @@
  * **There is no password field, and there is no email field.** That is the
  * feature rather than an omission: an address exists to recover a password, and
  * there is no password here to recover.
+ *
+ * **It ends in a PIN rather than a device**, and the correction is worth
+ * recording. WebAuthn answers every refusal with one sentence — *"the
+ * operation either timed out or was not allowed"* — and the browser that
+ * refuses cannot be argued with. This Brain's owner met exactly that on a
+ * screen whose only control was the device button, and could not get in. A
+ * journey whose last step can be refused with no alternative is one that
+ * strands people, so the last step is six digits. A device can be added
+ * afterwards, from *Your devices*, and nothing requires one.
  */
 import { useCallback, useEffect, useState } from 'react';
-import {
-  PASSKEY_UNSUPPORTED,
-  Passkeys,
-  passkeysAvailable,
-  type EnrollmentPreview,
-} from '../lib/passkeys.ts';
+import { Passkeys, type EnrollmentPreview } from '../lib/passkeys.ts';
 
 function describe(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -44,7 +48,8 @@ export function Enrol({ onEnrolled }: { onEnrolled: () => void }): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [label, setLabel] = useState('This device');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
 
   useEffect(() => {
     if (!token) {
@@ -70,17 +75,31 @@ export function Enrol({ onEnrolled }: { onEnrolled: () => void }): JSX.Element {
     };
   }, [token]);
 
-  const register = useCallback(() => {
+  /**
+   * Spend the link on a PIN.
+   *
+   * It used to spend it on a device, and that is what locked this Brain's
+   * owner out: WebAuthn answers every refusal with one sentence, the browser
+   * that refuses cannot be argued with, and there was nothing else on the
+   * screen. Six digits cannot be refused by any device, so that is what the
+   * journey ends in. Registering a device is still possible afterwards, from
+   * *Your devices*, and is optional.
+   */
+  const createPin = useCallback(() => {
+    if (pin !== confirmPin) {
+      setError('Those two PINs are not the same.');
+      return;
+    }
     setBusy(true);
     setError(null);
-    Passkeys.enrol(token, label.trim() || 'This device').then(
+    Passkeys.enrolWithPin(token, pin).then(
       () => onEnrolled(),
       (failure) => {
         setError(describe(failure));
         setBusy(false);
       },
     );
-  }, [token, label, onEnrolled]);
+  }, [token, pin, confirmPin, onEnrolled]);
 
   if (loading) return <div className="rs-boot">Checking your link…</div>;
 
@@ -103,13 +122,14 @@ export function Enrol({ onEnrolled }: { onEnrolled: () => void }): JSX.Element {
       </p>
       {recovery ? (
         <p className="rs-enrol-note">
-          Your previous device has already been taken out of service. Registering here replaces it.
+          Whatever you were signing in with before has already been taken out of service. What you
+          set here replaces it.
         </p>
       ) : (
         <>
           <p className="rs-enrol-note">
-            Brain has no password and asks for no email address. You sign in with this device — its
-            fingerprint, face or screen lock — and you can add more devices later.
+            Brain has no password and asks for no email address. You choose a six-digit PIN, and
+            that is what you sign in with from now on.
           </p>
           {/*
             * What happens next, said here rather than discovered later.
@@ -128,24 +148,45 @@ export function Enrol({ onEnrolled }: { onEnrolled: () => void }): JSX.Element {
         </>
       )}
 
-      <label className="rs-enrol-label" htmlFor="device-label">
-        What to call this device
+      <label className="rs-enrol-label" htmlFor="enrol-pin">
+        Choose a six-digit PIN
       </label>
       <input
-        id="device-label"
+        id="enrol-pin"
         className="rs-enrol-input"
-        value={label}
-        onChange={(event) => setLabel(event.target.value)}
+        type="password"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        autoComplete="new-password"
+        maxLength={6}
+        value={pin}
+        onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
         disabled={busy}
       />
 
-      {passkeysAvailable() ? (
-        <button className="rs-enrol-go" onClick={register} disabled={busy}>
-          {busy ? 'Waiting for your device…' : 'Register this device'}
-        </button>
-      ) : (
-        <p className="rs-enrol-error">{PASSKEY_UNSUPPORTED}</p>
-      )}
+      <label className="rs-enrol-label" htmlFor="enrol-pin-confirm">
+        Confirm your PIN
+      </label>
+      <input
+        id="enrol-pin-confirm"
+        className="rs-enrol-input"
+        type="password"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        autoComplete="new-password"
+        maxLength={6}
+        value={confirmPin}
+        onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+        disabled={busy}
+      />
+
+      <button
+        className="rs-enrol-go"
+        onClick={createPin}
+        disabled={busy || pin.length !== 6 || confirmPin.length !== 6}
+      >
+        {busy ? 'Saving…' : 'Save and enter Brain'}
+      </button>
 
       {error ? <p className="rs-enrol-error">{error}</p> : null}
       <p className="rs-enrol-expiry">

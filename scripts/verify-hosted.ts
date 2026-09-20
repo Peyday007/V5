@@ -717,22 +717,25 @@ async function anonymousIsRefused(fixtures: Fixtures): Promise<void> {
  * What an unauthenticated person is actually served.
  *
  * The rest of this script asks the API questions. This asks the **bundle**,
- * because the defect it exists for was a screen: `SignIn.tsx` rendered an
- * address and a password under the device button, and no API check could ever
- * have seen it — the route it posted to went on working perfectly, which is
- * exactly why it survived.
+ * because both defects it has been written for were screens that no API check
+ * could see.
+ *
+ * The first was a password form under a device button. The second was the
+ * device button with nothing beside it: `/api/auth/passkey/verify` worked
+ * perfectly the whole time, and the owner still could not get in, because
+ * their browser refused the WebAuthn operation and the screen had no second
+ * control. **A door that only one kind of hardware can open is a locked door
+ * to everybody else**, and the API cannot tell you that.
  *
  * Read from the served assets rather than from the repository, so what is
  * asserted is what this deployment hands a browser rather than what the tree it
- * was built from says. §33 records why that distinction earns its place here:
- * the one change that reached every fixture in `tests/` and not this script was
- * the one that failed in production with the whole suite green.
+ * was built from says. §33 records why that distinction earns its place here.
  *
- * It classifies rather than bans. A bundle may contain the word *password* —
- * the recovery screen is in it, deliberately — so what is looked for is the
- * sign-in screen's own removed words, which nothing else composes.
+ * It classifies rather than bans. A bundle contains the enrolment and device
+ * screens deliberately, so what is looked for is the sign-in screen's own
+ * words: the PIN it must ask for, and the device sign-in it must not.
  */
-async function signInSurfaceIsDeviceOnly(): Promise<void> {
+async function signInSurfaceAsksForAPin(): Promise<void> {
   console.log('\nThe sign-in screen, as it is served');
 
   const index = await fetch(`${base}/`, { redirect: 'manual' });
@@ -752,23 +755,43 @@ async function signInSurfaceIsDeviceOnly(): Promise<void> {
   record('the script itself is served', bundle.length > 0, `${bundle.length} bytes`);
   if (bundle.length === 0) return;
 
-  record(
-    'the sign-in screen offers a device',
-    bundle.includes('SIGN IN WITH YOUR DEVICE'),
-    bundle.includes('SIGN IN WITH YOUR DEVICE') ? 'present' : 'the one way in is missing',
-  );
-  for (const phrase of ['OR WITH A PASSWORD', 'WAITING FOR YOUR DEVICE']) {
+  for (const phrase of ['SIX-DIGIT PIN', 'YOUR NAME OR EMAIL']) {
     const present = bundle.includes(phrase);
-    if (phrase === 'OR WITH A PASSWORD') {
-      record(
-        'the sign-in screen offers no password beside it',
-        !present,
-        present ? 'the password alternative is still being served' : 'absent',
-      );
-    } else {
-      record('the device button reports what it is waiting for', present, present ? '' : 'absent');
-    }
+    record(
+      `the sign-in screen asks for ${phrase.toLowerCase()}`,
+      present,
+      present ? 'present' : 'the ordinary way in is missing from the served bundle',
+    );
   }
+
+  const deviceButton = bundle.includes('SIGN IN WITH YOUR DEVICE');
+  record(
+    'the sign-in screen demands no device',
+    !deviceButton,
+    deviceButton
+      ? 'SIGN IN WITH YOUR DEVICE is still being served, so a browser that refuses WebAuthn is still locked out'
+      : 'absent',
+  );
+
+  const passwordAlternative = bundle.includes('OR WITH A PASSWORD');
+  record(
+    'the sign-in screen offers no password beside it',
+    !passwordAlternative,
+    passwordAlternative ? 'the password alternative is still being served' : 'absent',
+  );
+
+  // And the door itself answers, from outside any session. An unknown identity
+  // is refused rather than erroring, which is what says the route is wired.
+  const probe = await call('/api/auth/pin', {
+    method: 'POST',
+    origin: base,
+    body: { identity: 'nobody-at-all@brain.invalid', pin: '000000' },
+  });
+  record(
+    'the PIN door answers an unknown identity with a refusal',
+    probe.status === 401,
+    `${probe.status}`,
+  );
 }
 
 async function humanAuthentication(fixtures: Fixtures): Promise<string> {
@@ -3810,7 +3833,7 @@ async function main(): Promise<void> {
     if (phase === 'check' || phase === 'both') await checkFactoryBeacon(phase === 'check');
 
     await anonymousIsRefused(fixtures);
-    await signInSurfaceIsDeviceOnly();
+    await signInSurfaceAsksForAPin();
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await sharedCashBoundary(fixtures, cookie);
