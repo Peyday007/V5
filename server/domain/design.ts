@@ -563,3 +563,32 @@ export interface DesignExpansion {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * Which half of a cycle a bin was opened for.
+ *
+ * `RENDER` asks a machine with a browser to look; `REVIEW` asks a reader to
+ * judge what looking produced. They are two different absences with two
+ * different remedies, which is why a cycle sitting `OPEN` is ambiguous without
+ * one of these rows and why `pendingCycles` used to have to guess.
+ */
+export const DESIGN_REQUEST_KINDS = ['RENDER', 'REVIEW'] as const;
+export type DesignRequestKind = (typeof DESIGN_REQUEST_KINDS)[number];
+
+export function isDesignRequestKind(value: string): value is DesignRequestKind {
+  return (DESIGN_REQUEST_KINDS as readonly string[]).includes(value);
+}
+
+/** What a design bin was asked about, written when the question is asked. */
+export interface DesignBinRequest {
+  binId: string;
+  cycleId: string;
+  pass: number;
+  kind: DesignRequestKind;
+  surfaceKeys: string[];
+  revision: string | null;
+  /** The capture set a REVIEW was briefed on. Null on a RENDER, by CHECK. */
+  captureDigest: string | null;
+  captureCount: number;
+  createdAt: string;
+}

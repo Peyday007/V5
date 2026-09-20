@@ -19,8 +19,17 @@
  * own (§24), so a view about a screen arrives the way every other model
  * judgement in this codebase arrives — a fired worker, a validated submission,
  * recorded lineage. That means a cycle wanting a judgement **opens the bin and
- * leaves the pass open**; `advanceDesignCycles` on the tick is what reads the
- * answer, which is also what makes the loop survive a restart.
+ * leaves the pass open**; the tick is what reads the answer, which is also
+ * what makes the loop survive a restart.
+ *
+ * An earlier version of this paragraph named `advanceDesignCycles` as the thing
+ * that read it back, and **there was no such function**: nothing anywhere in the
+ * server opened a review bin at all, so the entire judged lane was reachable
+ * only from a test. The correction is recorded rather than quietly applied,
+ * because the sentence was right about the design and wrong about the code —
+ * which is exactly the shape this repository keeps having to catch. It is
+ * `settleJudgedCycles` in `kernel.ts` now, beside the render lane that gets the
+ * captures to it in the first place.
  *
  * ---------------------------------------------------------------------------
  * The stopping condition is the point of the whole module
@@ -74,6 +83,8 @@ import { captureSurfaces, digestCaptures, type CaptureOutcome } from './capture.
 import { evaluateCaptures, summarise, type EvaluationSummary } from './evaluate.ts';
 import { resolveSurfaces } from './surfaces.ts';
 import { probeRenderRuntime } from './renderRuntime.ts';
+import { openDesignReview } from './judge.ts';
+import { designProject } from './scope.ts';
 
 /**
  * How many render-evaluate-repair rounds one cycle may spend.
@@ -188,15 +199,39 @@ export async function runPass(input: PassInput): Promise<PassResult> {
     satisfied: input.satisfied,
   });
 
+  const measured = await measurePass({ cycle, pass, captures: outcome.captures });
+  return { ...measured, skipped: outcome.skipped };
+}
+
+/**
+ * Measure a capture set, record what was concluded, and settle what is gone.
+ *
+ * Split out of `runPass` because there are two ways a capture set arrives and
+ * only one of them happens here. A local run renders and measures in one
+ * process; a **render bin** is rendered by a worker somewhere with a browser and
+ * arrives as rows (`services/design/render.ts`). Both then need exactly this —
+ * the same evaluation, the same three capability observations, the same measured
+ * review row, the same closing of findings a later capture no longer shows.
+ *
+ * One function rather than two that agree: this repository has recorded the
+ * cost of the second arrangement five times, and the two readers here would
+ * disagree about whether a remote render counts as having rendered anything.
+ */
+export async function measurePass(input: {
+  cycle: DesignCycle;
+  pass: number;
+  captures: readonly DesignCapture[];
+}): Promise<Omit<PassResult, 'skipped'>> {
+  const { cycle, pass } = input;
   const evaluation = await evaluateCaptures({
     cycleId: cycle.id,
     pass,
-    captures: outcome.captures,
+    captures: input.captures,
   });
 
   await observeCapability({
     capabilityKey: 'RENDER_REAL_INTERFACE',
-    failed: outcome.captures.length === 0,
+    failed: input.captures.length === 0,
     evidenceRef: cycle.id,
   });
   await observeCapability({
@@ -228,7 +263,7 @@ export async function runPass(input: PassInput): Promise<PassResult> {
    * found nothing — a clean pass with no row would be indistinguishable from a
    * pass that never ran.
    */
-  const digest = digestCaptures(outcome.captures);
+  const digest = digestCaptures(input.captures);
   const summary = summarise(evaluation);
   await recordReview({
     cycleId: cycle.id,
@@ -242,12 +277,11 @@ export async function runPass(input: PassInput): Promise<PassResult> {
     findingsCount: evaluation.findings.length,
   });
 
-  const closed = pass > 0 ? await closeWhatIsGone(cycle, outcome.captures, pass) : [];
+  const closed = pass > 0 ? await closeWhatIsGone(cycle, input.captures, pass) : [];
 
   return {
     pass,
-    captures: outcome.captures,
-    skipped: outcome.skipped,
+    captures: [...input.captures],
     findings: evaluation.findings,
     summary,
     captureDigest: digest.digest,
@@ -326,14 +360,35 @@ export interface CycleInput {
   capture?: PassInput['capture'];
   /** Set when the caller wants the tree it rendered recorded on the cycle. */
   revision?: string | null;
+  /**
+   * Ask the fleet for the half measurement cannot settle, and leave the cycle
+   * open for the tick to close.
+   *
+   * Off by default, and that is honest rather than conservative: a local run
+   * against a throwaway database has no fleet to answer a bin, so a cycle left
+   * open there would wait for ever. Turned on when the database this is writing
+   * to is one the fleet actually serves.
+   */
+  judge?: boolean;
 }
 
 export interface CycleResult {
   cycle: DesignCycle;
   passes: PassResult[];
   repairs: RepairAttempt[];
+  /** What the measured loop concluded. The cycle may still be open — see below. */
   stopReason: DesignStopReason;
   stopDetail: string;
+  /**
+   * The review bin this run opened, when it opened one.
+   *
+   * Non-null means the cycle is **still open** and `stopReason` is what the
+   * measured half concluded rather than how the cycle ended: the judgement is
+   * outstanding, and `settleJudgedCycles` on the tick is what closes it. A
+   * caller that printed `stopReason` as the outcome without reading this would
+   * be reporting a cycle as finished while a worker was still being asked.
+   */
+  awaitingJudgement: { binId: string; pass: number } | null;
   /** Findings left open when it stopped. Never emptied to look finished. */
   unresolved: DesignFinding[];
 }
@@ -397,6 +452,7 @@ async function driveCycle(
       repairs: [],
       stopReason: 'NO_RENDER_RUNTIME',
       stopDetail: detail,
+      awaitingJudgement: null,
       unresolved: [],
     };
   }
@@ -413,6 +469,7 @@ async function driveCycle(
       repairs: [],
       stopReason: 'ABANDONED',
       stopDetail: detail,
+      awaitingJudgement: null,
       unresolved: [],
     };
   }
@@ -514,34 +571,81 @@ async function driveCycle(
     current = (await getCycle(current.id))!;
   }
 
-  await closeCycle({ id: current.id, stopReason, stopDetail });
-  const unresolved = await listFindings({ cycleId: current.id, state: 'OPEN', limit: 500 });
-
   /*
-   * A cycle that stopped with findings open marks them UNRESOLVED rather than
-   * leaving them OPEN for ever. The distinction is the one §12 draws: the work
-   * stopped, and the finding is still true — so it is a thing somebody has to
-   * answer rather than a thing this loop is still working on.
+   * Ask for the judgement, and leave the cycle open for the tick to close.
+   *
+   * Only when the caller said to, because the caller is the one that knows
+   * whether this database has a fleet behind it. A local run against a throwaway
+   * directory has none, so a bin opened there would be a cycle that never closes
+   * and a person watching a screen that never changes — which is precisely the
+   * park §24 refuses, arrived at by being over-eager rather than by forgetting.
    */
+  const last = passes[passes.length - 1];
+  let awaitingJudgement: CycleResult['awaitingJudgement'] = null;
+  if (input.judge === true && last && last.captures.length > 0) {
+    const projectId = await designProject();
+    if (projectId) {
+      const binId = await openDesignReview({
+        cycle: current,
+        pass: last.pass,
+        projectId,
+        surfaces,
+        captures: last.captures,
+      });
+      awaitingJudgement = { binId, pass: last.pass };
+    }
+  }
+
+  const unresolved = awaitingJudgement
+    ? await listFindings({ cycleId: current.id, state: 'OPEN', limit: 500 })
+    : await settleCycleNow(current, stopReason, stopDetail);
+
+  return {
+    cycle: (await getCycle(current.id))!,
+    passes,
+    repairs,
+    awaitingJudgement,
+    stopReason,
+    stopDetail,
+    unresolved,
+  };
+}
+
+/**
+ * Close a cycle and say what happened to what was still open.
+ *
+ * Extracted because there are two ways a cycle ends and only one of them is a
+ * local run finishing its loop. The other is the **tick**, reading back a
+ * judgement that arrived hours later from a fleet worker (`kernel.ts`), and a
+ * cycle closed by that path has to leave exactly the same rows behind — the
+ * same stop reason, the same UNRESOLVED findings, the same refusal to empty
+ * them. Two implementations of that would be the arrangement this repository
+ * has recorded the cost of five times.
+ *
+ * A cycle that stopped with findings open marks them UNRESOLVED rather than
+ * leaving them OPEN for ever. §12's distinction: the work stopped and the
+ * finding is still true, so it is a thing somebody has to answer rather than a
+ * thing this loop is still working on.
+ */
+export async function settleCycleNow(
+  cycle: DesignCycle,
+  stopReason: DesignStopReason,
+  stopDetail: string,
+): Promise<DesignFinding[]> {
+  await closeCycle({ id: cycle.id, stopReason, stopDetail });
+  const unresolved = await listFindings({ cycleId: cycle.id, state: 'OPEN', limit: 500 });
+
   if (stopReason === 'REPAIR_EXHAUSTED' || stopReason === 'NEEDS_PERSON') {
     for (const finding of unresolved) {
       await settleFinding({
         id: finding.id,
         state: 'UNRESOLVED',
         resolution: stopDetail,
-        resolvedBy: current.id,
+        resolvedBy: cycle.id,
       });
     }
   }
-
-  return {
-    cycle: (await getCycle(current.id))!,
-    passes,
-    repairs,
-    stopReason,
-    stopDetail,
-    unresolved,
-  };
+  return unresolved;
 }
 
 function worst(findings: readonly DesignFinding[]): DesignSeverity {

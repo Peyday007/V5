@@ -4550,6 +4550,16 @@ export const COMPLETION_CONTRACTS = [
   // view wearing a measurement's name cannot be argued with afterwards. See
   // `services/design/judge.ts`.
   'DESIGN_REVIEW_V1',
+  // A picture of the product, taken where a browser exists. The deployed Brain
+  // has none and must not acquire one, so the half of the design loop that needs
+  // one is work handed to a surface that has it — and what comes back is capture
+  // *metadata*: the surface, the width, the engine, the sha-256 of the bytes and
+  // the readings taken in the live document. The bytes stay with the renderer,
+  // because the address is an address and the digest is the evidence. Validated
+  // exactly: a width the surface does not declare, a hash that is not a sha-256,
+  // or a second picture of one thing refuses the whole submission. See
+  // `services/design/render.ts`.
+  'DESIGN_RENDER_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 

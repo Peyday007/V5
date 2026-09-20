@@ -25,7 +25,9 @@
  * `cycle` builds the client, boots a server against a throwaway data directory,
  * signs in, renders, measures, repairs within its bounds, renders again and
  * closes with a reason. `resume` does the same for a cycle the Factory opened
- * when a change landed.
+ * when a change landed, and `render` answers a `DESIGN_RENDER_V1` bin for a
+ * deployed Brain that has no browser of its own — the route that carries a
+ * picture from a machine that can take one to the Brain that asked for it.
  *
  *   npx tsx scripts/design.ts surfaces
  *   npx tsx scripts/design.ts capabilities
@@ -33,6 +35,7 @@
  *   npx tsx scripts/design.ts expand
  *   npx tsx scripts/design.ts cycle --surfaces russell/default,build/default
  *   npx tsx scripts/design.ts resume <cycleId>
+ *   npx tsx scripts/design.ts render --surfaces russell/default --pass 0
  *   npx tsx scripts/design.ts findings [--cycle <id>]
  *   npx tsx scripts/design.ts impact --paths a,b --says "..."
  *   npx tsx scripts/design.ts correction --admin you@example.com --says "..."
@@ -65,6 +68,7 @@ type ServerModules = {
   db: typeof import('../server/db/database.ts');
   repo: typeof import('../server/repos/design.ts');
   capabilities: typeof import('../server/services/design/capabilities.ts');
+  capture: typeof import('../server/services/design/capture.ts');
   corrections: typeof import('../server/services/design/corrections.ts');
   impact: typeof import('../server/services/design/impact.ts');
   kernel: typeof import('../server/services/design/kernel.ts');
@@ -73,6 +77,7 @@ type ServerModules = {
   expand: typeof import('../server/services/design/expand.ts');
   operate: typeof import('../server/services/design/operate.ts');
   priority: typeof import('../server/services/design/priority.ts');
+  surfaces: typeof import('../server/services/design/surfaces.ts');
 };
 
 let loaded: ServerModules | null = null;
@@ -83,6 +88,7 @@ async function load(): Promise<ServerModules> {
     db: await import('../server/db/database.ts'),
     repo: await import('../server/repos/design.ts'),
     capabilities: await import('../server/services/design/capabilities.ts'),
+    capture: await import('../server/services/design/capture.ts'),
     corrections: await import('../server/services/design/corrections.ts'),
     impact: await import('../server/services/design/impact.ts'),
     kernel: await import('../server/services/design/kernel.ts'),
@@ -91,6 +97,7 @@ async function load(): Promise<ServerModules> {
     expand: await import('../server/services/design/expand.ts'),
     operate: await import('../server/services/design/operate.ts'),
     priority: await import('../server/services/design/priority.ts'),
+    surfaces: await import('../server/services/design/surfaces.ts'),
   };
   return loaded;
 }
@@ -133,8 +140,8 @@ async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
   if (!command) {
     fail(
-      'Usage: design <seed|surfaces|capabilities|next|expand|cycle|resume|findings|impact|' +
-        'correction|report>',
+      'Usage: design <seed|surfaces|capabilities|next|expand|cycle|resume|render|findings|' +
+        'impact|correction|report>',
     );
   }
 
@@ -143,7 +150,7 @@ async function main(): Promise<void> {
    * so they open the repository's one only after that server has closed. Every
    * other command reads the ordinary database.
    */
-  const rendering = command === 'cycle' || command === 'resume';
+  const rendering = command === 'cycle' || command === 'resume' || command === 'render';
   if (!rendering) {
     const { db } = await load();
     await db.initDatabase();
@@ -217,6 +224,9 @@ async function main(): Promise<void> {
         });
         break;
       }
+      case 'render':
+        await renderForBin(rest);
+        break;
       default:
         fail(`Unknown command "${command}".`);
     }
@@ -504,6 +514,23 @@ function parseCookie(cookie: string): { name: string; value: string } | null {
  * nothing — which is correct and is why the run prints its own result in full.
  */
 async function withServer(body: (cookie: string, outputDir: string) => Promise<CycleResult>): Promise<void> {
+  await withProduct(async (cookie, outputDir) => {
+    const result = await body(cookie, outputDir);
+    printCycle(result);
+    writeRenderIndex(outputDir, result);
+  });
+}
+
+/**
+ * Build the client, boot a server against a throwaway database, and run.
+ *
+ * Generic over what the body returns, because two things now need a running
+ * product: a cycle, which measures and reports, and a **render for a bin**,
+ * which measures and prints a submission for a worker to hand back. Two copies
+ * of ninety lines of process management would be two copies to get the port,
+ * the sign-in and the process group wrong in.
+ */
+async function withProduct<T>(body: (cookie: string, outputDir: string) => Promise<T>): Promise<T> {
   await buildClient();
 
   /*
@@ -582,9 +609,8 @@ async function withServer(body: (cookie: string, outputDir: string) => Promise<C
     await db.initDatabase();
 
     const result = await body(cookie, outputDir);
-    printCycle(result);
-    writeRenderIndex(outputDir, result);
     await db.closeDatabase();
+    return result;
   } finally {
     endProcessTree(server);
     if (named.length === 0) {
@@ -625,6 +651,132 @@ function writeRenderIndex(outputDir: string, result: CycleResult): void {
   );
   console.log(`  declared ${declared.length} render(s) in index.json`);
   console.log('  npm run design:manifest -- docs/evidence/design-renders');
+}
+
+/* =========================================================================
+ * Answering a render bin
+ * ====================================================================== */
+
+/** The markers a worker copies between, so a log line cannot become evidence. */
+const SUBMISSION_BEGIN = '----- BEGIN DESIGN RENDER SUBMISSION -----';
+const SUBMISSION_END = '----- END DESIGN RENDER SUBMISSION -----';
+
+/**
+ * Render the surfaces a bin asked about and print what to submit.
+ *
+ * This is the worker half of the render lane. The deployed Brain has no browser,
+ * so it opens a `DESIGN_RENDER_V1` bin; a worker with a checkout and a browser
+ * runs this, and hands the printed object back through `brain_bin_submit_unit`.
+ * Nothing here talks to that Brain — the worker's own connector does — which is
+ * what keeps this a command rather than a second client with a second credential.
+ *
+ * It renders against a **throwaway** Brain of its own, for `withProduct`'s
+ * reason: a capture is supposed to be a fact about the product, and pointing a
+ * harness at live data would photograph somebody's real project rows. The
+ * surfaces come from the seed, which every Brain writes at boot, so the two
+ * agree about what `russell/default` means without anything being copied across.
+ *
+ * The bytes are written beside the run and their **hashes** are what travel.
+ * §27's standard, at a picture: the address is an address and the digest is the
+ * evidence, and a submission carrying the images would be megabytes of
+ * base64 nobody could check anyway.
+ */
+async function renderForBin(rest: string[]): Promise<void> {
+  const keys = (flag(rest, 'surfaces') ?? '')
+    .split(',')
+    .map((one) => one.trim())
+    .filter(Boolean);
+  if (keys.length === 0) {
+    fail('Usage: design render --surfaces <key,key> [--pass <n>]');
+  }
+  const pass = Number(flag(rest, 'pass') ?? 0);
+  if (!Number.isInteger(pass) || pass < 0) fail('--pass must be a whole number of rounds.');
+
+  /*
+   * A throwaway directory, never the committed evidence set.
+   *
+   * `cycle` writes into `docs/evidence/design-renders` on purpose: that set is
+   * declared, digested and committed as the evidence of one run at one commit.
+   * A render answering a bin is a *different* artifact — it is submitted, not
+   * committed — and writing it there would silently replace half of a
+   * content-addressed set with pictures from another revision, leaving a
+   * manifest whose digest no longer describes what is in the directory. The
+   * first version of this command did exactly that, and the only reason it was
+   * noticed is that one byte count moved.
+   */
+  const renderDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-design-render-'));
+
+  await withProduct(async (cookie) => {
+    const outputDir = renderDir;
+    const { capture, surfaces: surfaceService } = await load();
+    const { surfaces, unknown } = await surfaceService.resolveSurfaces(keys);
+    if (unknown.length > 0) {
+      /*
+       * Named and refused rather than silently rendered short. A submission
+       * missing a surface the bin asked about would be measured as though that
+       * screen were fine, which is the one thing a render must never say.
+       */
+      fail(
+        `This checkout has no registered surface called ${unknown.join(', ')}. ` +
+          'Report that as a blocker rather than submitting a partial render.',
+      );
+    }
+
+    const outcome = await capture.captureSurfaces({
+      baseUrl: BASE,
+      cookie: parseCookie(cookie),
+      surfaces,
+      // Null: these rows belong to the worker's throwaway database, and the
+      // cycle they are *for* lives in a Brain this process cannot see.
+      cycleId: null,
+      pass,
+      outputDir,
+      satisfied: ['SIGNED_IN', 'BRAIN_ADMINISTRATOR', 'PROJECT_EXISTS'],
+    });
+
+    const { revision, dirty } = capture.treeRevision(REPO_ROOT);
+    const submission = {
+      revision,
+      treeDirty: dirty,
+      captures: outcome.captures.map((one) => ({
+        surfaceKey: one.surfaceKey,
+        viewportName: one.viewportName,
+        width: one.width,
+        height: one.height,
+        contentHash: one.contentHash,
+        byteSize: one.byteSize,
+        artifactRef: one.artifactRef,
+        engine: one.engine,
+        engineVersion: one.engineVersion,
+        capturedAt: one.capturedAt,
+        readings: one.readings,
+      })),
+    };
+
+    console.log('');
+    console.log(`Rendered ${outcome.captures.length} capture(s) into ${outputDir}.`);
+    for (const skipped of outcome.skipped) {
+      console.log(`  NOT RENDERED  ${skipped.surfaceKey}: ${skipped.reason}`);
+    }
+    if (outcome.captures.length === 0) {
+      /*
+       * Loud, and not a submission. An empty render reads downstream as a screen
+       * with nothing wrong with it, so the contract refuses one — and a worker
+       * that printed an empty object here would spend an attempt learning that.
+       */
+      console.log('');
+      console.log(
+        'Nothing rendered. Report this as a blocker naming what stopped it — a missing browser, ' +
+          'a product that would not start, an address that answered 404 — rather than submitting ' +
+          'an empty render.',
+      );
+      return;
+    }
+    console.log('');
+    console.log(SUBMISSION_BEGIN);
+    console.log(JSON.stringify(submission));
+    console.log(SUBMISSION_END);
+  });
 }
 
 function printCycle(result: CycleResult): void {

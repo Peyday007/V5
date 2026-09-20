@@ -37,6 +37,7 @@ import type { SqlParam } from '../db/types.ts';
 import {
   type CaptureReadings,
   type DesignAbilityState,
+  type DesignBinRequest,
   type DesignCapability,
   type DesignCapture,
   type DesignConfidence,
@@ -56,6 +57,7 @@ import {
   type DesignPatternOrigin,
   type DesignPatternState,
   type DesignPrimitive,
+  type DesignRequestKind,
   type DesignReview,
   type DesignScope,
   type DesignSeverity,
@@ -67,6 +69,7 @@ import {
   type SurfacePrecondition,
   type SurfaceViewport,
 } from '../domain/design.ts';
+import { isDesignRequestKind } from '../domain/design.ts';
 import { fromBool, newId, nowIso, parseJson, toBool, toJson } from './util.ts';
 
 /* =========================================================================
@@ -597,6 +600,130 @@ export async function listReviews(cycleId: string): Promise<DesignReview[]> {
     [cycleId],
   );
   return rows.map(toReview);
+}
+
+/* =========================================================================
+ * What a design bin was asked about
+ * ====================================================================== */
+
+interface BinRequestRow {
+  bin_id: string;
+  cycle_id: string;
+  pass: number;
+  kind: string;
+  surface_keys: string;
+  revision: string | null;
+  capture_digest: string | null;
+  capture_count: number;
+  created_at: string;
+}
+
+const BIN_REQUEST_COLUMNS =
+  'bin_id, cycle_id, pass, kind, surface_keys, revision, capture_digest, capture_count, created_at';
+
+function toBinRequest(row: BinRequestRow): DesignBinRequest {
+  return {
+    binId: row.bin_id,
+    cycleId: row.cycle_id,
+    pass: row.pass,
+    kind: isDesignRequestKind(row.kind) ? row.kind : 'RENDER',
+    surfaceKeys: parseJson<string[]>(row.surface_keys, []),
+    revision: row.revision,
+    captureDigest: row.capture_digest,
+    captureCount: row.capture_count,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * Record what a design bin is being asked, once per cycle, pass and kind.
+ *
+ * `ON CONFLICT DO NOTHING` against the round key, and the winner is whoever
+ * inserted: two ticks both deciding the same cycle needs a review produce one
+ * request and one bin's worth of work. The loser reads back the row it collided
+ * with, so the caller can retire the bin it had already made rather than leave
+ * a second one claimable — §20's shape, at the smallest table in this kernel.
+ *
+ * Returns the row that now governs the round and whether this caller wrote it.
+ */
+export async function openBinRequest(input: {
+  binId: string;
+  cycleId: string;
+  pass: number;
+  kind: DesignRequestKind;
+  surfaceKeys: readonly string[];
+  revision: string | null;
+  captureDigest: string | null;
+  captureCount: number;
+}): Promise<{ request: DesignBinRequest; created: boolean }> {
+  await getDb().run(
+    `INSERT INTO design_bin_requests (${BIN_REQUEST_COLUMNS})
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (cycle_id, pass, kind) DO NOTHING`,
+    [
+      input.binId,
+      input.cycleId,
+      input.pass,
+      input.kind,
+      toJson([...input.surfaceKeys]),
+      input.revision,
+      input.captureDigest,
+      input.captureCount,
+      nowIso(),
+    ],
+  );
+  const row = await getDb().get<BinRequestRow>(
+    `SELECT ${BIN_REQUEST_COLUMNS} FROM design_bin_requests
+      WHERE cycle_id = ? AND pass = ? AND kind = ?`,
+    [input.cycleId, input.pass, input.kind],
+  );
+  const request = toBinRequest(row!);
+  return { request, created: request.binId === input.binId };
+}
+
+export async function getBinRequest(binId: string): Promise<DesignBinRequest | null> {
+  const row = await getDb().get<BinRequestRow>(
+    `SELECT ${BIN_REQUEST_COLUMNS} FROM design_bin_requests WHERE bin_id = ?`,
+    [binId],
+  );
+  return row ? toBinRequest(row) : null;
+}
+
+export async function binRequestFor(filter: {
+  cycleId: string;
+  pass: number;
+  kind: DesignRequestKind;
+}): Promise<DesignBinRequest | null> {
+  const row = await getDb().get<BinRequestRow>(
+    `SELECT ${BIN_REQUEST_COLUMNS} FROM design_bin_requests
+      WHERE cycle_id = ? AND pass = ? AND kind = ?`,
+    [filter.cycleId, filter.pass, filter.kind],
+  );
+  return row ? toBinRequest(row) : null;
+}
+
+export async function listBinRequests(filter: {
+  cycleId?: string;
+  kind?: DesignRequestKind;
+  limit?: number;
+}): Promise<DesignBinRequest[]> {
+  const clauses: string[] = [];
+  const params: SqlParam[] = [];
+  if (filter.cycleId !== undefined) {
+    clauses.push('cycle_id = ?');
+    params.push(filter.cycleId);
+  }
+  if (filter.kind !== undefined) {
+    clauses.push('kind = ?');
+    params.push(filter.kind);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const rows = await getDb().all<BinRequestRow>(
+    `SELECT ${BIN_REQUEST_COLUMNS} FROM design_bin_requests ${where}
+      ORDER BY created_at DESC, bin_id DESC LIMIT ?`,
+    [...params, filter.limit ?? 100],
+  );
+  return rows.map(toBinRequest);
 }
 
 /* =========================================================================

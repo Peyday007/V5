@@ -49,9 +49,15 @@
  * already does, and again here before anything is stored, because a lease can
  * expire and be retaken.
  */
-import { createBin, dispatchedSessionForBin, listBinUnitResults } from '../../repos/bins.ts';
+import {
+  createBin,
+  dispatchedSessionForBin,
+  listBinUnitResults,
+  markBinReady,
+  retireBin,
+} from '../../repos/bins.ts';
 import { workerSessionForBin } from '../../repos/fleet.ts';
-import { recordFinding, recordReview } from '../../repos/design.ts';
+import { getBinRequest, openBinRequest, recordFinding, recordReview } from '../../repos/design.ts';
 import type {
   DesignCapture,
   DesignCycle,
@@ -121,6 +127,18 @@ export interface OpenReviewInput {
  * at afterwards. A brief assembled from prose somebody wrote once would make the
  * review unreproducible, which is the same defect `router.ts` avoids by keeping
  * its decision answerable from a recorded input.
+ *
+ * **The capture set it was briefed on is written down**, which is the half that
+ * was missing: this function computed the digest and used it for nothing, so the
+ * digest a review was finally recorded with came from reading the table back at
+ * ingest time. `design_bin_requests` is the binding, and `ingestDesignReview`
+ * refuses an answer whose evidence has moved underneath it.
+ *
+ * Idempotent by the round. The bin is created as a **draft** and only the caller
+ * whose request row won the unique key marks it ready — §34's shape, and for its
+ * reason: a draft is not dispatchable, so the loser retires one nothing could
+ * ever have been fired at. Returns the bin that governs the round, which on a
+ * second call is the first call's.
  */
 export async function openDesignReview(input: OpenReviewInput): Promise<string> {
   const briefs: string[] = [];
@@ -231,12 +249,41 @@ export async function openDesignReview(input: OpenReviewInput): Promise<string> 
     completionContract: DESIGN_REVIEW_CONTRACT,
     createdByType: 'SYSTEM',
     createdById: reviewCreator(input.cycle, input.pass),
-    ready: true,
+    /*
+     * A draft, until the request row says this caller owns the round. A bin
+     * created ready and then found to be a duplicate is one the fleet may
+     * already have been fired at; a draft is not in `DISPATCHABLE_SQL` at all.
+     */
+    ready: false,
     priority: 5,
     maxAttempts: 3,
     workloadClass: DESIGN_WORKLOAD_CLASS,
   });
 
+  const { request, created } = await openBinRequest({
+    binId: bin.id,
+    cycleId: input.cycle.id,
+    pass: input.pass,
+    kind: 'REVIEW',
+    surfaceKeys: input.surfaces.map((one) => one.surfaceKey),
+    revision: input.cycle.revision,
+    captureDigest: digest.digest,
+    captureCount: digest.count,
+  });
+
+  if (!created) {
+    await retireBin({
+      binId: bin.id,
+      leaseGeneration: bin.leaseGeneration,
+      operator: 'design-kernel',
+      reason:
+        `A review of pass ${input.pass} of ${input.cycle.id} was already open as ` +
+        `${request.binId}. This draft was never dispatchable and is retired rather than deleted.`,
+    });
+    return request.binId;
+  }
+
+  await markBinReady(bin.id);
   return bin.id;
 }
 
@@ -623,6 +670,37 @@ export async function ingestDesignReview(input: {
 
   if (!submitted) {
     return refuse('The review bin finished with no submission, so nothing was judged.');
+  }
+
+  /*
+   * The evidence has to be the evidence this reviewer was shown.
+   *
+   * `design_bin_requests` recorded the digest when the question was asked, and
+   * `digest` above is the same computation over the captures that exist now. A
+   * capture written in between — a resumed pass, a second renderer, a re-render
+   * against a newer tree — makes those two different numbers, and a review of a
+   * set that has changed is stale by §23's own definition: *a document whose
+   * bytes changed is a different operation rather than a repeat.*
+   *
+   * Refused rather than recorded-with-the-new-digest, because the second would
+   * settle the current cycle on a judgement nobody made about it. A request
+   * Brain has no row for is also refused: unknown binding fails closed, which is
+   * the same answer this repository gives everywhere else it cannot tell.
+   */
+  const request = await getBinRequest(input.binId);
+  if (!request) {
+    return refuse(
+      'No record says what this review was asked about, so there is nothing to hold its answer ' +
+        'against. An unbound judgement could have been briefed on any capture set at all.',
+    );
+  }
+  if (request.captureDigest !== digest.digest) {
+    return refuse(
+      `The evidence moved: this review was briefed on ${request.captureCount} capture(s) ` +
+        `digesting ${String(request.captureDigest).slice(0, 12)}…, and pass ${input.pass} of ` +
+        `${input.cycle.id} now holds ${digest.count} digesting ${digest.digest.slice(0, 12)}…. ` +
+        'A judgement about one set may not settle another.',
+    );
   }
 
   /*

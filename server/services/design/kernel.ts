@@ -43,9 +43,19 @@
  */
 import { binByCreator } from '../../repos/bins.ts';
 import { getDb } from '../../db/database.ts';
-import { listCaptures, listCycles, listReviews } from '../../repos/design.ts';
+import {
+  binRequestFor,
+  listCaptures,
+  listCycles,
+  listFindings,
+  listReviews,
+} from '../../repos/design.ts';
 import type { DesignCycle } from '../../domain/design.ts';
-import { ingestDesignReview, reviewCreator, type ReviewLineage } from './judge.ts';
+import { ingestDesignReview, openDesignReview, reviewCreator, type ReviewLineage } from './judge.ts';
+import { ingestDesignRender, openDesignRender, renderCreator } from './render.ts';
+import { resolveSurfaces } from './surfaces.ts';
+import { settleCycleNow } from './operate.ts';
+import { designProject, NO_DESIGN_PROJECT } from './scope.ts';
 import { absorbFinishedResearch, type AbsorbedResearch } from './absorb.ts';
 import { learnFleetWide, learnFromCycle, type LearningReport } from './learn.ts';
 import { runExpansionPass, type ExpansionPass } from './expand.ts';
@@ -54,8 +64,14 @@ import { seedDesignPatterns } from './patterns.ts';
 import { seedDesignSurfaces } from './surfaces.ts';
 
 export interface DesignKernelPass {
+  /** Render bins opened for cycles that were waiting for a machine with a browser. */
+  asked: { binId: string; cycleId: string; kind: 'RENDER' | 'REVIEW'; because: string }[];
+  /** Renders read back from bins that finished, and what measuring them found. */
+  rendered: { binId: string; cycleId: string; captures: number; refused: string | null }[];
   /** Judged reviews read back from bins that finished. */
   ingested: { binId: string; cycleId: string; verdict: string; findings: number }[];
+  /** Cycles whose judgement landed and which are now closed, with the reason. */
+  settled: { cycleId: string; stopReason: string; unresolved: number }[];
   /** Cycles that closed and have now been learned from. */
   learned: { cycleId: string; report: LearningReport }[];
   /**
@@ -73,7 +89,10 @@ export interface DesignKernelPass {
 }
 
 const EMPTY: DesignKernelPass = {
+  asked: [],
+  rendered: [],
   ingested: [],
+  settled: [],
   learned: [],
   fleetWide: null,
   absorbed: [],
@@ -114,7 +133,10 @@ export async function seedDesignKernel(): Promise<{
  */
 export async function runDesignKernel(): Promise<DesignKernelPass> {
   const pass: DesignKernelPass = {
+    asked: [],
+    rendered: [],
     ingested: [],
+    settled: [],
     learned: [],
     fleetWide: null,
     absorbed: [],
@@ -122,10 +144,37 @@ export async function runDesignKernel(): Promise<DesignKernelPass> {
     problems: [],
   };
 
+  /*
+   * Renders first, then reviews, then the settling.
+   *
+   * The order is the order the work is in: a render that came back this tick
+   * produces the captures a review is briefed on, and a review that came back
+   * this tick is what lets a cycle close. Reading them in any other order would
+   * make each stage a tick late for ever — the industry kernel's argument for
+   * absorbing before deciding, at a loop with three stages instead of two.
+   */
+  try {
+    pass.rendered = await ingestFinishedRenders(pass);
+  } catch (error) {
+    pass.problems.push(`finished renders could not be read back: ${message(error)}`);
+  }
+
   try {
     pass.ingested = await ingestFinishedReviews();
   } catch (error) {
     pass.problems.push(`judged reviews could not be read back: ${message(error)}`);
+  }
+
+  try {
+    pass.settled = await settleJudgedCycles();
+  } catch (error) {
+    pass.problems.push(`cycles whose judgement landed could not be closed: ${message(error)}`);
+  }
+
+  try {
+    await askForRenders(pass);
+  } catch (error) {
+    pass.problems.push(`cycles waiting for a browser could not be asked about: ${message(error)}`);
   }
 
   try {
@@ -166,6 +215,192 @@ export async function runDesignKernel(): Promise<DesignKernelPass> {
 /** Nothing to do on a Brain with no design surfaces registered. */
 export async function designKernelIdle(): Promise<DesignKernelPass> {
   return EMPTY;
+}
+
+/**
+ * Ask somebody with a browser to look at the cycles that are waiting for one.
+ *
+ * This is the transition the kernel was missing. `requestDesignCycle` opens a
+ * cycle where a change integrates — on a server with no browser — and until this
+ * existed the only thing that could ever render it was a person running
+ * `npm run design resume` against a database that is not the one holding the
+ * cycle. §24's sentence at the top of the loop: **a state that says it is
+ * waiting for something nobody can supply is not waiting, it is stuck.**
+ *
+ * A render bin is the answering transition, and it is the machinery that is
+ * already there — dispatch, leases, fencing, attempts, a completion contract —
+ * rather than a second one beside it.
+ *
+ * Nothing here decides a screen is fine. A cycle with no surfaces registered, or
+ * a Brain with no project to file the work against, is **reported** and left
+ * alone; the honest outcome of not being able to ask is not an answer.
+ */
+async function askForRenders(pass: DesignKernelPass): Promise<void> {
+  const projectId = await designProject();
+
+  for (const cycle of await listCycles({ state: 'OPEN', limit: 50 })) {
+    // A pass that already has pictures does not need to be rendered again, and a
+    // pass already waiting on one must not be asked twice.
+    const captures = await listCaptures({ cycleId: cycle.id, pass: cycle.passes, limit: 1 });
+    if (captures.length > 0) continue;
+    if (await binRequestFor({ cycleId: cycle.id, pass: cycle.passes, kind: 'RENDER' })) continue;
+
+    const { surfaces, unknown } = await resolveSurfaces(cycle.surfaceKeys);
+    if (surfaces.length === 0) {
+      pass.problems.push(
+        `${cycle.id} names no registered surface${unknown.length > 0 ? ` (${unknown.join(', ')})` : ''}, ` +
+          'so there is nothing to render. Registering one, or abandoning the cycle, is the remedy.',
+      );
+      continue;
+    }
+    if (!projectId) {
+      pass.problems.push(`${cycle.id} is waiting for a render and ${NO_DESIGN_PROJECT}`);
+      continue;
+    }
+
+    const binId = await openDesignRender({ cycle, pass: cycle.passes, projectId, surfaces });
+    pass.asked.push({
+      binId,
+      cycleId: cycle.id,
+      kind: 'RENDER',
+      because:
+        `pass ${cycle.passes} of ${cycle.id} has no capture of ` +
+        `${surfaces.map((one) => one.surfaceKey).join(', ')}, and this Brain cannot take one`,
+    });
+  }
+}
+
+/**
+ * Read back every render whose bin has finished, and ask for the judgement next.
+ *
+ * Derived from the bin's state, so a render that completed while a tick was
+ * dying is read on the next one. Idempotent by the captures it writes: a pass
+ * that already holds captures is skipped inside `ingestDesignRender`, because a
+ * second copy would change the set's digest and every finding on it would
+ * reappear under a new capture id.
+ *
+ * A refused render is **reported and the bin is left as it is**. The attempt it
+ * spent is already on the row, and reopening the cycle here would be this
+ * module deciding that a worker's honest failure deserves another activation —
+ * a decision the bin's own attempt budget already makes.
+ */
+async function ingestFinishedRenders(pass: DesignKernelPass): Promise<DesignKernelPass['rendered']> {
+  const out: DesignKernelPass['rendered'] = [];
+  const projectId = await designProject();
+
+  for (const cycle of await listCycles({ state: 'OPEN', limit: 50 })) {
+    const request = await binRequestFor({
+      cycleId: cycle.id,
+      pass: cycle.passes,
+      kind: 'RENDER',
+    });
+    if (!request) continue;
+
+    const bin = await binByCreator(renderCreator(cycle, cycle.passes));
+    if (!bin || bin.state !== 'COMPLETE') continue;
+
+    const { surfaces } = await resolveSurfaces(cycle.surfaceKeys);
+    const existing = await listCaptures({ cycleId: cycle.id, pass: cycle.passes, limit: 200 });
+    const outcome = await ingestDesignRender({
+      binId: bin.id,
+      cycle,
+      pass: cycle.passes,
+      surfaces,
+      existing,
+    });
+
+    out.push({
+      binId: bin.id,
+      cycleId: cycle.id,
+      captures: outcome.captures.length,
+      refused: outcome.refused,
+    });
+    if (outcome.refused !== null) {
+      pass.problems.push(`${cycle.id}: ${outcome.refused}`);
+      continue;
+    }
+    if (outcome.captures.length === 0) continue;
+
+    /*
+     * The captures exist, so the half measurement cannot settle can be asked.
+     *
+     * Opened here rather than inside the render ingest, because opening a review
+     * needs a project and the ingest needs none — and a function that took a
+     * project id only so it could open a different bin would be two decisions in
+     * one place.
+     */
+    if (await binRequestFor({ cycleId: cycle.id, pass: cycle.passes, kind: 'REVIEW' })) continue;
+    if (!projectId) {
+      pass.problems.push(`${cycle.id} has been rendered and ${NO_DESIGN_PROJECT}`);
+      continue;
+    }
+    const reviewBin = await openDesignReview({
+      cycle,
+      pass: cycle.passes,
+      projectId,
+      surfaces,
+      captures: outcome.captures,
+    });
+    pass.asked.push({
+      binId: reviewBin,
+      cycleId: cycle.id,
+      kind: 'REVIEW',
+      because:
+        `${outcome.captures.length} capture(s) of pass ${cycle.passes} have been measured, and ` +
+        'what is left is the half a reader has to answer',
+    });
+  }
+  return out;
+}
+
+/**
+ * Close a cycle whose judgement has landed.
+ *
+ * The other half of the answering transition. A cycle sits `OPEN` while its
+ * review bin is outstanding — correctly, because the judgement is part of the
+ * pass — and something has to notice when the answer arrives, or the cycle waits
+ * for ever with every row reading healthy. That is the defect this kernel was
+ * built to avoid and had at its own centre.
+ *
+ * The stop reason is **derived from what is open**, never chosen: nothing open
+ * is `SETTLED`, and anything open is `NEEDS_PERSON`, because the only repair
+ * strategy this kernel has prepares a change somebody authorizes on Build.
+ * `REPAIR_EXHAUSTED` is deliberately not reachable from here — a pass ended by a
+ * judgement has not spent a ceiling, and reporting it as though it had would
+ * send somebody to look at a loop that did not run.
+ */
+async function settleJudgedCycles(): Promise<DesignKernelPass['settled']> {
+  const out: DesignKernelPass['settled'] = [];
+
+  for (const cycle of await listCycles({ state: 'OPEN', limit: 50 })) {
+    const request = await binRequestFor({
+      cycleId: cycle.id,
+      pass: cycle.passes,
+      kind: 'REVIEW',
+    });
+    if (!request) continue;
+
+    const judged = (await listReviews(cycle.id)).find(
+      (one) => one.lane === 'JUDGED' && one.pass === cycle.passes,
+    );
+    if (!judged) continue;
+
+    const open = await listFindings({ cycleId: cycle.id, state: 'OPEN', limit: 500 });
+    const stopReason = open.length === 0 ? 'SETTLED' : 'NEEDS_PERSON';
+    const stopDetail =
+      open.length === 0
+        ? `Pass ${cycle.passes} was rendered, measured and judged ${judged.verdict}, and nothing ` +
+          `is open. Capture set ${judged.captureDigest.slice(0, 12)}…, ` +
+          `independence ${judged.independenceTier ?? 'unrecorded'}.`
+        : `Pass ${cycle.passes} was rendered, measured and judged ${judged.verdict}. ` +
+          `${open.length} finding(s) are open and every repair for them is a change to code, ` +
+          'which is a person’s to authorize on Build. They stay open rather than being closed to ' +
+          'make this cycle read as finished.';
+
+    const unresolved = await settleCycleNow(cycle, stopReason, stopDetail);
+    out.push({ cycleId: cycle.id, stopReason, unresolved: unresolved.length });
+  }
+  return out;
 }
 
 /**
