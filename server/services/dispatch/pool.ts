@@ -46,6 +46,7 @@
 import type { Bin, BinDispatch, FleetAccount, FleetRoutine } from '../../domain/types.ts';
 import type { WorkerSession } from '../../repos/fleet.ts';
 import { proveSurface, type SurfaceChain } from './surfaceProof.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 
 /** What a surface is, once every row about it has been read. */
 export interface PoolSurfaceInput {
@@ -428,7 +429,9 @@ export async function readFactoryPool(input: {
     surfaces.push({
       routine,
       account,
-      worker: worker ? { id: worker.id, name: worker.name, archived: worker.archived } : null,
+      worker: worker
+        ? { id: worker.id, name: workerIdentity(worker), archived: worker.archived }
+        : null,
       routing: routing
         ? {
             families: routing.families,
@@ -450,7 +453,10 @@ export async function readFactoryPool(input: {
 
   return {
     now: nowIso,
-    expectedWorker: { id: expectedWorker.id, name: expectedWorker.name },
+    // The neutral identity: this string is printed in every pool problem, and
+    // a report naming a surface after a person reads as a claim about whose
+    // account it is. The lookup that found it is still by handle.
+    expectedWorker: { id: expectedWorker.id, name: workerIdentity(expectedWorker) },
     repository: input.repository,
     surfaces,
     boundElsewhere,

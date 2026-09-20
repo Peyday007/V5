@@ -80,6 +80,15 @@ function encodeHeaderValue(value: string): string {
   return `=?base64?${Buffer.from(value, 'utf8').toString('base64')}?=`;
 }
 
+/**
+ * How long one request may take before this client says so.
+ *
+ * Matches `verify-hosted.ts`'s own bound deliberately: the two are the same
+ * client talking to the same Brain, and a shorter one here would make the
+ * release gate fail in two different places for one condition.
+ */
+const REQUEST_TIMEOUT_MS = 15 * 60 * 1000;
+
 export class ModernMcpClient {
   private readonly options: ModernClientOptions;
   private nextId = 1;
@@ -141,11 +150,45 @@ export class ModernMcpClient {
       else headers[key] = value;
     }
 
-    const response = await fetch(this.options.url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
+    /*
+     * An explicit bound with a named failure — and the reason it is *here*.
+     *
+     * `verify-hosted.ts`'s own `call()` grew exactly this after six deploys
+     * died at the judge audit step, and its comment is right about the
+     * mechanism: no `signal` means Node's default, measured at 300.8 seconds,
+     * thrown as a bare `fetch failed`. What that change could not do is reach
+     * the requests that actually time out. The audit roles are submitted
+     * through **this** client, not through that helper, so the bound never
+     * applied to them — and the run of 2026-09-20 failed at 5m22s with the
+     * same unattributable sentence, four seconds from two readings taken
+     * before the bound existed. A mechanism that does not reach the thing it
+     * exists for is not a mechanism, which is a sentence this repository has
+     * had to write more than once.
+     *
+     * **It is not a fix for the slowness and must not be read as one.** The
+     * judge pass takes longer than five minutes and nobody yet knows how much
+     * longer, because nothing has ever waited long enough to find out. Fifteen
+     * minutes is where the next occurrence either finishes — and the
+     * timestamps say what it costs — or fails naming the method and the wait.
+     */
+    let response: Response;
+    try {
+      response = await fetch(this.options.url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (error) {
+      const cause = (error as { cause?: { code?: string } }).cause?.code;
+      throw new Error(
+        `${method}${typeof params['name'] === 'string' ? ` (${params['name']})` : ''} ` +
+          `did not answer within ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s ` +
+          `(${error instanceof Error ? error.message : String(error)}` +
+          `${cause ? `, ${cause}` : ''}). The request was not refused; nothing answered it.`,
+        { cause: error },
+      );
+    }
 
     const text = await response.text();
     let parsed: { result?: T; error?: RpcError } = {};

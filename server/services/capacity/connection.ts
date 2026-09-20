@@ -113,6 +113,7 @@ import { proveSurface } from '../dispatch/surfaceProof.ts';
 import { createProbeBin, ProbeRefused } from '../fleet/probe.ts';
 import { findCashRoot } from '../cash/root.ts';
 import { CONNECTOR_SCOPES } from '../../domain/types.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 import type {
   Bin,
   BinDispatch,
@@ -962,7 +963,7 @@ export async function connectionView(input: {
  */
 function checksFor(input: {
   connection: CapacityConnection;
-  worker: { id: string; name: string; archived: boolean; disabled: boolean } | null;
+  worker: { id: string; label: string | null; name: string; archived: boolean; disabled: boolean } | null;
   membership: ConnectionIdentity['membership'];
   authorization: ConnectionIdentity['authorization'];
   routine: { id: string; name: string; routineRef: string; workerId: string | null; state: string } | null;
@@ -979,7 +980,7 @@ function checksFor(input: {
           key: 'IDENTITY',
           title: 'Your worker identity',
           state: 'FAIL',
-          detail: `${worker.name} exists and has been ${worker.archived ? 'archived' : 'disabled'}.`,
+          detail: `${workerIdentity(worker)} exists and has been ${worker.archived ? 'archived' : 'disabled'}.`,
           remedy:
             'A Brain administrator resolves that. Nothing here can re-enable an identity, ' +
             'because an identity that could re-enable itself would not be one.',
@@ -988,7 +989,7 @@ function checksFor(input: {
           key: 'IDENTITY',
           title: 'Your worker identity',
           state: 'PASS',
-          detail: `Brain fires as ${worker.name}.`,
+          detail: `Brain fires as ${workerIdentity(worker)}.`,
           remedy: null,
         }
     : {
@@ -1111,7 +1112,7 @@ function checksFor(input: {
             key: 'BINDING',
             title: 'Bound to you',
             state: 'PASS',
-            detail: `${routine.name} answers as ${worker.name}.`,
+            detail: `${routine.name} answers as ${workerIdentity(worker)}.`,
             remedy: null,
           }
         : {
