@@ -1141,3 +1141,226 @@ describe('the record survives the run', () => {
     expect((await listPatterns({ state: 'ACTIVE' })).length).toBeGreaterThan(0);
   });
 });
+
+describe('the judged lane goes through a bin, and its plumbing is real', () => {
+  beforeEach(async () => {
+    await freshProject();
+    await seedDesignKernel();
+  });
+
+  /**
+   * The bin is the entrance, so its contract and its routing class have to be
+   * the ones the existing machinery already understands. A bin declaring a class
+   * `classesForFamilies` does not cover matches nothing and the assigner answers
+   * NO_READY_BINS with every other row correct — §37 records the capability
+   * kernel finding exactly that, on `GENERAL_`.
+   */
+  it('opens a review bin the existing fleet can route and evaluate', async () => {
+    const { openDesignReview, DESIGN_REVIEW_CONTRACT, DESIGN_WORKLOAD_CLASS } = await import(
+      '../server/services/design/judge.ts'
+    );
+    const { familyOf, classesForFamilies } = await import('../server/services/bins/routing.ts');
+    const { hasEvaluator } = await import('../server/services/bins/contracts.ts');
+    const { getBin } = await import('../server/repos/bins.ts');
+    const { listProjects } = await import('../server/repos/projects.ts');
+
+    const project = (await listProjects())[0]!;
+    const surface = (await listSurfaces()).find((one) => one.surfaceKey === 'russell/default')!;
+    const cycle = await openCycle({
+      triggerKind: 'OWNER_REQUEST',
+      triggerRef: null,
+      surfaceKeys: ['russell/default'],
+      revision: null,
+    });
+    const made = await capture({ cycleId: cycle.id });
+
+    const binId = await openDesignReview({
+      cycle,
+      pass: 0,
+      projectId: project.id,
+      surfaces: [surface],
+      captures: [made],
+    });
+    const bin = await getBin(binId);
+    expect(bin?.completionContract).toBe(DESIGN_REVIEW_CONTRACT);
+    expect(bin?.workloadClass).toBe(DESIGN_WORKLOAD_CLASS);
+
+    // The contract has an evaluator, so the bin can actually be judged. A
+    // declared contract with none refuses every bin under it, silently.
+    expect(hasEvaluator(DESIGN_REVIEW_CONTRACT)).toBe(true);
+
+    // And the router puts it in a family whose class prefixes cover it.
+    const family = familyOf(bin!);
+    expect(family).toBe('GENERAL');
+    const { prefixes } = classesForFamilies([family]);
+    expect(prefixes.some((prefix) => DESIGN_WORKLOAD_CLASS.startsWith(prefix))).toBe(true);
+
+    // The brief carries what the reviewer is meant to reason from, and says
+    // plainly which questions it may not answer.
+    const brief = bin!.manifest.units[0]!.input;
+    expect(brief).toMatch(/WHAT THIS SCREEN REPRESENTS/);
+    expect(brief).toMatch(/WHAT A PERSON CAN DO HERE/);
+    expect(bin!.manifest.excludedSources.join(' ')).toMatch(/You have not been shown one/);
+  });
+
+  it('stores a validated judgement with its lineage, and refuses one that is not', async () => {
+    const { openDesignReview, ingestDesignReview, REVIEW_UNIT_KEY } = await import(
+      '../server/services/design/judge.ts'
+    );
+    const { putBinUnitResult } = await import('../server/repos/bins.ts');
+    const { listProjects } = await import('../server/repos/projects.ts');
+    const { listReviews } = await import('../server/repos/design.ts');
+
+    const project = (await listProjects())[0]!;
+    const surface = (await listSurfaces()).find((one) => one.surfaceKey === 'russell/default')!;
+    const cycle = await openCycle({
+      triggerKind: 'OWNER_REQUEST',
+      triggerRef: null,
+      surfaceKeys: ['russell/default'],
+      revision: null,
+    });
+    const made = await capture({ cycleId: cycle.id });
+    const binId = await openDesignReview({
+      cycle,
+      pass: 0,
+      projectId: project.id,
+      surfaces: [surface],
+      captures: [made],
+    });
+
+    const submission = JSON.stringify({
+      verdict: 'CHANGES_REQUIRED',
+      findings: [
+        {
+          surfaceKey: 'russell/default',
+          region: 'section.rs-hero',
+          kind: 'EMPHASIS_MISPLACED',
+          statement: 'The loudest thing on the page is the thread list, not the decision.',
+          whyItMatters:
+            'A person opens this to find out whether anything needs them, and the one line that ' +
+            'answers that is quieter than a list they browse.',
+          severity: 'MAJOR',
+          proposedRepair: 'Give the needs line the hero weight and let the list settle below it.',
+        },
+      ],
+    });
+    await putBinUnitResult({
+      binId,
+      unitKey: REVIEW_UNIT_KEY,
+      value: submission,
+      contentHash: 'h'.repeat(64),
+      leaseId: null,
+      leaseGeneration: null,
+      submittedBy: 'wkr_reviewer',
+    });
+
+    const outcome = await ingestDesignReview({
+      binId,
+      cycle,
+      pass: 0,
+      captures: [made],
+      surfaceKeys: ['russell/default'],
+      authors: [{ sessionId: 's_author', workerId: 'wkr_author', accountId: 'a', routineId: 'r' }],
+      reviewer: { sessionId: 's_reviewer', workerId: 'wkr_reviewer', accountId: 'a', routineId: 'r' },
+    });
+
+    expect(outcome.refused).toBeNull();
+    expect(outcome.review?.verdict).toBe('CHANGES_REQUIRED');
+    /*
+     * WORKER_SEPARATED, because that is what the fleet actually supplied here:
+     * a different worker on the same account. Reported at the tier it earned
+     * and neither rounded up to ACCOUNT_SEPARATED nor down to the floor.
+     */
+    expect(outcome.review?.independenceTier).toBe('WORKER_SEPARATED');
+    expect(outcome.findings).toHaveLength(1);
+    expect(outcome.findings[0]?.lane).toBe('JUDGED');
+    expect(outcome.findings[0]?.primitive).toBe('EMPHASIS');
+
+    /*
+     * And the same bin read by the session that made the change is refused, with
+     * the refusal recorded rather than silent: a review nobody can see is one
+     * that looks as though it never happened (§8).
+     */
+    const second = await openDesignReview({
+      cycle,
+      pass: 1,
+      projectId: project.id,
+      surfaces: [surface],
+      captures: [made],
+    });
+    await putBinUnitResult({
+      binId: second,
+      unitKey: REVIEW_UNIT_KEY,
+      value: submission,
+      contentHash: 'i'.repeat(64),
+      leaseId: null,
+      leaseGeneration: null,
+      submittedBy: 'wkr_author',
+    });
+    const refused = await ingestDesignReview({
+      binId: second,
+      cycle,
+      pass: 1,
+      captures: [made],
+      surfaceKeys: ['russell/default'],
+      authors: [{ sessionId: 's_author', workerId: 'wkr_author', accountId: 'a', routineId: 'r' }],
+      reviewer: { sessionId: 's_author', workerId: 'wkr_author', accountId: 'a', routineId: 'r' },
+    });
+    expect(refused.refused).toMatch(/reviewing its own work/);
+    expect(refused.findings).toHaveLength(0);
+    const rows = await listReviews(cycle.id);
+    expect(rows.some((one) => one.verdict === 'REFUSED')).toBe(true);
+  });
+});
+
+describe('a research gap goes down the path that already exists', () => {
+  beforeEach(async () => {
+    await freshProject();
+    await seedDesignKernel();
+  });
+
+  /**
+   * The claim this pins is that the RESEARCH route is not a second research
+   * engine: it creates a Russell candidate, which is the entrance the archive
+   * check, the compiler, the approval envelope, the evidence gate and the three
+   * audit roles all sit behind. Nothing here bypasses any of them.
+   */
+  it('creates a Russell candidate on the architecture project', async () => {
+    const { createProject } = await import('../server/repos/projects.ts');
+    const { listCandidates } = await import('../server/repos/russellCandidates.ts');
+    const { runExpansionPass } = await import('../server/services/design/expand.ts');
+
+    const architecture = await createProject({
+      name: 'Brain architecture',
+      purpose: 'TECHNICAL',
+    });
+
+    const pass = await runExpansionPass('PROACTIVE');
+    const research = pass.opened.filter((one) => one.route === 'RESEARCH');
+    expect(research.length).toBeGreaterThan(0);
+
+    for (const expansion of research) {
+      expect(expansion.state).toBe('ROUTED');
+      expect(expansion.routeRef).toBeTruthy();
+    }
+
+    const candidates = await listCandidates({ projectId: architecture.id });
+    expect(candidates.length).toBe(research.length);
+    expect(candidates[0]?.title).toMatch(/Design capability:/);
+    // The question is bounded and says why it is worth asking.
+    expect(candidates[0]?.statement).toMatch(/Why this is worth asking:/);
+  });
+
+  /**
+   * And with no such project it parks naming the remedy, rather than filing
+   * architecture research into somebody's research project — §31's boundary, and
+   * §24's rule that a park has to name what would unpark it.
+   */
+  it('parks with the remedy when there is nowhere to file it', async () => {
+    const { runExpansionPass } = await import('../server/services/design/expand.ts');
+    const pass = await runExpansionPass('PROACTIVE');
+    const parked = pass.opened.filter((one) => one.state === 'PARKED');
+    expect(parked.length).toBeGreaterThan(0);
+    expect(parked[0]?.outcome).toMatch(/npm run admin/);
+  });
+});

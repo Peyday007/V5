@@ -426,7 +426,7 @@ export function summarise(outcome: EvaluationOutcome): EvaluationSummary {
       reason:
         `${outcome.unreadable.length} reading(s) could not be taken, so this surface has not been ` +
         'checked rather than checked and found clean.',
-    } as EvaluationSummary;
+    };
   }
   return {
     clean: open.length === 0,
@@ -445,5 +445,5 @@ export function summarise(outcome: EvaluationOutcome): EvaluationSummary {
             `Nothing is open. ${outcome.partial.length} element(s) could not be measured and are ` +
             'unknown rather than acceptable.'
           : null,
-  } as EvaluationSummary;
+  };
 }
