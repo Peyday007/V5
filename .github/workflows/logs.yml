@@ -26,7 +26,23 @@
 # the cleanup after it.
 name: Logs
 
+# Two triggers, and the second one is the reason this is usable at all.
+#
+# GitHub only lists a `workflow_dispatch` workflow once it exists on the
+# **default branch**, and the default branch here is `production` (§28). So a
+# log surface written while diagnosing a live fault cannot be dispatched
+# without first moving the canonical branch — which is the one ref this
+# repository is most careful about, and moving it to gain a diagnostic is the
+# wrong trade. A push to `logs/**` runs the workflow from the ref it was pushed
+# to, so the capture needs nothing on `production` at all.
+#
+# The namespace is the scoping: nothing else in this repository uses it, so no
+# ordinary push can start a capture. A run started that way takes the defaults
+# below, because a push carries no inputs.
 on:
+  push:
+    branches:
+      - 'logs/**'
   workflow_dispatch:
     inputs:
       seconds:
@@ -58,8 +74,10 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           # Through the environment, never interpolated into the shell.
-          LOG_SECONDS: ${{ inputs.seconds }}
-          LOG_PATTERN: ${{ inputs.pattern }}
+          # `inputs` is empty on a push, so each falls back to the default the
+          # dispatch form already shows.
+          LOG_SECONDS: ${{ inputs.seconds || '900' }}
+          LOG_PATTERN: ${{ inputs.pattern || 'mcp-tool-failure' }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
 
