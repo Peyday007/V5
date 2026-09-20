@@ -86,7 +86,15 @@ export interface PoolSurface {
   ineligibleBecause: string[];
   /** Room against the tighter of the two targets, as used/limit. */
   headroom: { used: number; limit: number | null };
-  /** When the provider said to try again, if it did. */
+  /**
+   * When the provider said to try again, **if that instant is still ahead**.
+   *
+   * A `retry_at` in the past is history rather than a condition: the fire
+   * router compares it to the clock and ignores it, so printing it beside
+   * `eligible yes` put two answers to one question on one screen — §29's
+   * status contradicting the control beside it, and the reason `now` is part
+   * of the snapshot this judges rather than something it reads itself.
+   */
   cooldownUntil: string | null;
   /** The most recent fire and what became of it. */
   lastFiredAt: string | null;
@@ -122,6 +130,14 @@ export interface PoolInput {
   expectedWorker: { id: string; name: string };
   repository: string;
   surfaces: PoolSurfaceInput[];
+  /**
+   * The instant this snapshot was taken, ISO-8601.
+   *
+   * Required rather than defaulted: a pure decision that read its own clock
+   * would answer differently on a re-run against the same recorded input,
+   * which is the whole property `router.ts` keeps this module pure for.
+   */
+  now: string;
 }
 
 /**
@@ -135,7 +151,7 @@ export interface PoolInput {
  */
 export function judgePool(input: PoolInput): PoolReport {
   const surfaces: PoolSurface[] = input.surfaces.map((surface) =>
-    judgeSurface(surface, input.expectedWorker, input.repository),
+    judgeSurface(surface, input.expectedWorker, input.repository, input.now),
   );
 
   const problems: string[] = [];
@@ -185,6 +201,7 @@ function judgeSurface(
   input: PoolSurfaceInput,
   expected: { id: string; name: string },
   repository: string,
+  now: string,
 ): PoolSurface {
   const problems: string[] = [];
   const ineligible: string[] = [];
@@ -240,7 +257,8 @@ function judgeSurface(
     input.routineTarget ?? input.accountTarget ?? null;
   const used = Math.max(input.routineInFlight, input.accountInFlight);
   if (limit !== null && used >= limit) ineligible.push(`at target ${used}/${limit}`);
-  const cooldownUntil = laterOf(input.routine.retryAt, input.account.retryAt);
+  const retryAt = laterOf(input.routine.retryAt, input.account.retryAt);
+  const cooldownUntil = retryAt !== null && retryAt > now ? retryAt : null;
 
   const proof = proveSurface({
     boundWorkerId: input.routine.workerId ?? '',
@@ -431,6 +449,7 @@ export async function readFactoryPool(input: {
   }
 
   return {
+    now: nowIso,
     expectedWorker: { id: expectedWorker.id, name: expectedWorker.name },
     repository: input.repository,
     surfaces,

@@ -892,6 +892,7 @@ describe('proving each surface, one at a time', () => {
     expect(whole.notes).toEqual([]);
 
     const alone = judgePool({
+      now: read.now,
       expectedWorker: read.expectedWorker,
       repository: read.repository,
       surfaces: read.surfaces.slice(0, 1),
@@ -901,9 +902,31 @@ describe('proving each surface, one at a time', () => {
     expect(alone.problems).toEqual([]);
   });
 
+  it('reports a cooldown only while it is still ahead, so it cannot contradict "eligible yes"', async () => {
+    /*
+     * `retry_at` in the past is history: the fire router compares it to the
+     * clock and ignores it. Printing it anyway put "cooling until <a moment
+     * two weeks ago>" on the same line as "eligible yes", which is two answers
+     * to one question — and production printed exactly that.
+     */
+    const read = await readFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
+    const first = read.surfaces[0]!;
+    const at = (iso: string): string | null =>
+      judgePool({
+        now: '2026-09-20T00:00:00.000Z',
+        expectedWorker: read.expectedWorker,
+        repository: read.repository,
+        surfaces: [{ ...first, routine: { ...first.routine, retryAt: iso } }],
+      }).surfaces[0]!.cooldownUntil;
+
+    expect(at('2026-09-09T22:32:10.195Z')).toBeNull();
+    expect(at('2026-09-20T01:00:00.000Z')).toBe('2026-09-20T01:00:00.000Z');
+  });
+
   it('judges from rows it is handed, so a verdict can be argued with afterwards', () => {
     // The pure half, with nothing read: an empty pool is not a proven one.
     const report = judgePool({
+      now: new Date().toISOString(),
       expectedWorker: { id: 'wkr_x', name: 'factory-brain' },
       repository: REPOSITORY,
       surfaces: [],
