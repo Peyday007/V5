@@ -140,8 +140,14 @@ Against the polluted one — 30 s timeout.
   time. Schema and marker are created in **one transaction**, because Postgres
   has transactional DDL and a schema that exists without its marker is one the
   sweeper cannot age.
-- Each run **drops the schemas it created** on teardown — the cheap path, and
-  the one that stops the leak going forward.
+- Each run **drops the schemas it created**, from a global `afterAll` in
+  `tests/setup.ts` beside the filesystem root's own `process.on('exit')` — the
+  cheap path, and the one that stops the leak going forward. **It was in
+  `teardown()` first, and that was wrong: 47 of 169 test files call it.** The
+  other 122 leaked exactly as before, and a sweep skips anything younger than
+  the cutoff, so a run could not see its own leavings for an hour. Measured on a
+  live cluster with two files that call no `teardown`: 33 schemas became 35
+  without the hook, and stayed 33 with it.
 - A sweeper retires what an interrupted run left behind, once per worker
   process, behind `pg_try_advisory_lock` so two workers cannot both drop the
   same schema. It skips anything newer than `STALE_AFTER_MS`, which is
