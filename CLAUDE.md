@@ -5953,6 +5953,16 @@ remembered to type, so `server/services/bridge/` is the way in.
   or a request id — and the replay returns the receipt the first attempt
   produced with `performed: false`, rather than silently answering as though it
   had done the work.
+- **A door that names its exception is wrong the day a fourth thing exists.**
+  `/mcp`'s `principalFor` refused `SESSION_COOKIE` by name, which was correct
+  for exactly as long as there were three authentication methods — and
+  `BRIDGE_BEARER` resolves to a person and sets a *header*, so a check written
+  as "not a cookie" would have admitted a key somebody pasted into a chat
+  client to the worker tool surface. It is an allowlist now, typed against
+  `AuthMethod` so a renamed method is a compile error, and §21's two bearers are
+  named rather than everything else being excluded. **Fail closed means naming
+  the set you admit**, and this is the same shape as §27's two `Set`s that had
+  to be total between them and were not.
 - **`TURN_OPENED` and `ANSWERED` are different outcomes.** `beginTurn` settles a
   turn in-request when it cannot tell which project a thread is about, and a
   receipt calling that `TURN_OPENED` would leave a client waiting for a worker

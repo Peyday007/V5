@@ -19,7 +19,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { authenticateRequest } from '../services/identity/authenticate.ts';
 import { recordIdentityEvent } from '../repos/identity.ts';
 import { contextFromRequest } from '../services/identity/context.ts';
-import type { DenialReason, Principal } from '../domain/types.ts';
+import type { AuthMethod, DenialReason, Principal } from '../domain/types.ts';
 import { dispatchModern, type DispatchContext } from './modern.ts';
 import { handleLegacy } from './legacy.ts';
 import { MAX_REQUEST_BYTES } from './limits.ts';
@@ -177,6 +177,15 @@ function originIsAcceptable(req: Request): boolean {
  * the exact combination `SameSite=Lax` and the origin check exist to prevent on
  * the HTTP API.
  */
+/**
+ * The only two credentials this door admits.
+ *
+ * Typed as `AuthMethod[]` so the compiler refuses a value that is not one, and
+ * declared here rather than inline so that adding a third is a visible decision
+ * in a file somebody reviews rather than a condition somebody edits.
+ */
+const DOOR_METHODS: readonly AuthMethod[] = ['WORKER_BEARER', 'OAUTH_BEARER'];
+
 async function principalFor(
   req: Request,
 ): Promise<{ ok: true; principal: Principal } | { ok: false; reason: DenialReason }> {
@@ -185,10 +194,28 @@ async function principalFor(
 
   const outcome = await authenticateRequest(req);
   if (!outcome.ok) return { ok: false, reason: outcome.reason };
-  // Two doors, one principal. `WORKER_BEARER` is a credential an administrator
-  // issued directly; `OAUTH_BEARER` is a token this Brain minted after a human
-  // approved the connection. A session cookie is neither, and is refused below.
-  if (outcome.principal.authMethod === 'SESSION_COOKIE') {
+
+  /*
+   * An allowlist, and it has to be one.
+   *
+   * Two doors, one principal. `WORKER_BEARER` is a credential an administrator
+   * issued directly; `OAUTH_BEARER` is a token this Brain minted after a human
+   * approved the connection. §21 admits those two and nothing else.
+   *
+   * This was written the other way round — *refuse `SESSION_COOKIE`* — and that
+   * was correct for exactly as long as there were three authentication methods.
+   * The moment a fourth appeared it was wrong by default: the conversation
+   * bridge's `BRIDGE_BEARER` resolves to a **person**, sets a header rather than
+   * a cookie, and would therefore have walked straight through a check whose
+   * whole job is to keep everything but a worker out. A chat key would have
+   * reached the worker tool surface.
+   *
+   * So the set is named rather than the exception. A method added later is
+   * refused until somebody writes it in, which is the direction a door has to
+   * fail in — and `DOOR_METHODS` is a `const` the compiler checks against
+   * `AuthMethod`, so a renamed method is an error rather than a silent miss.
+   */
+  if (!DOOR_METHODS.includes(outcome.principal.authMethod)) {
     return { ok: false, reason: 'INVALID_CREDENTIALS' };
   }
   return { ok: true, principal: outcome.principal };
