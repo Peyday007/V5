@@ -87,11 +87,26 @@ export async function unfiledWork(projectIds: string[]): Promise<UnfiledItem[]> 
       });
     }
 
+    /*
+     * A software request that has not become a change request yet has nothing
+     * a `CHANGE_REQUEST` link could resolve.
+     *
+     * The first version of this filed it under its own `rsr_` id anyway, which
+     * `readChangeRequest` would then report as missing for ever — a link whose
+     * target is gone, on a row that is perfectly healthy. A register that told
+     * somebody their work had vanished would be worse than one that had never
+     * mentioned it, which is §27's cries-wolf rule at a new reader.
+     *
+     * So it is offered **only once it has one**. Until then it is the
+     * conversation's own business and the bridge's status answers it, which is
+     * where a person asking "what happened to what I said" is already looking.
+     */
     for (const request of await listSoftwareRequests({ projectId })) {
       if (request.state === 'DECLINED') continue;
+      if (!request.changeRequestId) continue;
       push({
         kind: 'CHANGE_REQUEST',
-        ref: request.changeRequestId ?? request.id,
+        ref: request.changeRequestId,
         title: request.title,
         status: request.state,
         projectId,

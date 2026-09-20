@@ -34,6 +34,7 @@ import {
 } from '../server/repos/register.ts';
 import { assembleRegister, viewOf } from '../server/services/register/view.ts';
 import { createConversation } from '../server/repos/russellConversations.ts';
+import { captureSoftwareRequest } from '../server/repos/russellSoftware.ts';
 import { submitObjective, approveObjective } from '../server/services/factory/contract.ts';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -427,5 +428,33 @@ describe('what the register says it is holding that nobody filed', () => {
 
     const after = await assembleRegister({ projectIds: [projectId] });
     expect(after.unfiled.map((x) => x.ref)).not.toContain(id);
+  });
+
+  it('does not offer a software request that has no change request yet', async () => {
+    /*
+     * Offering it under its own `rsr_` id as a CHANGE_REQUEST link was the
+     * first version, and it would have produced a link `readChangeRequest`
+     * reports as missing for ever — a register telling somebody their work had
+     * vanished, on a row that is perfectly healthy. §27's cries-wolf rule at a
+     * new reader: a warning that is wrong teaches a person to stop believing
+     * the one place that says something is genuinely gone.
+     */
+    const conversation = await createConversation({ ownerUserId: userId, title: 'Asking for a change' });
+    const captured = await captureSoftwareRequest({
+      projectId,
+      conversationId: conversation.id,
+      messageId: null,
+      title: 'Fix the export',
+      objective: 'The export stops dropping the last row.',
+      expectedOutcome: 'A run of the export contains every row.',
+      submissionKey: `sw-${Math.random().toString(36).slice(2, 10)}`,
+    });
+
+    const view = await assembleRegister({ projectIds: [projectId] });
+    expect(view.unfiled.map((one) => one.ref)).not.toContain(captured.request.id);
+    // And nothing in the register claims a missing change request either.
+    expect(view.unfiled.every((one) => one.ref.startsWith('fcr_') || one.kind !== 'CHANGE_REQUEST')).toBe(
+      true,
+    );
   });
 });
