@@ -36,6 +36,15 @@ export type Route =
    */
   | { name: 'INVITE' }
   | { name: 'ENROL' }
+  /**
+   * The break-glass door, and the only address in this shell nothing links to.
+   *
+   * Deliberately unlisted rather than hidden: somebody who needs it has been
+   * told it, and putting a way to it on the sign-in screen would make it the
+   * alternative the sign-in screen exists not to offer. See
+   * `components/Recovery.tsx`.
+   */
+  | { name: 'RECOVERY' }
   | { name: 'DEVICES' }
   /**
    * Who has joined, and what can run.
@@ -82,6 +91,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'INVITE' };
     case 'enrol':
       return { name: 'ENROL' };
+    case 'recovery':
+      return { name: 'RECOVERY' };
     case 'devices':
       return { name: 'DEVICES' };
     case 'people':
@@ -121,6 +132,8 @@ export function pathFor(route: Route): string {
       return '/invite';
     case 'ENROL':
       return '/enrol';
+    case 'RECOVERY':
+      return '/recovery';
     case 'DEVICES':
       return '/devices';
     case 'PEOPLE':

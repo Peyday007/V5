@@ -1,13 +1,41 @@
 /**
- * Signing in, signing out, and changing a password.
+ * The password door, signing out, and changing a password.
  *
- * The only routes in the application that can be reached without credentials,
- * which is why they are the only ones written to give nothing away. Every
- * refusal here is the same refusal: a wrong password, an unknown address, a
- * disabled account and an expired session all produce one sentence and one
- * status code. The differences between them are exactly what somebody probing
- * would like to learn, and there is no benefit to a legitimate user in being
- * told which of the four it was — they will try the same thing either way.
+ * ---------------------------------------------------------------------------
+ * This is no longer how a person signs in
+ * ---------------------------------------------------------------------------
+ *
+ * `POST /api/auth/login` used to be *the* human door and is now the
+ * break-glass one. A person signs in with a device, at
+ * `/api/auth/passkey/verify`; nothing the ordinary client renders calls this
+ * route, and the screen it used to live on has no address field and no password
+ * field on it at all.
+ *
+ * What still arrives here, and why the route is not simply gone:
+ *
+ *   * **the hosted verification identities**, which `scripts/verify-hosted.ts`
+ *     creates as `kind = 'SYSTEM'` on every deploy and signs in as over the
+ *     real edge — machinery proving itself, with no device and never one;
+ *   * **an account that has no working device yet**, which on the live Brain
+ *     means the owner until the first time a passkey signs them in;
+ *   * **an emergency**, when `BRAIN_BREAK_GLASS` is armed in the deployment's
+ *     own secrets.
+ *
+ * `passwordDoor.ts` holds the rule that decides between them and the reasoning
+ * behind it. Here there is one thing worth saying about *where* the check sits:
+ * it is applied **after** the password has been verified, so a closed door and
+ * a wrong password take the same time and produce the same body. Checking it
+ * first would answer faster for an account that holds a device than for one
+ * that does not, which is a way to learn who has enrolled.
+ *
+ * ---------------------------------------------------------------------------
+ *
+ * Every refusal here is the same refusal: a wrong password, an unknown address,
+ * a disabled account, a closed door and an expired session all produce one
+ * sentence and one status code. The differences between them are exactly what
+ * somebody probing would like to learn, and there is no benefit to a legitimate
+ * user in being told which of the five it was — they will try the same thing
+ * either way.
  */
 import { Router } from 'express';
 import type { Request, Response } from 'express';
@@ -21,11 +49,16 @@ import {
   setUserPassword,
 } from '../repos/identity.ts';
 import {
-  SESSION_TTL_MS,
+  PASSWORD_SESSION_TTL_MS,
   clearedSessionCookie,
   isSecureRequest,
   sessionCookie,
 } from '../services/identity/authenticate.ts';
+import {
+  PASSWORD_DOOR_REFUSED,
+  breakGlassArmed,
+  passwordDoorOpenFor,
+} from '../services/identity/passwordDoor.ts';
 import {
   MIN_PASSWORD_LENGTH,
   WeakPasswordError,
@@ -38,8 +71,14 @@ import { HttpError, badRequest, bodyOf, handler, requiredString } from './helper
 
 export const authRouter = Router();
 
-/** One sentence for every way of failing to sign in. */
-const REFUSED = 'Those credentials were not accepted.';
+/**
+ * One sentence for every way of failing to sign in.
+ *
+ * It lives in `passwordDoor.ts` now, beside the rule that produces most of the
+ * refusals, so that a door that is closed and a password that is wrong cannot
+ * drift into saying two different things.
+ */
+const REFUSED = PASSWORD_DOOR_REFUSED;
 
 // ---------------------------------------------------------------------------
 // A modest brake on guessing
@@ -214,14 +253,29 @@ authRouter.post('/auth/login', (req: Request, res: Response) => {
         found?.verifier ?? 'scrypt$N=16384,r=8,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAA';
       const matches = await verifyPassword(password, verifierToTest);
 
-      if (!found || !matches || found.user.disabled) {
+      /*
+       * The door, asked after the password rather than before it.
+       *
+       * An account that holds a working device does not get in here however
+       * right its password is — and it is refused in the same words, with the
+       * same status, after the same work, as one whose password was wrong. The
+       * category is on the audit row, which is where a distinction belongs.
+       */
+      const doorOpen = found ? await passwordDoorOpenFor(found.user.id) : true;
+
+      if (!found || !matches || found.user.disabled || !doorOpen) {
         recordFailure(key);
         await audit(req, {
           action: 'SIGN_IN',
           result: 'DENIED',
           actorId: found?.user.id ?? null,
           reason: found?.user.disabled ? 'PRINCIPAL_DISABLED' : 'INVALID_CREDENTIALS',
-          metadata: { attempted: email },
+          metadata: {
+            attempted: email,
+            ...(found && matches && !found.user.disabled && !doorOpen
+              ? { category: 'PASSWORD_DOOR_CLOSED' }
+              : {}),
+          },
         });
         res.status(401).json({ error: REFUSED });
         return;
@@ -232,9 +286,12 @@ authRouter.post('/auth/login', (req: Request, res: Response) => {
       const session = await createSession({
         userId: found.user.id,
         secret: token.secret,
-        ttlMs: SESSION_TTL_MS,
+        ttlMs: PASSWORD_SESSION_TTL_MS,
         userAgent: req.header('user-agent') ?? null,
         ip: req.ip ?? null,
+        // No device opened this one, and saying so is what keeps it out of
+        // reach of a per-device revocation that could not honestly reach it.
+        passkeyId: null,
       });
 
       await audit(req, {
@@ -243,13 +300,16 @@ authRouter.post('/auth/login', (req: Request, res: Response) => {
         actorType: 'HUMAN',
         actorId: found.user.id,
         credentialId: session.sessionId,
+        // Which door, and whether the emergency switch was what opened it.
+        // "Recovery use must be auditable" is this line.
+        metadata: { door: 'PASSWORD', breakGlass: breakGlassArmed() },
       });
 
       res.setHeader(
         'Set-Cookie',
         sessionCookie(token.secret, {
           secure: isSecureRequest(req),
-          maxAgeMs: SESSION_TTL_MS,
+          maxAgeMs: PASSWORD_SESSION_TTL_MS,
         }),
       );
       res.setHeader('Cache-Control', 'no-store');
@@ -345,7 +405,18 @@ authRouter.post(
     const found = principal.handle
       ? await getPasswordVerifierByEmail(principal.handle)
       : null;
-    if (!found || !(await verifyPassword(currentPassword, found.verifier))) {
+    /*
+     * The same door, at the same account.
+     *
+     * Somebody whose device works does not get to set or rotate a password
+     * from an ordinary session — which is a real property rather than tidiness:
+     * without it, a session in the wrong hands could write a credential that
+     * outlives every device revocation aimed at it. Rotating a break-glass
+     * password is still possible, with break-glass armed, which is the same
+     * deliberate act that makes it usable at all.
+     */
+    const doorOpen = await passwordDoorOpenFor(principal.id);
+    if (!doorOpen || !found || !(await verifyPassword(currentPassword, found.verifier))) {
       await audit(req, {
         action: 'CHANGE_PASSWORD',
         result: 'DENIED',
