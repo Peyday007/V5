@@ -33,9 +33,11 @@ import {
   type LaneEvidenceKind,
   type StructuralFinding,
   type LaborFinding,
+  type CapabilityFinding,
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
 import { validateLabor } from '../../domain/labor.ts';
+import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
 import {
   booleanField,
   confidenceField,
@@ -536,6 +538,12 @@ export interface ParsedClaim {
   laborQualifier: string | null;
   /** A published rate, where a source published one. Null means unknown. */
   laborRateCents: number | null;
+  /** What it establishes about what building a machine takes, or null. */
+  capabilityFinding: CapabilityFinding | null;
+  /** What that finding is about: a name, or a value from that kind's own set. */
+  capabilitySubject: string | null;
+  /** When the source observed a demand signal. Null on every other kind. */
+  capabilityObservedOn: string | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -730,6 +738,21 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!labor.ok) return labor;
 
+  /*
+   * What this claim establishes about building a machine, if anything.
+   *
+   * Delegated whole to `validateCapabilityFinding` for the reason directly
+   * above: the MCP tool calls the same function, and two readers of one rule
+   * is how they come to disagree.
+   */
+  const capability = validateCapabilityFinding({
+    where,
+    finding: row['capabilityFinding'],
+    subject: row['capabilitySubject'],
+    observedOn: row['capabilityObservedOn'],
+  });
+  if (!capability.ok) return capability;
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -769,6 +792,9 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       laborSubject: labor.value.subject,
       laborQualifier: labor.value.qualifier,
       laborRateCents: labor.value.rateCents,
+      capabilityFinding: capability.value.finding,
+      capabilitySubject: capability.value.subject,
+      capabilityObservedOn: capability.value.observedOn,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

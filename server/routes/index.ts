@@ -23,6 +23,7 @@ import { factoryRouter } from './factory.ts';
 import { connectRouter } from './connect.ts';
 import { cashRouter } from './cash.ts';
 import { laborRouter } from './labor.ts';
+import { manufacturingRouter } from './manufacturing.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
@@ -92,10 +93,11 @@ export function createApiRouter(): Router {
   // an opportunity, a commitment or a need directly. Before the projects router
   // so its own `/:projectId/...` routes do not swallow them.
   router.use(cashRouter);
-  // The labor kernel (§39). Root-mounted for the same reason and with the same
+  // The labor kernel (§41). Root-mounted for the same reason and with the same
   // ordering requirement: its routes carry their own `/projects/:id/labor/...`
   // prefix and must sit before the projects router.
   router.use(laborRouter);
+  router.use(manufacturingRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

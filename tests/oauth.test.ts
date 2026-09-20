@@ -50,6 +50,10 @@ let memberCookie = '';
 let projectId = '';
 let workerId = '';
 let orphanWorkerId = '';
+// The neutral labels Brain assigned. Every screen names a worker by these;
+// the handles above are lookup keys and appear on no page. See migration 074.
+let workerLabel = '';
+let orphanLabel = '';
 let clientId = '';
 
 interface Reply<T = unknown> {
@@ -286,11 +290,12 @@ beforeAll(async () => {
     body: { principalId: member.body.user.id, principalType: 'HUMAN', role: 'MEMBER' },
   });
 
-  const worker = await api<{ worker: { id: string } }>('POST', '/api/admin/workers', {
+  const worker = await api<{ worker: { id: string; label: string } }>('POST', '/api/admin/workers', {
     cookie: adminCookie,
     body: { name: 'claude-max-worker-01', displayName: 'Claude Max Worker 01' },
   });
   workerId = worker.body.worker.id;
+  workerLabel = worker.body.worker.label;
   await api('POST', `/api/admin/projects/${projectId}/members`, {
     cookie: adminCookie,
     body: {
@@ -301,11 +306,12 @@ beforeAll(async () => {
   });
 
   // A worker with no membership at all, to prove a pointless connection is caught.
-  const orphan = await api<{ worker: { id: string } }>('POST', '/api/admin/workers', {
+  const orphan = await api<{ worker: { id: string; label: string } }>('POST', '/api/admin/workers', {
     cookie: adminCookie,
     body: { name: 'orphan-worker', displayName: 'Orphan' },
   });
   orphanWorkerId = orphan.body.worker.id;
+  orphanLabel = orphan.body.worker.label;
 
   const registered = await api<{ client_id: string }>('POST', '/oauth/register', {
     body: { client_name: 'Claude', redirect_uris: [REDIRECT] },
@@ -448,10 +454,15 @@ describe('an invitation in an administrator\u2019s browser', () => {
     // The chooser, not the single-worker invited screen: the administrator's
     // own authority is what this page runs on.
     expect(html).toContain('Connect a worker');
-    expect(html).toContain('claude-max-worker-01');
+    expect(html).toContain(workerLabel);
+    // By its neutral identity, never by the handle somebody typed: this is the
+    // screen where an identity is chosen, so a name that implies whose account
+    // it is, is how the wrong one gets picked.
+    expect(html).not.toContain('claude-max-worker-01');
     // And the answer to "why am I being shown a list".
     expect(html).toContain('This browser holds an invitation for');
-    expect(html).toContain('orphan-worker');
+    expect(html).toContain(orphanLabel);
+    expect(html).not.toContain('orphan-worker');
     expect(html).toContain('the invitation is not used');
     // Preselected, so the ordinary case is one click.
     expect(html).toMatch(new RegExp(`value="${orphanWorkerId}" selected`));
@@ -517,7 +528,9 @@ describe('an invitation in an administrator\u2019s browser', () => {
     const html = await response.text();
     expect(html).not.toContain('Connect a worker');
     expect(html).toContain('connecting on an invitation');
-    expect(html).toContain('orphan-worker');
+    expect(html).toContain(orphanLabel);
+    expect(html).not.toContain('orphan-worker');
+    expect(html).not.toContain(workerLabel);
     expect(html).not.toContain('claude-max-worker-01');
   });
 });
@@ -546,12 +559,23 @@ describe('client registration', () => {
 });
 
 describe('the consent screen', () => {
-  it('asks an unauthenticated visitor to sign in to the Brain', async () => {
+  it('sends an unauthenticated visitor to sign in with their device, and asks for nothing', async () => {
     const { challenge } = pkce();
     const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`);
     const html = await response.text();
     expect(response.status).toBe(200);
-    expect(html).toContain('Sign in to the Brain');
+    expect(html).toContain('Sign in with your device');
+    /*
+     * And it collects nothing. This page used to carry an address and a
+     * password and post them to `/api/auth/login`, which was the one surface
+     * still offering a password as an ordinary way in — see
+     * `services/identity/passwordDoor.ts`. The operator is in a browser on this
+     * Brain's own origin, so the Brain is one tab away and **Continue** is this
+     * same request re-asked with its parameters intact.
+     */
+    expect(html).not.toContain('type="password"');
+    expect(html).not.toContain('name="email"');
+    expect(html).toContain('/oauth/authorize');
   });
 
   it('shows the signed-in administrator what access it is granting', async () => {
@@ -561,8 +585,10 @@ describe('the consent screen', () => {
     });
     const html = await response.text();
     expect(html).toContain('Connect a worker');
-    // The decision is only meaningful if the access is on screen beside it.
-    expect(html).toContain('claude-max-worker-01');
+    // The decision is only meaningful if the access is on screen beside it —
+    // and the worker is named by what it is, not by whom it sounds like.
+    expect(html).toContain(workerLabel);
+    expect(html).not.toContain('claude-max-worker-01');
     expect(html).toContain('queue:claim');
   });
 
@@ -806,7 +832,13 @@ describe('the invariant: a token is the worker, not the approver', () => {
     expect(who.isError).toBe(false);
     // The administrator approved it. The administrator is not who it is.
     expect(who.structured['principalType']).toBe('WORKER');
-    expect(who.structured['handle']).toBe('claude-max-worker-01');
+    // And what it answers with is the *neutral* identity, never the handle
+    // whoever created the row happened to type. A worker called after a person
+    // made every reader treat `brain_whoami` as a statement about whose Claude
+    // account had run the session, which it has never been — see migration 074.
+    expect(who.structured['handle']).toMatch(/^worker-\d\d$/);
+    expect(who.structured['handle']).not.toBe('claude-max-worker-01');
+    expect(who.structured['displayName']).not.toBe('claude-max-worker-01');
   });
 
   it('carries the workerscopes, not the administrator’s authority', async () => {
@@ -923,7 +955,10 @@ describe('lifecycle', () => {
     });
     const who = await callTool(issued.body.secret, 'brain_whoami');
     expect(who.isError).toBe(false);
-    expect(who.structured['handle']).toBe('claude-max-worker-01');
+    // Both eras answer with the same neutral identity: the label is a property
+    // of the worker row, so it cannot differ by which credential was presented.
+    expect(who.structured['handle']).toMatch(/^worker-\d\d$/);
+    expect(who.structured['handle']).not.toBe('claude-max-worker-01');
   });
 });
 

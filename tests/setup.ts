@@ -16,6 +16,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { afterAll } from 'vitest';
+import { releaseTestSchemas } from './pgSchemas.ts';
 
 const PREFIX = 'brain-test-';
 
@@ -27,7 +29,7 @@ const PREFIX = 'brain-test-';
  * individual suite is a couple of minutes; an hour is far past any of them and
  * far short of leaving a run's worth of directories behind.
  */
-const STALE_AFTER_MS = 60 * 60 * 1000;
+export const STALE_AFTER_MS = 60 * 60 * 1000;
 
 function sweepStaleRoots(): void {
   const tmp = os.tmpdir();
@@ -65,6 +67,23 @@ function removeOwnRoot(): void {
     /* best effort; the next run's sweep will get it */
   }
 }
+
+/*
+ * And the Postgres schema derived from this root, in the same place for the
+ * same reason.
+ *
+ * A global `afterAll` rather than something a test file opts into: the first
+ * version of this put the drop in `helpers.ts`'s `teardown()`, which **47 of
+ * 169 files call**. The other 122 leaked exactly as they had before, and the
+ * sweep — which skips anything younger than `STALE_AFTER_MS` — could not see a
+ * run's own leavings until an hour after it finished.
+ *
+ * It cannot fail a suite. A schema that will not drop is a leak for the sweep
+ * to clear, which is what the sweep is for.
+ */
+afterAll(async () => {
+  await releaseTestSchemas();
+});
 
 process.on('exit', removeOwnRoot);
 // The signals vitest's pool actually uses to stop a worker. Without these an

@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { registerBlueprint, ensureArchitectureScope } from '../server/services/capability/ingest.ts';
+import { reopenFailedSource, reopenableSources } from '../server/services/capability/reopen.ts';
 import { listLayers } from '../server/repos/layers.ts';
 import {
   advanceSources,
@@ -38,6 +39,7 @@ import {
   currentSections,
   derivePacket,
   facultiesWithoutPackets,
+  judgeGap,
   listGaps,
   livePacketFor,
   missingSections,
@@ -47,7 +49,11 @@ import {
   readiness,
 } from '../server/services/realize/packet.ts';
 import { decisionReadiness, directorPass } from '../server/services/realize/director.ts';
+import { GAP_KINDS } from '../server/services/realize/gaps.ts';
 import { compile } from '../server/services/realize/compile.ts';
+import { handOff } from '../server/services/realize/handoff.ts';
+import { applyRealization, readRealization } from '../server/services/realize/realized.ts';
+import { askTheWorld, outstandingQuestions } from '../server/services/realize/askTheWorld.ts';
 import {
   answerAuthorityGap,
   gapsAwaitingAPerson,
@@ -72,6 +78,8 @@ const USAGE = `
   register <file> --title <t> [--amends <sourceId>]   register a blueprint or amendment
   sources                                             every registered source and its state
   advance                                             run one ingestion tick
+  reopen <sourceId> --admin <e> --reason <words>      read a failed or partial source again
+  failed                                              every source a re-read could still win
   read <sourceId>                                     what Brain can see in one source
   candidates [<sourceId>]                             proposed definitions and their verdicts
   faculties                                           the canonical registry, all six dimensions
@@ -87,11 +95,26 @@ const USAGE = `
   packet research <packetId>                          what it should research next, if anything
   packet compile <packetId>                           the change request it implies
   packet prove <packetId> [--apply]                   what the evidence supports, and what it does not
+  packet realize <packetId> [--apply]                 the dimensions the packet's own rows support
   packet section <packetId> <SECTION> <file.json>     write a design section a reader authored
+  packet judge <gapId> --kind <k> --evidence <words>  a reader's classification of one gap
+  packet outstanding <packetId>                       the questions the director has open
+  packet ask <packetId>                               turn the researchable ones into ideas
+  packet handoff <packetId>                           hand the compiled contract to Build
   packet awaiting <packetId>                          every gap waiting on a person
   packet answer <gapId> --grant|--refuse --admin <e>  a person's answer to one of them
            --statement <words>
   packets                                             every packet, and faculties with none
+
+  Five of those were missing from this list while the commands existed, and
+  "packet judge" is the one that mattered: it is the only way out of
+  NEEDS_A_READING, everything downstream of an unread gap refuses, and an
+  operator reading this text could not find it. A remedy nobody can reach is
+  the defect this whole surface was added to correct, one layer up.
+
+  Nothing here runs the chain. The durable tick does that by itself — deriving,
+  asking, moving the dimensions, compiling and handing off — and these are the
+  inspectable manual recovery beside it, reaching the identical functions.
 
   submit <binId> <file.json> --worker <handle>        submit a reading through the worker path
   verdicts <binId> <file.json> --worker <handle>      submit audit verdicts, as a second session
@@ -122,6 +145,12 @@ async function main(): Promise<void> {
       break;
     case 'advance':
       await advance();
+      break;
+    case 'reopen':
+      await reopen(rest);
+      break;
+    case 'failed':
+      await failed();
       break;
     case 'read':
       await read(rest);
@@ -208,6 +237,67 @@ async function register(argv: string[]): Promise<void> {
     // A command that changed nothing must not print success.
     fail('These exact bytes were already registered, so nothing changed.');
   }
+}
+
+async function reopen(argv: string[]): Promise<void> {
+  const sourceId = argv[0];
+  const admin = flag(argv, 'admin');
+  const reason = flag(argv, 'reason');
+  if (!sourceId || sourceId.startsWith('--') || !admin || !reason) {
+    fail(
+      'Usage: reopen <sourceId> --admin <email> --reason "…"\n' +
+        '  Reopening spends an activation, so it names the administrator whose authority it ' +
+        'carries and says why. It refuses anything that is not FAILED.',
+    );
+  }
+  const outcome = await reopenFailedSource({
+    sourceId: sourceId as string,
+    requestedByEmail: admin as string,
+    reason: reason as string,
+    channel: 'SHELL',
+  });
+  out('');
+  out(`  ${outcome.reopened ? 'Reopened' : 'Not reopened'}  ${sourceId}`);
+  if (outcome.source) out(`  State            ${outcome.source.ingestState}`);
+  out(`  Refusals kept    ${outcome.preserved}`);
+  for (const line of wrapLines(outcome.reason)) out(`  ${line}`);
+  out('');
+  if (!outcome.reopened) fail('Nothing was reopened.');
+}
+
+async function failed(): Promise<void> {
+  const rows = await reopenableSources();
+  out('');
+  if (rows.length === 0) out('  Nothing a second reading could win anything from.');
+  for (const { source, unpromoted } of rows) {
+    out(`  ${source.id}  ${source.ingestState} ${source.kind} v${source.version}  ${source.title}`);
+    out(`      bin    ${source.binId ?? '-'}`);
+    out(
+      `      ${unpromoted} candidate(s) not promoted` +
+        (source.ingestState === 'PROMOTED'
+          ? ' — a partial reading, which is reopenable for exactly those.'
+          : ''),
+    );
+    for (const line of wrapLines(source.ingestDetail ?? 'no detail recorded')) out(`      ${line}`);
+  }
+  out('');
+}
+
+/** Wrap a recorded sentence so a terminal reader sees all of it. */
+function wrapLines(text: string, width = 92): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if (line.length === 0) line = word;
+    else if (line.length + 1 + word.length <= width) line += ` ${word}`;
+    else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line.length > 0) lines.push(line);
+  return lines;
 }
 
 async function sources(): Promise<void> {
@@ -404,8 +494,10 @@ async function packet(argv: string[]): Promise<void> {
       out('');
       out('  Gaps');
       for (const gap of gaps) {
-        out(`    ${gap.state.padEnd(9)} ${gap.kind.padEnd(26)} ${gap.derivedBy.padEnd(7)} ${gap.aspect}`);
+        out(`    ${gap.id}`);
+        out(`      ${gap.state.padEnd(9)} ${gap.kind.padEnd(26)} ${gap.derivedBy.padEnd(7)} ${gap.aspect}`);
         out(`        ${gap.requirement}`);
+        if (gap.componentKey) out(`        against ${gap.componentKey}`);
       }
       out('');
       out(`  Ready: ${verdict.ready ? 'YES' : 'no'}`);
@@ -610,8 +702,168 @@ async function packet(argv: string[]): Promise<void> {
       out('');
       break;
     }
+    case 'judge': {
+      /*
+       * The reading a packet waits for, and the thing nothing could record.
+       *
+       * `judgeGap` existed, was exercised by four suites and had **no
+       * production caller** — so `NEEDS_A_READING` was a state a packet could
+       * enter and never leave. Everything downstream is guarded on it:
+       * `readiness` refuses while one is open, `decisionReadiness` refuses,
+       * `compile` refuses, `handOff` refuses, and the implementation reading
+       * refuses. So every packet in production was permanently stuck, and the
+       * kernel's own record of a reader classifying twenty-five gaps was done
+       * through something that is not a shipped surface.
+       *
+       * It belongs on a terminal for §26's reason: reaching the shell is the
+       * authentication, and `--admin` is the attribution. A reader may answer
+       * any kind — `DERIVABLE` bounds what *Brain* may derive by itself, and
+       * `NEEDS_JUDGEMENT` is precisely the set a person is here to supply — so
+       * the constraint is not on the answer but on who it is recorded as.
+       * `derivedBy` is always PERSON, and there is no flag that changes it.
+       */
+      const gapId = rest[0];
+      const kind = flag(rest, 'kind');
+      const evidence = flag(rest, 'evidence');
+      if (!gapId || !kind || !evidence) {
+        fail(
+          'Usage: packet judge <gapId> --kind <kind> --evidence "what you compared" ' +
+            '[--component <componentKey>]\n  kinds: ' +
+            GAP_KINDS.join(', '),
+        );
+      }
+      if (!(GAP_KINDS as readonly string[]).includes(kind as string)) {
+        fail(`Not a gap kind: ${kind}. One of: ${GAP_KINDS.join(', ')}`);
+      }
+      await judgeGap({
+        gapId: gapId as string,
+        kind: kind as (typeof GAP_KINDS)[number],
+        evidence: evidence as string,
+        componentKey: flag(rest, 'component'),
+        derivedBy: 'PERSON',
+      });
+      out('');
+      out(`  ${gapId} is ${kind}, on a person's reading.`);
+      out('  Nothing else moved. What this unblocks is whatever was waiting on the reading:');
+      out('  `packet show` for the stopping condition, `packet realize` for the dimensions.');
+      out('');
+      break;
+    }
+    case 'ask': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet ask <packetId> [--project <id> --layer <id>]');
+      const scope = await ensureArchitectureScope();
+      const layers = await listLayers(scope.id);
+      const layerId = flag(rest, 'layer') ?? layers[0]?.id ?? null;
+      if (!layerId) fail('That project has no layer for the work to file under.');
+      const outcome = await askTheWorld({
+        packetId: id as string,
+        projectId: flag(rest, 'project') ?? scope.id,
+        layerId,
+      });
+      out('');
+      out(`  ${outcome.explanation}`);
+      out(`  Already answered by the archive: ${outcome.alreadyAnswered}`);
+      out(`  Asked: ${outcome.asked.length}`);
+      for (const row of outcome.asked) {
+        out(`    ${row.question.aspect.padEnd(24)} ${row.candidateId ?? 'not captured'}`);
+        out(`      ${row.reason}`);
+      }
+      if (outcome.notResearch.length > 0) {
+        out('');
+        out(`  ${outcome.notResearch.length} gap(s) are real and are not research:`);
+        for (const row of outcome.notResearch) out(`    ${row.kind.padEnd(28)} ${row.remedy}`);
+      }
+      out('');
+      out('  Nothing was launched, approved or spent. Each of these is an idea, and whether');
+      out('  it becomes a mission is the standing authority\'s decision on the same path');
+      out('  every other idea takes.');
+      out('');
+      break;
+    }
+    case 'outstanding': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet outstanding <packetId>');
+      const rows = await outstandingQuestions(id as string);
+      out('');
+      if (rows.length === 0) out('  Nothing is out with the world for this packet.');
+      for (const row of rows) {
+        out(`  ${row.candidateId}  ${row.requirement}`);
+        out(`    ${row.reason}`);
+      }
+      out('');
+      break;
+    }
+    case 'handoff': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet handoff <packetId> [--project <id>] [--remote <url>]');
+      const scope = await ensureArchitectureScope();
+      const outcome = await handOff({
+        packetId: id as string,
+        projectId: flag(rest, 'project') ?? scope.id,
+        repositoryRemote: flag(rest, 'remote') ?? undefined,
+        baseBranch: flag(rest, 'base') ?? undefined,
+      });
+      out('');
+      if (!outcome.ok) {
+        out(`  Refused: ${outcome.reason}`);
+        for (const line of outcome.unresolved) out(`    ${line}`);
+        out('');
+        fail('Nothing was handed off.');
+      }
+      out(`  Change request  ${outcome.changeRequest.id}`);
+      out(`  State           ${outcome.changeRequest.state}`);
+      out(`  ${outcome.created ? 'Recorded now.' : 'This ask already existed; the packet points at it.'}`);
+      out(`  Objective`);
+      out(`    ${outcome.compiled.submission.objective}`);
+      out(`  Acceptance conditions`);
+      for (const entry of outcome.compiled.provenance) {
+        out(`    ${entry.condition}`);
+        out(`      from gap ${entry.gapId} (${entry.aspect})`);
+      }
+      out('');
+      out('  Nothing has started. Approving this and starting a campaign is a person\'s');
+      out('  decision, through the same approve-and-start every other entrance uses.');
+      out('');
+      break;
+    }
+    case 'realize': {
+      const id = rest[0];
+      if (!id) fail('Usage: packet realize <packetId> [--apply]');
+      const reading = await readRealization(id as string);
+      out('');
+      out(`  ${reading.facultySlug}`);
+      for (const row of reading.readings) {
+        out(`    ${row.dimension.padEnd(16)} ${row.to ?? 'no reading'}`);
+        out(`      ${row.reason}`);
+        for (const line of row.basis) out(`      - ${line}`);
+        if (row.withheld) out(`      withheld: ${row.withheld}`);
+      }
+      if (rest.includes('--apply')) {
+        const applied = await applyRealization({
+          packetId: id as string,
+          actorType: 'OPERATOR',
+          actorId: flag(rest, 'admin'),
+        });
+        out('');
+        for (const row of applied.moved) out(`  moved ${row.dimension} -> ${row.to}`);
+        for (const row of applied.unchanged) out(`  kept  ${row.dimension}: ${row.why}`);
+        if (applied.moved.length === 0) {
+          out('');
+          fail('Nothing moved.');
+        }
+      } else {
+        out('');
+        out('  Reading only. Pass --apply to record the moves this supports.');
+      }
+      out('');
+      break;
+    }
     default:
-      fail('Usage: packet <open|derive|show|research|compile|prove> …');
+      fail(
+        'Usage: packet <open|derive|show|judge|research|compile|prove|ask|outstanding|' +
+          'handoff|realize> …',
+      );
   }
 }
 

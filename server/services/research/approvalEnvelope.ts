@@ -519,6 +519,131 @@ posting, listing, filing or submitting anything anywhere; making any commitment 
 anybody's behalf. This is read-only research into what is already published. Nothing here
 hires, engages, approaches or contracts with anybody, and every action beyond reading
 needs a separate commercial authorization from a person.`;
+export const MACHINE_LADDER_ASSIGNMENT_TEMPLATE = `Establish, from published sources, which classes of machine exist here and how they relate:
+
+{QUESTION}
+
+Subject: the class of machine named above, and what the sources recognise inside and beside
+it. Anything you establish about a different class is reported as being about that class
+rather than generalized onto this one.
+
+Market: {JURISDICTION}. Say which market each finding is about.
+
+What to settle, as far as published sources allow: which narrower or more specific classes
+of machine the sources recognise inside this one, as they themselves name them; and which
+different classes they name as connected to it — because the same producers build both,
+because they are sold or serviced through the same channel, or because they share major
+components or subsystems.
+
+Every one of those becomes part of the ladder only if you declare it. Set
+capability_finding on the claim to PRODUCT_CATEGORY or ADJACENT_CATEGORY, and
+capability_subject to that class's own name as the source calls it. A claim with no
+capability_finding is ordinary context, which is most of them and is not a deficiency.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. A classification system, a trade
+association's own taxonomy and a regulator's category definitions are all conclusive about
+what they declare, and none of them is evidence that the division they declare is how
+producers actually organize — so where a trade source and a classification disagree, record
+both rather than choosing.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found. Do not invent a
+class no source names, and do not produce a tidy hierarchy by filling gaps.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or
+submitting anything anywhere; making any commitment on anybody's behalf; and recommending
+that anything be built, bought, tooled or entered. This is read-only research into what is
+already published, and every action beyond reading needs a separate authorization from a
+person.`;
+
+export const MACHINE_DEMAND_ASSIGNMENT_TEMPLATE = `Establish, from published sources, who is buying machines of this kind and how product
+reaches them:
+
+{QUESTION}
+
+Subject: the class of machine named above. Anything you establish about a different class
+is reported as being about that class rather than generalized onto this one.
+
+Market: {JURISDICTION}. Say which market each finding is about.
+
+What to settle, as far as published sources allow: observations that somebody is actually
+buying — unit shipments, registrations, fleet purchases, tenders and contract awards,
+replacement cycles, prices actually realised, order backlogs and lead times, installed
+base; the routes by which machines of this kind reach whoever pays for them; and where
+what is on the market today falls short, from recalls, safety actions, documented failure
+modes, service coverage, parts availability, stated lead times and stated unmet
+requirements.
+
+Declare each one on its claim: DEMAND_EVIDENCE with the kind of observation it is,
+DISTRIBUTION_CHANNEL with the route, INCUMBENT_WEAKNESS with the kind of shortfall.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it.
+A demand observation additionally carries the date the source observed it, in
+capability_observed_on — an undated buying signal cannot be told apart from one somebody
+remembers from years ago, and it will not be recorded as a demand signal without one. A
+market-size estimate is not an observation that somebody bought something. A forecast is
+never a fact, whatever supports it. An impression that a market is large, growing or
+underserved is not evidence and has nowhere to go here.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found. Where nothing
+published establishes that anybody is buying, say so plainly: that is a finding, and it is
+the one this research most needs to be able to return.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or
+submitting anything anywhere; making any commitment on anybody's behalf; and recommending
+that anything be built, bought, tooled or entered. This is read-only research into what is
+already published, and every action beyond reading needs a separate authorization from a
+person.`;
+
+export const MACHINE_CAPABILITY_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what producing this kind of machine requires and what
+producing it develops:
+
+{QUESTION}
+
+Subject: the class of machine named above, and what producing it takes. You are being
+asked about the industry, not about the organisation commissioning this research: what it
+can already do is recorded separately, from a person, and nothing you establish here can
+say anything about it.
+
+Market: {JURISDICTION}. Say which market each finding is about.
+
+What to settle, as far as published sources allow: the engineering, manufacturing, supply,
+testing, distribution and servicing capabilities a producer must have; what producing at
+this level builds up that a producer did not have before; what must be certified,
+approved, homologated, tooled, qualified or reached in scale before anybody may produce at
+all; and, where the question asks it, which components and subsystems producers buy in
+rather than make, and who supplies them.
+
+Declare each one on its claim: CAPABILITY_REQUIRED for what producing needs,
+CAPABILITY_TAUGHT for what producing develops, ENTRY_BARRIER for what must be obtained
+first, BOUGHT_IN_COMPONENT for what is bought rather than made. Name a capability as
+shortly as it can be named while still being the same capability wherever it appears, so
+that two classes of machine needing the same thing say the same words.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. A regulator's own published
+requirement is conclusive about what it requires. A producer's own account of what its
+manufacturing involves is conclusive about what it says and is not independent
+confirmation of anything. A capability asserted because it seems obviously necessary, with
+no source naming it, is not a finding.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found. Do not produce a
+complete-looking list by adding what a machine of this kind "must obviously" need: a class
+with four published requirements has four, and saying so is worth more than a symmetrical
+list that is partly guessed.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or
+submitting anything anywhere; making any commitment on anybody's behalf; recommending that
+anything be built, bought, tooled, integrated or entered; and reporting what the
+commissioning organisation can or cannot do. This is read-only research into what is
+already published, and every action beyond reading needs a separate authorization from a
+person.`;
 
 export const CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what owner capital this actually requires — after the
 requirements have been taken apart:
@@ -940,6 +1065,118 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'commitment, deposit, borrowing and purchase is a commercial action a person grants ' +
       'separately, and never this envelope.',
     assignmentTemplate: CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * The manufacturing programme's three questions.
+   *
+   * Same permissions as the cash discovery envelope, taken from the same two
+   * constants rather than restated — so a source class or a prohibition added
+   * there reaches these without anybody remembering. Three envelopes rather
+   * than one for `RUSSELL_CASH_VALIDATION_V1`'s reason: `planFitsEnvelope`
+   * pins one assignment template per envelope, and a packet has to be judged
+   * against the rules for the question it is actually asking. Asking which
+   * machines exist, asking who buys them and asking what building them takes
+   * are three questions with three completion standards, and judging one by
+   * another's is the Westbrook defect at a compiler.
+   *
+   * **They authorize no effect that discovery did not already authorize.**
+   * Adding them is a code change somebody reviews, which is where "does this
+   * authorize something new?" gets asked, and the answer is no: they authorize
+   * reading published sources about how machines are built, bought and sold.
+   * Nothing here authorizes building, buying, tooling or entering anything —
+   * those are decisions with a factory on the end of them, and there is no
+   * route to one through any envelope.
+   */
+  RUSSELL_MACHINE_LADDER_V1: Object.freeze({
+    id: 'RUSSELL_MACHINE_LADDER_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a manufacturing programme ' +
+      'when they started it: published sources only, across any class of machine, market or ' +
+      'producer, with no spending, no paid API or purchased data, no contact with any person ' +
+      'or organisation, no advertising, no publishing and no external effect of any kind. ' +
+      'This envelope is that authorization applied to establishing which classes of machine ' +
+      'the sources recognise and how they relate, so that every later question has somewhere ' +
+      'to point. Deciding to produce anything is a decision a person makes, and it is ' +
+      'authorized by nothing here.',
+    assignmentTemplate: MACHINE_LADDER_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * Who is buying, and how product reaches them.
+   *
+   * The question the whole kernel is ordered around, and the one whose
+   * completion standard has to be able to come back empty. *Nothing published
+   * establishes that anybody is buying* is the finding that stops a category
+   * being entered, so the assignment asks for it by name rather than treating
+   * silence as an incomplete answer.
+   */
+  RUSSELL_MACHINE_DEMAND_V1: Object.freeze({
+    id: 'RUSSELL_MACHINE_DEMAND_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a manufacturing programme ' +
+      'when they started it: published sources only, with no spending, no paid API or ' +
+      'purchased data, no contact with any person or organisation, no advertising, no ' +
+      'publishing and no external effect of any kind. This envelope is that authorization ' +
+      'applied to establishing who is buying machines of a given kind, how product reaches ' +
+      'them, and where what is on the market today falls short. It authorizes reading about a ' +
+      'market and never acting in one: every approach, listing, purchase and commitment is a ' +
+      'commercial action a person grants separately, and never this envelope.',
+    assignmentTemplate: MACHINE_DEMAND_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What producing requires, what it develops, and what is bought in.
+   *
+   * Worth saying explicitly because the subject sounds industrial: nothing here
+   * authorizes tooling, qualifying, certifying, building or acquiring anything.
+   * It authorizes *reading about* what producing a class of machine involves,
+   * and every one of the things its assignment names is something to establish
+   * from a published source rather than something to do.
+   *
+   * Its assignment also states, in the subject line, that the research is about
+   * the industry and not about the organisation commissioning it. Brain refuses
+   * a claim about the latter either way — there is no capability_finding that
+   * could mark a capability held — but a worker who understands the question
+   * writes better claims than one whose answers are silently discarded.
+   */
+  RUSSELL_MACHINE_CAPABILITY_V1: Object.freeze({
+    id: 'RUSSELL_MACHINE_CAPABILITY_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a manufacturing programme ' +
+      'when they started it: published sources only, with no spending, no paid API or ' +
+      'purchased data, no contact with any person or organisation, no advertising, no ' +
+      'publishing and no external effect of any kind. This envelope is that authorization ' +
+      'applied to establishing what producing a class of machine requires, what producing it ' +
+      'develops, what must be certified or tooled first, and which components producers buy ' +
+      'in. It authorizes reading about those things and never doing one of them: tooling, ' +
+      'qualifying, certifying, acquiring and producing are decisions a person makes, and this ' +
+      'envelope authorizes none of them.',
+    assignmentTemplate: MACHINE_CAPABILITY_ASSIGNMENT_TEMPLATE,
     jurisdiction: 'the market this question names',
     maxFragments: null,
     geography: /\S/,

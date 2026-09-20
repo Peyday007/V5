@@ -37,6 +37,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { freshProject, teardown, type TestProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
+import { createUser } from '../server/repos/identity.ts';
 import {
   ensureArchitectureScope,
   registerBlueprint,
@@ -50,7 +51,12 @@ import {
   settleAudit,
   settleExtraction,
 } from '../server/services/capability/extraction.ts';
-import { DEFINITION_KEYS, LIST_FIELDS } from '../server/domain/faculties.ts';
+import {
+  CONNECTION_KEYS,
+  DEFINITION_KEYS,
+  FACULTY_RELATIONSHIPS,
+  LIST_FIELDS,
+} from '../server/domain/faculties.ts';
 import { scanSections, sectionUnitKey } from '../server/services/capability/sections.ts';
 import {
   getFacultyBySlug,
@@ -490,6 +496,122 @@ describe('the capability kernel', () => {
       // candidate rather than being dropped.
       expect(outputs).toMatch(/no others/);
       expect(outputs).toMatch(/empty array/);
+
+      /*
+       * The nested shape, which this test did not reach and which is what
+       * actually broke.
+       *
+       * `connections` is in `DEFINITION_KEYS`, so the loop above passed on the
+       * word while the shape *inside* it was hand-written prose naming "kind",
+       * "faculty" and an optional "note" — three names `validateConnections`
+       * refuses. A fired Routine obeyed the contract, all fifteen candidates
+       * were rejected for obeying it, and the blueprint went to FAILED. The
+       * guard was one level too shallow: it proved the top level and stopped at
+       * the nesting.
+       */
+      for (const key of CONNECTION_KEYS) expect(outputs, key).toContain(key);
+      for (const rel of FACULTY_RELATIONSHIPS) expect(outputs, rel).toContain(rel);
+
+      /*
+       * And generically, so the next field group cannot drift either: every
+       * quoted identifier the outputs name must be a key the validator accepts.
+       * This is what fails on "kind", "faculty" and "note" without anybody
+       * having to remember they were the wrong three.
+       */
+      // The two envelope keys are named rather than the check loosened: they are
+      // a real part of the contract — a unit result is `{definition, quote}` —
+      // and a guard that allowed any unrecognised word would have allowed the
+      // three that broke this.
+      const envelope = ['definition', 'quote'];
+      const accepted = new Set<string>([...DEFINITION_KEYS, ...CONNECTION_KEYS, ...envelope]);
+      const quoted = [...outputs.matchAll(/"([A-Za-z][A-Za-z0-9]*)"/g)].map((m) => m[1] as string);
+      expect(quoted.length).toBeGreaterThan(4);
+      for (const name of quoted) {
+        expect(accepted.has(name), `the contract names "${name}", which the validator refuses`)
+          .toBe(true);
+      }
+    });
+
+    it('states a connection shape the validator actually accepts', async () => {
+      /*
+       * The strongest form of the guard above, and the one that would have
+       * caught this without anybody reading prose: build a definition out of
+       * exactly what the contract says a connection carries, and hand it to the
+       * thing that judges it. String matching proves the words are present;
+       * this proves the two agree.
+       */
+      const { sourceId } = await registerFixture();
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      const bin = await getBin(binId);
+      const outputs = (bin?.manifest.outputs ?? []).join('\n');
+
+      const connection: Record<string, unknown> = { relationship: FACULTY_RELATIONSHIPS[0] };
+      // Exactly one endpoint, which the contract has to say and did not.
+      expect(outputs).toContain('toFacultySlug');
+      expect(outputs).toContain('toComponent');
+      connection['toComponent'] = 'services/dispatch/loop.ts';
+      connection['rationale'] = 'The source states this faculty is activated by the tick.';
+
+      const definition = validateFacultyDefinition({
+        canonicalName: 'Research Intelligence',
+        purpose: 'p',
+        promisedPower: 'q',
+        centralQuestion: null,
+        ordinal: 1,
+        ...Object.fromEntries(LIST_FIELDS.map((field) => [field, []])),
+        connections: [connection],
+      });
+
+      expect(definition.connections).toHaveLength(1);
+      expect(definition.connections[0]?.relationship).toBe(FACULTY_RELATIONSHIPS[0]);
+      expect(definition.connections[0]?.toComponent).toBe('services/dispatch/loop.ts');
+    });
+
+    it('hands the reviewer the definition it is asked to judge, not an id for it', async () => {
+      /*
+       * Production's second reading validated thirteen definitions and promoted
+       * none of them, because every audit unit's `input` was a bare `fcd_…`
+       * candidate id and **no tool dereferences one**. Three independent leases
+       * released saying exactly that — "Cannot read the 13 fcd_* proposed-
+       * definition candidates named as each unit's input" — and the bin retired
+       * at NEEDS_HUMAN with all thirteen unjudged.
+       *
+       * So the assertion is the property rather than the wording: no unit input
+       * may be a bare row id, and the definition's own content has to be in
+       * there. A test that only checked for the absence of `fcd_` would pass on
+       * an empty string.
+       */
+      const { sourceId } = await registerFixture();
+      const binId = (await dispatchExtraction(sourceId)) as string;
+      await submit(binId, 'faculty_01', { definition: definition(), quote: RESEARCH_QUOTE });
+      await finish(binId);
+      await settleExtraction(sourceId);
+
+      const auditBinId = (await dispatchAudit(sourceId)) as string;
+      const auditBin = await getBin(auditBinId);
+      const units = auditBin?.manifest.units ?? [];
+      expect(units.length).toBeGreaterThan(0);
+
+      for (const unit of units) {
+        expect(unit.input, 'a unit input must never be a bare row id').not.toMatch(/^fcd_[0-9a-f]+$/);
+        const carried = JSON.parse(unit.input) as {
+          canonicalName: string;
+          definition: { canonicalName: string; purpose: string; promisedPower: string };
+          evidence: { quote: string };
+        };
+        // The three required strings are what OVERREACHES and INCOMPLETE are
+        // judgements about, so a reviewer must actually be holding them.
+        expect(carried.definition.canonicalName).toBe(carried.canonicalName);
+        expect(carried.definition.purpose.length).toBeGreaterThan(0);
+        expect(carried.definition.promisedPower.length).toBeGreaterThan(0);
+        // And the quote it was anchored to, because "does this carry that
+        // claim" is most of the question.
+        expect(carried.evidence.quote.length).toBeGreaterThan(0);
+      }
+
+      // And the contract says where it is, so a worker is not left looking.
+      const sources = (auditBin?.manifest.acceptableSources ?? []).join('\n');
+      expect(sources).toMatch(/carried in full in each unit/);
     });
 
     it('is handed out once, however many ticks read it', async () => {
@@ -614,6 +736,18 @@ describe('the capability kernel', () => {
     });
   });
 
+  /*
+   * The answering transition for the one state Brain's own wrong contract puts
+   * a source into.
+   *
+   * `advanceSources` never looks at `FAILED`, `registerSource` is idempotent by
+   * `(content_hash, kind)` so re-registering the same bytes returns the failed
+   * row unchanged, and `recoverExtraction` only reaches an assignment whose bin
+   * has vanished. So a source that failed had no way back — which was fine
+   * while `FAILED` meant *the document is not evidence*, and stopped being fine
+   * the moment a real worker followed a real instruction and had every reading
+   * refused for naming fields the validator has never had.
+   */
   describe('the schema a worker is held to', () => {
     it('refuses the whole candidate for an unknown field', () => {
       let thrown: unknown;

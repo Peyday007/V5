@@ -40,6 +40,9 @@ import type { ExistingClaim, ResearchClaim } from '../server/domain/types.ts';
 function found(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
   return {
     claimType: 'SOURCED_FACT',
+    capabilityFinding: null,
+    capabilitySubject: null,
+    capabilityObservedOn: null,
     structuralFinding: null,
     structuralSubject: null,
     structuralQualifier: null,

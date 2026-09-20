@@ -237,7 +237,10 @@ describe('a second instance, on the same storage', () => {
     });
     expect(me.status).toBe(200);
     expect(me.body.principal.type).toBe('WORKER');
-    expect(me.body.principal.handle).toBe('persistent-worker');
+    // And the label survives the restart with the row, because it is a column
+    // rather than anything derived at request time.
+    expect(me.body.principal.handle).toMatch(/^worker-\d\d$/);
+    expect(me.body.principal.handle).not.toBe('persistent-worker');
   });
 
   it('still refuses one that was revoked before the restart', async () => {

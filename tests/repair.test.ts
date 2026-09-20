@@ -77,6 +77,9 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
   return {
     claimType: 'SOURCED_FACT',
     sourceGroup: 'host:bls.gov',
+    capabilityFinding: null,
+    capabilitySubject: null,
+    capabilityObservedOn: null,
     structuralFinding: null,
     structuralSubject: null,
     structuralQualifier: null,

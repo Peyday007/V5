@@ -67,6 +67,7 @@ import {
   requiredString,
   withRequestContext,
 } from './helpers.ts';
+import { researchIntelligenceView } from '../services/research/intelligence/view.ts';
 
 /** A body field that has to be an object before it can be read as one. */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -267,6 +268,29 @@ researchRouter.post(
 researchRouter.get(
   '/research/:orchestrationId',
   handler((req) => orchestrationView(pathId(req, 'orchestrationId'))),
+);
+
+/**
+ * What Brain currently thinks the research is trying to answer, and where it is.
+ *
+ * Deliberately a separate address from the orchestration view rather than more
+ * fields on it: this is the *mental* state — the reading of the objective, the
+ * decisive unknowns, what changed the plan and why, whether a person is genuinely
+ * needed — and the orchestration view is the *workflow* state. A page showing
+ * one when it meant the other is §29's status-contradicting-the-control defect,
+ * and keeping them apart is how the two stay legible.
+ *
+ * Read-only, and that is asserted rather than intended: nothing under
+ * `researchIntelligenceView` enqueues, claims, cancels, reprioritises, moves a
+ * disposition or writes a revision. `requireOrchestration` authorizes against
+ * the project through the same resolver every other research route uses, so a
+ * caller who may not have this packet gets the same 404 a missing one gives.
+ */
+researchRouter.get(
+  '/research/:orchestrationId/intelligence',
+  handler(async (req) =>
+    researchIntelligenceView(await requireOrchestration(pathId(req, 'orchestrationId'))),
+  ),
 );
 
 /**

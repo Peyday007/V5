@@ -35,10 +35,33 @@ import { findLiveToken, touchToken } from '../../repos/oauth.ts';
 /** The cookie a signed-in person carries. */
 export const SESSION_COOKIE = 'brain_session';
 
-/** Eight hours. Long enough for a working day, short enough that a forgotten
- *  laptop is not an open session next week. Refreshed on use is deliberately
- *  *not* done: a rolling session never ends. */
-export const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+/**
+ * How long a session lives, and why there are two answers.
+ *
+ * Both are **absolute**. Neither is refreshed on use, and that is deliberate
+ * for the reason it has always been: a rolling session never ends, so the only
+ * thing that would eventually close it is somebody remembering to sign out.
+ *
+ * **A device session lasts thirty days.** The credential behind it is a
+ * passkey: bound to this origin, held by a device, and released only after that
+ * device has verified the person — a fingerprint, a face, or the screen lock.
+ * An eight-hour session on top of that asked somebody holding a strong
+ * credential to re-present it twice a day, which is friction that buys nothing:
+ * the session is a row this server can revoke on any request, the account is
+ * re-read on every one of them, and a disabled person is refused mid-sentence.
+ * Thirty days is long enough that ordinary use never reaches it and short
+ * enough that a browser nobody opens again is not an open session next quarter.
+ * It is carried in the cookie's `Max-Age`, so it survives closing the browser —
+ * which is the point — and nothing about it is stored where a script can read
+ * it.
+ *
+ * **A password session lasts eight hours**, unchanged. That door is
+ * break-glass now (see `passwordDoor.ts`): a session opened by somebody using
+ * an emergency credential is not a working session, and the first thing they
+ * are there to do is register a device.
+ */
+export const DEVICE_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const PASSWORD_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 export type AuthOutcome =
   | { ok: true; principal: Principal }
@@ -104,6 +127,19 @@ export function clearedSessionCookie(options: { secure: boolean }): string {
 /** Trusts `trust proxy`, which `buildApp` sets, so this is the real scheme. */
 export function isSecureRequest(req: Request): boolean {
   return req.secure;
+}
+
+/**
+ * What a worker is called, everywhere a caller can see.
+ *
+ * One function, so the answer cannot differ between two readers — and so the
+ * fallback to the legacy handle exists in exactly one place, for a row written
+ * before migration 074 that somehow escaped its backfill. It is a display
+ * decision and never an authorization one: nothing in this codebase branches on
+ * what a worker is called.
+ */
+export function workerIdentity(worker: { label: string | null; name: string }): string {
+  return worker.label ?? worker.name;
 }
 
 /**
@@ -225,8 +261,12 @@ async function authenticateWorker(presented: string, _req: Request): Promise<Aut
     principal: {
       type: 'WORKER',
       id: worker.id,
-      handle: worker.name,
-      displayName: worker.displayName,
+      // The neutral label, never the legacy handle. `brain_whoami` answers with
+      // this, so a worker that checks in says `worker-03` rather than somebody's
+      // first name — which readers took to be a statement about whose account
+      // had run the session, and never was. See migration 074.
+      handle: workerIdentity(worker),
+      displayName: workerIdentity(worker),
       isBrainAdmin: false,
       mustChangePassword: false,
       credentialId: credential.id,
@@ -269,8 +309,12 @@ async function authenticateOAuth(presented: string): Promise<AuthOutcome> {
     principal: {
       type: 'WORKER',
       id: worker.id,
-      handle: worker.name,
-      displayName: worker.displayName,
+      // The neutral label, never the legacy handle. `brain_whoami` answers with
+      // this, so a worker that checks in says `worker-03` rather than somebody's
+      // first name — which readers took to be a statement about whose account
+      // had run the session, and never was. See migration 074.
+      handle: workerIdentity(worker),
+      displayName: workerIdentity(worker),
       isBrainAdmin: false,
       mustChangePassword: false,
       // The token row, so an audit line points at the grant that can be revoked.

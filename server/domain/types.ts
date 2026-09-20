@@ -331,6 +331,26 @@ export const EVENT_TYPES = [
    */
   'RESEARCH_PARK_RESTORED',
 
+  /*
+   * A branch the evidence made pointless, closed with the finding that closed
+   * it.
+   *
+   * Its own type rather than a cancellation, because nothing failed: the
+   * question is still open and has stopped bearing on the decision, and those
+   * are different sentences in a report. The uncertainty keeps its row and its
+   * reason; this says which finding retired it.
+   */
+  'RESEARCH_BRANCH_RETIRED',
+
+  /*
+   * The plan grew or shrank while the campaign was running.
+   *
+   * Recorded on the project's history as well as on `research_plan_revisions`,
+   * because "what changed the plan" is a question a person asks from the
+   * project timeline rather than from a research table.
+   */
+  'RESEARCH_PLAN_REVISED',
+
   /* ----------------------------------------------------------------------- */
   /* The self-expansion kernel                                                */
   /* ----------------------------------------------------------------------- */
@@ -355,6 +375,26 @@ export const EVENT_TYPES = [
   'CAPABILITY_SOURCE_READ',
 
   /**
+   * A source that failed its reading was put back to be read again.
+   *
+   * It exists because the first real production run needed it and there was
+   * nothing: `FAILED` was terminal, `registerSource` dedupes on the content
+   * hash so the same bytes could never be registered a second time, and
+   * `advanceSources` only ever dispatches a `REGISTERED` source. So a blueprint
+   * that failed *because Brain's own extraction contract named the wrong field
+   * names* could never be re-read after the contract was corrected — a state
+   * saying FAILED that nothing could answer, which is §24's rule at a new
+   * altitude and worse than the usual case, because the remedy did not exist.
+   *
+   * It carries every candidate's refusal verbatim, and that is the point rather
+   * than decoration: `putCandidate` is an upsert on `(source_id, slug)`, so the
+   * second reading overwrites the first one's rejection reasons in place. The
+   * evidence that the contract was wrong would otherwise be destroyed by the
+   * fix for it — §5, at the one table where re-reading is the normal case.
+   */
+  'CAPABILITY_SOURCE_REOPENED',
+
+  /**
    * One faculty definition became canonical.
    *
    * Carries the audit that let it across. Promoting moves exactly one of the
@@ -365,7 +405,7 @@ export const EVENT_TYPES = [
   'FACULTY_PROMOTED',
 
   // -------------------------------------------------------------------------
-  // The labor kernel (§39)
+  // The labor kernel (§41)
   //
   // On the project's own history rather than on the cash section's, because a
   // workflow is not a sprint. A project may run labor allocation with no Cash
@@ -400,6 +440,51 @@ export const EVENT_TYPES = [
    * changed without saying what it changed from.
    */
   'LABOR_ALLOCATION_DECIDED',
+  /* ----------------------------------------------------------------------- */
+  /* The manufacturing empire kernel                                          */
+  /* ----------------------------------------------------------------------- */
+
+  /**
+   * A programme started, and every later move of its lifecycle.
+   *
+   * Project history rather than kernel telemetry, for `RUSSELL_AUTHORITY_GRANTED`'s
+   * reason: starting one is the moment the project agreed that Brain may
+   * research what building machines takes, and "who allowed this, and what did
+   * it allow" is a question about the project long after the screen that asked
+   * has scrolled away.
+   */
+  'MANUFACTURING_PROGRAMME_STARTED',
+  'MANUFACTURING_PROGRAMME_MOVED',
+
+  /** A question opened about a category, with the reason the allocator gave. */
+  'MANUFACTURING_ROUND_OPENED',
+
+  /** What the finished questions established, filed into the ladder. */
+  'MANUFACTURING_FINDINGS_ABSORBED',
+
+  /**
+   * A person naming a category to start from, or deciding not to pursue one.
+   *
+   * `SEED` is the one category origin Brain may not write, so this is the row
+   * that says a human chose it. Retiring is the one verdict no derivation could
+   * reach, and it destroys nothing.
+   */
+  'MANUFACTURING_CATEGORY_SEEDED',
+  'MANUFACTURING_CATEGORY_RETIRED',
+
+  /**
+   * This company was recorded as holding a capability, or that was withdrawn.
+   *
+   * The single most consequential row this kernel can write, and the one
+   * research may never produce: a capability a product *teaches* is not a
+   * capability this company *holds*, and everything downstream — what is
+   * enterable, what is missing, what to build next — turns on the difference.
+   * The payload carries which of the two kinds of evidence established it and
+   * who or what supplied that evidence, because a capability recorded as held
+   * for no stated reason is indistinguishable from one somebody guessed.
+   */
+  'MANUFACTURING_CAPABILITY_HELD',
+  'MANUFACTURING_CAPABILITY_WITHDRAWN',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -1020,7 +1105,7 @@ export interface OpportunityConstraint {
 }
 
 // ---------------------------------------------------------------------------
-// The labor kernel (§39)
+// The labor kernel (§41)
 //
 // The axis that says who or what produces an output. §38's kernel says *where*
 // to look; this one says *by whom the work is done*, and the two vocabularies
@@ -2063,6 +2148,9 @@ export interface ResearchClaimRow {
   labor_subject: string | null;
   labor_qualifier: string | null;
   labor_rate_cents: number | null;
+  capability_finding: string | null;
+  capability_subject: string | null;
+  capability_observed_on: string | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -3262,6 +3350,25 @@ export interface ResearchClaim {
    * like the best one.
    */
   laborRateCents: number | null;
+  /**
+   * What this claim establishes about building a machine, or null.
+   *
+   * A third question beside the opening signal and the industry structure, and
+   * a claim can answer all three: a trade report on excavator shipments is a
+   * demand signal about a machine category *and* a fact about an industry.
+   */
+  capabilityFinding: CapabilityFinding | null;
+  /** What that finding is about: a name, or a value from that kind's own set. */
+  capabilitySubject: string | null;
+  /**
+   * When the source observed a demand signal.
+   *
+   * Required of `DEMAND_EVIDENCE` and refused of everything else. §30's rule:
+   * an undated buying signal cannot be told apart from one somebody remembers
+   * from years ago, and this is the column that decides whether a category may
+   * be entered.
+   */
+  capabilityObservedOn: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -3885,6 +3992,8 @@ export interface UserSessionRow {
   last_seen_at: string | null;
   user_agent: string | null;
   created_ip: string | null;
+  /** The device this session was opened by; null for the break-glass door. */
+  passkey_id: string | null;
 }
 
 /**
@@ -3907,6 +4016,9 @@ export interface WorkerRoutingRow {
 
 export interface WorkerRow {
   id: string;
+  label: string | null;
+  owner_user_id: string | null;
+  owner_evidence: string | null;
   name: string;
   display_name: string;
   worker_type: string;
@@ -4083,8 +4195,35 @@ export interface User {
 
 export interface Worker {
   id: string;
+  /**
+   * The neutral operational identity — `worker-01`, `worker-02`, and so on.
+   *
+   * Server-assigned, stable, unique, and opaque about people. This is the only
+   * worker identifier any surface prints and the value `Principal.handle`
+   * carries, because a label that reads like a person's name is read as a claim
+   * about whose account ran a session and never was one. See migration 074.
+   *
+   * Nullable in the type only for a row written before labels existed; the
+   * migration backfilled every one, and `createWorker` assigns one.
+   */
+  label: string | null;
+  /**
+   * The legacy operator handle. A lookup key and nothing else.
+   *
+   * Two modules resolve a worker by it — connected sites and capability readers
+   * — so it is kept rather than rewritten. It authorizes nothing, attributes
+   * nothing, and must never be printed as an identity.
+   */
   name: string;
   displayName: string;
+  /**
+   * Whose capacity this is, where Brain can actually prove it, and null
+   * otherwise. Filled only from the approver on an authorization code or from a
+   * connection a person completed themselves; never inferred from a name.
+   */
+  ownerUserId: string | null;
+  /** How `ownerUserId` was established, so a reader can judge it. */
+  ownerEvidence: string | null;
   workerType: string;
   description: string | null;
   status: WorkerStatus;
@@ -7404,6 +7543,686 @@ export interface CapacityConnection {
   revokedAt: string | null;
   revokedReason: string | null;
   revokedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Research Intelligence (migration 076 / pg 067)
+// ---------------------------------------------------------------------------
+//
+// The judgement layer above the research engine. None of these types carries
+// evidence, scope or ordering that another table already owns: the boundary
+// contract still says what the research is bounded by, `research_claims` still
+// says what was established, and `research_fragments.depends_on` still says what
+// runs before what. These say what the work is *for*, what is still unknown that
+// matters, and what a finding changed about the plan.
+
+/** How much rides on being right. Feeds depth; never feeds a gate. */
+export const RESEARCH_STAKES = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW'] as const;
+export type ResearchStakes = (typeof RESEARCH_STAKES)[number];
+
+/** What acting on a wrong answer would cost. */
+export const RESEARCH_REVERSIBILITY = ['REVERSIBLE', 'COSTLY', 'IRREVERSIBLE'] as const;
+export type ResearchReversibility = (typeof RESEARCH_REVERSIBILITY)[number];
+
+export const PROBLEM_MODEL_SOURCES = [
+  'COMPILED',
+  'CONTRACT',
+  'ASSIGNMENT',
+  'PROPOSAL',
+  'PERSON',
+] as const;
+export type ProblemModelSource = (typeof PROBLEM_MODEL_SOURCES)[number];
+
+/**
+ * A constraint or a preference, with the reason it exists.
+ *
+ * The reason is what lets Brain later ask whether it still applies. A
+ * constraint recorded without one can only ever be obeyed literally, for ever,
+ * which is how a temporary choice becomes policy.
+ */
+export interface StatedConstraint {
+  statement: string;
+  reason: string | null;
+}
+
+/**
+ * An example the person gave, and the property it was an example of.
+ *
+ * `property` is the whole reason this is not a list of strings. Three named
+ * industries are an illustration of *a kind of buyer*; stored without that,
+ * the only safe reading is a whitelist, and search never looks beyond them.
+ */
+export interface StatedExample {
+  statement: string;
+  property: string | null;
+}
+
+export interface ResearchProblemModelRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  boundary_contract_id: string | null;
+  version: number;
+  outcome_sought: string;
+  decision_supported: string | null;
+  why_it_matters: string | null;
+  stakes: string;
+  reversibility: string;
+  consequence_if_wrong: string | null;
+  time_horizon: string | null;
+  success_criteria: string;
+  constraints: string;
+  preferences: string;
+  examples: string;
+  assumptions: string;
+  non_goals: string;
+  useless_if: string;
+  authority_granted: string;
+  derived_from: string;
+  rationale: string | null;
+  revised_from_version: number | null;
+  revision_reason: string | null;
+  created_at: string;
+}
+
+export interface ResearchProblemModel {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  boundaryContractId: string | null;
+  version: number;
+  outcomeSought: string;
+  decisionSupported: string | null;
+  whyItMatters: string | null;
+  stakes: ResearchStakes;
+  reversibility: ResearchReversibility;
+  consequenceIfWrong: string | null;
+  timeHorizon: string | null;
+  successCriteria: string[];
+  constraints: StatedConstraint[];
+  preferences: StatedConstraint[];
+  examples: StatedExample[];
+  assumptions: string[];
+  nonGoals: string[];
+  uselessIf: string[];
+  authorityGranted: string[];
+  derivedFrom: ProblemModelSource;
+  rationale: string | null;
+  revisedFromVersion: number | null;
+  revisionReason: string | null;
+  createdAt: string;
+}
+
+export const UNCERTAINTY_CONSUMERS = [
+  'DECISION',
+  'CONCLUSION',
+  'CALCULATION',
+  'FRAGMENT',
+  'REQUIREMENT',
+] as const;
+export type UncertaintyConsumer = (typeof UNCERTAINTY_CONSUMERS)[number];
+
+export const BELIEF_BASES = ['UNKNOWN', 'ASSUMED', 'ARCHIVE', 'EVIDENCE', 'PERSON'] as const;
+export type BeliefBasis = (typeof BELIEF_BASES)[number];
+
+export const CHANGE_RATES = ['STABLE', 'SLOW', 'VOLATILE'] as const;
+export type ChangeRate = (typeof CHANGE_RATES)[number];
+
+/**
+ * Where an uncertainty stands.
+ *
+ * `RETIRED` is the one worth naming: it means the question is still open and no
+ * longer *bears on the decision*, which is a completely different fact from
+ * `UNRESOLVABLE` and leads to a different sentence in the report.
+ */
+export const UNCERTAINTY_DISPOSITIONS = [
+  'OPEN',
+  'INVESTIGATING',
+  'RESOLVED',
+  'REFUTED',
+  'UNRESOLVABLE',
+  'RETIRED',
+  'DEFERRED',
+  'PERSON_ONLY',
+] as const;
+export type UncertaintyDisposition = (typeof UNCERTAINTY_DISPOSITIONS)[number];
+
+/**
+ * How much looking a question deserves.
+ *
+ * Three rungs rather than a number, because a number invites arithmetic nobody
+ * justified. `SINGLE_PRIMARY` is a statutory or documentary fact one directly
+ * inspected source settles; `CORROBORATED` is the ordinary bar;
+ * `CONTESTED_DEEP` is what a consequential question with conflicting sources
+ * earns. `standards.ts` still decides the bar per *claim* — this decides how
+ * hard to look before stopping.
+ */
+export const RESEARCH_DEPTHS = ['SINGLE_PRIMARY', 'CORROBORATED', 'CONTESTED_DEEP'] as const;
+export type ResearchDepth = (typeof RESEARCH_DEPTHS)[number];
+
+export const UNCERTAINTY_ORIGINS = [
+  'PLAN',
+  'FINDING',
+  'CONTRADICTION',
+  'COVERAGE_GAP',
+  'ARCHIVE',
+  'PERSON',
+] as const;
+export type UncertaintyOrigin = (typeof UNCERTAINTY_ORIGINS)[number];
+
+export interface ResearchUncertaintyRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  problem_model_id: string | null;
+  uncertainty_key: string;
+  question: string;
+  why_it_matters: string;
+  consumer_kind: string;
+  consumer_ref: string | null;
+  current_belief: string | null;
+  belief_basis: string;
+  consequence: string;
+  reversibility: string;
+  change_rate: string;
+  uncertainty_level: number;
+  invalidating: number;
+  stopping_condition: string;
+  disposition: string;
+  disposition_reason: string | null;
+  resolved_by_fragment_id: string | null;
+  resolved_at: string | null;
+  depth: string;
+  depth_basis: string | null;
+  origin: string;
+  origin_ref: string | null;
+  plan_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// THE MANUFACTURING EMPIRE KERNEL
+//
+// A second graph beside the industry map, answering a question containment
+// cannot hold: which machine to build next, and what building it makes
+// possible. See `domain/manufacturing.ts` for what each finding creates and
+// `docs/MANUFACTURING-KERNEL.md` for why a capability a product teaches is
+// never a capability this company holds.
+// ---------------------------------------------------------------------------
+
+/**
+ * What a source can establish about building a machine.
+ *
+ * Nine kinds, and the split between them is what makes the brief's core
+ * principle enforceable: two of them say somebody is buying and there is a
+ * route to them, two say what building takes and what it teaches, and the rest
+ * are what stands in the way. A category is enterable only when the first two
+ * are established, which is *demand pulling manufacturing* expressed as rows
+ * rather than as a sentence in a prompt.
+ */
+export const CAPABILITY_FINDINGS = [
+  /** A narrower or more specific class of machine inside the subject. */
+  'PRODUCT_CATEGORY',
+  /** A class of machine the sources name as reached sideways from this one. */
+  'ADJACENT_CATEGORY',
+  /** Producing in this category requires this capability, per the source. */
+  'CAPABILITY_REQUIRED',
+  /** Producing in this category develops this capability, per the source. */
+  'CAPABILITY_TAUGHT',
+  /** Published evidence that buyers in this category are actually buying. */
+  'DEMAND_EVIDENCE',
+  /** A route by which product in this category actually reaches a buyer. */
+  'DISTRIBUTION_CHANNEL',
+  /** A documented failure, gap or unmet need in what incumbents supply. */
+  'INCUMBENT_WEAKNESS',
+  /** Something that must be obtained, certified or built before entering. */
+  'ENTRY_BARRIER',
+  /** A component or subsystem producers in this category buy rather than make. */
+  'BOUGHT_IN_COMPONENT',
+] as const;
+export type CapabilityFinding = (typeof CAPABILITY_FINDINGS)[number];
+
+/**
+ * What kind of demand signal a source published.
+ *
+ * Closed, because "demand exists" asserted in prose is exactly the claim the
+ * brief refuses — it wants the observation, and each of these names an
+ * observation somebody published rather than an impression somebody formed.
+ */
+export const DEMAND_SIGNAL_KINDS = [
+  'UNIT_SHIPMENTS',
+  'REGISTRATIONS',
+  'FLEET_PURCHASE',
+  'TENDER_OR_CONTRACT',
+  'REPLACEMENT_CYCLE',
+  'PRICE_REALIZED',
+  'BACKLOG_OR_LEAD_TIME',
+  'INSTALLED_BASE',
+] as const;
+export type DemandSignalKind = (typeof DEMAND_SIGNAL_KINDS)[number];
+
+/** How product in a category actually reaches whoever pays for it. */
+export const DISTRIBUTION_CHANNEL_KINDS = [
+  'DEALER_NETWORK',
+  'DISTRIBUTOR',
+  'DIRECT_TO_BUYER',
+  'FLEET_OR_CONTRACT_SALE',
+  'RETAIL',
+  'MARKETPLACE',
+  'RENTAL_FLEET',
+  'OEM_SUPPLY',
+  'AFTERMARKET_AND_PARTS',
+  'SERVICE_NETWORK',
+] as const;
+export type DistributionChannelKind = (typeof DISTRIBUTION_CHANNEL_KINDS)[number];
+
+/**
+ * Where what is on the market today is documented to fall short.
+ *
+ * The brief's step 5 — *determine where existing manufacturers are weak* — and
+ * every value is something a source records rather than something a reader
+ * concludes. There is deliberately no `GENERALLY_POOR` or `EXPENSIVE`, so an
+ * impression has nowhere to go.
+ */
+export const INCUMBENT_WEAKNESS_KINDS = [
+  'FAILURE_MODE',
+  'RECALL_OR_SAFETY_ACTION',
+  'SERVICE_COVERAGE_GAP',
+  'PARTS_AVAILABILITY',
+  'LEAD_TIME',
+  'PRICE_GAP',
+  'UNMET_REQUIREMENT',
+  'SUPPORT_QUALITY',
+  'DURABILITY_IN_SERVICE',
+] as const;
+export type IncumbentWeaknessKind = (typeof INCUMBENT_WEAKNESS_KINDS)[number];
+
+/**
+ * What stands between this company and producing in a category.
+ *
+ * Kept apart from `CAPITAL_REQUIREMENTS`, which answers *what needs owner
+ * money*. These answer *what needs to exist at all* — a certification nobody
+ * can buy their way past is not a capital requirement, and filing it as one
+ * would make an unreachable category look like an expensive one.
+ */
+export const ENTRY_BARRIER_KINDS = [
+  'TYPE_APPROVAL_OR_HOMOLOGATION',
+  'SAFETY_CERTIFICATION',
+  'EMISSIONS_COMPLIANCE',
+  'AIRWORTHINESS_CERTIFICATION',
+  'PRODUCTION_LICENCE',
+  'TOOLING_LEAD_TIME',
+  'MINIMUM_PRODUCTION_SCALE',
+  'SUPPLIER_QUALIFICATION',
+  'DEALER_OR_SERVICE_REQUIREMENT',
+  'INTELLECTUAL_PROPERTY',
+  'TEST_FACILITY',
+  'SKILLED_LABOUR_AVAILABILITY',
+] as const;
+export type EntryBarrierKind = (typeof ENTRY_BARRIER_KINDS)[number];
+
+export const MACHINE_CATEGORY_KINDS = ['PRODUCT_CATEGORY', 'ADJACENT_CATEGORY'] as const;
+export type MachineCategoryKind = (typeof MACHINE_CATEGORY_KINDS)[number];
+
+export const MACHINE_CATEGORY_ORIGINS = ['SEED', 'BOOTSTRAP', 'DISCOVERED'] as const;
+export type MachineCategoryOrigin = (typeof MACHINE_CATEGORY_ORIGINS)[number];
+
+/**
+ * How Brain came to record that this company holds a capability.
+ *
+ * One value, because today there is exactly one thing that could establish it:
+ * a person with ADMIN on the project saying so. Nothing in this Brain can
+ * observe that a company built a machine — Cash Mode delivers services and the
+ * Software Factory delivers code, and neither is evidence of that — so a
+ * derived second value would be a mechanism nothing calls, wearing an enum.
+ *
+ * There is deliberately no `RESEARCHED`, and there never will be. A source
+ * establishing that ATV production develops chassis engineering is a fact about
+ * ATVs; it is not evidence about this company, and a value here is the only way
+ * the two could ever be confused.
+ */
+export const CAPABILITY_HELD_EVIDENCE = ['DECLARED'] as const;
+export type CapabilityHeldEvidence = (typeof CAPABILITY_HELD_EVIDENCE)[number];
+
+export const CAPABILITY_RELATIONS = ['REQUIRES', 'TEACHES'] as const;
+export type CapabilityRelation = (typeof CAPABILITY_RELATIONS)[number];
+
+export const CATEGORY_EVIDENCE_KINDS = [
+  'DEMAND_EVIDENCE',
+  'DISTRIBUTION_CHANNEL',
+  'INCUMBENT_WEAKNESS',
+  'ENTRY_BARRIER',
+  'BOUGHT_IN_COMPONENT',
+] as const;
+export type CategoryEvidenceKind = (typeof CATEGORY_EVIDENCE_KINDS)[number];
+
+export const MANUFACTURING_ROUND_PURPOSES = [
+  'BOOTSTRAP',
+  'MAP',
+  'DEMAND',
+  'CAPABILITY',
+  'INTEGRATION',
+] as const;
+export type ManufacturingRoundPurpose = (typeof MANUFACTURING_ROUND_PURPOSES)[number];
+
+export const MANUFACTURING_PROGRAM_STATES = ['ACTIVE', 'PAUSED', 'ARCHIVED'] as const;
+export type ManufacturingProgramState = (typeof MANUFACTURING_PROGRAM_STATES)[number];
+
+export interface ManufacturingProgramRow {
+  id: string;
+  project_id: string;
+  objective: string;
+  state: string;
+  owner_user_id: string;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResearchUncertainty {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  problemModelId: string | null;
+  uncertaintyKey: string;
+  question: string;
+  whyItMatters: string;
+  consumerKind: UncertaintyConsumer;
+  consumerRef: string | null;
+  currentBelief: string | null;
+  beliefBasis: BeliefBasis;
+  consequence: ResearchStakes;
+  reversibility: ResearchReversibility;
+  changeRate: ChangeRate;
+  uncertaintyLevel: number;
+  /** Could a bad answer here make the whole path pointless? */
+  invalidating: boolean;
+  stoppingCondition: string;
+  disposition: UncertaintyDisposition;
+  dispositionReason: string | null;
+  resolvedByFragmentId: string | null;
+  resolvedAt: string | null;
+  depth: ResearchDepth;
+  depthBasis: string | null;
+  origin: UncertaintyOrigin;
+  originRef: string | null;
+  planVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManufacturingProgram {
+  id: string;
+  projectId: string;
+  objective: string;
+  state: ManufacturingProgramState;
+  ownerUserId: string;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * How one uncertainty bears on another.
+ *
+ * Distinct from `FragmentDependency`, which is about execution order. These are
+ * about reasoning, and the difference decides what a failure costs:
+ * a HARD_PREREQUISITE failing strands its dependent, an EVIDENTIARY one failing
+ * costs nothing, and a COMPARATIVE one failing makes its sibling *more*
+ * decisive rather than less.
+ */
+export const UNCERTAINTY_LINK_KINDS = [
+  'HARD_PREREQUISITE',
+  'CONDITIONAL',
+  'EVIDENTIARY',
+  'COMPARATIVE',
+  'FOLLOW_UP',
+  'CHALLENGES',
+] as const;
+export type UncertaintyLinkKind = (typeof UNCERTAINTY_LINK_KINDS)[number];
+
+export interface ResearchUncertaintyLinkRow {
+  id: string;
+  orchestration_id: string;
+  from_key: string;
+  to_key: string;
+  kind: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface ResearchUncertaintyLink {
+  id: string;
+  orchestrationId: string;
+  fromKey: string;
+  toKey: string;
+  kind: UncertaintyLinkKind;
+  reason: string | null;
+  createdAt: string;
+}
+
+export const PLAN_REVISION_REASONS = [
+  'INITIAL_PLAN',
+  'EVIDENCE_ARRIVED',
+  'CONTRADICTION',
+  'BRANCH_RETIRED',
+  'COVERAGE_GAP',
+  'SUFFICIENCY',
+  'PERSON',
+] as const;
+export type PlanRevisionReason = (typeof PLAN_REVISION_REASONS)[number];
+
+export interface ResearchPlanRevisionRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  version: number;
+  reason: string;
+  summary: string;
+  decisions: string;
+  applied: string;
+  actor_kind: string;
+  actor_ref: string | null;
+  created_at: string;
+}
+
+export interface ResearchPlanRevision {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  version: number;
+  reason: PlanRevisionReason;
+  summary: string;
+  /** Everything the director proposed, refusals included. */
+  decisions: unknown[];
+  /** What the deterministic layer actually let through. */
+  applied: unknown[];
+  actorKind: 'BRAIN' | 'PERSON' | 'WORKER';
+  actorRef: string | null;
+  createdAt: string;
+}
+
+export const RETROSPECTIVE_SCOPES = ['CAMPAIGN_CLOSED', 'OUTCOME_OBSERVED'] as const;
+export type RetrospectiveScope = (typeof RETROSPECTIVE_SCOPES)[number];
+
+/** The level a lesson is actually true at. Only DOMAIN and GENERAL are reusable. */
+export const LESSON_ABSTRACTIONS = ['CAMPAIGN', 'DOMAIN', 'GENERAL'] as const;
+export type LessonAbstraction = (typeof LESSON_ABSTRACTIONS)[number];
+
+export interface ResearchRetrospectiveRow {
+  id: string;
+  orchestration_id: string;
+  project_id: string;
+  lesson_key: string;
+  scope: string;
+  abstraction: string;
+  lesson: string;
+  evidence: string;
+  metrics: string;
+  created_at: string;
+}
+
+export interface ResearchRetrospective {
+  id: string;
+  orchestrationId: string;
+  projectId: string;
+  lessonKey: string;
+  scope: RetrospectiveScope;
+  abstraction: LessonAbstraction;
+  lesson: string;
+  evidence: string[];
+  metrics: Record<string, number>;
+  createdAt: string;
+}
+
+export interface MachineCategoryRow {
+  id: string;
+  program_id: string;
+  project_id: string;
+  parent_id: string | null;
+  kind: string;
+  name: string;
+  description: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MachineCategory {
+  id: string;
+  programId: string;
+  projectId: string;
+  parentId: string | null;
+  kind: MachineCategoryKind;
+  name: string;
+  description: string | null;
+  origin: MachineCategoryOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CapabilityRow {
+  id: string;
+  program_id: string;
+  project_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  held_at: string | null;
+  held_evidence: string | null;
+  held_by: string | null;
+  held_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Capability {
+  id: string;
+  programId: string;
+  projectId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  origin: 'SEED' | 'DISCOVERED';
+  sourceClaimId: string | null;
+  /** Null unless something outside research established that we hold it. */
+  heldAt: string | null;
+  heldEvidence: CapabilityHeldEvidence | null;
+  heldBy: string | null;
+  heldNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CapabilityEdgeRow {
+  id: string;
+  program_id: string;
+  category_id: string;
+  capability_id: string;
+  relation: string;
+  statement: string;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapabilityEdge {
+  id: string;
+  programId: string;
+  categoryId: string;
+  capabilityId: string;
+  relation: CapabilityRelation;
+  statement: string;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CategoryEvidenceRow {
+  id: string;
+  program_id: string;
+  category_id: string;
+  kind: string;
+  subject: string;
+  statement: string;
+  observed_on: string | null;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CategoryEvidenceEntry {
+  id: string;
+  programId: string;
+  categoryId: string;
+  kind: CategoryEvidenceKind;
+  subject: string;
+  statement: string;
+  observedOn: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ManufacturingRoundRow {
+  id: string;
+  program_id: string;
+  project_id: string;
+  category_id: string | null;
+  purpose: string;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManufacturingRound {
+  id: string;
+  programId: string;
+  projectId: string;
+  categoryId: string | null;
+  purpose: ManufacturingRoundPurpose;
+  round: number;
+  candidateId: string;
+  state: 'OPEN' | 'HARVESTED' | 'ABANDONED';
+  openedAt: string;
+  harvestedAt: string | null;
+  /** Null while OPEN. Not counted yet is a different fact from none found. */
+  found: number | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -121,6 +121,8 @@ import {
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { readObject, storageKeyOf } from '../server/services/storage.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
+import { listUncertainties } from '../server/repos/researchIntelligence.ts';
+import { researchIntelligenceView } from '../server/services/research/intelligence/view.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import type { Project, WorkerScope } from '../server/domain/types.ts';
 
@@ -709,6 +711,64 @@ async function anonymousIsRefused(fixtures: Fixtures): Promise<void> {
     found.length === 0,
     found.length === 0 ? 'nothing named' : `leaked: ${found.join(', ')}`,
   );
+}
+
+/**
+ * What an unauthenticated person is actually served.
+ *
+ * The rest of this script asks the API questions. This asks the **bundle**,
+ * because the defect it exists for was a screen: `SignIn.tsx` rendered an
+ * address and a password under the device button, and no API check could ever
+ * have seen it — the route it posted to went on working perfectly, which is
+ * exactly why it survived.
+ *
+ * Read from the served assets rather than from the repository, so what is
+ * asserted is what this deployment hands a browser rather than what the tree it
+ * was built from says. §33 records why that distinction earns its place here:
+ * the one change that reached every fixture in `tests/` and not this script was
+ * the one that failed in production with the whole suite green.
+ *
+ * It classifies rather than bans. A bundle may contain the word *password* —
+ * the recovery screen is in it, deliberately — so what is looked for is the
+ * sign-in screen's own removed words, which nothing else composes.
+ */
+async function signInSurfaceIsDeviceOnly(): Promise<void> {
+  console.log('\nThe sign-in screen, as it is served');
+
+  const index = await fetch(`${base}/`, { redirect: 'manual' });
+  const html = await index.text();
+  const sources = [...html.matchAll(/src="([^"]+\.js)"/g)].map((match) => match[1]!);
+  record(
+    'the page names a script to read',
+    sources.length > 0,
+    sources.length > 0 ? sources.join(', ') : 'no module script in the served page',
+  );
+
+  let bundle = '';
+  for (const source of sources) {
+    const asset = await fetch(new URL(source, base).toString(), { redirect: 'manual' });
+    if (asset.ok) bundle += await asset.text();
+  }
+  record('the script itself is served', bundle.length > 0, `${bundle.length} bytes`);
+  if (bundle.length === 0) return;
+
+  record(
+    'the sign-in screen offers a device',
+    bundle.includes('SIGN IN WITH YOUR DEVICE'),
+    bundle.includes('SIGN IN WITH YOUR DEVICE') ? 'present' : 'the one way in is missing',
+  );
+  for (const phrase of ['OR WITH A PASSWORD', 'WAITING FOR YOUR DEVICE']) {
+    const present = bundle.includes(phrase);
+    if (phrase === 'OR WITH A PASSWORD') {
+      record(
+        'the sign-in screen offers no password beside it',
+        !present,
+        present ? 'the password alternative is still being served' : 'absent',
+      );
+    } else {
+      record('the device button reports what it is waiting for', present, present ? '' : 'absent');
+    }
+  }
 }
 
 async function humanAuthentication(fixtures: Fixtures): Promise<string> {
@@ -1422,6 +1482,65 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
   );
 
   await worker.call('brain_complete_work', { ...proofOf(verifyClaim), summary: 'gated' });
+
+  /* --- The judgement layer, on the released image ----------------------- */
+  /*
+   * Read from rows rather than asserted about code, and read *here* because
+   * this is the first moment the runner has advanced a real packet on this
+   * server: the questions were seeded when the plan landed and the disposition
+   * moved when the gate answered.
+   *
+   * §33's lesson is the reason it is in this script at all. A change that
+   * reaches every fixture in `tests/` and not the scripted worker is a change
+   * whose release gate cannot see it — which is how a required field reached
+   * production and refused the very packet the gate submits.
+   */
+  {
+    const questions = await listUncertainties(orchestrationId);
+    record(
+      'the packet carries a decision-relevant question per planned fragment',
+      questions.length >= planned.length,
+      `${questions.length} question(s) for ${planned.length} fragment(s)`,
+    );
+    const settled = questions.filter((one) => one.disposition === 'RESOLVED');
+    record(
+      'and the gate answering a fragment settles the question it was asking',
+      settled.length >= 1 && settled.every((one) => one.beliefBasis === 'EVIDENCE'),
+      settled.length >= 1
+        ? `${settled.length} settled on evidence`
+        : `none settled of ${questions.length}`,
+    );
+    record(
+      'every closed question says why it closed, rather than only that it did',
+      questions
+        .filter((one) => one.disposition !== 'OPEN' && one.disposition !== 'INVESTIGATING')
+        .every((one) => (one.dispositionReason ?? '').length > 0),
+      `${questions.filter((one) => one.dispositionReason).length} of ${questions.length} carry a reason`,
+    );
+
+    /*
+     * Reading the mental state performs nothing. Asserted against the queue
+     * rather than stated in a comment, because a projection that enqueued
+     * something would make opening a page a decision.
+     */
+    const before = (await listWorkItems(fixtures.scope.id, { limit: 200 })).length;
+    const orchestration = await getOrchestration(orchestrationId);
+    const view = orchestration ? await researchIntelligenceView(orchestration) : null;
+    const after = (await listWorkItems(fixtures.scope.id, { limit: 200 })).length;
+    record(
+      'reading what Brain thinks it is researching changes nothing',
+      view !== null && before === after,
+      `${before} work item(s) before and ${after} after`,
+    );
+    record(
+      'and reports decisive coverage with its denominator rather than a bare percentage',
+      view !== null && view.sufficiency.decisive.total >= 0 && view.understanding !== null,
+      view
+        ? `${view.sufficiency.decisive.settled}/${view.sufficiency.decisive.total} decisive · ` +
+          `${view.sufficiency.verdict}`
+        : 'no view',
+    );
+  }
 
   /* --- The synthesis, and what it may cite ------------------------------ */
 
@@ -2652,6 +2771,11 @@ async function mcpChecks(fixtures: Fixtures): Promise<void> {
     'brain_submit_synthesis',
     'brain_get_audit_brief',
     'brain_submit_audit',
+    // The one door a worker's judgement about the *plan* comes through. Named
+    // here for the same reason as the rest: a count passes when a tool is
+    // renamed, and renaming one the connector already knows is exactly the
+    // change that breaks a live worker and nothing else.
+    'brain_propose_plan_revision',
   ];
   const missingResearch = RESEARCH_TOOL_NAMES.filter((name) => !modernNames.includes(name));
   record(
@@ -3686,6 +3810,7 @@ async function main(): Promise<void> {
     if (phase === 'check' || phase === 'both') await checkFactoryBeacon(phase === 'check');
 
     await anonymousIsRefused(fixtures);
+    await signInSurfaceIsDeviceOnly();
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await sharedCashBoundary(fixtures, cookie);
