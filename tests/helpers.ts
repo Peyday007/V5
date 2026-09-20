@@ -194,13 +194,22 @@ let sweptThisProcess = false;
  * mechanism.
  *
  * Two things keep it from being its own problem. **An advisory lock**, taken
- * without blocking, so one worker sweeps and the other hundred-and-fifty return
+ * without blocking, so one process sweeps and every other one returns
  * immediately rather than all issuing the same drops at once. And a **limit**,
  * because the first run after this lands has hundreds of schemas to clear and a
- * `DROP SCHEMA … CASCADE` over ~150 tables is not free — an unbounded pass
- * would stall one worker's hook past its timeout and report as a test failure
- * somewhere unrelated. Sixty a pass, spread over the run, and the next run
- * finishes whatever is left.
+ * `DROP SCHEMA … CASCADE` is not free — an unbounded pass would stall one
+ * worker's hook past its timeout and report as a test failure somewhere
+ * unrelated. `SWEEP_LIMIT` is **five**, measured rather than chosen: one drop
+ * over 667 relations took 0.94 s here, and a limit of sixty blew the 30 s
+ * `beforeEach` that was meant to be running a test.
+ *
+ * **`sweptThisProcess` is per *file*, not per run, and saying so matters.**
+ * `vitest.config.ts` uses `pool: 'forks'` with isolation on, which gives each
+ * test file a fresh child process — that is what the database singleton relies
+ * on, and it also resets this flag. So a run with a backlog sweeps five a file
+ * rather than five in total, which is what actually clears it: the pass is
+ * self-limiting because the backlog shrinks, and on a clean database it costs
+ * one listing query that finds nothing.
  *
  * Best-effort throughout: a sweep that cannot run is a leak to clean up later,
  * and never a reason to fail somebody's test.
