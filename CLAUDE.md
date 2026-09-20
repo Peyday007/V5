@@ -2675,6 +2675,60 @@ remote.
   slowness rather than fixing it: nobody yet knows what the judge pass costs,
   because nothing has waited long enough to see.
 
+  **The tenth run waited long enough, and the number ends the investigation
+  this section has carried for nine.** Deploy 277, `cc32851`, with the bound
+  genuinely applied at last — the two clients share one `boundedRequest` built
+  on `node:http`, because `AbortSignal` was never the thing undici's
+  `headersTimeout` was going to respect. The JUDGE role's `brain_submit_audit`
+  began at 22:35:38.4Z and the verdict was recorded at 22:45:22.9Z: **nine
+  minutes and forty-four seconds**, and it *succeeded* — `PASS  and only the
+  judge records a verdict — verdict MORE_RESEARCH`.
+
+  So every earlier reading of this was the client giving up at 300 seconds, and
+  the two shapes the section could not tell apart were one slow pass seen from
+  either side of it. What the pass finishes into is the next refusal down:
+  `brain_complete_work: FENCE_LOST`, because `DEFAULT_LEASE_MS` is five minutes
+  and nothing was saying the worker was still alive. **The queue was right and
+  the harness was wrong.** An at-least-once queue expires a lease precisely so
+  that a worker which stopped working cannot hold work for ever, and a worker
+  still working says so by beating — which is what every other long-running
+  caller in this codebase already does, and what `verify-hosted.ts` does now,
+  across the audit submission and the filing beside it. Asking for a longer
+  lease at claim time was the other option and is worse: it is an estimate made
+  before the work starts, and a process that dies inside it strands the item
+  for the whole of it.
+
+  **Two words for one condition, and knowing which is a fact about the live
+  queue rather than about the code.** Writing the regression established it: an
+  unbeaten lease in isolation is refused `LEASE_EXPIRED`, and production said
+  `FENCE_LOST` — the stronger fact, that the expired item had already been
+  re-offered and retaken. The test asserts the refusal rather than the word,
+  because asserting one of them would make it a claim about how busy the queue
+  happened to be.
+
+  **And this run's post-restart half read the pool at 383 against the same
+  ceiling of two, which finally says what the ceiling is *for*.** The comment
+  beside `BRAIN_DATABASE_POOL_SIZE = '2'` in the harness argues the case
+  correctly — the harness runs inside the container beside the Brain, both talk
+  to the same Supabase pooler, and session mode allows fifteen clients in total
+  — and then claims *"the only concurrency here is the six-way idempotency
+  race, and that goes over HTTP"*. Three hundred and eighty-three queued
+  callers is the refutation. The fan-out is of the order of the live archive:
+  the same run read *399 claim(s) across 399 readable document(s)*.
+
+  Pre-restart the identical section got through that queue in nineteen seconds
+  and nothing was reported; post-restart, against a Brain replaying its own
+  ticks on the same pooler, the tail caller crossed ten. **So the ten-second
+  wall is the whole difference between the two halves of one run, and a wall
+  that turns correct serialization into "the database is unreachable" is
+  answering a different question from the one it was put there for.**
+  `BRAIN_DATABASE_CONNECT_TIMEOUT_MS` is that patience, ten seconds unless a
+  process says otherwise, so nothing else moves. **It fixes nothing about the
+  fan-out and is not claimed to**, and the ceiling is *still* deliberately not
+  raised: two plus the Brain's own ten is twelve of the pooler's fifteen, and
+  spending that budget to shorten a queue trades a legible timeout for
+  `EMAXCONNSESSION` on whichever statement happened to be running.
+
   **And post-restart the pool diagnostic finally produced the number §27 asked
   for.** Not a seventh anecdote: `2/2 connection(s) in use, 0 idle, **380
   caller(s) waiting**, ceiling 2`. So the eighth occurrence says what the
@@ -2938,6 +2992,29 @@ remote.
   tolerance, it is a removed check**, so that is the half the guard pins: the
   step must still carry an `::error::` and an `exit 1`, and must not end in
   `|| true`.
+
+- **A tolerance one line up is the same removed check, and `continue-on-error`
+  is the quietest form of it.** The bullet above is about a step that must
+  still fail; this is about two that failed and were rendered as passing.
+  GitHub sets a `continue-on-error` step's **`conclusion` to `success`** while
+  leaving `outcome` at `failure`, so both hosted verification probes showed
+  green ticks in the UI and in every API listing, and only the verdict — which
+  read `outcome` — knew. Three consecutive deploys reported
+  `beforeRestart: false` / `afterRestart: false` underneath a step table with
+  no red in it. **That is worse than the skipped gate above it**: a gate that
+  does not run leaves a gap somebody notices, and a gate that renders as passed
+  is read as evidence.
+
+  The flag's stated reason was real — the steps after a probe must still run,
+  so the bootstrap secrets are spent and the restart happens whatever the probe
+  said. That is what `if: always()` is for, and it is where those guards live
+  now. The probes fail honestly, the cleanup and the restart are guarded on the
+  *release* having succeeded rather than on the probe, and the verdict prints
+  each failing probe's own `HOSTED-VERIFICATION` and `FAIL` lines before it
+  names the condition — because a red run whose only message is "read the two
+  steps above" sends somebody to scroll through six hundred passing lines.
+  Proved on deploy 277: the same failing probe that rendered `success` on 276
+  rendered `failure`, and both `always()` steps ran after it.
 
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
