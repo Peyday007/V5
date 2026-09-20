@@ -5929,11 +5929,11 @@ reports `ABSENT` and `UNTESTED`, and nothing here can move either. No change
 request has been compiled, because the Research Intelligence packet correctly
 refuses on its remaining person clause.
 
-**Eleven faculties are canonical on production, promoted by a real audit on a
-fired Routine.** The paragraph this replaces said no faculty had been promoted
-from a production reading; that was true when it was written and is corrected
-here rather than edited there. It took three readings, and what each of them
-refused is the record:
+**Fourteen faculties are canonical on production, promoted by real audits on
+fired Routines, and Research Intelligence is one of them.** An earlier version
+of this paragraph said no faculty had been promoted from a production reading;
+that was true when it was written and is corrected here rather than edited
+there. It took four readings, and what each of them refused is the record:
 
 1. Fifteen definitions proposed, **all fifteen refused**, because Brain's own
    extraction contract named the three connection field names `validateConnections`
@@ -5944,20 +5944,61 @@ refused is the record:
    dereference. Three independent leases said exactly that and not one invented
    a verdict.
 3. Reopened again with the definition carried whole in the unit's own input:
-   **11 promoted, 1 refused by the audit, 0 left unjudged, 67 relationships
-   recorded.** The "0 left unjudged" is what says the second correction worked.
+   **11 promoted, 1 refused by the audit, 0 left unjudged, 67 relationships.**
+   The "0 left unjudged" is what says the second correction worked. Three were
+   rejected at validation for the worker's own reasons — Research Intelligence
+   among them, for a quote not copied exactly — and that is the partial reading
+   the reopen above was widened for.
+4. Reopened as a partial: **fourteen validated**, Research Intelligence
+   anchored this time to `blk_6bba079990094cceac83`, then **13 promoted, 1
+   refused by the audit, 0 left unjudged, 54 relationships**. Fired 6.2 seconds
+   after the bin went ready, read in nine and a half minutes, audited on a
+   session distinct from the one that read it.
 
-The one the audit refused is Shared Executive, `INCOMPLETE`, with a substantive
-critique of what the blueprint's §2 does and does not establish — a reviewer
-reading the definition it was handed, which is the thing the previous round
-could not do. Three were rejected at validation for the worker's own reasons,
-Research Intelligence among them for a quote not copied exactly.
+The registry holds fourteen because **a worse second reading cannot lose a
+faculty** — `promoteCandidate` updates the row it finds by slug and nothing
+deletes one — so the definition the fourth audit refused is still canonical
+from the third, and the third's refusal is still on its own row. That is the
+reopen's stated property, observed rather than asserted.
 
 Every stage of this has been Brain refusing to record something it could not
 stand behind, and every worker involved reported the blocker precisely instead
-of inventing a result. **The two earlier readings are still on the table with
+of inventing a result. **The three earlier readings are still on the table with
 their refusals intact**, which is the reopen preserving what it replaced rather
 than the fix erasing the evidence that there was ever anything to fix.
+
+**The chain then ran to a compiled change request, unattended where it could
+be and by a reader where it could not, and stopped at a person.** The durable
+tick opened `rlp_ca981f0b0933427098b5` for Research Intelligence by itself and
+derived its three derivable sections and sixteen gaps. Two were
+`REQUIRES_PERSON_AUTHORITY` — *available tools, workers, budgets, and time* and
+*permission and privacy boundaries* — and the operator's two standing
+statements were recorded against them verbatim, which is what they turned out
+to have been written for. Twelve were `NEEDS_A_READING`, and a reader compared
+each against the code: eleven are served by modules on the live `packetRunner`
+path or by tools production had just exercised, and **one is not** — *suggested
+experiments or simulations*, which nothing in `server/` produces. Four of the
+twelve had matched the wrong component on a name, so the reading names the
+right one instead; that is the matcher's stated failure mode behaving as
+designed, a miss costing a reading rather than an invention.
+
+`decisionReadiness`' five clauses then all held and the contract compiled,
+carrying its one acceptance condition with the gap id in it so the ask traces
+back to the requirement, the definition, the quote and the block.
+
+**And the handoff was refused, correctly, by a boundary with no terminal
+path.** The Factory said *"This project has not been given that repository"*:
+authorizing a repository in the envelope says the factory may be **pointed** at
+it, and onboarding says which project may change it and inside which
+directories. That is `POST /api/projects/:projectId/factory/repositories/:grantId/onboard`,
+behind `requirePerson` and a project write, with `scopeKind` deliberately
+carrying **no default** — §27's own sentence that a request omitting it is
+refused rather than given the whole repository, because that is the entire
+point of the boundary. Nothing in `scripts/` calls it and nothing should:
+adding a terminal route around a decision this file reserves to a person in a
+browser would be the second, weaker way in that §35 refuses. So the packet sits
+decision-ready with its change request compiled, and the next move is one
+action on Build that nobody else can make.
 
 **Three of those sentences named one defect rather than three, and the
 correction is recorded rather than quietly applied.** *Nothing here can move
@@ -5984,6 +6025,47 @@ nothing turned one into work.
   one dimension whose wrong answer is a wrong *action*, and a Brain that could
   switch its own faculties on is §22's worker creating its own work one altitude
   up.
+
+- **`prove.ts` and `realized.ts` read one column and answer different
+  questions, and for a while whichever ran last decided what the registry
+  said.** `implementationFrom` counts **buildable** gaps closed — how much of
+  what a packet set out to build has been built. `readRealization` counts every
+  requirement **served, closed or waived** — how much of the faculty exists.
+  Both are right about their own question and both write
+  `faculties.implementation_state`.
+
+  Production made it visible on the first packet that had both, within one
+  minute of itself. Research Intelligence has sixteen requirements: fifteen
+  served by live code, one late-found gap classified `MUST_BE_BUILT`.
+  `packet realize` read `PARTIAL` — *15 of 16 requirement(s) are served* — and
+  the durable tick applied it, because `advance.ts` calls `applyRealization`.
+  `packet prove` read `ABSENT` — *0 of 1 buildable gap(s) are closed* — and
+  `--apply` would have put a faculty §40 actually built back to having no
+  implementation at all. **A dimension whose value depends on which command
+  somebody typed is not a reading**, and this is the *two readers of one fact*
+  defect this file records more than any other, arriving with both readers in
+  the same printed command list.
+
+  The half that is wrong is the **lowering**, and the rule was already written
+  down one module along: `realized.ts` has `lowers` and refuses to move a state
+  down its own ladder, and `prove.ts` moved in either direction on
+  `target !== faculty.implementationState`. It is the same rule for the same
+  reason as the `UNKNOWN` one directly above — this reading is built from a
+  **narrower** set of gaps, so a state it cannot see is not a state it may
+  contradict, and a new build gap opening does not unbuild what is already
+  there. The ladder is now the one exported constant rather than a second copy,
+  the withholding is reported in the reading rather than silent, and **raising
+  is untouched**: `CONNECTED` and `LIVE` still move on this module's own
+  evidence, which is the half that has to survive the fix. Both halves are
+  pinned, and the lowering guard was run against the un-fixed version to watch
+  it fail first.
+
+  **What it does not do is decide which question owns the column.** That is a
+  design decision with a real answer either way — one column answering "how
+  much of this faculty exists" and a campaign's progress living somewhere else,
+  or the reverse — and inventing one here would be settling it by whichever
+  module I happened to be editing. What is fixed is that neither reader can now
+  make the registry say something a broader reading has already contradicted.
 - **`handoff.ts` submits and stops.** It never imports the approval, never
   chooses the repository or the project, and claims the packet with a guarded
   `UPDATE` on `change_request_id IS NULL` — the one value that means nobody
