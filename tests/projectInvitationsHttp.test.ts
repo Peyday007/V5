@@ -26,6 +26,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pickPort } from './helpers/ports.ts';
+import { authenticator } from './helpers/authenticator.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
@@ -53,7 +54,13 @@ function findTsxCli(): string {
 }
 const TSX_CLI = findTsxCli();
 const PORT = pickPort(6700, 100);
-const BASE = `http://127.0.0.1:${PORT}`;
+/*
+ * `localhost` rather than the address, because this journey now ends in a
+ * WebAuthn registration and `relyingPartyFrom` refuses an origin that is
+ * neither https nor localhost — so the address would test that refusal instead
+ * of the journey. `passkeyHttp` is driven at localhost for the same reason.
+ */
+const BASE = `http://localhost:${PORT}`;
 
 let server: ChildProcessByStdio<null, Readable, Readable> | null = null;
 let dataDir: string;
@@ -64,6 +71,8 @@ const BOOTSTRAP_PASSWORD = 'bootstrap-password-01';
 const ADMIN_PASSWORD = 'administrator-password-01';
 const MEMBER_PASSWORD = 'member-password-000001';
 const INVITED_PASSWORD = 'invited-password-00001';
+/** The link the acceptance hands back, carried to the test that spends it. */
+let enrollmentToken = '';
 
 let adminCookie = '';
 let memberCookie = '';
@@ -74,6 +83,8 @@ interface Result<T = unknown> {
   status: number;
   body: T;
   text: string;
+  /** The session a route set, where it set one. */
+  cookie: string;
 }
 
 async function call<T = unknown>(
@@ -98,7 +109,12 @@ async function call<T = unknown>(
   } catch {
     /* keep the text */
   }
-  return { status: response.status, body: body as T, text };
+  return {
+    status: response.status,
+    body: body as T,
+    text,
+    cookie: (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '',
+  };
 }
 
 async function signIn(email: string, password: string): Promise<string> {
@@ -385,9 +401,12 @@ describe('the invitation journey', () => {
       createdAccount: boolean;
       signInRequired: boolean;
       email: string;
+      enrollment?: { token: string };
     }>('POST', '/api/invitations/accept', {
       body: {
         token,
+        // Sent and ignored. Nothing here can spend a password, and this route
+        // answering an error about one would say that something used to.
         password: INVITED_PASSWORD,
         displayName: 'An invited collaborator',
         // Neither of these is read. The role comes from the invitation and Brain
@@ -403,6 +422,18 @@ describe('the invitation journey', () => {
     expect(accepted.body.email).toBe('invited.person@example.invalid');
     // Accepting hands out no session: no cookie, and nothing else to sign in with.
     expect(accepted.text).not.toContain('Set-Cookie');
+    /*
+     * What it does hand out is the one enrollment link for the account it just
+     * made — which holds no credential at all, so stopping here would leave
+     * somebody a member of a project they cannot reach. The password in the
+     * body above changed nothing: that account cannot be signed in to with one.
+     */
+    expect(accepted.body.enrollment?.token).toMatch(/^brnv_/);
+    enrollmentToken = accepted.body.enrollment?.token ?? '';
+    const refused = await call('POST', '/api/auth/login', {
+      body: { email: 'invited.person@example.invalid', password: INVITED_PASSWORD },
+    });
+    expect(refused.status).toBe(401);
 
     const members = await call<{ members: { principalId: string; role: string | null }[] }>(
       'GET',
@@ -413,7 +444,28 @@ describe('the invitation journey', () => {
   });
 
   it('lets the new person reach what that role permits, and nothing more', async () => {
-    const cookie = await signIn('invited.person@example.invalid', INVITED_PASSWORD);
+    /*
+     * Signed in with a device, which is the only way this account can be. The
+     * enrollment link the acceptance handed back is spent here — the same three
+     * calls `Enrol.tsx` makes — and what comes back is the session.
+     */
+    const options = await call<{ challenge: string }>('POST', '/api/enroll/options', {
+      body: { token: enrollmentToken },
+    });
+    expect(options.status).toBe(200);
+    const device = authenticator({ rpId: 'localhost', credentialId: 'invited-device-00001' });
+    const made = device.register(options.body.challenge, { origin: BASE });
+    const enrolled = await call('POST', '/api/enroll/complete', {
+      body: {
+        token: enrollmentToken,
+        challenge: options.body.challenge,
+        label: 'Their laptop',
+        ...made,
+      },
+    });
+    expect(enrolled.status).toBe(200);
+    const cookie = enrolled.cookie;
+    expect(cookie).not.toBe('');
 
     // READ on the project they were invited to.
     expect((await call('GET', `/api/projects/${project}`, { cookie })).status).toBe(200);

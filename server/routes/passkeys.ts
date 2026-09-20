@@ -50,16 +50,23 @@ import {
   revokePasskey,
   takeChallenge,
 } from '../repos/passkeys.ts';
-import { createSession, getUser, recordIdentityEvent } from '../repos/identity.ts';
+import {
+  createSession,
+  getUser,
+  recordIdentityEvent,
+  revokeSessionsForPasskey,
+} from '../repos/identity.ts';
 import { generateSessionToken } from '../services/identity/secrets.ts';
-import { isSecureRequest, sessionCookie } from '../services/identity/authenticate.ts';
+import {
+  DEVICE_SESSION_TTL_MS,
+  isSecureRequest,
+  sessionCookie,
+} from '../services/identity/authenticate.ts';
 import { requireBrainAdmin } from './helpers.ts';
 import { nowIso } from '../repos/util.ts';
 import { cashReadiness } from '../services/cash/readiness.ts';
 
 export const passkeyRouter: Router = Router();
-
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 function rpFor(req: Request) {
   const rp = relyingPartyFrom(issuerFor(req));
@@ -67,19 +74,31 @@ function rpFor(req: Request) {
   return rp;
 }
 
-function startSessionFor(res: Response, req: Request, userId: string) {
+/**
+ * Open a session for a device, and record which device opened it.
+ *
+ * The lifetime is `DEVICE_SESSION_TTL_MS` — thirty days, absolute, carried in
+ * the cookie's `Max-Age` so it survives closing the browser. That file has the
+ * reasoning; what matters here is the `passkeyId`, which is what lets revoking
+ * one device end exactly the sessions that device opened and nothing else.
+ */
+function startSessionFor(res: Response, req: Request, userId: string, passkeyId: string | null) {
   return (async () => {
     const token = generateSessionToken();
     const session = await createSession({
       userId,
       secret: token.secret,
-      ttlMs: SESSION_TTL_MS,
+      ttlMs: DEVICE_SESSION_TTL_MS,
       userAgent: req.header('user-agent') ?? null,
       ip: req.ip ?? null,
+      passkeyId,
     });
     res.setHeader(
       'Set-Cookie',
-      sessionCookie(token.secret, { secure: isSecureRequest(req), maxAgeMs: SESSION_TTL_MS }),
+      sessionCookie(token.secret, {
+        secure: isSecureRequest(req),
+        maxAgeMs: DEVICE_SESSION_TTL_MS,
+      }),
     );
     res.setHeader('Cache-Control', 'no-store');
     return session;
@@ -163,7 +182,7 @@ passkeyRouter.post('/enroll/complete', (req: Request, res: Response) => {
         return;
       }
 
-      await startSessionFor(res, req, outcome.user.id);
+      await startSessionFor(res, req, outcome.user.id, outcome.passkeyId);
       res.json({
         user: { id: outcome.user.id, displayName: outcome.user.displayName },
         readiness: await cashReadiness(),
@@ -198,7 +217,7 @@ passkeyRouter.post('/auth/passkey/verify', (req: Request, res: Response) => {
         res.status(401).json({ error: outcome.reason });
         return;
       }
-      await startSessionFor(res, req, outcome.user.id);
+      await startSessionFor(res, req, outcome.user.id, outcome.passkeyId);
       res.json({ user: { id: outcome.user.id, displayName: outcome.user.displayName } });
     } catch {
       res.status(401).json({ error: SIGN_IN_REFUSED });
@@ -316,6 +335,15 @@ passkeyRouter.post(
       reason: optionalString(bodyOf(req)['reason'], 'reason') ?? 'Revoked by its owner.',
       byUserId: principal.id,
     });
+    /*
+     * And the sessions that device opened, which is the half a revocation
+     * would otherwise be missing. Retiring the credential and leaving its
+     * session live means the retired device keeps working until the session
+     * expires — thirty days, now that a device session is meant to last. The
+     * person's other devices are untouched, because they are not what is being
+     * taken out of service.
+     */
+    const endedSessions = done ? await revokeSessionsForPasskey(id) : 0;
     await recordIdentityEvent({
       actorType: 'HUMAN',
       actorId: principal.id,
@@ -324,7 +352,7 @@ passkeyRouter.post(
       targetId: principal.id,
       projectId: null,
       result: done ? 'SUCCESS' : 'DENIED',
-      metadata: { passkeyId: id },
+      metadata: { passkeyId: id, endedSessions: String(endedSessions) },
     });
     return { revoked: done };
   }),
