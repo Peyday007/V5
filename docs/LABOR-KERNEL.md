@@ -337,10 +337,10 @@ would ask next and why, and every published sourcing option beside its rate.
 
 ---
 
-## Two defects found by running it rather than by reading it
+## Three defects found by running it rather than by reading it
 
-Both are recorded here rather than quietly fixed, and both are the same shape:
-correct-looking code whose *sentence about the rows* was wrong.
+All three are recorded here rather than quietly fixed, and the first two are
+the same shape: correct-looking code whose *sentence about the rows* was wrong.
 
 **The report said "established by a published source" about an answer a person
 had typed.** `established` was a boolean read off `verdict ===
@@ -361,6 +361,30 @@ successor. The regression test was measured against the old implementation
 before it was trusted — it failed **3 times in 8** while it equalized the
 timestamps, which is a test that lets the defect back in half the time, so it
 puts the clock *backwards* instead and now fails on every run.
+
+**A task that requires a person reported nothing standing in its way.**
+`ESTABLISHES` names four questions that each establish a human role, and
+`blockersFor` was a sequence of `if`s with three of the four written. So a task
+whose only positive answer was `HANDLES_ONLY_EXCEPTIONS` came back
+`HUMAN_REQUIRED` with an **empty blocker list** — and the frontier reads an
+empty list as *nothing is in the way*. A task that needs a person, presented as
+ready to move to Brain.
+
+It is a `Record` keyed off `ESTABLISHES`' own questions now, so a reason added
+there with no blocker here is a **compile error** rather than a silent gap. The
+refusal was exercised by deleting the entry and reading the error back, because
+a guard nobody has seen bite is a claim rather than a reading.
+
+**And the audit that found it had already passed once, against nothing.** Its
+first version drove all 2 187 answer combinations through a task naming no
+capability — and `deriveCanProduce` answers `UNKNOWN` for such a task, which is
+a *gating* question, so `BRAIN_DEFENSIBLE` was unreachable in every reading. It
+asserted one half of a biconditional whose other half never occurred, and it
+passed with `NECESSITY_UNANSWERED` deleted, which is how the vacuity was caught.
+A vacuous guard is worse than none, because it reads as coverage. It now
+registers a real healthy Routine, names a capability that genuinely reads
+`PRESENT`, and asserts that **all three verdicts actually occur** before it
+trusts the biconditional over them.
 
 ## What is true of this kernel today, said plainly
 

@@ -110,6 +110,7 @@ export const LABOR_BLOCKERS = [
   'RELATIONSHIP_VALUE',
   'QUALITY_UNPROVEN',
   'VERIFICATION_INSUFFICIENT',
+  'EXCEPTION_ONLY',
   'NECESSITY_UNANSWERED',
 ] as const;
 export type LaborBlockerKind = (typeof LABOR_BLOCKERS)[number];
@@ -259,13 +260,12 @@ const GATING: readonly AnyQuestion[] = Object.freeze([
  * constraint no amount of capability removes — and a reader who acted on the
  * weaker one would go looking for a robot.
  */
-const ESTABLISHES: readonly { question: AnyQuestion; reason: HumanNecessityReason }[] =
-  Object.freeze([
-    { question: 'REQUIRES_LICENSED_HUMAN', reason: 'ACCOUNTABILITY_LICENSING' },
-    { question: 'REQUIRES_PHYSICAL_PRESENCE', reason: 'PHYSICAL_EXECUTION' },
-    { question: 'HUMAN_INTERACTION_ADDS_VALUE', reason: 'HUMAN_INTERFACE' },
-    { question: 'HANDLES_ONLY_EXCEPTIONS', reason: 'EXCEPTION_HANDLING' },
-  ]);
+const ESTABLISHES = Object.freeze([
+  { question: 'REQUIRES_LICENSED_HUMAN', reason: 'ACCOUNTABILITY_LICENSING' },
+  { question: 'REQUIRES_PHYSICAL_PRESENCE', reason: 'PHYSICAL_EXECUTION' },
+  { question: 'HUMAN_INTERACTION_ADDS_VALUE', reason: 'HUMAN_INTERFACE' },
+  { question: 'HANDLES_ONLY_EXCEPTIONS', reason: 'EXCEPTION_HANDLING' },
+] as const) satisfies readonly { question: AnyQuestion; reason: HumanNecessityReason }[];
 
 /**
  * Read the test for one task.
@@ -499,6 +499,48 @@ function fromRow(
 }
 
 /**
+ * What each establishing question puts between this task and Brain.
+ *
+ * A `Record` over `ESTABLISHES`' own questions, so the set is total by
+ * construction. See the loop in `blockersFor` for what the un-total version
+ * cost.
+ */
+const ESTABLISHED_BLOCKER: Readonly<
+  Record<(typeof ESTABLISHES)[number]['question'], { kind: LaborBlockerKind; statement: string; remedy: string }>
+> = Object.freeze({
+  REQUIRES_LICENSED_HUMAN: {
+    kind: 'LEGAL_ACCOUNTABILITY',
+    statement: 'A person must hold the licence, sign, or be accountable for this output.',
+    remedy:
+      'Brain performs everything beneath that boundary and the accountable person receives ' +
+      'the smallest possible decision, rather than the raw work.',
+  },
+  REQUIRES_PHYSICAL_PRESENCE: {
+    kind: 'PHYSICAL_PRESENCE',
+    statement: 'The work requires physical interaction with the world.',
+    remedy:
+      'Brain plans, schedules, coordinates and verifies around it; the irreducibly physical ' +
+      'part stays with an operator.',
+  },
+  HUMAN_INTERACTION_ADDS_VALUE: {
+    kind: 'RELATIONSHIP_VALUE',
+    statement: 'The interaction itself is part of what is being bought.',
+    remedy:
+      'Brain prepares, prioritizes, researches and follows up so the person spends their ' +
+      'time only on the interaction.',
+  },
+  HANDLES_ONLY_EXCEPTIONS: {
+    kind: 'EXCEPTION_ONLY',
+    statement:
+      'A person is reached only for the cases the ordinary path does not cover, so the role ' +
+      'that remains is the exceptions rather than the work.',
+    remedy:
+      'Brain handles the ordinary path and narrows what counts as an exception; every case it ' +
+      'learns to settle is one the person no longer sees.',
+  },
+});
+
+/**
  * Everything currently standing between this task and Brain, strongest first.
  *
  * A list rather than one value, because §13's *bottlenecks* reading needs to
@@ -514,35 +556,25 @@ function blockersFor(input: {
   const out: LaborBlocker[] = [];
   const { answerOf } = input;
 
-  if (answerOf('REQUIRES_LICENSED_HUMAN') === 'YES') {
-    out.push({
-      kind: 'LEGAL_ACCOUNTABILITY',
-      statement: 'A person must hold the licence, sign, or be accountable for this output.',
-      remedy:
-        'Brain performs everything beneath that boundary and the accountable person receives ' +
-        'the smallest possible decision, rather than the raw work.',
-      capabilityId: null,
-    });
-  }
-  if (answerOf('REQUIRES_PHYSICAL_PRESENCE') === 'YES') {
-    out.push({
-      kind: 'PHYSICAL_PRESENCE',
-      statement: 'The work requires physical interaction with the world.',
-      remedy:
-        'Brain plans, schedules, coordinates and verifies around it; the irreducibly physical ' +
-        'part stays with an operator.',
-      capabilityId: null,
-    });
-  }
-  if (answerOf('HUMAN_INTERACTION_ADDS_VALUE') === 'YES') {
-    out.push({
-      kind: 'RELATIONSHIP_VALUE',
-      statement: 'The interaction itself is part of what is being bought.',
-      remedy:
-        'Brain prepares, prioritizes, researches and follows up so the person spends their ' +
-        'time only on the interaction.',
-      capabilityId: null,
-    });
+  /*
+   * Every question that can establish a human role reports one, and that is a
+   * table rather than a sequence of `if`s.
+   *
+   * It was a sequence of `if`s, and three of the four were written.
+   * `HANDLES_ONLY_EXCEPTIONS` establishes `EXCEPTION_HANDLING` in `ESTABLISHES`
+   * above and had no branch here, so a task whose only positive answer was that
+   * one came back `HUMAN_REQUIRED` **with an empty blocker list** — a task that
+   * needs a person, telling the frontier that nothing is in its way. That is
+   * the most misleading output this module can produce and it came from the
+   * state that looks healthiest.
+   *
+   * Keyed off `ESTABLISHES` so the two cannot drift: a reason added there with
+   * no entry here is a compile error rather than a silent gap, which is the
+   * only version of this that stays true.
+   */
+  for (const { question } of ESTABLISHES) {
+    if (answerOf(question) !== 'YES') continue;
+    out.push({ ...ESTABLISHED_BLOCKER[question], capabilityId: null });
   }
 
   if (input.capability?.state === 'MISSING') {

@@ -6949,6 +6949,28 @@ built.
   the old implementation before it was trusted**: it failed 3 times in 8 while
   it equalized the timestamps — a test that lets a defect back in half the time
   — so it puts the clock backwards instead and fails on every run.
+- **A task that requires a person reported nothing standing in its way, and the
+  test that was supposed to catch it was vacuous. Both are recorded rather than
+  quietly fixed.** `ESTABLISHES` names four questions that each establish a
+  human role; `blockersFor` was a sequence of `if`s and three of the four were
+  written. So a task whose only positive answer was `HANDLES_ONLY_EXCEPTIONS`
+  came back `HUMAN_REQUIRED` with an **empty blocker list** — and the frontier
+  reads an empty list as *nothing is in the way*. A task that needs a person,
+  presented as ready to move to Brain, from the state that looks healthiest.
+  It is a `Record` keyed off `ESTABLISHES`' own questions now, so a reason added
+  there with no blocker here is a compile error rather than a silent gap; the
+  refusal was exercised by deleting the entry and reading the error back.
+
+  **The audit that found it had already passed once, against nothing.** Its
+  first version drove all 2 187 answer combinations through a task naming **no
+  capability** — and `deriveCanProduce` answers `UNKNOWN` for such a task, which
+  is a gating question, so `BRAIN_DEFENSIBLE` was unreachable in every single
+  reading. It asserted one half of a biconditional whose other half never
+  occurred, and it passed with `NECESSITY_UNANSWERED` deleted, which is how the
+  vacuity was noticed at all. **A vacuous guard is worse than none, because it
+  reads as coverage.** It registers a real healthy Routine and names a
+  capability that genuinely reads `PRESENT` now, and it asserts that all three
+  verdicts actually occur *before* it trusts the biconditional over them.
 - **Two of the brief's sections are not built, and saying so is the honest
   report.** §5's elastic capacity and §10's pool of verified external operators
   are a roster of real people with contact details and credentials, and building
@@ -7362,6 +7384,7 @@ tests/                  Vitest suites
   cashSection.test.tsx       the Cash section in a browser: four states, one control
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
+  laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```
