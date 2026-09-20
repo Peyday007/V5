@@ -140,3 +140,57 @@ jobs:
             fi
           fi
           echo "LOGS: OK app=$app seconds=$LOG_SECONDS lines=$(wc -l < all.txt)"
+
+      # What the Brain wrote down about the failure, as opposed to what it said
+      # out loud.
+      #
+      # `runIdempotent` closes the attempt row with the exception's own message
+      # — outside the transaction that rolls the effect back, so it survives —
+      # while the caller only ever sees "That call could not be completed". So
+      # the durable record of an internal tool failure is a row, and the log
+      # line beside it ages out. This reads that row and nothing else.
+      #
+      # Read-only by construction: one SELECT, no writes, no schema, no
+      # credential printed. It runs the query from this checkout rather than
+      # from the deployed image, which is `step12a-inspect.yml`'s own pattern,
+      # so it changes nothing about what is running.
+      - name: What the failed effects recorded
+        id: effects
+        env:
+          BRAIN_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL }}
+        run: |
+          if [ -z "$BRAIN_DATABASE_URL" ]; then
+            echo "EFFECTS: SKIPPED no database URL is available to this job"
+            exit 0
+          fi
+          # The three work items whose synthesis failed after the deploy, plus
+          # every other `research.synthesis` operation that did not succeed.
+          # Named ids first, so the answer is legible even if the wider scan
+          # returns a lot.
+          psql "$BRAIN_DATABASE_URL" --no-psqlrc -v ON_ERROR_STOP=1 -P pager=off -x -c "
+            SELECT o.work_item_id,
+                   o.state,
+                   o.failure_category,
+                   a.attempt_number,
+                   a.outcome,
+                   a.started_at,
+                   a.detail
+              FROM idempotency_operations o
+              JOIN effect_attempts a ON a.operation_id = o.id
+             WHERE o.namespace = 'research.synthesis'
+               AND o.work_item_id IN (
+                 'wki_9fcf0dd1a3d24a489ce0',
+                 'wki_46be9521e7d942e0beaa',
+                 'wki_23cac3340ba4466282be')
+             ORDER BY a.started_at, a.attempt_number;"
+
+          echo "--- every other research.synthesis attempt that did not succeed ---"
+          psql "$BRAIN_DATABASE_URL" --no-psqlrc -v ON_ERROR_STOP=1 -P pager=off -x -c "
+            SELECT o.work_item_id, a.attempt_number, a.outcome, a.started_at, a.detail
+              FROM idempotency_operations o
+              JOIN effect_attempts a ON a.operation_id = o.id
+             WHERE o.namespace = 'research.synthesis'
+               AND a.outcome IS DISTINCT FROM 'SUCCEEDED'
+             ORDER BY a.started_at DESC
+             LIMIT 30;"
+          echo "EFFECTS: OK"
