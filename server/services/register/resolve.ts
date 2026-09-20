@@ -95,6 +95,8 @@ export async function readLink(link: WorkstreamLink): Promise<LinkReading> {
       return await readDocument(link);
     case 'CONVERSATION':
       return await readConversation(link);
+    case 'BRANCH':
+      return readBranch(link);
     case 'PULL_REQUEST':
       return readAttested(link, 'pull request');
     case 'DEPLOY':
@@ -271,6 +273,38 @@ async function readConversation(link: WorkstreamLink): Promise<LinkReading> {
     missing: false,
     blocker: null,
     evidence: `russell_conversations.id = ${conversation.id}`,
+  };
+}
+
+/**
+ * A branch somebody said this work is on.
+ *
+ * Brain cannot see it — it holds no forge credential and no checkout (§27) — so
+ * this is **not** a reading of the repository and must not be presented as one.
+ * What it is, is a person declaring where their own work is happening, and that
+ * is a different kind of statement from *"it merged"*: one is somebody telling
+ * Brain what they are doing, the other is a claim about a system Brain cannot
+ * check.
+ *
+ * So it contributes `IN_PROGRESS` and can never contribute more, whatever the
+ * link says. A branch name is not a merge, not a deployment and not a
+ * verification, and the ladder stops here precisely so that somebody who wants
+ * the register to say `MERGED` has to produce the attestation §27's rule
+ * requires rather than renaming a branch.
+ *
+ * `PURSUES` only. A branch recorded as `EVIDENCE` of something finished says
+ * nothing about progress, because the thing it is evidence *of* is what would.
+ */
+function readBranch(link: WorkstreamLink): LinkReading {
+  return {
+    linkId: link.id,
+    kind: link.kind,
+    ref: link.ref,
+    status: `work is on ${link.ref}`,
+    state: link.relation === 'PURSUES' ? 'IN_PROGRESS' : null,
+    missing: false,
+    blocker: null,
+    evidence: `declared by ${link.recordedBy === 'PERSON' ? 'a person' : 'Brain'}, never read from the repository`,
   };
 }
 

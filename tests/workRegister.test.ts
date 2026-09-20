@@ -212,6 +212,31 @@ describe('what a link may and may not say about progress', () => {
     expect(view.readings[0]?.status).toContain('nobody attesting');
   });
 
+  it('reads a declared branch as work in progress, and never as more than that', async () => {
+    /*
+     * A branch is a person saying where their own work is happening, which is a
+     * different kind of statement from "it merged": one is somebody telling
+     * Brain what they are doing, the other is a claim about a system Brain
+     * cannot see. So it contributes IN_PROGRESS and the ladder stops there —
+     * otherwise somebody wanting the register to say MERGED could get there by
+     * renaming a branch rather than by producing an attestation.
+     */
+    const one = await stream();
+    await linkWorkstream({
+      workstreamId: one.id,
+      kind: 'BRANCH',
+      ref: 'claude/some-work',
+      relation: 'PURSUES',
+      // Whatever a caller puts in the detail, this is not a merge.
+      detail: { merged: true, state: 'merged', attestedBy: 'nobody', attestedAt: 'never' },
+      recordedBy: 'PERSON',
+      recordedByUserId: userId,
+    });
+    const view = await viewOf(one, await listLinks(one.id));
+    expect(view.state).toBe('IN_PROGRESS');
+    expect(view.readings[0]?.evidence).toContain('never read from the repository');
+  });
+
   it('reads it once somebody has attested to it, and says who and when', async () => {
     const one = await stream();
     await linkWorkstream({
