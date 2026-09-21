@@ -620,9 +620,11 @@ never a process-local lock.
   **And the commonest reason a worker finds the connector unreachable is not a
   fault at all.** Measured from outside the runner while deploy 305 was
   restarting the machine on 2026-09-21: `GET /healthz` answered **503 after
-  35.7s**, again **503 after 35.7s**, then **200 after 28.8s** — about two
-  minutes in which every MCP call fails, on an endpoint that is a fixed string
-  with no database behind it. Every deploy does this, and a fired worker that
+  35.7s**, again **503 after 35.7s**, then **200 after 28.8s**, and **0.44s** a
+  minute later — about two minutes in which every MCP call fails, on an
+  endpoint that is a fixed string with no database behind it. The slow 200 is
+  the tail of a cold start rather than a standing condition, which is why the
+  last reading is recorded beside it. Every deploy does this, and a fired worker that
   arrives in that window sees exactly what the notification described. A third
   shape was observed the same day and is the same category: the connector proxy
   answering `-32600 Anthropic Proxy: Invalid content from server`, which
