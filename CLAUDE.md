@@ -7430,9 +7430,15 @@ they were.
   authority launches no mission, so its round would stay `OPEN` for ever and an
   open round is exactly what stops that question being asked again.
 
-- **The fourth `ORDER BY`-shaped defect this repository has been told about by
-  the second backend, and the first that was not an `ORDER BY`.** The Postgres
-  half of the migration guarded its one `ADD CONSTRAINT` inside a
+- **The fifth time this repository has been told something by the second
+  backend and by nothing else, and the first that is about a statement rather
+  than a column or a constraint's name.** I first wrote *fourth*, which was an
+  off-by-one: §25 records `012_checkpoint_seq` and the three connect tables,
+  §27 `worker_sessions`, and §35 already claims the fourth. Miscounting in the
+  direction that makes a finding sound rarer is the comfortable half-truth this
+  file exists to refuse, so it is corrected here rather than left.
+
+  The Postgres half of the migration guarded its one `ADD CONSTRAINT` inside a
   `DO $$ … $$` block. `migrate.ts` splits a file on semicolons, so a
   dollar-quoted body is cut at its first internal `;` and Postgres is handed
   half a statement. **No SQLite run could have shown it** — that chain carries
