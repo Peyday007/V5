@@ -44,6 +44,7 @@ import { puzzleSnapshot } from '../server/services/puzzles/map.ts';
 import { puzzleView } from '../server/services/puzzles/view.ts';
 import { allocate } from '../server/services/puzzles/allocate.ts';
 import { validatePuzzle, slugFor } from '../server/domain/puzzles.ts';
+import { findTool } from '../server/mcp/tools.ts';
 import {
   getMaster,
   listInstancesForMaster,
@@ -1194,6 +1195,88 @@ describe('the claim declaration, which both submission doors validate with', () 
   it('joins two spellings of one format and never two names for one thing', () => {
     expect(slugFor('Word Search')).toBe(slugFor('word  search'));
     expect(slugFor('Word Search')).not.toBe(slugFor('Find-a-Word'));
+  });
+});
+
+
+/* =========================================================================
+ * The contract a worker actually reads
+ * ====================================================================== */
+
+describe('the submission tool', () => {
+  /*
+   * §37 records what the alternative costs, twice. A contract that named three
+   * connection field names the validator refuses made a worker do exactly what
+   * it was told and have all fifteen definitions rejected; and the test that
+   * was meant to catch it proved the top level and stopped at the nesting.
+   *
+   * The declaration half of that defect is §33's, one axis along:
+   * `opportunity_signal` was named in a tool's description and left out of its
+   * schema, and `additionalProperties: false` meant every client honouring the
+   * schema dropped it — which reads exactly like a worker honestly finding
+   * nothing.
+   */
+  it('declares every puzzle field it names, and names every one it declares', () => {
+    const tool = findTool('brain_submit_claims');
+    expect(tool).toBeDefined();
+    if (!tool) return;
+
+    const schema = tool.inputSchema as {
+      properties?: { claims?: { items?: { properties?: Record<string, unknown>; additionalProperties?: unknown } } };
+    };
+    const item = schema.properties?.claims?.items;
+    // The setting that makes an undeclared field vanish rather than arrive.
+    expect(item?.additionalProperties).toBe(false);
+
+    const declared = Object.keys(item?.properties ?? {}).filter((one) =>
+      one.startsWith('puzzle_'),
+    );
+    expect(declared.sort()).toEqual([
+      'puzzle_finding',
+      'puzzle_price_cents',
+      'puzzle_qualifier',
+      'puzzle_subject',
+    ]);
+
+    // Both directions, because each has its own failure: a field named in
+    // prose and undeclared is silently dropped, and one declared and never
+    // explained is one nobody knows to set.
+    const named = new Set(String(tool.description ?? '').match(/\bpuzzle_[a-z_]+/g) ?? []);
+    expect([...named].filter((one) => !declared.includes(one))).toEqual([]);
+    expect(declared.filter((one) => !named.has(one))).toEqual([]);
+  });
+
+  it('accepts a claim built from what its own description states', () => {
+    /*
+     * String matching proves the words are present; only this proves the two
+     * agree. §37's round trip, at the fields this kernel added.
+     */
+    const priced = validatePuzzle({
+      where: 'claims[0]',
+      finding: 'PRICE_POINT',
+      subject: 'PRINT_BOOK',
+      qualifier: 'PER_BOOK',
+      priceCents: 499,
+    });
+    expect(priced.ok).toBe(true);
+
+    const discovered = validatePuzzle({
+      where: 'claims[1]',
+      finding: 'PUZZLE_FORMAT',
+      subject: 'Kakuro',
+      qualifier: undefined,
+      priceCents: undefined,
+    });
+    expect(discovered.ok).toBe(true);
+
+    const absence = validatePuzzle({
+      where: 'claims[2]',
+      finding: 'RIGHTS_CONSTRAINT',
+      subject: 'NO_CONSTRAINT_FOUND',
+      qualifier: undefined,
+      priceCents: undefined,
+    });
+    expect(absence.ok).toBe(true);
   });
 });
 
