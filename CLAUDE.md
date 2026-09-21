@@ -182,6 +182,9 @@ There must be no workflow where the user has to remember "now go update the data
 44. No human role kept without naming which reason makes it necessary, and no
     work given to Brain on a question nobody answered — the burden is on
     justifying the person, and an absence justifies neither.
+45. No state stored about work whose rows can be read, and no claim about the
+    world outside this Brain without somebody attesting to it — a register says
+    where work has got to by reading, or it says nobody has said.
 
 ## 8. Model prose never mutates project state.
 
@@ -7728,8 +7731,262 @@ needed* line, which is also used as a background and is therefore an accent
 decision the owner owns — is reported and not repaired, and the cycle closed
 `NEEDS_PERSON` saying so.
 
+---
 
-## 43. A deal has two sides, and everything hard about it lives between them.
+## 43. A register stores an intent. Everything else about it is derived.
+
+Brain has always held every *part* of what it is doing — candidates, missions,
+packets, campaigns, change requests, faculties, industry rounds, cash
+opportunities, documents, audits — and has never held the thing a person
+actually asks about: *what is this work, where did it come from, and where has
+it got to.* That question spans all of them and belongs to none, so nothing
+answered it and a person asking had to read six surfaces and join them by hand.
+
+`server/repos/register.ts`, `server/services/register/` and
+`docs/WORK-REGISTER.md` are the answer, and the shape is §25's: **a join plus an
+idea.** There is no new orchestration object, no second queue, no command bus
+and no duplicate of anything. A workstream points at rows that already exist and
+holds only the two things no derivation could recover — what somebody meant by
+it, and what it is for.
+
+- **There is no `state` column, and that is asserted against the database rather
+  than the TypeScript.** What must not exist is a *place to put* a stored
+  verdict: a type can be changed back in one line, and a column somebody has to
+  add is a migration somebody reads. §29 records what a stored status costs at a
+  status line, §38 at a capital tier and §33 at a round's own count, and this is
+  the same rule at the surface where it would be most tempting to break — a page
+  answering six questions at once is exactly where somebody would cache the
+  answers.
+- **`purpose` is stored and `state` is derived, and the split is the whole
+  design.** Whether work pursues money is a judgment about intent that no amount
+  of reading the graph recovers; where it has got to is a fact about rows that
+  reading them is the only honest way to get.
+- **A `SOURCE` link never contributes a state.** A conversation describing
+  shipped work is not the work shipping, and the only thing stopping the
+  register saying otherwise is that sources are excluded before the derivation
+  rather than filtered after it.
+- **An unattested pull request is not a merge.** Brain holds no forge credential
+  (§27), so a link carrying `merged: true` with nobody attesting to it is
+  *recorded, unverified* and moves nothing. Once something has attested the
+  reading names who and when. A register that read a URL as a merge would be the
+  invented citation this codebase exists to refuse, at the one field an owner
+  most wants to believe.
+- **`UNKNOWN` is a state, counted and printed.** A workstream nothing can be read
+  about has not failed and is not proposed — nobody has said. Invariant 39 at a
+  new surface: an unknown may never be the favourable reading, and *we could not
+  tell* must never be folded into *nothing is happening*.
+- **`unfiled` is derived, offered, and never filed.** Work Brain is holding that
+  no workstream accounts for is the half that makes this a register rather than a
+  list somebody remembered to type — and filing one needs an intent and a
+  purpose, so composing either would be §8's model-output-as-state at the one
+  place it would read most like a decision somebody made.
+- **A software request with no change request yet is not offered.** The first
+  version filed it under its own `rsr_` id as a `CHANGE_REQUEST` link, which
+  `readChangeRequest` reports as missing for ever — a register telling somebody
+  their work had vanished, on a row that is perfectly healthy. §27's cries-wolf
+  rule at a new reader.
+- **A correction keeps what it corrects**, guarded on the link still being live
+  in the statement that makes the change, so two people correcting one link
+  produce one correction. Archiving keeps the links, so the sources still
+  resolve.
+
+### The entrance: a conversation held somewhere else
+
+A register whose sources cannot reach it is a register of whatever somebody
+remembered to type, so `server/services/bridge/` is the way in.
+`docs/CONVERSATION-BRIDGE.md` is the setup.
+
+- **`brnc_` is the only bearer in this Brain that resolves to a person**, and it
+  can be nothing else: `bridge_credentials` has no column naming a worker,
+  exactly as §22 arranged the converse for `oauth_tokens`. A cookie was refused
+  here for §21's reason — a chat client is not a browser, and a cookie on a
+  mutating cross-origin endpoint is a CSRF surface.
+- **It is deliberately not an administrator**, however its holder's account is
+  configured, and **it cannot mint another credential**: a key that could mint
+  keys survives its own revocation. Both are asserted at the door rather than
+  described, because a service test cannot see either.
+- **A transcript keeps its own roles.** `russell_messages` may say USER, RUSSELL
+  or SYSTEM, and writing another model's turn as RUSSELL would attribute words
+  to Russell that Russell did not say. So the transcript has its own table, its
+  own vocabulary, and only the person's own turns are ever projected into a
+  Russell thread.
+- **Order is the client's, a hole is reported as a hole, an edit keeps what it
+  replaced, and a fork is kept as a fork.** A transcript with a gap can read as
+  saying the opposite of what it said; resolving a fork by picking one would be
+  settling an ambiguity by guessing.
+- **A retry is not a second delivery, and §20's corollary holds.** The key is the
+  batch's own content against a server-built scope — never a clock, an attempt
+  or a request id — and the replay returns the receipt the first attempt
+  produced with `performed: false`, rather than silently answering as though it
+  had done the work.
+- **A door that names its exception is wrong the day a fourth thing exists.**
+  `/mcp`'s `principalFor` refused `SESSION_COOKIE` by name, which was correct
+  for exactly as long as there were three authentication methods — and
+  `BRIDGE_BEARER` resolves to a person and sets a *header*, so a check written
+  as "not a cookie" would have admitted a key somebody pasted into a chat
+  client to the worker tool surface. It is an allowlist now, typed against
+  `AuthMethod` so a renamed method is a compile error, and §21's two bearers are
+  named rather than everything else being excluded. **Fail closed means naming
+  the set you admit**, and this is the same shape as §27's two `Set`s that had
+  to be total between them and were not.
+- **`TURN_OPENED` and `ANSWERED` are different outcomes.** `beginTurn` settles a
+  turn in-request when it cannot tell which project a thread is about, and a
+  receipt calling that `TURN_OPENED` would leave a client waiting for a worker
+  nobody sent for — §24's reassuring pending state, arriving at a receipt.
+- **No inference is bought.** The person's own turn becomes a PENDING row and a
+  bin the fixed-subscription fleet answers. Imported text is untrusted data
+  throughout: the other model's words are stored and are never something Russell
+  is asked to act on.
+- **The automatic bridge and the manual import are not the same claim.** Nothing
+  pushes from ChatGPT and nothing here polls it: synchronization happens when the
+  client calls the action. That is a property of the platform, it is written
+  down rather than glossed, and a missed sync is visible as `lastSyncAt`,
+  `messageCount` and the positions a receipt names as never given. An import is
+  a fallback and is labelled as one.
+
+### Two defects the walk found that reading had not
+
+`tests/intakeToResult.test.ts` starts where a person starts — a transcript
+arriving from somewhere else — and it found both of these on its way through.
+That is the fourth time this file has had to record the same lesson: §24 found
+five unreachable transitions by walking, §30 the same shape one section along,
+§33 four more.
+
+**A campaign blocked for want of a surface resumed in the wrong stage.**
+`NO_HEALTHY_EXECUTION_SURFACE` is raised from two places — `planningStage` when
+no free slot holds `ARCHITECT`, and execution when there is nothing to run a
+planned unit on — and `unblockStage` resumed both into `EXECUTING`. Right for the
+second and wrong for the first: a campaign with nothing planned walked
+`EXECUTING` → `INTEGRATING` → `REVIEWING` on an empty diff and stopped at
+*"Nothing was integrated, so there is no change to review"*. Every word true and
+the diagnosis wrong — nothing was integrated because nothing was ever *planned*,
+and an operator reading it goes looking at attempts on units that do not exist.
+It resumes into `PLANNING` when the campaign has no units, derived from the rows
+rather than from a memory of which stage blocked.
+
+**Authorizing too early made a change unauthorizable for ever.**
+`submitObjective` is idempotent by submission key and deliberately returns *the
+same* change request however its derived fields would look now, because a pin
+that moved because somebody resubmitted would make the pin meaningless. The
+consequence nobody had walked into: press Authorize once without acceptance
+conditions and the contract is created with none, approval refuses by name — and
+every later attempt, conditions and all, collides with that row and is refused
+in the identical words. **The screen named a remedy and applying it did
+nothing**, which is §24's *waiting nobody can resolve* with the extra insult
+that the person did exactly what they were told. Conditions supplied by a person
+are now recorded through the amendment ledger on a contract that has **none**
+and has not been approved — three conditions, each load-bearing, and nothing in
+it can touch conditions somebody already approved, because supplying the first
+set is not amending a frozen one.
+
+### What ran, and what is fixture
+
+The factory pipeline ran end to end against a fixture repository with the real
+Claude Code CLI as its executor: `PLANNING` → `EXECUTING` → `REVIEWING` →
+`VERIFYING` → `ASSEMBLING` → `COMPLETE` in six ticks, one unit integrated from
+one architect's plan, 1 commit and 2 files at +15/-1, review round 1 `PASS` with
+0 findings at `WORKER_SEPARATED`, final verification `npm test` green on the
+merged tree, three sessions at a measured concurrency of 1, and **`paid-API
+executions recorded: 0`** — which is the spawn's own environment rather than a
+promise in a comment. The reviewer's worktree was detached at the reviewed
+commit.
+
+What the acceptance walk simulates is said precisely rather than nearly: the
+worker's answer, and the forge, which Brain reads over HTTP and holds no
+credential for. Everything between is the real tick, the real gate, the real
+authorization and the real repositories.
+
+## 44. A person is set up or they are not, and nothing could answer that.
+
+Every fact needed to answer *is this account set up* was already derivable and
+no single place held them together. `people.ts` says whether somebody can sign
+in, `connection.ts` says where their Claude connection is, `contribution.ts`
+says whether that connection is capacity a dispatcher would fire,
+`ownership.ts` says whose a worker is, `attribution.ts` says whether a
+surface's sessions can be attributed at all. Five correct readings, five
+screens, and no answer to the only question they are collectively for.
+
+The shape that hides in that gap is an account which reads *mostly fine*
+everywhere and contributes nothing: sign-in works, the connection says
+CONFIGURED, the worker is bound to somebody else's Routine, and the capacity is
+zero. Nothing was wrong with any individual reading. **What was missing was the
+join**, and `services/identity/foundation.ts` is it — six dimensions per
+account, each `PASS`, `BLOCKED` or `NOT_APPLICABLE`, each with one next action
+and who performs it.
+
+- **It composes and never re-derives.** Every verdict is read from the module
+  that owns that question. A second copy of *is this capacity usable* living in
+  the matrix would be the two-readers-disagreeing defect this file records at a
+  column, a status line, a review card and a routing table — and the copy
+  nobody reads is always the one that drifts.
+- **`NOT_APPLICABLE` is a real answer and is never rounded to `PASS`.** A
+  member who has not started a connection has no worker to attribute and no
+  capacity to measure. Saying so is a different fact from saying those are
+  fine, and different again from saying they are broken — invariant 39 at a
+  matrix.
+- **It is a projection and decides nothing.** Nothing in it fires, binds,
+  repoints, issues, revokes or writes. Deriving it rather than storing it is
+  also what lets it reach the accounts that are *already* stranded.
+- **Two requirements in it look like bookkeeping and are not.** `IDENTITY`
+  includes display-name uniqueness, because `getPinCredentialByIdentity`
+  resolves a typed name with `LIMIT 2` and returns nothing when two rows match:
+  two people sharing a name do not get a warning, they get a sign-in that
+  cannot succeed and a refusal that correctly tells them nothing. And `SIGN_IN`
+  asks what the *served screen* takes rather than what the schema holds — a
+  passkey is a credential and the screen does not offer one, so an account
+  holding only a device cannot get in.
+
+**A recovery retired the lock nobody was using and left the door open.**
+`issueRecovery` revoked every passkey and every session, exactly as §32
+requires, and migration 078 then made a **PIN** the ordinary human credential
+without anything coming back to that function. So the one command an
+administrator has for *my phone is in somebody else's hands* retired the device
+that could no longer sign in anyway, ended the sessions, and left the six
+digits that actually open the door working — indefinitely, because an
+unredeemed link replaces nothing. Every row read as healthy: the passkeys were
+revoked, the sessions ended, the audit row written, the link delivered.
+
+The failure was **forgetting**, not mis-implementing, so the fix is a list
+rather than three more lines. `services/identity/recoveryContract.ts` declares
+the credential classes a recovery must retire; `issueRecovery` retires them;
+the foundation reports whether an account's holdings are covered; and a test
+performs a real recovery and asserts nothing the account held still works. A
+fourth credential added to this Brain fails all three until it is genuinely
+retired. A password is deliberately **not** on the list, and that is a decision
+rather than an omission: it is what `/recovery` itself takes, so retiring it
+during a recovery would remove the route the recovery is performed through.
+
+**And an administrator was reading a different lifecycle from the member.**
+`reconcile` had exactly one caller — the member's own page — while
+`/people/connections` and `contributedCapacity` both read
+`capacity_connections.state` straight out of the row. So a Routine repointed to
+somebody else read `MISBOUND` to the member and `CONFIGURED` to the only person
+who can repoint it, until the member happened to open their page; and the
+dispatcher's own reading of who may be fired was taken from the same stale
+column. **The fourth time this repository has needed the sentence about a rule
+applied by one of two readers, and the first time the reader that was wrong was
+the one holding the remedy.** `settleConnection` is the shared reconciliation
+and all three now read it. It is safe for a second caller for the reason the
+first was: every move inside it is a guarded compare-and-swap naming the state
+it comes from, so two readers settling at the same instant produce one move and
+one ordinary loser. It deliberately does **not** call `ensureConnection` —
+minting a row is the member's own page establishing the names they are about to
+paste into Claude, and an administrator glancing at a list must not create
+connections for people who have never opened it.
+
+**Capacity nobody's foundation covers is named rather than counted.** A worker
+registered by hand before the connection journey existed has no
+`capacity_connections` row, so `ownership.ts` leaves `owner_user_id` null —
+correctly, since only a connection is evidence — and no account's foundation
+covers the surface it is bound to. The reading lists those surfaces and
+**never acts on one**: adopting a hand-made identity or retiring its Routine is
+an operator's decision, and a projection that took it would be exactly the
+blind redistribution that loses running work. An empty list is the healthy
+answer and is not the same fact as nobody having looked, which is why it is a
+list rather than a flag.
+
+
+## 45. A deal has two sides, and everything hard about it lives between them.
 
 The cross-border industrial dealflow kernel (`server/services/dealflow/`,
 `server/repos/dealflow.ts`, `server/domain/dealflow.ts`, `docs/DEALFLOW.md`)
@@ -8043,6 +8300,8 @@ server/
     cashLock.ts       where two cash decisions stop being concurrent
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
+    register.ts       workstreams, what they point at, and what happened to them
+    bridge.ts         a person's bearer, a transcript exactly as it arrived, and its receipts
     dealflow.ts       both sides of a transaction, and everything hard between them
     faculties.ts      sources, candidates, faculties and their typed edges
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
@@ -8075,6 +8334,8 @@ server/
     identity/
         secrets.ts        scrypt for passwords, sha-256 for generated credentials
       people.ts         who has actually joined, from a declared kind rather than a name
+      foundation.ts     every account against every dimension, with one next action each
+      recoveryContract.ts  the credential classes a recovery must retire, in one list
       webauthn.ts       a registration and an assertion, verified against Node crypto
       enrollment.ts     a member slot, its one link, and the recovery that retires first
       passkeyAuth.ts    the relying party, the challenge, and one refusal for everything
@@ -8134,6 +8395,14 @@ server/
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
       shared.ts         what crosses between projects, and what may never
+    register/
+      resolve.ts        what the row behind a link says right now, or that it is gone
+      view.ts           the six answers, derived on the read path and stored nowhere
+      unfiled.ts        work nobody accounted for, offered and never filed
+    bridge/
+      sync.ts           exact, ordered, idempotent — and handed to the machinery that reads it
+      status.ts         what Brain did with what was said, as rows rather than prose
+      import.ts         a pasted or exported conversation, read two ways and never guessed
     fleet/
       view.ts           three capacity numbers that are not each other, and why it is slow
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
@@ -8334,6 +8603,8 @@ server/
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
+    register.ts         the work register's door: workstreams, links, corrections
+    bridge.ts           the conversation entrance: credentials, sync, transcript, status
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     passkeys.ts         enrolling, signing in with a device, and your own devices
     people.ts           who has joined, what can run, and connecting your Claude account
@@ -8352,6 +8623,7 @@ client/                 React UI
   src/russell/cashPage.ts  both payloads, normalized; the capabilities the server sent
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
   src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
+  src/russell/Register.tsx  the six answers, and the one form Brain may not fill in
   src/russell/Devices.tsx    your own passkeys, and nobody else's
   src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate
   src/components/SignIn.tsx  one button; no address, no password, no alternative
@@ -8415,6 +8687,11 @@ tests/                  Vitest suites
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker
   factoryPool.test.ts        one Factory worker, three accounts, and the failover between them
   sharedKnowledge.test.ts    one finding, two operations, and the wall between them
+  workRegister.test.ts       no stored state, no source that ships, no URL that merges
+  conversationBridge.test.ts exact bytes, real order, kept edits, and a replay that says so
+  bridgeHttp.test.ts         the door: a worker refused by type, and one body for two refusals
+  intakeToResult.test.ts     a transcript from outside, to a pull request, and back out
+  factoryUnblock.test.ts     where a blocked campaign resumes, derived from its own rows
   webauthn.test.ts           a real P-256 credential, and every refusal that would not have been one
   passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits
   passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new
@@ -8422,6 +8699,7 @@ tests/                  Vitest suites
   signInSurface.test.tsx     the screen an unauthenticated person is actually served
   sharedCashAccess.test.ts   a member reads the frontier; nobody reads somebody's job
   peopleAndCapacity.test.ts  a declared person, a counted Routine, a resumable setup
+  accountFoundation.test.ts  four account shapes, six dimensions, and a recovery that retires
   claudeConnectionLifecycle.test.ts  asking, checking, misbinding, lapsing, revoking, reconnecting
   claudeConnectionParity.test.ts     three real accounts, one screen, compared field by field
   peopleSection.test.tsx     the two screens the defects were actually visible on

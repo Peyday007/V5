@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 082. See that file for why a deal has
+-- The Postgres half of SQLite migration 083. See that file for why a deal has
 -- two sides and a cash opportunity cannot express one, why every fact row
 -- traces to a claim that cleared the gate, why the five compliance layers do
 -- not collapse, why "nobody looked" needed a finding of its own, and why

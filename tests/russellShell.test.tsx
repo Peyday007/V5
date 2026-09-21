@@ -890,7 +890,17 @@ describe('the thin views', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /^Work/ }));
     });
-    await waitFor(() => expect(screen.getByText(/not something you can open/i)).toBeTruthy());
+    /*
+     * Scoped to the Work panel rather than to the document.
+     *
+     * The destination renders two sections now — the register and the mission
+     * list — and each answers for itself, so an unscoped query finds both and
+     * is really asserting how many panels the page has. What this test is about
+     * is that *this* panel refuses rather than claiming emptiness.
+     */
+    await waitFor(() =>
+      expect(screen.getByText(/access to see the work\./i)).toBeTruthy(),
+    );
     expect(screen.queryByText(/no work yet/i)).toBeNull();
   });
 

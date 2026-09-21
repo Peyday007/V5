@@ -68,6 +68,7 @@ import {
 } from '../../repos/russellSoftware.ts';
 import { ContractError, submitObjective, submissionKeyFor } from '../factory/contract.ts';
 import { approveAndStartCampaign } from '../factory/start.ts';
+import { amendContract } from '../factory/contract.ts';
 import { campaignBriefing } from '../factory/projections.ts';
 import { getCampaign } from '../../repos/factory.ts';
 import {
@@ -681,6 +682,59 @@ export async function authorizeSoftwareRequest(input: {
       acceptanceConditions: input.acceptanceConditions ?? [],
       submissionKey: request.submissionKey,
     });
+
+    /*
+     * A first attempt that was refused for want of acceptance conditions must
+     * not make this request unauthorizable for ever.
+     *
+     * `submitObjective` is idempotent by submission key and deliberately
+     * returns *the same* change request even when its derived fields would be
+     * different now — because a pin that moved because somebody resubmitted
+     * would make the pin meaningless. Correct, and it has a consequence nobody
+     * had walked into: press Authorize once without conditions, the change
+     * request is created with none, approval refuses by name — and every later
+     * attempt, conditions and all, collides with that row and is refused in the
+     * identical words. The screen names a remedy and applying it does nothing,
+     * which is §24's *waiting nobody can resolve* with the extra insult that
+     * the person did exactly what they were told.
+     *
+     * So conditions supplied by a person are recorded on a contract that has
+     * **none**, through the amendment ledger rather than by writing the column:
+     * append-only, both values, a reason, and an actor. Three conditions bound
+     * it and each one is load-bearing — the contract must still be unapproved,
+     * it must hold no conditions at all, and the actor is the person who is
+     * authorizing. Nothing here can touch conditions somebody already approved,
+     * which is the immutability §27 requires; supplying the first set is not
+     * amending a frozen one.
+     */
+    const supplied = input.acceptanceConditions ?? [];
+    if (
+      supplied.length > 0 &&
+      submitted.changeRequest.acceptanceConditions.length === 0 &&
+      submitted.changeRequest.state === 'DRAFT'
+    ) {
+      const amended = await amendContract({
+        changeRequestId: submitted.changeRequest.id,
+        campaignId: null,
+        field: 'acceptance_conditions',
+        newValue: supplied.map((condition, index) => ({
+          id: `A${String(index + 1).padStart(2, '0')}`,
+          statement: condition.statement,
+          verification: condition.verification,
+          mandatory: condition.mandatory ?? true,
+        })),
+        reason:
+          'The person authorizing this change supplied what success is, on a contract that had ' +
+          'none and had not been approved.',
+        actorType: 'PERSON',
+        actorId: input.userId,
+        affectedWork: [],
+      });
+      if (!amended.ok) {
+        await releaseSoftwareRequest(request.id);
+        return { ok: false, reason: amended.reason };
+      }
+    }
 
     const started = await approveAndStartCampaign({
       changeRequestId: submitted.changeRequest.id,
