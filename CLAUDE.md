@@ -3850,6 +3850,15 @@ of an older dispatch is the same rollback wearing the right branch name.
   history and also refuses a branch that was *rewound*, which a commit count
   silently passes.
 
+  **Both halves were then watched refusing a real deploy, within half an hour
+  of each other.** Run 307 checked out `1dda87a`, `production` moved to
+  `6ba5c9a` while it tested, and it failed at *The ref must still be the
+  canonical tip, now* rather than releasing. Run 308 checked out `6ba5c9a`,
+  `production` moved to `53f640b`, and it failed at the identical step. Neither
+  reached `flyctl deploy`; neither rolled anything back. That is the guard
+  doing exactly what run 283 needed it to do, observed twice rather than
+  argued.
+
   Beside it is the question being level with the branch does not answer:
   whether this tree is **older than what is already running**.
   `deployed/production` is a lightweight tag the workflow moves *after* a
