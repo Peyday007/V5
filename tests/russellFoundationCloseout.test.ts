@@ -32,8 +32,12 @@ import { createConversation, getConversation } from '../server/repos/russellConv
 import { adoptSurface } from '../server/services/capacity/adopt.ts';
 import {
   MAX_VALIDATIONS_IN_FLIGHT,
+  MAX_VALIDATION_ROUNDS,
   VALIDATION_STALL_MS,
   settleValidations,
+  sprintCanRefine,
+  startValidations,
+  whyNotDiving,
 } from '../server/services/cash/validation.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import { createCandidate } from '../server/repos/russellCandidates.ts';
@@ -818,6 +822,139 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
     expect(reading.tier).toBe('SIGNAL');
     expect(reading.toAdvance.map((one) => one.key)).toEqual(['captureMechanism']);
     expect(plan([diving]).waiting).toHaveLength(0);
+  });
+
+  /**
+   * Why nothing is being refined, read off the rows rather than counted.
+   *
+   * `passes 0/0` is a true statement about a packet and no statement at all
+   * about whether the lifecycle is stuck, waiting on a person, or working
+   * exactly as designed — and those three have three different remedies. What
+   * makes the answer trustworthy is that it is not a second opinion:
+   * `startValidations` is written in terms of `whyNotDiving`, so the reading a
+   * report prints is the refusal that actually happened.
+   *
+   * These assert the *agreement* rather than either half. A test of the
+   * derivation alone would pass over a producer that had quietly grown a
+   * fourth condition of its own, which is the failure mode having one reader
+   * exists to prevent.
+   */
+  it('names, per opening, the row-level reason it is not being qualified', async () => {
+    const fixture = await freshProject();
+    const owner = await createUser({
+      email: 'why@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const started = await activate({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const make = async (
+      title: string,
+      patch: Record<string, unknown>,
+    ): Promise<CashOpportunity> => {
+      const made = await createOpportunity({
+        projectId: fixture.project.id,
+        cashModeId: started.mode.id,
+        ownerUserId: owner.id,
+        title,
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        currency: 'USD',
+      });
+      await updateOpportunity(made.id, patch);
+      return (await getOpportunity(made.id))!;
+    };
+
+    // Four openings, four different reasons, all of them rows.
+    const eligible = await make('has a published signal', {
+      buying_signal: 'A county published a paid request on 2026-09-01.',
+    });
+    const silent = await make('nothing published to ask about', {});
+    const spent = await make('both dives spent', {
+      buying_signal: 'A published request.',
+      validation_state: 'BLOCKED',
+      validation_rounds: MAX_VALIDATION_ROUNDS,
+    });
+    const closed = await make('somebody declined it', {
+      buying_signal: 'A published request.',
+      state: 'DECLINED',
+    });
+
+    expect((await whyNotDiving(eligible)).kind).toBe('ELIGIBLE');
+    expect((await whyNotDiving(silent)).kind).toBe('NOTHING_PUBLISHED_TO_ASK_ABOUT');
+    expect((await whyNotDiving(spent)).kind).toBe('ROUNDS_SPENT');
+    expect((await whyNotDiving(closed)).kind).toBe('NOT_A_QUALIFYING_STATE');
+
+    /*
+     * And the producer agrees, which is the assertion that matters.
+     *
+     * Exactly the opening the derivation called eligible is the one that
+     * starts — not merely *an* opening, and not three of them.
+     */
+    const begun = await startValidations({ projectId: fixture.project.id });
+    expect(begun.map((one) => one.opportunityId)).toEqual([eligible.id]);
+  });
+
+  /**
+   * A park is the lifecycle *waiting*, and that is a different fact from
+   * stuck — provable from rows rather than asserted.
+   */
+  it('separates waiting on a person from having no capacity and from being refused', async () => {
+    const fixture = await freshProject();
+    const owner = await createUser({
+      email: 'why2@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const started = await activate({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    if (!started.ok) return;
+
+    // A sprint with nothing running has free slots, and says how many.
+    const free = await sprintCanRefine(fixture.project.id);
+    expect(free).toEqual({ kind: 'READY', free: MAX_VALIDATIONS_IN_FLIGHT, cap: MAX_VALIDATIONS_IN_FLIGHT });
+
+    // Fill every slot with a live dive.
+    for (let i = 0; i < MAX_VALIDATIONS_IN_FLIGHT; i += 1) {
+      const held = await createOpportunity({
+        projectId: fixture.project.id,
+        cashModeId: started.mode.id,
+        ownerUserId: owner.id,
+        title: `live dive ${i}`,
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        currency: 'USD',
+      });
+      await updateOpportunity(held.id, { validation_state: 'RUNNING', validation_rounds: 1 });
+    }
+    expect((await sprintCanRefine(fixture.project.id)).kind).toBe('SLOTS_TAKEN');
+
+    /*
+     * Now park one. A parked dive uses no provider capacity, so the slot comes
+     * back — and the opening itself reports `AWAITING_PERSON` rather than
+     * anything that reads as a refusal of the work.
+     */
+    const live = (await listOpportunities({ projectId: fixture.project.id })).filter(
+      (one) => one.validationState === 'RUNNING',
+    );
+    await updateOpportunity(live[0]!.id, { validation_state: 'NEEDS_PERSON' });
+    expect((await sprintCanRefine(fixture.project.id)).kind).toBe('READY');
+    const parked = (await getOpportunity(live[0]!.id))!;
+    expect((await whyNotDiving(parked)).kind).toBe('AWAITING_PERSON');
+
+    // And it is not re-dived while it waits: the answer must not be bought twice.
+    expect(await startValidations({ projectId: fixture.project.id })).toEqual([]);
   });
 });
 

@@ -8939,6 +8939,35 @@ count beside the ceiling it is compared against, and says when every slot is
 taken — which is the line that would have named this condition on the first
 reading.
 
+**And *why is nothing being refined* is answered causally rather than counted,
+because `passes 0/0` is a true statement about a packet and no statement at all
+about the lifecycle.** Stuck, waiting on a person, and working exactly as
+designed all produce that number, and they have three different remedies. So
+the answer is two readings that must not be collapsed: `sprintCanRefine` says
+whether the **project** can start anything — no sprint, wound down, no research
+grant, no free slot, or *n* slots free — and `whyNotDiving` says, per opening,
+which row refused *that one*: eligible, a worker is on it, parked on a person,
+both bounded dives spent, already qualified, a state where the commercial
+questions are closed, or nothing published to ask about. Reading the second as
+the first is how somebody concludes a healthy sprint is broken.
+
+**What makes it trustworthy is that it is not a second opinion.**
+`startValidations`' three inline `continue`s are gone; the loop is written in
+terms of `whyNotDiving`, so the refusal a report prints is the refusal that
+actually happened. A report with its own copy of an eligibility rule is the
+*two readers of one fact* defect this file records more than any other, and it
+is always the copy nobody exercises that drifts. `mayDiveAgain` went with them
+rather than being left beside its replacement, for the reason this file keeps
+correcting: a function with no caller is not a mechanism.
+
+The tests assert the **agreement** rather than either half — exactly the
+opening the derivation calls eligible is the one the producer starts — because
+a test of the derivation alone would pass over a producer that had quietly
+grown a fourth condition of its own, which is the failure mode having one
+reader exists to prevent. And they prove the distinction from rows: filling
+every slot reads `SLOTS_TAKEN`, parking one frees it, the parked opening reads
+`AWAITING_PERSON`, and nothing re-dives it while it waits.
+
 ### Two things the gates found that reading did not.
 
 **A placeholder tested only for nullity has no type on one of the two
