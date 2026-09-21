@@ -58,6 +58,7 @@ let memberCookie = '';
 let clientId = '';
 let projectOne = '';
 let projectTwo = '';
+let firstHandle = '';
 let workerOne = '';
 let workerTwo = '';
 
@@ -481,8 +482,14 @@ describe('the journey it exists for', () => {
      */
     const who = await whoami(token['access_token']);
     expect(who['principalType']).toBe('WORKER');
-    expect(who['handle']).toBe('research-worker-one');
+    // The neutral label, not the handle whoever issued the invitation typed.
+    // What matters here is that it is *this* worker's identity and reaches
+    // this worker's project — see the second connector below, which must get a
+    // different one.
+    expect(who['handle']).toMatch(/^worker-\d\d$/);
+    expect(who['handle']).not.toBe('research-worker-one');
     expect((who['memberships'] as any[]).map((one) => one.projectId)).toEqual([projectOne]);
+    firstHandle = who['handle'] as string;
 
     // And the link is spent.
     const reused = await openInvite(issued.body.invitationUrl);
@@ -553,7 +560,9 @@ describe('the journey it exists for', () => {
     // Two connectors, two identities — not one worker wearing two labels,
     // which is what keeps a boundary keyed on the worker able to separate
     // anything. And it reaches its own project and only its own.
-    expect(who['handle']).toBe('research-worker-two');
+    expect(who['handle']).toMatch(/^worker-\d\d$/);
+    expect(who['handle']).not.toBe(firstHandle);
+    expect(who['handle']).not.toBe('research-worker-two');
     expect((who['memberships'] as any[]).map((one) => one.projectId)).toEqual([projectTwo]);
   });
 });

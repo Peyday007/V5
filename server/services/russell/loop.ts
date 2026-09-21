@@ -91,6 +91,7 @@ import { completeProbe, listExpiredProbes } from '../../repos/russellProbes.ts';
 import { openProbe, runProbe } from './probe.ts';
 import { GENERAL_LIGHT_PROBE_V1 } from './probeEnvelope.ts';
 import { reconcileBins, reopenParkedBin } from '../bins/service.ts';
+import { reconcileWorkerOwnership } from '../identity/ownership.ts';
 import { getBin } from '../../repos/bins.ts';
 import {
   handoffCandidates,
@@ -105,6 +106,7 @@ import {
   reconcileArguedAuditRoles,
   reconcileTerminalPackets,
 } from '../research/packetRunner.ts';
+import { reconcileRetrospectives } from '../research/intelligence/retrospective.ts';
 import { recoverExecutionLineage } from '../dispatch/lineageRecovery.ts';
 import { recomputeProject } from '../stateEngine.ts';
 import {
@@ -134,9 +136,11 @@ import {
 import { parseJson } from '../../repos/util.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
+import { runCommerceKernel } from '../commerce/kernel.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
-import { runCommerceKernel } from '../commerce/kernel.ts';
+import { runLaborKernel } from '../labor/kernel.ts';
+import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -146,6 +150,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 
 export interface TickReport {
@@ -191,6 +196,34 @@ export interface TickReport {
     recovered: number;
     /** Set when the self-model was re-read because the last one had gone stale. */
     selfModelDrift: number | null;
+    /**
+     * What one pass over the live realization packets did.
+     *
+     * `advanceSources` stops at the registry: a blueprint becomes a canonical
+     * definition without anybody typing anything, and then everything after it
+     * — deriving the gaps, asking the world, moving the dimensions, compiling
+     * the contract — waited for an operator to run six commands in order. A
+     * mechanism whose only caller is somebody's memory is not a mechanism.
+     *
+     * Every transition it performs is the identical function the CLI calls, so
+     * the two cannot drift; what this owns is the ordering and where to stop.
+     */
+    packets: {
+      /**
+       * Packets opened this tick, which until now was a command.
+       *
+       * Nothing opened a packet for a faculty that had just become canonical,
+       * so the walk below had an empty list to walk for ever — and both
+       * functions that could have done it carry a comment naming the tick as
+       * their caller. One per pass, in the blueprint's own order.
+       */
+      opened: string[];
+      considered: number;
+      advanced: number;
+      questionsRaised: number;
+      changeRequests: string[];
+      failed: number;
+    };
   };
   /**
    * Ideas the project's own archive already answered, judged and parked without
@@ -289,6 +322,8 @@ export interface TickReport {
    * a packet that had already finished, so nothing ever cleared it.
    */
   retiredPacketWork: { orchestrationId: string; retired: number }[];
+  /** Campaigns whose lessons were written this tick. See `retrospective.ts`. */
+  researchLessons: { orchestrationId: string; lessons: number }[];
   abandonedParks: { orchestrationId: string; missionId: string; missionState: string }[];
   /** Parks put back after being cancelled while a reopen was their asker. */
   restoredParks: { orchestrationId: string; reopenId: string }[];
@@ -390,6 +425,43 @@ export interface TickReport {
     settled: string[];
   }[];
   /**
+   * What the labor kernel did: what the portfolio produced, what Brain could
+   * settle from its own rows, what it asked and why, and what came back.
+   *
+   * `decided` carries both the layer and the reason, because a task that
+   * became Brain's and a task whose human role was finally established are two
+   * different events and a count of "decisions" would read as one.
+   */
+  laborKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    workflows: string[];
+    tasks: string[];
+    decided: { taskId: string; layer: string; reason: string | null }[];
+    answers: string[];
+    options: string[];
+    settled: string[];
+  }[];
+  /**
+   * What the manufacturing kernel did: which questions it opened and why, and
+   * what the finished ones added to the ladder.
+   *
+   * `capabilitiesHeld` is deliberately absent from this report, and its absence
+   * is the point: nothing a tick does can change it. A capability this company
+   * holds is recorded by a person, and no pass, claim or round reaches that
+   * column — so a field here would be a number that never moved for a reason a
+   * reader could not see.
+   */
+  manufacturingKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    categories: string[];
+    capabilities: string[];
+    edges: string[];
+    evidence: string[];
+    settled: string[];
+  }[];
+  /**
    * The social commerce kernel's pass, reported separately from the industry
    * kernel's because they answer different questions about different rows.
    *
@@ -459,6 +531,14 @@ const EMPTY: TickReport = {
     promoted: 0,
     recovered: 0,
     selfModelDrift: null,
+    packets: {
+      opened: [],
+      considered: 0,
+      advanced: 0,
+      questionsRaised: 0,
+      changeRequests: [],
+      failed: 0,
+    },
   },
   answeredByArchive: [],
   planning: [],
@@ -478,8 +558,10 @@ const EMPTY: TickReport = {
   lineageRecovered: [],
   lineageUnresolved: [],
   retiredPacketWork: [],
+  researchLessons: [],
   abandonedParks: [],
   restoredParks: [],
+  commerceKernel: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -489,7 +571,8 @@ const EMPTY: TickReport = {
   lensInquiries: { dispatched: 0, settled: 0 },
   cashDiscovery: [],
   industryKernel: [],
-  commerceKernel: [],
+  laborKernel: [],
+  manufacturingKernel: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -534,6 +617,7 @@ export async function tick(owner: string): Promise<TickReport> {
     lineageUnresolved: [],
     linksUnreconciled: [],
     retiredPacketWork: [],
+  researchLessons: [],
     abandonedParks: [],
     restoredParks: [],
     followOns: [],
@@ -552,6 +636,7 @@ export async function tick(owner: string): Promise<TickReport> {
      *
      * `integrityReopens` gets away without this because it is replaced whole;
      * this one is not, which is exactly the difference.
+  commerceKernel: [],
      */
     capability: {
       dispatched: 0,
@@ -560,11 +645,20 @@ export async function tick(owner: string): Promise<TickReport> {
       promoted: 0,
       recovered: 0,
       selfModelDrift: null,
+      packets: {
+      opened: [],
+      considered: 0,
+      advanced: 0,
+      questionsRaised: 0,
+      changeRequests: [],
+      failed: 0,
+    },
     },
     lensInquiries: { dispatched: 0, settled: 0 },
     cashDiscovery: [],
     industryKernel: [],
-  commerceKernel: [],
+    laborKernel: [],
+    manufacturingKernel: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -757,6 +851,20 @@ export async function tick(owner: string): Promise<TickReport> {
     }
 
     /*
+     * 1a-iv-b. Write the lessons a finished campaign's rows already support.
+     *
+     * Derived on the tick rather than hooked to the moment a packet ends, for
+     * the reason every other reconciliation here is: a hook reaches only what
+     * finishes after it is deployed, and this reaches the packets that finished
+     * already. Idempotent by `lesson_key`, so a healthy Brain does the work once
+     * and then finds nothing, and no provider is called — every lesson is a
+     * count of rows.
+     */
+    for (const entry of await reconcileRetrospectives(cycle.maxEventsPerCycle)) {
+      report.researchLessons.push(entry);
+    }
+
+    /*
      * 1a-iv-b. And take dead work off a packet that has *not* finished.
      *
      * The mirror image of the sweep above, and the one nothing covered: a live
@@ -820,6 +928,38 @@ export async function tick(owner: string): Promise<TickReport> {
       report.capability.recovered = advanced.recovered;
     } catch {
       /* a kernel that could not advance is left exactly as it was */
+    }
+
+    /*
+     * And the packets the registry produced, one step each.
+     *
+     * Beside `advanceSources` because it is the rest of the same chain: that
+     * one turns a blueprint into a canonical definition, and this one turns a
+     * canonical definition into a change request somebody can approve. Before
+     * this existed the join between them was a person running
+     * `npm run capability` six times in the right order — so a packet whose
+     * authority gap was answered on Tuesday sat exactly where it was until
+     * somebody remembered.
+     *
+     * It approves nothing, spends nothing, and answers no question a person
+     * owns: an authority gap becomes a card on the Needs You surface that
+     * already exists, and the packet waits. Swallowed for `advanceSources`'
+     * reason — a reading about Brain is never a precondition of Brain.
+     */
+    try {
+      const packets = await advanceCapabilityPackets(cycle.maxEventsPerCycle);
+      if (packets.opened) report.capability.packets.opened.push(packets.opened.packetId);
+      report.capability.packets.considered = packets.considered;
+      report.capability.packets.advanced = packets.advances.length;
+      report.capability.packets.failed = packets.failed.length;
+      for (const advance of packets.advances) {
+        report.capability.packets.questionsRaised += advance.questionsRaised;
+        if (advance.changeRequestId) {
+          report.capability.packets.changeRequests.push(advance.changeRequestId);
+        }
+      }
+    } catch {
+      /* a packet that could not be walked is left exactly as it was */
     }
 
     /*
@@ -1118,55 +1258,6 @@ export async function tick(owner: string): Promise<TickReport> {
 
       try {
         /*
-         * And the axis the ten buckets never had: *where* to look.
-         *
-         * The buckets are ten mechanisms — who published a paid request, where
-         * one deliverable has two prices, who has sold more than they can
-         * deliver — and not one of them says which part of the economy to ask.
-         * So production discovery searched an undifferentiated one: thirty-one
-         * openings across transcription, stock photography, ticket resale,
-         * sneakers and domains, with nothing saying which industries Brain had
-         * looked at or what lived underneath any of them.
-         *
-         * Its own `try`, for the reason the block below has one: a kernel pass
-         * that threw must not stop a sprint settling a need or harvesting what
-         * already ran. It is derived from rows on every tick, so a sprint that
-         * predates it gets a map with nobody pressing anything, and it is
-         * bounded by how many questions may be open at once rather than by any
-         * lifetime count — §24's correction, which this kernel does not undo.
-         *
-         * Nothing it creates bypasses anything. A kernel round is a Russell
-         * candidate, and it goes through the archive check, the judgment pass,
-         * the compiler, the approval envelope, the evidence gate and all three
-         * audit roles exactly as a bucket does.
-         */
-        const kernel = await runIndustryKernel(project.id);
-        if (
-          kernel.opened.length > 0 ||
-          kernel.absorbed.nodes.length > 0 ||
-          kernel.absorbed.constraints.length > 0 ||
-          kernel.absorbed.capital.length > 0 ||
-          kernel.absorbed.settled.length > 0
-        ) {
-          report.industryKernel.push({
-            projectId: project.id,
-            opened: kernel.opened.map((one) => ({
-              purpose: one.purpose,
-              roundId: one.roundId,
-              why: one.why,
-            })),
-            subjects: kernel.absorbed.nodes.map((one) => one.id),
-            constraints: kernel.absorbed.constraints.map((one) => one.id),
-            capital: kernel.absorbed.capital.map((one) => one.id),
-            settled: kernel.absorbed.settled.map((one) => one.roundId),
-          });
-        }
-      } catch {
-        /* a map that could not be advanced is left exactly as it was */
-      }
-
-      try {
-        /*
          * And the loop that turns an opening into something somebody sells.
          *
          * The industry kernel answers *where in the economy*; this one answers
@@ -1218,6 +1309,160 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a loop that could not be advanced is left exactly as it was */
+      }
+
+      try {
+        /*
+         * And the axis the ten buckets never had: *where* to look.
+         *
+         * The buckets are ten mechanisms — who published a paid request, where
+         * one deliverable has two prices, who has sold more than they can
+         * deliver — and not one of them says which part of the economy to ask.
+         * So production discovery searched an undifferentiated one: thirty-one
+         * openings across transcription, stock photography, ticket resale,
+         * sneakers and domains, with nothing saying which industries Brain had
+         * looked at or what lived underneath any of them.
+         *
+         * Its own `try`, for the reason the block below has one: a kernel pass
+         * that threw must not stop a sprint settling a need or harvesting what
+         * already ran. It is derived from rows on every tick, so a sprint that
+         * predates it gets a map with nobody pressing anything, and it is
+         * bounded by how many questions may be open at once rather than by any
+         * lifetime count — §24's correction, which this kernel does not undo.
+         *
+         * Nothing it creates bypasses anything. A kernel round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does.
+         */
+        const kernel = await runIndustryKernel(project.id);
+        if (
+          kernel.opened.length > 0 ||
+          kernel.absorbed.nodes.length > 0 ||
+          kernel.absorbed.constraints.length > 0 ||
+          kernel.absorbed.capital.length > 0 ||
+          kernel.absorbed.settled.length > 0
+        ) {
+          report.industryKernel.push({
+            projectId: project.id,
+            opened: kernel.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            subjects: kernel.absorbed.nodes.map((one) => one.id),
+            constraints: kernel.absorbed.constraints.map((one) => one.id),
+            capital: kernel.absorbed.capital.map((one) => one.id),
+            settled: kernel.absorbed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a map that could not be advanced is left exactly as it was */
+      }
+
+      try {
+        /*
+         * And the axis that says who or what actually produces the work.
+         *
+         * §38's kernel says *where* to look; this one says *by whom it is
+         * done*. Brain knew what it wanted to produce and held no row saying
+         * who produced it — the nearest thing was one free-text line per
+         * opening, with no vocabulary, no test and no way to ask the question
+         * across a portfolio.
+         *
+         * Its own `try`, for the reason the block above has one: a labor pass
+         * that threw must not stop a sprint harvesting or settling a need. It
+         * is derived from rows on every tick, so a portfolio qualified before
+         * it existed gets a labor map with nobody pressing anything, and it is
+         * bounded by how many questions may be open at once rather than by any
+         * lifetime count.
+         *
+         * Nothing it creates bypasses anything, and nothing it decides engages
+         * anybody: a labor round is a Russell candidate that goes through the
+         * archive check, the compiler, the approval envelope, the evidence
+         * gate and all three audit roles, and its envelope forbids contacting,
+         * quoting for or hiring anyone by name.
+         */
+        const labor = await runLaborKernel(project.id);
+        if (
+          labor.opened.length > 0 ||
+          labor.decided.length > 0 ||
+          labor.derived.workflows.length > 0 ||
+          labor.derived.tasks.length > 0 ||
+          labor.absorbed.answers.length > 0 ||
+          labor.absorbed.options.length > 0 ||
+          labor.absorbed.settled.length > 0
+        ) {
+          report.laborKernel.push({
+            projectId: project.id,
+            opened: labor.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            workflows: labor.derived.workflows.map((one) => one.id),
+            tasks: labor.derived.tasks.map((one) => one.id),
+            decided: labor.decided.map((one) => ({
+              taskId: one.taskId,
+              layer: one.productionLayer,
+              reason: one.necessityReason,
+            })),
+            answers: labor.absorbed.answers.map((one) => one.id),
+            options: labor.absorbed.options.map((one) => one.id),
+            settled: labor.absorbed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a labor map that could not be advanced is left exactly as it was */
+      }
+
+      try {
+        /*
+         * And the long-horizon question the sprints run underneath.
+         *
+         * §38's kernel answers *where in the economy money is reachable*; this
+         * one answers *which machine to build next, and what building it makes
+         * possible*. They are independent on purpose — a project may run either,
+         * both or neither — so this pass asks about every project rather than
+         * only the ones holding a sprint, and one read of
+         * `manufacturing_programs` answers it for the many that hold neither.
+         *
+         * Its own `try`, for the reason every block around it has one: a kernel
+         * pass that threw must not stop a sprint settling a need or harvesting
+         * what already ran.
+         *
+         * Nothing it creates bypasses anything. A programme round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does. And nothing it does can record
+         * that this company holds a capability: that is a person's, and there
+         * is no path to it from here.
+         */
+        const programme = await runManufacturingKernel(project.id);
+        if (
+          programme.opened.length > 0 ||
+          programme.absorbed.categories.length > 0 ||
+          programme.absorbed.capabilities.length > 0 ||
+          programme.absorbed.edges.length > 0 ||
+          programme.absorbed.evidence.length > 0 ||
+          programme.absorbed.settled.length > 0
+        ) {
+          report.manufacturingKernel.push({
+            projectId: project.id,
+            opened: programme.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            categories: programme.absorbed.categories.map((one) => one.id),
+            capabilities: programme.absorbed.capabilities.map((one) => one.id),
+            edges: programme.absorbed.edges.map((one) => one.id),
+            evidence: programme.absorbed.evidence.map((one) => one.id),
+            settled: programme.absorbed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a ladder that could not be advanced is left exactly as it was */
       }
 
       try {
@@ -1500,6 +1745,22 @@ export async function tick(owner: string): Promise<TickReport> {
       binId: detail.binId,
       reason: detail.reason,
     }));
+
+    /*
+     * And whose capacity each worker is, where a row can prove it.
+     *
+     * Derived here rather than hooked to the moment a connection completes, for
+     * the reason every other reconciliation on this tick is: it reaches the
+     * workers already registered, and a hook fixes one entrance while the rows
+     * reach every entrance plus the ones already stranded. It authorizes
+     * nothing and is wrapped for the same reason the rest of this block is —
+     * metadata must never stop a mission writing back.
+     */
+    try {
+      await reconcileWorkerOwnership();
+    } catch {
+      // A reading that could not be taken is not a reason to fail the tick.
+    }
 
     await completeCycle({ owner, generation: claim.generation, cursorAt: cycleNow() });
     return report;

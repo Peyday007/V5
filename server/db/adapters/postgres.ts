@@ -385,3 +385,160 @@ export async function verifyConnection(adapter: Database): Promise<{ serverVersi
   }
   return { serverVersion: row.version };
 }
+
+/**
+ * What the *server* will allow, which is the fact a pool ceiling has to be
+ * sized against and the one this repository has never had.
+ *
+ * §27 records seven occurrences of a post-restart verification dying at a pool
+ * checkout and says, in as many words, that the ceiling was deliberately not
+ * raised because *"this repository has no reading of that limit"* — raising it
+ * blind could exhaust the server's own limit and turn a failed verification
+ * into a failed boot. The eighth occurrence then produced the other half of the
+ * number: `2/2 connection(s) in use, 0 idle, 380 caller(s) waiting, ceiling 2`.
+ * A ceiling of two with three hundred and eighty callers queued is the ceiling
+ * binding, not a slow query — and the only thing between that reading and a
+ * sized decision is this one.
+ *
+ * **It is a diagnostic and never a gate.** It runs after `verifyConnection` has
+ * already proved the database answers, every field is nullable, and a refusal
+ * returns nulls rather than throwing: §18's rule is that cloud mode must not
+ * fall back, and a *diagnostic* that failed the boot would be a diagnosis
+ * replacing the thing it exists to explain. `deploy.yml`'s own "Why it failed"
+ * step carries the same `|| true` for the same reason.
+ *
+ * `max_connections` and `superuser_reserved_connections` are `current_setting`
+ * reads any role may make. The backend count comes from `pg_stat_database`
+ * rather than `pg_stat_activity`, deliberately: a non-superuser sees only its
+ * own rows in the second, so a count taken there would be a *partial* total
+ * reported as a whole one — an under-reading that makes the server look idle,
+ * which is the direction that would talk somebody into raising the ceiling on
+ * a server that has no room. `numbackends` is server-wide and visible to
+ * everyone.
+ *
+ * Nothing here names a credential, a host or a database; it is four integers.
+ */
+export interface ServerConnectionLimit {
+  /** The server's own ceiling, or null when it would not say. */
+  maxConnections: number | null;
+  /** Slots the server keeps back for superusers, so they are not ours to use. */
+  superuserReserved: number | null;
+  /** Backends currently connected, server-wide, from `pg_stat_database`. */
+  backendsInUse: number | null;
+}
+
+export async function readServerConnectionLimit(
+  adapter: Database,
+): Promise<ServerConnectionLimit> {
+  const unknown: ServerConnectionLimit = {
+    maxConnections: null,
+    superuserReserved: null,
+    backendsInUse: null,
+  };
+  try {
+    const row = await adapter.get<{
+      max_connections: string | number | null;
+      superuser_reserved: string | number | null;
+      backends: string | number | null;
+    }>(
+      `SELECT current_setting('max_connections') AS max_connections,
+              current_setting('superuser_reserved_connections') AS superuser_reserved,
+              (SELECT sum(numbackends) FROM pg_stat_database) AS backends`,
+    );
+    if (!row) return unknown;
+    return {
+      maxConnections: asCount(row.max_connections),
+      superuserReserved: asCount(row.superuser_reserved),
+      backendsInUse: asCount(row.backends),
+    };
+  } catch {
+    // A server that will not answer this is a server whose limit is unknown,
+    // which is a different fact from a limit of zero and is reported as one.
+    return unknown;
+  }
+}
+
+function asCount(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * The half of the reading this function cannot take, said rather than implied.
+ *
+ * **`max_connections` is the database's ceiling and it is not necessarily the
+ * binding one.** A connection pooler in front of the database has a client
+ * limit of its own, that limit is lower, it is shared with every other client
+ * of the same pooler, and it is not readable from a session on the far side of
+ * it — `current_setting('max_connections')` answers about Postgres, which is
+ * exactly the thing that is not refusing.
+ *
+ * Measured in production on 2026-09-20. The banner read
+ * `pool ceiling 10 of 57 usable (max_connections 60, 3 reserved for
+ * superusers)` while the pooler refused an ordinary operator read outright:
+ *
+ *     (EMAXCONNSESSION) max clients reached in session mode
+ *     - max clients are limited to pool_size: 15
+ *
+ * So the number on the banner was **57** and the number that was binding was
+ * **15**, and it is shared: the app holds up to `BRAIN_DATABASE_POOL_SIZE`,
+ * and every `flyctl ssh console` operator script beside it opens its own pool
+ * of two. Several concurrent readings and a busy app exhaust it, and the
+ * refusal above is what that looks like to whichever one loses.
+ *
+ * **What it explains is that refusal and nothing further.** An earlier version
+ * of this comment went on to attribute a ninety-five-minute hosted
+ * verification to the same cause; no such hang was ever measured, and the
+ * duration it named came from an impression rather than a clock. The reading
+ * here is a refusal with a number in it. Whether pooler contention is also
+ * behind the slow steps §27 records is **not established**, and recording it
+ * as the cause would send the next person to debug a fixed bug.
+ *
+ * This says so and reads nothing extra to do it. Sniffing the host for
+ * `pooler.` would be deriving a deployment fact from a name — §25's rule about
+ * prose, at a connection string — and it would still not produce the pooler's
+ * number. An unknown ceiling reads as unknown rather than as headroom.
+ */
+const POOLER_CAVEAT =
+  'A pooler in front of the database has its own, lower client limit that is not readable ' +
+  'from here, and it is shared with every other client of that pooler — so this is the ' +
+  'database\'s ceiling rather than necessarily the binding one.';
+
+/**
+ * The sentence an operator needs, or the honest absence of one.
+ *
+ * Pure, so both dialects test every branch it draws — the same reason
+ * `describePoolExhaustion` is pure. It reports and never decides: nothing in
+ * this repository can set `BRAIN_DATABASE_POOL_SIZE`, which is a deployment
+ * secret, and a function that recommended a number it could not apply would be
+ * a remedy the reader cannot use.
+ */
+export function describeConnectionHeadroom(
+  limit: ServerConnectionLimit,
+  poolCeiling: number,
+): string {
+  const { maxConnections, superuserReserved, backendsInUse } = limit;
+  if (maxConnections === null) {
+    return (
+      `pool ceiling ${poolCeiling}; the server would not report max_connections, so how much ` +
+      `headroom there is above that ceiling is unknown rather than large. ${POOLER_CAVEAT}`
+    );
+  }
+  const reserved = superuserReserved ?? 0;
+  const usable = maxConnections - reserved;
+  const used = backendsInUse === null ? 'unknown' : String(backendsInUse);
+  const head =
+    `pool ceiling ${poolCeiling} of ${usable} usable at the database (max_connections ` +
+    `${maxConnections}` +
+    `${superuserReserved === null ? '' : `, ${reserved} reserved for superusers`}), ` +
+    `${used} backend(s) connected now`;
+  if (poolCeiling >= usable) {
+    return (
+      `${head}. The ceiling is at or above what the database will give out, so raising ` +
+      `BRAIN_DATABASE_POOL_SIZE would be refused connections rather than more of them. ` +
+      POOLER_CAVEAT
+    );
+  }
+  return `${head}. BRAIN_DATABASE_POOL_SIZE sets the ceiling. ${POOLER_CAVEAT}`;
+}

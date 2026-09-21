@@ -27,6 +27,7 @@ import { badRequest, notFound, unprocessable } from './helpers.ts';
 import { issuerFor } from './oauth.ts';
 import {
   completeEnrollment,
+  completeEnrollmentWithPin,
   createMemberSlot,
   issueRecovery,
   previewEnrollment,
@@ -41,6 +42,7 @@ import {
   signInWithPasskey,
 } from '../services/identity/passkeyAuth.ts';
 import { verifyRegistration } from '../services/identity/webauthn.ts';
+import { PIN_MALFORMED, hashPin, isWellFormedPin } from '../services/identity/pin.ts';
 import {
   addPasskey,
   countLivePasskeys,
@@ -183,6 +185,50 @@ passkeyRouter.post('/enroll/complete', (req: Request, res: Response) => {
       }
 
       await startSessionFor(res, req, outcome.user.id, outcome.passkeyId);
+      res.json({
+        user: { id: outcome.user.id, displayName: outcome.user.displayName },
+        readiness: await cashReadiness(),
+      });
+    } catch {
+      // Inside enrollment, an unexpected error does not get to explain itself.
+      res.status(404).json({ error: LINK_REFUSED });
+    }
+  })();
+});
+
+/**
+ * Spend the link on a **PIN**, and sign the person straight in.
+ *
+ * The device route below is still here and still works; this is the one the
+ * screen offers, because a device can refuse and six digits cannot. The link
+ * is the whole authority either way, and it is spent by the same guarded
+ * `UPDATE` — so a person cannot end up with both a device and a PIN from one
+ * link, and two requests holding one intercepted link still produce one
+ * credential and one ordinary refusal.
+ */
+passkeyRouter.post('/enroll/pin', (req: Request, res: Response) => {
+  void (async (): Promise<void> => {
+    try {
+      const body = bodyOf(req);
+      const pin = body['pin'];
+      if (!isWellFormedPin(pin)) {
+        // Malformed is its own answer and deliberately not the link refusal:
+        // it says nothing about the link, and telling somebody who typed five
+        // digits that their *link* is bad sends them to ask for a new one.
+        res.status(400).json({ error: PIN_MALFORMED });
+        return;
+      }
+
+      const outcome = await completeEnrollmentWithPin({
+        token: body['token'],
+        pinVerifier: await hashPin(pin),
+      });
+      if (!outcome.ok) {
+        res.status(404).json({ error: outcome.reason });
+        return;
+      }
+
+      await startSessionFor(res, req, outcome.user.id, null);
       res.json({
         user: { id: outcome.user.id, displayName: outcome.user.displayName },
         readiness: await cashReadiness(),

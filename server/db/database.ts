@@ -16,7 +16,13 @@ import path from 'node:path';
 import { DB_PATH, ensureDataDirs } from '../env.ts';
 import { databaseConfig, type DatabaseConfig } from '../config.ts';
 import { openSqlite } from './adapters/sqlite.ts';
-import { PostgresAdapter, describeConnection, verifyConnection } from './adapters/postgres.ts';
+import {
+  PostgresAdapter,
+  describeConnection,
+  describeConnectionHeadroom,
+  readServerConnectionLimit,
+  verifyConnection,
+} from './adapters/postgres.ts';
 import { runMigrations, type MigrationReport } from './migrate.ts';
 import { DatabaseConfigurationError, type Database, type Row, type SqlParam } from './types.ts';
 
@@ -133,6 +139,7 @@ async function openCloud(config: DatabaseConfig): Promise<{ db: Database; descri
   const adapter = new PostgresAdapter({
     connectionString: config.connectionString!,
     max: config.poolSize,
+    connectionTimeoutMillis: config.connectTimeoutMs,
     schema: config.schema,
   });
   const described = describeConnection(config.connectionString!);
@@ -148,6 +155,22 @@ async function openCloud(config: DatabaseConfig): Promise<{ db: Database; descri
         `cloud-backed while the work went somewhere nobody else can see.`,
     );
   }
+  /*
+   * The headroom reading, after the proof and never instead of it.
+   *
+   * §27 refused to raise the pool ceiling seven times on the grounds that this
+   * repository had no reading of the server's own limit. It has one now, and
+   * it is taken here because this is the one moment the pool is certainly
+   * healthy — so a reading that fails says something about the *server's*
+   * willingness to answer rather than about a pool that has already collapsed.
+   * `readServerConnectionLimit` returns nulls rather than throwing, so nothing
+   * about this can stop a boot that had otherwise succeeded.
+   */
+  connectionHeadroom = describeConnectionHeadroom(
+    await readServerConnectionLimit(adapter),
+    config.poolSize,
+  );
+
   return { db: adapter, describedPath: described };
 }
 
@@ -159,6 +182,19 @@ export function getDb(): Database {
 
 export function getMigrationReport(): MigrationReport | null {
   return migrationReport;
+}
+
+/**
+ * How much room the pool has above it, in the server's own numbers.
+ *
+ * Null on SQLite, where there is no pool and no server to ask. Set once at
+ * boot: it is the fact a ceiling is sized against, and re-reading it per
+ * request would spend a connection to measure how many connections there are.
+ */
+let connectionHeadroom: string | null = null;
+
+export function databaseConnectionHeadroom(): string | null {
+  return connectionHeadroom;
 }
 
 /** Which backend actually answered, for the health endpoint and the banner. */
@@ -188,6 +224,7 @@ export async function closeDatabase(options: { drainMs?: number } = {}): Promise
   migrationReport = null;
   bootError = null;
   activeConfig = null;
+  connectionHeadroom = null;
   if (open) await open.close();
 }
 

@@ -60,7 +60,7 @@ import { dispatchTick } from '../server/services/dispatch/loop.ts';
 import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { decideBinRouting } from '../server/services/bins/routing.ts';
-import { judgePool, verifyFactoryPool } from '../server/services/dispatch/pool.ts';
+import { judgePool, readFactoryPool, verifyFactoryPool } from '../server/services/dispatch/pool.ts';
 import { createProbeBin } from '../server/services/fleet/probe.ts';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
 
@@ -380,6 +380,8 @@ describe('several accounts serving one logical Factory worker', () => {
     // Unproven rather than faulted: nothing has been fired at them yet.
     expect(report.surfaces.map((s) => s.verdict)).toEqual(['UNPROVEN', 'UNPROVEN', 'UNPROVEN']);
     expect(report.problems.join(' ')).toContain('no fire to this Routine has ever produced');
+    // Three surfaces, so nothing to say about being unpooled.
+    expect(report.notes).toEqual([]);
   });
 });
 
@@ -873,9 +875,58 @@ describe('proving each surface, one at a time', () => {
     expect((await elsewhere(bin)).ok).toBe(true);
   });
 
+  it('says a one-surface Factory is not a pool on the run that passes, not only on one that fails', async () => {
+    /*
+     * The caveat used to be a `problem`, and `ok` never counted it — so the
+     * only run that ever printed it was one that had already failed for some
+     * other reason, and the green run, which is the single place somebody
+     * could read "VERIFIED" as "pooled", said nothing. It is a note now, and
+     * this pins both halves: present when there is one surface, and never
+     * counted as a reason to refuse.
+     */
+    for (const surface of surfaces) await completeChainFor(surface);
+    const read = await readFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
+
+    const whole = judgePool(read);
+    expect(whole.ok).toBe(true);
+    expect(whole.notes).toEqual([]);
+
+    const alone = judgePool({
+      now: read.now,
+      expectedWorker: read.expectedWorker,
+      repository: read.repository,
+      surfaces: read.surfaces.slice(0, 1),
+    });
+    expect(alone.ok).toBe(true);
+    expect(alone.notes.join(' ')).toContain('nothing here is pooled');
+    expect(alone.problems).toEqual([]);
+  });
+
+  it('reports a cooldown only while it is still ahead, so it cannot contradict "eligible yes"', async () => {
+    /*
+     * `retry_at` in the past is history: the fire router compares it to the
+     * clock and ignores it. Printing it anyway put "cooling until <a moment
+     * two weeks ago>" on the same line as "eligible yes", which is two answers
+     * to one question — and production printed exactly that.
+     */
+    const read = await readFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
+    const first = read.surfaces[0]!;
+    const at = (iso: string): string | null =>
+      judgePool({
+        now: '2026-09-20T00:00:00.000Z',
+        expectedWorker: read.expectedWorker,
+        repository: read.repository,
+        surfaces: [{ ...first, routine: { ...first.routine, retryAt: iso } }],
+      }).surfaces[0]!.cooldownUntil;
+
+    expect(at('2026-09-09T22:32:10.195Z')).toBeNull();
+    expect(at('2026-09-20T01:00:00.000Z')).toBe('2026-09-20T01:00:00.000Z');
+  });
+
   it('judges from rows it is handed, so a verdict can be argued with afterwards', () => {
     // The pure half, with nothing read: an empty pool is not a proven one.
     const report = judgePool({
+      now: new Date().toISOString(),
       expectedWorker: { id: 'wkr_x', name: 'factory-brain' },
       repository: REPOSITORY,
       surfaces: [],

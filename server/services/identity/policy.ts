@@ -354,6 +354,57 @@ const OVERRIDES: Override[] = [
   // READ, so every member of the project can see where Brain is looking.
   { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'PATCH', level: 'ADMIN' },
+
+  // ---------------------------------------------------------------------
+  // The labor kernel (§41)
+  // ---------------------------------------------------------------------
+  //
+  // Naming a workflow, naming a task, recording who produces one and retiring
+  // any of them are ADMIN, for the split the section above already draws:
+  // these are decisions *about* how the operation is run rather than work
+  // inside it, and "who does this" is the shape of decision a membership
+  // change already carries. `SEED` is the one task origin Brain itself may
+  // never write.
+  //
+  // **No entry here names a worker scope, and that is the design.** An ADMIN
+  // route refuses a worker by level; every handler additionally calls
+  // `requirePerson`, which refuses one by principal *type*. A machine that
+  // could decide a person is unnecessary — or that one is — is precisely what
+  // §22's split exists to prevent.
+  //
+  // Reading is deliberately absent and takes the default READ, so every member
+  // of the project can see who does the work here and why.
+  { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'PATCH', level: 'ADMIN' },
+  // The manufacturing kernel's programme (§39)
+  // ---------------------------------------------------------------------
+  //
+  // Every write is ADMIN, which is a wider sweep than the two sections above
+  // and is deliberate rather than lazy. There are four writes here and each one
+  // is a decision *about* the programme rather than work inside it: starting
+  // it, moving its lifecycle, naming a category to look at, and — the one that
+  // matters — recording that this company holds a capability.
+  //
+  // That last one is why the split is drawn here rather than at WRITE. Every
+  // readiness answer, every capability gap and the whole question of what to
+  // build next turns on which capabilities are held; a capability marked held
+  // that is not is the error with a factory on the end of it. It is the one
+  // fact in this kernel that research may never establish, so it must not be
+  // reachable by anything less than the level a membership change already
+  // carries.
+  //
+  // **No entry here names a worker scope, and that is the design.** An ADMIN
+  // route refuses a worker by level, so no machine credential reaches any
+  // manufacturing write however its membership is configured — §22's rule at
+  // the surface that decides what gets built. Every handler additionally calls
+  // `requirePerson`, which refuses by principal *type*: two independent guards,
+  // because a guard on one entrance is not a guard.
+  //
+  // Reading the programme is deliberately absent and takes the default READ, so
+  // every member of the project can see the ladder, what is missing and where
+  // Brain is looking.
+  { pattern: /^\/api\/projects\/[^/]+\/manufacturing/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/manufacturing/, method: 'PATCH', level: 'ADMIN' },
 ];
 
 export interface Requirement {

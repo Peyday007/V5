@@ -90,12 +90,27 @@ const UNAUTHENTICATED_PATHS = new Set([
   '/api/enroll/preview',
   '/api/enroll/options',
   '/api/enroll/complete',
+  // The PIN half of the same journey, for the same reason: an invited member
+  // holds no credential but the link in their hand, and the whole point is
+  // that they leave holding one. The link is the entire authority either way.
+  '/api/enroll/pin',
   // Passkey sign-in is the passkey half of `/api/auth/login`: a challenge is
   // issued to nobody in particular and the assertion that comes back is the
   // credential. A challenge is spent by a guarded DELETE, so it answers exactly
   // one assertion however many arrive.
   '/api/auth/passkey/options',
   '/api/auth/passkey/verify',
+  /*
+   * The PIN door, for `/api/auth/login`'s exact reason: it is how a person
+   * obtains a credential, so it has to work while the browser is carrying
+   * nothing, or a stale cookie from last time.
+   *
+   * What protects it is not this list. It is the single refusal, the constant
+   * work every outcome does, and the progressive cooldown held in rows rather
+   * than in memory — see `services/identity/pin.ts`, which says why six digits
+   * needs all three.
+   */
+  '/api/auth/pin',
 ]);
 
 /** Authenticated when a credential is presented; anonymous when one is not. */

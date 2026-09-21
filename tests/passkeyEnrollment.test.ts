@@ -28,11 +28,13 @@ import { authenticator } from './helpers/authenticator.ts';
 import {
   LINK_REFUSED,
   completeEnrollment,
+  completeEnrollmentWithPin,
   createMemberSlot,
   issueRecovery,
   previewEnrollment,
   withdrawLink,
 } from '../server/services/identity/enrollment.ts';
+import { hashPin } from '../server/services/identity/pin.ts';
 import {
   countLivePasskeys,
   listEnrollments,
@@ -286,8 +288,15 @@ describe('the readiness gate', () => {
      * under-stating direction, which is the direction §29 cares about.
      *
      * So `READY` is *holds a live credential* and `signsInWith` says which.
-     * Nothing about the enrollment journey moved: it still only ever produces a
-     * `DEVICE`, and the three transitions below are unchanged.
+     *
+     * **Then the credential changed, and `READY` had to mean something
+     * narrower.** The enrollment journey produces a PIN now, and the sign-in
+     * screen offers nothing else — so a device is still a live credential and
+     * is no longer a way *in*. `READY` is therefore *holds a credential the
+     * product actually offers*, and a device alone is `NEEDS_A_NEW_LINK`: not
+     * joined, because they cannot get in, and not a slot nobody filled,
+     * because they finished. Both halves are asserted below, because the
+     * passkey path still exists and must not be reported as a way in.
      */
     const admin = before.members.rows.find((row) => row.userId === adminId);
     expect(admin?.state).toBe('READY');
@@ -301,10 +310,23 @@ describe('the readiness gate', () => {
     await enrol(link.token);
     const after = await cashReadiness();
     const enrolled = after.members.rows.find((row) => row.userId === link.userId);
-    expect(enrolled?.state).toBe('READY');
-    // Enrolling produces a device, which is the fact a recovery acts on.
+    // A device, which is real, and which no sign-in screen takes.
     expect(enrolled?.signsInWith).toBe('DEVICE');
-    expect(after.members.ready).toBe(before.members.ready + 1);
+    expect(enrolled?.state).toBe('NEEDS_A_NEW_LINK');
+    expect(after.members.ready).toBe(before.members.ready);
+
+    // And the journey a link actually runs now, on a second slot: the same
+    // link, spent on a PIN, and that person can sign in.
+    const second = await createMemberSlot({ displayName: 'Third person', issuedByUserId: adminId });
+    await completeEnrollmentWithPin({
+      token: second.token,
+      pinVerifier: await hashPin('552104'),
+    });
+    const both = await cashReadiness();
+    const byPin = both.members.rows.find((row) => row.userId === second.userId);
+    expect(byPin?.state).toBe('READY');
+    expect(byPin?.signsInWith).toBe('PIN');
+    expect(both.members.ready).toBe(before.members.ready + 1);
   });
 
   /*

@@ -1142,7 +1142,27 @@ export async function reconcileBins(projectId?: string): Promise<ReconcileReport
       report.escalated += 1;
       report.details.push({ binId: bin.id, disposition: 'NEEDS_HUMAN', reason });
     } else {
-      // Somebody assigned it between the read and the write. Ordinary.
+      /*
+       * The generation moved between the read and the write, so somebody
+       * assigned it. Ordinary — and this branch used to absorb a great deal
+       * more than that. While `terminateUnleasedBin` matched READY and DRAFT
+       * only, every exhausted bin whose lease had merely *lapsed* landed here
+       * and was counted healthy for ever. It is now the race it claims to be,
+       * and it re-reads rather than asserting, so a bin that genuinely did not
+       * move is reported as the defect it is instead of as a busy moment.
+       */
+      const after = await getBin(bin.id);
+      if (after && after.leaseGeneration === bin.leaseGeneration) {
+        report.details.push({
+          binId: bin.id,
+          disposition: 'UNRESOLVED',
+          reason:
+            `This bin is ${after.state} at ${after.attemptCount}/${after.maxAttempts} attempts and ` +
+            'could not be turned into a decision. Nothing assigned it, so this is not a race. ' +
+            'It is reported rather than retried, because a pass that silently absorbed it is ' +
+            'how it came to be invisible.',
+        });
+      }
       report.healthy += 1;
     }
   }
