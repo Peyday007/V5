@@ -2835,6 +2835,22 @@ remote.
   test that blocks a beat behind a real fence and pins both the block and the
   ceiling it lands with.
 
+  **It works, and the reading is a green verdict rather than an argument.**
+  Deploy `35558774398` on `0fef279`, the first run in this investigation where
+  both halves passed: `HOSTED-VERIFICATION: PASS 210/210` before the restart
+  and `PASS 229/229` after it, with the restart itself succeeding in between —
+
+      release:             success
+      hosted verification: success
+      after the restart:   success
+
+  The pre-restart probe took **21m03s** against the 14m21s the same probe spent
+  failing, which is the shape of the fix: seven minutes of checks that no run
+  had ever reached, because every previous one stopped at the judge's
+  completion. The post-restart pass took 33m32s and is the *independent* half —
+  it is the one that failed on `pg-pool`'s checkout timeout rather than on the
+  lease, so its passing is a second result rather than a repeat of the first.
+
   **Two words for one condition, and knowing which is a fact about the live
   queue rather than about the code.** Writing the regression established it: an
   unbeaten lease in isolation is refused `LEASE_EXPIRED`, and production said
