@@ -2654,7 +2654,10 @@ async function main(): Promise<void> {
          FROM bin_events
         WHERE event_type = 'DISPATCH_TICK_FAILED'
         GROUP BY reason
-        ORDER BY MAX(at) DESC`,
+        -- By the alias, not the aggregate expression: the conventions in
+        -- CLAUDE.md say an ORDER BY has to be sayable in both dialects, and
+        -- naming the output column is the form that always is.
+        ORDER BY last_at DESC`,
     );
     const total = rows.reduce((sum, row) => sum + Number(row.n), 0);
     if (total === 0) {
@@ -2681,7 +2684,7 @@ async function main(): Promise<void> {
          FROM bin_events
         WHERE event_type = 'DISPATCH_UNROUTED'
         GROUP BY outcome
-        ORDER BY COUNT(*) DESC`,
+        ORDER BY n DESC`,
     );
     const unrouted = refusals.reduce((sum, row) => sum + Number(row.n), 0);
     console.log(`DISPATCH_UNROUTED: ${unrouted} cumulative, by refusal.`);
