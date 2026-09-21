@@ -177,6 +177,22 @@ adminRouter.post(
     if (await getUserByEmail(email)) {
       throw conflict(`Somebody already uses ${email.toLowerCase()}.`);
     }
+    /*
+     * And the name, for the same reason one door along.
+     *
+     * A guard on one entrance is not a guard. `createMemberSlot` refuses a
+     * name somebody already signs in with because a member holds no address
+     * and the name is all they can type — and an account made here with that
+     * same name takes the *member's* traffic, so the person locked out is the
+     * one who cannot do anything about it. This account would still be
+     * reachable by its address; theirs would not be reachable at all.
+     */
+    if (await signInNameTaken(displayName)) {
+      throw conflict(
+        'Somebody already signs in with that name. Pick one that tells them apart, because ' +
+          'for a member the name is how they sign in.',
+      );
+    }
 
     const who = actor();
     let user;

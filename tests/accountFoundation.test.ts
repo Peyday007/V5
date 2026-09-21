@@ -286,6 +286,26 @@ describe('one name, one account', () => {
     expect((await pinSignIn('Would Collide', '272727')).status).toBe(200);
   }, 120_000);
 
+  it('refuses the same collision at the other door that creates accounts', async () => {
+    // A guard on one entrance is not a guard. `POST /api/admin/users` makes an
+    // account with an address, which would still be reachable by that address
+    // — but it takes the *member's* name, and a member has no address to fall
+    // back to, so the person locked out is the one who can do nothing.
+    await joinAs('Shared With Admin', '303030');
+    const clash = await call<{ error?: string }>('POST', '/api/admin/users', {
+      cookie: ownerCookie,
+      body: {
+        email: 'clashing-name@example.invalid',
+        displayName: 'shared with admin',
+        password: 'temporary-password-01',
+      },
+    });
+    expect(clash.status).toBe(409);
+    expect(clash.body.error ?? '').toMatch(/already signs in/i);
+
+    expect((await pinSignIn('Shared With Admin', '303030')).status).toBe(200);
+  }, 120_000);
+
   it('is an administrator decision, and a member cannot rename anybody', async () => {
     const member = await joinAs('Ordinary Member', '282828');
     const theirs = await pinSignIn('Ordinary Member', '282828');
