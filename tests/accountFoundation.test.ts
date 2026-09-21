@@ -36,6 +36,7 @@ import {
   createCredentiallessUser,
   createUser,
   getUser,
+  setUserDisabled,
   setUserPin,
 } from '../server/repos/identity.ts';
 import { addPasskey, countLivePasskeys } from '../server/repos/passkeys.ts';
@@ -240,12 +241,19 @@ describe('identity is the thing that makes a name resolve', () => {
     }
   });
 
-  it('counts a disabled or machinery row as a collision, because the lookup does', async () => {
+  it('counts a machinery row as a collision, because the lookup does', async () => {
     /*
-     * `getPinCredentialByIdentity` selects on `display_name` with no filter for
-     * kind or disablement, so a SYSTEM row sharing a name still makes the typed
-     * name resolve to two and therefore to none. A foundation reading that only
-     * counted the accounts it displays would report the survivor as fine.
+     * `getPinCredentialByIdentity` does not filter on kind, so a SYSTEM row
+     * sharing a name still makes the typed name resolve to two and therefore
+     * to none. A foundation reading that only counted the accounts it displays
+     * would report the survivor as fine.
+     *
+     * This used to say *disabled or machinery*, and only ever exercised the
+     * machinery half. §46 made the disabled half deliberately false — a row
+     * nobody can sign into must not hold a name against a live person — and
+     * the case directly below is that assertion. The title is corrected rather
+     * than left, because a name claiming the opposite of what the code does is
+     * the same two-readers defect one layer up.
      */
     const real = await credentialless('Robin');
     await setUserPin(real.id, await hashPin('333333'));
@@ -258,6 +266,47 @@ describe('identity is the thing that makes a name resolve', () => {
     });
 
     expect(findingFor(await accountNamed('Robin'), 'IDENTITY').verdict).toBe('BLOCKED');
+  });
+
+  it('reads two names that differ only in case as one identity', async () => {
+    /*
+     * The door folds case, so *Alex* and *alex* are one thing it refuses and
+     * two things a verbatim count would pass — which is the expensive
+     * direction, because it tells an administrator that a locked-out pair is
+     * fine. Run against the verbatim count first, where both read PASS.
+     */
+    const upper = await credentialless('Sam');
+    const lower = await credentialless('sam');
+    await setUserPin(upper.id, await hashPin('555555'));
+    await setUserPin(lower.id, await hashPin('666666'));
+
+    const reading = await foundationReading();
+    const both = reading.accounts.filter((one) => one.displayName.toLowerCase() === 'sam');
+    expect(both.length).toBe(2);
+    for (const account of both) {
+      expect(findingFor(account, 'IDENTITY').verdict).toBe('BLOCKED');
+      expect(findingFor(account, 'IDENTITY').because).toContain('share the display name');
+    }
+  });
+
+  it('does not let a retired row hold a name against a live person', async () => {
+    /*
+     * The other direction, and the one that would have cried wolf: a verbatim
+     * count across every row calls this a collision and tells an administrator
+     * to rename somebody, when the door resolves the live account perfectly
+     * well. §27 records what a warning nobody should act on costs — it teaches
+     * a reader to stop believing the one place that says something is wrong.
+     */
+    const retired = await credentialless('Jo');
+    await setUserDisabled(retired.id, true);
+    const live = await credentialless('Jo');
+    await setUserPin(live.id, await hashPin('777777'));
+
+    const reading = await foundationReading();
+    const shown = reading.accounts.filter((one) => one.displayName === 'Jo');
+    const stillHere = shown.find((one) => one.userId === live.id);
+    expect(stillHere, 'the live account is missing from the reading').toBeDefined();
+    expect(findingFor(stillHere!, 'IDENTITY').verdict).toBe('PASS');
   });
 
   it('passes a name that resolves to exactly one account', async () => {

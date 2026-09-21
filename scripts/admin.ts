@@ -85,6 +85,7 @@ import {
   listMembershipsForPrincipal,
   listUsers,
   renameUser,
+  signInNameTaken,
   listWorkers,
   recordIdentityEvent,
   revokeMembership,
@@ -614,6 +615,27 @@ async function main(): Promise<void> {
       refuseAddressAsName(name);
       const user = (await listUsers()).find((one) => one.id === target || one.email === target);
       if (!user) fail(`No user with id or address ${target}.`);
+      /*
+       * And it must not be a name somebody else already signs in with.
+       *
+       * This is §46's guard, asked here because there are two surfaces onto
+       * one column: this and `POST /api/admin/users/:userId/display-name`. A
+       * member enrolled from a link holds no address, so their display name is
+       * the only thing they can type at the door — and two live accounts
+       * answering to one name lock **both** of them out, with the same
+       * sentence a wrong PIN gets, because invariant 23 is doing its job.
+       *
+       * Without it this command was the way round the route: an administrator
+       * correcting a name on a terminal could create the exact condition the
+       * browser refuses, and the People page would then report two people as
+       * unable to sign in with no record of what did it.
+       */
+      if (await signInNameTaken(name, { exceptUserId: user.id })) {
+        fail(
+          `Somebody else already signs in as "${name}". Pick one that tells them apart — the ` +
+            'name is how a member without an address gets in.',
+        );
+      }
       const before = user.displayName;
       await renameUser(user.id, name);
       await recordIdentityEvent({

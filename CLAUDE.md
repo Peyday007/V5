@@ -185,6 +185,9 @@ There must be no workflow where the user has to remember "now go update the data
 45. No state stored about work whose rows can be read, and no claim about the
     world outside this Brain without somebody attesting to it — a register says
     where work has got to by reading, or it says nobody has said.
+46. No identity two live accounts answer to, and no account made unreachable by
+    a row nobody can sign into — a name is a credential's other half, and the
+    refusal that protects it must still be legible to whoever can correct it.
 
 ## 8. Model prose never mutates project state.
 
@@ -8725,6 +8728,7 @@ server/
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
+    signInName.ts       the name a person types, and what makes it theirs alone
     design.ts           ten design concerns, and the kinds a reading may establish
     manufacturing.ts    what a capability finding creates, and what it may never
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
@@ -9146,6 +9150,8 @@ tests/                  Vitest suites
   passkeyEnrollment.test.ts  a link spent once, a recovery that retires, a count that waits
   passkeyHttp.test.ts        the door, over a socket: five ways in and nothing else new
   passkeyOnlyAuth.test.ts    the owner's own migration, and the door shutting behind it
+  signInIdentity.test.ts     one name, one account, and the door that stays open on purpose
+  signInMobile.test.ts       the login journey on a phone, read out of the stylesheets
   signInSurface.test.tsx     the screen an unauthenticated person is actually served
   sharedCashAccess.test.ts   a member reads the frontier; nobody reads somebody's job
   peopleAndCapacity.test.ts  a declared person, a counted Routine, a resumable setup
@@ -9204,3 +9210,253 @@ compiling:
 ```
 BRAIN_TEST_DATABASE_URL=postgresql://... npm test
 ```
+
+## 46. A name is the other half of a credential.
+
+A member who enrolled from a link holds **no address at all** — that is the
+whole point of the credential-less row §32's journey writes — so their display
+name is the only thing they can type at the sign-in screen. It is therefore a
+sign-in identity, and an identity two accounts can both claim is not one.
+
+Nothing kept it unique. Two correct pieces of code made a locked door between
+them: `createMemberSlot` wrote whatever name it was given, and
+`getPinCredentialByIdentity` refused an ambiguous one — `LIMIT 2`, `null`
+unless exactly one row came back — which is the right refusal and the reason
+the condition was invisible.
+
+- **Both of them are locked out, and neither can tell.** The refusal is
+  `PIN_REFUSED`, byte-identical to a wrong PIN, because invariant 23 is doing
+  its job: a door that said *two accounts share that name* would be confirming
+  which names exist. So the correct refusal at the door is exactly what makes
+  the condition unreadable from it, and the answer is not to weaken the door —
+  it is to name the condition where the person who can fix it is looking. The
+  audit row carries `AMBIGUOUS_IDENTITY`; `peopleReading` carries
+  `NAME_IS_AMBIGUOUS`; the caller is told nothing either way.
+- **The likeliest way to create one is the most ordinary thing an
+  administrator does**: re-inviting somebody whose first link expired. The
+  second slot is a second row, and from that instant the first person cannot
+  get in either.
+- **`READY` about a locked-out person is the expensive direction**, and §32
+  already says so one credential along — it is why `NEEDS_A_NEW_LINK` exists
+  rather than being rounded into a neighbour. `NAME_IS_AMBIGUOUS` is the fifth
+  state for the same reason and is the only one here that is not about a
+  credential at all: they hold a perfectly good PIN. It is claimed only for an
+  account with **no address**, because the lookup tries the address first and
+  an address is unique by index — somebody who can still get in is not stuck,
+  and saying they are would be the other direction's wrongness.
+- **A row nobody can sign into was making live people unreachable.** The
+  lookup filtered nothing, so retiring somebody's account and inviting a new
+  person of the same name locked the new person out on their first visit. The
+  resolution is among accounts that can *actually be signed into*, and it falls
+  back to a single retired row only so the refusal keeps its audit category —
+  the caller is told the same sentence either way, and an administrator reading
+  `identity_events` afterwards can still tell *somebody tried a retired
+  account* from *somebody tried a name that was never here*.
+- **Case is folded, and that is a strengthening rather than a convenience.** A
+  person typing their own name cannot be expected to reproduce the
+  capitalisation an administrator chose, and a phone will capitalise the first
+  letter whether they meant it or not. Two names that differ only in case are
+  not two identities to anybody reading them, so allowing both would be
+  allowing the collision this section exists to prevent.
+- **SQL narrows; `signInName` decides.** `LOWER` exists in both dialects and
+  agrees with `toLowerCase` for the names this Brain holds, but a rule whose
+  answer depends on which database is running is not one rule — this repository
+  has been told three times by the second backend that a statement true in one
+  dialect is not true in the other. The guard scans in JavaScript outright,
+  because it runs when a name is *chosen* rather than on every sign-in, and it
+  is the reader that must not miss one.
+- **The cooldown announced itself, and the announcement was reachable only for
+  a real account.** `pin.ts` closes enumeration with unusual care — one refusal
+  sentence for every way of failing, and `UNMATCHABLE_PIN_VERIFIER` so that an
+  unknown identity costs the same ~60ms as a wrong PIN, *"which is exactly the
+  enumeration the single refusal sentence is there to prevent"*. Then the
+  throttle answered `429` with a `retryAt`.
+
+  The reasoning recorded beside it was careful and checked the wrong thing:
+  *"it says that you are waiting and until when, because that is a fact about
+  this caller's own recent attempts"*, with a test asserting the address does
+  not appear in the body. Both true. **The branch is reachable only when the
+  identity resolves**, so its existence says the account is real — and the
+  sign-in names in this Brain are people's first names. Three wrong guesses
+  separated a member from an invention. The constant's own doc says *one
+  sentence for every way of failing to sign in with a PIN*, and this was a
+  second one; §46's own defect, one door along, where a correct guard's
+  *reachability* is the oracle rather than its contents.
+
+  The timing was the same oracle arriving the other way. The check sat *before*
+  the verification, on the stated reason that a locked-out attacker must not
+  keep spending the scrypt budget — which protects nothing, because an unknown
+  identity already costs that same ~60ms against the unmatchable verifier, so
+  anybody wanting to burn CPU varies the name instead. What it bought was a
+  locked-out account answering **faster** than an invented one.
+
+  So the refusal is byte-identical, after the same work, and `PIN_REFUSED`
+  names the remedy — *wait a moment before trying again* — unconditionally,
+  which is how a person who genuinely mistyped is told something useful without
+  the message being different. The distinction is on the audit row, where §32
+  already says a distinction belongs.
+
+  **The password door beside it had this right all along**, which is what makes
+  it a regression rather than an oversight: `recordFailure` is called for an
+  unknown address too, so its `429` is reachable without an account, and it
+  verifies against an unmatchable verifier for the timing. The older door was
+  correct and the newer one, written by the same careful hand, reintroduced
+  what the older one had closed.
+
+  **No assertion was weakened to make this pass.** The two tests that read the
+  `429` are replaced by ones that prove the lockout refuses the **correct**
+  PIN — which is the whole of what a lockout is for and which the old ones
+  never checked — and that its refusal is byte-identical to a wrong PIN and to
+  an unknown identity. Both were run against the restored `429` to watch them
+  fail with `expected 429 to be 401`.
+
+- **One path let the person choosing the name be somebody other than an
+  administrator, and §26's own sentence said it did not.** *"The acceptor
+  chooses neither who they are nor what they get"* is exact about the two
+  things it names — the address and the role are read from the invitation row,
+  so an acceptance carrying `role: OWNER` and `isBrainAdmin: true` changes
+  neither. The **display name** was not one of them, because when that was
+  written a display name was a label. Migration 062 made a member
+  address-less and 078 made the typed name the thing the door resolves, and
+  nothing came back here: an invited person could type an existing member's
+  name, in any case, and lock out both of them — themselves and somebody who
+  had done nothing.
+
+  The fallback is the **invitation's own address**, which is theirs by
+  construction and unique by index, rather than a refusal. An invited person
+  holding a link they cannot spend is an escalation with no answering
+  transition, and an awkward name is a great deal cheaper than not getting in —
+  correctable afterwards by the rename this section adds, which is what makes
+  the fallback honest rather than a shrug. The one case that *is* refused
+  needs another account's display name to be this exact address, and it
+  deliberately does not spend the invitation, for the same reason a missing
+  account authority does not: the link has to keep working once somebody has
+  corrected the name.
+
+  `NAME_UNAVAILABLE` is its own denial category rather than a reused one,
+  because it is a fact about this Brain's rows rather than about the caller —
+  it tells an attacker nothing they could not learn by trying the name at the
+  door, and an administrator reading the audit has to be able to tell it from
+  a refusal meaning the invitation itself was bad.
+
+- **§44's reading was built against the door as it was, and changing the door
+  makes it wrong in both directions.** `foundation.ts` counted `display_name`
+  verbatim across every row, on the reason it states: *"because
+  `getPinCredentialByIdentity` does"*. It did, and this change means it no
+  longer does — so *Caleb* and *caleb* are one identity the door refuses and
+  the reading would have called two names and passed a locked-out pair, while
+  a retired row no longer makes anybody unreachable and the reading would have
+  told an administrator to rename somebody when nothing was wrong. The second
+  is the worse one: §27 records what a warning that cries wolf costs, and the
+  remedy this one names is a rename that would achieve nothing. Both read
+  `ambiguousSignInNames` now, which returns the count as well as the name
+  because the two readers need different halves of one answer — *is this
+  person stuck*, and *how many share it* — and two functions would be the
+  defect this module exists to close.
+
+  **The two changes were written independently and each is the other's missing
+  half, which is worth recording rather than merging silently.** §44's IDENTITY
+  finding already named the remedy — *"Rename all but one of them, so the name
+  identifies exactly one account"* — attributed to `BRAIN_ADMINISTRATOR`, and
+  **no rename existed anywhere in this repository**. A reading that names an
+  action nobody can take is §24's escalation with no answering transition, at
+  the one dimension whose failure locks somebody out; and a rename with no
+  reading is a repair for a condition nobody can see. Neither session could
+  have shipped the whole of it alone.
+
+- **Two sessions then wrote the rename, and each carried the guard the other
+  lacked.** §44's reading named *"Rename all but one of them"* with nothing to
+  do it; within the week there were two — this route, and `people rename` on a
+  terminal — plus two byte-equivalent repository functions to write the column.
+  The route refused a collision and allowed an address; the command refused an
+  address and allowed a collision. **Either gap alone makes the other surface
+  pointless**: an administrator who cannot create a collision in a browser and
+  can create one on a terminal has not been stopped from creating one, and the
+  People page would then report two people unable to sign in with no record of
+  what did it.
+
+  One writer — `renameUser`, which landed first — and both callers ask both
+  questions. The checks are deliberately **not** in the repository function,
+  which was the obvious move: a function that refused would have to decide what
+  to do about it, and the two surfaces answer that differently — a browser gets
+  a 422 it can render, a terminal a sentence and a non-zero exit. Keeping both
+  surfaces is §26's own split rather than duplication: the decision belongs
+  where an administrator can *see* `NAME_IS_AMBIGUOUS`, and the terminal is the
+  recovery for when the bundle will not load.
+
+  The guard reads the repository rather than driving either surface, for
+  `operatorConsoleRemoved`'s reason: what must not exist is a way round, and a
+  passing request cannot show you one. Each of its three assertions was run
+  against its own defect — the terminal guard removed, the route's address
+  check removed, and a second writer re-added — and fails naming exactly what
+  is missing.
+
+- **The escalation needed an answering transition, and there was none.** There
+  was no rename anywhere in this repository — not a route, not a command, not a
+  repository function — so a collision creatable by an ordinary invitation
+  could not be corrected through any surface at all. §24's sentence at the
+  sign-in screen, in its sharpest form: the person who is stuck is the one the
+  whole PIN migration exists to let in. `POST /api/admin/users/:userId/
+  display-name` moves a **label** and nothing else — no role, no membership, no
+  credential, no session, no PIN — which is the difference between correcting
+  somebody's name and replacing them, and is why it sits at `ADMIN` rather than
+  needing a decision of its own. It refuses a name that would simply move the
+  collision, through the same guard an invitation is refused by.
+
+- **And the guard turned an awkward situation into a blocking one, which had
+  to be answered in the same change.** A slot whose link expired, was withdrawn
+  or was never opened holds no credential and no live link, and nothing issued
+  it a second *first* link: `createMemberSlot` makes a new row and
+  `issueRecovery` is for somebody who had something and lost it. So an
+  administrator's only route was to invite that person again — a second account
+  under one name, resolved by luck. §43's guard refuses that outright, and
+  without a third thing to try, a correct refusal is a stop. **A refusal whose
+  remedy does not exist is not an improvement.** `reissueEnrollmentLink` is the
+  remedy, and it is deliberately *not* recovery: recovery retires what somebody
+  is holding, which is right after a lost device and alarming to read for
+  somebody who has never signed in at all. It is refused outright for an
+  account holding any credential — a PIN, a password or a live device — which
+  is what keeps the two from becoming one operation with a flag, and it
+  withdraws the stale link in the same breath, because two live links for one
+  slot is two ways in where the design says one. On this Brain it is not
+  hypothetical: one live account holds no credential and no live link.
+
+**A repair I started and withdrew, recorded rather than quietly dropped.**
+`passwordDoorOpenFor` counts *proven passkeys* and knows nothing about a PIN,
+and §32's own words state the rule as *a password is accepted only from an
+account that cannot sign in with a device*. Read one word wider — *cannot
+otherwise get in* — the owner's account looks wrong: a PIN used daily, and a
+password door open beside it for ever. I built the column, the proof and the
+predicate, and the existing suite is what said no: `pinAuth.test.ts` calls that
+route **"the recovery door, which is where a forgotten PIN is replaced"**, and
+`Recovery.tsx` exists to take a password and end in a PIN.
+
+The device analogy does not carry, and that is the whole of it. **A passkey can
+be registered and still refuse** — which is exactly how this Brain's owner was
+locked out — so `countProvenPasskeys` insists on one that has actually worked.
+A PIN cannot fail that way: it is a verifier somebody typed into a box twice,
+and no hardware can decline it. So *proven* has nothing to add, and closing the
+door on *set* would turn the most ordinary event in a six-digit world —
+forgetting six digits — into a deployment-secret emergency for a sole
+administrator. The password is the recovery credential and the PIN is the daily
+one; twelve-plus characters typed rarely beside six digits typed constantly is
+a design rather than an oversight. The assertions that used to prove the change
+now **pin the decision**, so the next reader who reads that doc the way I did
+finds the answer instead of shipping it.
+
+**And one defect was a number in a stylesheet.** Safari on iOS zooms the page
+to fit whenever a focused input's font is under 16px, and does not zoom back.
+The identity box was 14px and the two enrolment boxes inherited the 15px body
+step — so the sign-in screen moved under somebody's thumb when they tapped it,
+and a new member's very first screen jumped twice while they were choosing the
+credential this Brain runs on. The PIN box beside it was 20px and never did,
+which is how two fields on one card came to behave differently.
+
+Nothing caught it because nothing could: jsdom does not lay out, a desktop
+browser does not zoom, and the two screens are the two nobody opens on a
+desktop by choice. `tests/signInMobile.test.ts` reads it out of the stylesheets
+instead — the condition is a number in a file, so a violation is a number below
+sixteen — and it asserts the property rather than the picture. Its first
+version failed on a **comment** explaining why `type="number"` is wrong, which
+is the third time a test in this repository has read prose as code; it strips
+comments now.

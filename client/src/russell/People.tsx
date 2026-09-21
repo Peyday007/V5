@@ -73,6 +73,10 @@ const MEMBER_STATE_LABEL: Record<PersonRow['state'], string> = {
   // The remedy, rather than the condition. Somebody reading this row has to
   // know what to press, and the control that does it is the next column.
   NEEDS_A_NEW_LINK: 'Needs a new link',
+  // The condition, because here the remedy is a *decision* rather than a
+  // button: which of the two people keeps the name is not something a screen
+  // can choose, so it says what is wrong and the control beside it asks.
+  NAME_IS_AMBIGUOUS: 'Cannot sign in — two accounts share this name',
 };
 
 /**
@@ -337,10 +341,27 @@ function ConnectorLink({ person }: { person: PersonRow }): JSX.Element {
  *
  * The link is shown once, and it ends in a PIN.
  */
-function Recover({ person, onChanged }: { person: PersonRow; onChanged(): void }): JSX.Element {
+function Recover({
+  person,
+  onChanged,
+  mode,
+}: {
+  person: PersonRow;
+  onChanged(): void;
+  /*
+   * Which operation this is, because they are two facts about the person.
+   *
+   * `RECOVER` retires whatever they are holding first, which is right when a
+   * device may be in the wrong hands. `RELINK` retires nothing, because there
+   * is nothing to retire — and calling that recovery would tell somebody who
+   * has never signed in that their credentials have been taken out of service.
+   */
+  mode: 'RECOVER' | 'RELINK';
+}): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<IssuedEnrollment | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const relink = mode === 'RELINK';
 
   return (
     <>
@@ -351,7 +372,13 @@ function Recover({ person, onChanged }: { person: PersonRow; onChanged(): void }
         onClick={() => {
           setBusy(true);
           setProblem(null);
-          CashApi.recoverMember(person.userId, 'The sign-in screen no longer offers a device.').then(
+          const asked = relink
+            ? CashApi.relinkMember(person.userId)
+            : CashApi.recoverMember(
+                person.userId,
+                'The sign-in screen no longer offers a device.',
+              );
+          asked.then(
             (answer) => {
               setIssued(answer.enrollment);
               setBusy(false);
@@ -364,7 +391,7 @@ function Recover({ person, onChanged }: { person: PersonRow; onChanged(): void }
           );
         }}
       >
-        {busy ? 'Making a link…' : 'New sign-in link'}
+        {busy ? 'Making a link…' : relink ? 'Send them a link' : 'New sign-in link'}
       </button>
       {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
       {issued ? (
@@ -377,11 +404,83 @@ function Recover({ person, onChanged }: { person: PersonRow; onChanged(): void }
           <p className="rs-hint">
             Shown once. It works once, stops working on{' '}
             {new Date(issued.expiresAt).toLocaleString()}, and they choose a six-digit PIN when
-            they open it. Anything they were holding before has stopped working.
+            they open it.
+            {relink ? '' : ' Anything they were holding before has stopped working.'}
           </p>
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Give one of them a name of their own.
+ *
+ * The answering transition for `NAME_IS_AMBIGUOUS`. A member enrolled from a
+ * link holds no address, so their display name is the only identity they can
+ * type — and a name two live accounts answer to is refused at the door, with
+ * the same sentence a wrong PIN gets. Both of them are locked out, and neither
+ * can do anything about it.
+ *
+ * It moves a label and nothing else: the account keeps its role, its
+ * memberships, its PIN, its sessions and everything it owns. Which of the two
+ * is renamed is a decision, so this asks rather than choosing — and the server
+ * refuses a name that would simply move the collision.
+ */
+function Rename({ person, onChanged }: { person: PersonRow; onChanged(): void }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button type="button" className="rs-button-quiet" onClick={() => setOpen(true)}>
+        Give them their own name
+      </button>
+    );
+  }
+  return (
+    <div className="rs-field">
+      <label className="rs-field-label" htmlFor={`rename-${person.userId}`}>
+        A name that tells them apart
+      </label>
+      <input
+        id={`rename-${person.userId}`}
+        className="rs-input"
+        type="text"
+        value={name}
+        placeholder="A surname, or an initial"
+        onChange={(event) => setName(event.target.value)}
+      />
+      <button
+        type="button"
+        className="rs-button-quiet"
+        disabled={busy || name.trim().length < 2}
+        onClick={() => {
+          setBusy(true);
+          setProblem(null);
+          CashApi.renameMember(person.userId, name.trim()).then(
+            () => {
+              setBusy(false);
+              setOpen(false);
+              onChanged();
+            },
+            (error: unknown) => {
+              setProblem(describe(error));
+              setBusy(false);
+            },
+          );
+        }}
+      >
+        {busy ? 'Saving…' : 'Save'}
+      </button>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      <p className="rs-hint">
+        This changes what they type to sign in, and nothing else — they keep their PIN, their
+        access and everything on their account. Tell them the new name.
+      </p>
+    </div>
   );
 }
 
@@ -421,7 +520,21 @@ function People({
               <ConnectorLink person={one} />
             ) : null}
             {page.you.isBrainAdmin && one.state === 'NEEDS_A_NEW_LINK' ? (
-              <Recover person={one} onChanged={onChanged} />
+              <Recover person={one} onChanged={onChanged} mode="RECOVER" />
+            ) : null}
+            {/*
+              * A slot nobody has filled, and — until now — nothing on this page
+              * could fill it. `Invite somebody` makes a *new row*, so the only
+              * route was a second account under the same name, which §43's
+              * guard now refuses outright. A refusal whose remedy does not
+              * exist is a stop rather than an improvement.
+              */}
+            {page.you.isBrainAdmin &&
+            (one.state === 'NOT_INVITED' || one.state === 'INVITED') ? (
+              <Recover person={one} onChanged={onChanged} mode="RELINK" />
+            ) : null}
+            {page.you.isBrainAdmin && one.state === 'NAME_IS_AMBIGUOUS' ? (
+              <Rename person={one} onChanged={onChanged} />
             ) : null}
             <Foundation
               account={page.foundation?.accounts.find((each) => each.userId === one.userId)}

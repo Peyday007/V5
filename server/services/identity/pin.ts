@@ -62,8 +62,17 @@ import { hashPassword, verifyPassword } from './secrets.ts';
 /** Exactly six, exactly digits. Not five, not seven, and not `01234 `. */
 export const PIN_LENGTH = 6;
 
-/** One sentence for every way of failing to sign in with a PIN. */
-export const PIN_REFUSED = 'That did not sign you in.';
+/**
+ * One sentence for every way of failing to sign in with a PIN.
+ *
+ * It names the remedy rather than the reason, and the remedy is the same one
+ * whatever went wrong: try again, and if you have been trying, wait first.
+ * That is what lets a caller who is genuinely cooling off be told something
+ * useful without the message being *different* — see the cooldown branch in
+ * `routes/auth.ts`, where saying so separately turned out to be an oracle.
+ */
+export const PIN_REFUSED =
+  'That did not sign you in. If you have tried several times, wait a moment before trying again.';
 
 /** What a caller is told when the PIN they sent is not a PIN at all. */
 export const PIN_MALFORMED = `A PIN is exactly ${PIN_LENGTH} digits.`;

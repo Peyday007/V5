@@ -77,6 +77,7 @@ import { getWorker, getWorkerByName } from '../../repos/identity.ts';
 import { getRoutine, listRoutines } from '../../repos/fleet.ts';
 import { namesFor } from '../capacity/connection.ts';
 import { contributedCapacity } from '../capacity/contribution.ts';
+import { ambiguousSignInNames, signInName } from '../../domain/signInName.ts';
 import { recoveryRetiresEverything } from './recoveryContract.ts';
 import { withoutDomain } from './people.ts';
 
@@ -229,15 +230,29 @@ export async function foundationReading(): Promise<FoundationReading> {
 
   /*
    * Display names, counted once, so the ambiguity check is a lookup rather
-   * than a query per account. It counts across *every* row rather than only
-   * the people above, because `getPinCredentialByIdentity` does: a disabled
-   * account or a SYSTEM one sharing a name still makes the typed name resolve
-   * to two rows and therefore to none.
+   * than a query per account.
+   *
+   * It is `ambiguousSignInNames` rather than a count written here, and that is
+   * the merge obligation rather than a tidy-up. This counted `displayName`
+   * verbatim across *every* row, on the stated reasoning that
+   * `getPinCredentialByIdentity` did the same — which was exactly right about
+   * the lookup as it was, and is false about the lookup now in both
+   * directions. The door folds case, so *Caleb* and *caleb* are one identity
+   * it refuses and this would have called two names and passed; and the door
+   * skips disabled rows, so a retired account no longer makes a live person
+   * unreachable and this would have told an administrator to rename somebody
+   * when nothing was wrong.
+   *
+   * Either way round is a reading that contradicts the door, and the second is
+   * the worse one: §27 records what a warning that cries wolf costs, and the
+   * remedy this one names is a rename that would achieve nothing. One rule,
+   * three readers — the lookup, the guard, and this.
+   *
+   * It still counts across every row rather than only the people above, and
+   * the original reason is untouched: a SYSTEM row sharing a name still makes
+   * the typed name resolve to two and therefore to none.
    */
-  const nameCounts = new Map<string, number>();
-  for (const one of all) {
-    nameCounts.set(one.displayName, (nameCounts.get(one.displayName) ?? 0) + 1);
-  }
+  const nameCounts = ambiguousSignInNames(all);
 
   const accounts: AccountFoundation[] = [];
   for (const user of people) {
@@ -318,7 +333,7 @@ async function findingsFor(
 
   /* ------------------------------------------------------------- identity */
 
-  const sharing = (nameCounts.get(user.displayName) ?? 1) - 1;
+  const sharing = (nameCounts.get(signInName(user.displayName)) ?? 1) - 1;
   if (sharing > 0) {
     findings.push(
       blocked(

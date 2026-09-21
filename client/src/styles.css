@@ -1812,6 +1812,20 @@ legend {
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }
 
+/*
+ * Sixteen pixels, and that is a platform rule rather than a taste.
+ *
+ * Safari on iOS zooms the page to fit whenever a focused input's font is
+ * smaller than 16px, and it does not zoom back out. At 14px this box therefore
+ * moved the whole screen the moment somebody tapped it, and then moved it
+ * again on the way to the PIN box beside it — which is 20px and never did.
+ * Somebody signing in on a phone was being made to pan a zoomed page to reach
+ * a field they could see a second ago.
+ *
+ * It is invisible from a desktop and from jsdom, so
+ * `tests/signInMobile.test.ts` reads it out of this stylesheet instead: the
+ * assertion is a number in a file, which is exactly what the defect was.
+ */
 .signin__input {
   width: 100%;
   padding: 9px 10px;
@@ -1819,7 +1833,7 @@ legend {
   border-radius: 6px;
   background: var(--bg, #0b0d12);
   color: inherit;
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
 }
 

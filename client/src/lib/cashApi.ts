@@ -439,10 +439,33 @@ export const CashApi = {
   inviteMember: (displayName: string): Promise<{ enrollment: IssuedEnrollment }> =>
     api('/api/members', { method: 'POST', body: JSON.stringify({ displayName }) }),
 
+  /**
+   * Another first link for a slot nobody has filled.
+   *
+   * Not recovery: that retires what somebody is holding, which is right after
+   * a lost device and wrong for a person who has never signed in. The server
+   * refuses this for anybody who already has a way in.
+   */
+  relinkMember: (userId: string): Promise<{ enrollment: IssuedEnrollment }> =>
+    api(`/api/members/${p(userId)}/link`, { method: 'POST' }),
+
   recoverMember: (userId: string, reason: string): Promise<{ enrollment: IssuedEnrollment }> =>
     api(`/api/members/${p(userId)}/recovery`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    }),
+
+  /**
+   * Correct somebody's name, which is what they type to sign in.
+   *
+   * A label and nothing else: no role, no membership, no credential and no
+   * session moves with it. The server refuses a name somebody else already
+   * signs in with, so this cannot move a collision rather than fixing one.
+   */
+  renameMember: (userId: string, displayName: string): Promise<{ user: { id: string } }> =>
+    api(`/api/admin/users/${p(userId)}/display-name`, {
+      method: 'POST',
+      body: JSON.stringify({ displayName }),
     }),
 
   withdrawLink: (enrollmentId: string, reason: string): Promise<{ revoked: boolean }> =>

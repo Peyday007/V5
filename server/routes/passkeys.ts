@@ -33,7 +33,9 @@ import {
   previewEnrollment,
   withdrawLink,
   LINK_REFUSED,
-} from '../services/identity/enrollment.ts';
+  NameAlreadyInUseError,
+  AlreadyHasCredentialError,
+  reissueEnrollmentLink,} from '../services/identity/enrollment.ts';
 import {
   SIGN_IN_REFUSED,
   authenticationOptions,
@@ -438,12 +440,46 @@ passkeyRouter.post(
   handler(async (req) => {
     const principal = requirePerson();
     await requireBrainAdmin();
-    const link = await createMemberSlot({
-      displayName: requiredString(bodyOf(req)['displayName'], 'displayName'),
-      issuedByUserId: principal.id,
-    });
-    // Shown once. The token is not stored and cannot be read back.
-    return { enrollment: link };
+    try {
+      const link = await createMemberSlot({
+        displayName: requiredString(bodyOf(req)['displayName'], 'displayName'),
+        issuedByUserId: principal.id,
+      });
+      // Shown once. The token is not stored and cannot be read back.
+      return { enrollment: link };
+    } catch (error) {
+      // A name somebody already signs in with is a refusal on the merits, and
+      // its sentence is the remedy. Anything else is a fault and stays one.
+      if (error instanceof NameAlreadyInUseError) throw unprocessable(error.message);
+      throw error;
+    }
+  }),
+);
+
+/**
+ * Another first link, for a slot that has never been filled.
+ *
+ * Separate from recovery because it is a different fact about the person, and
+ * because recovery *retires what they are holding* — which is right for a lost
+ * device and wrong, and alarming to read, for somebody who has never signed in
+ * at all. The service refuses this for an account that holds any credential,
+ * so the two cannot quietly become one.
+ */
+passkeyRouter.post(
+  '/members/:userId/link',
+  handler(async (req) => {
+    const principal = requirePerson();
+    await requireBrainAdmin();
+    try {
+      const link = await reissueEnrollmentLink({
+        userId: requiredString(req.params['userId'], 'userId'),
+        issuedByUserId: principal.id,
+      });
+      return { enrollment: link };
+    } catch (error) {
+      if (error instanceof AlreadyHasCredentialError) throw unprocessable(error.message);
+      throw error;
+    }
   }),
 );
 

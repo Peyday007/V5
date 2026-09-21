@@ -2714,13 +2714,23 @@ button.rs-card:hover {
   color: var(--ink-faint);
 }
 
+/*
+ * The two PIN boxes a new member fills in, most often on a phone.
+ *
+ * `font: inherit` resolved to the 15px body step, and Safari on iOS zooms the
+ * page to fit for anything under 16px — so the first screen of somebody's
+ * first visit jumped under their thumb, twice, while they were choosing the
+ * credential this Brain now runs on. The size is stated here rather than
+ * inherited, because inheriting is what made it wrong.
+ */
 .rs-enrol-input {
   padding: var(--gap-1);
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
   background: var(--surface);
   color: var(--ink);
-  font: inherit;
+  font-family: inherit;
+  font-size: 16px;
 }
 
 .rs-enrol-go {
