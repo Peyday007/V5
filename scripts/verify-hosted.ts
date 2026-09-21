@@ -85,6 +85,7 @@ import {
   completeWork,
   enqueueWork,
   getWorkItem,
+  heartbeatWork,
   releaseWork,
 } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
@@ -1593,11 +1594,16 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
     citedRejected ? 'it was filed' : 'refused',
   );
 
-  const filed = await worker.call('brain_submit_synthesis', {
-    ...proofOf(synthClaim),
-    report: `The deployed Brain recorded and gated a worker's claim [${accepted[0]?.id}].`,
-    cited_claim_ids: accepted.map((claim) => claim.id),
-  });
+  // Held open while it runs: this one filed in 3m23s on deploy 277, which is
+  // inside a five-minute lease and will not stay inside it as the live
+  // archive grows. The audit below it had already crossed.
+  const filed = await holdingLease(synthClaim, fixtures.researchWorkerId, () =>
+    worker.call('brain_submit_synthesis', {
+      ...proofOf(synthClaim),
+      report: `The deployed Brain recorded and gated a worker's claim [${accepted[0]?.id}].`,
+      cited_claim_ids: accepted.map((claim) => claim.id),
+    }),
+  );
   const withDocument = await getOrchestration(orchestrationId);
   record(
     'and a report citing only accepted claims is filed as a document',
@@ -1706,7 +1712,9 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
                 confidence: 0.5,
               },
             };
-    const result = await roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body });
+    const result = await holdingLease(auditClaim, surface.workerId, () =>
+      roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body }),
+    );
     if (result['role'] === role) auditRolesRun += 1;
     if (role !== 'JUDGE') {
       record(
@@ -1881,6 +1889,75 @@ function proofOf(claimed: { workItemId: string; leaseId: string; leaseGeneration
     lease_id: claimed.leaseId,
     lease_generation: claimed.leaseGeneration,
   };
+}
+
+/**
+ * How often a held lease is renewed while one submission is still in flight.
+ *
+ * `DEFAULT_LEASE_MS` is five minutes, and renewing at a third of that means two
+ * beats are missed before a lease can lapse — so a single slow query on the
+ * beat's own connection is not enough to drop the work this harness is holding.
+ */
+const BEAT_EVERY_MS = 100_000;
+
+/**
+ * Hold a lease open across a call that takes longer than the lease does.
+ *
+ * Measured, on deploy 277 against the released image: the JUDGE role's
+ * `brain_submit_audit` began at 22:35:38.4Z and recorded its verdict at
+ * 22:45:22.9Z — **nine minutes and forty-four seconds** — against a work item
+ * lease of five. The submission itself succeeded; the `brain_complete_work`
+ * after it was then refused with `FENCE_LOST`, correctly, because by then the
+ * lease had lapsed and the item was claimable again.
+ *
+ * That is the number §27 asked for and never got: three earlier runs threw
+ * `fetch failed` at 5m18s, 5m22s and 5m23s, because undici's own 300-second
+ * header timeout pre-empted the bound the script thought it had set. With the
+ * bound actually applied the pass finishes, and what it finishes into is this.
+ *
+ * **It is one reading rather than the cost of a judge pass.** Timed from the
+ * ADVERSARIAL pass to the judge's verdict in five runs' own logs: 3m34s (run
+ * 253, 374 documents), 4m10s (252, 373), at least 5m20s (274, 396, where the
+ * client gave up), 9m22s (`41f8741`, 397) and 9m44s here (399). The first two
+ * finished inside the five-minute lease, which is why nothing was refused on
+ * them — **the pass used to fit and now does not**, across a measured spread
+ * of 2.7x. The beat is what lets the harness survive whichever end of that
+ * range it gets; nothing here makes it faster, and what is driving the growth
+ * is a correlation with the archive rather than an established cause.
+ *
+ * So the queue was right and the harness was wrong: an at-least-once queue
+ * expires a lease precisely so that a worker which stopped working cannot hold
+ * work for ever, and a worker still working says so by beating. Asking for a
+ * longer lease at claim time was the other option and is worse — it is an
+ * estimate made before the work starts, and a process that dies inside it
+ * strands the item for the whole of it, whereas a beat is evidence the worker
+ * is alive now. `heartbeatWork` clamps the extension itself, so nothing here
+ * decides how long Brain is willing to wait.
+ *
+ * A beat that is refused is left alone rather than raised: the call in flight
+ * is what this run is measuring, and its own result says what happened to it.
+ */
+async function holdingLease<T>(
+  claimed: { workItemId: string; leaseId: string; leaseGeneration: number },
+  workerId: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const proof = {
+    workItemId: claimed.workItemId,
+    workerId,
+    leaseId: claimed.leaseId,
+    leaseGeneration: claimed.leaseGeneration,
+  };
+  const beat = setInterval(() => {
+    void heartbeatWork(proof).catch(() => undefined);
+  }, BEAT_EVERY_MS);
+  // The timer must not be what keeps this process alive once the work is done.
+  beat.unref?.();
+  try {
+    return await run();
+  } finally {
+    clearInterval(beat);
+  }
 }
 
 /**
@@ -3806,6 +3883,38 @@ async function main(): Promise<void> {
    * server's pool rather than this one.
    */
   if (!process.env['BRAIN_DATABASE_POOL_SIZE']) process.env['BRAIN_DATABASE_POOL_SIZE'] = '2';
+
+  /**
+   * And a patience to match it, because the sentence above is wrong about the
+   * concurrency and the measurement says by how much.
+   *
+   * "The only concurrency here is the six-way idempotency race" was true when
+   * it was written and is not true now. Deploy 265 and deploy 277 both failed
+   * their post-restart pass on `pg-pool`'s checkout timeout with the counts
+   * read at the instant of failure: `2/2 connection(s) in use, 0 idle, **380**
+   * caller(s) waiting, ceiling 2` and `383 caller(s) waiting, ceiling 2`. That
+   * is a fan-out of the order of the live archive — 399 readable documents on
+   * the same run — queued behind two connections, which is the pool doing
+   * exactly what a pool of two is for.
+   *
+   * Pre-restart the identical section got through it in nineteen seconds; the
+   * tail caller was inside ten and nothing was reported. Post-restart, with a
+   * freshly booted Brain replaying its own ticks against the same pooler, it
+   * was not. So the ten-second wall is what separates the two runs, and a wall
+   * that turns correct serialization into "the database is unreachable" is
+   * answering a different question from the one it was put there for.
+   *
+   * **Raising it fixes nothing about the fan-out**, and it is not claimed to.
+   * The ceiling is deliberately not raised either: two plus the Brain's own
+   * ten is twelve of the Supabase pooler's fifteen session-mode clients, and
+   * spending that budget to shorten a queue would trade a legible timeout for
+   * `EMAXCONNSESSION` on whichever statement happened to be running. What
+   * changes is only that this process, which chose a small pool knowing why,
+   * now also says how long it is willing to wait for it.
+   */
+  if (!process.env['BRAIN_DATABASE_CONNECT_TIMEOUT_MS']) {
+    process.env['BRAIN_DATABASE_CONNECT_TIMEOUT_MS'] = '120000';
+  }
 
   await initDatabase();
   /**

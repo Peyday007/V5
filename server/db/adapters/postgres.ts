@@ -484,9 +484,16 @@ function asCount(value: string | number | null | undefined): number | null {
  * So the number on the banner was **57** and the number that was binding was
  * **15**, and it is shared: the app holds up to `BRAIN_DATABASE_POOL_SIZE`,
  * and every `flyctl ssh console` operator script beside it opens its own pool
- * of two. Four concurrent readings and a busy app exhaust it, which is what a
- * hosted verification hanging for ninety-five minutes on one step looks like
- * from the inside.
+ * of two. Several concurrent readings and a busy app exhaust it, and the
+ * refusal above is what that looks like to whichever one loses.
+ *
+ * **What it explains is that refusal and nothing further.** An earlier version
+ * of this comment went on to attribute a ninety-five-minute hosted
+ * verification to the same cause; no such hang was ever measured, and the
+ * duration it named came from an impression rather than a clock. The reading
+ * here is a refusal with a number in it. Whether pooler contention is also
+ * behind the slow steps §27 records is **not established**, and recording it
+ * as the cause would send the next person to debug a fixed bug.
  *
  * This says so and reads nothing extra to do it. Sniffing the host for
  * `pooler.` would be deriving a deployment fact from a name — §25's rule about

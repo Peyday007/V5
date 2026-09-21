@@ -2675,48 +2675,117 @@ remote.
   slowness rather than fixing it: nobody yet knows what the judge pass costs,
   because nothing has waited long enough to see.
 
-- **That bound does not bind either, and the sentence it prints is now
-  confidently wrong. The correction is recorded rather than quietly applied.**
-  The deploy of 2026-09-20 (`d973175`) failed both verifications with the new
-  message, and the message says fifteen minutes. Neither wait was:
-  `brain_submit_audit` at **319.6s** pre-restart, `brain_submit_synthesis` at
-  **335.1s** after the restart, both `UND_ERR_HEADERS_TIMEOUT`.
+  **The tenth run waited long enough, and the number ends the investigation
+  this section has carried for nine.** Deploy 277, `cc32851`, with the bound
+  genuinely applied at last — the two clients share one `boundedRequest` built
+  on `node:http`, because `AbortSignal` was never the thing undici's
+  `headersTimeout` was going to respect. The JUDGE role's `brain_submit_audit`
+  began at 22:35:38.4Z and the verdict was recorded at 22:45:22.9Z: **nine
+  minutes and forty-four seconds**, and it *succeeded* — `PASS  and only the
+  judge records a verdict — verdict MORE_RESEARCH`.
 
-  `AbortSignal.timeout` bounds the whole request and **does not raise undici's
-  `headersTimeout`**, which is what actually ends a wait for a server that has
-  accepted the connection and not answered. Two sessions measured it
-  independently that afternoon, against a server that accepts and never
-  replies: **300.9s** and **300.8s**, both `UND_ERR_HEADERS_TIMEOUT`, which is
-  §27's own recorded default unchanged by the signal. So the bound changed the
-  *message* and nothing else, and the message then asserted a wait nobody
-  waited — **worse than the unattributable `fetch failed` it replaced**,
-  because it sends the next reader looking for a fifteen-minute operation that
-  never existed. The cries-wolf defect again, in the one place somebody goes
-  when a deploy has gone wrong.
+  So the three runs that failed at 5m18s, 5m22s and 5m23s were the client
+  giving up at 300 seconds, which §27 had already measured directly. What is
+  new is what lies past that wall: the pass carries on to 9m44s, and what it
+  finishes into is the next refusal down — `brain_complete_work: FENCE_LOST`,
+  because `DEFAULT_LEASE_MS` is five minutes and nothing was saying the worker
+  was still alive.
 
-  **Two sessions fixed it in parallel, and the other one's is the one that
-  ships. The reconciliation is recorded rather than quietly applied**, the way
-  §37 already records the same thing happening to `reoffer.ts`. Mine made the
-  sentence honest — the observed elapsed time rather than the configured
-  bound — and said in its own comment that raising the wait would need a
-  `dispatcher`, which would need `undici`, which this repository does not have.
-  **That premise was wrong and the better answer was one import away:**
-  `scripts/boundedRequest.ts` is `node:https`, where the only clock is the one
-  passed, so the bound actually binds and no dependency is added. An honest
-  message about a wall you cannot move is strictly worse than moving the wall,
-  so `describeTimeout` and its suite are removed here rather than merged
-  beside it.
+  **That chain has now been observed twice, on two trees, and it is still not
+  what the four earlier `FENCE_LOST` runs are established to have been.** The
+  second is another workstream's deploy of `41f8741` the same evening, which
+  carried `boundedRequest` and not the beat: archive 397 documents, ADVERSARIAL
+  at 23:20:26, verdict at 23:29:48 — **9m22s** — and then
+  `brain_complete_work: FENCE_LOST This lease is no longer current.` Two
+  independent reproductions is a good deal more than the one instance this
+  paragraph first claimed, and it is still short of establishing the four:
+  §27 refused that inference deliberately — *"the tempting story is a mechanism
+  rather than a reading"* — and none of those four was timed.
 
-  Two things this establishes and one it does not. It refines *always the judge
-  step* — the two failures are **two different methods**, so it is whichever
-  long call comes next rather than one stage. It settles that every reading in
-  this section from `fetch failed` onward is the 300s default rather than any
-  bound. And it still does **not** say how long the judge pass takes: that is
-  what the next occurrence under a bound that binds will finally measure.
+  **And 9m44s is not "the cost of a judge pass" either — four runs' logs give
+  four readings, and they are not close to each other.** Timed from the
+  ADVERSARIAL pass to the judge's recorded verdict, in the runs' own
+  timestamps, beside the archive each one read:
 
-  **What that run proved is separate from what it failed at.** `Deploy`
-  succeeded and the image was released; the restart itself succeeded for once,
-  and `/healthz` answered 200 in 0.42s from outside the runner. The commit was
+  | run | archive read | ADVERSARIAL → verdict |
+  |-----|--------------|-----------------------|
+  | 252 | 373 documents | **4m10s** |
+  | 253 | 374 documents | **3m34s** |
+  | 274 | 396 documents | ≥5m20s — the client gave up, so this is a floor |
+  | `41f8741` | 397 documents | **9m22s** |
+  | 277 | 399 documents | **9m44s** |
+
+  So the two runs §27 records as `PASS 198/198` did not squeak under the
+  300-second wall: they finished in three and four minutes, comfortably inside
+  the five-minute lease as well, which is exactly why nothing was refused on
+  them. **The pass used to fit inside the lease and now does not**, and the
+  measured spread is a factor of **2.7** across two days.
+
+  The archive grew from 373 to 399 over the same span, and the five readings
+  sort cleanly by it: the two at 373-374 documents took three and four minutes,
+  and the three at 396-399 took at least five, then nine, then nine and a half.
+  That is a **correlation worth the next person's attention and still not a
+  cause** — five points across two days that also carried other changes is not
+  a curve, the two fast ones are two days older than the three slow ones, and
+  recording it as established would be the comfortable half-truth this section
+  exists to refuse. What *is* established is the spread and the crossing.
+
+  **And the obvious mechanism is ruled out, which is the more useful half of
+  the lead.** The first place to look is `recordAuditEvidence`, since a judge
+  that searched the archive for passages would scale with exactly the number
+  that correlates. It does not: `pipeline.ts` passes it `auditedDocumentIds` —
+  the packet's own documents — and it returns early on an empty list. A hosted
+  verification packet files one document, so that pass is O(1) in the archive
+  however large the archive gets. Whatever is actually driving the growth is
+  somewhere else, and a reader starting from the correlation should not start
+  there. The beat makes the harness
+  survive whichever end of that range it gets; it makes nothing faster, and
+  whatever is actually driving the growth is still unmeasured. **The queue was right and
+  the harness was wrong.** An at-least-once queue expires a lease precisely so
+  that a worker which stopped working cannot hold work for ever, and a worker
+  still working says so by beating — which is what every other long-running
+  caller in this codebase already does, and what `verify-hosted.ts` does now,
+  across the audit submission and the filing beside it. Asking for a longer
+  lease at claim time was the other option and is worse: it is an estimate made
+  before the work starts, and a process that dies inside it strands the item
+  for the whole of it.
+
+  **Two words for one condition, and knowing which is a fact about the live
+  queue rather than about the code.** Writing the regression established it: an
+  unbeaten lease in isolation is refused `LEASE_EXPIRED`, and production said
+  `FENCE_LOST` — the stronger fact, that the expired item had already been
+  re-offered and retaken. The test asserts the refusal rather than the word,
+  because asserting one of them would make it a claim about how busy the queue
+  happened to be.
+
+  **And this run's post-restart half read the pool at 383 against the same
+  ceiling of two, which finally says what the ceiling is *for*.** The comment
+  beside `BRAIN_DATABASE_POOL_SIZE = '2'` in the harness argues the case
+  correctly — the harness runs inside the container beside the Brain, both talk
+  to the same Supabase pooler, and session mode allows fifteen clients in total
+  — and then claims *"the only concurrency here is the six-way idempotency
+  race, and that goes over HTTP"*. Three hundred and eighty-three queued
+  callers is the refutation. The fan-out is of the order of the live archive:
+  the same run read *399 claim(s) across 399 readable document(s)*.
+
+  Pre-restart the identical section got through that queue in nineteen seconds
+  and nothing was reported; post-restart, against a Brain replaying its own
+  ticks on the same pooler, the tail caller crossed ten. **So the ten-second
+  wall is the whole difference between the two halves of one run, and a wall
+  that turns correct serialization into "the database is unreachable" is
+  answering a different question from the one it was put there for.**
+  `BRAIN_DATABASE_CONNECT_TIMEOUT_MS` is that patience, ten seconds unless a
+  process says otherwise, so nothing else moves. **It fixes nothing about the
+  fan-out and is not claimed to**, and the ceiling is *still* deliberately not
+  raised: two plus the Brain's own ten is twelve of the pooler's fifteen, and
+  spending that budget to shorten a queue trades a legible timeout for
+  `EMAXCONNSESSION` on whichever statement happened to be running.
+
+- **What a run proved is separate from what it failed at, and `d973175` is the
+  worked example.** That deploy failed both hosted verifications at the 300s
+  wall above. `Deploy` nonetheless succeeded and the image was released; the
+  restart itself succeeded for once, and `/healthz` answered 200 in 0.42s from
+  outside the runner. The commit was
   proved live **behaviourally** rather than from the workflow's status: `npm run
   capability -- failed` on the released image printed *"6 candidate(s) not
   promoted — a partial reading, which is reopenable for exactly those"*, a
@@ -2989,6 +3058,33 @@ remote.
   tolerance, it is a removed check**, so that is the half the guard pins: the
   step must still carry an `::error::` and an `exit 1`, and must not end in
   `|| true`.
+
+- **A tolerance one line up is the same removed check, and `continue-on-error`
+  is the quietest form of it.** The bullet above is about a step that must
+  still fail; this is about two that failed and were rendered as passing.
+  GitHub sets a `continue-on-error` step's **`conclusion` to `success`** while
+  leaving `outcome` at `failure`, so both hosted verification probes showed
+  green ticks in the UI and in every API listing, and only the verdict — which
+  read `outcome` — knew. Deploys **272, 273 and 274** each carry
+  `conclusion: success` on both probes and `conclusion: failure` on the verdict
+  beneath them, and each reported `beforeRestart: false` /
+  `afterRestart: false` to the acceptance reporter — three consecutive runs
+  where nothing red appeared above the line a reader scrolls to. **That is worse than the skipped gate above it**: a gate that
+  does not run leaves a gap somebody notices, and a gate that renders as passed
+  is read as evidence.
+
+  The flag's stated reason was real — the steps after a probe must still run,
+  so the bootstrap secrets are spent and the restart happens whatever the probe
+  said. That is what `if: always()` is for, and it is where those guards live
+  now. The probes fail honestly, the cleanup and the restart are guarded on the
+  *release* having succeeded rather than on the probe, and the verdict prints
+  each failing probe's own `HOSTED-VERIFICATION` and `FAIL` lines before it
+  names the condition — because a red run whose only message is "read the two
+  steps above" sends somebody to scroll through six hundred passing lines.
+  Measured on deploys 273 and 274, whose probe steps both read
+  `conclusion: success` while `The verdict` beneath them read `failure`; and
+  proved on 277, where the same failing probe read `conclusion: failure` and
+  both `always()` steps ran after it regardless.
 
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
