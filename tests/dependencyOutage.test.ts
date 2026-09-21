@@ -45,6 +45,7 @@ import {
   createRoutine,
 } from '../server/repos/fleet.ts';
 import {
+  queueMetrics,
   claimWork,
   completeWork,
   enqueueWork,
@@ -571,5 +572,48 @@ describe('the ceiling binds, so it needs a way past it', () => {
     });
     expect(raised.raised).toBe(false);
     expect((await getWorkItem(item.id))!.state).toBe('FAILED');
+  });
+});
+
+/* ========================================================================= */
+
+describe('the number and the behaviour say the same thing', () => {
+  it('stops counting an exhausted item as claimable, and counts it as exhausted', async () => {
+    /*
+     * `queueMetrics.claimable` had its own copy of what a worker could be
+     * handed, and the moment the ceiling went into the claim the two became
+     * different opinions — the metric would have gone on counting items no
+     * worker can be given, which is a diagnostic lying about exactly the state
+     * the ceiling creates. One string, read by both.
+     *
+     * They are two fields rather than one, because folding the exhausted back
+     * into `claimable` would make the number agree with the old behaviour, and
+     * leaving them out entirely would hide the one figure that says whether to
+     * regrant.
+     */
+    const item = await enqueueWork({
+      projectId,
+      workType: 'SYNTHETIC_ECHO',
+      payload: {},
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      requiredScopes: ['queue:claim'],
+      maxAttempts: 1,
+    });
+    const worker = await createWorker({ name: `w-${tag()}`, createdByType: 'SYSTEM', createdById: 't' });
+    const scopes = [{ projectId, scopes: ['queue:claim' as const] }];
+
+    const before = await queueMetrics(projectId);
+    expect(before.claimable).toBe(1);
+    expect(before.exhausted).toBe(0);
+
+    expect(await claimWork({ workerId: worker.id, scopes })).toHaveLength(1);
+    await expireLease(item.id);
+
+    const after = await queueMetrics(projectId);
+    expect(after.claimable).toBe(0);
+    expect(after.exhausted).toBe(1);
+    // And the reading agrees with what actually happens.
+    expect(await claimWork({ workerId: worker.id, scopes })).toHaveLength(0);
   });
 });
