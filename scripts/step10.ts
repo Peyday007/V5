@@ -2470,6 +2470,67 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === 'tick-failures') {
+    /*
+     * What the dispatcher's own ticks have thrown, grouped by what they said.
+     *
+     * `DISPATCH_TICK_FAILED` is written by `startDispatcher`'s catch, which is
+     * the one place a tick can fail without failing anything else — the timer
+     * swallows it and the next tick runs, so a defect here is invisible to
+     * every surface and to every bin. Production carried a cumulative count of
+     * 32 with no way to ask what any of them were, which is a counter rather
+     * than a reading: §23's own distinction, at the dispatcher.
+     *
+     * Grouped by message on purpose. Thirty-two occurrences of one sentence is
+     * one defect that has since been fixed or has not; thirty-two different
+     * sentences is a fleet in trouble. The newest and oldest timestamps are
+     * printed per group because that is what says which it is — a group whose
+     * newest entry predates a known repair is history, and one still arriving
+     * is work.
+     *
+     * Read-only. It writes nothing and names no conversation content.
+     */
+    const rows = await getDb().all<{ reason: string | null; n: number; first_at: string; last_at: string }>(
+      `SELECT reason AS reason, COUNT(*) AS n, MIN(at) AS first_at, MAX(at) AS last_at
+         FROM bin_events
+        WHERE event_type = 'DISPATCH_TICK_FAILED'
+        GROUP BY reason
+        ORDER BY MAX(at) DESC`,
+    );
+    const total = rows.reduce((sum, row) => sum + Number(row.n), 0);
+    if (total === 0) {
+      console.log('No dispatcher tick has ever failed on this Brain.');
+      return;
+    }
+    console.log(`DISPATCH_TICK_FAILED: ${total} in ${rows.length} distinct message(s), newest first.`);
+    console.log('');
+    for (const row of rows) {
+      console.log(`  ${String(row.n).padStart(5)}x  first ${row.first_at}  last ${row.last_at}`);
+      console.log(`         ${row.reason ?? '(no reason recorded)'}`);
+      console.log('');
+    }
+    /*
+     * And the same question for the refusals, which are ordinary and are not
+     * failures. A refusal is not misconduct (§23), so a large number here says
+     * the fleet was busy rather than broken — but *which* refusal it was is the
+     * difference between "at its ceiling" and "no surface serves this family",
+     * and those have opposite remedies.
+     */
+    const refusals = await getDb().all<{ outcome: string | null; n: number; last_at: string }>(
+      `SELECT outcome AS outcome, COUNT(*) AS n, MAX(at) AS last_at
+         FROM bin_events
+        WHERE event_type = 'DISPATCH_UNROUTED'
+        GROUP BY outcome
+        ORDER BY COUNT(*) DESC`,
+    );
+    const unrouted = refusals.reduce((sum, row) => sum + Number(row.n), 0);
+    console.log(`DISPATCH_UNROUTED: ${unrouted} cumulative, by refusal.`);
+    for (const row of refusals) {
+      console.log(`  ${String(row.n).padStart(6)}  ${row.outcome ?? '(none)'}  last ${row.last_at}`);
+    }
+    return;
+  }
+
   if (command === 'in-flight') {
     /*
      * What is holding the fleet's capacity, and whether it is really working.

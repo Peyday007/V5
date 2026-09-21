@@ -583,6 +583,75 @@ never a process-local lock.
 - Deleting an operation record must never make a successful effect silently
   repeatable.
 
+- **The caller's own timeout is part of the boundary, and it is shorter than
+  Brain thinks.** A mutation that commits after the client has given up is
+  reported to the worker as a failure it did not have, and the worker then acts
+  on that report. Production, 2026-09-21: a JUDGE submission on
+  `wki_8ec24cf67707419aae39` came back `timed out after 60s`; the server
+  committed the operation at **10:35:06.165Z**, and resending exactly the same
+  arguments answered `ALREADY_RECORDED` with that timestamp. The verdict was in
+  the table. The worker reported *"Cloud Brain MCP connector is down, JUDGE
+  verdict not submitted"* — about a connector that was up throughout and a
+  verdict that had been submitted — and a person got a phone notification
+  saying so. **The mechanism worked perfectly and the story around it was
+  false**, which is this file's most expensive shape of defect.
+
+  Three things follow, and only the first is about speed.
+
+  **The client's bound is not Brain's to choose.** §27 measured the same seam
+  from `verify-hosted.ts` at undici's 300-second default; the Cowork connector
+  gives up at 60. Every number there is a property of whichever client is
+  connected, so the contract cannot rest on the operation being quick — and
+  making it quick on a guess is what §27 explicitly refuses. What the judge
+  branch actually spends its time on is still **not established**, and a reader
+  starting from `recomputeProject` should know that Cash Mode 1 holds one layer
+  and fourteen documents, so the archive scan is seconds rather than minutes
+  there.
+
+  **A retry is the answer, and nothing was telling anybody.** The server's own
+  instruction block has always said a mutation is idempotent by work item; the
+  worker contract — the thing a Routine actually reads — said nothing about
+  what a timeout means. It does now, as its own section: a timeout, a transport
+  error or a reset is a fact about the *reply*, the same call is sent again
+  with the same arguments, and `ALREADY_RECORDED` and `IN_PROGRESS` are both
+  ordinary answers. Reporting a connector as down because one reply was slow is
+  the one mistake that section exists to prevent.
+
+- **A role that has already been argued is not work, and the redelivery was
+  charged for it.** `reconcileArguedAuditRoles` retires exactly that item on
+  the tick, and it cannot win the race: the item becomes claimable the instant
+  the lease lapses and the tick arrives afterwards. So the next session
+  re-argues a settled role — minutes of judging whose submission
+  `idempotentEffect` then correctly refuses as a replay — and the reasoning is
+  discarded while **the attempt is not**. `RESEARCH_AUDIT` carries two, so two
+  such redeliveries exhaust an item whose work is already done.
+  `auditEligibility` refuses it now, scoped to the current round and only on a
+  `COMPLETE` pass, ahead of the compare-and-swap where §23's correction already
+  put the rest of this rule: no attempt, no lease, no generation.
+
+- **The attempt ceiling meant nothing on the path that reaches it.**
+  `failWork` has always honoured `max_attempts`, so an item a worker *reports*
+  failed retires correctly. An item whose lease merely **expires** — which is
+  what an infrastructure failure looks like from the queue — was re-offered for
+  ever, charged another attempt each time, and nothing ever read the number
+  again. Production, Cash Mode 1: `wki_207ff7c14abf46c19fd8` at attempt 4 of 2
+  and `wki_7b51a43e958f42f7b5ba` at 5 of 2, both `LEASED` on leases that lapsed
+  days earlier, both still candidates. **A bin cannot reach that state**,
+  because §23 put the same clause in `DISPATCHABLE_SQL`; the work item inside
+  the bin could, because it never got one. That asymmetry is the whole defect,
+  and the clause is now in the candidate read *and* in the swap — the second is
+  where it binds, since two claimants racing for an item's last attempt must
+  not both get one. An exhausted item stops being offered instead of cycling,
+  which is what lets `concludeUnworkablePackets` see it and turn the stop into
+  a decision.
+
+  `releaseWork`'s docstring said the opposite of `releaseWork`, and is
+  corrected in place rather than deleted: it claimed a release does not refund
+  the attempt, while the body — and the body's own comment, recording what that
+  belief cost the first real packet — refunds it. With the ceiling now binding
+  at the claim, a reader who believed the docstring would conclude that an
+  honest handover costs a packet one of its attempts.
+
 
 ## 21. The protocol is a door, not a second set of rules.
 

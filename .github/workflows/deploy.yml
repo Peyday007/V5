@@ -45,6 +45,10 @@ on:
         description: 'Optional: administrator email the authorization is recorded against'
         required: false
         default: ''
+      allow_rollback:
+        description: 'Deploy a commit older than the one already released (a deliberate rollback)'
+        required: false
+        default: 'no'
 
 # Two deploys of one app at once is a race whose loser is whichever image
 # finishes second. The second run waits rather than being cancelled: a deploy
@@ -158,6 +162,10 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     environment: production
+    # Only this job, and only for the release marker below. Every other job
+    # here reads.
+    permissions:
+      contents: write
     env:
       # `secrets` is not one of the contexts an `if:` on a step may read, so
       # whether the optional pre-flight runs is decided here, once, into a
@@ -165,6 +173,12 @@ jobs:
       HAS_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The freshness guard below compares commits, so it needs the
+          # history to compare them in, and the release marker to compare
+          # against. A shallow checkout answers "unrelated histories" to
+          # every ancestry question, which is not a refusal and not a pass.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -212,6 +226,89 @@ jobs:
       # The fallback is taken only for a builder failure. A build that fails
       # because the code does not compile must fail here, once, rather than be
       # compiled again somewhere else to fail identically.
+      # -------------------------------------------------------------------
+      # The guard, re-asked in the statement that makes the change
+      # -------------------------------------------------------------------
+      #
+      # The `canonical` job already refuses a checkout behind its own remote.
+      # It refuses it **at the start of the run**, and the deploy happens after
+      # a full typecheck, test suite and build — so between the two there is a
+      # window of many minutes in which the canonical branch can move and
+      # another run can release a newer image. This run would then release an
+      # older one on top of it.
+      #
+      # That is not hypothetical. 2026-09-21, run 283: the guard passed on
+      # `c94bef0`, two pull requests merged while its tests ran, and it released
+      # `c94bef0` to Fly at 01:02:31 — rolling production back and taking two
+      # merged changes off the live Brain until a later deploy restored them.
+      # §28 records the same damage twice before, from a different cause.
+      #
+      # So the check is asked again here, seconds before the release, which is
+      # this repository's own recurring rule: **the guard has to be in the
+      # statement that makes the change.** A `SELECT` earlier and an `UPDATE`
+      # later is a window, at whatever altitude it is written.
+      #
+      # And a second, stronger question is asked beside it. Being level with
+      # the branch says this tree is current; it does not say this tree is not
+      # *older than what is already running*, which is the thing that actually
+      # hurts. `deployed/production` is a lightweight tag this workflow moves
+      # after a release succeeds, so it is Brain's own record of what was last
+      # released rather than an inference from a branch. A commit that is a
+      # strict ancestor of it is a rollback, and a rollback is refused unless
+      # somebody asked for one by name.
+      #
+      # It is written in git alone, deliberately. Reading the running revision
+      # out of `flyctl` would be a better source and a worse dependency: an
+      # unverified CLI shape in the one workflow that ships the product is a
+      # way to break every deploy in order to prevent a rare one.
+      - name: Refuse to overwrite a newer production revision
+        env:
+          ALLOW_ROLLBACK: ${{ github.event.inputs.allow_rollback }}
+        run: |
+          set -euo pipefail
+          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
+
+          git fetch origin "$canonical" --quiet
+          behind=$(git rev-list --count "HEAD..origin/$canonical")
+          if [ "$behind" != "0" ]; then
+            echo "::error::origin/$canonical moved $behind commit(s) ahead while this run was testing, so releasing this tree would roll production back. Re-dispatch against the current tip."
+            exit 1
+          fi
+
+          # The release marker. Absent on the first deploy after this landed,
+          # which is an absence rather than a pass: it is reported and the
+          # branch check above is what stands.
+          if git fetch origin --quiet "+refs/tags/deployed/production:refs/tags/deployed/production" 2>/dev/null; then
+            released=$(git rev-parse --verify --quiet "refs/tags/deployed/production^{commit}" || true)
+          else
+            released=""
+          fi
+
+          if [ -z "$released" ]; then
+            echo "No deployed/production marker yet, so there is nothing to compare against."
+            echo "level with origin/$canonical. Proceeding."
+            exit 0
+          fi
+
+          echo "last released: $released"
+          echo "this tree:     $GITHUB_SHA"
+
+          if [ "$released" = "$GITHUB_SHA" ]; then
+            echo "This is the commit already released. Re-releasing it is a no-op on what is running."
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor "$GITHUB_SHA" "$released"; then
+            if [ "${ALLOW_ROLLBACK:-no}" = "yes" ]; then
+              echo "::warning::$GITHUB_SHA is older than the released $released. Deploying it anyway, because allow_rollback was set."
+              exit 0
+            fi
+            echo "::error::$GITHUB_SHA is an ancestor of the already-released $released, so this deploy would roll production backwards. If that is what you want, re-dispatch with allow_rollback set to yes."
+            exit 1
+          fi
+
+          echo "ahead of what is released. Proceeding."
+
       - name: Deploy
         id: release
         env:
@@ -233,6 +330,23 @@ jobs:
           echo "::warning::The Depot builder never answered. Building on Fly's own remote builder instead."
           flyctl deploy --ha=false --remote-only --depot=false \
             --build-arg BRAIN_REVISION="$GITHUB_SHA"
+
+      # Written after the release rather than before it, because the marker's
+      # whole meaning is "this commit is what is running". A marker moved by a
+      # deploy that then failed would refuse the very re-deploy that fixes it.
+      #
+      # `--force` because the marker moves forward with each release and is not
+      # history; the history is the commits it has pointed at, which are all
+      # still in the branch. It never fails the run: a release that happened is
+      # a fact, and losing the note about it must not be reported as losing the
+      # release.
+      - name: Record what was released
+        if: success()
+        run: |
+          set -euo pipefail
+          git tag -f deployed/production "$GITHUB_SHA"
+          git push -f origin "refs/tags/deployed/production" || \
+            echo "::warning::The release succeeded but the deployed/production marker could not be pushed. The next deploy will fall back to the branch check."
 
       # When a deploy fails, say why here rather than sending somebody to a
       # dashboard.

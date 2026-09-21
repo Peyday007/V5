@@ -531,6 +531,7 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
       `SELECT * FROM work_items
         WHERE ( (state = 'QUEUED' AND available_at <= ?)
              OR (state = 'LEASED' AND lease_expires_at <= ?) )
+          AND attempt_count < max_attempts
           AND project_id IN (${projectIds.map(() => '?').join(', ')})${typeClause}
           AND (target_worker_id IS NULL OR target_worker_id = ?)
         ORDER BY priority DESC, available_at, created_at, id
@@ -563,7 +564,27 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
 
       // The compare-and-swap. Everything that must happen exactly once happens
       // in this one statement: ownership, the attempt count, and the fencing
-      // generation.
+      // generation — and the ceiling, in the same statement that spends it.
+      //
+      // `attempt_count < max_attempts` is in both the candidate read and here,
+      // and it is here that it binds: two claimants racing for an item's last
+      // attempt must not both get one.
+      //
+      // It was in neither, and the ceiling therefore meant nothing on the path
+      // that actually needs it. `failWork` honours it, so an item a worker
+      // *reports* failed retires correctly — but an item whose lease merely
+      // **expires** was re-offered forever, charged another attempt each time,
+      // and nothing ever looked at the number again. Production, Cash Mode 1:
+      // `wki_207ff7c14abf46c19fd8` at 4/2 and `wki_7b51a43e958f42f7b5ba` at
+      // 5/2, both LEASED on leases that lapsed days earlier, both still
+      // candidates. A bin cannot reach that state, because §23 put the same
+      // clause in `DISPATCHABLE_SQL`; the work item inside the bin could,
+      // because it never got one. That asymmetry is the whole defect.
+      //
+      // An exhausted item now stops being offered instead of cycling, which is
+      // what lets `concludeUnworkablePackets` see it: that sweep selects a live
+      // packet holding only work past its own ceilings, and its answering
+      // transition is what turns the stop into a decision rather than a stall.
       const result = await db.run(
         `UPDATE work_items
             SET state = 'LEASED',
@@ -576,6 +597,7 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
           WHERE id = ?
             AND lease_generation = ?
             AND available_at <= ?
+            AND attempt_count < max_attempts
             AND ( state = 'QUEUED'
                OR (state = 'LEASED' AND lease_expires_at <= ?) )`,
         [
@@ -834,12 +856,14 @@ export async function failWork(proof: OwnershipProof, input: FailInput): Promise
 }
 
 /**
- * Give the work back without consuming another attempt's worth of goodwill.
+ * Give the work back, and give the attempt back with it.
  *
- * The attempt is already counted — it was counted at claim time, which is the
- * only moment it can be counted exactly once. Releasing therefore does not
- * refund it, and a worker that claims and releases in a loop exhausts the item
- * rather than spinning on it forever.
+ * This docstring used to say the opposite — that the attempt is spent at claim
+ * time and a release does not refund it — and the body below stopped being
+ * that function before the sentence was changed. Corrected here rather than
+ * deleted: a reader who believes it concludes that a clean release costs a
+ * packet one of its attempts, which is exactly the reasoning the body's own
+ * comment records as having cost the first real packet its Texas verification.
  */
 export async function releaseWork(
   proof: OwnershipProof,

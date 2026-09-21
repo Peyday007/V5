@@ -298,6 +298,61 @@ export function auditEligibility(input: {
     }
   }
 
+  /*
+   * A role that has already been argued is not work.
+   *
+   * ---------------------------------------------------------------------
+   * The seam this closes
+   * ---------------------------------------------------------------------
+   *
+   * `brain_submit_audit` records the pass and advances the packet inside one
+   * transaction, and the whole of that can outrun the *client's* tool timeout
+   * — which is a property of whichever MCP client is connected and not of
+   * anything Brain controls. Production, 2026-09-21: a JUDGE submission on
+   * `wki_8ec24cf67707419aae39` was reported to the worker as
+   * `timed out after 60s`, and the server committed it at 10:35:06.165Z. The
+   * verdict was stored; the worker was told it had failed, could not complete
+   * its own item, and reported a blocker naming a connector that was up the
+   * whole time. §20's rule at a new boundary: **a timeout is not evidence.**
+   *
+   * What then happens to the item is the defect. The lease lapses, the item is
+   * redelivered, and the next session re-argues a role whose answer is already
+   * in the table — an entire judge pass, measured elsewhere in minutes, whose
+   * submission `idempotentEffect` correctly refuses as a replay. The reasoning
+   * is thrown away and the **attempt is not**: `RESEARCH_AUDIT` carries
+   * `maxAttempts` 2, so two such redeliveries exhaust an item whose work is
+   * already done.
+   *
+   * `reconcileArguedAuditRoles` retires exactly this item on the tick, and it
+   * cannot win the race: the item becomes claimable the instant the lease
+   * lapses, and the tick arrives afterwards. So the question is asked here
+   * instead — ahead of the compare-and-swap, where §23's correction already
+   * put the rest of this rule — and a refusal costs no attempt, no lease and
+   * no generation, exactly as losing the swap does.
+   *
+   * Scoped to this round, like everything else in this function: after an
+   * `OTHER_LAYER` handoff the previous round's passes are deliberately not in
+   * `passes`, so a reopened round is argued again rather than refused.
+   *
+   * It refuses only a **settled** pass. `recordPass` writes `COMPLETE` inside
+   * the submitting transaction, so a submission still in flight is invisible
+   * to every other transaction and cannot produce a false refusal — and the
+   * caller that collides with one in flight is answered `IN_PROGRESS` by the
+   * operation record, which is a different and correct answer.
+   */
+  const alreadyArgued = passes.some(
+    (pass) =>
+      pass.passKey === 'AUDIT' &&
+      pass.status === 'COMPLETE' &&
+      ROLE_BY_ORDINAL_LOCAL[pass.ordinal] === role,
+  );
+  if (alreadyArgued) {
+    reasons.push(
+      `${role} has already been argued in this round and its pass is recorded, ` +
+        `so there is nothing left for this role to decide.`,
+    );
+  }
+
   for (const { party, lineage: recorded } of parties) {
     if (party === role) continue;
     const key = pairKey(role, party);
