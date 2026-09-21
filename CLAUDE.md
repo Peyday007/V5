@@ -5092,6 +5092,40 @@ and a suite that exercises the stage cannot see that.**
   whatever it became.
 
 
+- **The repair is proven in production, and the storage key is the proof.** A
+  claim that a filing path works is worth nothing without the path having been
+  walked, and §33 already records me reporting this one fixed on the strength
+  of a release gate that never exercises it. So: `orc_8adf57cff129492ca837`,
+  whose synthesis failed eight times on 2026-09-17 with
+  `The document store refused an upload (HTTP 400)`, was reissued and filed
+  `doc_f61e4c3723bf44b7adec` on 2026-09-21 — 22 183 bytes, read back out of the
+  bucket, extraction READY, seventeen of seventeen cited claim ids present in
+  the stored bytes. The two numbers that settle it sit beside each other on the
+  row: the canonical name is *"Opportunity Research v1 — Where the same
+  deliverable has two published prices"* and the key is the same sentence
+  **without the em dash**. `sanitizeFilename` returns the first and
+  `safeSegment` the second, so the key that Supabase answered to is the one
+  this repair builds and could not have been built by the code it replaced.
+
+- **An operation's failure category is the last thing that happened to it, not
+  what it is about.** Recovering that packet appended an eighth attempt to
+  `idop_51dd36b3313b4d12b048` — a worker submitting against the *original*,
+  now-unowned work item before submitting against its replacement, refused by
+  the ownership fence with *"This worker no longer owns the work item, so the
+  effect was not committed"*. The fence did exactly its job and nothing
+  committed. What moved is the operation's `failure_category`, from
+  `INTERNAL_ERROR` to `NOT_AUTHORIZED`, because `failOperation` overwrites it on
+  every non-terminal failure while the row is `RESERVED`. So an operation whose
+  substance is six HTTP 400s now summarises itself as an authorization problem.
+
+  **Nothing was destroyed and that is the whole difference** between this and
+  §33's packet that overwrote its own diagnosis: every attempt row keeps its
+  own message, and `packet-report` prints all of them, which is what the
+  observability change above exists for. It is recorded here rather than fixed
+  because the right fix is not obvious — the category is genuinely *current*
+  state, and a reader who wants the cause has the attempts — and because a
+  guess at it would be a change to the one table that explains failures.
+
 - **That repair hardened a function the live path does not call, and the
   correction is recorded rather than quietly applied.** `safeSegment` is
   correct and tested. `storeFile` reaches it only through `documentKey`, on the
