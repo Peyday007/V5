@@ -3949,7 +3949,17 @@ export const FACTORY_WORKER_SCOPES: readonly WorkerScope[] = [
  * principal: it resolves to the same WORKER principal a `brnw_` credential
  * would, so nothing downstream has to know which door was used.
  */
-export const AUTH_METHODS = ['SESSION_COOKIE', 'WORKER_BEARER', 'OAUTH_BEARER'] as const;
+export const AUTH_METHODS = [
+  'SESSION_COOKIE',
+  'WORKER_BEARER',
+  'OAUTH_BEARER',
+  /*
+   * A person's conversation-bridge bearer. The only one of the four that
+   * resolves to a HUMAN principal without a cookie — a chat client is not a
+   * browser, and §21 refuses a cookie on a mutating cross-origin endpoint.
+   */
+  'BRIDGE_BEARER',
+] as const;
 export type AuthMethod = (typeof AUTH_METHODS)[number];
 
 /**
