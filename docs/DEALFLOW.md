@@ -410,8 +410,8 @@ server/services/dealflow/
   seed.ts         the two things a person does directly
   view.ts         the operator surface
   kernel.ts       the tick: file, pair, promote, allocate
-server/db/migrations/080_dealflow_kernel.sql
-server/db/pg-migrations/071_dealflow_kernel.sql
+server/db/migrations/082_dealflow_kernel.sql
+server/db/pg-migrations/073_dealflow_kernel.sql
 tests/dealflowKernel.test.ts
 ```
 

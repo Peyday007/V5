@@ -7729,7 +7729,7 @@ decision the owner owns — is reported and not repaired, and the cycle closed
 `NEEDS_PERSON` saying so.
 
 
-## 42. A deal has two sides, and everything hard about it lives between them.
+## 43. A deal has two sides, and everything hard about it lives between them.
 
 The cross-border industrial dealflow kernel (`server/services/dealflow/`,
 `server/repos/dealflow.ts`, `server/domain/dealflow.ts`, `docs/DEALFLOW.md`)
