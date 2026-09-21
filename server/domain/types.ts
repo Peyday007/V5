@@ -4008,6 +4008,12 @@ export const DENIAL_REASONS = [
   'UNSAFE_TRANSPORT',
   'LAST_ADMIN',
   'PASSWORD_CHANGE_REQUIRED',
+  // A name somebody else already signs in by. It is a category about *this
+  // Brain's* rows rather than about the caller, so it tells an attacker
+  // nothing they could not learn by trying the name at the door — and the
+  // administrator reading the audit needs to be able to tell it from a
+  // refusal that means the invitation itself was bad.
+  'NAME_UNAVAILABLE',
   'INTERNAL_ERROR',
 ] as const;
 export type DenialReason = (typeof DENIAL_REASONS)[number];

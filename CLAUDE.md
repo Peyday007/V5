@@ -8815,6 +8815,35 @@ the condition was invisible.
   dialect is not true in the other. The guard scans in JavaScript outright,
   because it runs when a name is *chosen* rather than on every sign-in, and it
   is the reader that must not miss one.
+- **One path let the person choosing the name be somebody other than an
+  administrator, and §26's own sentence said it did not.** *"The acceptor
+  chooses neither who they are nor what they get"* is exact about the two
+  things it names — the address and the role are read from the invitation row,
+  so an acceptance carrying `role: OWNER` and `isBrainAdmin: true` changes
+  neither. The **display name** was not one of them, because when that was
+  written a display name was a label. Migration 062 made a member
+  address-less and 078 made the typed name the thing the door resolves, and
+  nothing came back here: an invited person could type an existing member's
+  name, in any case, and lock out both of them — themselves and somebody who
+  had done nothing.
+
+  The fallback is the **invitation's own address**, which is theirs by
+  construction and unique by index, rather than a refusal. An invited person
+  holding a link they cannot spend is an escalation with no answering
+  transition, and an awkward name is a great deal cheaper than not getting in —
+  correctable afterwards by the rename this section adds, which is what makes
+  the fallback honest rather than a shrug. The one case that *is* refused
+  needs another account's display name to be this exact address, and it
+  deliberately does not spend the invitation, for the same reason a missing
+  account authority does not: the link has to keep working once somebody has
+  corrected the name.
+
+  `NAME_UNAVAILABLE` is its own denial category rather than a reused one,
+  because it is a fact about this Brain's rows rather than about the caller —
+  it tells an attacker nothing they could not learn by trying the name at the
+  door, and an administrator reading the audit has to be able to tell it from
+  a refusal meaning the invitation itself was bad.
+
 - **§44's reading was built against the door as it was, and changing the door
   makes it wrong in both directions.** `foundation.ts` counted `display_name`
   verbatim across every row, on the reason it states: *"because
