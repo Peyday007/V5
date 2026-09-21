@@ -84,6 +84,7 @@ import {
   grantMembership,
   listMembershipsForPrincipal,
   listUsers,
+  renameUser,
   listWorkers,
   recordIdentityEvent,
   revokeMembership,
@@ -110,6 +111,9 @@ import {
 } from '../server/services/research/synthesisRecovery.ts';
 import { workerIdentity } from '../server/services/identity/authenticate.ts';
 import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
+import { refuseAddressAsName } from '../server/domain/personName.ts';
+import { adoptSurface } from '../server/services/capacity/adopt.ts';
+import { listConnections } from '../server/repos/capacityConnections.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -584,6 +588,95 @@ async function main(): Promise<void> {
       } else {
         console.log('  No surface runs under an identity no account owns.');
       }
+      break;
+    }
+    /*
+     * Saying what somebody is called.
+     *
+     * The repair for an account whose `display_name` is an address — which the
+     * first administrator's always was, because `bootstrap.ts` had nothing else
+     * to work from. `personName` keeps such a row readable; this is what makes
+     * it unnecessary, and it is the only path in this repository that sets a
+     * person's name after their account exists.
+     *
+     * It changes the name and nothing else: not the address, not the
+     * administration flag, not a membership, not a credential. A person is
+     * still reached, contacted and authenticated exactly as they were.
+     *
+     * On a terminal because reaching the shell is the authentication (§26), and
+     * `--admin` is the attribution, resolved against `users` rather than
+     * trusted — an audit row with no author answers nothing later.
+     */
+    case 'people rename': {
+      const actor = await administrator();
+      const target = rest[0] ?? fail('Name the user id or address to rename.');
+      const name = rest.slice(1).join(' ').trim() || fail('Give the name to show them as.');
+      refuseAddressAsName(name);
+      const user = (await listUsers()).find((one) => one.id === target || one.email === target);
+      if (!user) fail(`No user with id or address ${target}.`);
+      const before = user.displayName;
+      await renameUser(user.id, name);
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'RENAME_USER',
+        targetType: 'USER',
+        targetId: user.id,
+        result: 'SUCCESS',
+        // The names, because a rename with no before and after is a change
+        // nobody can check afterwards. Neither is a credential.
+        metadata: { from: before, to: name },
+      });
+      console.log(`  ${user.id} is shown as "${name}" (was "${before}").`);
+      console.log('  The address, the administration flag and every membership are unchanged.');
+      break;
+    }
+    /*
+     * Recording that a surface this Brain already fires is somebody's.
+     *
+     * The repair for the split brain migration 084 describes: four Routines
+     * registered on a terminal long before `capacity_connections` existed,
+     * firing every day, and a People page telling their owner that their
+     * Claude account was not connected because it looked the worker up by a
+     * name Brain would have minted.
+     *
+     * It creates no account, Routine, worker, credential or token, and it
+     * cannot promote a connection to healthy — that stays `reconcile`'s, from
+     * the four-row chain. Every refusal names what to do instead.
+     */
+    case 'capacity adopt': {
+      const actor = await administrator();
+      const who = rest[0] ?? fail('Name the user id or address whose connection this is.');
+      const ref = rest[1] ?? fail('Name the Routine reference (trig_…) being adopted.');
+      const person = (await listUsers()).find((one) => one.id === who || one.email === who);
+      if (!person) fail(`No user with id or address ${who}.`);
+      const outcome = await adoptSurface({
+        userId: person.id,
+        routineRef: ref,
+        actorUserId: actor.id,
+        // Reaching this shell is the authentication; the channel says so rather
+        // than claiming the stronger, browser-authenticated one (§23).
+        channel: 'SHELL',
+      });
+      if (!outcome.ok) fail(outcome.reason);
+      console.log(
+        `  ${person.displayName}: ${outcome.connection.routineName} (${outcome.connection.triggerRef})` +
+          `${outcome.alreadyAdopted ? ' — already recorded, nothing changed' : ''}`,
+      );
+      console.log(`  state ${outcome.connection.state}. Healthy is the four-row chain, read on the next view.`);
+      break;
+    }
+    case 'capacity show': {
+      for (const one of await listConnections()) {
+        const person = (await listUsers()).find((user) => user.id === one.userId);
+        console.log(
+          `  ${one.userId}  ${String(person?.displayName ?? '—').padEnd(24)} ${one.state.padEnd(22)} ` +
+            `routine=${one.routineId ?? '—'} worker=${one.workerId ?? '—'} ref=${one.triggerRef ?? '—'}`,
+        );
+      }
+      console.log('');
+      console.log('  worker=— is a connection whose surface Brain has not been told about.');
+      console.log('  `capacity adopt <user> <trig_…>` is what records one.');
       break;
     }
     case 'projects list': {

@@ -61,6 +61,7 @@ import {
 } from '../../repos/identity.ts';
 import { constantTimeEquals, digestSecret, generateInvitationToken, parseInvitationToken } from './secrets.ts';
 import type { MemberEnrollment, User } from '../../domain/types.ts';
+import { refuseAddressAsName } from '../../domain/personName.ts';
 
 /**
  * How long a link lives.
@@ -116,6 +117,15 @@ export async function createMemberSlot(input: {
 }): Promise<IssuedLink> {
   const displayName = input.displayName.trim();
   if (displayName.length < 2) throw new Error('A member needs a name to be shown as.');
+  /*
+   * And it may not be an address.
+   *
+   * The door, rather than only the fallback. `personName` keeps a legacy row
+   * readable; this stops a new one being written that needs it — which is what
+   * makes the fallback an accommodation for accounts that already exist rather
+   * than a permanent workaround for a door nobody closed.
+   */
+  refuseAddressAsName(displayName);
 
   /*
    * The name is the credential's other half, so it has to be theirs alone.

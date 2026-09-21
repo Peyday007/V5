@@ -164,17 +164,7 @@ export function MachinesView({ projectId }: { projectId: string | null }): JSX.E
   }
   if (query.loading) return <p className="rs-empty">Reading the programme…</p>;
   if (query.error?.status === 404) {
-    return (
-      <section className="rs-card rs-cash-machine">
-        <h2>No manufacturing programme</h2>
-        <p className="rs-hint">
-          This project has none. Starting one authorizes Brain to research, from published
-          sources, which classes of machine exist, who is buying them, how product reaches
-          them, and what producing each one takes. It authorizes nothing else — no spending,
-          no contact, no purchase, and nothing about actually building anything.
-        </p>
-      </section>
-    );
+    return <StartProgramme projectId={projectId} onStarted={query.reload} />;
   }
   if (query.error) {
     return <p className="rs-empty">{query.error.message}</p>;
@@ -191,6 +181,120 @@ export function MachinesView({ projectId }: { projectId: string | null }): JSX.E
       <Ledger view={view} />
       <History view={view} />
     </div>
+  );
+}
+
+/**
+ * The objective a programme starts with, unless somebody changes it.
+ *
+ * `startProgramme` refuses anything under twenty-four characters with a
+ * sentence explaining that *"Build machines" is not an objective*, and it is
+ * right to: the objective is what every compiled question is judged against.
+ * What was wrong is that the screen asked for one and offered no way to give
+ * it, so the refusal was unreachable and so was the programme.
+ *
+ * So it arrives filled in — §24's rule that a decision a person makes is a
+ * proposal to approve rather than a form to fill in — and *Change the
+ * objective* reveals the field, which starts hidden. Nothing about the server's
+ * check moved; what changed is that there is now something to check.
+ */
+const SUGGESTED_OBJECTIVE =
+  'Establish, from published sources, which classes of machine this company could produce, ' +
+  'who is buying them, how product reaches those buyers, and what producing each one requires — ' +
+  'starting from what it can already do.';
+
+/**
+ * The empty state, with the action it was missing.
+ *
+ * It used to be a card with a paragraph and nothing to press: *No manufacturing
+ * programme*, an accurate explanation of what starting one would authorize, and
+ * no way to start one. §24's sentence at a new surface — a state that says a
+ * person must decide, which that person cannot act on, is stuck rather than
+ * waiting — and here the remedy did not exist anywhere in the product: the
+ * route was real, the service was real, and nothing in any browser called
+ * either.
+ *
+ * Idempotent by the server: `startProgramme` answers `created: false` for a
+ * project that already has one, so a double press, a retry after a lost
+ * response and two tabs all produce one programme. The screen reloads the
+ * programme either way rather than reporting which it was, because *it exists
+ * now* is the fact and *this press is the one that made it* is not.
+ */
+function StartProgramme({
+  projectId,
+  onStarted,
+}: {
+  projectId: string;
+  onStarted(): void;
+}): JSX.Element {
+  const [objective, setObjective] = useState(SUGGESTED_OBJECTIVE);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const start = useCallback(() => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    void api(`/api/projects/${projectId}/manufacturing`, {
+      method: 'POST',
+      body: JSON.stringify({ objective }),
+    }).then(
+      () => {
+        setBusy(false);
+        onStarted();
+      },
+      (error: unknown) => {
+        // The button comes back rather than spinning. A control that never
+        // recovers from one failed press is worse than one that did nothing.
+        setBusy(false);
+        setProblem(error instanceof Error ? error.message : String(error));
+      },
+    );
+  }, [busy, objective, projectId, onStarted]);
+
+  return (
+    <section className="rs-card rs-machines rs-machines-start">
+      <h2>No manufacturing programme</h2>
+      <p className="rs-hint">
+        This project has none. Starting one authorizes Brain to research, from published sources,
+        which classes of machine exist, who is buying them, how product reaches them, and what
+        producing each one takes.
+      </p>
+      <p className="rs-hint">
+        It authorizes nothing else. No spending, no contact with anybody, no purchase, no tooling,
+        and nothing about actually building anything — every one of those is a separate decision
+        with its own grant, and none of them is on this page.
+      </p>
+      <p className="rs-item-meta">{objective}</p>
+      {editing ? (
+        <div className="rs-machines-declare">
+          <label className="rs-field-label" htmlFor="machines-objective">
+            What this programme is trying to establish
+          </label>
+          <textarea
+            id="machines-objective"
+            rows={4}
+            value={objective}
+            onChange={(event) => setObjective(event.target.value)}
+          />
+        </div>
+      ) : null}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      <div className="rs-cash-actions">
+        <button type="button" className="rs-primary" disabled={busy} onClick={start}>
+          {busy ? 'Starting…' : 'Start the programme'}
+        </button>
+        <button
+          type="button"
+          className="rs-button-quiet"
+          disabled={busy}
+          onClick={() => setEditing((was) => !was)}
+        >
+          {editing ? 'Keep this objective' : 'Change the objective'}
+        </button>
+      </div>
+    </section>
   );
 }
 

@@ -126,7 +126,10 @@ export function TopBar(props: {
             type="button"
             className="btn btn--ghost"
             onClick={props.onSignOut}
-            title={`${user.email}${user.isBrainAdmin ? ' · Brain administrator' : ''}`}
+            /* The name and what this account is, not the address: a tooltip is
+               a human-facing surface like any other, and this one was the last
+               place in the console that introduced somebody by their inbox. */
+            title={`${user.displayName}${user.isBrainAdmin ? ' · Brain administrator' : ''}`}
           >
             SIGN OUT {user.displayName.toUpperCase()}
           </button>

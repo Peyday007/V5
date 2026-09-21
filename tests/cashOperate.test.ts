@@ -1134,6 +1134,9 @@ describe('the operating pass as the tick calls it', () => {
   it('does nothing at all for a project with no sprint', async () => {
     const fixture = await freshProject();
     expect(await operate(fixture.project.id)).toEqual({
+      // Null rather than absent: a project with no sprint has no portfolio to
+      // read, so there is nothing to say about how it is classified.
+      reclassified: null,
       capabilities: { raised: [], settled: [] },
       gaps: [],
       research: { applied: [], unanswered: [] },

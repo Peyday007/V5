@@ -73,6 +73,7 @@ import { listUsers } from '../../repos/identity.ts';
 import { ambiguousSignInNames, signInName } from '../../domain/signInName.ts';
 import { countLivePasskeys, listEnrollments } from '../../repos/passkeys.ts';
 import { nowIso } from '../../repos/util.ts';
+import { personName } from '../../domain/personName.ts';
 
 /**
  * How far this person has got, as a fact about what they can actually do.
@@ -147,19 +148,18 @@ export interface PeopleReading {
 /**
  * A display name with any address domain removed.
  *
- * `bootstrap.ts` names the first administrator after the address it was created
- * with, so the owner's inbox was the label every member read on this page — and
- * this module's own contract is that no contact detail crosses it. Dropping
- * everything from the `@` keeps the row recognisable to the person it is and
- * leaves nothing anybody can write to.
+ * Kept as the name this module and `connection.ts` already import, and it is
+ * now one line over `domain/personName.ts` rather than a second implementation
+ * of the same redaction. Two copies of a rule about what a person is called
+ * would eventually call one person two things on two screens — which is the
+ * defect that made this necessary, at a smaller scale.
  *
  * It is not a classification and nothing is typed by it: §4's rule against
  * name-matching is about deciding *what a row is*, which `users.kind` now
  * declares. A false positive here shortens a name.
  */
 export function withoutDomain(displayName: string): string {
-  const at = displayName.indexOf('@');
-  return at > 0 ? displayName.slice(0, at) : displayName;
+  return personName({ displayName });
 }
 
 export async function peopleReading(viewerId: string | null): Promise<PeopleReading> {

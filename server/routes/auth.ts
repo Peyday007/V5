@@ -82,6 +82,7 @@ import {
   verifyPassword,
 } from '../services/identity/secrets.ts';
 import { currentContext, currentPrincipal } from '../services/identity/context.ts';
+import { personName } from '../domain/personName.ts';
 import { activeDatabaseConfig } from '../db/database.ts';
 import { HttpError, badRequest, bodyOf, handler, requiredString } from './helpers.ts';
 
@@ -159,8 +160,17 @@ function publicUser(user: {
 }): Record<string, unknown> {
   return {
     id: user.id,
+    /*
+     * The address stays, and it is not the identity.
+     *
+     * It is how this account signs in through the break-glass door and how a
+     * person is contacted, so removing it would take a real fact off a screen
+     * that has a reason to show it. What changed is that it is no longer what
+     * the product *calls* anybody: `displayName` below is the name, and it is
+     * never an address, whatever the row happens to hold.
+     */
     email: user.email,
-    displayName: user.displayName,
+    displayName: personName(user),
     isBrainAdmin: user.isBrainAdmin,
     mustChangePassword: user.mustChangePassword,
     /*

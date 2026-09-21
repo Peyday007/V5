@@ -552,6 +552,25 @@ export async function setUserDisabled(id: string, disabled: boolean): Promise<Us
   return await getUser(id);
 }
 
+/**
+ * Change what a person is called, and nothing else.
+ *
+ * One column. Not the address, which is how they sign in and how they are
+ * contacted; not the administration flag; not a membership; not a credential.
+ * A rename is a fact about presentation, and a function that could quietly
+ * change any of the others while doing it would be a rename nobody could trust
+ * to be one.
+ */
+export async function renameUser(id: string, displayName: string): Promise<User | null> {
+  const at = nowIso();
+  await getDb().run('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?', [
+    displayName.trim(),
+    at,
+    id,
+  ]);
+  return await getUser(id);
+}
+
 export async function setBrainAdmin(id: string, isAdmin: boolean): Promise<User | null> {
   const at = nowIso();
   await getDb().run('UPDATE users SET is_brain_admin = ?, updated_at = ? WHERE id = ?', [

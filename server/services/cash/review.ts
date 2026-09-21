@@ -32,6 +32,7 @@ import type {
   CashNeed,
   CashOpportunity,
 } from '../../domain/types.ts';
+import { isWorkable } from './portfolio.ts';
 import type { Placement } from './portfolio.ts';
 import type { CashPosition } from './money.ts';
 
@@ -308,11 +309,26 @@ export function compressedReview(input: ReviewInput): CompressedReview {
    * expiry is the one thing on this screen that gets worse by being read
    * tomorrow.
    */
-  const expiring = input.placements.filter(
+  const closingSoon = input.placements.filter(
     (p) =>
       p.disposition !== 'ARCHIVED' &&
       p.opportunity.expiresAt !== null &&
       p.opportunity.expiresAt <= plusDays(input.now, 3),
+  );
+  /*
+   * Two different things close, and only one of them is *take this*.
+   *
+   * A qualified opening with three days left is an instruction: act before the
+   * window shuts. A piece of market evidence with three days left is not —
+   * "take these before the slower pieces" over a published notice with no
+   * payer, no price and no capture path is precisely the homework §44's
+   * correction removed from the portfolio, arriving through the decisions
+   * review instead. The second group is below and says what is actually true
+   * about it.
+   */
+  const expiring = closingSoon.filter((p) => isWorkable({ tier: p.tier.tier, state: p.opportunity.state }));
+  const closingUnqualified = closingSoon.filter(
+    (p) => !isWorkable({ tier: p.tier.tier, state: p.opportunity.state }),
   );
   if (expiring.length > 0) {
     items.push({
@@ -335,6 +351,48 @@ export function compressedReview(input: ReviewInput): CompressedReview {
         targets: expiring.map((p) => p.opportunity.id),
         label: 'Answered by taking them, not by a control here',
         completionCondition: 'Each of these is executing, declined, or has closed.',
+      },
+    });
+  }
+
+  /*
+   * And the windows that will close before anything could be qualified.
+   *
+   * A real decision rather than an instruction, and the difference is who
+   * knows something. Brain has established no payer for these and the window
+   * shuts first, so its honest answer is that they will pass — unless the
+   * person reading knows a buyer, which is the one thing they can supply and
+   * research cannot. Not `URGENT`: urgency is for something that gets worse by
+   * being read tomorrow *and* can be acted on today, and this cannot.
+   */
+  if (closingUnqualified.length > 0) {
+    items.push({
+      key: 'CLOSING_UNQUALIFIED',
+      title:
+        `${closingUnqualified.length} ${closingUnqualified.length === 1 ? 'window closes' : 'windows close'} ` +
+        'before Brain could qualify them',
+      why: closingUnqualified
+        .map(
+          (p) =>
+            `"${p.opportunity.title}" ${p.opportunity.expiryReason ?? 'closes'} on ${p.opportunity.expiresAt}, ` +
+            `and ${p.tier.summary.charAt(0).toLowerCase()}${p.tier.summary.slice(1)}`,
+        )
+        .join('; '),
+      recommendation:
+        'Nothing here says anybody would pay us, and there is not time to establish it from ' +
+        'published sources. If you know a buyer for one of them, that is the thing Brain cannot ' +
+        'look up — say so and it becomes work. Otherwise these pass, which is an ordinary outcome.',
+      consequence: 'They close on their own dates and stay on the record as evidence either way.',
+      urgency: 'WHENEVER',
+      underlying: closingUnqualified.map((p) => p.opportunity.id),
+      sharedRemedy: false,
+      costCents: null,
+      costNote: null,
+      answer: {
+        kind: 'NOTHING_TO_PRESS',
+        targets: closingUnqualified.map((p) => p.opportunity.id),
+        label: 'Answered by knowing a buyer, or by letting it close',
+        completionCondition: 'Each of these has closed, or somebody named a payer for it.',
       },
     });
   }

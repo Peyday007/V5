@@ -8257,6 +8257,223 @@ one of the five is decorative.
 
 ---
 
+## 46. A real row is not an answer to a question it never answered.
+
+The product-foundation closeout. Five defects were reproducible in production
+on 2026-09-21 and every one of them passed every test that existed. They are
+one shape: a row that truthfully answers one question was being read as the
+answer to a different one, and the screen claimed the second.
+
+The readings they are written against were taken before anything was changed:
+
+    opportunities=40 signals=40 candidates=0 qualified=0 ready=0 validations=2
+    usr_14439966398243339341  PERSON ADMIN signs-in=pin rosserpeyton@gmail.com
+    Brain Research A  ENABLED  ref=trig_01CBLu5o…  worker=wkr_1cdd82…  fires=350
+    cop_b1eb51e4932c43528d39  validation=RUNNING … mission=NEEDS_HUMAN
+    cop_00ece786785648e384a4  validation=RUNNING … mission=NEEDS_HUMAN
+
+- **Evidence is not work, and the page called it work.** §33 built the tier that
+  separates them — `SIGNAL` is *this is evidence, not work* in its own summary
+  sentence — and then `assemble` put every live piece into `executeNow` or
+  `waiting` anyway, and summed every live piece into
+  `combinedContributionCents`. So production read `1 to act on now, 40 waiting`
+  over forty market observations, with a "combined conservative contribution"
+  that was the arithmetic difference between other people's published prices.
+  **A classification nothing downstream reads is not a classification.**
+
+  `isWorkable` is the one predicate, read by the placement, the plan, the
+  aggregate and the page. A piece below `QUALIFIED` that nobody has taken is
+  `EVIDENCE_ONLY` or `BEING_QUALIFIED` — neither is a queue — and the line is
+  drawn at qualified rather than one tier lower because the prompt's own
+  definition of a candidate is the set `UNIVERSAL_QUALIFICATION` already
+  requires: a buyer, a payer, a capture path, a fulfilment path, economics,
+  timing and a decisive unknown. **A piece a person has already taken is work
+  whatever its tier**: `READY` is reached only through `markReady` and the
+  executing states only through a recorded `cash_actions` row, and a derivation
+  that removed either would be overruling a person's decision with a reading.
+
+  The aggregate is **null** rather than zero over an empty work list, because
+  zero is a figure and a figure reads as a measurement. And *Mark ready to test*
+  is offered only where `markReady` could succeed — §35's rule that a control
+  which cannot succeed should not be offered, on thirty-one records at once.
+
+  **Nothing is deleted and nothing is archived to make a count come out.** The
+  tier is derived, so deploying reclassifies all forty with every claim, source,
+  packet, round and event exactly where it was, and the evidence is listed as
+  evidence rather than hidden.
+
+- **A person is not an address.** `bootstrap.ts` created the first
+  administrator with `read('BRAIN_BOOTSTRAP_ADMIN_NAME') ?? email`, that
+  variable was never set, and so the product called its owner
+  `rosserpeyton@gmail.com` in the account menu, on every activity row and on the
+  consent screen. **An authentication fallback had become the product's idea of
+  who somebody is**, and what a person reads on a screen is what they believe
+  the system is.
+
+  `domain/personName.ts` is the one rule and it **never invents**: the fallback
+  is the address's own local part, unprettified, because turning `rosserpeyton`
+  into a guess at somebody's name is a confidently wrong name. It is not the
+  repair either — the repair is the row, and `people rename` is what writes one.
+  `refuseAddressAsName` closes the doors, so the fallback is an accommodation
+  for accounts that already exist rather than a permanent workaround. §35 had
+  already had to stop this name becoming a *deployment secret's* name, which is
+  the same defect one layer down.
+
+- **A thread is not a deal.** `RussellShell` passed `projects[0]` — the first
+  project the API happened to return — as every new conversation's project,
+  while `createConversation` wrote `attachment_source = 'NONE'` unconditionally.
+  So every row said, in two columns at once, *attached to Deal Dispatch* and
+  *nobody attached this*, and `collectionNameFor` filed a person's thinking
+  about Brain under a customer's name.
+
+  `purpose` is the statement that was missing, and migration 084/075 derives it
+  from **linkage** rather than from a title: attached by the router or by a
+  person, or the thread actually produced a candidate, a mission, a knowledge
+  row or a software request against that project. Then the inconsistency is
+  repaired rather than judged — a thread whose own source column says nothing
+  attached it has its project cleared. Every message and every thread id is
+  untouched. The client stops choosing a project at all, which makes the
+  router's own attachment reachable for the first time, and a thread is named
+  from its first message deterministically rather than being one of six called
+  *New conversation*.
+
+- **A name is not a binding, and the Claude connection was built on one.**
+  `connectionView` resolved a member's worker with
+  `getWorkerByName(namesFor(user).workerName)` — a name composed from their
+  display name. That resolves a worker Brain minted through the connection
+  journey and **nothing at all** for a surface registered on a terminal before
+  the journey existed, which in production is the four Routines that do most of
+  the research. So the owner was shown *your Claude account is not connected*,
+  with a call to action, beside a Fleet page listing twelve eligible surfaces
+  and 350 fires.
+
+  Both readings were true of different questions. Migration 085/076 puts
+  `worker_id` on the connection, the view reads the row first and the derived
+  name only as a fallback, and `services/capacity/adopt.ts` is the transition
+  that records an existing surface as somebody's. It is a **person's decision**
+  because no row proves it: `services/identity/ownership.ts` already explains
+  that the approver on an `oauth_authorization_codes` row is the human who
+  approved a grant, which §22 is emphatic is not the same fact as whose
+  capacity it is. So it is `declareHeld`'s shape one kernel along — attributed,
+  channelled, reversible, refusing a surface another live connection names, and
+  unable to write `HEALTHY`, which stays `reconcile`'s from the four-row chain.
+
+  **One reader became three while this waited on its gates, and the third is
+  the one with teeth.** The work-register branch refactored this into a single
+  `settleConnection` with three callers — the member's page, the
+  administrator's list and `contributedCapacity` — which is a better shape than
+  the one this repair was written against and reintroduced the name-only
+  lookup inside it. Merging found two more asking the same question: the one
+  that registers a Routine, and **`revoke`**. That last one resolves a worker
+  in order to revoke its tokens, so a name-only lookup there leaves an adopted
+  surface's credentials live after somebody has taken their connection back —
+  silent, and in the unsafe direction. So it is one `workerFor` with three
+  callers, and the regression asserts it at the caller where being wrong costs
+  something rather than at the one where it only misinforms. It was run against
+  the name-only lookup to watch it fail first.
+
+- **A page with no action is not an empty state.** `/machines` rendered *No
+  manufacturing programme*, an accurate paragraph about what starting one would
+  authorize, and nothing to press. `startProgramme` refuses a short objective
+  with a sentence explaining that *"Build machines" is not an objective* — a
+  refusal no browser could reach, because no browser called the route at all.
+  §24's sentence at a seventh altitude, and the worst form of it: the remedy did
+  not exist anywhere in the product. The empty state arrives with the objective
+  filled in and one action (§24's *a proposal to approve, not a form to fill
+  in*), and it is idempotent by the server rather than by a flag.
+
+### The deep dive had no branch for a mission that stopped at a person.
+
+This is the measured one, and it is worth separating because it was found by
+looking rather than by reasoning. `settleValidations` had a branch for `DONE`,
+for `FAILED` and for `CANCELLED`, and none for `NEEDS_HUMAN`. A mission that
+stops at a decision only a person can make is none of those, so the opening
+stayed `RUNNING` **for ever while nothing ran** — and `RUNNING` counts against
+`MAX_VALIDATIONS_IN_FLIGHT`, which is two.
+
+Production held exactly two: the Rev.com record and the GoTranscript record,
+both `validation=RUNNING`, both `mission=NEEDS_HUMAN`. **Both slots, held by
+parked missions.** Thirty-eight openings that could never be qualified, no new
+deep dive that could ever start, and no state column anywhere saying so — the
+roadmap reported both as *being qualified*.
+
+`NEEDS_PERSON` is the state that was missing. It holds no slot, because no
+provider is working on it; it is re-read on every tick, so a person answering
+the mission's Needs You card puts the opening back to `RUNNING`; `mayDiveAgain`
+refuses a second dive meanwhile, so the answer is not bought twice; and the
+roadmap counts it apart from work in progress, which is what makes the condition
+visible the next time. Beside it, `VALIDATION_STALL_MS` is the backstop for what
+a mission row cannot express — launched, never advanced — as `BLOCKED` with the
+elapsed time in the reason rather than as a failure.
+
+**And the queue order was arrival order.** Within each group the openings
+closest to being a decision go first now, counted from their own columns. It is
+a preference and never a ceiling: nothing is refused because of it.
+
+`scripts/refinement-report.ts` is the instrument, and it exists because *why is
+refinement slow* had no answer that was not a guess. Every figure in it is the
+difference between two recorded timestamps; a stage with no timestamp reads `—`
+rather than being filled in from the one beside it. It prints the in-flight
+count beside the ceiling it is compared against, and says when every slot is
+taken — which is the line that would have named this condition on the first
+reading.
+
+### Two things the gates found that reading did not.
+
+**A placeholder tested only for nullity has no type on one of the two
+backends.** `attachConversation` moved the purpose in the same statement as the
+attachment, which is right, and expressed the decision as a `CASE` arm asking
+whether the project being written was null. SQLite is perfectly happy with
+that; Postgres answers `42P18 could not determine data type of parameter $4`
+and refuses the statement outright, because a `$n` whose only occurrence is a
+nullity test has nothing around it to infer from. **A full local suite — 4 118
+tests — passed straight over it**, which is the argument for the second backend
+stated more sharply than §25 could state it: there the two backends disagreed
+about a column and an identity column, and here they disagreed about a *shape*.
+
+The guard stayed where it has to be. `OPERATIONAL` and `TECHNICAL` are still
+never clobbered and the purpose still moves atomically with the attachment, so
+there is still one reader of one decision; what moved is the arithmetic over the
+value being written, into the `ELSE` arm of a `CASE` whose other arm is the
+`purpose` column, where the same value resolves to text. The regression refuses
+the **shape** rather than the instance, reading the repository the way
+`operatorConsoleRemoved` does — and it was exercised three ways before it was
+trusted, because a guard nobody has seen fire is a claim: the detector fires on
+production's own failed statement and not on the rewrite, the walk asserts it
+actually read more than two hundred files rather than passing over an empty
+list (§41's vacuous guard), and the shape was put back into `server/` to watch
+the guard name the file and the line. `CAST(? AS TEXT) IS NULL` is deliberately
+not refused: that types the parameter, and banning it would be banning the
+remedy.
+
+**And the migration numbers collided twice while this was waiting on its
+gates.** §25 records the first instance — Step 12A's `035_worker_sessions.sql`
+landing on the same number while Step 12C was being written — and the reason it
+is a boot failure with a sentence in it rather than half a schema quietly
+missing. This closeout took `082` / pg `073`; the work register took the same
+pair and reached `production` first, so these became `083` / pg `074`; then the
+dealflow kernel took *that* pair, so they are `084` / pg `075` and `085` / pg
+`076`. Every reference moved with them both times — the migration headers, the
+detachment reason a person reads on a conversation's own history, two
+type-level comments, an admin command's explanation and this file.
+
+**The number that landed first wins, and the renumber is the whole of what
+reconciling two parallel workstreams actually needs** — which is §28's point
+about converging branches, observed twice in one evening rather than argued.
+The same rule settled the section numbers: two sessions wrote a §43 and two
+more wrote a §44, and each time the one on `production` kept its index while
+this one moved, because two sections sharing a number is two readers of one
+index. `deploymentOwnership` is what would have refused either merge had a
+renumber been missed, and it walks both chains rather than one.
+
+**What this section does not claim.** The prompt that produced it asked that
+evidence-only records never enter refinement at all. Taken literally that would
+freeze this sprint permanently: all forty records are evidence, and the deep
+dive is the only thing that can establish a payer and move one. So what was
+built is the bounded, ordered, answerable version — evidence never appears as a
+person's work, never starves a piece that is closer to a decision, and never
+holds a slot while nobody is working on it. Saying that plainly is better than
+a sentence that is nearly true.
 ## Repository map
 
 ```
@@ -8278,6 +8495,7 @@ server/
     pg-migrations/*.sql the Postgres schema, generated from it
   domain/
     types.ts            enums, row types, view types — the contract
+    personName.ts       what a person is called; an address is never it
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
@@ -8395,6 +8613,7 @@ server/
       loop.ts           the tick that makes a state change visible to a poller
     capacity/
       connection.ts     connecting a Claude account, and the one step Brain cannot do
+      adopt.ts          a surface Brain already fires, recorded as somebody's
       contribution.ts   whose connection is usable capacity, and why not when it is not
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
@@ -8649,6 +8868,7 @@ scripts/
   manufacturing.ts          the programme's terminal door, until a surface exists
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
+  refinement-report.ts      where every deep dive spent its time, stage by stage
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
   admin.ts                  emergency administration, on a terminal rather than a page
@@ -8689,6 +8909,7 @@ tests/                  Vitest suites
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker
+  russellFoundationCloseout.test.ts  five production defects, asserted as absences
   factoryPool.test.ts        one Factory worker, three accounts, and the failover between them
   sharedKnowledge.test.ts    one finding, two operations, and the wall between them
   workRegister.test.ts       no stored state, no source that ships, no URL that merges
