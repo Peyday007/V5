@@ -903,6 +903,86 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
   });
 
   /**
+   * A dive that never became a mission held a slot with no bound at all.
+   *
+   * The stall backstop is guarded on `mission.state === 'RUNNING'`, and here
+   * there is no mission — so `PENDING` counted against the two slots and
+   * nothing in `settleValidations` could ever take one back. Found by reading
+   * production rather than the code: the first causal reading of a live sprint
+   * printed two `PENDING` dives holding both slots with `candidate=QUEUED
+   * mission=—`, against four parked ones whose missions had appeared within
+   * forty-four minutes.
+   *
+   * Asserted from both sides of the window, because a backstop that fires
+   * early would cancel a dive whose candidate is simply still being judged —
+   * which is the ordinary case and takes minutes.
+   */
+  it('frees a slot held by a dive that never became a mission, and not before', async () => {
+    const fixture = await freshProject();
+    const owner = await createUser({
+      email: 'nomission@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const started = await activate({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    if (!started.ok) return;
+
+    const launch = async (ago: number): Promise<string> => {
+      // A candidate with no mission: exactly what an unjudged one looks like.
+      const candidate = await createCandidate({
+        projectId: fixture.project.id,
+        visibility: 'SHARED',
+        title: 'Qualify: an opening nobody has judged',
+        statement: 'Who pays, what it pays, what it costs and what would rule it out.',
+      });
+      const made = await createOpportunity({
+        projectId: fixture.project.id,
+        cashModeId: started.mode.id,
+        ownerUserId: owner.id,
+        title: 'An opening whose dive never became a mission',
+        mechanism: 'EXPLICIT_PAID_REQUEST',
+        currency: 'USD',
+      });
+      await updateOpportunity(made.id, {
+        candidate_id: candidate.id,
+        // A real harvested opening quotes a published signal into its
+        // question; without one there would be nothing to ask a second time.
+        buying_signal: 'A county published a paid request.',
+        validation_state: 'PENDING',
+        validation_started_at: new Date(Date.now() - ago).toISOString(),
+        validation_rounds: 1,
+      });
+      return made.id;
+    };
+
+    // Inside the window: still being judged, and left alone.
+    const fresh = await launch(VALIDATION_STALL_MS / 2);
+    expect(await settleValidations(fixture.project.id)).toEqual([]);
+    expect((await getOpportunity(fresh))!.validationState).toBe('PENDING');
+
+    // Past it: nothing is researching it, so the slot comes back.
+    const stale = await launch(VALIDATION_STALL_MS * 2);
+    const settled = await settleValidations(fixture.project.id);
+    expect(settled).toContainEqual({ opportunityId: stale, to: 'BLOCKED' });
+
+    const after = (await getOpportunity(stale))!;
+    expect(after.validationState).toBe('BLOCKED');
+    // The row says what happened, and blames nobody for it.
+    expect(after.nextAction ?? '').not.toMatch(/worker/i);
+    // Nothing was destroyed: the candidate and the round count are untouched.
+    expect(after.candidateId).not.toBeNull();
+    expect(after.validationRounds).toBe(1);
+    // And a second round is available, rather than the piece being written off.
+    expect((await whyNotDiving(after)).kind).toBe('ELIGIBLE');
+  });
+
+  /**
    * A park is the lifecycle *waiting*, and that is a different fact from
    * stuck — provable from rows rather than asserted.
    */
