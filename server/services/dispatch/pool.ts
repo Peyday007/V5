@@ -46,6 +46,7 @@
 import type { Bin, BinDispatch, FleetAccount, FleetRoutine } from '../../domain/types.ts';
 import type { WorkerSession } from '../../repos/fleet.ts';
 import { proveSurface, type SurfaceChain } from './surfaceProof.ts';
+import { workerIdentity } from '../identity/authenticate.ts';
 
 /** What a surface is, once every row about it has been read. */
 export interface PoolSurfaceInput {
@@ -86,7 +87,15 @@ export interface PoolSurface {
   ineligibleBecause: string[];
   /** Room against the tighter of the two targets, as used/limit. */
   headroom: { used: number; limit: number | null };
-  /** When the provider said to try again, if it did. */
+  /**
+   * When the provider said to try again, **if that instant is still ahead**.
+   *
+   * A `retry_at` in the past is history rather than a condition: the fire
+   * router compares it to the clock and ignores it, so printing it beside
+   * `eligible yes` put two answers to one question on one screen — §29's
+   * status contradicting the control beside it, and the reason `now` is part
+   * of the snapshot this judges rather than something it reads itself.
+   */
   cooldownUntil: string | null;
   /** The most recent fire and what became of it. */
   lastFiredAt: string | null;
@@ -106,12 +115,30 @@ export interface PoolReport {
   ok: boolean;
   /** One sentence per thing that stops this being a pool. */
   problems: string[];
+  /**
+   * One sentence per thing a reader is owed that is **not** a failure.
+   *
+   * These used to live in `problems`, which made them invisible exactly when
+   * they mattered: `ok` never counted them, so the only run that printed them
+   * was one that had already failed for some other reason. A caveat you see
+   * only after something else went wrong is not a caveat, and it also made the
+   * refusal line over-count — "2 problem(s)" over one problem and one note.
+   */
+  notes: string[];
 }
 
 export interface PoolInput {
   expectedWorker: { id: string; name: string };
   repository: string;
   surfaces: PoolSurfaceInput[];
+  /**
+   * The instant this snapshot was taken, ISO-8601.
+   *
+   * Required rather than defaulted: a pure decision that read its own clock
+   * would answer differently on a re-run against the same recorded input,
+   * which is the whole property `router.ts` keeps this module pure for.
+   */
+  now: string;
 }
 
 /**
@@ -125,7 +152,7 @@ export interface PoolInput {
  */
 export function judgePool(input: PoolInput): PoolReport {
   const surfaces: PoolSurface[] = input.surfaces.map((surface) =>
-    judgeSurface(surface, input.expectedWorker, input.repository),
+    judgeSurface(surface, input.expectedWorker, input.repository, input.now),
   );
 
   const problems: string[] = [];
@@ -135,14 +162,19 @@ export function judgePool(input: PoolInput): PoolReport {
         'no pool to verify. Onboard the repository and register one Routine per Claude account.',
     );
   }
+  const notes: string[] = [];
   if (surfaces.length === 1) {
     /*
      * Said rather than counted as a failure. One surface is a working Factory
      * and a complete answer to "can this run at all"; it is not a pool, and a
      * command that reported a pool verified over a single account would be
      * exactly the rounding-up §23 refuses everywhere else.
+     *
+     * So it is a note rather than a problem: it must be printed on the green
+     * run, which is the only run where somebody could otherwise read
+     * "VERIFIED" as "pooled".
      */
-    problems.push(
+    notes.push(
       'Only one surface is registered for this repository, so nothing here is pooled: there is ' +
         'no second account to run in parallel with, and no failover. That is a complete ' +
         'single-surface Factory and it is reported as one.',
@@ -162,6 +194,7 @@ export function judgePool(input: PoolInput): PoolReport {
     // a pool that will hand work to something nothing has ever run on.
     ok: surfaces.length > 0 && surfaces.every((surface) => surface.verdict === 'PROVEN'),
     problems,
+    notes,
   };
 }
 
@@ -169,6 +202,7 @@ function judgeSurface(
   input: PoolSurfaceInput,
   expected: { id: string; name: string },
   repository: string,
+  now: string,
 ): PoolSurface {
   const problems: string[] = [];
   const ineligible: string[] = [];
@@ -224,7 +258,8 @@ function judgeSurface(
     input.routineTarget ?? input.accountTarget ?? null;
   const used = Math.max(input.routineInFlight, input.accountInFlight);
   if (limit !== null && used >= limit) ineligible.push(`at target ${used}/${limit}`);
-  const cooldownUntil = laterOf(input.routine.retryAt, input.account.retryAt);
+  const retryAt = laterOf(input.routine.retryAt, input.account.retryAt);
+  const cooldownUntil = retryAt !== null && retryAt > now ? retryAt : null;
 
   const proof = proveSurface({
     boundWorkerId: input.routine.workerId ?? '',
@@ -394,7 +429,9 @@ export async function readFactoryPool(input: {
     surfaces.push({
       routine,
       account,
-      worker: worker ? { id: worker.id, name: worker.name, archived: worker.archived } : null,
+      worker: worker
+        ? { id: worker.id, name: workerIdentity(worker), archived: worker.archived }
+        : null,
       routing: routing
         ? {
             families: routing.families,
@@ -415,7 +452,11 @@ export async function readFactoryPool(input: {
   }
 
   return {
-    expectedWorker: { id: expectedWorker.id, name: expectedWorker.name },
+    now: nowIso,
+    // The neutral identity: this string is printed in every pool problem, and
+    // a report naming a surface after a person reads as a claim about whose
+    // account it is. The lookup that found it is still by handle.
+    expectedWorker: { id: expectedWorker.id, name: workerIdentity(expectedWorker) },
     repository: input.repository,
     surfaces,
     boundElsewhere,

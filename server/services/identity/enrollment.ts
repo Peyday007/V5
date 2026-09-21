@@ -48,7 +48,13 @@ import {
   revokeEnrollment,
   spendEnrollment,
 } from '../../repos/passkeys.ts';
-import { getUser, recordIdentityEvent } from '../../repos/identity.ts';
+import {
+  createCredentiallessUser,
+  getUser,
+  recordIdentityEvent,
+  revokeSessionsForUser,
+  setUserPin,
+} from '../../repos/identity.ts';
 import { constantTimeEquals, digestSecret, generateInvitationToken, parseInvitationToken } from './secrets.ts';
 import type { MemberEnrollment, User } from '../../domain/types.ts';
 
@@ -89,23 +95,23 @@ export async function createMemberSlot(input: {
   const displayName = input.displayName.trim();
   if (displayName.length < 2) throw new Error('A member needs a name to be shown as.');
 
-  const id = newId('usr');
-  const at = nowIso();
   /*
-   * Written directly rather than through `createUser`, which requires an email
-   * and a password. Those columns are nullable now and this is the row shape
-   * that makes the whole feature true: no address to reset, no verifier to
-   * compare, so there is no password login to disable later.
+   * Not `createUser`, which requires an email and a password. This is the row
+   * shape that makes the whole feature true: no address to reset, no verifier
+   * to compare, so there is no password login to disable later. It is written
+   * by `createCredentiallessUser` rather than here, because the project
+   * invitation produces the same shape and two copies of one `INSERT` is how
+   * they come to differ.
    */
-  await getDb().run(
-    `INSERT INTO users (id, email, display_name, kind, password_algorithm, password_verifier,
-                        password_updated_at, must_change_password, is_brain_admin, disabled_at,
-                        created_by_type, created_by_id, created_at, updated_at)
-     VALUES (?, NULL, ?, 'PERSON', NULL, NULL, NULL, 0, 0, NULL, 'HUMAN', ?, ?, ?)`,
-    [id, displayName, input.issuedByUserId, at, at],
-  );
+  const slot = await createCredentiallessUser({
+    email: null,
+    displayName,
+    createdByType: 'HUMAN',
+    createdById: input.issuedByUserId,
+  });
+  const id = slot.id;
 
-  const link = await issueLink({
+  const link = await issueEnrollmentLink({
     userId: id,
     displayName,
     kind: 'ENROLLMENT',
@@ -127,7 +133,14 @@ export async function createMemberSlot(input: {
   return link;
 }
 
-async function issueLink(input: {
+/**
+ * A link for a person who already has a slot.
+ *
+ * Exported because the project invitation needs exactly this and nothing else:
+ * it has just made the slot itself, and what it owes the person standing in
+ * front of it is the one link that turns a slot into an account they can use.
+ */
+export async function issueEnrollmentLink(input: {
   userId: string;
   displayName: string;
   kind: MemberEnrollment['kind'];
@@ -175,7 +188,20 @@ export async function issueRecovery(input: {
     byUserId: input.issuedByUserId,
   });
 
-  const link = await issueLink({
+  /*
+   * And every session those devices opened.
+   *
+   * Retiring the credentials and leaving the sessions is half a recovery: a
+   * device session now lasts thirty days, so a lost phone with an open tab on
+   * it would go on being signed in for weeks after the credential it holds
+   * stopped working. All of them rather than the ones a device is recorded
+   * against, because this is the case where nothing about what that person
+   * holds can be trusted, and because the sessions written before a device was
+   * recorded at all name none.
+   */
+  const endedSessions = await revokeSessionsForUser(input.userId, null);
+
+  const link = await issueEnrollmentLink({
     userId: user.id,
     displayName: user.displayName,
     kind: 'RECOVERY',
@@ -190,7 +216,11 @@ export async function issueRecovery(input: {
     targetId: user.id,
     projectId: null,
     result: 'SUCCESS',
-    metadata: { enrollmentId: link.enrollmentId, retiredCredentials: String(retired) },
+    metadata: {
+      enrollmentId: link.enrollmentId,
+      retiredCredentials: String(retired),
+      endedSessions: String(endedSessions),
+    },
   });
 
   return link;
@@ -256,8 +286,61 @@ export async function previewEnrollment(token: unknown): Promise<PreviewOutcome>
   };
 }
 
+/**
+ * Spend the link and set a PIN, which is the ordinary way a member joins now.
+ *
+ * The same guarded spend as `completeEnrollment`, in the same order and for the
+ * same reason: the claim comes first, so a second request holding one
+ * intercepted link finds nothing to spend, and a crash between the two costs
+ * the link rather than leaving it live beside a working credential.
+ *
+ * It exists because the device half could not be relied on. A member whose
+ * browser refuses WebAuthn — which is the condition that locked the owner out
+ * of this Brain — had no way to finish joining at all, and a journey whose last
+ * step can be refused with no alternative is one that strands people.
+ * Registering a device is still offered and is still optional.
+ */
+export async function completeEnrollmentWithPin(input: {
+  token: unknown;
+  pinVerifier: string;
+}): Promise<CompleteOutcome> {
+  const enrollment = await liveEnrollmentFor(input.token);
+  if (!enrollment) return { ok: false, reason: LINK_REFUSED };
+
+  if (!(await spendEnrollment({ id: enrollment.id, now: nowIso() }))) {
+    return { ok: false, reason: LINK_REFUSED };
+  }
+
+  /*
+   * No session is kept, because there is none yet: this is the link being
+   * exchanged for a credential, and the route opens the session afterwards.
+   * Passing `null` means any session the slot somehow held is ended, which is
+   * the right answer for a recovery — the point of one is that what came
+   * before stops working.
+   */
+  await setUserPin(enrollment.userId, input.pinVerifier, { keepSessionId: null });
+
+  const user = await getUser(enrollment.userId);
+  if (!user) return { ok: false, reason: LINK_REFUSED };
+
+  await recordIdentityEvent({
+    actorType: 'HUMAN',
+    actorId: user.id,
+    action: 'ENROLL_PIN',
+    targetType: 'USER',
+    targetId: user.id,
+    projectId: null,
+    result: 'SUCCESS',
+    // The enrollment, never the PIN and never its verifier.
+    metadata: { enrollmentId: enrollment.id, kind: enrollment.kind },
+  });
+
+  return { ok: true, user, passkeyId: null };
+}
+
 export type CompleteOutcome =
-  | { ok: true; user: User; passkeyId: string }
+  /** `passkeyId` is null when the link was spent on a PIN rather than a device. */
+  | { ok: true; user: User; passkeyId: string | null }
   | { ok: false; reason: string };
 
 /**

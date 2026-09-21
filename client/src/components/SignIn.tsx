@@ -1,49 +1,83 @@
 /**
- * The sign-in screen, and the password change that sometimes follows it.
- *
- * Two screens rather than one because they are two different moments: the first
- * is "prove who you are", the second is "the password you were given was never
- * meant to be kept". An account created by an administrator, or bootstrapped
- * into an empty Brain, arrives with a password that somebody else chose and that
- * has probably passed through a deployment secret and a terminal. The server
- * will not let that account do anything else until this screen is done with.
- *
- * Nothing here interprets a failure. The server answers every wrong sign-in the
- * same way on purpose, and a client that tried to be more helpful — "no account
- * with that address" — would hand back exactly the distinction the server spent
- * effort refusing to make.
+ * The sign-in screen. An identity and six digits.
  *
  * ---------------------------------------------------------------------------
- * Two mistakes this file used to make, both of which locked somebody out
+ * What was here, and why it is gone
  * ---------------------------------------------------------------------------
  *
- * **It asked for a password it already had.** Somebody signs in, and is then
- * shown a form demanding the same password again. That is not a security
- * property — the session is already established, and the server's own check is
- * against the account, not against whatever this form collects. It was pure
- * friction, and friction in front of a mandatory step is a lockout waiting to
- * happen. When the password is already known it is now used, and the field is
- * not shown at all.
+ * One button: SIGN IN WITH YOUR DEVICE. It was the only thing on the screen,
+ * and for the account that administers this Brain it did not work — the
+ * browser answered *"the operation either timed out or was not allowed"*,
+ * which is the single refusal WebAuthn gives for every reason it has. There
+ * was nothing else to press. The owner could not get in.
  *
- * **The two forms shared DOM nodes.** Rendered by a ternary at the same
- * position, React reconciled the sign-in form's inputs onto the change form's
- * inputs — the email box became the current-password box with its `type`
- * swapped underneath it. A browser that sees a password field appear offers to
- * fill it, and the credential it had saved for this origin was the shared
- * access token from the outer HTTP Basic prompt, not the account password.
- * Clearing the field did nothing: the next render filled it again. Each form
- * now has its own `key`, so React unmounts one and mounts the other instead of
- * quietly turning one into the other.
+ * The mistake was not the passkey. It was making a credential mandatory that
+ * **nobody had ever successfully presented**, on a surface with no second
+ * route, for an account that had not enrolled. A credential that has never
+ * worked is not a credential yet, and a screen offering only one of those is a
+ * locked door with a button on it.
+ *
+ * So the ordinary way in is six digits the person chose: no hardware, no
+ * biometric prompt, no pairing, nothing a device can refuse. Passkeys remain in
+ * the schema and the code and are optional; nothing on this screen asks for
+ * one, and nothing anywhere requires one.
+ *
+ * ---------------------------------------------------------------------------
+ * The remembered identity is a convenience and not a credential
+ * ---------------------------------------------------------------------------
+ *
+ * The last identity typed here is kept in `localStorage` so the next visit can
+ * show one box instead of two. That is **all** it is. It authenticates nobody,
+ * it is not consulted by the server, and a browser that has it still has to
+ * present the PIN — so it is a saved form field rather than a pairing, and
+ * "not this account" throws it away and asks again.
+ *
+ * Storage can throw, and can come back empty in a private window or with site
+ * data cleared. Every read and write is wrapped, and the screen is correct with
+ * neither: it simply asks for both.
+ *
+ * ---------------------------------------------------------------------------
+ *
+ * Nothing here interprets a failure. The server answers every refused sign-in
+ * the same way on purpose — a wrong PIN, an unknown identity and an account
+ * with no PIN are one sentence — and a client that tried to be more helpful
+ * would hand back exactly the distinction the server spent effort refusing to
+ * make. The one thing it does render specially is the cooldown, because that
+ * is what the server itself chose to say.
  */
 import { useState } from 'react';
 import { Api, ApiError, type SessionUser } from '../lib/api.ts';
-import { PASSKEY_UNSUPPORTED, Passkeys, passkeysAvailable } from '../lib/passkeys.ts';
 
 interface Props {
-  /** Set once the person is signed in and their password is their own. */
+  /** Set once the person is signed in. */
   onSignedIn: (user: SessionUser) => void;
-  /** Present when a session exists but the password must be replaced first. */
-  pendingUser?: SessionUser | null;
+}
+
+/** Where the last identity is remembered. Read defensively; never required. */
+const LAST_IDENTITY_KEY = 'brain.lastIdentity';
+
+function rememberedIdentity(): string {
+  try {
+    return window.localStorage.getItem(LAST_IDENTITY_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function remember(identity: string): void {
+  try {
+    window.localStorage.setItem(LAST_IDENTITY_KEY, identity);
+  } catch {
+    /* a convenience that could not be saved is still a convenience */
+  }
+}
+
+function forget(): void {
+  try {
+    window.localStorage.removeItem(LAST_IDENTITY_KEY);
+  } catch {
+    /* nothing to do, and nothing depends on it */
+  }
 }
 
 function describe(error: unknown): string {
@@ -52,88 +86,29 @@ function describe(error: unknown): string {
   return String(error);
 }
 
-export function SignIn({ onSignedIn, pendingUser }: Props): JSX.Element {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  /**
-   * The password this tab signed in with, kept only in memory and only until
-   * the change succeeds.
-   *
-   * It is what makes the current-password field unnecessary in the ordinary
-   * case. Held in React state rather than anywhere durable: it never reaches
-   * storage, a cookie, or the URL, and it is gone the moment the tab is closed
-   * or reloaded — which is exactly the case the field below still exists for.
-   */
-  const [knownPassword, setKnownPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+export function SignIn({ onSignedIn }: Props): JSX.Element {
+  const known = rememberedIdentity();
+  const [identity, setIdentity] = useState(known);
+  /** Whether the identity box is shown. Hidden only when one is remembered. */
+  const [askIdentity, setAskIdentity] = useState(known.length === 0);
+  const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const mustChange = pendingUser?.mustChangePassword ?? false;
-  /** After a reload there is no remembered password, so it has to be asked for. */
-  const needsCurrentPassword = mustChange && knownPassword.length === 0;
-
-  /**
-   * Sign in with a device.
-   *
-   * Nothing is typed and nothing is looked up first: a resident key names its
-   * own account, which is what lets somebody who holds no address sign in at
-   * all. Every failure is the server's one sentence.
-   */
-  async function signInWithDevice(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      await Passkeys.signIn();
-      const session = await Api.session();
-      if (session.user) onSignedIn(session.user);
-    } catch (err) {
-      setError(describe(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitSignIn(event: React.FormEvent): Promise<void> {
+  async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const { user } = await Api.login(email.trim(), password);
-      // Remembered before the field is cleared, so the change form that may be
-      // about to appear does not have to ask for it again.
-      setKnownPassword(password);
-      // The server decides this, not the form: if the account still carries a
-      // temporary password, it is handed straight to the second screen.
+      const { user } = await Api.signInWithPin(identity.trim(), pin);
+      remember(identity.trim());
+      setPin('');
       onSignedIn(user);
-      setPassword('');
     } catch (err) {
       setError(describe(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitPasswordChange(event: React.FormEvent): Promise<void> {
-    event.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setError('Those two passwords are not the same.');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      // The remembered one where there is one; the typed one after a reload.
-      await Api.changePassword(knownPassword || password, newPassword);
-      const session = await Api.session();
-      if (session.user) onSignedIn(session.user);
-      setPassword('');
-      setKnownPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err) {
-      setError(describe(err));
+      // The digits go, the identity stays. Retyping an address you have just
+      // typed correctly is the friction that makes people give up on a typo.
+      setPin('');
     } finally {
       setBusy(false);
     }
@@ -143,131 +118,75 @@ export function SignIn({ onSignedIn, pendingUser }: Props): JSX.Element {
     <div className="signin">
       <div className="signin__card">
         <h1 className="signin__title">BRAIN</h1>
+        <form key="pin-sign-in" onSubmit={(event) => void submit(event)}>
+          <p className="signin__lede">This Brain is private.</p>
 
-        {mustChange ? (
-          <form key="change-password" onSubmit={(event) => void submitPasswordChange(event)}>
-            <p className="signin__lede">
-              {pendingUser?.displayName ?? 'This account'} is using a password somebody else
-              chose. Pick your own before going any further.
-            </p>
-            {needsCurrentPassword ? (
-              <>
-                <label className="signin__label" htmlFor="current">
-                  CURRENT PASSWORD
-                </label>
-                <input
-                  id="current"
-                  className="signin__input"
-                  type="password"
-                  // Not `current-password`: the credential a browser has saved
-                  // for this origin is as likely to be the shared token from the
-                  // outer prompt as it is to be this account's, and offering to
-                  // fill it here is how somebody ends up submitting the wrong
-                  // secret three times without seeing what changed.
-                  autoComplete="off"
-                  name="brain-current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                />
-              </>
-            ) : null}
-            <label className="signin__label" htmlFor="new">
-              NEW PASSWORD
-            </label>
-            <input
-              id="new"
-              className="signin__input"
-              type="password"
-              autoComplete="new-password"
-              minLength={12}
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              required
-            />
-            <label className="signin__label" htmlFor="confirm">
-              NEW PASSWORD AGAIN
-            </label>
-            <input
-              id="confirm"
-              className="signin__input"
-              type="password"
-              autoComplete="new-password"
-              minLength={12}
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              required
-            />
+          {askIdentity ? (
+            <>
+              <label className="signin__label" htmlFor="identity">
+                YOUR NAME OR EMAIL
+              </label>
+              <input
+                id="identity"
+                className="signin__input"
+                type="text"
+                autoComplete="username"
+                autoFocus
+                value={identity}
+                onChange={(event) => setIdentity(event.target.value)}
+                required
+              />
+            </>
+          ) : (
             <p className="signin__hint">
-              At least 12 characters. Generate one rather than choosing one where you can —
-              every other session this account holds ends when you save.
-              {needsCurrentPassword
-                ? ' Your current password is needed because this page was reloaded.'
-                : ' You are already signed in, so the current password is not needed again.'}
+              Signing in as <strong>{identity}</strong>.{' '}
+              <button
+                type="button"
+                className="signin__linkbutton"
+                onClick={() => {
+                  forget();
+                  setIdentity('');
+                  setAskIdentity(true);
+                }}
+              >
+                Not you?
+              </button>
             </p>
-            {error ? <div className="signin__error">{error}</div> : null}
-            <button type="submit" className="btn btn--primary signin__submit" disabled={busy}>
-              {busy ? 'SAVING…' : 'SET PASSWORD'}
-            </button>
-          </form>
-        ) : (
-          <form key="sign-in" onSubmit={(event) => void submitSignIn(event)}>
-            <p className="signin__lede">This Brain is private.</p>
-            {/*
-              * The passkey is the way in; the password form below it is what the
-              * owner's own account still uses and what an account made before
-              * passkeys existed needs. It is deliberately not hidden behind a
-              * link: a fallback somebody cannot find is a lockout.
-              */}
-            {passkeysAvailable() ? (
-              <>
-                <button
-                  type="button"
-                  className="btn btn--primary signin__submit"
-                  disabled={busy}
-                  onClick={() => void signInWithDevice()}
-                >
-                  {busy ? 'WAITING FOR YOUR DEVICE…' : 'SIGN IN WITH YOUR DEVICE'}
-                </button>
-                <p className="signin__hint">
-                  No password and no email address. Your device asks you for your fingerprint,
-                  your face or your screen lock.
-                </p>
-              </>
-            ) : (
-              <p className="signin__hint">{PASSKEY_UNSUPPORTED}</p>
-            )}
-            <p className="signin__label">OR WITH A PASSWORD</p>
-            <label className="signin__label" htmlFor="email">
-              EMAIL
-            </label>
-            <input
-              id="email"
-              className="signin__input"
-              type="email"
-              autoComplete="username"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-            <label className="signin__label" htmlFor="password">
-              PASSWORD
-            </label>
-            <input
-              id="password"
-              className="signin__input"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-            {error ? <div className="signin__error">{error}</div> : null}
-            <button type="submit" className="btn btn--primary signin__submit" disabled={busy}>
-              {busy ? 'SIGNING IN…' : 'SIGN IN'}
-            </button>
-          </form>
-        )}
+          )}
+
+          <label className="signin__label" htmlFor="pin">
+            SIX-DIGIT PIN
+          </label>
+          <input
+            id="pin"
+            className="signin__input signin__input--pin"
+            /*
+             * `text` with a numeric mode rather than `type="number"`: a number
+             * input strips leading zeros, offers a spinner, and lets the arrow
+             * keys change a credential. `inputMode` is what actually brings up
+             * the digit keypad on a phone, which is where this is typed most.
+             */
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="current-password"
+            maxLength={6}
+            autoFocus={!askIdentity}
+            value={pin}
+            onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            required
+          />
+
+          {error ? <div className="signin__error">{error}</div> : null}
+
+          <button
+            type="submit"
+            className="btn btn--primary signin__submit"
+            disabled={busy || pin.length !== 6 || identity.trim().length === 0}
+          >
+            {busy ? 'SIGNING IN…' : 'SIGN IN'}
+          </button>
+        </form>
       </div>
     </div>
   );

@@ -51,7 +51,12 @@ import {
   insertClaims,
   updateFragment,
 } from '../server/repos/research.ts';
-import { launchMission, linkMission, transitionMission } from '../server/repos/russellMissions.ts';
+import {
+  launchMission,
+  linkMission,
+  listMissions,
+  transitionMission,
+} from '../server/repos/russellMissions.ts';
 import { activate, setLifecycle, launchableUnderCashMode } from '../server/services/cash/lifecycle.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import {
@@ -118,6 +123,11 @@ interface StructuralClaim {
 async function finishedRound(input: {
   candidateId: string;
   claims: StructuralClaim[];
+  /**
+   * Leave the mission RUNNING, so the findings are filed and the round is not
+   * settled — the state a tick that died between the two leaves behind.
+   */
+  leaveRunning?: boolean;
 }): Promise<string> {
   const run = await createRun({
     projectId,
@@ -208,8 +218,19 @@ async function finishedRound(input: {
   });
   await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
   await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
-  await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'DONE' });
+  if (!input.leaveRunning) {
+    await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'DONE' });
+  }
   return orchestration.id;
+}
+
+/** Finish a mission left running, so its round settles on the next pass. */
+async function finishMissionFor(candidateId: string): Promise<void> {
+  const mission = (await listMissions({ projectId })).find(
+    (one) => one.candidateId === candidateId,
+  );
+  expect(mission, 'no mission for that candidate').toBeTruthy();
+  await transitionMission({ missionId: mission!.id, from: 'RUNNING', to: 'DONE' });
 }
 
 /** The candidate a kernel round of this purpose is asking, if one is open. */
@@ -1050,6 +1071,106 @@ describe('capital and constraints reach the right table', () => {
     expect(pass.absorbed.capital).toHaveLength(0);
     expect(pass.absorbed.refused).toHaveLength(1);
     expect(pass.absorbed.refused[0]!.why).toContain('one opening');
+  });
+});
+
+describe('a round records what it established, whenever the tick happened to die', () => {
+  /**
+   * The crash window between filing and settling, which a tally gets wrong.
+   *
+   * `absorb` counted what *this pass wrote*. That is correct only while every
+   * pass that absorbs a round also closes it — and a tick that dies in between
+   * leaves the findings filed and the round OPEN, so the next pass writes
+   * nothing (every insert conflicts on its unique index), counts zero, and
+   * records a round that established two subjects as having established none.
+   *
+   * `found` is what `nextRoundFor` and `standingOf` decide barrenness against,
+   * so the subject is then documented as one nobody should look at again — from
+   * an accident of timing rather than from anything about the subject.
+   *
+   * The openings half was already derived from rows; this makes the other half
+   * the same shape. Simulated by absorbing once with the mission still running
+   * and settling on the pass after, which is exactly what the dead tick leaves.
+   */
+  it('records what a round established even when an earlier pass already filed it', async () => {
+    await activated();
+    await runIndustryKernel(projectId);
+    const candidate = await candidateFor('BOOTSTRAP');
+
+    await finishedRound({
+      candidateId: candidate!,
+      leaveRunning: true,
+      claims: [
+        {
+          claim: 'The classification declares an information sector.',
+          finding: 'SUB_INDUSTRY',
+          subject: 'Information',
+        },
+        {
+          claim: 'It also declares a manufacturing sector.',
+          finding: 'SUB_INDUSTRY',
+          subject: 'Manufacturing',
+        },
+      ],
+    });
+
+    // The pass that files them. The mission is still running, so the round
+    // stays OPEN — the state a tick that died in between leaves behind.
+    const first = await runIndustryKernel(projectId);
+    expect(first.absorbed.nodes).toHaveLength(2);
+    expect(first.absorbed.settled).toHaveLength(0);
+
+    // The pass that settles it. It files nothing, because every insert now
+    // conflicts — and a tally of what *this* pass wrote would read zero.
+    await finishMissionFor(candidate!);
+    const second = await runIndustryKernel(projectId);
+    expect(second.absorbed.nodes).toHaveLength(0);
+
+    const bootstrap = (await listIndustryRounds(projectId)).find(
+      (one) => one.purpose === 'BOOTSTRAP',
+    )!;
+    expect(bootstrap.state).toBe('HARVESTED');
+    expect(bootstrap.found).toBe(2);
+  });
+
+  /**
+   * And the repair changes nothing about a round that settled correctly.
+   *
+   * Counting *rows* rather than declared claims is what makes that true: two
+   * claims naming one subject file one node, which is what the tally counted.
+   * Counting claims would have said two and quietly moved a number on every
+   * correctly settled round in the database.
+   */
+  it('counts what was filed, so two claims naming one subject stay one finding', async () => {
+    await activated();
+    await runIndustryKernel(projectId);
+    const candidate = await candidateFor('BOOTSTRAP');
+
+    await finishedRound({
+      candidateId: candidate!,
+      claims: [
+        {
+          claim: 'One classification declares an information sector.',
+          finding: 'SUB_INDUSTRY',
+          subject: 'Information',
+          sourceUrl: 'https://example.test/naics/51',
+        },
+        {
+          claim: 'Another declares the same information sector.',
+          finding: 'SUB_INDUSTRY',
+          subject: 'Information',
+          sourceUrl: 'https://example.test/isic/j',
+        },
+      ],
+    });
+    await runIndustryKernel(projectId);
+
+    expect((await listNodes(projectId)).filter((one) => one.name === 'Information')).toHaveLength(1);
+    const bootstrap = (await listIndustryRounds(projectId)).find(
+      (one) => one.purpose === 'BOOTSTRAP',
+    )!;
+    // One node was filed, so one finding — exactly what the tally recorded.
+    expect(bootstrap.found).toBe(1);
   });
 });
 

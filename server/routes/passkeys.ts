@@ -27,6 +27,7 @@ import { badRequest, notFound, unprocessable } from './helpers.ts';
 import { issuerFor } from './oauth.ts';
 import {
   completeEnrollment,
+  completeEnrollmentWithPin,
   createMemberSlot,
   issueRecovery,
   previewEnrollment,
@@ -41,6 +42,7 @@ import {
   signInWithPasskey,
 } from '../services/identity/passkeyAuth.ts';
 import { verifyRegistration } from '../services/identity/webauthn.ts';
+import { PIN_MALFORMED, hashPin, isWellFormedPin } from '../services/identity/pin.ts';
 import {
   addPasskey,
   countLivePasskeys,
@@ -50,16 +52,23 @@ import {
   revokePasskey,
   takeChallenge,
 } from '../repos/passkeys.ts';
-import { createSession, getUser, recordIdentityEvent } from '../repos/identity.ts';
+import {
+  createSession,
+  getUser,
+  recordIdentityEvent,
+  revokeSessionsForPasskey,
+} from '../repos/identity.ts';
 import { generateSessionToken } from '../services/identity/secrets.ts';
-import { isSecureRequest, sessionCookie } from '../services/identity/authenticate.ts';
+import {
+  DEVICE_SESSION_TTL_MS,
+  isSecureRequest,
+  sessionCookie,
+} from '../services/identity/authenticate.ts';
 import { requireBrainAdmin } from './helpers.ts';
 import { nowIso } from '../repos/util.ts';
 import { cashReadiness } from '../services/cash/readiness.ts';
 
 export const passkeyRouter: Router = Router();
-
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 function rpFor(req: Request) {
   const rp = relyingPartyFrom(issuerFor(req));
@@ -67,19 +76,31 @@ function rpFor(req: Request) {
   return rp;
 }
 
-function startSessionFor(res: Response, req: Request, userId: string) {
+/**
+ * Open a session for a device, and record which device opened it.
+ *
+ * The lifetime is `DEVICE_SESSION_TTL_MS` — thirty days, absolute, carried in
+ * the cookie's `Max-Age` so it survives closing the browser. That file has the
+ * reasoning; what matters here is the `passkeyId`, which is what lets revoking
+ * one device end exactly the sessions that device opened and nothing else.
+ */
+function startSessionFor(res: Response, req: Request, userId: string, passkeyId: string | null) {
   return (async () => {
     const token = generateSessionToken();
     const session = await createSession({
       userId,
       secret: token.secret,
-      ttlMs: SESSION_TTL_MS,
+      ttlMs: DEVICE_SESSION_TTL_MS,
       userAgent: req.header('user-agent') ?? null,
       ip: req.ip ?? null,
+      passkeyId,
     });
     res.setHeader(
       'Set-Cookie',
-      sessionCookie(token.secret, { secure: isSecureRequest(req), maxAgeMs: SESSION_TTL_MS }),
+      sessionCookie(token.secret, {
+        secure: isSecureRequest(req),
+        maxAgeMs: DEVICE_SESSION_TTL_MS,
+      }),
     );
     res.setHeader('Cache-Control', 'no-store');
     return session;
@@ -163,7 +184,51 @@ passkeyRouter.post('/enroll/complete', (req: Request, res: Response) => {
         return;
       }
 
-      await startSessionFor(res, req, outcome.user.id);
+      await startSessionFor(res, req, outcome.user.id, outcome.passkeyId);
+      res.json({
+        user: { id: outcome.user.id, displayName: outcome.user.displayName },
+        readiness: await cashReadiness(),
+      });
+    } catch {
+      // Inside enrollment, an unexpected error does not get to explain itself.
+      res.status(404).json({ error: LINK_REFUSED });
+    }
+  })();
+});
+
+/**
+ * Spend the link on a **PIN**, and sign the person straight in.
+ *
+ * The device route below is still here and still works; this is the one the
+ * screen offers, because a device can refuse and six digits cannot. The link
+ * is the whole authority either way, and it is spent by the same guarded
+ * `UPDATE` — so a person cannot end up with both a device and a PIN from one
+ * link, and two requests holding one intercepted link still produce one
+ * credential and one ordinary refusal.
+ */
+passkeyRouter.post('/enroll/pin', (req: Request, res: Response) => {
+  void (async (): Promise<void> => {
+    try {
+      const body = bodyOf(req);
+      const pin = body['pin'];
+      if (!isWellFormedPin(pin)) {
+        // Malformed is its own answer and deliberately not the link refusal:
+        // it says nothing about the link, and telling somebody who typed five
+        // digits that their *link* is bad sends them to ask for a new one.
+        res.status(400).json({ error: PIN_MALFORMED });
+        return;
+      }
+
+      const outcome = await completeEnrollmentWithPin({
+        token: body['token'],
+        pinVerifier: await hashPin(pin),
+      });
+      if (!outcome.ok) {
+        res.status(404).json({ error: outcome.reason });
+        return;
+      }
+
+      await startSessionFor(res, req, outcome.user.id, null);
       res.json({
         user: { id: outcome.user.id, displayName: outcome.user.displayName },
         readiness: await cashReadiness(),
@@ -198,7 +263,7 @@ passkeyRouter.post('/auth/passkey/verify', (req: Request, res: Response) => {
         res.status(401).json({ error: outcome.reason });
         return;
       }
-      await startSessionFor(res, req, outcome.user.id);
+      await startSessionFor(res, req, outcome.user.id, outcome.passkeyId);
       res.json({ user: { id: outcome.user.id, displayName: outcome.user.displayName } });
     } catch {
       res.status(401).json({ error: SIGN_IN_REFUSED });
@@ -316,6 +381,15 @@ passkeyRouter.post(
       reason: optionalString(bodyOf(req)['reason'], 'reason') ?? 'Revoked by its owner.',
       byUserId: principal.id,
     });
+    /*
+     * And the sessions that device opened, which is the half a revocation
+     * would otherwise be missing. Retiring the credential and leaving its
+     * session live means the retired device keeps working until the session
+     * expires — thirty days, now that a device session is meant to last. The
+     * person's other devices are untouched, because they are not what is being
+     * taken out of service.
+     */
+    const endedSessions = done ? await revokeSessionsForPasskey(id) : 0;
     await recordIdentityEvent({
       actorType: 'HUMAN',
       actorId: principal.id,
@@ -324,7 +398,7 @@ passkeyRouter.post(
       targetId: principal.id,
       projectId: null,
       result: done ? 'SUCCESS' : 'DENIED',
-      metadata: { passkeyId: id },
+      metadata: { passkeyId: id, endedSessions: String(endedSessions) },
     });
     return { revoked: done };
   }),

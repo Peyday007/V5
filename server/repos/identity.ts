@@ -74,6 +74,9 @@ function mapUser(row: UserRow): User {
     disabled: row.disabled_at !== null,
     disabledAt: row.disabled_at,
     passwordUpdatedAt: row.password_updated_at,
+    // A timestamp, never a verifier: "does this account have a PIN" is a
+    // question several screens need and none of them needs the PIN.
+    pinUpdatedAt: row.pin_updated_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -82,8 +85,11 @@ function mapUser(row: UserRow): User {
 function mapWorker(row: WorkerRow): Worker {
   return {
     id: row.id,
+    label: row.label,
     name: row.name,
     displayName: row.display_name,
+    ownerUserId: row.owner_user_id,
+    ownerEvidence: row.owner_evidence,
     workerType: row.worker_type,
     description: row.description,
     status: row.status as WorkerStatus,
@@ -237,6 +243,53 @@ export async function createUser(input: CreateUserInput): Promise<User> {
   return created;
 }
 
+/**
+ * A person with no credential of any kind, waiting for a device.
+ *
+ * The one place this row shape is written. Both journeys that bring somebody
+ * into this Brain produce it — an administrator creating a member slot, and a
+ * project invitation accepted by an address with no account yet — and having
+ * two copies of the `INSERT` is how one of them would eventually acquire a
+ * password column the other does not have.
+ *
+ * `password_verifier` and `password_algorithm` are NULL on purpose rather than
+ * set to something unusable: "passkey-only" is then a property of the row that
+ * `getPasswordVerifierByEmail` cannot answer for, rather than a policy some
+ * later code path has to remember to apply.
+ *
+ * The address is optional because the two journeys differ on exactly that. A
+ * member slot has none — there is nothing to send a reset to and nothing to
+ * collect it for. An invitation names one, and it is the invitation's own, so
+ * it is kept: it is how the *next* invitation to the same person finds them.
+ */
+export async function createCredentiallessUser(input: {
+  email: string | null;
+  displayName: string;
+  createdByType: ActorType;
+  createdById: string | null;
+}): Promise<User> {
+  const id = newId('usr');
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO users (id, email, display_name, kind, password_algorithm, password_verifier,
+                        password_updated_at, must_change_password, is_brain_admin, disabled_at,
+                        created_by_type, created_by_id, created_at, updated_at)
+     VALUES (?, ?, ?, 'PERSON', NULL, NULL, NULL, 0, 0, NULL, ?, ?, ?, ?)`,
+    [
+      id,
+      input.email === null ? null : normalizeEmail(input.email),
+      input.displayName.trim(),
+      input.createdByType,
+      input.createdById,
+      at,
+      at,
+    ],
+  );
+  const created = await getUser(id);
+  if (!created) throw new Error('The user row disappeared immediately after being written.');
+  return created;
+}
+
 export async function getUser(id: string): Promise<User | null> {
   const row = await getDb().get<UserRow>('SELECT * FROM users WHERE id = ?', [id]);
   return row ? mapUser(row) : null;
@@ -267,6 +320,119 @@ export async function getPasswordVerifierByEmail(
   // verifier that could never match and telling the caller the account exists.
   if (!row || row.password_verifier === null) return null;
   return { user: mapUser(row), verifier: row.password_verifier };
+}
+
+/**
+ * Who a typed identity names, for the PIN door and for nothing else.
+ *
+ * An address, or a display name when it is **unambiguous**. Members enrolled
+ * with a link hold no address at all — that is the whole of what migration 062
+ * made possible — so an email-only lookup would have a PIN they could never
+ * present. Two people sharing a display name resolve to nobody rather than to
+ * whichever row sorted first, because signing somebody in as the wrong person
+ * is worse than refusing them both.
+ *
+ * It returns the verifier, so it is named like the password one and for the
+ * same reason: nothing may reach a verifier while looking for a user.
+ */
+export async function getPinCredentialByIdentity(
+  identity: string,
+): Promise<{ user: User; verifier: string | null } | null> {
+  const typed = identity.trim();
+  if (typed.length === 0) return null;
+
+  const byEmail = await getDb().get<UserRow>('SELECT * FROM users WHERE email = ?', [
+    normalizeEmail(typed),
+  ]);
+  const row =
+    byEmail ??
+    (await (async (): Promise<UserRow | null> => {
+      // Exactly one, or none. `LIMIT 2` rather than `LIMIT 1` is the whole
+      // check: it is how ambiguity is *seen* rather than silently resolved.
+      const named = await getDb().all<UserRow>(
+        'SELECT * FROM users WHERE display_name = ? ORDER BY id LIMIT 2',
+        [typed],
+      );
+      return named.length === 1 ? (named[0] ?? null) : null;
+    })());
+
+  if (!row) return null;
+  // The row comes back even with no PIN set, because the caller still has to
+  // spend the same time on it as it would on a real one — see
+  // `UNMATCHABLE_PIN_VERIFIER`. What it must not do is say which this was.
+  return { user: mapUser(row), verifier: row.pin_verifier };
+}
+
+export interface PinThrottleState {
+  failures: number;
+  lockedUntil: string | null;
+}
+
+export async function readPinThrottle(userId: string): Promise<PinThrottleState> {
+  const row = await getDb().get<UserRow>(
+    'SELECT pin_failed_count, pin_locked_until FROM users WHERE id = ?',
+    [userId],
+  );
+  return {
+    failures: Number(row?.pin_failed_count ?? 0),
+    lockedUntil: row?.pin_locked_until ?? null,
+  };
+}
+
+/** One more failure, and the cooldown that failure earns. Returns the new count. */
+export async function recordPinFailure(
+  userId: string,
+  cooldownFor: (failures: number) => number,
+): Promise<PinThrottleState> {
+  const current = await readPinThrottle(userId);
+  const failures = current.failures + 1;
+  const cooldownMs = cooldownFor(failures);
+  const lockedUntil =
+    cooldownMs > 0 ? new Date(Date.now() + cooldownMs).toISOString() : null;
+  await getDb().run(
+    'UPDATE users SET pin_failed_count = ?, pin_locked_until = ?, updated_at = ? WHERE id = ?',
+    [failures, lockedUntil, nowIso(), userId],
+  );
+  return { failures, lockedUntil };
+}
+
+/** Cleared by a success, and by setting a new PIN. Nothing else clears it. */
+export async function clearPinThrottle(userId: string): Promise<void> {
+  await getDb().run(
+    'UPDATE users SET pin_failed_count = 0, pin_locked_until = NULL, updated_at = ? WHERE id = ?',
+    [nowIso(), userId],
+  );
+}
+
+export interface SetPinOptions {
+  /** The session doing the setting stays; every other one this person holds ends. */
+  keepSessionId?: string | null;
+}
+
+/**
+ * Set or replace this account's PIN.
+ *
+ * Every other session ends, for `setUserPassword`'s reason: setting a PIN is
+ * what somebody does when they believe the old one may be in the wrong hands,
+ * and leaving the other sessions alive would defeat it. The throttle is
+ * cleared in the same statement, because a cooldown earned against a PIN that
+ * no longer exists is a punishment for a credential nobody holds.
+ */
+export async function setUserPin(
+  id: string,
+  verifier: string,
+  options: SetPinOptions = {},
+): Promise<User | null> {
+  const at = nowIso();
+  await getDb().run(
+    `UPDATE users
+        SET pin_algorithm = ?, pin_verifier = ?, pin_updated_at = ?,
+            pin_failed_count = 0, pin_locked_until = NULL, updated_at = ?
+      WHERE id = ?`,
+    ['scrypt', verifier, at, at, id],
+  );
+  await revokeSessionsForUser(id, options.keepSessionId ?? null);
+  return await getUser(id);
 }
 
 export async function listUsers(): Promise<User[]> {
@@ -366,6 +532,15 @@ export interface CreateSessionInput {
   ttlMs: number;
   userAgent?: string | null;
   ip?: string | null;
+  /**
+   * The device this session was opened by, where one was.
+   *
+   * Null is an answer rather than a gap: the break-glass password door opens a
+   * session from no device at all, and a session that names none is correctly
+   * out of reach of a per-device revocation while still being reached by the
+   * per-person one.
+   */
+  passkeyId?: string | null;
 }
 
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
@@ -374,8 +549,8 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
   const expiresAt = new Date(Date.now() + input.ttlMs).toISOString();
   await getDb().run(
     `INSERT INTO user_sessions (id, user_id, token_verifier, issued_at, expires_at,
-                                revoked_at, last_seen_at, user_agent, created_ip)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
+                                revoked_at, last_seen_at, user_agent, created_ip, passkey_id)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
     [
       id,
       input.userId,
@@ -385,6 +560,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
       at,
       (input.userAgent ?? '').slice(0, 200) || null,
       input.ip ?? null,
+      input.passkeyId ?? null,
     ],
   );
   return { sessionId: id, secret: input.secret, expiresAt };
@@ -450,6 +626,29 @@ export async function revokeSessionsForUser(
   return result.changes;
 }
 
+/**
+ * End every session one device opened.
+ *
+ * What a revocation of *that credential* can honestly reach. Revoking a
+ * passkey and leaving the session it opened alive would mean a retired device
+ * keeps working until its session expires — which, now that a device session is
+ * measured in weeks rather than hours, is not a rounding error.
+ *
+ * It deliberately does not touch the person's other sessions: the ones their
+ * remaining devices opened are not the ones being taken out of service, and
+ * ending them would make losing one phone a reason to sign in again everywhere.
+ * Where *every* session has to go — a recovery, a password change — the
+ * per-person revocation above is the one to call.
+ */
+export async function revokeSessionsForPasskey(passkeyId: string): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE user_sessions SET revoked_at = ?
+      WHERE passkey_id = ? AND revoked_at IS NULL`,
+    [nowIso(), passkeyId],
+  );
+  return result.changes;
+}
+
 export async function countLiveSessions(userId: string): Promise<number> {
   const row = await getDb().get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM user_sessions
@@ -478,29 +677,72 @@ export interface CreateWorkerInput {
   createdById: string;
 }
 
+/**
+ * The next neutral label, and why it is a retry loop rather than a MAX.
+ *
+ * `label` carries a UNIQUE index, so two concurrent creations that both read
+ * the same maximum produce one winner and one constraint violation — the
+ * arbiter is the database, exactly as §20 requires of every reservation in this
+ * codebase. The loser simply reads again and takes the next one. Bounded,
+ * because the alternative to a bound is a spin.
+ */
+const MAX_LABEL_ATTEMPTS = 25;
+
+function labelOrdinal(label: string | null): number {
+  if (!label) return 0;
+  const match = /^worker-(\d+)$/.exec(label);
+  return match ? Number(match[1]) : 0;
+}
+
+async function nextWorkerLabel(): Promise<string> {
+  const rows = await getDb().all<{ label: string | null }>('SELECT label FROM workers');
+  const highest = rows.reduce((max, row) => Math.max(max, labelOrdinal(row.label)), 0);
+  return `worker-${String(highest + 1).padStart(2, '0')}`;
+}
+
 export async function createWorker(input: CreateWorkerInput): Promise<Worker> {
   const id = newId('wkr');
   const at = nowIso();
   const name = normalizeWorkerName(input.name);
-  await getDb().run(
-    `INSERT INTO workers (id, name, display_name, worker_type, description, status,
-                          disabled_at, created_by_type, created_by_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 'ACTIVE', NULL, ?, ?, ?, ?)`,
-    [
-      id,
-      name,
-      (input.displayName ?? input.name).trim(),
-      input.workerType ?? 'GENERIC',
-      input.description ?? null,
-      input.createdByType,
-      input.createdById,
-      at,
-      at,
-    ],
-  );
-  const created = await getWorker(id);
-  if (!created) throw new Error('The worker row disappeared immediately after being written.');
-  return created;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < MAX_LABEL_ATTEMPTS; attempt += 1) {
+    const label = await nextWorkerLabel();
+    try {
+      await getDb().run(
+        `INSERT INTO workers (id, label, name, display_name, worker_type, description, status,
+                              disabled_at, created_by_type, created_by_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', NULL, ?, ?, ?, ?)`,
+        [
+          id,
+          label,
+          name,
+          (input.displayName ?? input.name).trim(),
+          input.workerType ?? 'GENERIC',
+          input.description ?? null,
+          input.createdByType,
+          input.createdById,
+          at,
+          at,
+        ],
+      );
+      const created = await getWorker(id);
+      if (!created) throw new Error('The worker row disappeared immediately after being written.');
+      return created;
+    } catch (error) {
+      // A collision on `name` is the caller's problem and must surface; a
+      // collision on `label` is this loop's to resolve. Distinguished by asking
+      // the database rather than by parsing a driver's message, because the two
+      // backends word it differently.
+      const taken = await getDb().get<{ id: string }>('SELECT id FROM workers WHERE label = ?', [
+        label,
+      ]);
+      if (!taken) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Could not assign a neutral worker label after repeated collisions.');
 }
 
 export async function getWorker(id: string): Promise<Worker | null> {
@@ -512,6 +754,19 @@ export async function getWorkerByName(name: string): Promise<Worker | null> {
   const row = await getDb().get<WorkerRow>('SELECT * FROM workers WHERE name = ?', [
     normalizeWorkerName(name),
   ]);
+  return row ? mapWorker(row) : null;
+}
+
+/**
+ * The neutral operational label migration 074 assigns, which is what every
+ * surface prints. Unique by index, so this can never answer with two rows.
+ *
+ * Matched exactly, not normalized: a label is server-assigned rather than
+ * typed, so there is no casing anybody has to guess at, and lower-casing here
+ * would quietly widen what an operator reference matches.
+ */
+export async function getWorkerByLabel(label: string): Promise<Worker | null> {
+  const row = await getDb().get<WorkerRow>('SELECT * FROM workers WHERE label = ?', [label.trim()]);
   return row ? mapWorker(row) : null;
 }
 

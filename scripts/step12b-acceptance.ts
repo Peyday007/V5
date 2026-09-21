@@ -197,6 +197,7 @@ import { projectRecord } from '../server/services/connect/projection.ts';
 import { findExternalRecord } from '../server/repos/externalRecords.ts';
 import { WORKER_SCOPES } from '../server/domain/types.ts';
 import type { ExistingClaim, Principal, Project } from '../server/domain/types.ts';
+import { workerIdentity } from '../server/services/identity/authenticate.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
@@ -2247,8 +2248,8 @@ async function inviteJourney(
   const workerPrincipal: Principal = {
     type: 'WORKER',
     id: worker.id,
-    handle: worker.name,
-    displayName: worker.displayName,
+    handle: workerIdentity(worker),
+    displayName: workerIdentity(worker),
     isBrainAdmin: false,
     mustChangePassword: false,
     credentialId: 'acceptance:worker',
@@ -2426,8 +2427,8 @@ async function inviteJourney(
   });
   const raceToken = raced.ok ? (raced.issued.invitationUrl.split('#')[1] ?? '') : '';
   const [raceA, raceB] = await Promise.all([
-    acceptInvitation({ token: raceToken, password: `acc-${randomUUID()}` }),
-    acceptInvitation({ token: raceToken, password: `acc-${randomUUID()}` }),
+    acceptInvitation({ token: raceToken }),
+    acceptInvitation({ token: raceToken }),
   ]);
   const exactlyOneWon = [raceA.ok, raceB.ok].filter(Boolean).length === 1;
 
@@ -2479,7 +2480,6 @@ async function inviteJourney(
   const newcomerToken = newcomer.ok ? (newcomer.issued.invitationUrl.split('#')[1] ?? '') : '';
   const newcomerAccepted = await acceptInvitation({
     token: newcomerToken,
-    password: `acc-${randomUUID()}`,
     displayName: 'Test identity — a new collaborator',
   });
   const newcomerUser = await getUserByEmail(newcomerEmail);
@@ -2488,7 +2488,15 @@ async function inviteJourney(
     newcomerAccepted.createdAccount &&
     newcomerUser !== null &&
     newcomerUser.email === newcomerEmail &&
-    !newcomerUser.isBrainAdmin;
+    !newcomerUser.isBrainAdmin &&
+    /*
+     * And it holds no password. The account this journey creates is
+     * credential-less, with one enrollment link beside it, because a password
+     * minted here would be one `passwordDoor.ts` accepts — an ordinary member
+     * with exactly the credential no member is supposed to have.
+     */
+    newcomerUser.passwordUpdatedAt === null &&
+    newcomerAccepted.enrollment !== undefined;
 
   const unauthorizedEmail = at('invited-with-no-account-by-a-project-admin');
   const unauthorized = await inviteToProject({
@@ -2501,10 +2509,7 @@ async function inviteJourney(
   const unauthorizedToken = unauthorized.ok
     ? (unauthorized.issued.invitationUrl.split('#')[1] ?? '')
     : '';
-  const unauthorizedAccept = await acceptInvitation({
-    token: unauthorizedToken,
-    password: `acc-${randomUUID()}`,
-  });
+  const unauthorizedAccept = await acceptInvitation({ token: unauthorizedToken });
   const unauthorizedStillLive =
     unauthorized.ok &&
     (await getProjectInvitation(unauthorized.issued.invitation.id))!.acceptedAt === null &&

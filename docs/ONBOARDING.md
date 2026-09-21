@@ -42,8 +42,11 @@ separate decision and stays the owner's.
 
 ## 1. The four people
 
-There is no email address and no password in this journey. An address exists to
-recover a password, and there is no password here to recover.
+There is no email address and no password in this journey, and there is none in
+the project-invitation journey either. An address exists to recover a password,
+and there is no password here to recover: an invitation accepted by somebody
+with no Brain account creates a credential-less row and hands back one
+enrollment link, which the screen spends immediately.
 
 ### Inviting somebody
 
@@ -97,14 +100,66 @@ never its token.
 
 ### Password sign-in
 
-Password sign-in is still on the sign-in screen, below the device button,
-because the owner's own account has one and an account made before this existed
-needs it. A passkey-only account is not reachable by that path at all: it has no
-address and no verifier, so the lookup answers `null` in exactly the way an
-unknown address does.
+**It is gone from the sign-in screen, and gone as a way for a person to sign
+in.** The screen carries one button. There is no address field, no password
+field, no *or with a password*, and no mention of a recovery path — the last of
+those deliberately, because internal recovery machinery on the front door tells
+somebody probing that a second door exists and where it is.
 
-Turning password sign-in off entirely is the owner's decision and needs the
-owner to hold a safe secondary passkey first.
+What decides it is one rule, in `server/services/identity/passwordDoor.ts`, and
+it is derived from rows rather than set anywhere: **a password is accepted only
+from an account that cannot sign in with a device.** Concretely, an account is
+refused its password once it holds a live passkey it has *actually signed in
+with at least once* — registered is not enough, because a credential bound to
+the wrong origin registers perfectly and asserts never, and the safe direction
+to be wrong in is leaving the door somebody came in through open.
+
+Three consequences, which are the whole reason the rule is shaped this way:
+
+* **The owner's own migration needs no step anybody has to remember.** Their
+  account had a password and no device, so the door was open for them; the
+  first time a device signed them in, it shut. "Verify the passkey works before
+  disabling the password" is a derivation rather than a procedure.
+* **A member is never offered one.** A member slot holds no address and no
+  verifier, so there is nothing for a password to be compared against — and
+  once they enrol, the rule shuts the door as well.
+* **The hosted verification identities keep working.** `kind = 'SYSTEM'`,
+  created on every deploy, no device and never one. Nothing in the rule mentions
+  kinds; what keeps them working is that machinery holds no passkey.
+
+### If you are locked out
+
+Two doors, in this order.
+
+**`/recovery`** is an address in the app that nothing links to. It takes an
+address and a password, and it exists for an account that has no working device
+yet. It ends by registering a device rather than by opening the Brain, because
+the point of getting in that way is to stop needing to. Every attempt is
+recorded.
+
+**`BRAIN_BREAK_GLASS`** is the answer when `/recovery` refuses you — which it
+will, once your device has worked once. Set it in the deployment's own secrets
+(`fly secrets set BRAIN_BREAK_GLASS=true`), which re-opens the password door for
+every account that has one, sign in at `/recovery`, register a replacement
+device, and **remove it again**. The boot banner says `BREAK-GLASS IS ARMED`
+every time the machine starts while it is set, so a deployment left armed says
+so rather than quietly keeping a second way in.
+
+It grants no authority of its own: the password still has to be right, the
+throttle still applies, a disabled account is still refused, and the session it
+opens is the short one rather than the thirty-day device session.
+
+### How long you stay signed in
+
+A device session lasts **thirty days**, absolute, and is carried in the cookie's
+`Max-Age` so it survives closing the browser and restarting the machine. It is
+not refreshed on use, because a rolling session never ends. A password session —
+which now only means a break-glass one — is eight hours.
+
+The session is a row the server can end at any moment: signing out revokes it,
+revoking a device revokes the sessions **that device** opened, and issuing a
+recovery link revokes every session that person holds. A disabled account is
+refused on its next request whatever it is carrying.
 
 **So `Joined` on the People page means *holds a live credential*, and the row
 says which.** An earlier reading counted live passkeys only, which reported the

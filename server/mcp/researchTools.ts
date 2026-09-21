@@ -99,7 +99,21 @@ import {
   subjectVocabularyFor,
   validateStructural,
 } from '../domain/industry.ts';
-import type { StructuralFinding } from '../domain/types.ts';
+import {
+  LABOR_FINDINGS,
+  LABOR_FINDING_GUIDE,
+  LABOR_SUBJECT_GUIDE,
+  validateLabor,
+} from '../domain/labor.ts';
+import { RATE_BASES } from '../domain/types.ts';
+import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
+import {
+  CAPABILITY_FINDINGS,
+  describeVocabularies,
+  FINDING_GUIDE as CAPABILITY_FINDING_GUIDE,
+  validateCapabilityFinding,
+} from '../domain/manufacturing.ts';
+import type { CapabilityFinding } from '../domain/types.ts';
 import type { EvidenceLane, LaneNecessity } from '../domain/types.ts';
 import { coverProposal, whyNotResearched } from '../services/research/coverageGate.ts';
 import { planDependencies } from '../services/research/splitting.ts';
@@ -131,6 +145,7 @@ import {
 } from '../repos/research.ts';
 import { checkpointWork, listCheckpoints, TooManyCheckpoints } from '../repos/workQueue.ts';
 import { classifyContradiction } from '../services/research/contradictions.ts';
+import { applyProposal } from '../services/research/intelligence/proposals.ts';
 import {
   assertCitable,
   fileResearchPacket,
@@ -195,6 +210,7 @@ const VERIFY_NAMESPACE = namespace('research.verify');
 const CONTRADICTION_NAMESPACE = namespace('research.contradiction');
 const BLOCKER_NAMESPACE = namespace('research.blocker');
 const SYNTHESIS_NAMESPACE = namespace('research.synthesis');
+const REVISION_NAMESPACE = namespace('research.plan-revision');
 
 /* ------------------------------------------------------------------------ */
 /* Argument reading                                                          */
@@ -1123,6 +1139,69 @@ function structuralOf(
 }
 
 /**
+ * The labor declaration on one submitted claim.
+ *
+ * `structuralOf`'s shape and its reasoning, delegated whole to `validateLabor`
+ * so that the wire door and the provider door cannot disagree about what a
+ * valid declaration is. A rename and nothing else.
+ */
+function laborOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  laborFinding: LaborFinding | null;
+  laborSubject: string | null;
+  laborQualifier: string | null;
+  laborRateCents: number | null;
+} {
+  const parsed = validateLabor({
+    where,
+    finding: row['labor_finding'],
+    subject: row['labor_subject'],
+    qualifier: row['labor_qualifier'],
+    rateCents: row['labor_rate_cents'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    laborFinding: parsed.value.finding,
+    laborSubject: parsed.value.subject,
+    laborQualifier: parsed.value.qualifier,
+    laborRateCents: parsed.value.rateCents,
+  };
+}
+
+/**
+ * The capability declaration on one submitted claim.
+ *
+ * The third question a claim can answer, beside the opening signal and the
+ * industry structure. Same shape, same delegation and the same reason for it:
+ * `services/research/schema.ts` calls this identical function for a pass a
+ * provider returned, so the two doors cannot come to disagree about what a
+ * valid declaration is.
+ */
+function capabilityOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  capabilityFinding: CapabilityFinding | null;
+  capabilitySubject: string | null;
+  capabilityObservedOn: string | null;
+} {
+  const parsed = validateCapabilityFinding({
+    where,
+    finding: row['capability_finding'],
+    subject: row['capability_subject'],
+    observedOn: row['capability_observed_on'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    capabilityFinding: parsed.value.finding,
+    capabilitySubject: parsed.value.subject,
+    capabilityObservedOn: parsed.value.observedOn,
+  };
+}
+
+/**
  * The dealflow declaration on one submitted claim.
  *
  * Delegated whole to `validateDealFinding`, which is also what the provider
@@ -1189,6 +1268,22 @@ const submitClaimsTool: McpTool = {
     '. The kinds that add a subject to the industry map (SUB_INDUSTRY, VALUE_CHAIN_LAYER, ' +
     'BUYER_TYPE, FULFILMENT_SOURCE, TRANSACTION_TYPE, BOTTLENECK, ADJACENT_INDUSTRY) also ' +
     'require structural_subject, which is that subject\'s name; the other three must omit it. ' +
+    'Separately again, where a claim establishes who or what actually produces work of this ' +
+    'kind, set labor_finding: ' +
+    LABOR_FINDINGS.map((finding) => `${finding} — ${LABOR_FINDING_GUIDE[finding]}`).join('; ') +
+    '. All three axes are independent — a claim may carry an opportunity_signal, a ' +
+    'structural_finding and a labor_finding at once, and most claims carry none of them. ' +
+    'Separately again, where a claim establishes what building a machine takes or teaches, ' +
+    'set capability_finding to the kind it is: ' +
+    CAPABILITY_FINDINGS.map((one) => `${one} — ${CAPABILITY_FINDING_GUIDE[one]}`).join('; ') +
+    '. All nine require capability_subject. For a category, a capability or a component that ' +
+    'is its own name as the source calls it; for the four that have a closed set it is a value ' +
+    'from that set (' +
+    describeVocabularies() +
+    '). DEMAND_EVIDENCE additionally requires capability_observed_on, the date the source ' +
+    'observed it, because an undated buying signal cannot be told apart from an old one. ' +
+    'A claim can carry any of opportunity_signal, structural_finding and capability_finding ' +
+    'together, and most claims carry none of the three. ' +
     'And separately again, where a claim establishes something about a cross-border ' +
     'transaction — who needs the equipment, who builds it, what the destination market ' +
     'demands of it, what a line of the landed cost is, or how this trade actually pays — ' +
@@ -1284,7 +1379,87 @@ const submitClaimsTool: McpTool = {
                 'would understate it.',
             },
             /*
-             * The third axis, declared rather than merely described — §33's
+             * Declared here too, for §33's reason one axis along: a field
+             * named in prose and absent from the schema is dropped by every
+             * client that honours `additionalProperties: false`, and the
+             * failure reads exactly like a worker honestly finding nothing.
+             */
+            labor_finding: {
+              type: 'string',
+              enum: [...LABOR_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes who ' +
+                'or what actually produces work of this kind: ' +
+                LABOR_FINDINGS.map((one) => `${one} — ${LABOR_FINDING_GUIDE[one]}`).join('; ') +
+                '. Independent of the other two declarations — a claim may carry all three.',
+            },
+            labor_subject: {
+              type: 'string',
+              description:
+                'Required whenever labor_finding is set: what the finding is about. ' +
+                LABOR_SUBJECT_GUIDE +
+                '.',
+            },
+            labor_qualifier: {
+              type: 'string',
+              enum: [...RATE_BASES],
+              description:
+                'Only for SOURCING_CHANNEL, and required there whenever labor_rate_cents is ' +
+                'set: what the rate is quoted on. A figure with no basis compares to nothing, ' +
+                'and reading the basis out of the claim sentence would get an order of ' +
+                'magnitude wrong silently.',
+            },
+            labor_rate_cents: {
+              type: 'integer',
+              description:
+                'Only for SOURCING_CHANNEL, and optional there: what a source publishes this ' +
+                'channel charges, in minor units. Leave it out where none does — the channel ' +
+                'is still worth recording, and an unknown rate is recorded as unknown rather ' +
+                'than read as cheap.',
+            },
+
+            /*
+             * The third declaration, and declared in the schema rather than
+             * only in the prose above — §33's defect, which this repository
+             * has already paid for once: `opportunity_signal` was named in a
+             * tool's description and left out of its schema, and
+             * `additionalProperties: false` meant a client honouring the
+             * schema dropped the one field that decided whether anything was
+             * ever created.
+             */
+            capability_finding: {
+              type: 'string',
+              enum: [...CAPABILITY_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes what ' +
+                'building a machine in some category takes, teaches, or runs into: ' +
+                CAPABILITY_FINDINGS.map(
+                  (one) => `${one} — ${CAPABILITY_FINDING_GUIDE[one]}`,
+                ).join('; ') +
+                '. Independent of the other two declarations — a claim may carry any of them.',
+            },
+            capability_subject: {
+              type: 'string',
+              description:
+                'Required whenever capability_finding is set: what the finding is about. For a ' +
+                'category, a capability or a bought-in component it is that thing\'s own name ' +
+                'as the source calls it, not a sentence about it. For the four kinds with a ' +
+                'closed set it is a value from that set: ' +
+                describeVocabularies() +
+                '.',
+            },
+            capability_observed_on: {
+              type: 'string',
+              description:
+                'Only for DEMAND_EVIDENCE, where it is required: the ISO-8601 date the source ' +
+                'observed what it reports. An undated buying signal cannot be told apart from ' +
+                'one somebody remembers from years ago, and this is the field that decides ' +
+                'whether a machine category counts as having established demand. Omitted for ' +
+                'every other kind.',
+            },
+
+            /*
+             * The fifth axis, declared rather than merely described — §33's
              * defect, which this schema already records one field above.
              */
             deal_finding: {
@@ -1438,6 +1613,26 @@ const submitClaimsTool: McpTool = {
          * answer can overwrite the other.
          */
         ...structuralOf(row, where),
+        /*
+         * And what it establishes about who or what produces the work.
+         *
+         * The third axis, and independent of the other two for the same
+         * reason they are independent of each other: that same subcontracting
+         * notice is an opening, a fulfilment source *and* a sourcing channel,
+         * and a shared column would make one of the three overwrite the rest.
+         */
+        ...laborOf(row, where),
+
+        /*
+         * And what it establishes about what building a machine takes.
+         *
+         * A third question about the same claim, and a claim can answer all
+         * three: a trade report on excavator shipments is a demand signal
+         * about a machine category *and* a fact about an industry. One column
+         * each rather than one shared column, so no answer overwrites another.
+         */
+        ...capabilityOf(row, where),
+
         /*
          * And what it establishes about a cross-border transaction.
          *
@@ -1891,6 +2086,128 @@ const reportContradictionTool: McpTool = {
       },
     );
 
+    return {
+      projectId: item.projectId,
+      value: outcome.value,
+      replayed: outcome.replayed,
+      operationId: outcome.operationId,
+    };
+  },
+};
+
+/**
+ * The one door a worker's *judgement about the plan* comes through.
+ *
+ * Everything else a worker submits is evidence — a claim, a verification, a
+ * contradiction, a report — and Brain decides what it means. Two things a
+ * campaign needs are genuinely semantic and no row can answer them: what a
+ * finding *means*, and which new question it raises. This carries those, and
+ * `services/research/intelligence/proposals.ts` is the wall in front of it.
+ *
+ * Nothing here is an instruction. The actions are a closed set matched exactly,
+ * an unrecognised field refuses the whole proposal rather than the field, every
+ * key is re-resolved inside this packet, and a proposal cannot reach the
+ * approval envelope, the evidence bar, the independent-source minimum, the
+ * coverage decision or the audit verdict — by absence of an import, not by a
+ * check somebody could forget.
+ *
+ * A new question does **not** become research here. It becomes a question, and
+ * the next advance decides whether it becomes a fragment — which then lands
+ * `PLANNED` and goes through the packet's own approval, the envelope or the
+ * person. That separation is deliberate: letting one submission be both the
+ * finding and the plan would make the worker the planner.
+ */
+const proposePlanRevisionTool: McpTool = {
+  name: 'brain_propose_plan_revision',
+  title: 'Propose a change to what this campaign is trying to learn',
+  description:
+    'Say what a finding changed about the research itself: a question that turned out to be ' +
+    'decisive, a branch that has stopped mattering, a reading of the objective that was too ' +
+    'literal, or something that genuinely needs the person. This is for judgement about the ' +
+    'plan — evidence goes through brain_submit_claims. Nothing here spends anything: a new ' +
+    'question still has to pass this packet\'s own approval before it is researched. Every ' +
+    'action must say why. A request for the person is refused unless it names one of the kinds ' +
+    'only a person can supply (a preference, a consent, a judgement that is theirs, an ' +
+    'irreversible decision, a secret, a credential, or an authorization to spend, contact or ' +
+    'publish) — a price, a contact channel, a legal requirement or an integration is research, ' +
+    'and it is Brain\'s to do rather than the person\'s to attest to.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      work_item_id: { type: 'string' },
+      lease_id: { type: 'string' },
+      lease_generation: { type: 'integer' },
+      actions: {
+        type: 'array',
+        description:
+          'Each action is an object whose "action" is one of REFRAME_OBJECTIVE, ' +
+          'OPEN_UNCERTAINTY, LINK_UNCERTAINTIES, RETIRE_UNCERTAINTY or ESCALATE_PERSON_ONLY, ' +
+          'plus a "why". The remaining fields depend on the action and a field the action does ' +
+          'not take refuses the whole proposal.',
+        items: { type: 'object' },
+      },
+      idempotency_key: { type: 'string' },
+    },
+    required: ['work_item_id', 'lease_id', 'lease_generation', 'actions'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Propose a plan revision', ...MUTATING },
+  run: async (args, { principal, requestId }) => {
+    const workerId = workerOnly(principal);
+    const item = await requireOwnedItem(
+      principal,
+      requiredString(args, 'work_item_id'),
+      'research:propose',
+    );
+    if (!item) throw notFoundError();
+    if (!item.orchestrationId) throw notFoundError();
+    const orchestration = await getOrchestration(item.orchestrationId);
+    if (!orchestration || orchestration.projectId !== item.projectId) throw notFoundError();
+    const proof = proofFrom(args, item.id, workerId);
+
+    const outcome = await idempotentEffect(
+      {
+        namespace: REVISION_NAMESPACE,
+        principal,
+        projectId: item.projectId,
+        proof,
+        suppliedKey: optionalIdempotencyKey(args),
+        requestId,
+        payload: { workItemId: item.id, operation: 'propose-plan-revision' },
+      },
+      async () => {
+        const result = await applyProposal({
+          orchestration,
+          actions: args['actions'],
+          // Brain's own record of who asked, from the authenticated principal.
+          // Nothing the caller sent about itself contributes.
+          actorRef: workerId,
+        });
+        if (!result.ok) {
+          return {
+            resultRef: item.id,
+            resultSummary: 'refused',
+            value: { accepted: false, reasons: result.reasons },
+          };
+        }
+        return {
+          resultRef: item.id,
+          resultSummary: `${result.applied.length} applied, ${result.refused.length} refused`,
+          value: {
+            accepted: true,
+            applied: result.applied,
+            refused: result.refused,
+          },
+        };
+      },
+    );
+
+    /*
+     * A refused proposal is a *result*, not a protocol error — §21, and the
+     * reason is practical: a refusal delivered as a transport failure is one the
+     * worker cannot see or react to, and the whole value of the refusal is that
+     * it says which half was wrong.
+     */
     return {
       projectId: item.projectId,
       value: outcome.value,
@@ -2517,6 +2834,7 @@ export const RESEARCH_TOOLS: readonly McpTool[] = [
   submitClaimsTool,
   submitVerificationTool,
   reportContradictionTool,
+  proposePlanRevisionTool,
   reportBlockerTool,
   submitSynthesisTool,
   getAuditBriefTool,

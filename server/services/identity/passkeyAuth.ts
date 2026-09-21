@@ -126,7 +126,10 @@ export async function authenticationOptions(rp: RelyingParty): Promise<Record<st
   };
 }
 
-export type SignInOutcome = { ok: true; user: User } | { ok: false; reason: string };
+export type SignInOutcome =
+  /** The device that answered, so the session can record what opened it. */
+  | { ok: true; user: User; passkeyId: string }
+  | { ok: false; reason: string };
 
 /**
  * Verify an assertion and say who it was.
@@ -195,7 +198,7 @@ export async function signInWithPasskey(input: {
     result: 'SUCCESS',
     metadata: { passkeyId: passkey.id },
   });
-  return { ok: true, user };
+  return { ok: true, user, passkeyId: passkey.id };
 }
 
 async function denied(category: string, userId: string | null): Promise<void> {

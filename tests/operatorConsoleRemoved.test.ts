@@ -141,9 +141,25 @@ describe('what replaced it exists', () => {
   });
 
   it('names the site scope set in exactly one place that writes it', () => {
+    // A *write* is the set reaching a membership's `scopes`, not the identifier
+    // appearing somewhere in the same file. The first version of this matcher
+    // took co-occurrence with `grantMembership(` anywhere in a file, so a module
+    // that merely cited the constant in a comment — as the capability reader
+    // does, explaining why its own scopes are a constant rather than a picker —
+    // read as a second writer. That is the file's own recurring defect: a
+    // matcher that reads prose produces a confident wrong answer, and here the
+    // wrong answer accuses a module of widening a boundary it never touches.
+    const writesTheSet = /scopes:\s*(\[\s*\.\.\.\s*)?SITE_CONNECTOR_SCOPES/;
     const writers = tracked()
       .filter((f) => f.startsWith('server/') && f.endsWith('.ts'))
-      .filter((f) => /grantMembership\([\s\S]*SITE_CONNECTOR_SCOPES|SITE_CONNECTOR_SCOPES[\s\S]*grantMembership\(/.test(read(f)));
+      .filter((f) => writesTheSet.test(read(f)));
     expect(writers).toEqual(['server/services/connect/sites.ts']);
+
+    // And the matcher still recognises the write it exists for, so tightening it
+    // did not turn the assertion into one nothing can fail.
+    expect(writesTheSet.test(read('server/services/connect/sites.ts'))).toBe(true);
+    expect(writesTheSet.test('  scopes: [...SITE_CONNECTOR_SCOPES],')).toBe(true);
+    expect(writesTheSet.test('  scopes: SITE_CONNECTOR_SCOPES,')).toBe(true);
+    expect(writesTheSet.test(' * for `SITE_CONNECTOR_SCOPES` reasons')).toBe(false);
   });
 });

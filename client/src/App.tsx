@@ -22,6 +22,7 @@ import type {
 import type { HealthResponse, SessionUser } from './lib/api.ts';
 import { Api, ApiError } from './lib/api.ts';
 import { SignIn } from './components/SignIn.tsx';
+import { Recovery } from './components/Recovery.tsx';
 import { Pill } from './components/Badge.tsx';
 import { ImportPanel } from './components/ImportPanel.tsx';
 import { SourceReview } from './components/SourceReview.tsx';
@@ -331,11 +332,28 @@ export default function App(): JSX.Element {
     return <div className="app app--booting">Loading…</div>;
   }
 
-  // Not signed in, or signed in with a password that is not yet theirs. Both
-  // are the sign-in screen's business, and neither renders any project data —
-  // there is none in this component to render, because nothing was fetched.
-  if (user === null || user.mustChangePassword) {
-    return <SignIn onSignedIn={handleSignedIn} pendingUser={user} />;
+  // Not signed in: the device screen, which is the only way in. Nothing here
+  // renders any project data — there is none in this component to render,
+  // because nothing was fetched.
+  if (user === null) {
+    return <SignIn onSignedIn={handleSignedIn} />;
+  }
+  // Signed in with a password that is not yet theirs. That is the recovery
+  // screen's business now rather than the sign-in screen's, for the reason
+  // `components/Recovery.tsx` gives: the form belongs somewhere somebody
+  // reaches deliberately, not in front of the door everybody uses.
+  if (user.mustChangePassword) {
+    return (
+      <Recovery
+        onSignedIn={() => {
+          void Api.session().then(
+            (session) => (session.user ? handleSignedIn(session.user) : setUser(null)),
+            () => setUser(null),
+          );
+        }}
+        pendingUser={user}
+      />
+    );
   }
 
   return (
