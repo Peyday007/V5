@@ -1,0 +1,149 @@
+# Driving the design kernel on the deployed Brain, without a terminal.
+#
+# The sibling of `capability.yml`, and separate from `deploy.yml` for the reason
+# that file already gives: asking the kernel what it has looked at would
+# otherwise mean building an image, restarting the machine and running the whole
+# hosted verification. That is minutes and a restart per question, so in practice
+# it would not be asked and the answer would come from somebody's memory of a
+# conversation instead.
+#
+# **This adds convenience and not privilege**, on `admin.yml`'s own argument.
+# Anyone who can dispatch this can already dispatch `deploy.yml`. What it must
+# not do is grow past the job it is for, so the command is passed through to
+# `scripts/design.ts`, which is the same closed surface a terminal reaches: it
+# cannot settle a cycle, cannot record a review, cannot move a capability
+# dimension, and cannot approve a visual decision — `npm run admin`'s
+# `design approve` is still the only thing that records one, and it is still on a
+# terminal.
+#
+# ---------------------------------------------------------------------------
+# Why `route` computes the paths rather than taking them
+# ---------------------------------------------------------------------------
+#
+# `requestDesignCycle` had one caller in the repository — the Software Factory's
+# integrate stage — so the kernel could only notice a change made by the one
+# route almost nothing in this project's history used. Every UI change that has
+# actually reached this product landed by a merge and a deploy.
+#
+# The fix is a second entrance and not a second decision: the same
+# `classifyUiImpact` reads the same paths against the same registered surfaces.
+# What the entrance has to supply is the paths, and the honest source of those is
+# `git diff --name-only` between the two commits the deploy moved between —
+# computed here, in the checkout, because this runner has a `.git` and the
+# deployed image deliberately does not. A typed path list would be somebody's
+# account of a change, and the whole argument of this kernel is that an account
+# of a change is not the change.
+#
+# Reaching this is the authentication, as §26 says of the shell.
+name: Design kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'report | surfaces | capabilities | findings | next | expand | impact | route'
+        required: true
+        default: report
+      from:
+        description: 'route only: the commit production was at before (e.g. the previous deploy)'
+        required: false
+        default: ''
+      to:
+        description: 'route only: the commit it is at now. Defaults to this checkout HEAD.'
+        required: false
+        default: ''
+      says:
+        description: 'route only: what the change was, in a sentence'
+        required: false
+        default: ''
+      args:
+        description: 'The rest of the command line, passed through verbatim'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a reading that raced a restart would be reporting whichever half answered.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  design:
+    name: Design kernel
+    runs-on: ubuntu-latest
+    steps:
+      # The whole history, because `route` diffs two commits and a shallow clone
+      # would answer "unknown revision" for the one before last.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # The paths are read from git rather than from an input, so nobody types
+      # them and nobody can widen them. An empty diff is reported here rather
+      # than sent: `route` refuses an empty list at the far end too, because an
+      # empty list is indistinguishable from a diff nobody read.
+      - name: What moved
+        if: ${{ inputs.command == 'route' }}
+        env:
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+        run: |
+          set -euo pipefail
+          from="${FROM}"
+          to="${TO:-$(git rev-parse HEAD)}"
+          if [ -z "$from" ]; then
+            echo "::error::route needs --from: the commit production was at before this one."
+            exit 1
+          fi
+          git rev-parse --verify "$from^{commit}" >/dev/null
+          git rev-parse --verify "$to^{commit}" >/dev/null
+          paths=$(git diff --name-only "$from" "$to" | paste -sd, -)
+          if [ -z "$paths" ]; then
+            echo "::error::$from and $to have the same tree, so no change landed between them."
+            exit 1
+          fi
+          echo "from=$(git rev-parse "$from")" >> "$GITHUB_ENV"
+          echo "to=$(git rev-parse "$to")" >> "$GITHUB_ENV"
+          echo "paths=$paths" >> "$GITHUB_ENV"
+          echo "$paths" | tr ',' '\n' | sed 's/^/  /'
+
+      # The inputs reach the shell as *environment variables*, never as `${{ }}`
+      # interpolated into the script, and they are parsed rather than evaluated —
+      # `capability.yml` gives the full argument, and the short version is that
+      # `-C` takes one command string, so an input pasted into it is executed by
+      # the shell inside the production container. `shlex.split` applies the same
+      # quoting rules and executes nothing; `eval "set -- $ARGS"` would be the
+      # identical hole one line along, because `$(…)` inside the string runs.
+      - name: Run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COMMAND: ${{ inputs.command }}
+          ARGS: ${{ inputs.args }}
+          SAYS: ${{ inputs.says }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          remote=$(python3 - <<'PY'
+          import os, shlex
+          command = os.environ.get('COMMAND', '')
+          words = shlex.split(command) + shlex.split(os.environ.get('ARGS', ''))
+          if command.strip() == 'route':
+              paths = os.environ.get('paths', '')
+              says = os.environ.get('SAYS', '').strip()
+              if not says:
+                  raise SystemExit('route needs --says: what the change was, in a sentence.')
+              words += ['--paths', paths, '--says', says]
+              revision = os.environ.get('to', '')
+              if revision:
+                  words += ['--revision', revision]
+              run = os.environ.get('GITHUB_RUN_ID', '')
+              if run:
+                  words += ['--ref', 'gha:' + run]
+          print(' '.join(['sh', '/app/scripts/design.sh'] + [shlex.quote(w) for w in words]))
+          PY
+          )
+          echo "Running: $remote"
+          # `tee` would otherwise hide a non-zero exit behind its own success.
+          set -o pipefail
+          flyctl ssh console --app "$app" -C "$remote" 2>&1 | tee design.txt

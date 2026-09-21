@@ -689,6 +689,62 @@ describe('UI impact is classified from paths and concepts, not from filenames al
   });
 });
 
+/**
+ * A mechanism with one entrance is not a mechanism.
+ *
+ * `requestDesignCycle` had exactly one caller in the repository — the Software
+ * Factory's integrate stage — so the kernel could only notice a change made by
+ * the one route almost nothing in this project's history used. Every UI change
+ * that has actually reached this product landed by a merge and a deploy, and the
+ * kernel was blind to all of them.
+ *
+ * These read the repository rather than behaviour, for
+ * `operatorConsoleRemoved`'s reason: what is being asserted is that a second
+ * entrance *exists and is reachable*, and a behavioural test cannot see the
+ * difference between a function nothing calls and one that is called from
+ * somewhere real. The behaviour itself is already pinned directly above.
+ */
+describe('a landed change has a second way in, and it decides nothing new', () => {
+  it('is reachable from the operator surface as well as from the factory', () => {
+    const script = readFileSync('scripts/design.ts', 'utf8');
+    expect(script).toContain("case 'route':");
+    expect(script).toContain('route.requestDesignCycle');
+
+    // And it is carried into the deployed container, where the cycles live.
+    const shim = readFileSync('scripts/design.sh', 'utf8');
+    expect(shim).toContain('scripts/design.ts');
+    const workflow = readFileSync('.github/workflows/design.yml', 'utf8');
+    expect(workflow).toContain('/app/scripts/design.sh');
+  });
+
+  it('derives the paths from git rather than taking somebody’s list of them', () => {
+    const workflow = readFileSync('.github/workflows/design.yml', 'utf8');
+    /*
+     * The load-bearing assertion. A `paths` input would make the classifier's
+     * answer a function of what somebody typed, and the whole argument of this
+     * kernel is that an account of a change is not the change. The two commits
+     * are the input; the diff between them is the fact.
+     */
+    expect(workflow).toContain('git diff --name-only');
+    expect(workflow).not.toMatch(/^ {6}paths:/m);
+  });
+
+  it('adds no decision of its own — the same classifier, over the same surfaces', () => {
+    const script = readFileSync('scripts/design.ts', 'utf8');
+    const route = script.slice(script.indexOf('async function routeLandedChange'));
+    const body = route.slice(0, route.indexOf('\n}\n'));
+    /*
+     * No `shouldOpenCycle`, no surface list, no verdict of its own: everything
+     * that decides is inside `requestDesignCycle`, which is the function the
+     * factory calls. A second copy of the rule here is the two-readers-disagree
+     * shape this repository keeps correcting.
+     */
+    expect(body).not.toContain('shouldOpenCycle');
+    expect(body).not.toContain('classifyUiImpact');
+    expect(body).not.toContain('openCycle');
+  });
+});
+
 describe('the repair loop stops, and says why', () => {
   beforeEach(async () => {
     await freshProject();

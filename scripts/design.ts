@@ -38,6 +38,7 @@
  *   npx tsx scripts/design.ts render --surfaces russell/default --pass 0
  *   npx tsx scripts/design.ts findings [--cycle <id>]
  *   npx tsx scripts/design.ts impact --paths a,b --says "..."
+ *   npx tsx scripts/design.ts route --paths a,b --says "..." --revision <sha>
  *   npx tsx scripts/design.ts correction --admin you@example.com --says "..."
  *   npx tsx scripts/design.ts report
  */
@@ -184,6 +185,9 @@ async function main(): Promise<void> {
         break;
       case 'impact':
         await printImpact(rest);
+        break;
+      case 'route':
+        await routeLandedChange(rest);
         break;
       case 'correction':
         await recordCorrectionFromTerminal(rest);
@@ -377,6 +381,90 @@ async function printImpact(argv: string[]): Promise<void> {
   }
   if (impact.unrepresented.length > 0) {
     console.log(`  no surface is registered about: ${impact.unrepresented.join(', ')}`);
+  }
+}
+
+/**
+ * A change that has landed, offered to the classifier that already decides.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this exists, and why it is not a shortcut
+ * ---------------------------------------------------------------------------
+ *
+ * `requestDesignCycle` had exactly one caller in the whole repository: the
+ * Software Factory's integrate stage. So the kernel could only notice a change
+ * made by the one route almost nothing in this project's history actually used.
+ * **Every UI change that has ever reached this product landed by a merge and a
+ * deploy**, and the kernel was blind to all of them — which is this file's own
+ * recurring sentence at the top of the loop rather than a gap in the walk: a
+ * mechanism with one entrance is not a mechanism.
+ *
+ * It decides nothing that the factory's own hook does not decide. The same
+ * `classifyUiImpact` reads the same changed paths against the same registered
+ * surfaces, `shouldOpenCycle` is untouched, and a change with no interface
+ * consequence produces no cycle and the reason why. What differs is only where
+ * the paths come from: a unit's declared mutation scope there, and the two
+ * commits a deploy actually moved between here.
+ *
+ * ---------------------------------------------------------------------------
+ * The paths are a fact, not an argument
+ * ---------------------------------------------------------------------------
+ *
+ * They are computed by `git diff --name-only <from> <to>` in the checkout the
+ * workflow already has, and handed here. The deployed image has no `.git` and
+ * must not acquire one, so this end takes them as given — and that is why the
+ * workflow computes them from the two SHAs rather than accepting a typed list:
+ * a hand-written path list is somebody's account of a change, and the point of
+ * this kernel is that an account of a change is not the change.
+ *
+ * Idempotent by the trigger, in `requestDesignCycle`'s own way: running it twice
+ * for one revision finds the open cycle and returns it rather than opening a
+ * second.
+ */
+async function routeLandedChange(argv: string[]): Promise<void> {
+  const paths = (flag(argv, 'paths') ?? '').split(',').map((one) => one.trim()).filter(Boolean);
+  const says = flag(argv, 'says');
+  const revision = flag(argv, 'revision') ?? null;
+  const ref = flag(argv, 'ref') ?? null;
+  if (paths.length === 0 || !says) {
+    fail(
+      'Usage: design route --paths a,b --says "<what the change was>" ' +
+        '[--revision <sha>] [--ref <deploy or run id>]\n\n' +
+        'A change with no paths is not a change. Nothing is opened for an empty list, ' +
+        'because an empty list is indistinguishable from a diff nobody read.',
+    );
+  }
+
+  const { route } = await load();
+  const outcome = await route.requestDesignCycle({
+    triggerKind: 'UI_IMPACT',
+    triggerRef: ref,
+    changedPaths: paths,
+    description: says,
+    revision,
+  });
+
+  console.log(`UI IMPACT: ${outcome.impact.verdict}`);
+  console.log(`  ${outcome.impact.because}`);
+  if (outcome.impact.interfacePaths.length > 0) {
+    console.log(`  interface: ${outcome.impact.interfacePaths.join(', ')}`);
+  }
+  if (outcome.impact.surfaces.length > 0) {
+    console.log(`  surfaces:  ${outcome.impact.surfaces.map((one) => one.surfaceKey).join(', ')}`);
+  }
+  console.log('');
+  if (outcome.cycle) {
+    console.log(`CYCLE ${outcome.cycle.id}`);
+    console.log(`  state:     ${outcome.cycle.state}`);
+    console.log(`  revision:  ${outcome.cycle.revision ?? '(none recorded)'}`);
+    console.log(`  surfaces:  ${outcome.cycle.surfaceKeys.join(', ')}`);
+    console.log('');
+    console.log(
+      '  The tick will open a DESIGN_RENDER_V1 bin for it, because this Brain has no browser.',
+    );
+  } else {
+    console.log('NO CYCLE');
+    console.log(`  ${outcome.because}`);
   }
 }
 

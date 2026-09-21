@@ -433,9 +433,28 @@ npm run design -- resume <cycleId>   # a cycle the Factory opened when a change 
 npm run design -- render --surfaces a,b --pass 0   # answer a render bin
 npm run design -- findings [--cycle <id>]
 npm run design -- impact --paths a,b --says "..."
+npm run design -- route --paths a,b --says "..." --revision <sha>
 npm run design -- correction --admin you@example.com --says "..."
 npm run design -- report
 ```
+
+`route` is the second entrance to `requestDesignCycle`, and it exists because
+there was only one. The Software Factory's integrate stage was the sole caller,
+so the kernel could only notice a change made by the route almost nothing in
+this repository's history used — **every UI change that has actually reached
+this product landed by a merge and a deploy**, and the kernel was blind to all
+of them.
+
+It decides nothing new. The same `classifyUiImpact` reads the same paths against
+the same registered surfaces, and a change with no interface consequence still
+produces no cycle and the reason why. What it needs is the paths, and the honest
+source of those is the diff between the two commits a deploy moved between — so
+`.github/workflows/design.yml` computes them with `git diff --name-only` in the
+checkout it already has, and has no `paths` input for anybody to type into. A
+hand-written path list is somebody's *account* of a change, and the argument of
+this whole kernel is that an account of a change is not the change.
+
+`impact` is the same classification with nothing written, for looking first.
 
 `correction` asks for the scope and refuses to choose one: it prints the
 narrowest reading of what was pointed at and what else it could reasonably be,
@@ -458,9 +477,13 @@ committed as the evidence of one run at one commit, and half-replacing it with
 pictures from another revision would leave a manifest whose digest no longer
 describes what is in the directory.
 
-Nothing in this script talks to a deployed Brain. The worker's own connector
-does, which is what keeps this a command rather than a second client holding a
-second credential.
+Nothing in this script reaches a deployed Brain over the network. The worker's
+own connector does, which is what keeps this a command rather than a second
+client holding a second credential — and `scripts/design.sh` runs the
+row-reading half *inside* the deployed container, the way `admin.sh`, `fleet.sh`
+and `capability.sh` already do, where reaching the shell is the authentication.
+`cycle`, `resume` and `render` are deliberately not reachable that way and would
+not work if they were: the deployed image has no browser.
 
 ## Registering a surface
 
