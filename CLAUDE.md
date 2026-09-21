@@ -8730,8 +8730,9 @@ dispatch, and the guard as written cannot see it because it asks its question
 before the build rather than before the release.
 
 **And the `deploy-brain` group lets a report cancel a deployment.**
-`deploy.yml`, `admin.yml` and `cash-report.yml` share it, GitHub keeps exactly
-one *pending* run per group, and the newest pending evicts the one waiting. A
+**Sixteen** workflows share it — the deploy itself plus every operator read and
+every administration command in the repository — GitHub keeps exactly one
+*pending* run per group, and the newest pending evicts the one waiting. A
 queued `Deploy` was cancelled two seconds after an unrelated `Admin` dispatch,
 with `jobs: 0` — it never started, and nothing anywhere was red except a
 conclusion nobody was watching. The closeout-report workflow's own header
