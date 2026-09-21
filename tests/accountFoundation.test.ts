@@ -320,6 +320,87 @@ describe('one name, one account', () => {
   }, 120_000);
 });
 
+describe('a slot nobody has filled', () => {
+  /*
+   * The guard above refuses a second invitation under a live name, which is
+   * right — and it turns an awkward situation into a blocking one, because the
+   * only way an administrator had to re-reach somebody whose link expired was
+   * to invite them again. A refusal whose remedy does not exist is a stop.
+   *
+   * On this Brain that is not hypothetical: one live account holds no
+   * credential at all and no live link.
+   */
+  it('can be sent another first link, and the person joins on it', async () => {
+    const slot = await call<{ enrollment: { token: string; userId: string } }>(
+      'POST',
+      '/api/members',
+      { cookie: ownerCookie, body: { displayName: 'Never Opened It' } },
+    );
+    expect(slot.status).toBe(200);
+
+    // They never opened it. Inviting them again is refused, correctly.
+    const again = await call('POST', '/api/members', {
+      cookie: ownerCookie,
+      body: { displayName: 'Never Opened It' },
+    });
+    expect(again.status).toBe(422);
+
+    const fresh = await call<{ enrollment: { token: string; userId: string } }>(
+      'POST',
+      `/api/members/${slot.body.enrollment.userId}/link`,
+      { cookie: ownerCookie },
+    );
+    expect(fresh.status).toBe(200);
+    expect(fresh.body.enrollment.userId).toBe(slot.body.enrollment.userId);
+    expect(fresh.body.enrollment.token).not.toBe(slot.body.enrollment.token);
+
+    // One slot, one account, one way in — the older link is withdrawn rather
+    // than left as a second live door.
+    const stale = await call('POST', '/api/enroll/pin', {
+      body: { token: slot.body.enrollment.token, pin: '515151' },
+    });
+    expect(stale.status).toBe(404);
+
+    const joined = await call<{ user: { id: string } }>('POST', '/api/enroll/pin', {
+      body: { token: fresh.body.enrollment.token, pin: '525252' },
+    });
+    expect(joined.status).toBe(200);
+    expect(joined.body.user.id).toBe(slot.body.enrollment.userId);
+    expect((await pinSignIn('Never Opened It', '525252')).status).toBe(200);
+  }, 120_000);
+
+  it('refuses it for somebody who already has a way in, and names the one they want', async () => {
+    const member = await joinAs('Already In', '535353');
+    expect(member.status).toBe(200);
+
+    const refused = await call<{ error?: string }>(
+      'POST',
+      `/api/members/${member.userId}/link`,
+      { cookie: ownerCookie },
+    );
+    expect(refused.status).toBe(422);
+    expect(refused.body.error ?? '').toMatch(/recovery/i);
+
+    // And nothing moved: they still sign in with what they had.
+    expect((await pinSignIn('Already In', '535353')).status).toBe(200);
+  }, 120_000);
+
+  it('is an administrator decision, and shows no token to anybody else', async () => {
+    const slot = await call<{ enrollment: { userId: string } }>('POST', '/api/members', {
+      cookie: ownerCookie,
+      body: { displayName: 'Not Your Link' },
+    });
+    const member = await joinAs('Some Other Member', '545454');
+    expect(member.status).toBe(200);
+    const theirs = await pinSignIn('Some Other Member', '545454');
+
+    const attempt = await call('POST', `/api/members/${slot.body.enrollment.userId}/link`, {
+      cookie: theirs.cookie,
+    });
+    expect(attempt.status).toBeGreaterThanOrEqual(400);
+  }, 120_000);
+});
+
 describe('the password door beside a PIN, which stays open deliberately', () => {
   /*
    * ------------------------------------------------------------------------

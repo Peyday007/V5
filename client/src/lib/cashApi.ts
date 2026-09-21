@@ -418,6 +418,16 @@ export const CashApi = {
   inviteMember: (displayName: string): Promise<{ enrollment: IssuedEnrollment }> =>
     api('/api/members', { method: 'POST', body: JSON.stringify({ displayName }) }),
 
+  /**
+   * Another first link for a slot nobody has filled.
+   *
+   * Not recovery: that retires what somebody is holding, which is right after
+   * a lost device and wrong for a person who has never signed in. The server
+   * refuses this for anybody who already has a way in.
+   */
+  relinkMember: (userId: string): Promise<{ enrollment: IssuedEnrollment }> =>
+    api(`/api/members/${p(userId)}/link`, { method: 'POST' }),
+
   recoverMember: (userId: string, reason: string): Promise<{ enrollment: IssuedEnrollment }> =>
     api(`/api/members/${p(userId)}/recovery`, {
       method: 'POST',

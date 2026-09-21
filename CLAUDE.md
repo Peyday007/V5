@@ -8134,6 +8134,24 @@ the condition was invisible.
   needing a decision of its own. It refuses a name that would simply move the
   collision, through the same guard an invitation is refused by.
 
+- **And the guard turned an awkward situation into a blocking one, which had
+  to be answered in the same change.** A slot whose link expired, was withdrawn
+  or was never opened holds no credential and no live link, and nothing issued
+  it a second *first* link: `createMemberSlot` makes a new row and
+  `issueRecovery` is for somebody who had something and lost it. So an
+  administrator's only route was to invite that person again — a second account
+  under one name, resolved by luck. §43's guard refuses that outright, and
+  without a third thing to try, a correct refusal is a stop. **A refusal whose
+  remedy does not exist is not an improvement.** `reissueEnrollmentLink` is the
+  remedy, and it is deliberately *not* recovery: recovery retires what somebody
+  is holding, which is right after a lost device and alarming to read for
+  somebody who has never signed in at all. It is refused outright for an
+  account holding any credential — a PIN, a password or a live device — which
+  is what keeps the two from becoming one operation with a flag, and it
+  withdraws the stale link in the same breath, because two live links for one
+  slot is two ways in where the design says one. On this Brain it is not
+  hypothetical: one live account holds no credential and no live link.
+
 **A repair I started and withdrew, recorded rather than quietly dropped.**
 `passwordDoorOpenFor` counts *proven passkeys* and knows nothing about a PIN,
 and §32's own words state the rule as *a password is accepted only from an
