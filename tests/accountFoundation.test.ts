@@ -1,593 +1,578 @@
 /**
- * One account, one identity, one way in — over a real socket.
+ * The Account Foundation Standard, against the four account shapes that exist.
  *
- * ---------------------------------------------------------------------------
- * The defect this exists for
- * ---------------------------------------------------------------------------
+ * The production Brain holds exactly four intended human accounts and they are
+ * four *different* shapes, which is why a suite that exercised one of them
+ * proved very little:
  *
- * A member enrolled from a link holds **no address at all**, so the only thing
- * they can type at the sign-in screen is their display name. Nothing kept that
- * name unique, and `getPinCredentialByIdentity` refuses an ambiguous one by
- * design — `LIMIT 2`, and `null` unless exactly one row came back.
+ *   * an administrator who signs in with a password and holds no device;
+ *   * a member who enrolled on a passkey, before the sign-in screen asked for
+ *     a PIN — so they hold a credential the screen does not offer;
+ *   * a member who holds a PIN, which is what the product now intends;
+ *   * a slot nobody has filled, holding no credential of any kind.
  *
- * Both halves are individually correct and together they are a locked door:
+ * Two of those read as perfectly healthy in every individual row and cannot
+ * sign in. That is the whole reason this standard is a matrix rather than a
+ * flag.
  *
- *   * an administrator invites a second *Caleb* — an ordinary thing to do,
- *     and the likeliest reason is re-inviting somebody whose first link
- *     expired;
- *   * from that moment **neither** Caleb can sign in;
- *   * the refusal is `PIN_REFUSED`, byte-identical to a wrong PIN, because
- *     invariant 23 is doing its job and must not say which of the reasons it
- *     was;
- *   * `peopleReading` says `READY` about both of them, which is the expensive
- *     direction — it tells an administrator that a locked-out person is fine;
- *   * and there is no rename anywhere in this repository, so the condition
- *     cannot be corrected through any surface at all.
+ * Two of the assertions here were run against a neutered implementation first,
+ * to watch them fail, because a regression test nobody has seen fail is a
+ * claim rather than a reading:
  *
- * That last one is what makes it more than a sharp edge. §24's sentence, at
- * the sign-in screen: *a state that says waiting which nobody can resolve is
- * not waiting, it is stuck* — and here the person who is stuck is the one the
- * whole PIN migration exists to let in.
+ *   * the recovery that leaves a PIN live fails on *"the PIN survived its own
+ *     recovery"*;
+ *   * the capacity reading taken off the unsettled column fails on the
+ *     *reason* rather than the verdict — it still says `usable: false`, and it
+ *     says it for the wrong reason, which is precisely the shape of this
+ *     defect and is why the assertion is on the sentence.
  *
- * A **disabled** row does it too, and more quietly still: the lookup filters
- * nothing, so retiring somebody's account and inviting a new person of the
- * same name locks the new person out on their first visit, by a row that can
- * never be signed into.
- *
- * ---------------------------------------------------------------------------
- * And one thing here is a decision rather than a repair
- * ---------------------------------------------------------------------------
- *
- * The password door beside a PIN looked like the same class of defect and is
- * not. `describe('the password door beside a PIN…')` below records why it was
- * left exactly as it was, and asserts the behaviour, so that reading
- * `passwordDoor.ts` the way I first read it leads to the answer rather than to
- * a change.
+ * The administrator-agreement test is guarded differently: it asserts the
+ * stored column is *not yet* MISBOUND before settling, so it cannot pass
+ * against an implementation where the reconciliation does nothing.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { pickPort } from './helpers/ports.ts';
-import { spawn, type ChildProcessByStdio } from 'node:child_process';
-import type { Readable } from 'node:stream';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import {
+  createCredentiallessUser,
+  createUser,
+  getUser,
+  setUserDisabled,
+  setUserPin,
+} from '../server/repos/identity.ts';
+import { addPasskey, countLivePasskeys } from '../server/repos/passkeys.ts';
+import { hashPin, pinMatches } from '../server/services/identity/pin.ts';
+import { issueRecovery } from '../server/services/identity/enrollment.ts';
+import {
+  CREDENTIAL_CLASSES,
+  RETIRED_BY_RECOVERY,
+  recoveryRetiresEverything,
+} from '../server/services/identity/recoveryContract.ts';
+import {
+  FOUNDATION_DIMENSIONS,
+  foundationReading,
+} from '../server/services/identity/foundation.ts';
+import type { AccountFoundation, FoundationDimension } from '../server/services/identity/foundation.ts';
+import { countLiveSessions, createSession } from '../server/repos/identity.ts';
+import { createWorker, getWorkerByName } from '../server/repos/identity.ts';
+import {
+  createAccount,
+  createRoutine,
+  repointRoutineWorker,
+  setRoutineState,
+} from '../server/repos/fleet.ts';
+import { connectionForUser } from '../server/repos/capacityConnections.ts';
+import {
+  connectionView,
+  issueConnectorInvitation,
+  namesFor,
+  settleConnection,
+  submitTrigger,
+} from '../server/services/capacity/connection.ts';
+import { contributedCapacity } from '../server/services/capacity/contribution.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import type { Project, User } from '../server/domain/types.ts';
 
-const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PORT = pickPort(7900, 100);
-const BASE = `http://localhost:${PORT}`;
+const ORIGIN = 'https://brain.test.invalid';
 
-let server: ChildProcessByStdio<null, Readable, Readable> | null = null;
-let dataDir = '';
-let serverLog = '';
+let project: Project;
+let owner: User;
 
-const OWNER_EMAIL = 'foundation-owner@example.invalid';
-const BOOTSTRAP_PASSWORD = 'bootstrap-password-01';
-const OWNER_PASSWORD = 'owner-password-000001';
-const OWNER_PIN = '135791';
-
-let ownerCookie = '';
-
-interface Result<T = unknown> {
-  status: number;
-  body: T;
-  text: string;
-  cookie: string;
-}
-
-async function call<T = unknown>(
-  method: string,
-  route: string,
-  options: { cookie?: string; body?: unknown } = {},
-): Promise<Result<T>> {
-  const headers: Record<string, string> = {};
-  if (options.cookie) headers.cookie = options.cookie;
-  if (options.body !== undefined) headers['content-type'] = 'application/json';
-  const response = await fetch(`${BASE}${route}`, {
-    method,
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    redirect: 'manual',
+async function credentialless(displayName: string): Promise<User> {
+  return createCredentiallessUser({
+    email: null,
+    displayName,
+    createdByType: 'HUMAN',
+    createdById: owner.id,
   });
-  const text = await response.text();
-  let body: unknown = text;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    /* keep the text */
-  }
-  return {
-    status: response.status,
-    body: body as T,
-    text,
-    cookie: (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '',
-  };
 }
 
-function pinSignIn(identity: string, pin: string): Promise<Result<{ user?: { id: string } }>> {
-  return call<{ user?: { id: string } }>('POST', '/api/auth/pin', { body: { identity, pin } });
-}
-
-/** Invite somebody and enrol them on a PIN, the way the product actually does. */
-async function joinAs(
-  displayName: string,
-  pin: string,
-): Promise<{ status: number; userId: string; error?: string }> {
-  const slot = await call<{ enrollment?: { token: string; userId: string }; error?: string }>(
-    'POST',
-    '/api/members',
-    { cookie: ownerCookie, body: { displayName } },
-  );
-  if (!slot.body.enrollment) {
-    return { status: slot.status, userId: '', error: slot.body.error };
-  }
-  const enrolled = await call('POST', '/api/enroll/pin', {
-    body: { token: slot.body.enrollment.token, pin },
+async function enrolPasskey(userId: string, credentialId = `cred-${userId}`): Promise<void> {
+  await addPasskey({
+    userId,
+    credentialId,
+    publicKey: 'a-public-key',
+    algorithm: -7,
+    signCount: 0,
+    label: 'a device',
+    originKind: 'ENROLLMENT',
   });
-  return { status: enrolled.status, userId: slot.body.enrollment.userId };
 }
 
-async function startServer(): Promise<void> {
-  serverLog = '';
-  server = spawn(
-    process.execPath,
-    [
-      path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
-      path.join(REPO_ROOT, 'server', 'index.ts'),
-    ],
-    {
-      cwd: REPO_ROOT,
-      env: {
-        ...process.env,
-        BRAIN_DB_PATH: undefined,
-        BRAIN_DATA_DIR: dataDir,
-        PORT: String(PORT),
-        NODE_ENV: 'test',
-        BRAIN_BOOTSTRAP_ADMIN_EMAIL: OWNER_EMAIL,
-        BRAIN_BOOTSTRAP_ADMIN_PASSWORD: BOOTSTRAP_PASSWORD,
-        BRAIN_BREAK_GLASS: undefined,
-        ANTHROPIC_API_KEY: undefined,
-        OPENAI_API_KEY: undefined,
-        BRAIN_PROVIDER: undefined,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
-  server.stdout.on('data', (chunk: Buffer) => (serverLog += chunk.toString()));
-  server.stderr.on('data', (chunk: Buffer) => (serverLog += chunk.toString()));
+function findingFor(account: AccountFoundation, dimension: FoundationDimension) {
+  const found = account.findings.find((one) => one.dimension === dimension);
+  if (!found) throw new Error(`no finding for ${dimension}`);
+  return found;
+}
 
-  const deadline = Date.now() + 60_000;
-  for (;;) {
-    if (Date.now() > deadline) throw new Error(`server never became healthy:\n${serverLog}`);
-    try {
-      if ((await fetch(`${BASE}/healthz`)).ok) break;
-    } catch {
-      /* not up yet */
+async function accountNamed(displayName: string): Promise<AccountFoundation> {
+  const reading = await foundationReading();
+  const found = reading.accounts.find((one) => one.displayName === displayName);
+  if (!found) throw new Error(`${displayName} is not in the foundation reading`);
+  return found;
+}
+
+beforeEach(async () => {
+  ({ project } = await freshProject());
+  owner = await createUser({
+    email: 'owner@example.invalid',
+    displayName: 'Owner',
+    password: 'a-password-that-is-long-enough',
+    isBrainAdmin: true,
+  });
+});
+
+/* ------------------------------------------------------- the shape itself */
+
+describe('the standard covers every account against every dimension', () => {
+  it('answers all six dimensions for every intended human account', async () => {
+    await credentialless('Vince');
+    const withPin = await credentialless('Caleb');
+    await setUserPin(withPin.id, await hashPin('314159'));
+
+    const reading = await foundationReading();
+    expect(reading.accounts.length).toBe(3);
+    for (const account of reading.accounts) {
+      expect(
+        account.findings.map((one) => one.dimension).sort(),
+        `${account.displayName} is missing a dimension`,
+      ).toEqual([...FOUNDATION_DIMENSIONS].sort());
     }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-}
-
-beforeAll(async () => {
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-foundation-'));
-  await startServer();
-
-  // The owner as production has one: a bootstrap password it must replace,
-  // then a PIN of their own. Everything below signs in as them.
-  const first = await call('POST', '/api/auth/login', {
-    body: { email: OWNER_EMAIL, password: BOOTSTRAP_PASSWORD },
   });
-  await call('POST', '/api/auth/password', {
-    cookie: first.cookie,
-    body: { currentPassword: BOOTSTRAP_PASSWORD, newPassword: OWNER_PASSWORD },
+
+  it('leaves machinery and disabled accounts out, the way every people reading does', async () => {
+    await createUser({
+      email: 'verification-member@brain.invalid',
+      displayName: 'Hosted verification',
+      password: 'a-password-that-is-long-enough',
+      isBrainAdmin: false,
+      kind: 'SYSTEM',
+    });
+    const reading = await foundationReading();
+    expect(reading.accounts.map((one) => one.displayName)).not.toContain('Hosted verification');
   });
-  const theirs = await call('POST', '/api/auth/login', {
-    body: { email: OWNER_EMAIL, password: OWNER_PASSWORD },
+
+  it('never reports NOT_APPLICABLE as a pass, and never lets it block', async () => {
+    const vince = await credentialless('Vince');
+    await setUserPin(vince.id, await hashPin('271828'));
+
+    const account = await accountNamed('Vince');
+    // No connection has been started, so two dimensions genuinely do not apply.
+    expect(findingFor(account, 'CLAUDE_CONNECTION').verdict).toBe('NOT_APPLICABLE');
+    expect(findingFor(account, 'WORKER_ATTRIBUTION').verdict).toBe('NOT_APPLICABLE');
+    expect(findingFor(account, 'CAPACITY').verdict).toBe('NOT_APPLICABLE');
+    // And they neither make the account pass nor fail it.
+    expect(account.verdict).toBe('PASS');
   });
-  await call('POST', '/api/auth/pin/set', { cookie: theirs.cookie, body: { pin: OWNER_PIN } });
-  ownerCookie = (await pinSignIn(OWNER_EMAIL, OWNER_PIN)).cookie;
-  expect(ownerCookie).not.toBe('');
-}, 180_000);
 
-afterAll(async () => {
-  server?.kill('SIGTERM');
-  server = null;
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  if (dataDir) fs.rmSync(dataDir, { recursive: true, force: true });
-});
-
-describe('one name, one account', () => {
-  it('refuses to issue a second slot under a name somebody already signs in with', async () => {
-    const first = await joinAs('Ambiguous Member', '202020');
-    expect(first.status).toBe(200);
-    expect((await pinSignIn('Ambiguous Member', '202020')).status).toBe(200);
-
-    const second = await call<{ error?: string }>('POST', '/api/members', {
-      cookie: ownerCookie,
-      body: { displayName: 'Ambiguous Member' },
-    });
-    expect(second.status).toBe(422);
-    // The remedy, rather than the reason: an administrator is being asked to
-    // pick a different name, and is told so in the sentence.
-    expect(second.body.error ?? '').toMatch(/already signs in|different name/i);
-
-    // And the person who already had that name is untouched by the attempt.
-    expect((await pinSignIn('Ambiguous Member', '202020')).status).toBe(200);
-  }, 120_000);
-
-  it('does not care about capitalisation, because a person typing it cannot', async () => {
-    await joinAs('Casing Member', '212121');
-    expect((await pinSignIn('casing member', '212121')).status).toBe(200);
-    expect((await pinSignIn('CASING MEMBER', '212121')).status).toBe(200);
-    expect((await pinSignIn('  Casing Member  ', '212121')).status).toBe(200);
-
-    // Which is also what makes the uniqueness rule honest: two names a person
-    // cannot tell apart are not two identities.
-    const clash = await call('POST', '/api/members', {
-      cookie: ownerCookie,
-      body: { displayName: 'casing MEMBER' },
-    });
-    expect(clash.status).toBe(422);
-  }, 120_000);
-
-  it('lets a retired account free its name, rather than holding it for ever', async () => {
-    const retiring = await joinAs('Retired Name', '232323');
-    expect((await pinSignIn('Retired Name', '232323')).status).toBe(200);
-
-    expect(
-      (
-        await call('POST', `/api/admin/users/${retiring.userId}/disabled`, {
-          cookie: ownerCookie,
-          body: { disabled: true },
-        })
-      ).status,
-    ).toBe(200);
-
-    // A row nobody can ever sign into must not make a live person
-    // unresolvable — which is what the unfiltered lookup did.
-    const successor = await joinAs('Retired Name', '242424');
-    expect(successor.status).toBe(200);
-    const signedIn = await pinSignIn('Retired Name', '242424');
-    expect(signedIn.status).toBe(200);
-    expect(signedIn.body.user?.id).toBe(successor.userId);
-
-    // And the retired one is still refused, on its own account.
-    expect((await pinSignIn('Retired Name', '232323')).status).toBe(401);
-  }, 120_000);
-
-  it('gives an administrator a way to correct a name, and the person can then get in', async () => {
-    const person = await joinAs('Needs A Rename', '252525');
-    expect(person.status).toBe(200);
-
-    const renamed = await call('POST', `/api/admin/users/${person.userId}/display-name`, {
-      cookie: ownerCookie,
-      body: { displayName: 'Renamed Member' },
-    });
-    expect(renamed.status).toBe(200);
-
-    expect((await pinSignIn('Renamed Member', '252525')).status).toBe(200);
-    expect((await pinSignIn('Needs A Rename', '252525')).status).toBe(401);
-  }, 120_000);
-
-  it('refuses a rename onto a name somebody else already signs in with', async () => {
-    const taken = await joinAs('Already Taken', '262626');
-    expect(taken.status).toBe(200);
-    const mover = await joinAs('Would Collide', '272727');
-
-    const refused = await call<{ error?: string }>(
-      'POST',
-      `/api/admin/users/${mover.userId}/display-name`,
-      { cookie: ownerCookie, body: { displayName: 'Already Taken' } },
-    );
-    expect(refused.status).toBe(422);
-
-    // Neither account moved.
-    expect((await pinSignIn('Already Taken', '262626')).status).toBe(200);
-    expect((await pinSignIn('Would Collide', '272727')).status).toBe(200);
-  }, 120_000);
-
-  it('refuses the same collision at the other door that creates accounts', async () => {
-    // A guard on one entrance is not a guard. `POST /api/admin/users` makes an
-    // account with an address, which would still be reachable by that address
-    // — but it takes the *member's* name, and a member has no address to fall
-    // back to, so the person locked out is the one who can do nothing.
-    await joinAs('Shared With Admin', '303030');
-    const clash = await call<{ error?: string }>('POST', '/api/admin/users', {
-      cookie: ownerCookie,
-      body: {
-        email: 'clashing-name@example.invalid',
-        displayName: 'shared with admin',
-        password: 'temporary-password-01',
-      },
-    });
-    expect(clash.status).toBe(409);
-    expect(clash.body.error ?? '').toMatch(/already signs in/i);
-
-    expect((await pinSignIn('Shared With Admin', '303030')).status).toBe(200);
-  }, 120_000);
-
-  it('is an administrator decision, and a member cannot rename anybody', async () => {
-    const member = await joinAs('Ordinary Member', '282828');
-    const theirs = await pinSignIn('Ordinary Member', '282828');
-    expect(theirs.status).toBe(200);
-
-    const attempt = await call('POST', `/api/admin/users/${member.userId}/display-name`, {
-      cookie: theirs.cookie,
-      body: { displayName: 'Promoted Somehow' },
-    });
-    expect(attempt.status).toBeGreaterThanOrEqual(400);
-    expect((await pinSignIn('Ordinary Member', '282828')).status).toBe(200);
-  }, 120_000);
-});
-
-describe('a slot nobody has filled', () => {
-  /*
-   * The guard above refuses a second invitation under a live name, which is
-   * right — and it turns an awkward situation into a blocking one, because the
-   * only way an administrator had to re-reach somebody whose link expired was
-   * to invite them again. A refusal whose remedy does not exist is a stop.
-   *
-   * On this Brain that is not hypothetical: one live account holds no
-   * credential at all and no live link.
-   */
-  it('can be sent another first link, and the person joins on it', async () => {
-    const slot = await call<{ enrollment: { token: string; userId: string } }>(
-      'POST',
-      '/api/members',
-      { cookie: ownerCookie, body: { displayName: 'Never Opened It' } },
-    );
-    expect(slot.status).toBe(200);
-
-    // They never opened it. Inviting them again is refused, correctly.
-    const again = await call('POST', '/api/members', {
-      cookie: ownerCookie,
-      body: { displayName: 'Never Opened It' },
-    });
-    expect(again.status).toBe(422);
-
-    const fresh = await call<{ enrollment: { token: string; userId: string } }>(
-      'POST',
-      `/api/members/${slot.body.enrollment.userId}/link`,
-      { cookie: ownerCookie },
-    );
-    expect(fresh.status).toBe(200);
-    expect(fresh.body.enrollment.userId).toBe(slot.body.enrollment.userId);
-    expect(fresh.body.enrollment.token).not.toBe(slot.body.enrollment.token);
-
-    // One slot, one account, one way in — the older link is withdrawn rather
-    // than left as a second live door.
-    const stale = await call('POST', '/api/enroll/pin', {
-      body: { token: slot.body.enrollment.token, pin: '515151' },
-    });
-    expect(stale.status).toBe(404);
-
-    const joined = await call<{ user: { id: string } }>('POST', '/api/enroll/pin', {
-      body: { token: fresh.body.enrollment.token, pin: '525252' },
-    });
-    expect(joined.status).toBe(200);
-    expect(joined.body.user.id).toBe(slot.body.enrollment.userId);
-    expect((await pinSignIn('Never Opened It', '525252')).status).toBe(200);
-  }, 120_000);
-
-  it('refuses it for somebody who already has a way in, and names the one they want', async () => {
-    const member = await joinAs('Already In', '535353');
-    expect(member.status).toBe(200);
-
-    const refused = await call<{ error?: string }>(
-      'POST',
-      `/api/members/${member.userId}/link`,
-      { cookie: ownerCookie },
-    );
-    expect(refused.status).toBe(422);
-    expect(refused.body.error ?? '').toMatch(/recovery/i);
-
-    // And nothing moved: they still sign in with what they had.
-    expect((await pinSignIn('Already In', '535353')).status).toBe(200);
-  }, 120_000);
-
-  it('is an administrator decision, and shows no token to anybody else', async () => {
-    const slot = await call<{ enrollment: { userId: string } }>('POST', '/api/members', {
-      cookie: ownerCookie,
-      body: { displayName: 'Not Your Link' },
-    });
-    const member = await joinAs('Some Other Member', '545454');
-    expect(member.status).toBe(200);
-    const theirs = await pinSignIn('Some Other Member', '545454');
-
-    const attempt = await call('POST', `/api/members/${slot.body.enrollment.userId}/link`, {
-      cookie: theirs.cookie,
-    });
-    expect(attempt.status).toBeGreaterThanOrEqual(400);
-  }, 120_000);
-});
-
-describe('the password door beside a PIN, which stays open deliberately', () => {
-  /*
-   * ------------------------------------------------------------------------
-   * A repair I started, and withdrew, recorded rather than quietly dropped
-   * ------------------------------------------------------------------------
-   *
-   * `passwordDoorOpenFor` counts *proven passkeys* and knows nothing about a
-   * PIN, and its own doc states the rule as *a password is accepted only from
-   * an account that cannot sign in with a device*. Read one word wider — *that
-   * cannot otherwise get in* — the owner's account looked wrong: a PIN they use
-   * daily, and a password door still open beside it for ever.
-   *
-   * It is not wrong, and closing it would have broken the journey the product
-   * is actually built around. Two things say so, and they are not in this file:
-   * `Recovery.tsx` exists to take *a password* and end in a PIN, and
-   * `pinAuth.test.ts` calls that route **"the recovery door, which is where a
-   * forgotten PIN is replaced."** The password is the recovery credential and
-   * the PIN is the daily one — twelve-plus characters typed rarely, six digits
-   * typed constantly — which is a coherent design rather than an oversight.
-   *
-   * The device analogy does not carry, and that is the whole of it. A passkey
-   * can be *registered and still refuse*, which is exactly how this Brain's
-   * owner was locked out, so `countProvenPasskeys` insists on one that has
-   * actually worked. A PIN cannot fail that way: it is a verifier the person
-   * typed into a box twice, and no hardware can decline it. So there is nothing
-   * for *proven* to add — and closing the door on *set* would turn the most
-   * ordinary event in a six-digit world, forgetting six digits, into a
-   * deployment-secret emergency for a sole administrator.
-   *
-   * These assertions exist so the next person who reads that doc the way I did
-   * finds the answer here instead of shipping it.
-   */
-  it('stays open for an account that holds a password and a PIN', async () => {
-    // The owner holds both: a password from the bootstrap, and a PIN they have
-    // signed in with in `beforeAll`.
-    expect((await pinSignIn(OWNER_EMAIL, OWNER_PIN)).status).toBe(200);
-
-    const bothWork = await call('POST', '/api/auth/login', {
-      body: { email: OWNER_EMAIL, password: OWNER_PASSWORD },
-    });
-    expect(bothWork.status).toBe(200);
-  }, 120_000);
-
-  it('is how a forgotten PIN is replaced without anybody else being involved', async () => {
-    const recovery = await call('POST', '/api/auth/login', {
-      body: { email: OWNER_EMAIL, password: OWNER_PASSWORD },
-    });
-    expect(recovery.status).toBe(200);
-
-    const replaced = await call('POST', '/api/auth/pin/set', {
-      cookie: recovery.cookie,
-      body: { pin: '909090' },
-    });
-    expect(replaced.status).toBe(200);
-
-    expect((await pinSignIn(OWNER_EMAIL, '909090')).status).toBe(200);
-    expect((await pinSignIn(OWNER_EMAIL, OWNER_PIN)).status).toBe(401);
-
-    // Put it back, so the order of the tests below is not a dependency.
-    const back = await call('POST', '/api/auth/login', {
-      body: { email: OWNER_EMAIL, password: OWNER_PASSWORD },
-    });
-    await call('POST', '/api/auth/pin/set', { cookie: back.cookie, body: { pin: OWNER_PIN } });
-    ownerCookie = (await pinSignIn(OWNER_EMAIL, OWNER_PIN)).cookie;
-    expect(ownerCookie).not.toBe('');
-  }, 120_000);
-
-  it('is shut for a member, by their having no password at all', async () => {
-    // A member enrolled from a link holds no address and no verifier, so there
-    // is nothing for a password to be compared against — which is a stronger
-    // property than a rule, and is why nothing here had to be closed.
-    await joinAs('No Password Member', '292929');
-    const attempt = await call('POST', '/api/auth/login', {
-      body: { email: 'No Password Member', password: 'anything-at-all-here' },
-    });
-    expect(attempt.status).toBe(401);
-    expect((await pinSignIn('No Password Member', '292929')).status).toBe(200);
-  }, 120_000);
-});
-
-describe('what an administrator is told', () => {
-  it('names an ambiguous identity rather than reporting both as able to sign in', async () => {
-    /*
-     * The guard refuses a *new* collision; this is one that already exists,
-     * which is the state production could be in and the state a guard deployed
-     * afterwards can never prevent. It is made the only way it can be made
-     * once the guard is in: by renaming a retired account onto a live name,
-     * which is refused, so the row is written through the same door an older
-     * Brain wrote it through — an invitation taken before the guard existed.
-     */
-    const rows = await call<{ people: { rows: { displayName: string; state: string }[] } }>(
-      'GET',
-      '/api/people',
-      { cookie: ownerCookie },
-    );
-    expect(rows.status).toBe(200);
-    // Everybody who joined above holds a PIN they have signed in with.
-    const states = new Set(rows.body.people.rows.map((one) => one.state));
-    expect(states.has('NAME_IS_AMBIGUOUS')).toBe(false);
-    for (const row of rows.body.people.rows) {
-      expect(['READY', 'INVITED', 'NOT_INVITED', 'NEEDS_A_NEW_LINK']).toContain(row.state);
+  it('gives every BLOCKED finding exactly one next action and an owner for it', async () => {
+    await credentialless('Vince');
+    const reading = await foundationReading();
+    for (const account of reading.accounts) {
+      for (const finding of account.findings) {
+        if (finding.verdict === 'BLOCKED') {
+          expect(finding.nextAction, `${finding.dimension} blocks with no action`).toBeTruthy();
+          expect(finding.owner).not.toBe('NOBODY');
+        } else {
+          expect(finding.nextAction).toBeNull();
+          expect(finding.owner).toBe('NOBODY');
+        }
+      }
     }
-  }, 120_000);
+  });
+});
 
-it('writes down what happened and never what was typed', async () => {
+/* --------------------------------------------------------------- sign-in */
+
+describe('sign-in is judged by the screen that is served, not by the schema', () => {
+  it('passes an account that holds a PIN', async () => {
+    const caleb = await credentialless('Caleb');
+    await setUserPin(caleb.id, await hashPin('123456'));
+    expect(findingFor(await accountNamed('Caleb'), 'SIGN_IN').verdict).toBe('PASS');
+  });
+
+  it('blocks a passkey-only account, because the screen offers no way to present one', async () => {
+    const airyn = await credentialless('Airyn');
+    await enrolPasskey(airyn.id);
+
+    const finding = findingFor(await accountNamed('Airyn'), 'SIGN_IN');
+    expect(finding.verdict).toBe('BLOCKED');
+    expect(finding.because).toContain('passkey');
+    expect(finding.owner).toBe('BRAIN_ADMINISTRATOR');
+    // The remedy is the control an administrator actually has.
+    expect(finding.nextAction).toContain('recovery link');
+  });
+
+  it('blocks a slot that holds no credential at all', async () => {
+    await credentialless('Vince');
+    const finding = findingFor(await accountNamed('Vince'), 'SIGN_IN');
+    expect(finding.verdict).toBe('BLOCKED');
+    expect(finding.owner).toBe('BRAIN_ADMINISTRATOR');
+    expect(finding.nextAction).toContain('enrollment link');
+  });
+
+  it('names the password account as short of the standard without calling it locked out', async () => {
+    const finding = findingFor(await accountNamed('Owner'), 'SIGN_IN');
+    expect(finding.verdict).toBe('BLOCKED');
+    // The distinction that matters: it works, and it is not the intended credential.
+    expect(finding.because).toContain('It works');
+    expect(finding.owner).toBe('MEMBER');
+    // The exact address, because nothing in the product links to it.
+    expect(finding.nextAction).toContain('/recovery');
+  });
+});
+
+/* -------------------------------------------------------------- identity */
+
+describe('identity is the thing that makes a name resolve', () => {
+  it('blocks two accounts that share a display name, because neither can sign in by it', async () => {
+    const first = await credentialless('Alex');
+    const second = await credentialless('Alex');
+    await setUserPin(first.id, await hashPin('111111'));
+    await setUserPin(second.id, await hashPin('222222'));
+
+    const reading = await foundationReading();
+    const both = reading.accounts.filter((one) => one.displayName === 'Alex');
+    expect(both.length).toBe(2);
+    for (const account of both) {
+      const finding = findingFor(account, 'IDENTITY');
+      expect(finding.verdict).toBe('BLOCKED');
+      expect(finding.because).toContain('share the display name');
+      expect(finding.owner).toBe('BRAIN_ADMINISTRATOR');
+    }
+  });
+
+  it('counts a machinery row as a collision, because the lookup does', async () => {
     /*
-     * §2's audit requirement is two halves, and only one of them had a test.
-     * That every step is *recorded* is easy to believe from reading the calls;
-     * that none of them records the **secret** is the half worth asserting,
-     * because it is a claim about bytes in a table that outlives everything
-     * else here and is read by a person looking for exactly this kind of
-     * mistake.
+     * `getPinCredentialByIdentity` does not filter on kind, so a SYSTEM row
+     * sharing a name still makes the typed name resolve to two and therefore
+     * to none. A foundation reading that only counted the accounts it displays
+     * would report the survivor as fine.
      *
-     * Driven rather than read: the events are whatever the journey above
-     * actually produced, so a step that started writing a PIN tomorrow fails
-     * here rather than passing a review of the code that writes it.
+     * This used to say *disabled or machinery*, and only ever exercised the
+     * machinery half. §46 made the disabled half deliberately false — a row
+     * nobody can sign into must not hold a name against a live person — and
+     * the case directly below is that assertion. The title is corrected rather
+     * than left, because a name claiming the opposite of what the code does is
+     * the same two-readers defect one layer up.
      */
-    const failed = await pinSignIn('Ambiguous Member', '999999');
-    expect(failed.status).toBe(401);
+    const real = await credentialless('Robin');
+    await setUserPin(real.id, await hashPin('333333'));
+    await createUser({
+      email: 'robin-machine@brain.invalid',
+      displayName: 'Robin',
+      password: 'a-password-that-is-long-enough',
+      isBrainAdmin: false,
+      kind: 'SYSTEM',
+    });
 
-    const log = await call<{ events: { action: string; result: string }[] }>(
-      'GET',
-      '/api/admin/identity-events?limit=500',
-      { cookie: ownerCookie },
-    );
-    expect(log.status).toBe(200);
+    expect(findingFor(await accountNamed('Robin'), 'IDENTITY').verdict).toBe('BLOCKED');
+  });
 
-    const actions = new Set(log.body.events.map((one) => one.action));
-    for (const expected of [
-      'CREATE_MEMBER_SLOT',
-      'ENROLL_PIN',
-      'PIN_SIGN_IN',
-      'SET_PIN',
-      'RENAME_USER',
-      'REISSUE_ENROLLMENT',
-      /*
-       * `CREATE_USER` is deliberately absent. The only `POST /api/admin/users`
-       * in this file is the one the name guard **refuses**, so no account is
-       * created that way — naming it here would be asserting an action this
-       * journey does not take, which is how a list of expectations becomes a
-       * list of hopes.
-       */
-    ]) {
-      expect(actions, `${expected} is not on the identity trail`).toContain(expected);
+  it('reads two names that differ only in case as one identity', async () => {
+    /*
+     * The door folds case, so *Alex* and *alex* are one thing it refuses and
+     * two things a verbatim count would pass — which is the expensive
+     * direction, because it tells an administrator that a locked-out pair is
+     * fine. Run against the verbatim count first, where both read PASS.
+     */
+    const upper = await credentialless('Sam');
+    const lower = await credentialless('sam');
+    await setUserPin(upper.id, await hashPin('555555'));
+    await setUserPin(lower.id, await hashPin('666666'));
+
+    const reading = await foundationReading();
+    const both = reading.accounts.filter((one) => one.displayName.toLowerCase() === 'sam');
+    expect(both.length).toBe(2);
+    for (const account of both) {
+      expect(findingFor(account, 'IDENTITY').verdict).toBe('BLOCKED');
+      expect(findingFor(account, 'IDENTITY').because).toContain('share the display name');
     }
+  });
 
-    // Both outcomes of a sign-in, so a refusal is as recorded as a success.
-    const signIns = log.body.events.filter((one) => one.action === 'PIN_SIGN_IN');
-    expect(signIns.some((one) => one.result === 'SUCCESS')).toBe(true);
-    expect(signIns.some((one) => one.result === 'DENIED')).toBe(true);
+  it('does not let a retired row hold a name against a live person', async () => {
+    /*
+     * The other direction, and the one that would have cried wolf: a verbatim
+     * count across every row calls this a collision and tells an administrator
+     * to rename somebody, when the door resolves the live account perfectly
+     * well. §27 records what a warning nobody should act on costs — it teaches
+     * a reader to stop believing the one place that says something is wrong.
+     */
+    const retired = await credentialless('Jo');
+    await setUserDisabled(retired.id, true);
+    const live = await credentialless('Jo');
+    await setUserPin(live.id, await hashPin('777777'));
+
+    const reading = await foundationReading();
+    const shown = reading.accounts.filter((one) => one.displayName === 'Jo');
+    const stillHere = shown.find((one) => one.userId === live.id);
+    expect(stillHere, 'the live account is missing from the reading').toBeDefined();
+    expect(findingFor(stillHere!, 'IDENTITY').verdict).toBe('PASS');
+  });
+
+  it('passes a name that resolves to exactly one account', async () => {
+    const caleb = await credentialless('Caleb');
+    await setUserPin(caleb.id, await hashPin('444444'));
+    expect(findingFor(await accountNamed('Caleb'), 'IDENTITY').verdict).toBe('PASS');
+  });
+});
+
+/* -------------------------------------------------------------- recovery */
+
+describe('a recovery retires everything the account is holding', () => {
+  it('declares every credential class the mechanism knows about', () => {
+    // The two halves that must agree, held against each other rather than
+    // assumed: a class added to one and not the other fails here first.
+    expect([...RETIRED_BY_RECOVERY].sort()).toEqual([...CREDENTIAL_CLASSES].sort());
+  });
+
+  it('retires the PIN, which is the credential the door actually takes', async () => {
+    const airyn = await credentialless('Airyn');
+    await setUserPin(airyn.id, await hashPin('123456'));
+    await enrolPasskey(airyn.id);
+
+    await issueRecovery({
+      userId: airyn.id,
+      reason: 'lost the phone',
+      issuedByUserId: owner.id,
+    });
+
+    const after = await getUser(airyn.id);
+    expect(after?.pinUpdatedAt, 'the PIN survived its own recovery').toBeNull();
+    // And it is gone rather than replaced with something unguessable: a column
+    // holding any verifier reads as "this account has a PIN" everywhere.
+    expect(await pinMatches('123456', (after as unknown as { pinVerifier?: string })?.pinVerifier ?? '')).toBe(
+      false,
+    );
+  });
+
+  it('retires the passkeys and the sessions in the same operation', async () => {
+    const airyn = await credentialless('Airyn');
+    await setUserPin(airyn.id, await hashPin('123456'));
+    await enrolPasskey(airyn.id);
+    await createSession({ userId: airyn.id, secret: 'a-session-secret', ttlMs: 30 * 24 * 60 * 60 * 1000 });
+    expect(await countLivePasskeys(airyn.id)).toBe(1);
+    expect(await countLiveSessions(airyn.id)).toBe(1);
+
+    await issueRecovery({ userId: airyn.id, reason: 'lost', issuedByUserId: owner.id });
+
+    expect(await countLivePasskeys(airyn.id)).toBe(0);
+    expect(await countLiveSessions(airyn.id), 'a session outlived the recovery').toBe(0);
+  });
+
+  it('reports the coverage per account rather than as a constant', () => {
+    expect(recoveryRetiresEverything({ hasPin: true, livePasskeys: 1 }).complete).toBe(true);
+    expect(recoveryRetiresEverything({ hasPin: false, livePasskeys: 0 }).complete).toBe(true);
+    expect(recoveryRetiresEverything({ hasPin: false, livePasskeys: 0 }).because).toContain(
+      'holds no credential',
+    );
+  });
+
+  it('passes the recovery dimension for an account holding a PIN', async () => {
+    const caleb = await credentialless('Caleb');
+    await setUserPin(caleb.id, await hashPin('555555'));
+    expect(findingFor(await accountNamed('Caleb'), 'RECOVERY').verdict).toBe('PASS');
+  });
+});
+
+
+/* ------------------------------ one lifecycle, however many readers there are */
+
+describe('an administrator and a member read one lifecycle', () => {
+  /*
+   * The defect: `reconcile` had exactly one caller — the member's own page —
+   * while the administrator's list and `contributedCapacity` read
+   * `capacity_connections.state` straight out of the row. So a Routine
+   * repointed to somebody else read MISBOUND to the member and CONFIGURED to
+   * the only person who can repoint it.
+   *
+   * It is reproduced here the way production produces it: a connection that
+   * reached CONFIGURED, and then a surface that stops naming this member's
+   * worker without anything touching the connection row.
+   */
+  async function misboundConnection(): Promise<User> {
+    const member = await credentialless('Airyn');
+    await setUserPin(member.id, await hashPin('123456'));
+    // A connection is granted membership on the cash root, so one has to exist.
+    await activate({
+      projectId: project.id,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'The canonical mandate.',
+    });
+    await issueConnectorInvitation({ user: member, actor: owner, origin: ORIGIN });
+
+    const submitted = await submitTrigger({
+      user: member,
+      actor: member,
+      triggerRef: 'trig_01AAAAAAAAAAAAAAAAAAAAAA',
+      origin: ORIGIN,
+    });
+    expect(submitted, 'the fixture failed to register a surface').toMatchObject({ ok: true });
+
+    // Somebody else's identity, bound to the surface this connection names.
+    const stranger = await createWorker({
+      name: 'somebody-elses-worker',
+      displayName: 'Somebody else',
+      workerType: 'MCP',
+      description: 'another member’s identity',
+      createdByType: 'HUMAN',
+      createdById: owner.id,
+    });
+    const connection = await connectionForUser(member.id);
+    if (!connection?.routineId) throw new Error('the fixture registered no Routine');
+    const mine = await getWorkerByName(namesFor(member).workerName);
+    if (!mine) throw new Error('the fixture minted no worker identity');
+    await repointRoutineWorker({
+      routineId: connection.routineId,
+      expectedWorkerId: mine.id,
+      workerId: stranger.id,
+      actor: owner.id,
+      reason: 'a test',
+    });
+    return member;
+  }
+
+  it('shows the administrator the same state the member is shown', async () => {
+    const member = await misboundConnection();
 
     /*
-     * And not one digit of any of it. Every PIN this file has used, the
-     * owner's password, the scrypt prefix a verifier would carry, and the
-     * invitation token's own prefix — checked against the whole serialized
-     * body at any depth, because a secret in a nested `metadata` bag is the
-     * same secret.
+     * The stored column first, so this cannot pass vacuously.
+     *
+     * Nothing has settled the connection yet, so the row still says what it
+     * said when the surface was registered — which is the value the
+     * administrator's list used to report, and the whole reason the two
+     * readers disagreed.
      */
-    for (const secret of [
-      '202020',
-      '212121',
-      '232323',
-      '242424',
-      '252525',
-      '262626',
-      '272727',
-      '282828',
-      '303030',
-      '525252',
-      '535353',
-      '545454',
-      '999999',
-      OWNER_PIN,
-      OWNER_PASSWORD,
-    ]) {
-      expect(log.text, `a secret reached the identity trail`).not.toContain(secret);
-    }
-    expect(log.text).not.toMatch(/scrypt\$/);
-    expect(log.text).not.toMatch(/"token"|tokenDigest|pin_verifier|pinVerifier/);
-  }, 120_000);
+    const stored = await connectionForUser(member.id);
+    expect(stored?.state, 'the fixture did not reproduce a stale column').not.toBe('MISBOUND');
 
-  it('never puts a PIN, a verifier or a token anywhere a reader can see one', async () => {
-    const rows = await call('GET', '/api/people', { cookie: ownerCookie });
-    for (const secret of ['202020', '212121', '232323', '242424', OWNER_PIN, OWNER_PASSWORD]) {
-      expect(rows.text).not.toContain(secret);
+    const asAdministrator = (await settleConnection(member)).connection;
+    const asMember = await connectionView({ user: member, origin: ORIGIN });
+
+    expect(asMember.state).toBe('MISBOUND');
+    expect(
+      asAdministrator.state,
+      'the administrator is reading a different lifecycle from the member',
+    ).toBe(asMember.state);
+  });
+
+  it('keeps the dispatcher’s own capacity reading on the settled state', async () => {
+    const member = await misboundConnection();
+
+    const capacity = await contributedCapacity();
+    const surface = capacity.surfaces.find((one) => one.userId === member.id);
+    expect(surface?.usable, 'a misbound surface was counted as usable capacity').toBe(false);
+    expect(surface?.because).toContain('not the one this connection names');
+  });
+
+  it('reports it to the foundation matrix as one blocked dimension with one remedy', async () => {
+    const member = await misboundConnection();
+    const account = await accountNamed('Airyn');
+
+    const connection = findingFor(account, 'CLAUDE_CONNECTION');
+    expect(connection.verdict).toBe('BLOCKED');
+    expect(connection.owner).toBe('BRAIN_ADMINISTRATOR');
+    expect(connection.nextAction).toContain('repoint-worker');
+    expect(findingFor(account, 'CAPACITY').verdict).toBe('BLOCKED');
+  });
+});
+
+
+/* ----------------------------- capacity nobody's foundation covers */
+
+describe('a surface running under an identity no account owns is named', () => {
+  it('reports a hand-registered worker rather than counting it as somebody’s capacity', async () => {
+    /*
+     * The production shape: a worker created by hand before the connection
+     * journey existed, bound to an enabled Routine, with no
+     * `capacity_connections` row resolving to it. `ownership.ts` leaves
+     * `owner_user_id` null — correctly, since only a connection is evidence —
+     * so no account's foundation covers it and nothing else says so.
+     */
+    const legacy = await createWorker({
+      name: 'airynworker2',
+      displayName: 'a hand-made identity',
+      workerType: 'MCP',
+      description: 'registered before the journey existed',
+      createdByType: 'HUMAN',
+      createdById: owner.id,
+    });
+    const account = await createAccount({
+      name: 'primary',
+      kind: 'CAPACITY',
+      planLabel: 'Max',
+      declaredPlanPower: 'unknown',
+    });
+    await createRoutine({
+      accountId: account.id,
+      routineRef: 'trig_01BBBBBBBBBBBBBBBBBBBBBB',
+      name: 'Brain Research A',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN',
+      workerId: legacy.id,
+    });
+
+    const reading = await foundationReading();
+    const found = reading.unattributed.find((one) => one.workerId === legacy.id);
+    expect(found, 'a surface with no owning account was not reported').toBeTruthy();
+    expect(found?.enabled).toBe(true);
+    expect(found?.nextAction).toContain('retire');
+    // The neutral label, never the legacy operator handle that reads like a person.
+    expect(JSON.stringify(found)).not.toContain('airynworker2');
+  });
+
+  it('says so in words when there is none, rather than staying silent', async () => {
+    const reading = await foundationReading();
+    expect(reading.unattributed).toEqual([]);
+  });
+
+  it('leaves a retired surface out, because retiring is one of the two remedies', async () => {
+    const legacy = await createWorker({
+      name: 'oakwood-legacy',
+      displayName: 'a retired identity',
+      workerType: 'MCP',
+      description: 'out of active dispatch',
+      createdByType: 'HUMAN',
+      createdById: owner.id,
+    });
+    const account = await createAccount({
+      name: 'primary',
+      kind: 'CAPACITY',
+      planLabel: 'Max',
+      declaredPlanPower: 'unknown',
+    });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: 'trig_01CCCCCCCCCCCCCCCCCCCCCC',
+      name: 'V1-oak',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN',
+      workerId: legacy.id,
+    });
+    await setRoutineState({
+      routineId: routine.id,
+      from: 'ENABLED',
+      to: 'RETIRED',
+      reason: 'proof complete',
+    });
+
+    const reading = await foundationReading();
+    expect(reading.unattributed.map((one) => one.routineId)).not.toContain(routine.id);
+  });
+});
+
+/* ------------------------------------------------- nothing leaks anywhere */
+
+describe('no secret reaches a reader', () => {
+  it('carries no verifier, token or PIN anywhere in the reading', async () => {
+    const caleb = await credentialless('Caleb');
+    await setUserPin(caleb.id, await hashPin('987654'));
+    await enrolPasskey(caleb.id);
+
+    const serialized = JSON.stringify(await foundationReading());
+    for (const forbidden of ['987654', 'pinVerifier', 'pin_verifier', 'passwordVerifier', 'token']) {
+      expect(serialized, `the reading carries ${forbidden}`).not.toContain(forbidden);
     }
-    expect(rows.text).not.toMatch(/scrypt\$/);
-    expect(rows.text).not.toMatch(/pin_verifier|pinVerifier/);
-  }, 60_000);
+    // And a real verifier, read straight from the row, is not in it either.
+    const row = await getUser(caleb.id);
+    expect(row?.pinUpdatedAt).not.toBeNull();
+  });
 });

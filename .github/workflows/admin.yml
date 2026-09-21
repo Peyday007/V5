@@ -32,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'people list | projects list | projects create | workers list | workers create | access show | access grant | research start | packets list | packets syntheses | packets recover-synthesis | cash seed-industry'
+        description: 'people list | people foundation | projects list | projects create | workers list | workers create | access show | access grant | research start | packets list | packets syntheses | packets recover-synthesis | cash seed-industry'
         required: true
         default: projects list
       subject:
@@ -81,7 +81,7 @@ jobs:
           # happened to `people list`, and what made a deployed image
           # unverifiable by the one command that could have proved it.
           case "$ADMIN_COMMAND" in
-            'people list'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'packets list'|'packets syntheses'|'packets recover-synthesis'|'cash seed-industry') ;;
+            'people list'|'people foundation'|'projects list'|'projects create'|'workers list'|'workers create'|'access show'|'access grant'|'research start'|'packets list'|'packets syntheses'|'packets recover-synthesis'|'cash seed-industry') ;;
             *)
               echo "::error::Refusing '$ADMIN_COMMAND': see the command list on this workflow."
               exit 1

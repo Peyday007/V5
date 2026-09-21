@@ -45,7 +45,9 @@ export type CompilerProfileId =
   | 'LABOR_ALLOCATION'
   | 'MACHINE_LADDER'
   | 'MACHINE_DEMAND'
-  | 'MACHINE_CAPABILITY';
+  | 'MACHINE_CAPABILITY'
+  | 'DEALFLOW_PARTIES'
+  | 'DEALFLOW_TERMS';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -1246,6 +1248,230 @@ const MACHINE_CAPABILITY: CompilerProfile = {
   ],
 };
 
+
+/**
+ * Who is on each side of a cross-border equipment transaction.
+ *
+ * The completion standard here is unusual and the profile exists to say so: a
+ * named organisation with a published trigger is the whole deliverable, and a
+ * well-reasoned description of *the kind of company that would want this*
+ * answers nothing at all. This trade is full of plausible buyers who do not
+ * exist, so `failureConditions` names finding none as a real and reportable
+ * outcome rather than a failure to try harder.
+ */
+const DEALFLOW_PARTIES: CompilerProfile = {
+  id: 'DEALFLOW_PARTIES',
+  fragmentKey: 'dealflow-parties',
+  // A cross-border market genuinely spans jurisdictions — a supplier in one
+  // country and buyers in four — so refusing a question that names several
+  // would refuse the work this envelope exists to permit.
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the industry map: both give later questions somewhere to point, and
+  // both yield to anything finishing a deal that already exists.
+  launchOrdinal: 310,
+  proposedSources: [
+    'an organisation’s own website, press release or announcement',
+    'a procurement or tender notice, or a government contract award',
+    'a trade association, industry body or trade publication',
+    'an official registry, filing, permit or licence record',
+    'a marketplace, job board, classified or auction listing',
+    'a census, statistical or government publication',
+    'a published price list, rate card or fee schedule',
+    'a manufacturer’s published catalogue, specification or export record',
+  ],
+  excludedSources: [
+    'an organisation named as a likely buyer with nothing published showing the need',
+    'a manufacturer inferred from a directory listing that does not say what it builds',
+    'a trigger inferred from an industry trend rather than from this organisation',
+    'a forecast or projection presented as a current need',
+  ],
+  lanes: [
+    {
+      id: 'buyer_need',
+      // One published tender proves one published tender. Requiring a second
+      // publisher for "this mine advertised for tankers" requires somebody
+      // else to have advertised the same thing.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A named organisation with something published showing it needs this class of ' +
+        'equipment — an expansion, a commissioning, an awarded contract, an ageing fleet, a ' +
+        'regulatory change forcing replacement, a tender or a procurement notice. Declared ' +
+        'on its claim with deal_finding set to BUYER_NEED, deal_subject set to the ' +
+        'organisation’s own name, deal_equipment set to the class, and deal_jurisdiction set ' +
+        'to its country. An organisation described and not declared reaches nothing.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'supplier_capability',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A named manufacturer publishing the capability to build this class for export: the ' +
+        'models, the certifications it publishes, the export markets it says it serves, its ' +
+        'stated minimum order and lead time. Declared with deal_finding set to ' +
+        'SUPPLIER_CAPABILITY and the same three fields.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'decision_path',
+      description:
+        'How a purchase of this size is actually decided at the organisation: the ' +
+        'procurement function, published vendor qualification requirements, whether it goes ' +
+        'through tender, and any individual the organisation itself publishes in that role. ' +
+        'Declared with deal_finding set to DECISION_MAKER and deal_subject set to the ' +
+        'organisation’s name, with no deal_equipment. Never a name inferred from a job ' +
+        'title held somewhere else.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'The class of equipment can be described but no organisation has published a need for ' +
+      'it, which is recorded as no buyer established rather than as a likely buyer.',
+    'Manufacturers can be found but nothing they publish says they export, which is ' +
+      'recorded rather than assumed away.',
+    'Organisations are named in directories with nothing published about what they need or ' +
+      'build, so nothing is declared.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which country each ` +
+        'organisation is in; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every organisation is declared on its claim with deal_finding, deal_subject set to its ' +
+      'own name, deal_equipment set to the class of equipment, and deal_jurisdiction set to ' +
+      'its country. One described in prose and not declared changes nothing.',
+    'Where the question names a class of equipment, that exact string is copied into ' +
+      'deal_equipment. A different wording is a different class and pairs with nothing.',
+    'A buyer rests on something published showing the need, not on the organisation being ' +
+      'the kind that would have one. A plausible buyer is not a finding, and reporting that ' +
+      'none was established is a better answer than naming one.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which country it is about. Where that is not ${scope}, it is ` +
+      'reported as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * What the transaction would actually involve.
+ *
+ * The one profile in this repository whose most valuable answer is a
+ * *documented absence*. A compliance layer nobody has looked at and a layer
+ * somebody searched properly and found empty are opposite facts with opposite
+ * consequences, and the absence of claims says only the first — so
+ * `REQUIREMENT_ABSENCE` has its own lane, and the completion criteria say in
+ * as many words that an unreported empty search leaves the question open.
+ */
+const DEALFLOW_TERMS: CompilerProfile = {
+  id: 'DEALFLOW_TERMS',
+  fragmentKey: 'dealflow-terms',
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the deep dive and the capital question: all three are finishing
+  // work already paid for on something that already exists, and all three
+  // outrank starting another search.
+  launchOrdinal: 130,
+  proposedSources: [
+    'a government regulation, statutory instrument or official standard',
+    'a customs tariff schedule or published duty rate',
+    'a transport, vehicle or roadworthiness authority’s own published rules',
+    'a standards body’s published specification',
+    'a freight, shipping or logistics operator’s published rate or tariff',
+    'an inspection, certification or testing body’s published requirements or fees',
+    'a trade association, industry body or trade publication',
+    'an organisation’s own website, press release or announcement',
+    'a published price list, rate card or fee schedule',
+  ],
+  excludedSources: [
+    'a requirement in one market presented as applying in another',
+    'a rule inferred from a neighbouring country or a regional bloc without a source ' +
+      'saying this market adopts it',
+    'a figure estimated, interpolated or converted between currencies',
+    'a rate produced by turning a published range into a single number',
+    'an absence asserted with no account of where it was searched for',
+  ],
+  lanes: [
+    {
+      id: 'compliance_layer',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'One thing the destination market or the buyer demands of these goods, declared with ' +
+        'deal_finding set to COMPLIANCE_REQUIREMENT, deal_value set to its layer, and ' +
+        'deal_jurisdiction set to the market. The layers are separate questions: a factory ' +
+        'quality certificate is not a product approval, a product approval is not a market ' +
+        'registration, and none of them is the buyer’s own acceptance standard.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'documented_absence',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A layer you searched properly that demands nothing here, declared with deal_finding ' +
+        'set to REQUIREMENT_ABSENCE, the layer in deal_value, and the places you searched ' +
+        'listed in searched_repositories. This is a real finding and often the most useful ' +
+        'one: a layer with no answer at all is treated as unresearched rather than as clear, ' +
+        'so an empty search you do not report leaves the question open.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'landed_cost',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'One published figure for one line of the cost of getting these goods there, or what ' +
+        'the buyer pays today. Declared with deal_finding set to COST_COMPONENT, the line in ' +
+        'deal_value, the amount in deal_amount_cents, the published currency in ' +
+        'deal_currency, and what the figure is per in deal_subject. Report figures as ' +
+        'published: Brain withholds the landed cost when they are on different bases or in ' +
+        'different currencies and says why, which is correct, and a harmonised number would ' +
+        'be one nobody can check.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'commercial_precedent',
+      description:
+        'Evidence that a named commercial structure is actually used in this trade, declared ' +
+        'with deal_finding set to COMMERCIAL_PRECEDENT, the structure in deal_value, and ' +
+        'what the source says it pays — in the source’s own words, including ranges — in ' +
+        'deal_subject. That a structure exists somewhere is not evidence it is used here.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'A requirement can be found for a neighbouring market but nothing published says this ' +
+      'market imposes it, which is recorded as unresolved rather than carried across.',
+    'A layer cannot be searched because the authority publishes nothing reachable, which is ' +
+      'recorded as unresolved naming what was searched — not as a documented absence.',
+    'Figures are published on incompatible bases or in different currencies, so the landed ' +
+      'cost is withheld and the figures are reported as published.',
+    'Intermediary arrangements can be described in general but nothing published shows this ' +
+      'trade using any of them.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every requirement is declared with deal_finding set to COMPLIANCE_REQUIREMENT and its ' +
+      'layer in deal_value. Each layer is answered on its own evidence: one layer’s answer ' +
+      'is never carried to another.',
+    'A layer searched properly and found to demand nothing is declared with ' +
+      'REQUIREMENT_ABSENCE and the places searched listed. An empty search that is not ' +
+      'declared leaves the layer unresearched, which blocks the deal.',
+    'A figure is read from a source and never produced. It is reported in the currency and ' +
+      'on the basis the source published, with no conversion, no interpolation and no ' +
+      'reconciliation of incompatible figures into one number.',
+    'A published range stays a range. It is never turned into a single rate.',
+    'A commercial structure is reported as used only where a source about this trade shows ' +
+      'it being used. That one exists in general is not evidence about here.',
+    'Every source carries its URL, who publishes it, and the date it took effect or was ' +
+      'last observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is ` +
+      'reported as being about somewhere else rather than generalized.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -1259,6 +1485,8 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_MACHINE_LADDER_V1: MACHINE_LADDER,
   RUSSELL_MACHINE_DEMAND_V1: MACHINE_DEMAND,
   RUSSELL_MACHINE_CAPABILITY_V1: MACHINE_CAPABILITY,
+  RUSSELL_DEALFLOW_PARTIES_V1: DEALFLOW_PARTIES,
+  RUSSELL_DEALFLOW_TERMS_V1: DEALFLOW_TERMS,
 });
 
 export function profileFor(envelopeId: string): CompilerProfile | null {

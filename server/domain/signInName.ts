@@ -89,14 +89,20 @@ export function signInNameIsTaken(
 }
 
 /**
- * The sign-in names more than one live account answers to.
+ * The sign-in names more than one live account answers to, and how many.
  *
- * Returned as the folded form, so a caller comparing a row against it uses the
+ * Keyed by the folded form, so a caller comparing a row against it uses the
  * same rule the lookup does.
+ *
+ * It carries the count rather than only the name because its two readers need
+ * different halves of one answer: the People reading asks *is this person
+ * stuck*, and the foundation reading says *how many accounts share this* in a
+ * sentence an administrator acts on. Two functions would be two readers of one
+ * fact, which is the defect this whole module exists to close.
  */
 export function ambiguousSignInNames(
   accounts: readonly { email: string | null; displayName: string; disabled: boolean }[],
-): Set<string> {
+): Map<string, number> {
   const seen = new Map<string, number>();
   for (const account of accounts) {
     if (account.disabled) continue;
@@ -107,5 +113,5 @@ export function ambiguousSignInNames(
     if (name.length === 0) continue;
     seen.set(name, (seen.get(name) ?? 0) + 1);
   }
-  return new Set([...seen].filter(([, count]) => count > 1).map(([name]) => name));
+  return new Map([...seen].filter(([, count]) => count > 1));
 }

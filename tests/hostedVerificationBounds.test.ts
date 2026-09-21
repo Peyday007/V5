@@ -25,10 +25,13 @@ import {
   enqueueWork,
   getWorkItem,
   heartbeatWork,
+  DEFAULT_LEASE_MS,
   MIN_LEASE_MS,
+  proveLeaseOwnership,
   type ClaimScope,
   type OwnershipProof,
 } from '../server/repos/workQueue.ts';
+import { getDb } from '../server/db/database.ts';
 import type { ClaimedWork, WorkerScope } from '../server/domain/types.ts';
 
 const SCOPES: WorkerScope[] = ['queue:read', 'queue:claim', 'queue:heartbeat', 'queue:complete'];
@@ -131,21 +134,23 @@ describe('a lease held across work that outlasts it', () => {
   });
 });
 
-describe('the release gate holds its leases open', () => {
+describe('the release gate leases its research work for longer than it takes', () => {
   const source = code('scripts/verify-hosted.ts');
 
-  it('beats while the audit submission is in flight, because that is the one that crossed', () => {
-    expect(source).toMatch(/holdingLease\(\s*auditClaim,[\s\S]{0,200}brain_submit_audit/);
+  it('takes a lease at claim time rather than trying to beat a fenced effect', () => {
+    expect(source).toMatch(/claimWork\(\{[\s\S]{0,400}leaseMs: RESEARCH_LEASE_MS/);
   });
 
-  it('beats while the filing submission is in flight, because that one is next', () => {
-    expect(source).toMatch(/holdingLease\(\s*synthClaim,[\s\S]{0,200}brain_submit_synthesis/);
+  it('leases for comfortably longer than the longest judge pass measured', () => {
+    const ms = /RESEARCH_LEASE_MS = ([0-9 *_]+);/.exec(source)?.[1];
+    expect(ms).toBeDefined();
+    // eslint-disable-next-line no-eval
+    const value = Number(eval(ms!.replace(/_/g, '')));
+    expect(value).toBeGreaterThan(10 * 60 * 1000);
   });
 
-  it('renews often enough that one missed beat cannot drop the work', () => {
-    const every = /BEAT_EVERY_MS = ([0-9_]+)/.exec(source)?.[1]?.replace(/_/g, '');
-    expect(every).toBeDefined();
-    expect(Number(every)).toBeLessThanOrEqual((5 * 60 * 1000) / 2);
+  it('no longer carries the heartbeat that a fenced effect defeats', () => {
+    expect(source).not.toContain('holdingLease');
   });
 });
 
@@ -195,4 +200,110 @@ describe('how long a checkout may wait', () => {
       /BRAIN_DATABASE_CONNECT_TIMEOUT_MS'\]\s*=\s*'\d+'/,
     );
   });
+});
+
+
+/**
+ * Why the release gate takes its lease at claim time, measured rather than
+ * argued — and the hypothesis this replaces, which was wrong.
+ *
+ * Two production deploys were spent on a heartbeat that did not hold the
+ * lease. The first explanation was that a beat is *defeated* by the effect's
+ * fence: every mutation is fenced by `proveLeaseOwnership`, an `UPDATE` of the
+ * work item row inside the effect's own transaction (§20), so a nine-minute
+ * submission holds that row's lock for nine minutes and a concurrent beat
+ * blocks on it. Half of that is true and the conclusion was not.
+ *
+ * What this measures: the beat **does** block for the whole transaction, and
+ * it then **succeeds** — because `heartbeatWork` captures `queueNow()` in
+ * JavaScript before the statement runs, so both the `lease_expires_at > ?`
+ * comparison and the new expiry are computed from the pre-block clock. A
+ * blocked beat is therefore not refused; it extends the lease to *its own
+ * capture time* plus a lease, which is already in the past by the time it
+ * lands.
+ *
+ * That is the real ceiling, and it is arithmetic rather than a refusal: beats
+ * cannot push the lease past the last beat that got a connection. It is why
+ * the remedy is a lease taken at claim time, which needs no extending at all.
+ *
+ * Postgres only: SQLite serialises writers, so the two statements can never
+ * overlap there and the test would be asserting against the absence of the
+ * condition it exists to demonstrate. §34 records the same restriction.
+ */
+const POSTGRES = process.env['BRAIN_TEST_DATABASE_URL'];
+
+describe.skipIf(!POSTGRES)('a beat issued against a fenced effect', () => {
+  let projectId = '';
+  let workerId = '';
+
+  beforeEach(async () => {
+    projectId = (await freshProject()).project.id;
+    workerId = (
+      await createWorker({ name: 'fenced-worker', createdByType: 'SYSTEM', createdById: 'test' })
+    ).id;
+  });
+  afterEach(teardown);
+
+  it('blocks for the whole effect, then lands with the clock it captured before blocking', async () => {
+    await enqueueWork({
+      projectId,
+      workType: 'SYNTHETIC_ECHO',
+      payload: { note: 'fenced' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+    });
+    const [claim] = await claimWork({
+      workerId,
+      scopes: [{ projectId, scopes: SCOPES }],
+      leaseMs: MIN_LEASE_MS,
+    });
+    if (!claim) throw new Error('nothing was claimed');
+    const proof: OwnershipProof = {
+      workItemId: claim.workItemId,
+      workerId,
+      leaseId: claim.leaseId,
+      leaseGeneration: claim.leaseGeneration,
+    };
+
+    const HELD_MS = MIN_LEASE_MS + 2_000;
+    let blockedForMs: number | null = null;
+    let beatOk: boolean | null = null;
+    const started = Date.now();
+
+    const effect = getDb().transaction(async () => {
+      expect(await proveLeaseOwnership(proof)).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, HELD_MS));
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    const beatIssuedAt = Date.now() - started;
+    const beat = heartbeatWork(proof).then((result) => {
+      blockedForMs = Date.now() - started;
+      beatOk = result.ok;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(blockedForMs).toBeNull(); // still waiting on the fence's row lock
+
+    await effect;
+    await beat;
+
+    // It waited for the effect to commit rather than skipping the row.
+    expect(blockedForMs!).toBeGreaterThanOrEqual(HELD_MS);
+    // And it was accepted, on the clock it captured before it blocked.
+    expect(beatOk).toBe(true);
+
+    /*
+     * And here is the ceiling, which is the whole reason a beat cannot rescue
+     * a long submission: the lease now ends `DEFAULT_LEASE_MS` after the beat
+     * was **issued**, not after it landed. Nine minutes of blocking buys
+     * nothing beyond that, and with the harness's two-connection pool only two
+     * beats are ever in flight — so the lease tops out near the second beat's
+     * issue time plus five minutes, which a nine-minute submission outruns.
+     */
+    const item = await getWorkItem(claim.workItemId);
+    const extendedTo = Date.parse(item!.leaseExpiresAt!) - started;
+    expect(extendedTo).toBeGreaterThanOrEqual(beatIssuedAt + DEFAULT_LEASE_MS - 500);
+    expect(extendedTo).toBeLessThan(beatIssuedAt + DEFAULT_LEASE_MS + 2_000);
+  }, 40_000);
 });

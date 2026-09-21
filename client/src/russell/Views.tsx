@@ -11,6 +11,7 @@
  */
 import { Fragment, useState, type ReactNode } from 'react';
 import { Constellation } from './Constellation.tsx';
+import { Register } from './Register.tsx';
 import { Frontier } from './Frontier.tsx';
 import { Maps } from './Maps.tsx';
 import { freshnessLabel, humanWhen, listState, priorityTone, readingState } from './present.ts';
@@ -191,6 +192,21 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
   });
   const groups = (work?.groups ?? []).filter((group) => group.entries.length > 0);
   return (
+    <>
+      {/*
+       * The register leads, and the mission list follows.
+       *
+       * They answer different questions and the order is the argument: *what is
+       * pursuing money, what is running, what needs me* spans every kind of
+       * work and every project, and the missions below it are one project's
+       * research. A person opening Work wants the first before the second.
+       *
+       * It is a section on a destination that already exists rather than a
+       * seventh destination, which is §36's rule read the way round it is
+       * usually needed: a new answer belongs inside the surface somebody
+       * already opens.
+       */}
+      <Register projectId={projectId} />
     <Panel title="Work" state={state} onRetry={query.reload}>
       {groups.map((group) => (
         <div key={group.group} className="rs-group">
@@ -220,6 +236,7 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
         </button>
       ) : null}
     </Panel>
+    </>
   );
 }
 

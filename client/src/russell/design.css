@@ -3218,3 +3218,160 @@ details.rs-card > section.rs-card {
 .rs-machines-barren {
   opacity: 0.65;
 }
+
+/* ---------------------------------------------------------------------------
+   The work register
+   ---------------------------------------------------------------------------
+
+   Container queries throughout, never a viewport media query. §29 records the
+   defect this avoids: the element that clips is a column inside a rail, and a
+   media query asks the viewport instead — so the same component was right on a
+   phone and wrong in a drawer. Nothing here sets a `min-width` wider than a
+   phone and nothing scrolls sideways.
+   --------------------------------------------------------------------------- */
+
+.rs-register {
+  container-type: inline-size;
+}
+
+.rs-register-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  list-style: none;
+  margin: 0 0 var(--gap-3);
+  padding: 0;
+}
+
+.rs-register-question {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gap-1);
+  padding: var(--gap-1) var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rs-register-question:hover {
+  border-color: var(--ink-faint);
+}
+
+.rs-register-question.is-selected {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.rs-register-question-label {
+  font-size: var(--step--1);
+}
+
+/* The state word carries a colour and the colour is never the only signal:
+   every card prints the state in words and the row that decided it. */
+.rs-workstream-blocked {
+  border-left: 3px solid var(--warn, var(--accent));
+}
+
+.rs-workstream-verified_live,
+.rs-workstream-deployed,
+.rs-workstream-merged,
+.rs-workstream-done {
+  border-left: 3px solid var(--ok, var(--accent));
+}
+
+.rs-evidence {
+  font-size: var(--step--2);
+  color: var(--ink-faint);
+  margin: var(--gap-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.rs-owner-action {
+  margin: var(--gap-2) 0 0;
+}
+
+.rs-next-action {
+  margin: var(--gap-2) 0 0;
+  color: var(--ink-soft, var(--ink-faint));
+}
+
+.rs-blockers {
+  margin: var(--gap-2) 0 0;
+  padding-left: var(--gap-3);
+  font-size: var(--step--1);
+}
+
+.rs-disclosure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gap-1);
+  margin-top: var(--gap-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.rs-readings {
+  margin-top: var(--gap-2);
+  font-size: var(--step--1);
+}
+
+.rs-reading-kind {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+/* A link whose target is gone reads as gone, rather than quietly as absent. */
+.rs-reading-missing {
+  color: var(--warn, var(--ink));
+}
+
+.rs-register-unknown,
+.rs-register-unfiled {
+  margin-top: var(--gap-4);
+}
+
+.rs-file-one {
+  margin-top: var(--gap-3);
+}
+
+.rs-field {
+  display: block;
+  margin: var(--gap-3) 0;
+}
+
+.rs-field > span,
+.rs-field > legend {
+  display: block;
+  margin-bottom: var(--gap-1);
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+}
+
+.rs-field input,
+.rs-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.rs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  margin-top: var(--gap-3);
+}

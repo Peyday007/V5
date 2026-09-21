@@ -45,6 +45,7 @@ import { useAsync } from './useAsync.ts';
 import {
   PeopleApi,
   type ConnectionView,
+  type AccountFoundation,
   type PeopleAndCapacity,
   type PersonRow,
   type SurfaceReading,
@@ -95,6 +96,59 @@ const SIGNS_IN_LABEL: Record<PersonRow['signsInWith'], string | null> = {
 
 
 /* ------------------------------------------------------------------ people */
+
+/**
+ * What is short, for this account, in the order it has to be fixed.
+ *
+ * Every sentence here is the server's. The client chooses no wording, derives
+ * no verdict and has no branch on who is reading — `foundation` is absent from
+ * the payload entirely for a member, so there is nothing to render rather than
+ * something to hide, which is the only version of that distinction a forgotten
+ * `.filter()` cannot undo.
+ *
+ * `NOT_APPLICABLE` is not printed. A dimension this account has not reached is
+ * not a finding, and listing three of them under somebody who has simply not
+ * started is the noise that teaches a reader to stop reading the list.
+ */
+function Foundation({ account }: { account?: AccountFoundation }): JSX.Element | null {
+  if (!account) return null;
+  const short = account.findings.filter((one) => one.verdict === 'BLOCKED');
+  if (short.length === 0) {
+    return <p className="rs-hint">Foundation complete.</p>;
+  }
+  return (
+    <ul className="rs-hint rs-foundation">
+      {short.map((one) => (
+        <li key={one.dimension}>
+          <strong>{FOUNDATION_LABEL[one.dimension] ?? one.dimension}</strong> &middot; {one.because}
+          {one.nextAction ? (
+            <>
+              {' '}
+              <em>{one.nextAction}</em> ({ACTOR_LABEL[one.owner] ?? one.owner})
+            </>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The server names the dimension; this only makes it readable. */
+const FOUNDATION_LABEL: Record<string, string> = {
+  IDENTITY: 'Identity',
+  SIGN_IN: 'Sign-in',
+  CLAUDE_CONNECTION: 'Claude connection',
+  WORKER_ATTRIBUTION: 'Worker',
+  CAPACITY: 'Capacity',
+  RECOVERY: 'Recovery',
+};
+
+const ACTOR_LABEL: Record<string, string> = {
+  MEMBER: 'them',
+  BRAIN_ADMINISTRATOR: 'you',
+  DEPLOYMENT_ADMINISTRATOR: 'deployment',
+  BRAIN: 'Brain, by itself',
+};
 
 /**
  * The invite control.
@@ -482,6 +536,9 @@ function People({
             {page.you.isBrainAdmin && one.state === 'NAME_IS_AMBIGUOUS' ? (
               <Rename person={one} onChanged={onChanged} />
             ) : null}
+            <Foundation
+              account={page.foundation?.accounts.find((each) => each.userId === one.userId)}
+            />
           </li>
         ))}
       </ul>
