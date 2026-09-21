@@ -140,6 +140,7 @@ import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
 import { runManufacturingKernel } from '../manufacturing/kernel.ts';
+import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -478,6 +479,26 @@ export interface TickReport {
     evidence: string[];
     settled: string[];
   }[];
+  /**
+   * What the cross-border dealflow kernel did: what it filed from finished
+   * rounds, what it paired, what it promoted into the portfolio, and what it
+   * asked next and why.
+   *
+   * `why` travels with the round for `industryKernel`'s exact reason — the
+   * allocator is pure over a snapshot that has since moved, so the sentence
+   * has to be the one written when the decision was made.
+   */
+  dealflowKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    parties: string[];
+    requirements: string[];
+    costs: string[];
+    structures: string[];
+    paired: string[];
+    promoted: string[];
+    settled: string[];
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -571,6 +592,7 @@ const EMPTY: TickReport = {
   industryKernel: [],
   laborKernel: [],
   manufacturingKernel: [],
+  dealflowKernel: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -656,6 +678,7 @@ export async function tick(owner: string): Promise<TickReport> {
     industryKernel: [],
     laborKernel: [],
     manufacturingKernel: [],
+    dealflowKernel: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -1392,6 +1415,60 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a labor map that could not be advanced is left exactly as it was */
+      }
+
+      try {
+        /*
+         * 1a-iv-f. The cross-border dealflow kernel.
+         *
+         * §38's kernel added *where* in the economy to look. This one adds the
+         * axis a cross-border equipment transaction needs and nothing above it
+         * can express: a deal has two sides, and everything hard about it —
+         * whether the goods may lawfully enter that market, what it costs to
+         * land them, how the trade pays somebody in the middle — lives between
+         * them.
+         *
+         * Its own `try`, for the reason every block around it has one: a
+         * dealflow pass that threw must not stop a sprint settling a need,
+         * harvesting what already ran, or advancing its map.
+         *
+         * Nothing it creates bypasses anything. A round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does. A deal that becomes real is
+         * promoted into a `cash_opportunities` row and pursued by the
+         * machinery Cash Mode already has, so there is no second lifecycle
+         * here and no second work queue.
+         */
+        const dealflow = await runDealflowKernel(project.id);
+        if (
+          dealflow.opened.length > 0 ||
+          dealflow.paired.length > 0 ||
+          dealflow.promoted.length > 0 ||
+          dealflow.filed.parties.length > 0 ||
+          dealflow.filed.requirements.length > 0 ||
+          dealflow.filed.costs.length > 0 ||
+          dealflow.filed.structures.length > 0 ||
+          dealflow.filed.settled.length > 0
+        ) {
+          report.dealflowKernel.push({
+            projectId: project.id,
+            opened: dealflow.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            parties: dealflow.filed.parties.map((one) => one.id),
+            requirements: dealflow.filed.requirements.map((one) => one.id),
+            costs: dealflow.filed.costs.map((one) => one.id),
+            structures: dealflow.filed.structures.map((one) => one.id),
+            paired: dealflow.paired.map((one) => one.id),
+            promoted: dealflow.promoted.map((one) => one.dealId),
+            settled: dealflow.filed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a dealflow pass that could not run leaves every row exactly as it was */
       }
 
       try {
