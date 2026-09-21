@@ -11,7 +11,8 @@ import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
 import { isCapabilityFinding } from '../domain/manufacturing.ts';
 import { isStructuralFinding } from '../domain/industry.ts';
 import { isLaborFinding } from '../domain/labor.ts';
-import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
+import { isPuzzleFinding } from '../domain/puzzles.ts';
+import type { LaborFinding, PuzzleFinding, StructuralFinding } from '../domain/types.ts';
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
@@ -207,6 +208,10 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     laborSubject: row.labor_subject,
     laborQualifier: row.labor_qualifier,
     laborRateCents: row.labor_rate_cents,
+    puzzleFinding: isPuzzleFinding(row.puzzle_finding) ? row.puzzle_finding : null,
+    puzzleSubject: row.puzzle_subject,
+    puzzleQualifier: row.puzzle_qualifier,
+    puzzlePriceCents: row.puzzle_price_cents,
     capabilityFinding: isCapabilityFinding(row.capability_finding)
       ? row.capability_finding
       : null,
@@ -814,6 +819,14 @@ export interface InsertClaimInput {
   laborQualifier?: string | null;
   /** A published rate in minor units, or null for unknown. */
   laborRateCents?: number | null;
+  /** What it establishes about puzzle formats, buyers, channels, rights or production. */
+  puzzleFinding?: PuzzleFinding | null;
+  /** A format's own name, or a value from that finding's closed set. */
+  puzzleSubject?: string | null;
+  /** What a published price is quoted on. */
+  puzzleQualifier?: string | null;
+  /** A published price in minor units, or null where none is published. */
+  puzzlePriceCents?: number | null;
   capabilityFinding?: string | null;
   capabilitySubject?: string | null;
   capabilityObservedOn?: string | null;
@@ -856,6 +869,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            evidence_locator, evidence_lane, opportunity_signal, structural_finding,
            structural_subject, structural_qualifier, structural_amount_cents,
            labor_finding, labor_subject, labor_qualifier, labor_rate_cents,
+           puzzle_finding, puzzle_subject, puzzle_qualifier, puzzle_price_cents,
            capability_finding, capability_subject, capability_observed_on,
            retrieved_at, confidence,
            contradiction_state,
@@ -864,7 +878,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            geography, timeframe, population, definition, requirement_ids, job_id,
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
@@ -873,6 +887,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.structuralQualifier ?? null, input.structuralAmountCents ?? null,
           input.laborFinding ?? null, input.laborSubject ?? null,
           input.laborQualifier ?? null, input.laborRateCents ?? null,
+          input.puzzleFinding ?? null, input.puzzleSubject ?? null,
+          input.puzzleQualifier ?? null, input.puzzlePriceCents ?? null,
           input.capabilityFinding ?? null, input.capabilitySubject ?? null,
           input.capabilityObservedOn ?? null,
           input.retrievedAt,
@@ -1096,6 +1112,45 @@ export async function laborClaims(input: {
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
         AND c.labor_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
+/**
+ * The accepted claims that declared a puzzle finding, for the puzzle kernel.
+ *
+ * `laborClaims`' shape and its reasoning, one column along — including why the
+ * window is bounded to the orchestrations whose round is still open: an
+ * unbounded oldest-first scan fills permanently with claims from rounds that
+ * settled weeks ago, and a bounded scan that cannot make progress is worse
+ * than an unbounded one because it looks like it is working.
+ *
+ * Only `PUZZLE_FORMAT` produces a row of its own. Everything else stays on the
+ * claim and is read through it, because §31's argument holds here too: the
+ * claim already carries the statement, the source, the publisher and the date,
+ * and a table beside it would be a copy — the one nobody reconciles.
+ */
+export async function puzzleClaims(input: {
+  projectId: string;
+  orchestrationIds: readonly string[];
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.puzzle_finding IS NOT NULL
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid

@@ -23,6 +23,7 @@ import { factoryRouter } from './factory.ts';
 import { connectRouter } from './connect.ts';
 import { cashRouter } from './cash.ts';
 import { laborRouter } from './labor.ts';
+import { puzzlesRouter } from './puzzles.ts';
 import { manufacturingRouter } from './manufacturing.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
@@ -97,6 +98,7 @@ export function createApiRouter(): Router {
   // ordering requirement: its routes carry their own `/projects/:id/labor/...`
   // prefix and must sit before the projects router.
   router.use(laborRouter);
+  router.use(puzzlesRouter);
   router.use(manufacturingRouter);
 
   router.use(apiNotFound);

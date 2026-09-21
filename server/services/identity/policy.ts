@@ -376,6 +376,29 @@ const OVERRIDES: Override[] = [
   // of the project can see who does the work here and why.
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'PATCH', level: 'ADMIN' },
+
+  // ---------------------------------------------------------------------
+  // The puzzle products and production kernel (§42)
+  // ---------------------------------------------------------------------
+  //
+  // Every write is ADMIN, for the split the three sections above already draw:
+  // declaring a format, a master or an edition is a decision *about* what this
+  // operation makes, and recording what a master's content stands on is the
+  // fact that decides whether anything may be sold at all. Producing a batch
+  // is ADMIN too, which is stricter than it strictly needs to be — generating
+  // spends nothing — and is deliberate, because the same route is the one that
+  // can block a master.
+  //
+  // **No entry here names a worker scope.** An ADMIN route refuses a worker by
+  // level; every handler additionally calls `requirePerson`, which refuses one
+  // by principal *type*. A machine that could declare what its own output
+  // stands on, or clear a block put on it for producing wrong puzzles, is
+  // precisely what §22's split exists to prevent.
+  //
+  // Reading is deliberately absent and takes the default READ, so every member
+  // of the project can see what is made here, what passed and what did not.
+  { pattern: /^\/api\/projects\/[^/]+\/puzzles\//, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/puzzles\//, method: 'PATCH', level: 'ADMIN' },
   // The manufacturing kernel's programme (§39)
   // ---------------------------------------------------------------------
   //

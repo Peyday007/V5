@@ -40,7 +40,8 @@
     "step12b:combine": "tsx scripts/step12b-combine.ts",
     "design:manifest": "tsx scripts/design-manifest.ts",
     "capability": "tsx --env-file-if-exists=.env scripts/capability.ts",
-    "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts"
+    "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts",
+    "puzzles": "tsx --env-file-if-exists=.env scripts/puzzles.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

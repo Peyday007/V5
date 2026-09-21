@@ -139,6 +139,7 @@ import { launchableUnderCashMode } from '../cash/lifecycle.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
+import { runPuzzleKernel } from '../puzzles/kernel.ts';
 import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
@@ -442,6 +443,30 @@ export interface TickReport {
     settled: string[];
   }[];
   /**
+   * What the puzzle kernel did: what it produced, what checking it said, and
+   * which questions it opened.
+   *
+   * `produced` and `failed` are separate counts and are never summed, because
+   * a batch that produced wrong puzzles is the one event on this report that
+   * stops a master — and `blocked` naming which masters is what makes that
+   * visible without reading the events table.
+   *
+   * `unsupported` is here for the reason it is everywhere else in this kernel:
+   * a puzzle nothing could fully check is not a puzzle that passed, and a
+   * report that folded the two would say the catalog was sound.
+   */
+  puzzleKernel: {
+    projectId: string;
+    produced: number;
+    duplicates: number;
+    failed: number;
+    unsupported: number;
+    blocked: { masterId: string; reason: string }[];
+    opened: { purpose: string; roundId: string; why: string }[];
+    formatsDiscovered: string[];
+    settled: string[];
+  }[];
+  /**
    * What the manufacturing kernel did: which questions it opened and why, and
    * what the finished ones added to the ladder.
    *
@@ -551,6 +576,7 @@ const EMPTY: TickReport = {
   cashDiscovery: [],
   industryKernel: [],
   laborKernel: [],
+  puzzleKernel: [],
   manufacturingKernel: [],
   cashOperations: [],
   sharedPromoted: [],
@@ -636,6 +662,7 @@ export async function tick(owner: string): Promise<TickReport> {
     cashDiscovery: [],
     industryKernel: [],
     laborKernel: [],
+  puzzleKernel: [],
     manufacturingKernel: [],
     cashOperations: [],
     sharedPromoted: [],
@@ -1337,6 +1364,60 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a labor map that could not be advanced is left exactly as it was */
+      }
+
+      try {
+        /*
+         * And what this operation actually makes.
+         *
+         * Its own `try`, for the reason every block here has one: a puzzle
+         * pass that threw must not stop a sprint harvesting or a labor map
+         * settling. It is derived from rows on every tick, so a master
+         * declared before it existed starts producing with nobody pressing
+         * anything.
+         *
+         * Two halves with different bounds, which is the whole shape of this
+         * kernel. Producing and checking spend nothing — no provider, no
+         * allowance, no external read — so they run whatever the standing
+         * authority says, and a project with no research grant still builds
+         * its catalog and still learns whether its generators work. Opening a
+         * question fires a worker, so that half is behind the grant.
+         *
+         * Nothing it does publishes, lists, submits or sells anything, and
+         * nothing it decides clears a block: a master stopped for producing
+         * wrong puzzles stays stopped until a person says the generator is
+         * repaired.
+         */
+        const puzzles = await runPuzzleKernel(project.id);
+        const produced = puzzles.produced.reduce((sum, one) => sum + one.created.length, 0);
+        const failed = puzzles.produced.reduce((sum, one) => sum + one.failures, 0);
+        if (
+          produced > 0 ||
+          failed > 0 ||
+          puzzles.opened.length > 0 ||
+          puzzles.absorbed.formats.length > 0 ||
+          puzzles.absorbed.settled.length > 0
+        ) {
+          report.puzzleKernel.push({
+            projectId: project.id,
+            produced,
+            duplicates: puzzles.produced.reduce((sum, one) => sum + one.duplicates, 0),
+            failed,
+            unsupported: puzzles.produced.reduce((sum, one) => sum + one.unsupported, 0),
+            blocked: puzzles.produced
+              .filter((one) => one.blocked !== null)
+              .map((one) => ({ masterId: one.masterId, reason: one.blocked ?? '' })),
+            opened: puzzles.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            formatsDiscovered: puzzles.absorbed.formats.map((one) => one.id),
+            settled: puzzles.absorbed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a catalog that could not be advanced is left exactly as it was */
       }
 
       try {

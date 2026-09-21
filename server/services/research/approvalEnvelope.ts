@@ -753,6 +753,161 @@ const CASH_SOURCE_RULE =
 const CASH_FORBIDDEN_ACTIONS =
   /\b(purchase|paid api|api key|subscription fee|subscribe to|pay for access|paywall bypass|buy (?:the |a |an )?(?:list|data|access|leads)|telephone call|phone call|call the|cold call|email the|write to the|contact the|reach out to|message the|dm the|submit a (?:request|bid|proposal|application) to|file a (?:complaint|request|petition)|register with|apply for a|sign up (?:for|with)|place an? (?:ad|advert|order|bid)|run an? (?:ad|advert|campaign)|post to|publish (?:a|our|the report|this report|a listing)|list (?:it |the item )?for sale|negotiate with|agree terms with|commit (?:funds|money)|make a payment|send payment|hire|engage a contractor)\b/i;
 
+
+/* ---------------------------------------------------------------------------
+ * The puzzle kernel's three assignments.
+ *
+ * Three rather than one for `RUSSELL_CASH_VALIDATION_V1`'s reason:
+ * `planFitsEnvelope` pins one template per envelope, and a packet has to be
+ * judged against the rules for the question it is actually asking. What sells,
+ * what may lawfully be copied, and what a print run costs are three questions
+ * with three completion standards, and judging one by another's is §25's
+ * Westbrook defect at a compiler.
+ *
+ * **None of them authorizes an effect discovery did not already authorize.**
+ * They take their source classes and their prohibitions from the same two
+ * constants the cash envelopes use, rather than restating them, so a class or
+ * a prohibition added there reaches these without anybody remembering. Nothing
+ * here writes a puzzle, publishes one, lists one for sale, opens a seller
+ * account, approaches a publisher or commits to a print run: every one of
+ * those is a commercial action a person grants separately.
+ * ------------------------------------------------------------------------ */
+
+export const PUZZLE_MARKET_ASSIGNMENT_TEMPLATE = `Establish, from published sources, who buys puzzle work of this kind and on what
+published terms it reaches them:
+
+{QUESTION}
+
+Subject: the format or product named above. Anything you establish about a different
+format is reported as being about something else rather than generalized — "puzzle books
+sell well" is not a finding about cryptograms.
+
+Market: {JURISDICTION}.
+
+What to settle, as far as published sources allow: which specific buyers exist and are
+named by a source — a publication with an open submissions page, a syndicate's published
+terms, a retailer stocking a named product, an institution's procurement notice, a
+platform's published revenue share; what each is published to pay and on what basis that
+figure is quoted; by what routes the product actually reaches a buyer; and what each
+route takes in platform or retailer share, distributor discount, returns, payment timing,
+exclusivity and rights required.
+
+Every one of those becomes usable only if you declare it. Set puzzle_finding on the claim
+to the kind it is and puzzle_subject to the value from that kind's own set — and for a
+format you are putting on the map, to the format's own short name as its sources name it.
+A claim with no puzzle_finding is ordinary context, which is most of them and is not a
+deficiency.
+
+A price is read from a source and never produced. Set puzzle_price_cents in minor units
+with puzzle_qualifier saying what it is quoted on; a per-book figure recorded as a
+per-puzzle one is wrong by two orders of magnitude and nothing downstream could catch it.
+Where a source names a route but no figure, record the route with no price — an unknown
+price is recorded as unknown and is never read as cheap.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. A publisher or platform is
+conclusive about its own stated terms and worth nothing as independent confirmation of
+anybody else's. A market-size estimate is not a buyer.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found.
+
+Out of scope: submitting work to any publication, syndicate or platform; opening a seller,
+publisher or marketplace account; contacting any editor, buyer, publisher, distributor or
+retailer; placing an advertisement; listing anything for sale; buying access, data, a
+subscription or a paid API; committing to any print run, order or agreement. This is
+read-only research into what is already published, and every action beyond reading is a
+decision a person makes separately.`;
+
+export const PUZZLE_RIGHTS_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what constrains the rights to produce and sell
+puzzle work of this kind:
+
+{QUESTION}
+
+Subject: the format, mechanic or corpus named above.
+
+Market: {JURISDICTION}. A rights rule is usually jurisdictional, so say which jurisdiction
+each constraint is from — a rule quoted without one is not a finding about anywhere.
+
+What to settle, as far as published sources allow: copyright in individual puzzles and
+separately in compilations; trademarks over format or product names; any mechanic that is
+licensed rather than free to use; rights in the word lists, lexicons, clue banks and
+databases such a product would draw on, and the licence each is actually released under;
+licences for fonts and artwork; the terms of the platforms it would be sold on; and any
+safety, age or labelling rule that applies to it as a physical product.
+
+Every one of those becomes usable only if you declare it. Set puzzle_finding to
+RIGHTS_CONSTRAINT and puzzle_subject to which kind of constraint it is.
+
+An established absence is the most valuable result this question can return, and it is
+also the easiest to get wrong. Where you searched the places a constraint would be
+published — a trademark register, the rights holder's own terms, the licence a corpus is
+released under, a platform's content policy — and found none, declare it as
+NO_CONSTRAINT_FOUND and name exactly what you searched. Do not conclude that something is
+unencumbered because you did not encounter a rule saying otherwise: an undocumented
+silence is not an established absence, and recording one as the other is the single most
+expensive mistake available here, because something would be built on it.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. A register or a rights holder's
+own published terms is conclusive about what it states. A forum post asserting that
+something is public domain is not.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found.
+
+Out of scope: applying for, registering or claiming any right; contacting any rights
+holder, registry, licensor or their representatives; agreeing to or accepting any licence;
+buying access to any database, lexicon, font or artwork; downloading or reproducing any
+corpus. This is read-only research into what is already published, and it is emphatically
+not legal advice — what it produces is sourced statements a person decides what to do
+about.`;
+
+export const PUZZLE_PRODUCTION_ASSIGNMENT_TEMPLATE = `Establish, from published sources, how puzzle work of this kind is physically produced
+and what each step costs:
+
+{QUESTION}
+
+Subject: the product named above as a physical object. A book, a card deck, a jigsaw and a
+boxed mechanical puzzle are different production classes with different materials,
+workflows, machines and safety rules — anything you establish about one is reported as
+being about that one rather than generalized to the others.
+
+Market: {JURISDICTION}.
+
+What to settle, as far as published sources allow: which production methods are actually
+used; minimum order quantities; per-unit and setup costs at several volumes rather than
+one; materials and components; tooling, prepress and proofing charges; changeover time;
+lead times; freight, duty and storage; published spoilage, defect and return rates; and
+what the same work costs outsourced against what the equipment to do it in-house costs to
+buy, run, staff and maintain.
+
+Every one of those becomes usable only if you declare it. Set puzzle_finding to
+PRODUCTION_METHOD and puzzle_subject to which method, and declare published costs as
+PRICE_POINT findings with puzzle_price_cents and the basis in puzzle_qualifier.
+
+Report the figures that actually decide whether owning equipment beats outsourcing, as
+published facts rather than as a recommendation: throughput at the slowest step, staffed
+productive utilisation rather than advertised machine speed, maintenance and consumables,
+floor space, and resale value. A machine's advertised speed is what the manufacturer says
+it does, and is not what a run produces.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. A printer's or manufacturer's
+own quote page is conclusive about what it charges and worth nothing as evidence about
+anybody else's costs. A figure at one volume says nothing about another volume unless the
+source gives both.
+
+Completion standard: each item above either answered from a quoted source, or explicitly
+recorded as unresolved naming what was searched and what was not found. Where a cost
+depends on a quantity nobody has decided, say so rather than assuming one.
+
+Out of scope: requesting a quote from any printer, manufacturer, broker or supplier;
+contacting any vendor; placing, committing to or reserving any order, print run or tooling;
+buying, leasing or reserving any equipment; opening any trade or wholesale account. Nothing
+here commits this operation to producing anything: it establishes what is true, and a
+person decides what is done about it.`;
+
 export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Object.freeze({
   /**
    * The standing authorization Russell's compiled missions run under.
@@ -1020,6 +1175,112 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
    * separately, and the assignment template names them as out of scope so a
    * worker is told rather than merely refused.
    */
+
+  /**
+   * What puzzle work of this kind sells for, and to whom.
+   *
+   * `RUSSELL_CASH_DISCOVERY_V1`'s permissions exactly — the same source
+   * classes, the same forbidden actions, the same zero external effect, taken
+   * by reference rather than written afresh so they cannot drift into
+   * authorizing different things. What differs is only the assignment it pins.
+   *
+   * No geography bound, deliberately. A puzzle sells in whatever language and
+   * market publishes it, and an envelope that refused a finding about a German
+   * newspaper's puzzle rate would refuse precisely the breadth the brief asks
+   * for. What bounds it is what it may *do*, which is nothing.
+   */
+  RUSSELL_PUZZLE_MARKET_V1: Object.freeze({
+    id: 'RUSSELL_PUZZLE_MARKET_V1',
+    authorization:
+      'The operator authorized standing read-only research inside this project: published ' +
+      'sources only, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing who buys puzzle work ' +
+      'of a given kind, what published sources say it pays, and by what routes it reaches a ' +
+      'buyer. It authorizes reading about that market and never entering it: submitting work, ' +
+      'opening a seller account, contacting an editor or buyer, listing anything for sale and ' +
+      'committing to any order are commercial actions a person grants separately, and never ' +
+      'this envelope.',
+    assignmentTemplate: PUZZLE_MARKET_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What may lawfully be copied, and what may not.
+   *
+   * Its own envelope because its completion standard is the one that differs
+   * most: an *established absence* is the result it most often exists to
+   * produce, and §14 already says such a claim is established by a documented
+   * search of the places it would be or not at all. A packet judged against
+   * the market template would treat "no constraint found" as a failure to find
+   * anything, which is the opposite of what it is.
+   *
+   * It authorizes reading about rights and never acquiring, claiming or
+   * accepting one — and it produces sourced statements rather than advice.
+   */
+  RUSSELL_PUZZLE_RIGHTS_V1: Object.freeze({
+    id: 'RUSSELL_PUZZLE_RIGHTS_V1',
+    authorization:
+      'The operator authorized standing read-only research inside this project: published ' +
+      'sources only, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing what published ' +
+      'sources say constrains the rights to produce and sell puzzle work of a given kind. It ' +
+      'authorizes reading about those constraints and never acting on one: applying for or ' +
+      'claiming a right, contacting a rights holder, accepting a licence, and buying or ' +
+      'downloading any corpus, font or artwork are all outside it. What it produces is sourced ' +
+      'statements a person decides what to do about, and it is not legal advice.',
+    assignmentTemplate: PUZZLE_RIGHTS_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the jurisdiction this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What making it physically actually costs.
+   *
+   * Same permissions again, and worth saying explicitly because the subject
+   * sounds like procurement: nothing here requests a quote, contacts a
+   * printer, reserves tooling or commits to a run. It authorizes *reading
+   * about* how products of this kind are manufactured and what published
+   * sources say each step costs, which is what has to be established before
+   * anybody can sensibly decide between outsourcing and owning a machine.
+   */
+  RUSSELL_PUZZLE_PRODUCTION_V1: Object.freeze({
+    id: 'RUSSELL_PUZZLE_PRODUCTION_V1',
+    authorization:
+      'The operator authorized standing read-only research inside this project: published ' +
+      'sources only, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing how puzzle products ' +
+      'of a given kind are physically produced and what published sources say each step ' +
+      'costs. It authorizes reading about production and never commissioning any: requesting ' +
+      'a quote, contacting a printer or supplier, placing or reserving an order or a print ' +
+      'run, and buying or leasing equipment are commercial actions a person grants ' +
+      'separately, and never this envelope.',
+    assignmentTemplate: PUZZLE_PRODUCTION_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
   RUSSELL_LABOR_ALLOCATION_V1: Object.freeze({
     id: 'RUSSELL_LABOR_ALLOCATION_V1',
     authorization:

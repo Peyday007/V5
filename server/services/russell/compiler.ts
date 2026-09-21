@@ -75,6 +75,7 @@ import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
+import { puzzleRoundForCandidate } from '../../repos/puzzles.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { laborRoundForCandidate } from '../../repos/labor.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
@@ -219,6 +220,29 @@ async function envelopeIdFor(
     }
     if (programme.purpose === 'DEMAND') return 'RUSSELL_MACHINE_DEMAND_V1';
     return 'RUSSELL_MACHINE_CAPABILITY_V1';
+  }
+
+  /*
+   * A puzzle question is decided by the round that asked it, read **before**
+   * the project's declared envelope, for the two reasons directly above.
+   *
+   * The purposes map onto three envelopes rather than five, because what
+   * `planFitsEnvelope` pins is the assignment template and three templates
+   * cover them: what the market publishes, what the rights position is, and
+   * what production costs. Asking which formats exist and asking who buys one
+   * are the same *kind* of question judged by the same standard — the subject
+   * varies and the standard does not.
+   *
+   * The rights question is separated because its completion standard is the
+   * one that genuinely differs: an established absence is the result it exists
+   * to produce, and a packet judged by the market template would read "no
+   * constraint found" as having found nothing.
+   */
+  const puzzle = await puzzleRoundForCandidate(candidate.id);
+  if (puzzle) {
+    if (puzzle.purpose === 'RIGHTS') return 'RUSSELL_PUZZLE_RIGHTS_V1';
+    if (puzzle.purpose === 'PRODUCTION') return 'RUSSELL_PUZZLE_PRODUCTION_V1';
+    return 'RUSSELL_PUZZLE_MARKET_V1';
   }
 
   const declared = ENVELOPE_BY_PROJECT[project.slug];

@@ -7135,6 +7135,197 @@ between the research engine passing its tests and a real job having actually
 run, which §38 had to say about itself on the day it landed.
 
 
+## 42. A generator is code. A row may never say a format is supported.
+
+The puzzle products and production kernel (`server/services/puzzles/`,
+`server/repos/puzzles.ts`, `server/domain/puzzles.ts`, `docs/PUZZLES.md`) is a
+different shape from every kernel before it, and one fact decides all of it.
+
+§38 answers *where* money is reachable, §41 *by whom* work is produced, §39
+*which machine to build next*, §30 *which opening to pursue*, §37 *what Brain
+itself can do*. Every one of them researches the world, and the evidence gate
+judges what they claim against a published source. **This one makes something**,
+and there is no source to judge a generated Sudoku against. It is judged by
+running a deterministic check over it.
+
+Everything it adds is a new *entrance* to machinery Steps 4 to 12C already
+built — a round is a Russell candidate, and the archive check, the compiler, the
+approval envelope, the evidence gate and all three audit roles apply exactly as
+they were.
+
+- **The universe is rows and the registry is code, and they answer different
+  questions.** `puzzle_formats` is what exists in the world. Exactly one
+  function writes a `SEED` format — `declareFormat`, reachable only from a
+  route behind `requirePerson` and `ADMIN` and from the operator script — and
+  the tick, the allocator and the absorption path can write only `DISCOVERED`,
+  from a gated claim that named it. That is §41's rule that `SEED` is the one
+  origin Brain may never write, and a test pins it by reading the source. The
+  brief's starting list of twenty formats lives in `scripts/puzzles.ts` rather
+  than in the schema, because a person running a command is the design act and
+  a constant in a migration would be the limit the brief says not to impose.
+  What *is* in server code is `services/puzzles/registry.ts` — a map of format
+  to **functions** — and beside it the honest reason a handful of known formats
+  have none. Both are statements about this Brain's hands rather than about the
+  world. So
+  `GENERATABLE` and `VALIDATABLE` are rungs no row can claim: delete a registry
+  entry and the format falls back down the ladder on the next read with nothing
+  to update. §37 drew the same line between a definition and an implementation;
+  this is that line at a product somebody would buy. **A map that held only
+  what Brain can already make could not record the gaps that decide what to
+  build next**, which is why the crossword is on it — and why
+  `UNIMPLEMENTED_REASONS` says in words that what stops a crossword is a
+  rights-established lexicon rather than the grid.
+
+- **`UNSUPPORTED` is not `PASS`, and the schema keeps them apart.** `runChecks`
+  compares what a validator actually answered against what its format
+  *declares* is required and writes `UNSUPPORTED` for every one missing. That
+  comparison is the whole safety property: without it a validator that quietly
+  stopped answering a check would make every puzzle look more validated than
+  before, and nothing would say so. §9 settled it for documents — a `BLOCKED`
+  extraction is something the auditor does **not** have — and the stake is
+  higher in one direction here, because the favourable reading is *ship it*.
+  `readValidation` answers five states rather than a boolean, because
+  *uncheckable*, *unchecked*, *incomplete* and *failed* have four different
+  remedies and a boolean sends everybody to the same wrong one.
+
+- **An instance is immutable, because a verdict is about bytes.** No
+  `updated_at`, nothing updates one, and every validation records the content
+  hash it ran against — §9's extraction runs at a generated artifact.
+  Regenerating produces a new instance with its own verdicts and never edits
+  one. What makes that worth having is the **seed**: every generator is a
+  deterministic function of a recorded seed, so a defect found in March
+  resolves to the exact input that produced the puzzle. Nothing in
+  `services/puzzles/` may call `Math.random()`, and a test reads the source to
+  assert it rather than observing behaviour, because a generator that reached
+  for the global once in a rare branch would pass every behavioural check until
+  that branch was taken.
+
+- **A systematic defect stops the master, never the output.** The brief's own
+  rule — *block the batch and repair the generator, do not patch dozens of
+  broken outputs and leave the source defect alive* — is structural rather than
+  remembered, because `produceBatch` is the only code path that can write a
+  puzzle row. **The threshold is one failure**, which is strict and correct:
+  these are deterministic functions and every check is deterministic over the
+  bytes, so a single invalid puzzle is a bug that will produce more rather than
+  bad luck, and a tolerance would let a generator ship 4% wrong answers
+  indefinitely. An `UNSUPPORTED` check never blocks — that is a gap in *Brain's
+  checking* rather than a defect in the master's output, and blocking for it
+  would send somebody to repair a generator that may well be perfect. Brain
+  never clears its own block, and `unblockMaster` refuses unless the
+  generator's **version** has actually changed: clearing at the same version
+  would be the same code claiming to be different.
+
+- **A cosmetic reskin is recorded and never counted.** The brief says a cover
+  change or a reordering does not create a new qualified output, and the
+  tempting implementation is a rule in a document somebody remembers. Here it
+  is arithmetic over rows: an edition claiming `DISTINCT_CONTENT` must carry a
+  puzzle no earlier edition of its master carries, one claiming any other axis
+  must name a value no earlier edition on that axis named, `position` is
+  deliberately not an axis so reordering can qualify nothing, and `COSMETIC` is
+  in the vocabulary and never qualifies. Refusing to *store* a reskin would be
+  worse — it exists either way, and a schema that cannot hold it makes
+  misdeclaring the axis the only way to record it. The failure mode is a reskin
+  that is visible and uncounted rather than one that is hidden.
+
+- **The comparison runs against what came *before*, and getting that wrong was
+  found by driving the product rather than by reading it.** The first version
+  compared against every live sibling in both directions. Declaring a cosmetic
+  reskin of *Volume One* and filling it with Volume One's own puzzles then made
+  **Volume One** stop qualifying — every puzzle it carried now appeared
+  somewhere else too — and the catalog's qualified count went from one to
+  nought on a change that added nothing. **A copy must never retroactively
+  unmake the thing it copied.** Precedence fixes it without weakening anything:
+  the original keeps what it earned and the duplicate is the one refused. The
+  regression is pinned and was watched failing against the old behaviour first.
+
+- **Rights gate a different thing from quality, and collapsing them breaks one
+  of the two.** A master whose `rights_basis` is `UNESTABLISHED` **may generate
+  and be validated** — checking whether the code works publishes nothing — and
+  may never reach a qualified edition, which is the step where something would
+  be sold. One gate would either stop Brain testing its own generators or let
+  it sell a puzzle built from a corpus nobody established the rights to.
+  `UNESTABLISHED` is a real value meaning *the question is open*, which is a
+  different fact from nobody having asked, and every other basis must say what
+  it actually is: "licensed" with no statement of which licence is an assertion
+  nobody could check later.
+
+- **An established absence is what lets something be built, and an undocumented
+  silence is not.** That is why `RUSSELL_PUZZLE_RIGHTS_V1` is its own envelope
+  rather than sharing the market one: §14's standard is that a claim something
+  does not exist is established by a documented search of the places it would
+  be or not at all, and a packet judged by the market template would read *no
+  constraint found* as having found nothing. `NO_CONSTRAINT_FOUND` is in the
+  vocabulary and the question asks for it by name. Recording a silence as an
+  absence is the most expensive mistake available here, because something would
+  be built on it.
+
+- **Nothing derivable is stored.** No maturity, no multiplier, no yield, no
+  qualification verdict, no ranking — §38's third rule and §33's tier. Three
+  things are stored because no derivation could recover them: that a person
+  named a format, that a person declared what a master's content stands on, and
+  that a person blocked or unblocked a master.
+
+- **Two of the brief's three multipliers are not measured, and say so.**
+  Master-to-SKU is counted from rows with its denominator named. Setup-to-unit
+  yield and contribution per setup are `null` with what would measure them
+  named, because nothing here holds a print run or money — and inventing a
+  figure somebody would use to decide whether to buy a machine is the single
+  most expensive thing this kernel could do. **"A setup of 10 producing 50" is
+  a search target rather than a quota**: nothing counts up towards a number,
+  and both `editionsDeclared` and `qualifiedEditions` are reported because the
+  gap between them is exactly how much of the catalog is real.
+
+- **The monetization ledger is Cash Mode's and the production ladder is the
+  manufacturing programme's, and neither is reproduced.** The order was
+  explicit about not duplicating engines, queues, graphs, factories, approval
+  systems or dashboards, and a second ledger would be the one that drifts. What
+  this kernel contributes is *claims*: a worker answering a `DEMAND` or
+  `CHANNEL` question sets `opportunity_signal` beside its `puzzle_finding` —
+  the axes are independent and `brain_submit_claims` says so — and Cash Mode's
+  own bridge turns a signalled claim into a ranked opening. `view.ts` names
+  where each of those lives rather than answering for them.
+
+- **Producing is free and asking is not, so only one of them is behind the
+  standing authority.** Generating and checking spend nothing and run whatever
+  the grant says, so a project with no research authority still builds its
+  catalog and still learns whether its generators work. Opening a round fires a
+  worker, so that half is behind the grant — asked in the kernel rather than
+  left to `launch`, for §41's reason: a candidate that parks for want of
+  authority launches no mission, so its round would stay `OPEN` for ever and an
+  open round is exactly what stops that question being asked again.
+
+- **The fourth `ORDER BY`-shaped defect this repository has been told about by
+  the second backend, and the first that was not an `ORDER BY`.** The Postgres
+  half of the migration guarded its one `ADD CONSTRAINT` inside a
+  `DO $$ … $$` block. `migrate.ts` splits a file on semicolons, so a
+  dollar-quoted body is cut at its first internal `;` and Postgres is handed
+  half a statement. **No SQLite run could have shown it** — that chain carries
+  the rule as an inline column CHECK and never reaches the code path — and the
+  whole suite was green. There is no `DO` block anywhere else in that chain,
+  and a versioned migration applied once in its own transaction needs no guard
+  anyway. §25's sentence at a *statement* rather than at a column: a repository
+  layer over two databases is true or merely compiling, and only one of the two
+  can tell you which.
+
+**What is true today, said plainly.** The kernel operates end to end on both
+backends. A seeded universe of twenty formats, four of which this Brain can
+generate; a declared master; twelve puzzles produced with every required check
+passing; a qualified edition of ten compiled to a proof sheet with a recorded
+sha-256; and a cosmetic reskin of it recorded, refused qualification by name and
+refused compilation. `tests/puzzleKernel.test.ts` walks the refusals rather than
+the successes, because every expensive mistake available here is an acceptance.
+
+**What is not true, and is not rounded up.** No fleet worker has answered a
+puzzle question in production, because that needs a deploy and a fire — the
+separation Step 3 drew, which §38, §39 and §41 each had to say about themselves
+on the day they landed. Nothing here compiles a press-ready artifact: an edition
+becomes a **proof sheet** whose own first page says it has no typography, page
+architecture, trim, bleed or imposition. No difficulty is calibrated against
+human solve times, and `difficulty_basis` names the structural thing actually
+counted instead. Nothing has been published, listed, submitted or sold, and
+nothing here can do any of those.
+
+
 ## Repository map
 
 ```
@@ -7163,6 +7354,7 @@ server/
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
     industry.ts         what a structural finding means, and what it may create
     labor.ts            what a labor finding means, and the one validator both doors call
+    puzzles.ts          what a puzzle finding means, and the one subject that is not closed
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     auditReopens.ts     the record behind a re-audit, and its one reservation
@@ -7185,6 +7377,7 @@ server/
     manufacturing.ts  the ladder, the capability ledger, and the one write research cannot reach
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
     labor.ts          workflows, tasks, who produces each, and what has been asked
+    puzzles.ts        formats, masters, the puzzles themselves, and what checked them
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -7307,6 +7500,26 @@ server/
       view.ts           §13's six readings, and the four figures nothing measures
       declare.ts        a person naming a workflow; the one origin Brain may not write
       kernel.ts         the tick, bounded by authority and concurrency and nothing else
+    puzzles/
+      registry.ts       what this Brain can actually make and check; the only thing that may say so
+      generators.ts     real code that produces a puzzle and its answer from one seed
+      validators.ts     real code that decides whether one is correct, given the bytes and nothing else
+      prng.ts           the seeded randomness that makes a recorded seed evidence
+      grid.ts           the canonical form, honest about the duplicates it misses
+      kinds.ts          what a generator and a validator agree on
+      validate.ts       running the checks, and refusing to read UNSUPPORTED as PASS
+      produce.ts        a batch, checked as it is made; a defect stops the master
+      declare.ts        the three things a person says that no derivation could recover
+      editions.ts       what makes an output a product rather than a second cover
+      compile.ts        the proof sheet, and the press-ready artifact it does not claim to be
+      maturity.ts       how far this Brain has got, with two rungs no row can claim
+      leverage.ts       three multipliers, and the two nothing here can measure
+      allocate.ts       which question is next, cash now ahead of position later
+      questions.ts      what each round asks a published source
+      expand.ts         a round becomes a candidate; a gated claim becomes a format
+      map.ts            the whole kernel as one recorded reading
+      kernel.ts         the tick: producing is free, asking is not
+      view.ts           what a person reads, and where the ledger actually lives
     manufacturing/
       program.ts        starting a programme, and what pressing Start authorizes
       ladder.ts         the classes of machine, and how far Brain has got with each
@@ -7432,6 +7645,7 @@ server/
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
+    puzzles.ts          the puzzle kernel's door: formats, masters, batches, editions
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     passkeys.ts         enrolling, signing in with a device, and your own devices
@@ -7470,6 +7684,7 @@ scripts/
   manufacturing.ts          the programme's terminal door, until a surface exists
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
+  puzzles.ts                the kernel's terminal door, until a surface exists
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
   admin.ts                  emergency administration, on a terminal rather than a page
@@ -7524,6 +7739,7 @@ tests/                  Vitest suites
   cashHttp.test.ts           Cash Mode's door, driven as an attack
   cashSection.test.tsx       the Cash section in a browser: four states, one control
   connectorIsolation.test.ts one site, two private operations, two identities
+  puzzleKernel.test.ts       what may claim to be supported, and every acceptance refused
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
   fixtures/             generated PDFs and DOCX packages, not opaque binaries

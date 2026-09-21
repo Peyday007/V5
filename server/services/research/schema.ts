@@ -33,10 +33,13 @@ import {
   type LaneEvidenceKind,
   type StructuralFinding,
   type LaborFinding,
+  type PriceBasis,
+  type PuzzleFinding,
   type CapabilityFinding,
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
 import { validateLabor } from '../../domain/labor.ts';
+import { validatePuzzle } from '../../domain/puzzles.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
 import {
   booleanField,
@@ -532,6 +535,10 @@ export interface ParsedClaim {
   structuralAmountCents: number | null;
   /** What it establishes about who or what produces work of this kind, or null. */
   laborFinding: LaborFinding | null;
+  puzzleFinding: PuzzleFinding | null;
+  puzzleSubject: string | null;
+  puzzleQualifier: PriceBasis | null;
+  puzzlePriceCents: number | null;
   /** Which reason, which channel, or what the source says performs the work. */
   laborSubject: string | null;
   /** The basis a sourcing channel's rate is quoted on. Null otherwise. */
@@ -739,6 +746,23 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   if (!labor.ok) return labor;
 
   /*
+   * And what it establishes about puzzle products.
+   *
+   * Delegated whole to `validatePuzzle`, and kept as its own call for the
+   * reason the two above are: these vocabularies are unrelated, one claim may
+   * carry several of these findings at once, and one validator checking
+   * several closed sets is how a refusal stops naming the right thing.
+   */
+  const puzzle = validatePuzzle({
+    where,
+    finding: row['puzzleFinding'],
+    subject: row['puzzleSubject'],
+    qualifier: row['puzzleQualifier'],
+    priceCents: row['puzzlePriceCents'],
+  });
+  if (!puzzle.ok) return puzzle;
+
+  /*
    * What this claim establishes about building a machine, if anything.
    *
    * Delegated whole to `validateCapabilityFinding` for the reason directly
@@ -792,6 +816,10 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       laborSubject: labor.value.subject,
       laborQualifier: labor.value.qualifier,
       laborRateCents: labor.value.rateCents,
+      puzzleFinding: puzzle.value.finding,
+      puzzleSubject: puzzle.value.subject,
+      puzzleQualifier: puzzle.value.qualifier,
+      puzzlePriceCents: puzzle.value.priceCents,
       capabilityFinding: capability.value.finding,
       capabilitySubject: capability.value.subject,
       capabilityObservedOn: capability.value.observedOn,

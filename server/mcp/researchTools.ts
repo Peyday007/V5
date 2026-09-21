@@ -96,8 +96,18 @@ import {
   LABOR_SUBJECT_GUIDE,
   validateLabor,
 } from '../domain/labor.ts';
-import { RATE_BASES } from '../domain/types.ts';
-import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
+import {
+  PUZZLE_FINDING_GUIDE,
+  PUZZLE_SUBJECT_GUIDE,
+  validatePuzzle,
+} from '../domain/puzzles.ts';
+import { PRICE_BASES, PUZZLE_FINDINGS, RATE_BASES } from '../domain/types.ts';
+import type {
+  LaborFinding,
+  PriceBasis,
+  PuzzleFinding,
+  StructuralFinding,
+} from '../domain/types.ts';
 import {
   CAPABILITY_FINDINGS,
   describeVocabularies,
@@ -1162,6 +1172,39 @@ function laborOf(
 }
 
 /**
+ * The puzzle declaration on one submitted claim.
+ *
+ * Same shape and the same delegation as the three above, for the same reason:
+ * `services/research/schema.ts` calls this identical function for a pass a
+ * provider returned, so the two doors cannot come to disagree about what a
+ * declaration means. A rule applied by one of two readers is worse than none.
+ */
+function puzzleOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  puzzleFinding: PuzzleFinding | null;
+  puzzleSubject: string | null;
+  puzzleQualifier: PriceBasis | null;
+  puzzlePriceCents: number | null;
+} {
+  const parsed = validatePuzzle({
+    where,
+    finding: row['puzzle_finding'],
+    subject: row['puzzle_subject'],
+    qualifier: row['puzzle_qualifier'],
+    priceCents: row['puzzle_price_cents'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    puzzleFinding: parsed.value.finding,
+    puzzleSubject: parsed.value.subject,
+    puzzleQualifier: parsed.value.qualifier,
+    puzzlePriceCents: parsed.value.priceCents,
+  };
+}
+
+/**
  * The capability declaration on one submitted claim.
  *
  * The third question a claim can answer, beside the opening signal and the
@@ -1216,6 +1259,15 @@ const submitClaimsTool: McpTool = {
     LABOR_FINDINGS.map((finding) => `${finding} — ${LABOR_FINDING_GUIDE[finding]}`).join('; ') +
     '. All three axes are independent — a claim may carry an opportunity_signal, a ' +
     'structural_finding and a labor_finding at once, and most claims carry none of them. ' +
+    'Separately again, where a claim establishes something about puzzle products — a format ' +
+    'that exists, a buyer, a route to market, a rights constraint, a production method or a ' +
+    'published price — set puzzle_finding: ' +
+    PUZZLE_FINDINGS.map((one) => `${one} — ${PUZZLE_FINDING_GUIDE[one]}`).join('; ') +
+    '. All of them require puzzle_subject; for PUZZLE_FORMAT that is the format’s own name, ' +
+    'and for the rest a value from that finding’s closed set (' +
+    PUZZLE_SUBJECT_GUIDE +
+    '). PRICE_POINT additionally requires puzzle_price_cents and puzzle_qualifier, because a ' +
+    'figure with no basis compares to nothing. ' +
     'Separately again, where a claim establishes what building a machine takes or teaches, ' +
     'set capability_finding to the kind it is: ' +
     CAPABILITY_FINDINGS.map((one) => `${one} — ${CAPABILITY_FINDING_GUIDE[one]}`).join('; ') +
@@ -1353,6 +1405,49 @@ const submitClaimsTool: McpTool = {
             },
 
             /*
+             * Declared in the schema for the same reason the block above is,
+             * and one of these is the field that would be dropped most
+             * expensively: `puzzle_subject` for a PUZZLE_FORMAT is how the
+             * format universe expands at all, so a client silently dropping it
+             * would look exactly like a worker finding no new formats.
+             */
+            puzzle_finding: {
+              type: 'string',
+              enum: [...PUZZLE_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes ' +
+                'something about puzzle products: ' +
+                PUZZLE_FINDINGS.map((one) => `${one} — ${PUZZLE_FINDING_GUIDE[one]}`).join('; ') +
+                '. Independent of the other declarations — a claim may carry several at once.',
+            },
+            puzzle_subject: {
+              type: 'string',
+              description:
+                'Required whenever puzzle_finding is set: what the finding is about. ' +
+                PUZZLE_SUBJECT_GUIDE +
+                '. PUZZLE_FORMAT is the one whose subject is not a closed set, because the ' +
+                'format universe expands from evidence — give the format’s own short name as ' +
+                'its sources give it, not a description of it.',
+            },
+            puzzle_qualifier: {
+              type: 'string',
+              enum: [...PRICE_BASES],
+              description:
+                'Only for PRICE_POINT, and required there: what the price is quoted on. A ' +
+                'per-book figure recorded as a per-puzzle one is wrong by two orders of ' +
+                'magnitude and nothing downstream could catch it.',
+            },
+            puzzle_price_cents: {
+              type: 'integer',
+              description:
+                'Only for PRICE_POINT, and required there: what a source publishes as the ' +
+                'price, in minor units. Where a source names a route to a buyer but no ' +
+                'figure, submit it as DISTRIBUTION_CHANNEL instead — that is recorded as a ' +
+                'real route at an unknown price, and a price point with no price establishes ' +
+                'nothing.',
+            },
+
+            /*
              * The third declaration, and declared in the schema rather than
              * only in the prose above — §33's defect, which this repository
              * has already paid for once: `opportunity_signal` was named in a
@@ -1484,6 +1579,7 @@ const submitClaimsTool: McpTool = {
          * and a shared column would make one of the three overwrite the rest.
          */
         ...laborOf(row, where),
+        ...puzzleOf(row, where),
 
         /*
          * And what it establishes about what building a machine takes.

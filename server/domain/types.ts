@@ -440,6 +440,44 @@ export const EVENT_TYPES = [
    * changed without saying what it changed from.
    */
   'LABOR_ALLOCATION_DECIDED',
+
+  /* ----------------------------------------------------------------------- */
+  /* The puzzle products and production kernel                                */
+  /* ----------------------------------------------------------------------- */
+
+  /** A person named a format, a master or an edition. */
+  'PUZZLE_DECLARED',
+
+  /**
+   * Puzzles were produced and every one of them was checked.
+   *
+   * Carries what was generated, what passed, what failed and what nothing
+   * could check — the fourth of those being the one a summary would drop.
+   */
+  'PUZZLE_BATCH_PRODUCED',
+
+  /**
+   * A master stopped producing because its output was systematically wrong.
+   *
+   * The brief's own rule: block the batch and repair the generator, rather
+   * than patching outputs and leaving the source defect alive. The event
+   * carries the failure rate and the checks that failed, so the repair has
+   * somewhere to start.
+   */
+  'PUZZLE_MASTER_BLOCKED',
+
+  /** A person established the defect is fixed, and production may resume. */
+  'PUZZLE_MASTER_UNBLOCKED',
+
+  /** An edition was compiled from validated instances. */
+  'PUZZLE_EDITION_COMPILED',
+
+  /** Brain asked a published question about a format, its buyers or its rights. */
+  'PUZZLE_ROUND_OPENED',
+
+  /** What a finished puzzle round established, and what it refused to file. */
+  'PUZZLE_FINDINGS_ABSORBED',
+
   /* ----------------------------------------------------------------------- */
   /* The manufacturing empire kernel                                          */
   /* ----------------------------------------------------------------------- */
@@ -1461,6 +1499,468 @@ export interface LaborRound {
   updatedAt: string;
 }
 
+/* ------------------------------------------------------------------------- */
+/* The puzzle products and production kernel                                  */
+/*                                                                            */
+/* What is deliberately absent from this whole section is a list of puzzle     */
+/* formats. The brief seeds a universe and says not to limit it, so the        */
+/* universe lives in `puzzle_formats` — rows, from a person or from a gated    */
+/* claim — and never in a constant here. What *is* in code is which formats    */
+/* this Brain can actually generate and check, which is a statement about      */
+/* Brain's hands rather than about the world, and it lives in                  */
+/* `services/puzzles/registry.ts` beside the functions that do it.             */
+/* ------------------------------------------------------------------------- */
+
+export const PUZZLE_ORIGINS = ['SEED', 'DISCOVERED'] as const;
+export type PuzzleOrigin = (typeof PUZZLE_ORIGINS)[number];
+
+/**
+ * What a master's corpus may be published on the strength of.
+ *
+ * `UNESTABLISHED` is a real value rather than the absence of one, and it is
+ * what a master carries while the question is open — a different fact from
+ * nobody having asked. It is never a basis to publish on: a master carrying it
+ * may generate and be validated, because checking whether the code works
+ * publishes nothing, and it can never reach a qualified edition.
+ */
+export const RIGHTS_BASES = ['PUBLIC_DOMAIN', 'OWN_WORK', 'LICENSED', 'UNESTABLISHED'] as const;
+export type RightsBasis = (typeof RIGHTS_BASES)[number];
+
+/** The bases somebody can actually stand behind when something is sold. */
+export const PUBLISHABLE_RIGHTS_BASES: readonly RightsBasis[] = Object.freeze([
+  'PUBLIC_DOMAIN',
+  'OWN_WORK',
+  'LICENSED',
+]);
+
+/**
+ * What a check said about one puzzle.
+ *
+ * Three values, and the third is load-bearing. `UNSUPPORTED` means this Brain
+ * has no implementation of this check for this format — a reading that says
+ * *nothing looked*, which §9 and §30 both insist must never collapse into the
+ * answer that something passed. Here the favourable direction is towards
+ * shipping, so collapsing them sells somebody a defective product.
+ */
+export const PUZZLE_VERDICTS = ['PASS', 'FAIL', 'UNSUPPORTED'] as const;
+export type PuzzleVerdict = (typeof PUZZLE_VERDICTS)[number];
+
+/** What a buyer actually receives. One master may compile into several. */
+export const PRODUCT_CLASSES = [
+  'PRINTABLE_PDF',
+  'PRINT_BOOK',
+  'WEB_PLAY',
+  'APP',
+  'EMAIL_FEED',
+  'SYNDICATED_FEED',
+  'WHITE_LABEL',
+  'INSTITUTIONAL_PACK',
+  'PHYSICAL_PRODUCT',
+  'API_FEED',
+] as const;
+export type ProductClass = (typeof PRODUCT_CLASSES)[number];
+
+/**
+ * On what axis an edition differs from its siblings.
+ *
+ * The brief's own sentence is the reason this exists: "a cover-color change,
+ * title change, reordered pages, or other cosmetic reskin does not create a
+ * new qualified output." An edition declares its axis and the derivation then
+ * *checks* it — two siblings claiming one axis must name two different values,
+ * and one claiming `DISTINCT_CONTENT` must carry puzzles no sibling carries.
+ *
+ * `COSMETIC` is in the set and never qualifies. Refusing to store one would be
+ * worse: a reskin somebody made still exists, and a schema that cannot hold it
+ * makes misdeclaring the axis the only way to record it at all.
+ */
+export const DISTINCTNESS_AXES = [
+  'DISTINCT_CONTENT',
+  'DIFFICULTY',
+  'AUDIENCE',
+  'LANGUAGE',
+  'PRODUCT_FORM',
+  'USE_OCCASION',
+  'CHANNEL',
+  'MECHANIC',
+  'COSMETIC',
+] as const;
+export type DistinctnessAxis = (typeof DISTINCTNESS_AXES)[number];
+
+/** The one axis that is recorded honestly and never counted as leverage. */
+export const NON_QUALIFYING_AXES: readonly DistinctnessAxis[] = Object.freeze(['COSMETIC']);
+
+/**
+ * How far this Brain has actually got with one format.
+ *
+ * Every one of these is **derived** on the read path and stored nowhere, and
+ * the two at the bottom of the ladder are what the brief demands honesty
+ * about: `GENERATABLE` requires a function in the registry and `VALIDATABLE`
+ * requires the checks that function's format declares to be implemented. A row
+ * cannot claim either. §37 drew the same line between a definition and an
+ * implementation; this is that line at a product somebody would buy.
+ */
+export const FORMAT_MATURITIES = [
+  /** A gated claim says it exists, or a person named it. */
+  'DISCOVERED',
+  /** Something is established about its buyers, channels or economics. */
+  'RESEARCHED',
+  /** Code in this repository produces one. */
+  'GENERATABLE',
+  /** Code in this repository checks one, and the checks passed. */
+  'VALIDATABLE',
+  /** A validated instance is carried by an edition. */
+  'PRODUCTIZABLE',
+  /** A qualified edition exists: distinct, validated and rights-clear. */
+  'SELLABLE',
+  /** Money arrived against it. */
+  'REVENUE_PROVEN',
+  /** It has been sold more than once. */
+  'REPEATABLE',
+  /** Several qualified editions from one master. */
+  'SCALABLE',
+  /** Produced on equipment this operation owns. */
+  'PRODUCTION_OWNED',
+] as const;
+export type FormatMaturity = (typeof FORMAT_MATURITIES)[number];
+
+/** What a published puzzle price is quoted on. A figure with no basis compares to nothing. */
+export const PRICE_BASES = [
+  'PER_UNIT',
+  'PER_BOOK',
+  'PER_PUZZLE',
+  'PER_MONTH',
+  'PER_YEAR',
+  'PER_ENGAGEMENT',
+  'PER_THOUSAND',
+] as const;
+export type PriceBasis = (typeof PRICE_BASES)[number];
+
+/** Who a published source says buys work of this kind. */
+export const PUZZLE_BUYERS = [
+  'CONSUMER',
+  'NEWSPAPER_OR_MAGAZINE',
+  'BOOK_PUBLISHER',
+  'RETAILER',
+  'BRAND_OR_AGENCY',
+  'SCHOOL_OR_EDUCATOR',
+  'LIBRARY_OR_MUSEUM',
+  'SENIOR_LIVING_OR_CARE',
+  'EMPLOYER_OR_CORPORATE',
+  'EVENT_OR_HOSPITALITY',
+  'APP_OR_PLATFORM',
+  'SUBSCRIPTION_BOX',
+] as const;
+export type PuzzleBuyer = (typeof PUZZLE_BUYERS)[number];
+
+/** A published route by which work of this kind reaches a buyer. */
+export const PUZZLE_CHANNELS = [
+  'DIRECT_DIGITAL',
+  'MARKETPLACE',
+  'PRINT_ON_DEMAND',
+  'WHOLESALE_OR_DISTRIBUTOR',
+  'RETAIL',
+  'SYNDICATION',
+  'LICENSING',
+  'SUBSCRIPTION',
+  'ADVERTISING_OR_SPONSORSHIP',
+  'INSTITUTIONAL_PROCUREMENT',
+  'CONTRACT_OR_CUSTOM',
+] as const;
+export type PuzzleChannel = (typeof PUZZLE_CHANNELS)[number];
+
+/**
+ * What a published source says constrains the rights to work of this kind.
+ *
+ * There is deliberately no value meaning "probably fine". Every one of these
+ * is something a source can actually establish, and the absence of a
+ * constraint is established by a documented search (§14) rather than by
+ * silence.
+ */
+export const RIGHTS_CONSTRAINTS = [
+  'COPYRIGHT_IN_CONTENT',
+  'COPYRIGHT_IN_COMPILATION',
+  'TRADEMARKED_NAME',
+  'LICENSED_MECHANIC',
+  'DATABASE_OR_LEXICON_RIGHTS',
+  'FONT_OR_ARTWORK_LICENCE',
+  'PLATFORM_TERMS',
+  'SAFETY_OR_LABELLING_RULE',
+  'NO_CONSTRAINT_FOUND',
+] as const;
+export type RightsConstraint = (typeof RIGHTS_CONSTRAINTS)[number];
+
+/** How a published source says work of this kind is physically produced. */
+export const PRODUCTION_METHODS = [
+  'DIGITAL_ONLY',
+  'PRINT_ON_DEMAND',
+  'DIGITAL_PRESS',
+  'OFFSET_PRESS',
+  'DIE_CUTTING',
+  'BOARD_OR_JIGSAW',
+  'INJECTION_OR_MOULDING',
+  'WOOD_OR_METAL_FABRICATION',
+  'ASSEMBLY_AND_PACKAGING',
+] as const;
+export type ProductionMethod = (typeof PRODUCTION_METHODS)[number];
+
+/**
+ * What a claim establishes about puzzle products.
+ *
+ * Five, and every one is a fact about a *published source*. There is no kind
+ * for "this format looks promising" or "this would probably sell", because
+ * those are views rather than findings and the gate has nothing to check them
+ * against — `labor_finding`'s rule and `structural_finding`'s, one axis along.
+ *
+ * `PUZZLE_FORMAT` is the only one whose subject is not a closed set, and that
+ * is the universe-expansion rule: the brief says not to limit the format list,
+ * so a format's name comes from the source that named it. Every other finding
+ * answers a question Brain asks across all formats, and an answer in
+ * somebody's own words could not be compared across them.
+ */
+export const PUZZLE_FINDINGS = [
+  /** A format, mechanic or product kind exists. Subject is its name. */
+  'PUZZLE_FORMAT',
+  /** A published buyer for work of this kind. Subject is a buyer class. */
+  'BUYER_DEMAND',
+  /** A published route to a buyer. Subject is a channel. */
+  'DISTRIBUTION_CHANNEL',
+  /** A published rights, licensing or trademark constraint. */
+  'RIGHTS_CONSTRAINT',
+  /** A published way work of this kind is physically produced. */
+  'PRODUCTION_METHOD',
+  /** A published price, with what it is quoted on. */
+  'PRICE_POINT',
+] as const;
+export type PuzzleFinding = (typeof PUZZLE_FINDINGS)[number];
+
+export const PUZZLE_ROUND_PURPOSES = [
+  'UNIVERSE',
+  'DEMAND',
+  'CHANNEL',
+  'RIGHTS',
+  'PRODUCTION',
+] as const;
+export type PuzzleRoundPurpose = (typeof PUZZLE_ROUND_PURPOSES)[number];
+
+export interface PuzzleFormatRow {
+  id: string;
+  project_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  declared_by_ref: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleFormat {
+  id: string;
+  projectId: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  origin: PuzzleOrigin;
+  sourceClaimId: string | null;
+  declaredByRef: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleMasterRow {
+  id: string;
+  project_id: string;
+  format_id: string;
+  name: string;
+  generator_key: string;
+  spec: string;
+  generator_version: string;
+  rights_basis: string;
+  rights_statement: string | null;
+  rights_claim_id: string | null;
+  blocked_at: string | null;
+  blocked_reason: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  declared_by_ref: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleMaster {
+  id: string;
+  projectId: string;
+  formatId: string;
+  name: string;
+  generatorKey: string;
+  /** Parsed. The generator validates its own shape; nothing else reads inside it. */
+  spec: Record<string, unknown>;
+  generatorVersion: string;
+  rightsBasis: RightsBasis;
+  rightsStatement: string | null;
+  rightsClaimId: string | null;
+  blockedAt: string | null;
+  blockedReason: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  declaredByRef: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleInstanceRow {
+  id: string;
+  project_id: string;
+  master_id: string;
+  format_id: string;
+  generator_key: string;
+  generator_version: string;
+  seed: string;
+  payload: string;
+  content_hash: string;
+  solution_hash: string;
+  canonical_hash: string;
+  measured_difficulty: number | null;
+  difficulty_basis: string | null;
+  created_at: string;
+}
+
+export interface PuzzleInstance {
+  id: string;
+  projectId: string;
+  masterId: string;
+  formatId: string;
+  generatorKey: string;
+  generatorVersion: string;
+  seed: string;
+  /** The puzzle and its solution, from one call. Never re-derived by a reader. */
+  payload: Record<string, unknown>;
+  contentHash: string;
+  solutionHash: string;
+  canonicalHash: string;
+  /** What the solver needed, never what the generator hoped. Null where the format has no model. */
+  measuredDifficulty: number | null;
+  difficultyBasis: string | null;
+  createdAt: string;
+}
+
+export interface PuzzleValidationRow {
+  id: string;
+  project_id: string;
+  instance_id: string;
+  check_key: string;
+  verdict: string;
+  detail: string | null;
+  validator_key: string;
+  validator_version: string;
+  content_hash: string;
+  ran_at: string;
+}
+
+export interface PuzzleValidation {
+  id: string;
+  projectId: string;
+  instanceId: string;
+  checkKey: string;
+  verdict: PuzzleVerdict;
+  detail: string | null;
+  validatorKey: string;
+  validatorVersion: string;
+  contentHash: string;
+  ranAt: string;
+}
+
+export interface PuzzleEditionRow {
+  id: string;
+  project_id: string;
+  master_id: string;
+  name: string;
+  product_class: string;
+  distinctness_axis: string;
+  distinctness_value: string | null;
+  rationale: string;
+  artifact_key: string | null;
+  artifact_hash: string | null;
+  compiled_at: string | null;
+  declared_by_ref: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleEdition {
+  id: string;
+  projectId: string;
+  masterId: string;
+  name: string;
+  productClass: ProductClass;
+  distinctnessAxis: DistinctnessAxis;
+  distinctnessValue: string | null;
+  rationale: string;
+  artifactKey: string | null;
+  artifactHash: string | null;
+  compiledAt: string | null;
+  declaredByRef: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleEditionInstanceRow {
+  id: string;
+  edition_id: string;
+  instance_id: string;
+  position: number;
+  created_at: string;
+}
+
+export interface PuzzleEditionInstance {
+  id: string;
+  editionId: string;
+  instanceId: string;
+  position: number;
+  createdAt: string;
+}
+
+export interface PuzzleRoundRow {
+  id: string;
+  project_id: string;
+  format_id: string | null;
+  purpose: string;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleRound {
+  id: string;
+  projectId: string;
+  /** Null for the UNIVERSE question, which asks what formats exist and names none. */
+  formatId: string | null;
+  purpose: PuzzleRoundPurpose;
+  round: number;
+  candidateId: string;
+  state: 'OPEN' | 'HARVESTED' | 'ABANDONED';
+  openedAt: string;
+  harvestedAt: string | null;
+  /** Null while OPEN. Not counted yet is a different fact from none found. */
+  found: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const CLAIM_TYPES = [
   'SOURCED_FACT',
   'SELF_REPORT',
@@ -2148,6 +2648,10 @@ export interface ResearchClaimRow {
   labor_subject: string | null;
   labor_qualifier: string | null;
   labor_rate_cents: number | null;
+  puzzle_finding: string | null;
+  puzzle_subject: string | null;
+  puzzle_qualifier: string | null;
+  puzzle_price_cents: number | null;
   capability_finding: string | null;
   capability_subject: string | null;
   capability_observed_on: string | null;
@@ -3332,6 +3836,28 @@ export interface ResearchClaim {
    * names whatever the source says performs the work.
    */
   laborSubject: string | null;
+  /**
+   * What this claim establishes about puzzle products, or null.
+   *
+   * Its own column rather than a value in one of the others, because a field
+   * with two masters is invariant 31 and one vocabulary validating two
+   * unrelated closed sets is how a refusal stops naming the right thing. One
+   * claim may carry several of these findings at once and most carry none.
+   */
+  puzzleFinding: PuzzleFinding | null;
+  /**
+   * What the puzzle finding is about.
+   *
+   * From a closed set for every kind but `PUZZLE_FORMAT`, whose subject is the
+   * format's own name as the source gives it — because the brief seeds a
+   * puzzle universe and says explicitly not to limit it, so a closed list of
+   * formats would encode the one thing it asks not to.
+   */
+  puzzleSubject: string | null;
+  /** What a published puzzle price is quoted on. Null for every other finding. */
+  puzzleQualifier: string | null;
+  /** A published price in minor units. Null where no source publishes one. */
+  puzzlePriceCents: number | null;
   /**
    * The basis a sourcing channel's rate is quoted on. Null for every other
    * kind, and required wherever a rate is present.

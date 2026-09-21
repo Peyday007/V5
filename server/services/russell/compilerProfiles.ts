@@ -45,7 +45,10 @@ export type CompilerProfileId =
   | 'LABOR_ALLOCATION'
   | 'MACHINE_LADDER'
   | 'MACHINE_DEMAND'
-  | 'MACHINE_CAPABILITY';
+  | 'MACHINE_CAPABILITY'
+  | 'PUZZLE_MARKET'
+  | 'PUZZLE_RIGHTS'
+  | 'PUZZLE_PRODUCTION';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -1246,6 +1249,345 @@ const MACHINE_CAPABILITY: CompilerProfile = {
   ],
 };
 
+
+/* ---------------------------------------------------------------------------
+ * The puzzle kernel's three profiles.
+ *
+ * Three rather than one because their completion standards genuinely differ,
+ * and the rights one differs most: an *established absence* is the result it
+ * usually exists to produce, so a profile that treated "nothing found" as a
+ * failure would refuse exactly the finding that lets a generator be built.
+ * ------------------------------------------------------------------------ */
+
+const PUZZLE_MARKET: CompilerProfile = {
+  id: 'PUZZLE_MARKET',
+  fragmentKey: 'puzzle-market',
+  // A puzzle sells in whatever market publishes it, and a question about two
+  // is one question about a product with two markets rather than an
+  // indecipherable one. Described rather than refused, for market discovery's
+  // reason: refusing would refuse the breadth the brief asks for.
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Behind the industry map and ahead of a broad search, beside labor.
+   *
+   * It is downstream of knowing the operation makes puzzles at all and
+   * upstream of looking for more openings, because a format Brain can already
+   * produce is work whose cost is already sunk.
+   */
+  launchOrdinal: 360,
+  proposedSources: [
+    'a publication’s own submissions, contributor or freelancer page stating what it pays',
+    'a syndicate’s or feature service’s published terms',
+    'a retailer’s or marketplace’s product listing with a stated price',
+    'a publisher’s catalogue, rights page or trade listing',
+    'a platform’s published revenue share, payout or royalty terms',
+    'a distributor’s or wholesaler’s published discount schedule',
+    'an institution’s procurement notice, tender or purchasing catalogue',
+    'a trade association or trade publication covering puzzles, games or publishing',
+    'a published rate card, price list or fee schedule',
+  ],
+  excludedSources: [
+    'a market-size estimate used as evidence that a buyer exists',
+    'a price quoted with no statement of what it is a price for',
+    'a bestseller rank or review count presented as revenue',
+    'a vendor claim about its own product used as evidence the product sells',
+    'a forecast or projection presented as a current fact',
+  ],
+  lanes: [
+    {
+      id: 'buyer',
+      // One publication's own submissions page proves that publication buys.
+      // Demanding a second publisher for "this magazine states it pays $X"
+      // demands something that does not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A specific named buyer for work of this kind, established by a source that names ' +
+        'them: a publication with an open submissions page, a syndicate, a retailer stocking ' +
+        'a named product, an institution’s procurement notice, a platform. Declare each with ' +
+        'puzzle_finding set to BUYER_DEMAND and puzzle_subject set to which class of buyer. A ' +
+        'market-size figure is not a buyer.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'price',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What a source publishes as the price or the rate, with what it is quoted on. Declare ' +
+        'each with puzzle_finding set to PRICE_POINT, puzzle_subject set to the product class ' +
+        'it prices, puzzle_price_cents in minor units and puzzle_qualifier set to the basis. A ' +
+        'figure is read from a source and never produced, converted or averaged.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'route',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A published route by which work of this kind reaches a buyer, and what the route ' +
+        'takes: platform or retailer share, distributor discount, returns, payment timing, ' +
+        'exclusivity, rights required, and any eligibility rule about who may list at all. ' +
+        'Declare each with puzzle_finding set to DISTRIBUTION_CHANNEL. A route with no ' +
+        'published price is still a real finding — record it without a figure.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'format',
+      description:
+        'A kind of puzzle, mechanic or puzzle product the sources name, including obscure, ' +
+        'regional, non-English and audience-specific ones. Declare each with puzzle_finding ' +
+        'set to PUZZLE_FORMAT and puzzle_subject set to that format’s own short name as its ' +
+        'sources give it. Breadth and specificity are what is wanted here; a confirmation ' +
+        'that crosswords exist is worth nothing.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source names any buyer for work of this kind, and the places such a buyer ' +
+      'would be published were searched and named — which is recorded as an established ' +
+      'absence rather than as a failure.',
+    'Buyers can be found but nothing published states what any of them pays, so every price ' +
+      'would have to be estimated.',
+    'Every figure found is quoted with no statement of what it is a price for, so none of them ' +
+      'compares to anything.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every buyer is declared on its claim with puzzle_finding set to BUYER_DEMAND and ' +
+      'puzzle_subject naming which class, every route with DISTRIBUTION_CHANNEL, and every ' +
+      'figure with PRICE_POINT carrying its basis. A buyer described in prose and not declared ' +
+      'moves nothing.',
+    'A price is read from a source and never produced. Where nothing publishes one, the route ' +
+      'is recorded with no price and no basis. Do not estimate, do not convert a currency, and ' +
+      'do not infer a basis from a total.',
+    'Every price says what it is a price for. A per-book figure recorded as a per-puzzle one ' +
+      'is wrong by two orders of magnitude and nothing downstream could catch it.',
+    'A named buyer is a source naming them. A market-size estimate, a category growth rate and ' +
+      'a bestseller rank are none of them a buyer, and are reported as what they are.',
+    'A publisher or platform is conclusive about its own stated terms and is not independent ' +
+      'confirmation of anybody else’s. Say which it is for every claim resting on one.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported as ` +
+      'being about somewhere else rather than generalized.',
+    'Nothing here submits work, opens an account, contacts a buyer, lists anything for sale or ' +
+      'commits to an order. If answering a question would require any of that, it is recorded ' +
+      'as unresolved with the reason.',
+  ],
+};
+
+const PUZZLE_RIGHTS: CompilerProfile = {
+  id: 'PUZZLE_RIGHTS',
+  fragmentKey: 'puzzle-rights',
+  // A rights rule is jurisdictional, and a question about two jurisdictions is
+  // a question about two rules rather than an indecipherable one.
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Ahead of the market question, deliberately.
+   *
+   * A format whose corpus nobody may use cannot be sold however well it sells
+   * for other people, and the rights answer is what decides whether a
+   * generator is worth building at all. It is the cheapest question that can
+   * stop the most expensive work.
+   */
+  launchOrdinal: 355,
+  proposedSources: [
+    'a trademark or copyright register’s own record',
+    'a rights holder’s own published terms, licence or permissions page',
+    'the licence a word list, lexicon, clue bank or database is released under',
+    'a font or artwork licence as published by its author or foundry',
+    'a platform’s or marketplace’s published content and intellectual-property policy',
+    'a statute, regulation or regulator’s guidance on compilations or databases',
+    'a product safety, age-grading or labelling standard as published by its body',
+    'a court decision or official summary of one',
+    'a trade association or industry body’s published guidance',
+  ],
+  excludedSources: [
+    'an assertion that something is public domain with no source establishing it',
+    'a forum post or blog summarising the law in place of the rule itself',
+    'a rule quoted without the jurisdiction it applies in',
+    'an absence of a rule inferred from not having encountered one',
+    'a licence summary used in place of the licence it summarises',
+  ],
+  lanes: [
+    {
+      id: 'constraint',
+      // One register or one rights holder's own terms is conclusive about what
+      // it states. A second publisher restating it adds nothing.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A published constraint on producing or selling work of this kind: copyright in ' +
+        'individual puzzles or in compilations, a trademarked name, a licensed mechanic, ' +
+        'rights in a lexicon or database, a font or artwork licence, platform terms, or a ' +
+        'safety or labelling rule. Declare each with puzzle_finding set to RIGHTS_CONSTRAINT ' +
+        'and puzzle_subject set to which kind, and say which jurisdiction it applies in.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'absence',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'An established absence: you searched the places a constraint would be published — a ' +
+        'register, the rights holder’s own terms, the licence a corpus is released under, a ' +
+        'platform’s policy — and found none. Declare it as RIGHTS_CONSTRAINT with ' +
+        'puzzle_subject set to NO_CONSTRAINT_FOUND and name exactly what you searched. This ' +
+        'is the most valuable result this question returns and the easiest to get wrong: an ' +
+        'undocumented silence is not an established absence, and something will be built on ' +
+        'whichever one you record.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'corpus',
+      description:
+        'What a usable corpus for this format would actually be, and on what terms: which ' +
+        'word lists, lexicons, clue banks, quotation collections or artwork sets exist, who ' +
+        'publishes each, and what licence each is released under including whether commercial ' +
+        'use is permitted. Kept separate from the constraint lane because "this is encumbered" ' +
+        'and "here is one that is not" are two different findings.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source states any constraint, and the registers, terms and licences where ' +
+      'one would be published were searched and named — which is an established absence and is ' +
+      'the successful outcome of this question rather than a failure.',
+    'Constraints can be found but every one is quoted without the jurisdiction it applies in, ' +
+      'so nothing establishes anything about anywhere.',
+    'Every corpus that would serve this format is published under terms that do not state ' +
+      'whether commercial use is permitted, so nothing can be built on any of them yet.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which jurisdiction each ` +
+        'constraint is from; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every constraint is declared on its claim with puzzle_finding set to RIGHTS_CONSTRAINT ' +
+      'and puzzle_subject naming which kind. A constraint described in prose and not declared ' +
+      'moves nothing.',
+    'An absence is established by a documented search rather than by silence: say which ' +
+      'registers, terms, licences and policies you looked in and what you did not find. Do not ' +
+      'conclude that something is unencumbered because you did not encounter a rule saying so.',
+    'Every constraint says which jurisdiction it applies in. A rule quoted without one is not ' +
+      'a finding about anywhere.',
+    'A licence is read as published rather than as summarised. Where a summary and the licence ' +
+      'itself disagree, the licence is the finding and the disagreement is reported.',
+    'A register or a rights holder’s own terms is conclusive about what it states. A forum ' +
+      'post asserting something is free to use is not, and is reported as what it is.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which jurisdiction it is about. Where that is not ${scope}, it is ` +
+      'reported as being about somewhere else rather than generalized.',
+    'Nothing here applies for, claims or accepts any right, contacts any rights holder, or ' +
+      'downloads any corpus. Nothing here is legal advice: it is sourced statements a person ' +
+      'decides what to do about.',
+  ],
+};
+
+const PUZZLE_PRODUCTION: CompilerProfile = {
+  id: 'PUZZLE_PRODUCTION',
+  fragmentKey: 'puzzle-production',
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Last of the three, and after the market question.
+   *
+   * What a print run costs is the POSITION LATER question: asking it before
+   * anything is established about who buys the thing is costing a run for a
+   * book nobody has shown anybody wants.
+   */
+  launchOrdinal: 370,
+  proposedSources: [
+    'a printer’s, converter’s or manufacturer’s own published price list or quote calculator',
+    'a print-on-demand service’s published per-unit and setup pricing',
+    'a trade printer’s published minimum order quantities and volume breaks',
+    'an equipment manufacturer’s published specification, throughput or price',
+    'a used-equipment dealer’s or auction’s listing with a stated price',
+    'a materials supplier’s published price list',
+    'a freight or fulfilment provider’s published rate card',
+    'a trade association or trade publication on print or game manufacturing',
+    'a published industry survey of spoilage, defect, return or utilisation rates',
+  ],
+  excludedSources: [
+    'a cost at one volume presented as the cost at another',
+    'an advertised machine speed presented as what a staffed run produces',
+    'a quote from one supplier presented as evidence about anybody else’s costs',
+    'a total with no statement of what it includes',
+    'a payback or return figure produced rather than published',
+  ],
+  lanes: [
+    {
+      id: 'method',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'How work of this kind is actually produced, as a published source describes it. ' +
+        'Declare each with puzzle_finding set to PRODUCTION_METHOD and puzzle_subject set to ' +
+        'which method. A book, a card deck, a jigsaw and a boxed mechanical puzzle are ' +
+        'different production classes and a finding about one is not a finding about another.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'cost',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What a published source says a step costs, at a stated volume: per-unit and setup ' +
+        'cost, minimum order quantity, tooling, prepress and proofing, materials, freight and ' +
+        'storage. Declare each as a PRICE_POINT with its basis. A figure at one volume says ' +
+        'nothing about another unless the source gives both.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'ownership',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'What published sources say decides whether owning equipment beats outsourcing: ' +
+        'throughput at the slowest step, changeover time, staffed productive utilisation ' +
+        'rather than advertised machine speed, labour, maintenance and consumables, floor ' +
+        'space, and resale value. Kept separate from the cost lane because "this run costs X" ' +
+        'and "owning the machine that does it is worth it" are two claims with two standards.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'CALCULATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source states any cost for producing work of this kind, and the printers, ' +
+      'services and suppliers where such a figure would be published were searched and named.',
+    'Costs are published only as "request a quote", so every figure would have to be obtained ' +
+      'by contacting somebody — which this envelope does not permit, and which is recorded as ' +
+      'unresolved rather than estimated around.',
+    'Figures exist at one volume only, so nothing establishes what the same work costs at the ' +
+      'quantity that would actually be produced.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'figure is from; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every method is declared on its claim with puzzle_finding set to PRODUCTION_METHOD and ' +
+      'puzzle_subject naming which one, and every published figure as a PRICE_POINT with its ' +
+      'basis. A method described in prose and not declared moves nothing.',
+    'Every figure says what quantity it is for. A per-unit cost with no volume beside it is ' +
+      'not comparable to anything, and is reported as incomplete rather than used.',
+    'A cost is read from a source and never produced. Where a supplier publishes only "request ' +
+      'a quote", that is recorded as unresolved — this research contacts nobody.',
+    'An advertised machine speed is what the manufacturer says it does. Where a source gives ' +
+      'staffed or effective utilisation, both are reported and which is which is said.',
+    'A printer or manufacturer is conclusive about what it charges and worth nothing as ' +
+      'evidence about anybody else’s costs. Say which it is for every claim resting on one.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported as ` +
+      'being about somewhere else rather than generalized.',
+    'Nothing here requests a quote, contacts a supplier, places or reserves an order, or buys ' +
+      'or leases equipment. If answering a question would require any of that, it is recorded ' +
+      'as unresolved with the reason.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -1259,6 +1601,9 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_MACHINE_LADDER_V1: MACHINE_LADDER,
   RUSSELL_MACHINE_DEMAND_V1: MACHINE_DEMAND,
   RUSSELL_MACHINE_CAPABILITY_V1: MACHINE_CAPABILITY,
+  RUSSELL_PUZZLE_MARKET_V1: PUZZLE_MARKET,
+  RUSSELL_PUZZLE_RIGHTS_V1: PUZZLE_RIGHTS,
+  RUSSELL_PUZZLE_PRODUCTION_V1: PUZZLE_PRODUCTION,
 });
 
 export function profileFor(envelopeId: string): CompilerProfile | null {
