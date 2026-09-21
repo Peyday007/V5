@@ -48,7 +48,10 @@ import { getDb } from '../../db/database.ts';
 import { CAMPAIGN_TICK_LEASE_MS, mapCampaign } from '../../repos/factory.ts';
 import { failOperation, getOperation } from '../../repos/idempotency.ts';
 import type { FactoryCampaign, FactoryCampaignRow, FactoryCampaignState } from '../../domain/factory.ts';
-import { attestCampaignPullRequest } from '../register/campaignPullRequestLink.ts';
+import {
+  attestCampaignPullRequest,
+  campaignNeedsPullRequestAttestation,
+} from '../register/campaignPullRequestLink.ts';
 import {
   OperationConflict,
   OperationInProgress,
@@ -216,7 +219,12 @@ export async function recordCampaignOutcome(
    * on the call that happens to win the outcome-event reservation. Its own
    * write is idempotent (see campaignPullRequestLink.ts), so repeating it is
    * free and a workstream linked to this campaign after its first outcome
-   * write still gets the attestation on a later tick.
+   * write still gets the attestation on a later tick — provided something
+   * calls this function again for that campaign, which is exactly what
+   * `listCampaignsPendingOutcome`'s second condition, below, exists to do:
+   * without it, a terminal campaign whose outcome already landed drops out of
+   * every periodic tick's selection for ever, and a workstream linked to it
+   * afterward would never be offered a call to reach.
    */
   await attestCampaignPullRequest(campaign);
 
@@ -319,29 +327,79 @@ export async function recordCampaignOutcome(
 }
 
 /**
- * Terminal campaigns whose Brain outcome has not landed yet.
+ * Terminal campaigns the tick still has writeback work to do for.
  *
- * `recordCampaignOutcome`'s idempotency guard is what makes calling it a
- * second time safe; the defect this closes is that nothing was ever calling
- * it a second time. A crash between `patchCampaign(state: 'COMPLETE', ...)`
- * and this module's own insert — or a caught error from the insert itself —
- * leaves a campaign that is COMPLETE or CANCELLED, has a `finishedAt`, and
- * carries no `FACTORY_CAMPAIGN_COMPLETED` row. `listLiveCampaigns` will never
- * surface that campaign again, because by every other measure it is finished;
- * this is the query that looks specifically for the one thing still missing,
- * so a later tick can find it without re-reading every terminal campaign's
- * event history one at a time.
+ * Two reasons a finished campaign lands here, and both are answered by the
+ * same call this list feeds into: `recordCampaignOutcome` runs
+ * `attestCampaignPullRequest` unconditionally on every invocation, before it
+ * ever asks whether its own project-history row already exists.
+ *
+ *   1. **The outcome event itself has not landed.** `recordCampaignOutcome`'s
+ *      idempotency guard is what makes calling it a second time safe; the
+ *      defect this half closes is that nothing was ever calling it a second
+ *      time. A crash between `patchCampaign(state: 'COMPLETE', ...)` and this
+ *      module's own insert — or a caught error from the insert itself —
+ *      leaves a campaign that is COMPLETE or CANCELLED, has a `finishedAt`,
+ *      and carries no `FACTORY_CAMPAIGN_COMPLETED` row. `listLiveCampaigns`
+ *      will never surface that campaign again, because by every other measure
+ *      it is finished.
+ *
+ *   2. **A workstream was linked after the outcome already landed.** The
+ *      outcome event existing was never evidence that every workstream
+ *      pursuing this campaign has its `PULL_REQUEST` attestation — a person
+ *      files a workstream by *noticing* finished work, and noticing happens
+ *      after the fact at least as often as before it. Without this half, a
+ *      campaign that reached `COMPLETE` before anyone linked a workstream to
+ *      it dropped out of both `listLiveCampaigns` (terminal) and this query's
+ *      original `e.id IS NULL` condition (its outcome already recorded) at
+ *      once, so nothing would ever call `recordCampaignOutcome` for it again
+ *      and the newly linked workstream's attestation would never be written.
+ *      The `EXISTS` clause below is a cheap, generous first pass: it is
+ *      scoped to a campaign that still has *some* live workstream pointing at
+ *      it, so a campaign nobody has ever filed a workstream against never
+ *      enters candidacy on this account, but it does not itself know whether
+ *      that workstream's attestation is already written — a live `CAMPAIGN`
+ *      link never goes away once every workstream pointing through it is
+ *      attested, so a query that stopped at `EXISTS` would keep re-offering
+ *      the campaign for ever. `campaignNeedsPullRequestAttestation` is the
+ *      second, precise pass that answers the question the SQL cannot: it is
+ *      applied only to a row that matched purely on account of reason 2 (a
+ *      row already covered by reason 1 belongs here regardless, because its
+ *      project-history write is still outstanding whatever its workstreams
+ *      say), and it is what lets a campaign finally stop being a candidate
+ *      once every currently-linked workstream is attested.
  */
 export async function listCampaignsPendingOutcome(): Promise<FactoryCampaign[]> {
-  const rows = await getDb().all<FactoryCampaignRow>(
-    `SELECT c.* FROM factory_campaigns c
+  const rows = await getDb().all<FactoryCampaignRow & { outcome_event_id: string | null }>(
+    `SELECT c.*, e.id AS outcome_event_id FROM factory_campaigns c
       LEFT JOIN project_events e
         ON e.entity_type = ? AND e.entity_id = c.id AND e.event_type = ?
       WHERE c.state IN ('COMPLETE', 'CANCELLED')
         AND c.finished_at IS NOT NULL
-        AND e.id IS NULL
+        AND (
+          e.id IS NULL
+          OR (
+            c.pr_url IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM workstream_links wl
+               WHERE wl.kind = 'CAMPAIGN' AND wl.ref = c.id AND wl.superseded_at IS NULL
+            )
+          )
+        )
       ORDER BY c.finished_at`,
     [ENTITY_TYPE, FACTORY_CAMPAIGN_OUTCOME],
   );
-  return rows.map(mapCampaign);
+
+  const pending: FactoryCampaign[] = [];
+  for (const row of rows) {
+    const campaign = mapCampaign(row);
+    if (row.outcome_event_id === null) {
+      pending.push(campaign);
+      continue;
+    }
+    if (await campaignNeedsPullRequestAttestation(campaign)) {
+      pending.push(campaign);
+    }
+  }
+  return pending;
 }

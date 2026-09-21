@@ -18,7 +18,12 @@ import {
   patchCampaign,
 } from '../server/repos/factory.ts';
 import { recordIntegration, recordReview } from '../server/repos/factoryFleet.ts';
-import { recordCampaignOutcome, FACTORY_CAMPAIGN_OUTCOME } from '../server/services/factory/writeback.ts';
+import {
+  recordCampaignOutcome,
+  listCampaignsPendingOutcome,
+  FACTORY_CAMPAIGN_OUTCOME,
+} from '../server/services/factory/writeback.ts';
+import { tickAllCampaigns } from '../server/services/factory/loop.ts';
 import { createWorkstream, linkWorkstream, listAllLiveLinks } from '../server/repos/register.ts';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';
 
@@ -347,5 +352,91 @@ describe('recordCampaignOutcome attests a finished campaign\'s pull request', ()
     expect(links[0]?.detail.state).toBe('open');
     expect(links[0]?.detail.attestedBy).toBe('factory-campaign');
     expect(typeof links[0]?.detail.attestedAt).toBe('string');
+  });
+
+  /**
+   * A01, the case a reviewer found unproven: the objective's own scenario is
+   * a person *noticing* finished work and filing a workstream for it, which
+   * happens after a campaign's outcome has already landed at least as often
+   * as before. Before this fix, `listCampaignsPendingOutcome`'s only
+   * condition was "the outcome event does not exist yet" — so a campaign
+   * whose outcome had already been recorded dropped out of every periodic
+   * tick's selection for good, and a workstream linked to it afterward could
+   * never reach `attestCampaignPullRequest` through any automatic path.
+   *
+   * This drives the real production entrance — `tickAllCampaigns`, not a
+   * direct call to `recordCampaignOutcome` — because a direct call would only
+   * prove the writer still works and say nothing about whether the loop that
+   * is supposed to reach it actually does.
+   */
+  it('A01: a workstream linked after the outcome already landed still gets attested, via the real tick loop', async () => {
+    const campaignId = await completeCampaign({
+      prUrl: 'https://github.com/Peyday007/V5/pull/4210',
+      prRef: '#4210',
+    });
+
+    // The ordinary automatic path: the tick reaches this campaign and
+    // records its outcome while nobody has filed a workstream against it yet.
+    const first = await recordCampaignOutcome(campaignId);
+    expect(first.recorded).toBe(true);
+
+    // A person notices the finished work only afterward, and files it.
+    const workstreamId = await stream();
+    await linkWorkstream({
+      workstreamId,
+      kind: 'CAMPAIGN',
+      ref: campaignId,
+      relation: 'PURSUES',
+      recordedBy: 'PERSON',
+      recordedByUserId: approverId,
+    });
+
+    // The campaign's own outcome is already recorded, so the old query's
+    // sole condition would have excluded it here.
+    const pending = await listCampaignsPendingOutcome();
+    expect(pending.some((one) => one.id === campaignId)).toBe(true);
+
+    // The actual periodic loop, run more than once, exactly as production
+    // runs it every few seconds.
+    await tickAllCampaigns();
+    await tickAllCampaigns();
+
+    const links = (await listAllLiveLinks([workstreamId])).filter((link) => link.kind === 'PULL_REQUEST');
+    expect(links).toHaveLength(1);
+    expect(links[0]?.ref).toBe('https://github.com/Peyday007/V5/pull/4210');
+    expect(links[0]?.relation).toBe('EVIDENCE');
+    expect(links[0]?.detail.merged).toBe(false);
+  });
+
+  it('A02: a campaign nobody has ever linked a workstream to never re-enters the pending list once its outcome is recorded', async () => {
+    const campaignId = await completeCampaign({
+      prUrl: 'https://github.com/Peyday007/V5/pull/4211',
+      prRef: '#4211',
+    });
+    await recordCampaignOutcome(campaignId);
+
+    const pending = await listCampaignsPendingOutcome();
+    expect(pending.some((one) => one.id === campaignId)).toBe(false);
+  });
+
+  it('does not keep offering a campaign once every linked workstream is already attested', async () => {
+    const campaignId = await completeCampaign({
+      prUrl: 'https://github.com/Peyday007/V5/pull/4212',
+      prRef: '#4212',
+    });
+    const workstreamId = await stream();
+    await linkWorkstream({
+      workstreamId,
+      kind: 'CAMPAIGN',
+      ref: campaignId,
+      relation: 'PURSUES',
+      recordedBy: 'BRAIN',
+    });
+
+    await recordCampaignOutcome(campaignId);
+    // The workstream was linked before the outcome ran, so it is already
+    // attested and this campaign has nothing left to answer for.
+    const pending = await listCampaignsPendingOutcome();
+    expect(pending.some((one) => one.id === campaignId)).toBe(false);
   });
 });

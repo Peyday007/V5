@@ -28,8 +28,15 @@
  * including a call that finds the outcome event already recorded, produces
  * exactly one live `PULL_REQUEST`/`EVIDENCE` link per workstream rather than
  * one per call.
+ *
+ * That covers every workstream linked *before* the call this function runs
+ * inside of. It says nothing about one linked afterward, against a campaign
+ * whose outcome has already landed — `writeback.ts`'s
+ * `listCampaignsPendingOutcome` is what keeps offering such a campaign to the
+ * tick, and `campaignNeedsPullRequestAttestation` below is the predicate it
+ * uses to stop once there is nothing left to do.
  */
-import { linkWorkstream, workstreamsForRef } from '../../repos/register.ts';
+import { linkWorkstream, listLinks, workstreamsForRef } from '../../repos/register.ts';
 import { nowIso } from '../../repos/util.ts';
 import type { FactoryCampaign } from '../../domain/factory.ts';
 
@@ -81,4 +88,35 @@ export async function attestCampaignPullRequest(campaign: CampaignForPullRequest
       },
     });
   }
+}
+
+/**
+ * Would calling `attestCampaignPullRequest` on this campaign right now still
+ * write something?
+ *
+ * True only when the campaign carries a confirmed pull request and at least
+ * one live workstream pursuing it does not yet carry a live, matching
+ * `PULL_REQUEST`/`EVIDENCE` link — exactly the condition a workstream linked
+ * *after* the campaign's first writeback leaves behind. `false` covers both
+ * the ordinary case (every currently-linked workstream is already attested)
+ * and the case nothing here should keep re-checking for ever (no workstream
+ * points at this campaign at all), so a caller offering campaigns to a tick
+ * on this predicate stops offering one the moment there is nothing left for
+ * it to do — never a permanent candidate just because a live `CAMPAIGN` link
+ * to it happens to still exist.
+ */
+export async function campaignNeedsPullRequestAttestation(
+  campaign: CampaignForPullRequestLink,
+): Promise<boolean> {
+  if (!campaign.prUrl) return false;
+
+  const workstreamIds = await workstreamsForRef('CAMPAIGN', campaign.id);
+  for (const workstreamId of workstreamIds) {
+    const links = await listLinks(workstreamId);
+    const attested = links.some(
+      (link) => link.kind === 'PULL_REQUEST' && link.relation === 'EVIDENCE' && link.ref === campaign.prUrl,
+    );
+    if (!attested) return true;
+  }
+  return false;
 }
