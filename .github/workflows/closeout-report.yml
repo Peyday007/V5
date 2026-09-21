@@ -110,7 +110,7 @@ jobs:
                 orc_*) ;;
                 *) echo "::error::A packet ref is an orc_ id."; exit 1 ;;
               esac
-              cmd="sh /app/scripts/packet-report.sh $ref"
+              cmd="sh /app/scripts/packet-report.sh --orchestration $ref"
               marker='^PACKET-REPORT'
               ;;
             refinement)
