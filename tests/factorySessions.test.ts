@@ -20,7 +20,7 @@ import {
 } from '../server/repos/factory.ts';
 import { assignNextBin, createBin, finishBin, getBin, releaseBin } from '../server/repos/bins.ts';
 import { listSessions } from '../server/repos/factoryFleet.ts';
-import { campaignMetrics } from '../server/services/factory/metrics.ts';
+import { campaignMetrics, maxOverlap } from '../server/services/factory/metrics.ts';
 import { tickRemoteCampaign } from '../server/services/factory/remoteLoop.ts';
 import {
   episodesOf,
@@ -131,6 +131,34 @@ describe('pairing an assignment with the event that ended it', () => {
     expect(episodesOf([event({ leaseId: 'l1', leaseGeneration: 1 })])).toHaveLength(0);
   });
 
+  /*
+   * An episode Brain timed at less than its clock's resolution is a session —
+   * it is counted, and `concurrencyEvidence` reads MEASURED because of it —
+   * and it contributes nothing to a *peak overlap*, because `maxOverlap`'s rule
+   * is that intervals which merely touch were not concurrent and an instant
+   * touches itself. Pinned rather than papered over: a reading that said
+   * otherwise would be inventing a width nobody measured.
+   */
+  it('keeps an episode with no measurable width, and lets it add nothing to a peak', () => {
+    const at = '2026-09-21T00:00:00.000Z';
+    const episodes = episodesOf([
+      event({ at, leaseId: 'l1', leaseGeneration: 1 }),
+      event({
+        eventType: 'BIN_TERMINAL',
+        at,
+        leaseId: 'l1',
+        leaseGeneration: 1,
+        outcome: 'COMPLETE',
+      }),
+    ]);
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0]?.durationMs).toBe(0);
+    expect(maxOverlap(episodes.map((one) => ({
+      start: new Date(one.startedAt).getTime(),
+      end: new Date(one.endedAt).getTime(),
+    })))).toBe(0);
+  });
+
   it('never reports a stage it cannot name a role for', () => {
     expect(ROLE_OF_BIN_KIND['RESEARCH_FRAGMENT']).toBeUndefined();
     expect(ROLE_OF_BIN_KIND['FACTORY_REVIEW']).toBe('REVIEWER');
@@ -227,6 +255,18 @@ describe('what the hosted plane ran, recorded from Brain’s own rows', () => {
     return bin.id;
   }
 
+  /**
+   * A few milliseconds, so a fixture's episode has a width a sweep can read.
+   *
+   * Real sessions last minutes. These last microseconds, and an episode whose
+   * start and end land in the same millisecond is a zero-width interval —
+   * which `maxOverlap` correctly reports as contributing nothing to a peak,
+   * because its rule is that two intervals which merely *touch* were not
+   * concurrent and an instant touches itself. That is the right reading of a
+   * session too short to measure, and it is not the thing under test here.
+   */
+  const apart = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+
   /** One worker taking one bin and finishing it: exactly one session episode. */
   async function runBin(binId: string, workerId: string, sessionRef: string): Promise<void> {
     const assigned = await assignNextBin({
@@ -235,6 +275,7 @@ describe('what the hosted plane ran, recorded from Brain’s own rows', () => {
       sessionRef,
     });
     expect(assigned?.bin.id, 'the bin the fixture meant to hand out').toBe(binId);
+    await apart();
     const bin = await getBin(binId);
     if (!bin || !bin.leaseId) throw new Error('the bin was not leased');
     await finishBin(
@@ -300,16 +341,6 @@ describe('what the hosted plane ran, recorded from Brain’s own rows', () => {
     const two = await createWorker({ name: `w2-${Date.now()}`, createdByType: 'SYSTEM', createdById: 't' });
     const binA = await stageBin(campaignId, 'FACTORY_UNITS', 'a');
     const binB = await stageBin(campaignId, 'FACTORY_UNITS', 'b');
-
-    /*
-     * Real sessions last minutes and these last microseconds, so the fixture
-     * separates them by a few milliseconds. Without it every event carries one
-     * timestamp, both intervals are zero-length at the same instant, and
-     * `maxOverlap` correctly reports that two sessions which merely *touched*
-     * were not concurrent — which would be the sweep being right about a
-     * fixture that could not express the thing under test.
-     */
-    const apart = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
 
     const assignedA = await assignNextBin({
       workerId: one.id,

@@ -62,6 +62,17 @@ export interface SessionEpisode {
   durationMs: number | null;
 }
 
+/**
+ * How much of one bin's history to read.
+ *
+ * `listBinEvents` defaults to 500 and caps at 5000, and a busy bin carries far
+ * more than 500: a heartbeat is a `bin_events` row, and so is every item claim,
+ * attempt credit, routing decision and refusal. The cap is asked for rather
+ * than the default, and a read that reaches it is reported as partial rather
+ * than passed off as complete.
+ */
+const EVENT_READ_LIMIT = 5000;
+
 const OPENS = new Set(['BIN_ASSIGNED', 'BIN_TAKEOVER']);
 const CLOSES = new Set(['BIN_TERMINAL', 'BIN_RELEASED']);
 
@@ -152,6 +163,17 @@ export interface SessionSweepReport {
   unclosed: number;
   /** Episodes whose bin kind is not a factory stage, so no role could be named. */
   unmapped: number;
+  /**
+   * Bins whose event history filled the read, so the reading of them is partial.
+   *
+   * Said out loud rather than counted as a clean pass. `listBinEvents` orders
+   * oldest first and truncates the newest, which is exactly the end of an
+   * episode — so a truncated read loses closes and quietly reports fewer
+   * sessions than happened. Under-counting is the safe direction and a
+   * truncation reported as success is not: §27 records that as the one outcome
+   * a caller cannot recover from.
+   */
+  partialReads: number;
 }
 
 /**
@@ -167,6 +189,7 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
     alreadyRecorded: 0,
     unclosed: 0,
     unmapped: 0,
+    partialReads: 0,
   };
   const bins = await campaignBins(campaignId);
   if (bins.length === 0) return report;
@@ -177,7 +200,8 @@ export async function recordObservedSessions(campaignId: string): Promise<Sessio
       report.unmapped += 1;
       continue;
     }
-    const events = await listBinEvents(bin.id);
+    const events = await listBinEvents(bin.id, EVENT_READ_LIMIT);
+    if (events.length >= EVENT_READ_LIMIT) report.partialReads += 1;
     const opens = events.filter((event) => OPENS.has(event.eventType)).length;
     const episodes = episodesOf(events);
     report.unclosed += Math.max(0, opens - episodes.length);

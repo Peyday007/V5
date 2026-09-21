@@ -1501,6 +1501,12 @@ async function sweepSessionsInto(report: RemoteTickReport, campaignId: string): 
         `${swept.recorded} execution session(s) recorded from Brain's own dispatch and lease rows.`,
       );
     }
+    if (swept.partialReads > 0) {
+      report.notes.push(
+        `${swept.partialReads} bin(s) have more recorded history than one read returns, so ` +
+          'their session reading is partial and the concurrency figure below them is a floor.',
+      );
+    }
     if (swept.unclosed > 0) {
       report.notes.push(
         `${swept.unclosed} assignment(s) have no close event, so no interval could be read for ` +
