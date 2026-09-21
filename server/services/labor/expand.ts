@@ -34,6 +34,7 @@
  * output well enough. Those findings are recorded as evidence on their claims
  * and move no question, which is a refusal rather than a gap.
  */
+import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { createCandidate } from '../../repos/russellCandidates.ts';
 import { listMissions } from '../../repos/russellMissions.ts';
@@ -69,6 +70,7 @@ import type {
   LaborRound,
   LaborRoundPurpose,
   ResearchClaim,
+  RussellCandidate,
 } from '../../domain/types.ts';
 
 const OPENED = 'LABOR_ROUND_OPENED';
@@ -87,11 +89,61 @@ export interface OpenedRound {
 /**
  * Turn the allocator's decisions into work.
  *
- * The round is written *after* the candidate and the insert is
- * `ON CONFLICT DO NOTHING`, so a tick that dies between the two leaves a
- * candidate nothing points at — harmless, because the next tick's insert
- * collides on the same key and the orphan is never asked anything. The shape
- * `openRound` and `openAsks` already have, for the same reason.
+ * ---------------------------------------------------------------------------
+ * "The orphan is never asked anything" was mine, and it was false
+ * ---------------------------------------------------------------------------
+ *
+ * This comment used to say that the round is written after the candidate, that
+ * the insert is `ON CONFLICT DO NOTHING`, and that a tick dying between the two
+ * therefore leaves "a candidate nothing points at — harmless, because the next
+ * tick's insert collides on the same key and **the orphan is never asked
+ * anything**". The first three clauses were true of the code. The fourth was a
+ * claim about Russell that nothing in Russell supports, and the correction is
+ * recorded here rather than quietly applied.
+ *
+ * `createCandidate` writes state `CAPTURED` and priority `NULL`, and
+ * `unjudged()` in `services/russell/loop.ts` selects **every** candidate with
+ * `priority IS NULL AND state <> 'MERGED' AND project_id IS NOT NULL`. There is
+ * no clause anywhere on that path asking whether a labor round points at it. So
+ * an orphan is judged, compiled — these questions specify perfectly well, which
+ * is the problem — queued, and launched as a real mission that spends a real
+ * fleet activation and the project's allowance.
+ *
+ * And then its answer is discarded. `absorb` resolves a claim's orchestration
+ * through the mission to the candidate to the round, and there is no round, so
+ * every finding that mission gated is filed nowhere. Meanwhile the next tick
+ * asks the identical question on a second candidate. **One question, paid for
+ * twice, answered into nothing once** — which is worse than the plain waste,
+ * because every row involved reads as healthy and the map simply stays empty.
+ *
+ * ---------------------------------------------------------------------------
+ * The window is closed rather than narrowed
+ * ---------------------------------------------------------------------------
+ *
+ * Both writes go in one transaction, so a crash between them leaves neither and
+ * there is no instant at which a candidate exists without its round. That also
+ * settles the case the original reasoning never considered, which is the more
+ * likely of the two: the tick runs on every instance, `allocate` is a pure
+ * function over a snapshot, so two instances compute the *same* ask and both
+ * create a candidate. Exactly one wins the unique index — `created: false` is
+ * the loser, and an ordinary outcome rather than an error — and rolling back is
+ * what stops the loser's candidate becoming the orphan by the other route.
+ *
+ * Reversing the order is not available: `labor_rounds.candidate_id` is a
+ * foreign key, so the round cannot be written first. Checking for the round
+ * before creating the candidate does not help either, because the losing
+ * instance's read happens before the winner's write.
+ *
+ * Nothing already written needs reaching, and that is a reading rather than an
+ * assumption: production carries no labor task, therefore no round, therefore
+ * no candidate this function has ever created (`LABOR-REPORT: OK maps=0`,
+ * 2026-09-21, against `d115bc3`). The window is closed before the first one.
+ *
+ * **The same sentence is in `services/industry/expand.ts` and this fix is
+ * deliberately not widened into it.** That kernel has opened rounds in
+ * production, so it may already hold orphans and the remedy there is a
+ * derivation over rows rather than a transaction alone — which is a decision
+ * for whoever owns it, on evidence this session has not taken.
  */
 export async function openAsks(input: {
   projectId: string;
@@ -113,23 +165,14 @@ export async function openAsks(input: {
     const context = contextFor({ workflow: coverage.workflow.name });
     const composed = compose(ask.purpose, subject, context, ask.round);
 
-    const candidate = await createCandidate({
+    const asked = await openOneAsk({
       projectId: input.projectId,
-      visibility: 'SHARED',
-      conversationId: null,
-      sourceMessageId: null,
+      ask,
       title: ask.round === 1 ? composed.title : `${composed.title} (round ${ask.round})`,
       statement: composed.question,
     });
-
-    const opened = await openLaborRound({
-      projectId: input.projectId,
-      taskId: ask.taskId,
-      purpose: ask.purpose,
-      round: ask.round,
-      candidateId: candidate.id,
-    });
-    if (!opened.created) continue;
+    if (!asked) continue;
+    const { candidate, opened } = asked;
 
     await recordEvent({
       projectId: input.projectId,
@@ -166,6 +209,51 @@ export async function openAsks(input: {
     });
   }
   return out;
+}
+
+/**
+ * A round exists only if its candidate does, and the reverse.
+ *
+ * The sentinel is control flow rather than a failure: `created: false` means
+ * another instance opened this exact ask first, which is an ordinary outcome,
+ * and the only way to undo the candidate written a statement earlier is to roll
+ * the transaction back. It is caught by identity rather than by message, so a
+ * real database error on either write still propagates.
+ */
+class AskAlreadyOpen extends Error {}
+
+async function openOneAsk(input: {
+  projectId: string;
+  ask: Ask;
+  title: string;
+  statement: string;
+}): Promise<{ candidate: RussellCandidate; opened: { round: LaborRound } } | null> {
+  try {
+    return await getDb().transaction(async () => {
+      const candidate = await createCandidate({
+        projectId: input.projectId,
+        visibility: 'SHARED',
+        conversationId: null,
+        sourceMessageId: null,
+        title: input.title,
+        statement: input.statement,
+      });
+
+      const opened = await openLaborRound({
+        projectId: input.projectId,
+        taskId: input.ask.taskId,
+        purpose: input.ask.purpose,
+        round: input.ask.round,
+        candidateId: candidate.id,
+      });
+      if (!opened.created) throw new AskAlreadyOpen();
+
+      return { candidate, opened };
+    });
+  } catch (error) {
+    if (error instanceof AskAlreadyOpen) return null;
+    throw error;
+  }
 }
 
 function compose(

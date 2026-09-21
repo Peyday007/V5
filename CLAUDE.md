@@ -7200,6 +7200,66 @@ built.
   reads as coverage.** It registers a real healthy Routine and names a
   capability that genuinely reads `PRESENT` now, and it asserts that all three
   verdicts actually occur *before* it trusts the biconditional over them.
+- **"The orphan is never asked anything" was a claim about Russell, and Russell
+  does not support it.** `openAsks` writes a Russell candidate and then the
+  `labor_rounds` row pointing at it, and the comment above it said a tick dying
+  between the two was harmless because the next tick's insert collides and the
+  orphan is never asked anything. The first half is true of the code. The second
+  is false: `createCandidate` writes state `CAPTURED` with priority `NULL`, and
+  `unjudged()` selects **every** candidate with `priority IS NULL AND state <>
+  'MERGED' AND project_id IS NOT NULL` — no clause anywhere on that path asks
+  whether a labor round points at the row. So an orphan is judged, compiled (the
+  questions specify perfectly well, which is the problem), queued and launched
+  as a mission that spends a real fleet activation and the project's allowance.
+  Then `absorb` resolves a claim's orchestration through the mission to the
+  candidate to the round, finds none, and files nothing, while the next tick
+  asks the identical question on a second candidate. **One question, paid for
+  twice, answered into nothing once** — with every row involved reading as
+  healthy and the map simply staying empty.
+
+  Both writes go in one transaction now, so there is no instant at which the
+  first exists without the second. That also settles the case the original
+  reasoning never considered and which is **the more likely of the two**: the
+  tick runs on every instance and `allocate` is pure over a snapshot, so two
+  instances compute the same ask and both reach `createCandidate`; exactly one
+  wins the unique index, and rolling the loser back is what stops its candidate
+  becoming the orphan by the other route. Reversing the order is not available —
+  `candidate_id` is a foreign key — and checking first does not help, because the
+  loser's read precedes the winner's write. **Nothing already written needs
+  reaching, and that is a reading rather than an assumption**: production carries
+  no labor task, so no round, so no candidate this function has ever created
+  (`LABOR-REPORT: OK maps=0`, against `d115bc3`). The same sentence is in
+  `services/industry/expand.ts` and this is deliberately **not** widened into it:
+  that kernel has opened rounds in production, so it may already hold orphans and
+  its remedy is a derivation over rows rather than a transaction alone, which is
+  a decision for whoever owns it on evidence this session has not taken.
+
+- **Three missions that never ran retired a question for ever, and recorded the
+  reason as an observation nobody had made.** A round settles on *any* terminal
+  mission, failed and cancelled included, which is right — a round left `OPEN`
+  is the state nothing can leave. But `roundsByPurpose` counted every settled
+  round, so the allocator's barren rule read a crashed mission exactly as it read
+  one that had opened the sources and found nothing, and three abandonments
+  declined the question with *"has been asked 3 times and nothing published has
+  answered it. Brain has documented that there is nothing there."* **A wrong
+  answer confidently derived is worse than no answer**, and this one was recorded
+  as the reason the work stopped. `expand.ts`'s own comment already stated the
+  rule it was breaking — *it ran and found nothing* and *it never finished* have
+  different remedies, "and the allocator's barren rule reads the first" — which
+  it did not.
+
+  It is two counts rather than one changed: `harvestedByPurpose` is what
+  barrenness reads, and `roundsByPurpose` still numbers the next round and has
+  to. Numbering from the harvested count would reuse a number an abandoned round
+  already holds, collide on the unique index and re-ask nothing for ever, which
+  is the same stranding by the other route. Three abandonments in a row is not
+  exotic on a fleet whose dispatch is failing — §23 records eighteen consecutive
+  `AUTH 401`s against one Routine — and the remedy for that is to fix the
+  surface, which this would have out-raced. The bound is **narrowed and not
+  removed**: three rounds that genuinely ran and found nothing still retire the
+  question, asserted in the same file so the fix cannot be mistaken for deleting
+  the rule.
+
 - **Two of the brief's sections are not built, and saying so is the honest
   report.** §5's elastic capacity and §10's pool of verified external operators
   are a roster of real people with contact details and credentials, and building
@@ -7622,6 +7682,7 @@ tests/                  Vitest suites
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
+  laborOrphanedAsk.test.ts   a candidate and its round, together or not at all
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

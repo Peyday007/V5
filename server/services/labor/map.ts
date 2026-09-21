@@ -66,6 +66,18 @@ export interface TaskCoverage {
   purposesOpen: ReadonlySet<LaborRoundPurpose>;
   /** How many settled rounds of each purpose, so the next one can be numbered. */
   roundsByPurpose: Readonly<Record<LaborRoundPurpose, number>>;
+  /**
+   * How many of those actually ran to a conclusion.
+   *
+   * Kept apart from `roundsByPurpose` because the two answer different
+   * questions and only one of them is evidence. A round settles on *any*
+   * terminal mission (`expand.ts` says why), so `roundsByPurpose` counts a
+   * mission that crashed exactly as it counts one that read the sources and
+   * found nothing — which is right for *numbering* the next round, and is a lie
+   * as a measure of how hard Brain has looked. §41's own sentence: "it ran and
+   * found nothing" and "it never finished" have different remedies.
+   */
+  harvestedByPurpose: Readonly<Record<LaborRoundPurpose, number>>;
   foundByPurpose: Readonly<Record<LaborRoundPurpose, number>>;
   lastAskedAt: string | null;
   lastSettledAt: string | null;
@@ -140,13 +152,17 @@ export async function laborSnapshot(projectId: string, now?: string): Promise<La
     const mine = roundsByTask.get(task.id) ?? [];
 
     const roundsByPurpose: Record<LaborRoundPurpose, number> = { ...EMPTY_COUNTS };
+    const harvestedByPurpose: Record<LaborRoundPurpose, number> = { ...EMPTY_COUNTS };
     const foundByPurpose: Record<LaborRoundPurpose, number> = { ...EMPTY_COUNTS };
     const asked = new Set<LaborRoundPurpose>();
     const open = new Set<LaborRoundPurpose>();
     for (const round of mine) {
       asked.add(round.purpose);
       if (round.state === 'OPEN') open.add(round.purpose);
-      else roundsByPurpose[round.purpose] += 1;
+      else {
+        roundsByPurpose[round.purpose] += 1;
+        if (round.state === 'HARVESTED') harvestedByPurpose[round.purpose] += 1;
+      }
       // A round that has not settled contributes nothing — not zero, nothing.
       foundByPurpose[round.purpose] += round.found ?? 0;
     }
@@ -163,6 +179,7 @@ export async function laborSnapshot(projectId: string, now?: string): Promise<La
       purposesAsked: asked,
       purposesOpen: open,
       roundsByPurpose,
+      harvestedByPurpose,
       foundByPurpose,
       lastAskedAt: latest(mine.map((one) => one.openedAt)),
       lastSettledAt: latest(
