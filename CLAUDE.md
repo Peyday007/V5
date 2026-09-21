@@ -9086,6 +9086,28 @@ actually worth having, keeping a command off a machine mid-release, is
 `.github/actions/await-release`: a composite action every workflow that opens
 an ssh session runs first.
 
+**How often it was happening is a reading rather than an anecdote, and it is
+worse than the one incident that prompted this.** Forty consecutive runs on
+2026-09-21 hold three cross-workflow evictions in ninety minutes, each one a
+dispatch of a *different* command taking the slot:
+
+| evicted | created | cancelled | what arrived |
+|---|---|---|---|
+| `Routing 17` | 08:20:07 | 08:21:01 | `Admin 72`, created 08:20:59 |
+| `Admin 72` | 08:20:59 | 08:28:42 | `Admin 73`, created 08:28:40 |
+| `Step 10 267` | 08:48:19 | 08:48:45 | `Admin 75`, created 08:48:43 |
+
+Each cancellation lands within two seconds of the next dispatch, none of them
+started, and nothing anywhere went red. Beside them in the same window,
+`Closeout report` — the one read that already held a group of its own —
+succeeded **eighteen** times without a single cancellation. That contrast is
+the whole argument: the eviction is a property of the group and not of any
+workflow in it, and the remedy three sessions each reached for was to move one
+more file out of the group.
+
+The deploy's own run log says the same thing about the direction that matters:
+runs 298, 299, 300, 301 and 303 all ended `cancelled` in a single morning.
+
 **That wait is bounded and fails open, and both are deliberate.** A deploy that
 hangs must not make the Brain unadministrable, and an unreadable Actions API
 must not disable every operator command at once — so the expiry and the
