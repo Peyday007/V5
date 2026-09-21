@@ -33,7 +33,17 @@ import { adoptSurface } from '../server/services/capacity/adopt.ts';
 import {
   MAX_VALIDATIONS_IN_FLIGHT,
   VALIDATION_STALL_MS,
+  settleValidations,
 } from '../server/services/cash/validation.ts';
+import { activate } from '../server/services/cash/lifecycle.ts';
+import { createCandidate } from '../server/repos/russellCandidates.ts';
+import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
+import {
+  createOpportunity,
+  getOpportunity,
+  listOpportunities,
+  updateOpportunity,
+} from '../server/repos/cashPortfolio.ts';
 import { OPPORTUNITY_VALIDATION_STATES } from '../server/domain/types.ts';
 import type { PortfolioInput } from '../server/services/cash/portfolio.ts';
 import type { CashCardFact, CashOpportunity } from '../server/domain/types.ts';
@@ -47,7 +57,7 @@ function opportunity(overrides: Partial<CashOpportunity> = {}): CashOpportunity 
     cashModeId: 'csm_1',
     ownerUserId: 'usr_1',
     title: 'An opening',
-    mechanism: 'ARBITRAGE',
+    mechanism: 'EXPLICIT_PAID_REQUEST',
     industryNodeId: null,
     industry: null,
     source: null,
@@ -562,6 +572,149 @@ describe('the refinement lifecycle is bounded and says what it is doing', () => 
     // longer than this is what frees the slot.
     expect(VALIDATION_STALL_MS).toBeGreaterThan(60 * 60 * 1000);
     expect(MAX_VALIDATIONS_IN_FLIGHT).toBeGreaterThan(0);
+  });
+
+  /**
+   * One deep dive, as rows, in whatever state the case needs.
+   *
+   * The real repositories rather than hand-written SQL, so a case asserts
+   * against what `settleValidations` will actually read: an opportunity whose
+   * `candidate_id` names a candidate, a mission for that candidate, and the
+   * orchestration the mission names.
+   */
+  async function dive(input: {
+    projectId: string;
+    ownerUserId: string;
+    cashModeId: string;
+    missionState: 'RUNNING' | 'DONE' | 'NEEDS_HUMAN';
+    startedAt: string;
+  }): Promise<string> {
+    const candidate = await createCandidate({
+      projectId: input.projectId,
+      visibility: 'SHARED',
+      title: 'Qualify: an opening',
+      statement: 'Who pays, what it pays, what it costs and what would rule it out.',
+    });
+    const { mission } = await launchMission({
+      projectId: input.projectId,
+      visibility: 'SHARED',
+      objective: 'Qualify one opening.',
+      whyNow: 'It was harvested.',
+      idempotencyKey: `idem_${candidate.id}`,
+      candidateId: candidate.id,
+    });
+    /*
+     * Deliberately no orchestration linked.
+     *
+     * `settleValidations` reads one only for the *reason* on a park or a
+     * block, and tolerates its absence — so leaving it out keeps the fixture
+     * to the rows these two cases are actually about: an opportunity, its
+     * candidate, and the mission's state.
+     */
+    // A mission is born `PLANNED`; `RUNNING` is the state a worker takes it to.
+    await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+    if (input.missionState !== 'RUNNING') {
+      await transitionMission({
+        missionId: mission.id,
+        from: 'RUNNING',
+        to: input.missionState,
+        ...(input.missionState === 'NEEDS_HUMAN'
+          ? { waitingOn: 'A decision only a person can make.' }
+          : {}),
+      });
+    }
+    const opportunity = await createOpportunity({
+      projectId: input.projectId,
+      cashModeId: input.cashModeId,
+      ownerUserId: input.ownerUserId,
+      title: 'An opening a deep dive was launched for',
+      mechanism: 'EXPLICIT_PAID_REQUEST',
+      currency: 'USD',
+    });
+    await updateOpportunity(opportunity.id, {
+      candidate_id: candidate.id,
+      validation_state: 'RUNNING',
+      validation_started_at: input.startedAt,
+      validation_rounds: 1,
+    });
+    return opportunity.id;
+  }
+
+  it('parks a dive whose mission stopped at a person, and frees its slot', async () => {
+    const fixture = await freshProject();
+    const owner = await createUser({
+      email: 'dive@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const started = await activate({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const parked = await dive({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      cashModeId: started.mode.id,
+      missionState: 'NEEDS_HUMAN',
+      startedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
+
+    const settled = await settleValidations(fixture.project.id);
+    expect(settled).toContainEqual({ opportunityId: parked, to: 'NEEDS_PERSON' });
+    const after = await getOpportunity(parked);
+    expect(after!.validationState).toBe('NEEDS_PERSON');
+    /*
+     * And the slot is free, which is the whole repair: `RUNNING` counted
+     * against `MAX_VALIDATIONS_IN_FLIGHT` and production had both of its two
+     * held by parked missions.
+     */
+    const live = (await listOpportunities({ projectId: fixture.project.id })).filter(
+      (one) => one.validationState === 'PENDING' || one.validationState === 'RUNNING',
+    );
+    expect(live).toHaveLength(0);
+  });
+
+  it('never blocks a dive whose mission has finished, however long the tick was down', async () => {
+    /*
+     * The ordering the stall backstop got wrong on its first write. A packet
+     * that completed yesterday, read by a tick that came back today, has a
+     * last pass older than the stall window — and settling it `BLOCKED` would
+     * throw away a `COMPLETE` and the card facts taken from it. A backstop
+     * that can destroy a result is worse than no backstop.
+     */
+    const fixture = await freshProject();
+    const owner = await createUser({
+      email: 'dive2@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const started = await activate({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      actorUserId: owner.id,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    if (!started.ok) return;
+
+    const finished = await dive({
+      projectId: fixture.project.id,
+      ownerUserId: owner.id,
+      cashModeId: started.mode.id,
+      missionState: 'DONE',
+      // Well past VALIDATION_STALL_MS, and with no pass ever completed.
+      startedAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    });
+
+    const settled = await settleValidations(fixture.project.id);
+    expect(settled).toContainEqual({ opportunityId: finished, to: 'COMPLETE' });
+    expect((await getOpportunity(finished))!.validationState).toBe('COMPLETE');
   });
 
   it('derives a tier from the card rather than from the validation state', () => {

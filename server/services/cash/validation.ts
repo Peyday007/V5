@@ -480,7 +480,18 @@ export async function settleValidations(projectId: string): Promise<
      * where it is.
      */
     const startedAt = opportunity.validationStartedAt;
-    if (startedAt) {
+    /*
+     * A **running** mission that has gone quiet, and only that.
+     *
+     * The guard on `RUNNING` is what keeps this from reaching a mission that
+     * has already finished. Without it, a dive whose packet completed
+     * yesterday and whose tick was down overnight would be read here first —
+     * its last pass is older than the window — and settled `BLOCKED`,
+     * throwing away a `COMPLETE` and the card facts `applyValidationAnswers`
+     * would have taken from it. A backstop that can destroy a result is worse
+     * than no backstop.
+     */
+    if (startedAt && mission.state === 'RUNNING') {
       const passes = mission.orchestrationId ? await listPasses(mission.orchestrationId) : [];
       const finished = passes
         .map((pass) => pass.completedAt)
