@@ -7545,14 +7545,39 @@ nowhere.
   that excludes it. **A false finding costs more than the defect it was looking
   for**, for the third and fourth time in this kernel's short life.
 
-- **Nothing here is deployed, and the distinction is the whole of §37's first
-  sentence.** The branch is unmerged; production does not contain
-  `server/services/design` at all, so the deployed Brain has no design table and
-  runs no design tick. An earlier report of mine named two Russell candidates as
-  evidence that proactive expansion had routed research — they were rows in a
-  throwaway directory, and production's `brain-architecture` project holds zero
-  work items. The machinery is complete and **no fleet worker has answered a
-  design bin**; that needs a deploy, which is a person's.
+- **`requestDesignCycle` had one caller in the repository and it was the
+  factory, so the kernel was blind to every change this product has ever
+  actually had.** The Software Factory's integrate stage was the only thing that
+  opened a cycle — and every UI change that has reached this interface landed by
+  a merge and a deploy, which is a route the kernel could not see at all. That
+  is this section's own recurring sentence arriving at the *top* of the loop
+  rather than inside it: a mechanism with one entrance is not a mechanism, and
+  the one entrance it had was the rarest of the two.
+
+  `npm run design route` is the second, and it adds **no decision**. The same
+  `classifyUiImpact` reads the same changed paths against the same registered
+  surfaces, `shouldOpenCycle` is untouched, and a change with no interface
+  consequence still produces no cycle and the reason why — a second copy of that
+  rule here would be the two-readers-disagree shape this file keeps correcting.
+  What differs is only where the paths come from: a unit's declared mutation
+  scope for the factory, and the two commits a deploy moved between for this.
+
+  **And the paths are derived rather than typed**, which is the half that makes
+  it honest. `.github/workflows/design.yml` computes them with
+  `git diff --name-only <from> <to>` in the checkout it already has, because the
+  deployed image has no `.git` and must not acquire one. A hand-written path
+  list would be somebody's *account* of a change, and the whole argument of this
+  kernel is that an account of a change is not the change. The workflow has no
+  `paths` input at all, and a test reads it and fails if one appears.
+
+- **An earlier version of this section said nothing here was deployed. That was
+  true when it was written and is corrected here rather than edited there.** It
+  also named two Russell candidates as evidence that proactive expansion had
+  routed research; they were rows in a throwaway directory, and that correction
+  stands. What has changed is the deployment: the kernel is on `production` and
+  the design tick runs there. What has *not* changed is the separation Step 3
+  drew — a deployed tick is not a fired worker, and the design lane is proven
+  only by a bin a worker actually answered.
 
 **The sharpest limitation, because it is the one most worth being honest about:
 the judged lane reads a structured description of the rendered page, not the
@@ -7929,6 +7954,7 @@ blueprints/             the blueprint and its amendments, preserved with their h
 objectives/             software objectives a person approved, in the image by design
 scripts/
   design.ts                 render a real screen, measure it, and ask what is next
+  design.sh                 the half that reads rows, inside the deployed container
   capability.ts             the kernel's operator surface: register, advance, derive
   factory.ts                the operator's factory surface: register, submit, run
   manufacturing.ts          the programme's terminal door, until a surface exists
