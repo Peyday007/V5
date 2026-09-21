@@ -18,13 +18,13 @@
  * the door; this reads the answers the doors hand out and prints them, which is
  * the thing a person was being told wrongly.
  *
- * Read-only by construction: it opens the database, calls projections that
- * write nothing, prints, and closes. It activates nothing, adopts nothing,
- * renames nobody and starts no programme. Two projections *do* write, and
- * saying so exactly is better than a sentence that is nearly true:
- * `connectionView` assigns a connection its three names and reconciles its
- * state against rows, exactly as §34 records — neither creates an account, a
- * Routine, a worker, a credential or a bin.
+ * It activates nothing, adopts nothing, renames nobody, starts no programme,
+ * enqueues nothing and fires nothing. It is **not** literally read-only, and
+ * saying so exactly is better than a sentence that is nearly true: calling
+ * `connectionView` is what a member's own page call does, so it assigns a
+ * connection its three names and reconciles its state against rows — the two
+ * writes §34 already names, neither of which creates an account, a Routine, a
+ * worker, a credential or a bin. Everything else here is a projection.
  *
  * No credential is read or printed.
  */
