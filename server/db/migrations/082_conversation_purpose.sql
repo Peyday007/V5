@@ -74,6 +74,36 @@ UPDATE russell_conversations
                  WHERE s.conversation_id = russell_conversations.id)
    );
 
+-- What the repair is about to remove, written down before it removes it.
+--
+-- `russell_conversation_context` is append-only and exists for exactly this:
+-- the history of what a thread was attached to and why. `attachConversation`
+-- writes a row on every attachment and `createConversation` never did, so the
+-- value this clears was recorded nowhere at all — and clearing it silently
+-- would be the one thing §5 does not allow. `MIGRATED` is the source vocabulary
+-- already has for a change a migration made. The row records what the thread is
+-- attached to *after* the decision — NULL — exactly as `attachConversation`
+-- does, and the reason names the project it was detached from, which is the
+-- table's own comment: "Russell detached this" is a decision worth recording.
+INSERT INTO russell_conversation_context
+  (id, conversation_id, project_id, source, confidence, reason, actor_user_id, created_at)
+SELECT
+  'rcx_m082_' || substr(id, 5, 20),
+  id,
+  NULL,
+  'MIGRATED',
+  NULL,
+  'Detached from ' || project_id || ' by migration 082: this thread carried a project and '
+    || 'attachment_source = ''NONE'', which is the schema''s own way of saying nothing attached '
+    || 'it. It was the value a client default wrote. Re-attach it from the conversation if it '
+    || 'really is about that project.',
+  NULL,
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+FROM russell_conversations
+WHERE purpose = 'GENERAL'
+  AND project_id IS NOT NULL
+  AND attachment_source = 'NONE';
+
 -- The repair. `attachment_source = 'NONE'` says nothing attached this thread,
 -- so a project on it is a value the default wrote and no reader can defend.
 -- Guarded on the purpose the two passes above established, so a thread that

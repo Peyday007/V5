@@ -31,6 +31,31 @@ UPDATE russell_conversations AS rc
                  WHERE s.conversation_id = rc.id)
    );
 
+-- What the repair is about to remove, written down before it removes it. See
+-- the SQLite file: `createConversation` never wrote a context row, so the value
+-- this clears was recorded nowhere, and clearing it silently is the one thing
+-- §5 does not allow. The timestamp expression is the dialect's own; the rest is
+-- the same rule, because two chains disagreeing about which threads are general
+-- would mean the two backends disagreed about a person's conversation list.
+INSERT INTO russell_conversation_context
+  (id, conversation_id, project_id, source, confidence, reason, actor_user_id, created_at)
+SELECT
+  'rcx_m082_' || substr(id, 5, 20),
+  id,
+  NULL,
+  'MIGRATED',
+  NULL,
+  'Detached from ' || project_id || ' by migration 082: this thread carried a project and '
+    || 'attachment_source = ''NONE'', which is the schema''s own way of saying nothing attached '
+    || 'it. It was the value a client default wrote. Re-attach it from the conversation if it '
+    || 'really is about that project.',
+  NULL,
+  to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+FROM russell_conversations
+WHERE purpose = 'GENERAL'
+  AND project_id IS NOT NULL
+  AND attachment_source = 'NONE';
+
 UPDATE russell_conversations
    SET project_id = NULL,
        attachment_confidence = NULL
