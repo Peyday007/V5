@@ -32,11 +32,19 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'cash | people | fleet | refinement | product'
+        description: 'cash | people | fleet | refinement | product | candidate | packet | routing | projects | campaigns | campaign | bins'
         required: true
         default: cash
       project:
         description: 'Optional project id (prj_...), for cash and refinement'
+        required: false
+        default: ''
+      ref:
+        description: 'A row id, for the reads that take one: rcn_… for candidate, orc_… for packet'
+        required: false
+        default: ''
+      campaign:
+        description: 'Optional campaign id (fcp_...), for campaign and bins'
         required: false
         default: ''
 
@@ -60,6 +68,25 @@ jobs:
           set -eu
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           project="${{ inputs.project }}"
+          ref="${{ inputs.ref }}"
+          campaign="${{ inputs.campaign }}"
+
+          # An id is letters, digits, underscore and dash. Refused rather than
+          # escaped, because a value a shell could act on is a way to run
+          # something else inside the container however the dispatcher meant
+          # it — the same rule `factory.yml` already applies to its own ids,
+          # which this file wanted the moment it grew a second id input. The
+          # per-read prefix checks below are kept as well: this says an id is
+          # an id, and those say *which* id each read wants.
+          for value in "$project" "$ref" "$campaign"; do
+            case "$value" in
+              '') ;;
+              *[!A-Za-z0-9_-]*)
+                echo "::error::Refusing an id that is not letters, digits, underscore or dash."
+                exit 1
+                ;;
+            esac
+          done
 
           # The allowlist is the control. The input's description is a label,
           # and a label is not a guard: a command composed from free text would
@@ -81,6 +108,71 @@ jobs:
             product)
               cmd="sh /app/scripts/closeout-verify.sh"
               marker='^CLOSEOUT-VERIFY: OK'
+              ;;
+            candidate)
+              # Read-only: `step10 candidate` prints an idea, the missions it
+              # produced and the packet each one points at. It belongs here
+              # rather than on `step10.yml` for this file's own reason — that
+              # workflow shares the deploy group, and a read starved by every
+              # deploy in a busy repository is a read nobody can take.
+              [ -n "$ref" ] || { echo "::error::candidate needs a ref (rcn_...)."; exit 1; }
+              case "$ref" in
+                rcn_*) ;;
+                *) echo "::error::A candidate ref is an rcn_ id."; exit 1 ;;
+              esac
+              cmd="sh /app/scripts/step10.sh candidate $ref"
+              marker='^STEP10: OK'
+              ;;
+            packet)
+              # Read-only: the packet's fragments, passes, claims and work
+              # items, which is where a production reading resolves to the
+              # worker that produced it.
+              [ -n "$ref" ] || { echo "::error::packet needs a ref (orc_...)."; exit 1; }
+              case "$ref" in
+                orc_*) ;;
+                *) echo "::error::A packet ref is an orc_ id."; exit 1 ;;
+              esac
+              cmd="sh /app/scripts/packet-report.sh --orchestration $ref"
+              marker='^PACKET-REPORT'
+              ;;
+            # ----------------------------------------------------------------
+            # The factory's own reads.
+            #
+            # Every one of these opens the database, prints and closes: no
+            # enqueue, no claim, no dispatch, no migration, no deploy. They are
+            # here rather than in `factory.yml` and `routing.yml` for this
+            # file's own stated reason — those two share the `deploy-brain`
+            # group, GitHub keeps exactly one *pending* run per group, and with
+            # a dozen sessions working this repository a read that queues is a
+            # read that gets cancelled before it starts. Measured: four
+            # consecutive `Routing show` dispatches cancelled without running.
+            #
+            # The writes stay where they are. `factory submit`, `approve` and
+            # `remote-tick` change rows a deploy could be racing, and they
+            # belong behind the group that waits for one.
+            # ----------------------------------------------------------------
+            routing)
+              cmd="sh /app/scripts/admin.sh routing show"
+              marker='.'
+              ;;
+            projects)
+              cmd="sh /app/scripts/admin.sh projects list"
+              marker='.'
+              ;;
+            campaigns)
+              cmd="sh /app/scripts/factory.sh campaigns"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              marker='.'
+              ;;
+            campaign)
+              [ -n "$campaign" ] || { echo "::error::campaign needs a campaign id."; exit 1; }
+              cmd="sh /app/scripts/factory.sh status --campaign $campaign"
+              marker='^campaign '
+              ;;
+            bins)
+              [ -n "$campaign" ] || { echo "::error::bins needs a campaign id."; exit 1; }
+              cmd="sh /app/scripts/factory.sh bins --campaign $campaign"
+              marker='.'
               ;;
             refinement)
               cmd="sh /app/scripts/refinement-report.sh"

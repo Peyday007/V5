@@ -28,6 +28,8 @@ function session(over: Partial<FactorySession> = {}): FactorySession {
     model: 'sonnet',
     state: 'FINISHED',
     exitReason: null,
+    binId: null,
+    leaseGeneration: null,
     durationMs: 60_000,
     numTurns: null,
     usage: null,

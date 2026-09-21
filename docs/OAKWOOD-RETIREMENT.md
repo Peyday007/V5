@@ -211,13 +211,21 @@ for future explicitly authorized repositories, and that onboarding one create
 isolated authorization rather than reusing Oakwood as a permanent executor. That
 is now structural rather than a promise:
 
-- `REPOSITORY_GRANTS` in `services/factory/repositoryEnvelope.ts` is `[]`. No
-  campaign can be created against any repository, Oakwood included.
-- **No worker is registered for any repository.** Even with a grant, nothing
-  could claim the work.
-- `V5` stays deliberately absent from the envelope: a campaign that could
-  rewrite the machinery executing it is the one whose failure mode is not
-  contained by declining a pull request.
+- `REPOSITORY_GRANTS` in `services/factory/repositoryEnvelope.ts` held `[]`
+  when this was written. **Oakwood is still not in it and that has not
+  changed**, which is the claim this record exists to make; what has changed is
+  that the list is no longer empty — it grants `brain-worker-bootstrap` and
+  `brain`, neither of which is Oakwood, and `decideRepository` still refuses
+  `oakwood-junk-removal` in every spelling.
+- **No worker was registered for any repository** when this was written.
+  Onboarding registers one per grant now; none of them is registered for
+  Oakwood, and a worker's `worker_routing` row is exhaustive, so a worker
+  onboarded for one repository can never be handed another's bin.
+- `V5` stayed deliberately absent at the time. The owner has since named Brain
+  as an intended target and the envelope grants `brain`; the containment there
+  is the grant's `forbiddenPaths` rather than absence. **That is a different
+  decision from this one and does not reopen it:** Oakwood's retirement is a
+  standing operator instruction and stands.
 
 Onboarding a repository is therefore three deliberate acts — a reviewed envelope
 grant, a `worker_routing` row, and push access where that worker runs — and any
