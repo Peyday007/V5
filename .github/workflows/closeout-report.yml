@@ -32,11 +32,15 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'cash | people | fleet | refinement | product | routing | projects | campaigns | campaign | bins'
+        description: 'cash | people | fleet | refinement | product | candidate | packet | routing | projects | campaigns | campaign | bins'
         required: true
         default: cash
       project:
-        description: 'Optional project id (prj_...), for cash, refinement and campaigns'
+        description: 'Optional project id (prj_...), for cash and refinement'
+        required: false
+        default: ''
+      ref:
+        description: 'A row id, for the reads that take one: rcn_… for candidate, orc_… for packet'
         required: false
         default: ''
       campaign:
@@ -64,14 +68,17 @@ jobs:
           set -eu
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           project="${{ inputs.project }}"
+          ref="${{ inputs.ref }}"
           campaign="${{ inputs.campaign }}"
 
           # An id is letters, digits, underscore and dash. Refused rather than
           # escaped, because a value a shell could act on is a way to run
           # something else inside the container however the dispatcher meant
           # it — the same rule `factory.yml` already applies to its own ids,
-          # which this file wanted the moment it grew a second id input.
-          for value in "$project" "$campaign"; do
+          # which this file wanted the moment it grew a second id input. The
+          # per-read prefix checks below are kept as well: this says an id is
+          # an id, and those say *which* id each read wants.
+          for value in "$project" "$ref" "$campaign"; do
             case "$value" in
               '') ;;
               *[!A-Za-z0-9_-]*)
@@ -102,10 +109,31 @@ jobs:
               cmd="sh /app/scripts/closeout-verify.sh"
               marker='^CLOSEOUT-VERIFY: OK'
               ;;
-            refinement)
-              cmd="sh /app/scripts/refinement-report.sh"
-              [ -n "$project" ] && cmd="$cmd --project $project"
-              marker='^REFINEMENT-REPORT: OK'
+            candidate)
+              # Read-only: `step10 candidate` prints an idea, the missions it
+              # produced and the packet each one points at. It belongs here
+              # rather than on `step10.yml` for this file's own reason — that
+              # workflow shares the deploy group, and a read starved by every
+              # deploy in a busy repository is a read nobody can take.
+              [ -n "$ref" ] || { echo "::error::candidate needs a ref (rcn_...)."; exit 1; }
+              case "$ref" in
+                rcn_*) ;;
+                *) echo "::error::A candidate ref is an rcn_ id."; exit 1 ;;
+              esac
+              cmd="sh /app/scripts/step10.sh candidate $ref"
+              marker='^STEP10: OK'
+              ;;
+            packet)
+              # Read-only: the packet's fragments, passes, claims and work
+              # items, which is where a production reading resolves to the
+              # worker that produced it.
+              [ -n "$ref" ] || { echo "::error::packet needs a ref (orc_...)."; exit 1; }
+              case "$ref" in
+                orc_*) ;;
+                *) echo "::error::A packet ref is an orc_ id."; exit 1 ;;
+              esac
+              cmd="sh /app/scripts/packet-report.sh --orchestration $ref"
+              marker='^PACKET-REPORT'
               ;;
             # ----------------------------------------------------------------
             # The factory's own reads.
@@ -145,6 +173,11 @@ jobs:
               [ -n "$campaign" ] || { echo "::error::bins needs a campaign id."; exit 1; }
               cmd="sh /app/scripts/factory.sh bins --campaign $campaign"
               marker='.'
+              ;;
+            refinement)
+              cmd="sh /app/scripts/refinement-report.sh"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              marker='^REFINEMENT-REPORT: OK'
               ;;
             *)
               echo "::error::Unknown report '${{ inputs.what }}'."
