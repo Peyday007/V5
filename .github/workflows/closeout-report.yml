@@ -93,8 +93,22 @@ jobs:
               ;;
           esac
 
+          # One pooler client, asked for at the call site as well as inside the
+          # script.
+          #
+          # `BRAIN_DATABASE_POOL_SIZE` is read from the process environment, so
+          # setting it here reaches an image whose copy of the script predates
+          # the line that sets it — which is exactly the case an operator read
+          # is for: the app that needs reading is the one already running. The
+          # scripts use `${BRAIN_DATABASE_POOL_SIZE:-1}`, so this agrees with
+          # them rather than overriding anything.
+          #
+          # Measured: read beside a deploy's own verification, `cash-report`
+          # printed a whole sprint and died on its last query with
+          # `EMAXCONNSESSION ... pool_size: 15`.
           set +e
-          flyctl ssh console --app "$app" -C "$cmd" 2>&1 | tee closeout-report.txt
+          flyctl ssh console --app "$app" \
+            -C "sh -c 'BRAIN_DATABASE_POOL_SIZE=1 $cmd'" 2>&1 | tee closeout-report.txt
           set -e
           grep -q "$marker" closeout-report.txt
 
