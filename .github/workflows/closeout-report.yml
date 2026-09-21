@@ -1,0 +1,211 @@
+# Reading production for the Russell product-foundation closeout.
+#
+# ---------------------------------------------------------------------------
+# Why this exists rather than a `--report` flag on one of the others
+# ---------------------------------------------------------------------------
+#
+# Every read-only report in this repository shares one concurrency group,
+# `deploy-brain`, and the reason for that is sound: a deploy replaces the
+# machine, and a report that raced a restart would be reporting whichever half
+# answered.
+#
+# The measured cost of it is that a read cannot be taken at all. GitHub keeps
+# exactly one *pending* run per group, so a new dispatch cancels the one that
+# was waiting — and with a dozen sessions working this repository at once, four
+# consecutive attempts at `Cash report` were cancelled before any of them
+# started. A reading you cannot take is not a control; it is a reading nobody
+# has.
+#
+# So this one carries its own group, and the reason that is safe rather than a
+# hole in the rule is specific: **the database is not on the machine.** In
+# cloud mode the rows are in Supabase Postgres and the documents are in the
+# bucket (§18), so a restart does not change what this reads. What a restart
+# can do is interrupt the ssh session, and that fails loudly with a missing
+# `OK` line rather than quietly reporting half a Brain.
+#
+# It is read-only in the script as well as here: `cash-report.ts`,
+# `admin.ts people list` and `fleet.ts show` open the database, print and
+# close. No deploy, no restart, no migration, no write.
+name: Closeout report
+
+on:
+  workflow_dispatch:
+    inputs:
+      what:
+        description: 'cash | people | fleet | refinement | product | candidate | packet | routing | projects | campaigns | campaign | bins'
+        required: true
+        default: cash
+      project:
+        description: 'Optional project id (prj_...), for cash and refinement'
+        required: false
+        default: ''
+      ref:
+        description: 'A row id, for the reads that take one: rcn_… for candidate, orc_… for packet'
+        required: false
+        default: ''
+      campaign:
+        description: 'Optional campaign id (fcp_...), for campaign and bins'
+        required: false
+        default: ''
+
+concurrency:
+  group: closeout-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -eu
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          project="${{ inputs.project }}"
+          ref="${{ inputs.ref }}"
+          campaign="${{ inputs.campaign }}"
+
+          # An id is letters, digits, underscore and dash. Refused rather than
+          # escaped, because a value a shell could act on is a way to run
+          # something else inside the container however the dispatcher meant
+          # it — the same rule `factory.yml` already applies to its own ids,
+          # which this file wanted the moment it grew a second id input. The
+          # per-read prefix checks below are kept as well: this says an id is
+          # an id, and those say *which* id each read wants.
+          for value in "$project" "$ref" "$campaign"; do
+            case "$value" in
+              '') ;;
+              *[!A-Za-z0-9_-]*)
+                echo "::error::Refusing an id that is not letters, digits, underscore or dash."
+                exit 1
+                ;;
+            esac
+          done
+
+          # The allowlist is the control. The input's description is a label,
+          # and a label is not a guard: a command composed from free text would
+          # be a way to run anything inside the container.
+          case "${{ inputs.what }}" in
+            cash)
+              cmd="sh /app/scripts/cash-report.sh"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              marker='^CASH-REPORT: OK'
+              ;;
+            people)
+              cmd="sh /app/scripts/admin.sh people list"
+              marker='kind=PERSON'
+              ;;
+            fleet)
+              cmd="sh /app/scripts/fleet.sh show"
+              marker='.'
+              ;;
+            product)
+              cmd="sh /app/scripts/closeout-verify.sh"
+              marker='^CLOSEOUT-VERIFY: OK'
+              ;;
+            candidate)
+              # Read-only: `step10 candidate` prints an idea, the missions it
+              # produced and the packet each one points at. It belongs here
+              # rather than on `step10.yml` for this file's own reason — that
+              # workflow shares the deploy group, and a read starved by every
+              # deploy in a busy repository is a read nobody can take.
+              [ -n "$ref" ] || { echo "::error::candidate needs a ref (rcn_...)."; exit 1; }
+              case "$ref" in
+                rcn_*) ;;
+                *) echo "::error::A candidate ref is an rcn_ id."; exit 1 ;;
+              esac
+              cmd="sh /app/scripts/step10.sh candidate $ref"
+              marker='^STEP10: OK'
+              ;;
+            packet)
+              # Read-only: the packet's fragments, passes, claims and work
+              # items, which is where a production reading resolves to the
+              # worker that produced it.
+              [ -n "$ref" ] || { echo "::error::packet needs a ref (orc_...)."; exit 1; }
+              case "$ref" in
+                orc_*) ;;
+                *) echo "::error::A packet ref is an orc_ id."; exit 1 ;;
+              esac
+              cmd="sh /app/scripts/packet-report.sh --orchestration $ref"
+              marker='^PACKET-REPORT'
+              ;;
+            # ----------------------------------------------------------------
+            # The factory's own reads.
+            #
+            # Every one of these opens the database, prints and closes: no
+            # enqueue, no claim, no dispatch, no migration, no deploy. They are
+            # here rather than in `factory.yml` and `routing.yml` for this
+            # file's own stated reason — those two share the `deploy-brain`
+            # group, GitHub keeps exactly one *pending* run per group, and with
+            # a dozen sessions working this repository a read that queues is a
+            # read that gets cancelled before it starts. Measured: four
+            # consecutive `Routing show` dispatches cancelled without running.
+            #
+            # The writes stay where they are. `factory submit`, `approve` and
+            # `remote-tick` change rows a deploy could be racing, and they
+            # belong behind the group that waits for one.
+            # ----------------------------------------------------------------
+            routing)
+              cmd="sh /app/scripts/admin.sh routing show"
+              marker='.'
+              ;;
+            projects)
+              cmd="sh /app/scripts/admin.sh projects list"
+              marker='.'
+              ;;
+            campaigns)
+              cmd="sh /app/scripts/factory.sh campaigns"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              marker='.'
+              ;;
+            campaign)
+              [ -n "$campaign" ] || { echo "::error::campaign needs a campaign id."; exit 1; }
+              cmd="sh /app/scripts/factory.sh status --campaign $campaign"
+              marker='^campaign '
+              ;;
+            bins)
+              [ -n "$campaign" ] || { echo "::error::bins needs a campaign id."; exit 1; }
+              cmd="sh /app/scripts/factory.sh bins --campaign $campaign"
+              marker='.'
+              ;;
+            refinement)
+              cmd="sh /app/scripts/refinement-report.sh"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              marker='^REFINEMENT-REPORT: OK'
+              ;;
+            *)
+              echo "::error::Unknown report '${{ inputs.what }}'."
+              exit 1
+              ;;
+          esac
+
+          # One pooler client, asked for at the call site as well as inside the
+          # script.
+          #
+          # `BRAIN_DATABASE_POOL_SIZE` is read from the process environment, so
+          # setting it here reaches an image whose copy of the script predates
+          # the line that sets it — which is exactly the case an operator read
+          # is for: the app that needs reading is the one already running. The
+          # scripts use `${BRAIN_DATABASE_POOL_SIZE:-1}`, so this agrees with
+          # them rather than overriding anything.
+          #
+          # Measured: read beside a deploy's own verification, `cash-report`
+          # printed a whole sprint and died on its last query with
+          # `EMAXCONNSESSION ... pool_size: 15`.
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh -c 'BRAIN_DATABASE_POOL_SIZE=1 $cmd'" 2>&1 | tee closeout-report.txt
+          set -e
+          grep -q "$marker" closeout-report.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: closeout-report
+          path: closeout-report.txt

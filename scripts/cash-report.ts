@@ -34,6 +34,7 @@
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { industryView } from '../server/services/industry/view.ts';
+import { dealflowView } from '../server/services/dealflow/view.ts';
 import { listProjects } from '../server/repos/projects.ts';
 import { getCashMode, listCashEvents } from '../server/repos/cashMode.ts';
 import { listOpportunities } from '../server/repos/cashPortfolio.ts';
@@ -380,6 +381,164 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       }
       if (one.mechanisms.length > 0) console.log(`      structures: ${one.mechanisms.join(', ')}`);
       for (const constraint of one.constraints) console.log(`      constraint: ${trim(constraint)}`);
+    }
+  }
+
+  /*
+   * The cross-border dealflow kernel, reported in the order §15 of the brief
+   * asks for it: what exists, what is furthest along, what is blocking it, and
+   * what Brain would ask next.
+   *
+   * Every figure printed here is one the kernel derived from rows. There is no
+   * revenue line, because there is no revenue figure: what we earn is a fee
+   * under a structure nobody has chosen, and printing a number would be
+   * somebody else's published range multiplied by a transaction value and
+   * presented as arithmetic.
+   */
+  const dealflow = await dealflowView(projectId);
+  if (
+    dealflow.counts.categories > 0 ||
+    dealflow.counts.deals > 0 ||
+    dealflow.counts.liveQuestions > 0 ||
+    dealflow.counts.observations > 0
+  ) {
+    console.log('');
+    console.log(
+      `DEALFLOW — categories=${dealflow.counts.categories} buyers=${dealflow.counts.buyers} ` +
+        `suppliers=${dealflow.counts.suppliers} deals=${dealflow.counts.deals} ` +
+        `outreach_ready=${dealflow.counts.outreachReady} blocked=${dealflow.counts.blocked} ` +
+        `questions=${dealflow.counts.liveQuestions}/${dealflow.counts.questionSlots}`,
+    );
+    if (dealflow.gate) console.log(`  ${trim(dealflow.gate)}`);
+
+    for (const category of dealflow.categories) {
+      console.log(
+        `  ${category.equipmentClass} — buyers=${category.buyers} ` +
+          `suppliers=${category.suppliers} deals=${category.deals} ` +
+          `costs=${category.costLines} structures=${category.attestedStructures}` +
+          (category.markets.length > 0 ? ` markets=${category.markets.join(', ')}` : '') +
+          (category.liveQuestions > 0 ? ' (a question is running)' : ''),
+      );
+    }
+
+    /*
+     * Every party with the claim that established it, because §4's whole rule
+     * is that a party is a row a gated claim produced rather than a name
+     * somebody typed. A reader who cannot walk from the name to the passage
+     * cannot check it.
+     */
+    if (dealflow.buyers.length > 0 || dealflow.suppliers.length > 0) {
+      console.log('');
+      console.log('DEALFLOW PARTIES');
+      for (const party of [...dealflow.buyers, ...dealflow.suppliers]) {
+        const side = dealflow.buyers.includes(party) ? 'BUYER' : 'SUPPLIER';
+        console.log(
+          `  [${side}] ${party.id}  ${party.name}` +
+            (party.country ? ` — ${party.country}` : '') +
+            `  class=${party.equipmentClass} deals=${party.deals}`,
+        );
+        console.log(
+          `      from claim: ${party.sourceClaimId ?? '— (seeded by a person, not a claim)'}` +
+            (party.decisionMaker ? `  decision maker: ${trim(party.decisionMaker)}` : ''),
+        );
+      }
+    }
+
+    /*
+     * The five layers, each named with its own reading.
+     *
+     * A count of unresearched layers says how many are missing; only the list
+     * says which, and the whole point of the five not collapsing is that they
+     * have different remedies. NOT_ESTABLISHED is printed as loudly as the
+     * others, because an absence of rows reading as a clearance is the one
+     * mistake here that gets equipment built for a market it cannot enter.
+     */
+    for (const market of dealflow.markets) {
+      console.log(
+        `  ${market.destination}: buyers=${market.buyers} deals=${market.deals} — ` +
+          market.envelopes
+            .map(
+              (one) =>
+                `${one.equipmentClass}=${one.verdict}` +
+                (one.unestablished > 0 ? `(${one.unestablished} unresearched)` : ''),
+            )
+            .join(' '),
+      );
+      for (const envelope of market.envelopes) {
+        console.log(
+          `      ${envelope.equipmentClass}: ` +
+            envelope.layers.map((one) => `${one.layer}=${one.reading}`).join(' '),
+        );
+      }
+    }
+
+    if (dealflow.deals.length > 0) {
+      console.log('');
+      console.log('DEAL CANDIDATES (furthest along first)');
+      for (const deal of dealflow.deals.slice(0, 20)) {
+        console.log(
+          `  [${deal.stage}] ${deal.id}  ${deal.buyer} \u2194 ${deal.supplier} — ` +
+            `${deal.equipmentClass}` +
+            (deal.destination ? ` into ${deal.destination}` : ' (market unknown)'),
+        );
+        // Whether this deal became work Cash Mode is pursuing, and nothing
+        // about whether anybody may act on it: that is the standing commercial
+        // grant, which this report prints separately and which is a different
+        // decision by a different person.
+        console.log(
+          `      opportunity: ${deal.opportunityId ?? '— (not promoted; nothing has been created)'}`,
+        );
+        console.log(
+          `      transaction=${
+            deal.transactionValueCents === null
+              ? 'WITHHELD'
+              : `${deal.transactionValueCents} ${deal.currency ?? ''}`.trim()
+          } our_revenue=not-stated capital=${deal.capitalClass ?? 'unknown'}`,
+        );
+        if (deal.paidWhen) console.log(`      paid: ${trim(deal.paidWhen)}`);
+        console.log(`      because: ${trim(deal.because)}`);
+        if (deal.blocker) console.log(`      blocker: ${trim(deal.blocker)}`);
+        if (deal.nextAction) console.log(`      next: ${trim(deal.nextAction)}`);
+        if (deal.outstanding.length > 0) {
+          console.log(`      outstanding: ${deal.outstanding.join('; ')}`);
+        }
+      }
+    }
+
+    if (dealflow.live.length > 0) {
+      console.log('');
+      console.log('DEALFLOW QUESTIONS RUNNING');
+      for (const question of dealflow.live) {
+        console.log(
+          `  ${question.purpose} round ${question.round} — ${trim(question.subject)}`,
+        );
+        // The round and the idea it is, so a reader can walk from the question
+        // to the mission, the packet, the work item and the claims.
+        console.log(
+          `      round: ${question.id}  candidate: ${question.candidateId}  ` +
+            `opened ${question.openedAt}`,
+        );
+      }
+    }
+
+    if (dealflow.next.length > 0) {
+      console.log('');
+      console.log('WHAT THE DEALFLOW KERNEL WOULD ASK NEXT (reading this creates nothing)');
+      for (const next of dealflow.next) {
+        console.log(`  ${next.purpose} — ${trim(next.subject)}`);
+        console.log(`    because: ${trim(next.why)}`);
+      }
+    }
+    for (const declined of dealflow.declined.slice(0, 10)) {
+      console.log(`  not asked: ${trim(declined.subject)} — ${trim(declined.why)}`);
+    }
+
+    if (dealflow.lessons.length > 0) {
+      console.log('');
+      console.log(`WHAT THE ATTEMPTS TAUGHT (${dealflow.lessons.length})`);
+      for (const lesson of dealflow.lessons) {
+        console.log(`  ${lesson.kind} — ${trim(lesson.says)}`);
+      }
     }
   }
 

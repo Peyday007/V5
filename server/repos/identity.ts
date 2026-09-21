@@ -38,6 +38,7 @@ import type {
 } from '../domain/types.ts';
 import { WORKER_SCOPES } from '../domain/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
+import { identitiesOf, signInName, signInNameIsTaken } from '../domain/signInName.ts';
 // Safe in this direction only: repos/oauth.ts imports nothing from here, so
 // there is no cycle. Archiving revokes tokens through the same function the
 // console's Disable uses rather than repeating the statement.
@@ -323,44 +324,95 @@ export async function getPasswordVerifierByEmail(
 }
 
 /**
- * Who a typed identity names, for the PIN door and for nothing else.
+ * What a typed identity resolves to at the PIN door.
  *
- * An address, or a display name when it is **unambiguous**. Members enrolled
- * with a link hold no address at all — that is the whole of what migration 062
- * made possible — so an email-only lookup would have a PIN they could never
- * present. Two people sharing a display name resolve to nobody rather than to
- * whichever row sorted first, because signing somebody in as the wrong person
- * is worse than refusing them both.
- *
- * It returns the verifier, so it is named like the password one and for the
- * same reason: nothing may reach a verifier while looking for a user.
+ * Three outcomes rather than a row-or-null, because two of the three have
+ * different remedies and only one of them is the caller's problem. `AMBIGUOUS`
+ * is a condition an **administrator** has to correct and the person typing can
+ * do nothing about, so it has to be distinguishable *here* even though the
+ * refusal the caller receives must not distinguish it (invariant 23).
  */
-export async function getPinCredentialByIdentity(
-  identity: string,
-): Promise<{ user: User; verifier: string | null } | null> {
-  const typed = identity.trim();
-  if (typed.length === 0) return null;
+export type PinIdentityLookup =
+  | { outcome: 'FOUND'; user: User; verifier: string | null }
+  | { outcome: 'AMBIGUOUS'; candidates: number }
+  | { outcome: 'NONE' };
 
-  const byEmail = await getDb().get<UserRow>('SELECT * FROM users WHERE email = ?', [
-    normalizeEmail(typed),
-  ]);
-  const row =
-    byEmail ??
-    (await (async (): Promise<UserRow | null> => {
-      // Exactly one, or none. `LIMIT 2` rather than `LIMIT 1` is the whole
-      // check: it is how ambiguity is *seen* rather than silently resolved.
-      const named = await getDb().all<UserRow>(
-        'SELECT * FROM users WHERE display_name = ? ORDER BY id LIMIT 2',
-        [typed],
-      );
-      return named.length === 1 ? (named[0] ?? null) : null;
-    })());
+export async function getPinCredentialByIdentity(identity: string): Promise<PinIdentityLookup> {
+  const wanted = signInName(identity);
+  if (wanted.length === 0) return { outcome: 'NONE' };
 
-  if (!row) return null;
-  // The row comes back even with no PIN set, because the caller still has to
-  // spend the same time on it as it would on a real one — see
-  // `UNMATCHABLE_PIN_VERIFIER`. What it must not do is say which this was.
-  return { user: mapUser(row), verifier: row.pin_verifier };
+  /*
+   * The address first, because it is unique by index and therefore never
+   * ambiguous. A member enrolled from a link holds none, which is exactly why
+   * the name below has to work at all.
+   */
+  const byEmail = await getDb().get<UserRow>('SELECT * FROM users WHERE email = ?', [wanted]);
+  if (byEmail) return { outcome: 'FOUND', user: mapUser(byEmail), verifier: byEmail.pin_verifier };
+
+  /*
+   * SQL narrows; `signInName` decides.
+   *
+   * `LOWER` exists in both dialects and agrees with `toLowerCase` for the
+   * names this Brain actually holds, but a rule whose answer depends on which
+   * database is running is not one rule — and this repository has been told
+   * twice by the second backend that a statement true in one dialect is not
+   * true in the other. So the comparison that matters is re-applied in
+   * JavaScript, and SQL is allowed only to fetch too much.
+   */
+  const named = (
+    await getDb().all<UserRow>('SELECT * FROM users WHERE LOWER(display_name) = ? ORDER BY id', [
+      wanted,
+    ])
+  ).filter((row) => identitiesOf(mapUser(row)).includes(wanted));
+
+  /*
+   * Among the accounts that can actually be signed into.
+   *
+   * Filtering disabled rows out is not a convenience: a row nobody can ever
+   * present a credential for was making a live person unresolvable, so
+   * retiring somebody's account and inviting a new person of the same name
+   * locked the new person out on their first visit. A row that cannot be
+   * signed into cannot be the account somebody is claiming to be.
+   */
+  const live = named.filter((row) => row.disabled_at === null);
+  if (live.length === 1) {
+    const row = live[0] as UserRow;
+    // The row comes back even with no PIN set, because the caller still has to
+    // spend the same time on it as it would on a real one — see
+    // `UNMATCHABLE_PIN_VERIFIER`. What it must not do is say which this was.
+    return { outcome: 'FOUND', user: mapUser(row), verifier: row.pin_verifier };
+  }
+  if (live.length > 1) return { outcome: 'AMBIGUOUS', candidates: live.length };
+
+  /*
+   * Nothing live, so fall back to a retired row if exactly one names this.
+   *
+   * Purely so the refusal keeps its audit category: the caller is told the
+   * same sentence either way, and an administrator reading `identity_events`
+   * afterwards can tell *somebody tried a retired account* from *somebody
+   * tried a name that was never here*.
+   */
+  const retired = named.filter((row) => row.disabled_at !== null);
+  if (retired.length === 1) {
+    const row = retired[0] as UserRow;
+    return { outcome: 'FOUND', user: mapUser(row), verifier: row.pin_verifier };
+  }
+  return { outcome: 'NONE' };
+}
+
+/**
+ * Would this name collide with an identity somebody already signs in with?
+ *
+ * Asked of the whole table in JavaScript rather than with a `WHERE`, because
+ * this runs once when a name is *chosen* rather than on every sign-in, and the
+ * guard is the reader that must not miss one. `signInNameIsTaken` is the same
+ * rule the lookup and the People reading use.
+ */
+export async function signInNameTaken(
+  proposed: string,
+  options: { exceptUserId?: string } = {},
+): Promise<boolean> {
+  return signInNameIsTaken(proposed, await listUsers(), options);
 }
 
 export interface PinThrottleState {
@@ -476,6 +528,40 @@ export async function setUserDisabled(id: string, disabled: boolean): Promise<Us
   // Disabling ends every session that person holds, immediately. Leaving them
   // to expire would mean "disabled" described the next login and not this one.
   if (disabled) await revokeSessionsForUser(id);
+  return await getUser(id);
+}
+
+/**
+ * Change what a person is called, and nothing else.
+ *
+ * One column. Not the address, which is how they sign in and how they are
+ * contacted; not the administration flag; not a membership; not a credential.
+ * A rename is a fact about presentation, and a function that could quietly
+ * change any of the others while doing it would be a rename nobody could trust
+ * to be one.
+ *
+ * It is also the **answering transition for an ambiguous sign-in identity**
+ * (§46), which is why two sessions wrote it in the same week and why there is
+ * one of it rather than two. A reading that names a collision is a diagnosis
+ * rather than a remedy until something can correct one, and before this there
+ * was no rename anywhere in this repository — so a collision creatable by an
+ * ordinary invitation could not be corrected through any surface at all.
+ *
+ * **It does not decide whether the new name is allowed.** Both callers ask
+ * that first, and they ask the same two questions — `signInNameTaken`, because
+ * a name is a credential's other half, and `looksLikeAddress`, because an
+ * address is not a name. Putting the checks here instead was the obvious move
+ * and is wrong: a repository function that refused would have to decide what
+ * to do about it, and the two surfaces answer that differently — a browser
+ * gets a 422 it can render, a terminal gets a sentence and a non-zero exit.
+ */
+export async function renameUser(id: string, displayName: string): Promise<User | null> {
+  const at = nowIso();
+  await getDb().run('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?', [
+    displayName.trim(),
+    at,
+    id,
+  ]);
   return await getUser(id);
 }
 
@@ -1325,4 +1411,35 @@ export async function listIdentityEvents(
       params,
     )
   ).map(mapIdentityEvent);
+}
+
+/**
+ * Retire this account's PIN, so nothing about it opens the door any more.
+ *
+ * The counterpart to `setUserPin`, and deliberately not a call to it with a
+ * verifier nobody knows: a random verifier is still a verifier, and a column
+ * that holds one reads as *this account has a PIN* to `people.ts`,
+ * `foundation.ts` and the sign-in screen alike. NULL is the only value that
+ * means what a retirement means.
+ *
+ * The throttle goes with it for `setUserPin`'s reason — a cooldown earned
+ * against a credential that no longer exists is a punishment for a PIN nobody
+ * holds — and the sessions are ended by `issueRecovery`, which is the only
+ * caller and ends all of them anyway.
+ *
+ * Returns whether a PIN was actually there, so a recovery can record what it
+ * retired rather than asserting it.
+ */
+export async function clearUserPin(id: string): Promise<boolean> {
+  const before = await getUser(id);
+  if (!before || before.pinUpdatedAt === null) return false;
+  const at = nowIso();
+  await getDb().run(
+    `UPDATE users
+        SET pin_algorithm = NULL, pin_verifier = NULL, pin_updated_at = NULL,
+            pin_failed_count = 0, pin_locked_until = NULL, updated_at = ?
+      WHERE id = ?`,
+    [at, id],
+  );
+  return true;
 }

@@ -251,6 +251,24 @@ export const OAUTH_TOKEN_MARKER = 'brnt_';
  */
 export const INVITATION_MARKER = 'brnv_';
 
+/**
+ * A conversation bridge credential — a **person's**, not a worker's.
+ *
+ * Its own marker for the reason every other marker here has one, and for one
+ * more that matters much more: this is the only bearer in this Brain that
+ * resolves to a `HUMAN` principal. A value beginning `brnc_` and a value
+ * beginning `brnw_` authorize completely different things, and a lookup that
+ * only checked the shape would be one refactor away from letting a worker
+ * credential open a person's door or the reverse.
+ *
+ * Why a person needs a bearer at all, when a person already has a cookie: a
+ * conversation client is not a browser. It has no cookie jar, it posts JSON
+ * from another origin, and §21 refuses a cookie on exactly that surface
+ * because a cookie on a mutating cross-origin endpoint is a CSRF hole. The
+ * bearer is the correct credential for a client that sets its own headers.
+ */
+export const BRIDGE_CREDENTIAL_MARKER = 'brnc_';
+
 export interface GeneratedOAuthToken {
   plaintext: string;
   prefix: string;
@@ -261,6 +279,26 @@ export function generateOAuthToken(): GeneratedOAuthToken {
   const prefix = `${OAUTH_TOKEN_MARKER}${crypto.randomBytes(PREFIX_BYTES).toString('hex')}`;
   const secret = crypto.randomBytes(SECRET_BYTES).toString('base64url');
   return { plaintext: `${prefix}.${secret}`, prefix, digest: digestSecret(secret) };
+}
+
+export function generateBridgeCredential(): GeneratedOAuthToken {
+  const prefix = `${BRIDGE_CREDENTIAL_MARKER}${crypto.randomBytes(PREFIX_BYTES).toString('hex')}`;
+  const secret = crypto.randomBytes(SECRET_BYTES).toString('base64url');
+  return { plaintext: `${prefix}.${secret}`, prefix, digest: digestSecret(secret) };
+}
+
+/** The same shape rules again, against the bridge marker. */
+export function parseBridgeCredential(presented: string): ParsedOAuthToken | null {
+  if (typeof presented !== 'string') return null;
+  const trimmed = presented.trim();
+  if (!trimmed.startsWith(BRIDGE_CREDENTIAL_MARKER)) return null;
+  const dot = trimmed.indexOf('.');
+  if (dot <= BRIDGE_CREDENTIAL_MARKER.length) return null;
+  const prefix = trimmed.slice(0, dot);
+  const secret = trimmed.slice(dot + 1);
+  if (secret.length < 16 || /[^A-Za-z0-9_-]/.test(secret)) return null;
+  if (!/^brnc_[0-9a-f]{16}$/.test(prefix)) return null;
+  return { prefix, secret };
 }
 
 export function generateInvitationToken(): GeneratedOAuthToken {

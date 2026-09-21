@@ -37,6 +37,7 @@ import { reopenProjection } from '../server/services/audit/integrityReaudit.ts';
 import { binForOrchestration } from '../server/repos/bins.ts';
 import { listCoverage, listRequirements } from '../server/repos/reconciliation.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
+import { listAttempts, operationsForWorkItems } from '../server/repos/idempotency.ts';
 import { objectExists, objectSize, readObject, storageKeyOf } from '../server/services/storage.ts';
 import { getStorage, initStorage } from '../server/services/storage/index.ts';
 import { getCurrentExtractionRun } from '../server/repos/extraction.ts';
@@ -265,6 +266,46 @@ async function main(): Promise<void> {
         ` attempt ${item.attemptCount}/${item.maxAttempts}` +
         (item.workerId ? ` held by ${item.workerId}` : ''),
     );
+  }
+
+  /*
+   * What the failures actually recorded.
+   *
+   * A worker whose tool call throws internally is handed one opaque sentence,
+   * and the host's log buffer is measured in minutes — so by the time anybody
+   * reads the worker's report of it, the only surviving account is the
+   * `effect_attempts` row that `runIdempotent` writes outside the transaction
+   * it rolls back. This report already prints the item, the bin, the claims and
+   * the documents; it did not print that row, and ten production packets sat at
+   * NEEDS_HUMAN for days saying "nothing was recorded about why" while the
+   * reason was one join away.
+   *
+   * Read-only, bounded, and it reserves nothing. The detail is whatever the
+   * effect engine stored — already bounded, single-lined and stripped of
+   * anything credential-shaped before it reached the column.
+   */
+  const operations = await operationsForWorkItems(items.map((item) => item.id));
+  const unhappy = operations.filter((operation) => operation.state !== 'SUCCEEDED');
+  console.log('');
+  console.log(`OPERATIONS (${operations.length}, ${unhappy.length} not succeeded)`);
+  if (operations.length === 0) {
+    console.log('  (none — no work item here has reserved an effect)');
+  }
+  for (const operation of unhappy) {
+    console.log(
+      `  ${operation.id}  ${operation.namespace}  ${operation.state}` +
+        `  ${operation.failureCategory ?? 'no category'}` +
+        `  item ${operation.workItemId ?? '—'}`,
+    );
+    console.log(`      created ${operation.createdAt}  correlation ${operation.correlationId ?? '—'}`);
+    for (const attempt of await listAttempts(operation.id)) {
+      console.log(
+        `      attempt ${attempt.attemptNumber}  ${attempt.phase}` +
+          `  ${attempt.outcome ?? 'open'}  started ${attempt.startedAt}` +
+          `  ended ${attempt.endedAt ?? '—'}`,
+      );
+      if (attempt.detail) console.log(`        said ${attempt.detail}`);
+    }
   }
 
   /*

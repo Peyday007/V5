@@ -424,6 +424,35 @@ describe('who may reach it', () => {
     }
   });
 
+  it('sends the foundation matrix to an administrator and to nobody else', async () => {
+    /*
+     * It is a per-account judgement about *other people* — what each of them
+     * is short of, and which remedies only an administrator holds. So it is
+     * **absent** from an ordinary member's payload rather than emptied, which
+     * is the only form of that distinction a forgotten `.filter()` in a client
+     * cannot undo.
+     */
+    const asAdmin = await call<{ foundation?: { accounts: unknown[] } }>('GET', '/api/people', {
+      cookie: adminCookie,
+    });
+    expect(asAdmin.status).toBe(200);
+    expect(asAdmin.body?.foundation?.accounts.length, 'an administrator got no matrix').toBeTruthy();
+
+    for (const [who, cookie] of [
+      ['Airyn', airynCookie],
+      ['Caleb', calebCookie],
+    ] as const) {
+      const asMember = await call<Record<string, unknown>>('GET', '/api/people', { cookie });
+      expect(asMember.status, `${who} could not read the page at all`).toBe(200);
+      expect(
+        Object.prototype.hasOwnProperty.call(asMember.body ?? {}, 'foundation'),
+        `${who} was sent the foundation matrix`,
+      ).toBe(false);
+      // And no other account's state reached them under any other key.
+      expect(JSON.stringify(asMember.body ?? {})).not.toContain('BLOCKED');
+    }
+  });
+
   it('refuses a worker principal by type, however well scoped it is', async () => {
     for (const [method, route] of memberRoutes) {
       const answer = await call(method, route, {

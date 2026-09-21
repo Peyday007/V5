@@ -159,6 +159,22 @@ function useDepth(): [Depth, (next: Depth) => void] {
   return [depth, choose];
 }
 
+/**
+ * What an empty thread is called until somebody says something in it.
+ *
+ * The moment and nothing else. It is replaced by the server from the first
+ * message, so this only has to be distinguishable from the thread somebody
+ * started five minutes ago — which "New conversation" was not.
+ */
+function newThreadTitle(): string {
+  return `Conversation — ${new Date().toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+}
+
 export function RussellShell({
   navigation,
   user,
@@ -195,13 +211,21 @@ export function RussellShell({
       return;
     }
     let cancelled = false;
-    const title = `Conversation — ${new Date().toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })}`;
-    void RussellApi.openConversation(title, projectId).then(
+    const title = newThreadTitle();
+    /*
+     * No project, and that is the whole of the Deal Dispatch defect.
+     *
+     * This passed `projectId` — `projects[0]`, the first project the API
+     * happened to return — so every ordinary conversation in this Brain was
+     * created attached to the seeded project and filed under its name. Nobody
+     * chose it: the route's own default is null, and `attachment_source` on
+     * every one of those rows says `NONE`.
+     *
+     * A thread that turns out to be about a project is attached by the router
+     * when the person says something that identifies one, or by the person
+     * themselves. Opening a window is not evidence of either.
+     */
+    void RussellApi.openConversation(title, null).then(
       (created) => {
         if (!cancelled) setOpenedId(created.id);
       },
@@ -271,7 +295,17 @@ export function RussellShell({
   const startConversation = useCallback(() => {
     if (starting) return;
     setStarting(true);
-    void RussellApi.openConversation('New conversation', projectId).then(
+    /*
+     * Unattached, for the reason above, and named after when it was started
+     * rather than "New conversation".
+     *
+     * A list of six threads all called *New conversation* is a list nobody can
+     * navigate, and the name is the only thing distinguishing them until the
+     * first message arrives. The server renames it from that message the
+     * moment there is one — deterministically, from the person's own words —
+     * so this is what a thread is called for as long as it is empty.
+     */
+    void RussellApi.openConversation(newThreadTitle(), null).then(
       (created) => {
         setStarting(false);
         // Reload rather than patch: what is listed is what is stored.

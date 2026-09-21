@@ -20,7 +20,7 @@
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { PROJECTS_ROOT, DATA_ROOT, toDataRelative } from '../env.ts';
-import { sanitizeFilename } from '../domain/naming.ts';
+
 import { getStorage } from './storage/index.ts';
 import { contentTypeFor, documentKey, safeSegment } from './storage/keys.ts';
 import { activeStorageConfig } from './storage/index.ts';
@@ -265,7 +265,27 @@ export interface StoreFileInput {
 
 export async function storeFile(input: StoreFileInput): Promise<StoredFile> {
   const store = getStorage();
-  const filename = sanitizeFilename(path.basename(input.filename));
+  /*
+   * An object key, not a filename.
+   *
+   * `sanitizeFilename` answers the *filesystem* question and `safeSegment`
+   * answers the *storage* one, and this line is building a key. §33 already
+   * had to write that sentence once, about this exact pair of functions: the
+   * repair it produced hardened `safeSegment`, and `safeSegment` was reachable
+   * from here only through `documentKey`, on the branch taken when an
+   * `identity` is supplied — which no caller in this repository supplies. So
+   * every stored document took the other branch and a cash packet's report,
+   * whose canonical name carries the em dash §33 put there to stop four
+   * packets burying each other, produced a key the bucket answered 400
+   * InvalidKey to. Locally it worked, because a disk does not mind.
+   *
+   * The extension survives (`.` is inside the class), so the content type and
+   * every reader that looks at one are unaffected; the canonical name on the
+   * row is untouched, because that is the title a person reads and a key is an
+   * address. Two titles that reduce to one leaf are separated by `uniqueKey`
+   * exactly as two identical ones already were.
+   */
+  const filename = safeSegment(path.basename(input.filename), 'document');
 
   const key =
     store.kind === 'local' || !input.identity
@@ -297,9 +317,12 @@ export async function relocateFile(
   filename: string,
 ): Promise<StoredFile> {
   const store = getStorage();
+  // A key, for `storeFile`'s reason. `resolveImport` reaches this with the same
+  // canonical-derived name, so leaving it would keep the identical hole open on
+  // the path a person takes to confirm a parked import.
   const target = await uniqueKey(
     layerPrefix(projectSlug, layerSlug),
-    sanitizeFilename(path.basename(filename)),
+    safeSegment(path.basename(filename), 'document'),
   );
   const meta = await store.move(currentKey, target);
   return {

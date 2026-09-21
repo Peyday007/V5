@@ -32,7 +32,53 @@
  * `proposedSources` already does — and the categories arrive as claims that
  * cleared the evidence gate. A constant holding the brief's six levels would
  * encode the example sequence the brief explicitly refuses to mandate.
+ *
+ * ---------------------------------------------------------------------------
+ * The directive is carried here, or it is carried nowhere
+ * ---------------------------------------------------------------------------
+ *
+ * Every function below takes the parsed directive, and this is the whole of
+ * what makes naming and hashing a blueprint mean anything. A programme that
+ * recorded a path and a sha-256 and stopped there had proved the file had not
+ * changed and had never opened it: the directive's core principle, its
+ * evaluation dimensions, its compounding questions and its
+ * vertical-integration tests reached no worker, and the only thing an
+ * assignment actually carried was one sentence a person typed at start.
+ *
+ * So the brief's own sentences are pasted into the assignment, and
+ * `tests/manufacturingDirective.test.ts` drives a programme to an opened work
+ * item and asserts they are in the text a worker reads. That test fails if the
+ * hash keeps being written while the contents stop arriving, which is exactly
+ * the failure a hash cannot detect.
+ *
+ * `null` is accepted and is never silent: a programme whose directive could
+ * not be read says so in the assignment, rather than producing a question that
+ * reads almost right.
  */
+import {
+  compoundingBrief,
+  corePrincipleBrief,
+  dimension,
+  searchSpread,
+  type Directive,
+} from './directive.ts';
+
+/**
+ * What an assignment says when the directive could not be read.
+ *
+ * Said out loud rather than omitted. A worker whose assignment silently lost
+ * half its context answers a narrower question correctly and nobody can tell
+ * afterwards which question they answered.
+ */
+const DIRECTIVE_MISSING =
+  'The programme directive could not be read for this question, so the context below is the ' +
+  'objective alone. Report what you establish; somebody is being told separately that this ' +
+  'assignment went out without it.';
+
+function brief(directive: Directive | null, ...parts: (string | null)[]): string[] {
+  if (!directive) return [DIRECTIVE_MISSING];
+  return parts.filter((one): one is string => Boolean(one));
+}
 
 export const BOOTSTRAP_TITLE = 'Which classes of powered machine the sources actually recognise';
 
@@ -44,10 +90,23 @@ export const BOOTSTRAP_QUESTION =
   'it, saying which source recognises it, and reporting where two sources divide the same ' +
   'kind of machine differently rather than reconciling them?';
 
-export function bootstrapQuestion(objective: string, round: number): string {
+export function bootstrapQuestion(
+  objective: string,
+  round: number,
+  directive: Directive | null,
+): string {
   const parts = [
     BOOTSTRAP_QUESTION,
     `This is the starting ladder for a manufacturing programme whose objective is: ${objective}`,
+    /*
+     * The directive's example levels, as a spread to search across.
+     *
+     * `searchSpread` returns the bands and the directive's own refusal of its
+     * own ordering as one string, so there is no call here that could print a
+     * ladder. They are seeds and illustrations of scale — never rows, never an
+     * ordering, and nothing downstream compares a category to one.
+     */
+    ...brief(directive, directive && searchSpread(directive)),
     'Declare every class you establish with capability_finding set to PRODUCT_CATEGORY and ' +
       "capability_subject set to that class's own name. A category described in prose and not " +
       'declared does not reach the ladder.',
@@ -70,6 +129,7 @@ export function mapQuestion(input: {
   objective: string;
   round: number;
   childrenSoFar: number;
+  directive: Directive | null;
 }): string {
   const subject = input.path.join(' → ');
   const parts = [
@@ -78,6 +138,7 @@ export function mapQuestion(input: {
       'connected to it, whether because the same producers build both, because they are sold ' +
       'through the same channel, or because they share major components?',
     `This is for a manufacturing programme whose objective is: ${input.objective}`,
+    ...brief(input.directive, input.directive && searchSpread(input.directive)),
     'Declare every class you establish on its claim: capability_finding set to ' +
       "PRODUCT_CATEGORY or ADJACENT_CATEGORY, and capability_subject set to that class's own " +
       'name.',
@@ -115,6 +176,7 @@ export function demandQuestion(input: {
   objective: string;
   round: number;
   foundSoFar: number;
+  directive: Directive | null;
 }): string {
   const subject = input.path.join(' → ');
   const parts = [
@@ -126,6 +188,20 @@ export function demandQuestion(input: {
       'recalls, safety actions, service coverage, parts availability, documented failure modes ' +
       'and stated unmet requirements, where existing producers are weak.',
     `This is for a manufacturing programme whose objective is: ${input.objective}`,
+    /*
+     * The core principle and the two dimensions this round answers, in the
+     * directive's own words.
+     *
+     * This is the round the whole kernel is ordered around, so it is the one
+     * where a worker most needs to know *why* a dated observation is being
+     * insisted on rather than a market estimate.
+     */
+    ...brief(
+      input.directive,
+      input.directive && corePrincipleBrief(input.directive),
+      input.directive && dimension(input.directive, 'DEMAND'),
+      input.directive && dimension(input.directive, 'DISTRIBUTION'),
+    ),
     'Declare each one on its claim: DEMAND_EVIDENCE with the kind of observation it is and ' +
       'the date the source observed it, DISTRIBUTION_CHANNEL with the route, ' +
       'INCUMBENT_WEAKNESS with the kind of shortfall. An observation with no date is not a ' +
@@ -164,6 +240,7 @@ export function capabilityQuestion(input: {
   objective: string;
   round: number;
   knownSoFar: number;
+  directive: Directive | null;
 }): string {
   const subject = input.path.join(' → ');
   const parts = [
@@ -173,6 +250,13 @@ export function capabilityQuestion(input: {
       'level builds up that a producer did not have before; and what must be certified, ' +
       'approved, tooled, qualified or reached in scale before anybody may produce at all.',
     `This is for a manufacturing programme whose objective is: ${input.objective}`,
+    // The seven compounding questions are what this round is *for*, so they
+    // arrive as the directive wrote them rather than as a paraphrase.
+    ...brief(
+      input.directive,
+      input.directive && compoundingBrief(input.directive),
+      input.directive && dimension(input.directive, 'STRATEGIC VALUE'),
+    ),
     'Declare each one on its claim: CAPABILITY_REQUIRED for what producing needs, ' +
       'CAPABILITY_TAUGHT for what producing develops, ENTRY_BARRIER for what must be obtained ' +
       'first. Name a capability as shortly as it can be named while still being the same ' +
@@ -210,6 +294,7 @@ export function integrationQuestion(input: {
   path: readonly string[];
   objective: string;
   requiredSoFar: readonly string[];
+  directive: Directive | null;
 }): string {
   const subject = input.path.join(' → ');
   const parts = [
@@ -219,6 +304,15 @@ export function integrationQuestion(input: {
       'electronics, control systems, structures — how concentrated each supply is, and what ' +
       'making one in-house is published to require.',
     `This is for a manufacturing programme whose objective is: ${input.objective}`,
+    /*
+     * The directive's own integration test, carried verbatim.
+     *
+     * It opens *"Do NOT vertically integrate merely for ideological reasons"*
+     * and then names the seven things that should decide instead — which is
+     * precisely what a worker needs in order to report the right evidence
+     * without being asked for a recommendation.
+     */
+    ...brief(input.directive, input.directive && `The directive says: ${input.directive.integrationTests}`),
     'Declare each bought-in part with capability_finding set to BOUGHT_IN_COMPONENT and ' +
       "capability_subject set to the component's own name. Where a source establishes what " +
       'producing one in-house requires, declare that separately as CAPABILITY_REQUIRED.',
@@ -228,6 +322,134 @@ export function integrationQuestion(input: {
   if (input.requiredSoFar.length > 0) {
     parts.push(
       `Producing here is already established to require: ${input.requiredSoFar.join(', ')}.`,
+    );
+  }
+  return parts.join(' ');
+}
+
+export function capitalTitle(path: readonly string[]): string {
+  return `What entering ${path[path.length - 1] ?? 'this'} costs`;
+}
+
+/**
+ * The entry-cost question, which asks for figures and refuses estimates.
+ *
+ * The directive names *required capital* as the first item under ENTRY, and
+ * before this round existed a category could read as enterable with nothing
+ * anywhere saying what entering it would cost — a verdict about an easier
+ * question than the one asked.
+ *
+ * The half that decides whether this is worth having is what it says about a
+ * requirement nobody publishes a figure for. That is a **finding**, and the
+ * assignment says so twice: submit the requirement with no amount, and do not
+ * produce one of your own. A worker who believed a blank was a failure would
+ * fill it, and an invented figure at the number that starts a factory is the
+ * worst output this kernel could receive — worse than the blank, because a
+ * blank is visible and a plausible number is not.
+ */
+export function capitalQuestion(input: {
+  path: readonly string[];
+  objective: string;
+  round: number;
+  knownSoFar: number;
+  directive: Directive | null;
+}): string {
+  const subject = input.path.join(' → ');
+  const parts = [
+    `What does entering ${subject} actually cost, requirement by requirement? Establish, from ` +
+      'published sources, what a producer has to fund before selling anything and what each ' +
+      'item is published to cost: tooling and production equipment, a facility, certification ' +
+      'and type approval, engineering and development, working capital, inventory and parts, ' +
+      'onboarding suppliers, a distribution and service network, licences and intellectual ' +
+      'property, and test and validation. Give figures where a source publishes one, with the ' +
+      'currency and the date they were true, and say which of them is a price, a regulator’s ' +
+      'published fee, a comparable firm’s disclosure or somebody’s estimate.',
+    `This is for a manufacturing programme whose objective is: ${input.objective}`,
+    ...brief(
+      input.directive,
+      input.directive && dimension(input.directive, 'ENTRY'),
+      input.directive && dimension(input.directive, 'ECONOMICS'),
+    ),
+    'Declare each one with capability_finding set to CAPITAL_REQUIREMENT, capability_subject ' +
+      'set to which requirement it is, capability_qualifier set to which shape of the business ' +
+      'the figure is about, capability_basis set to what kind of figure it is, and ' +
+      'capability_observed_on set to the date it was true.',
+    '**Where a requirement is real and nothing publishes what it costs, submit it with no ' +
+      'amount at all.** That is a finding and it is recorded as one: Brain reports the ' +
+      'requirement and withholds any total rather than summing past it. Do not estimate, do ' +
+      'not scale a figure from another category, and do not fill a gap to complete a picture — ' +
+      'a plausible number here is worse than a blank, because a blank is visible afterwards ' +
+      'and a number is not.',
+  ];
+  if (input.round > 1 || input.knownSoFar > 0) {
+    parts.push(
+      `Brain already holds ${input.knownSoFar} costed requirement` +
+        (input.knownSoFar === 1 ? '' : 's') +
+        ' for this category. Report what those do not cover, and report a published figure for ' +
+        'any that Brain holds without one.',
+    );
+  }
+  return parts.join(' ');
+}
+
+export function acquisitionTitle(path: readonly string[]): string {
+  return `Who could be bought instead of built, for ${path[path.length - 1] ?? 'this'}`;
+}
+
+/**
+ * The acquisition question, which identifies and does nothing else.
+ *
+ * The directive's recursive behaviour asks Brain to *identify acquisition
+ * opportunities*, and its optimization rule gives the reason: *an acquisition
+ * could suddenly make an advanced category viable much earlier*. Identifying
+ * one is research about published sources, and it is built here.
+ *
+ * Everything that follows from one is not, stays separately authorized, and
+ * has no route through this kernel: no approach, no valuation Brain produced,
+ * no offer, no diligence commitment, no signing, no capital. The table the
+ * findings land in has no column any of those could be written into, which is
+ * the mechanism rather than a sentence in this comment — but the sentence is
+ * in the assignment too, because a worker who thinks they are scoping a deal
+ * writes different claims from one who knows they are naming candidates.
+ */
+export function acquisitionQuestion(input: {
+  path: readonly string[];
+  objective: string;
+  round: number;
+  missingCapabilities: readonly string[];
+  directive: Directive | null;
+}): string {
+  const subject = input.path.join(' → ');
+  const parts = [
+    `Which firms do published sources name as producers, suppliers, distributors or holders of ` +
+      `approvals in ${subject} — the kind of firm whose acquisition would supply a capability, ` +
+      'production capacity, a dealer or distribution network, a component supply, a ' +
+      'certification or approval, intellectual property, an engineering team or a market ' +
+      'position that would otherwise have to be built? Name each firm as the source names it ' +
+      'and say, from the source, what it actually holds.',
+    `This is for a manufacturing programme whose objective is: ${input.objective}`,
+    ...brief(input.directive, input.directive && dimension(input.directive, 'STRATEGIC VALUE')),
+    'Declare each with capability_finding set to ACQUISITION_CANDIDATE, capability_subject set ' +
+      'to the firm’s own name, and capability_qualifier set to what buying it would ' +
+      'contribute.',
+    'This is identification only. Do not approach anybody, do not value anything, do not ' +
+      'propose terms, do not estimate what a firm would sell for, and do not recommend buying ' +
+      'one. Whether to pursue any of these is a decision a person makes under a separate ' +
+      'authorization, and nothing in this programme can make it.',
+  ];
+  if (input.missingCapabilities.length > 0) {
+    parts.push(
+      'Producing here is established to require, and this company is not recorded as holding: ' +
+        `${input.missingCapabilities.join(', ')}. A firm that holds one of those is worth ` +
+        'naming for that reason.',
+    );
+  }
+  if (input.round > 1) {
+    parts.push(
+      `Brain has asked this of this category ${input.round - 1} time` +
+        (input.round === 2 ? '' : 's') +
+        ' before. Report firms it will not already hold, and say so plainly where the sources ' +
+        'name none.',
     );
   }
   return parts.join(' ');

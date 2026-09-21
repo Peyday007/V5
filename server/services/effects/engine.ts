@@ -54,6 +54,7 @@ import {
   type ReserveOutcome,
 } from '../../repos/idempotency.ts';
 import { proveLeaseOwnership, type OwnershipProof } from '../../repos/workQueue.ts';
+import { failureDetail } from './failureDetail.ts';
 import {
   FINGERPRINT_VERSION,
   assertValidKey,
@@ -290,8 +291,16 @@ export async function runIdempotent<T>(
     await closeAttempt(attempt.id, {
       phase: 'FAILED',
       outcome: 'FAILED',
-      // Bounded and sanitized by the repository. Never a stack trace.
-      detail: error instanceof Error ? error.message : String(error),
+      /*
+       * The message *and* what the provider said about it.
+       *
+       * This row is the only durable account of an internal failure — the
+       * caller gets one opaque sentence and the log ages out — and it used to
+       * keep the half that says least. `failureDetail` adds the provider's own
+       * words, bounded, single-lined and with everything credential-shaped
+       * taken out. Never a stack trace.
+       */
+      detail: failureDetail(error),
     });
     // A lost fence is not this operation's failure — the work belongs to
     // somebody else now, and the operation stays open for whoever holds it.

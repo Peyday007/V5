@@ -109,6 +109,41 @@ describe('one branch owns production', () => {
     expect(guard).not.toContain('/api/russell/projects/x/sites');
   });
 
+  /*
+   * The Postgres gate's own cluster, which is not about deployment and is here
+   * because this is the suite that reads workflow files.
+   *
+   * `openTestDatabase` drops each file's schema with `DROP SCHEMA … CASCADE`,
+   * which takes one lock per object in a single transaction — 851 relations on
+   * this chain, 166 of them tables, so each drop also locks a toast relation
+   * and a toast index per table. The shared lock table is
+   * `max_locks_per_transaction × (max_connections + max_prepared_transactions)`,
+   * which is 6400 at the settings a runner ships with, and `pool: 'forks'` runs
+   * several of those drops at once while the live files hold locks of their own.
+   *
+   * It failed as `53200 out of shared memory` with Postgres naming this exact
+   * setting in its hint, and the reason it arrived as a mystery is that the
+   * margin shrinks by a few relations every time any workstream adds a
+   * migration. A run costs the best part of half an hour to find that out; this
+   * costs a file read.
+   */
+  it('gives the Postgres suite a lock table big enough for the schema it drops', () => {
+    const suite = read('.github/workflows/postgres-suite.yml');
+    expect(suite).toMatch(/ALTER SYSTEM SET max_locks_per_transaction = (\d+)/);
+    const declared = Number(
+      /ALTER SYSTEM SET max_locks_per_transaction = (\d+)/.exec(suite)?.[1] ?? '0',
+    );
+    // Room for the chain to keep growing rather than the number that just
+    // happened to work: one drop already reaches past a thousand locks.
+    expect(declared).toBeGreaterThanOrEqual(1024);
+    // A setting that needs a restart and does not get one is the same failure
+    // with a passing step in front of it.
+    expect(suite).toMatch(/restart postgresql|main restart/);
+    // And the run says what it got, because a restart that silently kept the
+    // old value would send the next reader back to the same mystery.
+    expect(suite).toContain("current_setting('max_locks_per_transaction')");
+  });
+
   it('tells a future session the rule, in the file sessions are told to read', () => {
     const claude = read('CLAUDE.md');
     expect(claude).toContain('.github/CANONICAL_BRANCH');
@@ -307,6 +342,30 @@ describe('every workstream is present in the canonical tree', () => {
       'server/db/migrations/037_software_factory.sql',
       'server/db/migrations/038_factory_repository_root.sql',
     ],
+    /*
+     * The work register and the conversation entrance (§42).
+     *
+     * This entry is here because the convergence it guards actually happened to
+     * it: production moved 079/070 ahead while this workstream was open, and
+     * reconciling it meant a merge, a renumbered migration and a conflict in
+     * two shared files. A merge that resolved any of that by dropping a file
+     * would leave every row-level test passing — none of them opens the tree —
+     * and fail here.
+     *
+     * The migration is named by its *number* on purpose, so a second renumbering
+     * has to be made deliberately rather than by a rename nobody reads.
+     */
+    'Work register and bridge': [
+      'server/routes/register.ts',
+      'server/routes/bridge.ts',
+      'server/repos/register.ts',
+      'server/repos/bridge.ts',
+      'server/services/register/view.ts',
+      'server/services/bridge/sync.ts',
+      'client/src/russell/Register.tsx',
+      'server/db/migrations/082_work_register_and_bridge.sql',
+      'server/db/pg-migrations/073_work_register_and_bridge.sql',
+    ],
   };
 
   for (const [workstream, files] of Object.entries(MUST_EXIST)) {
@@ -439,5 +498,86 @@ describe('every workstream is present in the canonical tree', () => {
         `${range.file} (${range.from}-${range.to}) has only ${usable} port(s) fetch will dial`,
       ).toBeGreaterThan(50);
     }
+  });
+});
+
+describe('and the log surface reads, and only reads', () => {
+  /*
+   * `logs.yml` exists because the only way to read production's log was to
+   * deploy — `deploy.yml` runs `flyctl logs` twice, as diagnosis attached to a
+   * deploy — and a deploy replaces the machine, which is how you lose the log
+   * you came for. So the surface is worth having and is worth being exactly one
+   * thing.
+   *
+   * "Strictly read-only" is a claim, and a claim about a file is a test that
+   * reads the file. It is pinned as a closed set of `flyctl` subcommands rather
+   * than as a list of things it must not say, because a ban is complete only
+   * against the commands somebody thought of, and this one must stay complete
+   * against the ones added later.
+   */
+  const logs = read('.github/workflows/logs.yml');
+  /** The commands, without the prose above them. */
+  const BODY = logs.slice(logs.indexOf('run: |'));
+
+  it('runs no flyctl subcommand that could change anything', () => {
+    /*
+     * Exact command forms rather than bare subcommands, because one of these
+     * has mutating siblings under the same first word: `secrets list` reads,
+     * and `secrets set`, `secrets unset` and `secrets import` each replace a
+     * deployment secret and restart the machine. A set holding `secrets` would
+     * admit all four, so what is allowed is the whole command.
+     */
+    const READS = new Set(['logs', 'status', 'secrets list']);
+    const used = [...logs.matchAll(/flyctl\s+([a-z-]+(?:\s+[a-z-]+)?)/g)].map((m) => m[1] ?? '');
+    expect(used.length).toBeGreaterThan(0);
+    for (const one of used) {
+      // A flag is not a second word: `flyctl logs --app` is `logs`. Anything
+      // whose first word is not itself a complete read has to match in full.
+      const head = one.split(' ')[0] ?? '';
+      const ok = READS.has(one) || READS.has(head);
+      expect(ok, `logs.yml runs "flyctl ${one}"`).toBe(true);
+    }
+  });
+
+  it('never writes a deployment secret', () => {
+    // Named separately from the set above, so the one command that could
+    // restart production from this surface fails by its own name rather than
+    // as a set membership somebody could widen without noticing.
+    for (const verb of ['secrets set', 'secrets unset', 'secrets import']) {
+      expect(BODY, `logs.yml runs "flyctl ${verb}"`).not.toContain(verb);
+    }
+  });
+
+  it('prints secret names and never a value or a digest', () => {
+    // `flyctl secrets list` prints NAME, DIGEST, CREATED AT. A digest is not
+    // recoverable, and it is still derived from a secret and has no reader
+    // here — §17's rule is about what reaches a log, not about what could be
+    // reversed out of it. Only the name column crosses.
+    expect(BODY).toMatch(/secrets list[^\n]*\|[^\n]*awk/);
+  });
+
+  it('has no way into the machine and no script to run there', () => {
+    /*
+     * `ssh console` is how every *writing* workflow on this repository reaches
+     * the Brain. The absence of it is what makes the subcommand set above a
+     * boundary rather than a preference.
+     *
+     * Asked of the **script body** rather than of the file, for
+     * `operatorConsoleRemoved`'s reason: a comment saying "there is no ssh
+     * console here, and that is the point" is the kind of prose this repository
+     * keeps, and a check that went red on it would be teaching somebody to
+     * delete the explanation instead of the command.
+     */
+    expect(BODY).not.toContain('ssh');
+    expect(BODY).not.toContain('scripts/');
+    expect(BODY).not.toContain('curl');
+  });
+
+  it('lets no input reach a shell', () => {
+    expect(BODY).not.toContain('${{ inputs.');
+    expect(BODY).not.toMatch(/\beval\b/);
+    // Both inputs are compared against a closed class before they are used.
+    expect(BODY).toContain('seconds must be a whole number');
+    expect(BODY).toContain('pattern must be one of');
   });
 });

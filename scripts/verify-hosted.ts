@@ -1112,6 +1112,118 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
   );
 }
 
+/**
+ * The manufacturing kernel's door, on the released image, creating nothing.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this check does not start a programme
+ * ---------------------------------------------------------------------------
+ *
+ * A release gate that started one would leave a real programme, a real research
+ * grant and a real set of questions behind in the Brain it was verifying —
+ * every deploy, for ever. What is worth proving here is the **boundary**, and
+ * the boundary is provable from refusals: a project with no programme answers
+ * the same 404 a project you may not see answers, a machine is refused by
+ * principal type at the reads as well as the writes, and the two person-only
+ * writes are refused to a member who is not an administrator of that project.
+ *
+ * So nothing below is a POST that succeeds. The one thing it reads that *is* a
+ * fact about the release is which routes exist at all — a 404 from
+ * `requireProject` and a 404 from Express having no such route are the same
+ * status, so the check that separates them is the one that would notice the
+ * router being dropped from the build.
+ */
+async function manufacturingBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nThe manufacturing kernel, as a member and as a machine');
+  if (!cookie) {
+    record('manufacturing boundary', false, 'skipped: there was no session to test with');
+    return;
+  }
+
+  /*
+   * A project the member genuinely may read, with no programme on it.
+   *
+   * The answer is 404 — *this project has no manufacturing programme* — and it
+   * is byte-identical to the answer a project they may not see gives, which is
+   * invariant 23 at this door. Compared rather than asserted, because a status
+   * that matches while the body differs is still an oracle.
+   */
+  const mine = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, { cookie });
+  expectStatus('a project with no programme answers not-found', mine.status, 404);
+
+  if (fixtures.holdout) {
+    const theirs = await call(`/api/projects/${fixtures.holdout.id}/manufacturing`, { cookie });
+    expectStatus('and so does a project this member may not see', theirs.status, 404);
+    record(
+      'the two refusals are the same body, not just the same status',
+      JSON.stringify(mine.json) === JSON.stringify(theirs.json),
+      JSON.stringify(mine.json) === JSON.stringify(theirs.json)
+        ? 'byte-identical'
+        : `absent=${JSON.stringify(mine.json)} forbidden=${JSON.stringify(theirs.json)}`,
+    );
+  }
+
+  /*
+   * A machine is refused at the **read**, which is wider than the policy
+   * module's own refusal and is the half `requirePerson` adds.
+   *
+   * The credential used here is the one that authenticates and holds the scope
+   * for this project, so a refusal means *a machine may not do this* rather
+   * than *this credential is dead* — which the check above it has already
+   * established by getting a 200 out of it elsewhere.
+   */
+  const machineReads = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, {
+    bearer: fixtures.credential,
+  });
+  record(
+    'a worker is refused the manufacturing read by principal type',
+    machineReads.status === 404 || machineReads.status === 403,
+    `status=${machineReads.status}`,
+  );
+
+  /*
+   * And the two person-only writes are refused to it as well.
+   *
+   * Neither of these creates anything on success, because neither succeeds:
+   * starting a programme and recording a held capability are both ADMIN plus
+   * `requirePerson`, and a worker is refused by level *and* by type. A 200
+   * from either would mean a machine had just started a programme in the Brain
+   * this gate is verifying, which is exactly the failure worth catching here.
+   */
+  const machineStarts = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, {
+    method: 'POST',
+    bearer: fixtures.credential,
+    body: {
+      objective:
+        'A release gate proving a machine cannot start a programme. If this ever succeeds, ' +
+        'the boundary is gone and this row is the evidence.',
+    },
+  });
+  record(
+    'a worker cannot start a manufacturing programme',
+    machineStarts.status !== 200 && machineStarts.status !== 201,
+    `status=${machineStarts.status}`,
+  );
+
+  const machineHolds = await call(
+    `/api/projects/${fixtures.scope.id}/manufacturing/capabilities`,
+    {
+      method: 'POST',
+      bearer: fixtures.credential,
+      body: { name: 'release gate', note: 'a machine must not be able to record this' },
+    },
+  );
+  record(
+    'a worker cannot record a capability as held',
+    machineHolds.status !== 200 && machineHolds.status !== 201,
+    `status=${machineHolds.status}`,
+  );
+
+  // Nothing was created by any of the above, read back from the Brain itself.
+  const after = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, { cookie });
+  expectStatus('and still no programme exists on that project', after.status, 404);
+}
+
 async function workerAuthentication(fixtures: Fixtures): Promise<void> {
   console.log('\nWorker credentials');
 
@@ -1594,16 +1706,11 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
     citedRejected ? 'it was filed' : 'refused',
   );
 
-  // Held open while it runs: this one filed in 3m23s on deploy 277, which is
-  // inside a five-minute lease and will not stay inside it as the live
-  // archive grows. The audit below it had already crossed.
-  const filed = await holdingLease(synthClaim, fixtures.researchWorkerId, () =>
-    worker.call('brain_submit_synthesis', {
-      ...proofOf(synthClaim),
-      report: `The deployed Brain recorded and gated a worker's claim [${accepted[0]?.id}].`,
-      cited_claim_ids: accepted.map((claim) => claim.id),
-    }),
-  );
+  const filed = await worker.call('brain_submit_synthesis', {
+    ...proofOf(synthClaim),
+    report: `The deployed Brain recorded and gated a worker's claim [${accepted[0]?.id}].`,
+    cited_claim_ids: accepted.map((claim) => claim.id),
+  });
   const withDocument = await getOrchestration(orchestrationId);
   record(
     'and a report citing only accepted claims is filed as a document',
@@ -1712,9 +1819,10 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
                 confidence: 0.5,
               },
             };
-    const result = await holdingLease(auditClaim, surface.workerId, () =>
-      roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body }),
-    );
+    const result = await roleWorker.call('brain_submit_audit', {
+      ...proofOf(auditClaim),
+      ...body,
+    });
     if (result['role'] === role) auditRolesRun += 1;
     if (role !== 'JUDGE') {
       record(
@@ -1861,6 +1969,7 @@ async function claimResearch(
     credentialId,
     scopes: [{ projectId: fixtures.scope.id, scopes: RESEARCH_SCOPES }],
     workTypes: [workType],
+    leaseMs: RESEARCH_LEASE_MS,
   });
   if (!claimed) return null;
 
@@ -1892,73 +2001,33 @@ function proofOf(claimed: { workItemId: string; leaseId: string; leaseGeneration
 }
 
 /**
- * How often a held lease is renewed while one submission is still in flight.
+ * How long a research work item is leased for, and why a beat cannot do this.
  *
- * `DEFAULT_LEASE_MS` is five minutes, and renewing at a third of that means two
- * beats are missed before a lease can lapse — so a single slow query on the
- * beat's own connection is not enough to drop the work this harness is holding.
+ * `DEFAULT_LEASE_MS` is five minutes and the judge's `brain_submit_audit` has
+ * been measured at 9m19s, 9m22s and 9m44s, so the lease lapses mid-submission
+ * and the `brain_complete_work` after it is refused `FENCE_LOST`.
+ *
+ * The obvious remedy is a heartbeat, and **it cannot work here** — that is a
+ * measured fact rather than a preference, and it cost two deploys to learn.
+ * Every mutation is fenced by `proveLeaseOwnership`, which is an
+ * `UPDATE work_items SET updated_at = ? WHERE <owned>` **inside the effect's
+ * own transaction** (§20: the fence is at the commit boundary). So the
+ * submission's first act is to write this row and hold the lock on it for the
+ * whole nine minutes. A concurrent beat's `UPDATE … WHERE lease_expires_at >
+ * now()` matches on its own snapshot, so Postgres makes it *block* on that
+ * lock rather than skip; when the lock is finally granted at commit it
+ * re-evaluates against the new row version, finds the lease long expired, and
+ * updates **zero rows**. The beat is not refused loudly — it simply does
+ * nothing, nine minutes late.
+ *
+ * So the lease has to be right when it is taken. That is an estimate made
+ * before the work starts, which is the weaker mechanism in general — but this
+ * caller is a scripted client whose one long call is bounded and measured,
+ * unlike a real worker whose duration nobody knows. An hour is what the two
+ * other claim sites in this file already use; the measured ceiling is a sixth
+ * of it.
  */
-const BEAT_EVERY_MS = 100_000;
-
-/**
- * Hold a lease open across a call that takes longer than the lease does.
- *
- * Measured, on deploy 277 against the released image: the JUDGE role's
- * `brain_submit_audit` began at 22:35:38.4Z and recorded its verdict at
- * 22:45:22.9Z — **nine minutes and forty-four seconds** — against a work item
- * lease of five. The submission itself succeeded; the `brain_complete_work`
- * after it was then refused with `FENCE_LOST`, correctly, because by then the
- * lease had lapsed and the item was claimable again.
- *
- * That is the number §27 asked for and never got: three earlier runs threw
- * `fetch failed` at 5m18s, 5m22s and 5m23s, because undici's own 300-second
- * header timeout pre-empted the bound the script thought it had set. With the
- * bound actually applied the pass finishes, and what it finishes into is this.
- *
- * **It is one reading rather than the cost of a judge pass.** Timed from the
- * ADVERSARIAL pass to the judge's verdict in five runs' own logs: 3m34s (run
- * 253, 374 documents), 4m10s (252, 373), at least 5m20s (274, 396, where the
- * client gave up), 9m22s (`41f8741`, 397) and 9m44s here (399). The first two
- * finished inside the five-minute lease, which is why nothing was refused on
- * them — **the pass used to fit and now does not**, across a measured spread
- * of 2.7x. The beat is what lets the harness survive whichever end of that
- * range it gets; nothing here makes it faster, and what is driving the growth
- * is a correlation with the archive rather than an established cause.
- *
- * So the queue was right and the harness was wrong: an at-least-once queue
- * expires a lease precisely so that a worker which stopped working cannot hold
- * work for ever, and a worker still working says so by beating. Asking for a
- * longer lease at claim time was the other option and is worse — it is an
- * estimate made before the work starts, and a process that dies inside it
- * strands the item for the whole of it, whereas a beat is evidence the worker
- * is alive now. `heartbeatWork` clamps the extension itself, so nothing here
- * decides how long Brain is willing to wait.
- *
- * A beat that is refused is left alone rather than raised: the call in flight
- * is what this run is measuring, and its own result says what happened to it.
- */
-async function holdingLease<T>(
-  claimed: { workItemId: string; leaseId: string; leaseGeneration: number },
-  workerId: string,
-  run: () => Promise<T>,
-): Promise<T> {
-  const proof = {
-    workItemId: claimed.workItemId,
-    workerId,
-    leaseId: claimed.leaseId,
-    leaseGeneration: claimed.leaseGeneration,
-  };
-  const beat = setInterval(() => {
-    void heartbeatWork(proof).catch(() => undefined);
-  }, BEAT_EVERY_MS);
-  // The timer must not be what keeps this process alive once the work is done.
-  beat.unref?.();
-  try {
-    return await run();
-  } finally {
-    clearInterval(beat);
-  }
-}
+const RESEARCH_LEASE_MS = 60 * 60 * 1000;
 
 /**
  * Step 12A — Russell, against the deployment.
@@ -3948,6 +4017,9 @@ async function main(): Promise<void> {
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await sharedCashBoundary(fixtures, cookie);
+    // Before revocation, like the checks below it: the worker refusals mean
+    // "a machine may not do this" only while the credential still works.
+    await manufacturingBoundary(fixtures, cookie);
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
     await effectChecks(fixtures, fixtures.adminCookie, cookie);

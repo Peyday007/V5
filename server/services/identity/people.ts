@@ -70,8 +70,10 @@
  * It writes nothing.
  */
 import { listUsers } from '../../repos/identity.ts';
+import { ambiguousSignInNames, signInName } from '../../domain/signInName.ts';
 import { countLivePasskeys, listEnrollments } from '../../repos/passkeys.ts';
 import { nowIso } from '../../repos/util.ts';
+import { personName } from '../../domain/personName.ts';
 
 /**
  * How far this person has got, as a fact about what they can actually do.
@@ -83,8 +85,23 @@ import { nowIso } from '../../repos/util.ts';
  * is outstanding, so `INVITED` is wrong; and the sign-in screen no longer
  * offers a device, so `READY` is wrong in the direction that matters most,
  * telling an administrator that a locked-out person is fine.
+ *
+ * `NAME_IS_AMBIGUOUS` is a *fifth* for the same reason, and it is the one
+ * state here that is not about a credential at all. A member enrolled from a
+ * link holds no address, so their display name is the only identity they can
+ * present — and `getPinCredentialByIdentity` refuses a name two live accounts
+ * answer to, identically to a wrong PIN, because invariant 23 is doing its
+ * job. They hold a perfectly good PIN and cannot get in. `READY` about that
+ * person is the same expensive wrongness one column along, and it is worse
+ * here because the remedy is not theirs: an administrator has to rename one of
+ * them, which is why the state exists on the surface the rename lives on.
  */
-export type MemberState = 'READY' | 'INVITED' | 'NOT_INVITED' | 'NEEDS_A_NEW_LINK';
+export type MemberState =
+  | 'READY'
+  | 'INVITED'
+  | 'NOT_INVITED'
+  | 'NEEDS_A_NEW_LINK'
+  | 'NAME_IS_AMBIGUOUS';
 
 /**
  * Which credential lets this person in.
@@ -131,19 +148,18 @@ export interface PeopleReading {
 /**
  * A display name with any address domain removed.
  *
- * `bootstrap.ts` names the first administrator after the address it was created
- * with, so the owner's inbox was the label every member read on this page — and
- * this module's own contract is that no contact detail crosses it. Dropping
- * everything from the `@` keeps the row recognisable to the person it is and
- * leaves nothing anybody can write to.
+ * Kept as the name this module and `connection.ts` already import, and it is
+ * now one line over `domain/personName.ts` rather than a second implementation
+ * of the same redaction. Two copies of a rule about what a person is called
+ * would eventually call one person two things on two screens — which is the
+ * defect that made this necessary, at a smaller scale.
  *
  * It is not a classification and nothing is typed by it: §4's rule against
  * name-matching is about deciding *what a row is*, which `users.kind` now
  * declares. A false positive here shortens a name.
  */
 export function withoutDomain(displayName: string): string {
-  const at = displayName.indexOf('@');
-  return at > 0 ? displayName.slice(0, at) : displayName;
+  return personName({ displayName });
 }
 
 export async function peopleReading(viewerId: string | null): Promise<PeopleReading> {
@@ -155,6 +171,15 @@ export async function peopleReading(viewerId: string | null): Promise<PeopleRead
   const disabledAccounts = all.filter(
     (user) => user.kind === 'PERSON' && user.disabledAt !== null,
   ).length;
+
+  /*
+   * Computed once over the same rows, with the same rule the door uses.
+   *
+   * `ambiguousSignInNames` is the door's own normaliser, shared rather than
+   * restated: a reading that folded names differently from the lookup would
+   * eventually call somebody stuck who is not, or miss somebody who is.
+   */
+  const ambiguous = ambiguousSignInNames(all);
 
   const people: PersonReading[] = [];
   for (const user of all) {
@@ -179,6 +204,30 @@ export async function peopleReading(viewerId: string | null): Promise<PeopleRead
           : live > 0
             ? 'DEVICE'
             : 'NONE';
+
+    /*
+     * Named before the credential is looked at, because it outranks it.
+     *
+     * Somebody whose name two live accounts answer to cannot sign in with that
+     * name however good their PIN is, so reporting the credential would be
+     * reporting the half of their situation that is working.
+     *
+     * An account holding an **address** is not stuck: the lookup tries the
+     * address first, and it is unique by index, so they still have a way in.
+     * The state means *this person cannot get in*, and claiming it for
+     * somebody who can would be the other direction's wrongness.
+     */
+    if (user.email === null && ambiguous.has(signInName(user.displayName))) {
+      people.push({
+        userId: user.id,
+        displayName: withoutDomain(user.displayName),
+        state: 'NAME_IS_AMBIGUOUS',
+        signsInWith,
+        isYou: user.id === viewerId,
+        isBrainAdmin: user.isBrainAdmin,
+      });
+      continue;
+    }
 
     if (signsInWith === 'PIN' || signsInWith === 'PASSWORD') {
       people.push({

@@ -140,6 +140,7 @@ import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
 import { runManufacturingKernel } from '../manufacturing/kernel.ts';
+import { runDealflowKernel } from '../dealflow/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -149,6 +150,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 
@@ -223,6 +225,23 @@ export interface TickReport {
       changeRequests: string[];
       failed: number;
     };
+  };
+  /**
+   * The design kernel's pass, fleet-wide.
+   *
+   * Three things, and not the fourth: judged reviews read back, closed cycles
+   * learned from, and one pass of the proactive expansion loop. Rendering is
+   * deliberately absent — a capture needs a headless browser and a running
+   * product, and the deployed Brain has neither, so a tick that tried would
+   * either fail every pass or quietly decide a surface was fine. See
+   * `services/design/kernel.ts`.
+   */
+  design: {
+    ingested: number;
+    learned: number;
+    expansionsOpened: number;
+    expansionsSettled: number;
+    problems: string[];
   };
   /**
    * Ideas the project's own archive already answered, judged and parked without
@@ -460,6 +479,26 @@ export interface TickReport {
     evidence: string[];
     settled: string[];
   }[];
+  /**
+   * What the cross-border dealflow kernel did: what it filed from finished
+   * rounds, what it paired, what it promoted into the portfolio, and what it
+   * asked next and why.
+   *
+   * `why` travels with the round for `industryKernel`'s exact reason — the
+   * allocator is pure over a snapshot that has since moved, so the sentence
+   * has to be the one written when the decision was made.
+   */
+  dealflowKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    parties: string[];
+    requirements: string[];
+    costs: string[];
+    structures: string[];
+    paired: string[];
+    promoted: string[];
+    settled: string[];
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -520,6 +559,7 @@ const EMPTY: TickReport = {
       failed: 0,
     },
   },
+  design: { ingested: 0, learned: 0, expansionsOpened: 0, expansionsSettled: 0, problems: [] },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -552,6 +592,7 @@ const EMPTY: TickReport = {
   industryKernel: [],
   laborKernel: [],
   manufacturingKernel: [],
+  dealflowKernel: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -637,6 +678,7 @@ export async function tick(owner: string): Promise<TickReport> {
     industryKernel: [],
     laborKernel: [],
     manufacturingKernel: [],
+    dealflowKernel: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -956,6 +998,42 @@ export async function tick(owner: string): Promise<TickReport> {
       if (scan) report.capability.selfModelDrift = scan.drift.length;
     } catch {
       /* a reading that could not be taken is not a reason to stop the tick */
+    }
+
+    /*
+     * 1a-iv-f. Advance the design kernel, fleet-wide.
+     *
+     * A judged review whose bin finished, a closed cycle nothing has learned
+     * from, and a weakness in the kernel's own capability map that nobody has
+     * been asked about are three states nothing else moves. Every one of them is
+     * derived from rows, so a cycle that closed before this existed is learned
+     * from on the next tick with nobody pressing anything.
+     *
+     * The expansion pass is the half that matters here: it needs no browser, no
+     * failure and no complaint, so **this is where the kernel gets more capable
+     * simply by Brain running**. It is bounded by how many expansions may be
+     * open at once rather than by any lifetime count — §24's correction, which
+     * this kernel does not undo.
+     *
+     * Fleet-wide rather than per-project, because a design capability is a fact
+     * about Brain rather than about somebody's work — the same reasoning that
+     * puts the capability kernel here rather than in the per-project loop below.
+     *
+     * Its own `try`, for the reason the block above has one: a design pass that
+     * threw must not stop Russell writing back a mission or reconciling a
+     * stranded lease.
+     */
+    try {
+      const design = await runDesignKernel();
+      report.design.ingested = design.ingested.length;
+      report.design.learned =
+        design.learned.length +
+        (design.fleetWide ? design.fleetWide.compiled.length + design.fleetWide.moved.length : 0);
+      report.design.expansionsOpened = design.expansion?.opened.length ?? 0;
+      report.design.expansionsSettled = design.expansion?.settled.length ?? 0;
+      report.design.problems = design.problems;
+    } catch {
+      /* a design pass that could not run leaves the kernel exactly as it was */
     }
 
     /*
@@ -1337,6 +1415,60 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a labor map that could not be advanced is left exactly as it was */
+      }
+
+      try {
+        /*
+         * 1a-iv-f. The cross-border dealflow kernel.
+         *
+         * §38's kernel added *where* in the economy to look. This one adds the
+         * axis a cross-border equipment transaction needs and nothing above it
+         * can express: a deal has two sides, and everything hard about it —
+         * whether the goods may lawfully enter that market, what it costs to
+         * land them, how the trade pays somebody in the middle — lives between
+         * them.
+         *
+         * Its own `try`, for the reason every block around it has one: a
+         * dealflow pass that threw must not stop a sprint settling a need,
+         * harvesting what already ran, or advancing its map.
+         *
+         * Nothing it creates bypasses anything. A round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does. A deal that becomes real is
+         * promoted into a `cash_opportunities` row and pursued by the
+         * machinery Cash Mode already has, so there is no second lifecycle
+         * here and no second work queue.
+         */
+        const dealflow = await runDealflowKernel(project.id);
+        if (
+          dealflow.opened.length > 0 ||
+          dealflow.paired.length > 0 ||
+          dealflow.promoted.length > 0 ||
+          dealflow.filed.parties.length > 0 ||
+          dealflow.filed.requirements.length > 0 ||
+          dealflow.filed.costs.length > 0 ||
+          dealflow.filed.structures.length > 0 ||
+          dealflow.filed.settled.length > 0
+        ) {
+          report.dealflowKernel.push({
+            projectId: project.id,
+            opened: dealflow.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            parties: dealflow.filed.parties.map((one) => one.id),
+            requirements: dealflow.filed.requirements.map((one) => one.id),
+            costs: dealflow.filed.costs.map((one) => one.id),
+            structures: dealflow.filed.structures.map((one) => one.id),
+            paired: dealflow.paired.map((one) => one.id),
+            promoted: dealflow.promoted.map((one) => one.dealId),
+            settled: dealflow.filed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a dealflow pass that could not run leaves every row exactly as it was */
       }
 
       try {

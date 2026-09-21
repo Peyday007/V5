@@ -57,12 +57,20 @@ import {
   listCapabilities,
   retireCategory,
   withdrawCapabilityHeld,
+  listAcquisitionCandidates,
+  listProgrammeDecisions,
+  reopenProgrammeDecision,
+  resolveProgrammeDecision,
+  setAsideCandidate,
 } from '../../repos/manufacturing.ts';
 import { capabilitySlug } from '../../domain/manufacturing.ts';
 import type {
   Capability,
   MachineCategory,
   MachineCategoryKind,
+  AcquisitionCandidate,
+  ProgrammeDecision,
+  ProgrammeDecisionTopic,
 } from '../../domain/types.ts';
 
 export interface SeedResult {
@@ -313,4 +321,185 @@ export async function ledger(projectId: string): Promise<Capability[]> {
   const program = await getProgram(projectId);
   if (!program) return [];
   return listCapabilities(program.id);
+}
+
+
+/**
+ * A person setting an acquisition candidate aside.
+ *
+ * The one verdict no derivation reaches: somebody read it and said no. It
+ * **destroys nothing** — the row keeps its name, its contribution, its
+ * statement and the claim it came from — because deleting it would let the
+ * same firm arrive again on the next round as a fresh discovery, spending the
+ * allowance to learn something somebody had already decided. §5, at a table
+ * whose rows are about other people's companies.
+ *
+ * Setting aside is the only thing a person may do to a candidate here, and
+ * that is the boundary rather than an omission. There is no approach, no
+ * valuation, no offer and no commitment, in this function or anywhere in this
+ * kernel, and there is no column in `acquisition_candidates` that one could be
+ * written into.
+ */
+export async function setAsideAcquisition(input: {
+  projectId: string;
+  candidateId: string;
+  reason: string;
+  actorRef: string;
+}): Promise<AcquisitionCandidate | { error: string }> {
+  const program = await getProgram(input.projectId);
+  if (!program) return { error: 'This project has no manufacturing programme.' };
+
+  const reason = input.reason.replace(/\s+/g, ' ').trim();
+  if (!reason) {
+    return {
+      error:
+        'Setting a candidate aside records why. A firm dismissed for no stated reason is ' +
+        'indistinguishable afterwards from one nobody got round to reading.',
+    };
+  }
+
+  const before = (await listAcquisitionCandidates(program.id)).find(
+    (one) => one.id === input.candidateId,
+  );
+  if (!before) return { error: 'That candidate is not on this programme.' };
+  if (before.setAsideAt !== null) {
+    // Already answered. The first reason stands rather than being replaced:
+    // the guarded UPDATE says so, and saying it here too keeps the reply
+    // honest about what happened.
+    return before;
+  }
+
+  const after = await setAsideCandidate({
+    candidateId: input.candidateId,
+    programId: program.id,
+    reason,
+    actorUserId: input.actorRef,
+  });
+  if (!after) return { error: 'That candidate is not on this programme.' };
+
+  await recordEvent({
+    projectId: input.projectId,
+    entityType: 'MANUFACTURING_PROGRAM',
+    entityId: program.id,
+    eventType: 'MANUFACTURING_CANDIDATE_SET_ASIDE',
+    payload: {
+      summary: `${after.name} was set aside as an acquisition candidate.`,
+      candidateId: after.id,
+      contribution: after.contribution,
+      reason,
+      actorRef: input.actorRef,
+    },
+  });
+  return after;
+}
+
+/**
+ * A person answering one of the questions this kernel raises and cannot
+ * settle.
+ *
+ * Their own words, stored exactly as written. Nothing validates the answer
+ * against a vocabulary, nothing derives it, nothing improves it, and no
+ * research round can reach this table — the whole point of the row is that the
+ * question is not a researchable one. A Brain that proposed three candidate
+ * brand names would have made the decision and left somebody the clerical half
+ * of it.
+ */
+export async function resolveDecision(input: {
+  projectId: string;
+  topic: ProgrammeDecisionTopic;
+  resolution: string;
+  actorRef: string;
+}): Promise<ProgrammeDecision | { error: string }> {
+  const program = await getProgram(input.projectId);
+  if (!program) return { error: 'This project has no manufacturing programme.' };
+
+  const resolution = input.resolution.replace(/\s+/g, ' ').trim();
+  if (!resolution) {
+    return {
+      error:
+        'An answer is the words you would say. An empty one would read afterwards as a ' +
+        'decision taken with nothing behind it.',
+    };
+  }
+
+  const before = (await listProgrammeDecisions(program.id)).find(
+    (one) => one.topic === input.topic,
+  );
+  if (!before) return { error: 'This programme has no such open question.' };
+  if (before.state === 'RESOLVED') return before;
+
+  const after = await resolveProgrammeDecision({
+    programId: program.id,
+    topic: input.topic,
+    resolution,
+    actorUserId: input.actorRef,
+  });
+  if (!after) return { error: 'This programme has no such open question.' };
+
+  await recordEvent({
+    projectId: input.projectId,
+    entityType: 'MANUFACTURING_PROGRAM',
+    entityId: program.id,
+    eventType: 'MANUFACTURING_DECISION_RESOLVED',
+    payload: {
+      summary: `${input.topic} was answered.`,
+      topic: input.topic,
+      resolution,
+      actorRef: input.actorRef,
+    },
+  });
+  return after;
+}
+
+/**
+ * A person unchoosing one.
+ *
+ * The answering transition, and it exists because the directive's own reason
+ * for caution — *do not lock these division names prematurely* — is precisely
+ * a reason a name chosen early may need unchoosing. An escalation with no way
+ * back is stuck rather than waiting, for the seventh time in this file's
+ * history.
+ *
+ * The previous answer is cleared rather than kept, because a question that
+ * reads OPEN while still carrying an answer is §29's status contradicting the
+ * control beside it. What it happened is on `project_events`, which is
+ * append-only, so nothing about the record is lost.
+ */
+export async function reopenDecision(input: {
+  projectId: string;
+  topic: ProgrammeDecisionTopic;
+  reason: string;
+  actorRef: string;
+}): Promise<ProgrammeDecision | { error: string }> {
+  const program = await getProgram(input.projectId);
+  if (!program) return { error: 'This project has no manufacturing programme.' };
+
+  const reason = input.reason.replace(/\s+/g, ' ').trim();
+  if (!reason) {
+    return { error: 'Reopening a question records why, so that it stays answerable.' };
+  }
+
+  const before = (await listProgrammeDecisions(program.id)).find(
+    (one) => one.topic === input.topic,
+  );
+  if (!before) return { error: 'This programme has no such question.' };
+  if (before.state === 'OPEN') return before;
+
+  const after = await reopenProgrammeDecision({ programId: program.id, topic: input.topic });
+  if (!after) return { error: 'This programme has no such question.' };
+
+  await recordEvent({
+    projectId: input.projectId,
+    entityType: 'MANUFACTURING_PROGRAM',
+    entityId: program.id,
+    eventType: 'MANUFACTURING_DECISION_REOPENED',
+    payload: {
+      summary: `${input.topic} was reopened.`,
+      topic: input.topic,
+      previousResolution: before.resolution,
+      reason,
+      actorRef: input.actorRef,
+    },
+  });
+  return after;
 }

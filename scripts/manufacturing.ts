@@ -364,12 +364,85 @@ async function show(projectId: string): Promise<void> {
   }
 
   out('');
+  out('  THE DIRECTIVE');
+  out(`    ${it.directive.path ?? '(none named)'}`);
+  if (it.directive.sha256) out(`    sha-256 ${it.directive.sha256}`);
+  /*
+   * Two lines rather than one, because *hashed* and *operative* are two facts
+   * and a hash can only answer the first. A programme whose directive stopped
+   * being readable would otherwise print a perfectly healthy digest.
+   */
+  out(
+    it.directive.reaching
+      ? '    reaching the questions: yes — its own sentences are in every assignment'
+      : `    reaching the questions: NO — ${it.directive.why ?? 'unknown'}`,
+  );
+
+  out('');
+  out('  STRONGEST NEXT EXPANSION');
+  if (it.frontier.length === 0) out('    nothing is on the ladder, so there is nothing to rank.');
+  for (const one of it.frontier.slice(0, 10)) {
+    out(`    ${String(one.position).padStart(2)}. ${one.path.join(' → ')}`);
+    // The single factor that put it below the entry above, which is what makes
+    // this a ranking somebody can argue with rather than only accept.
+    out(
+      one.separatedBy
+        ? `        separated by ${one.separatedBy.factor}: ${one.separatedBy.because}`
+        : '        level with the entry above on every factor Brain measures.',
+    );
+  }
+
+  out('');
   out('  THE LADDER');
   for (const one of it.ladder.slice(0, 30)) {
     out(`    ${one.verdict.padEnd(24)} ${one.path.join(' → ')}`);
     for (const condition of one.conditions) {
       out(`      ${condition.answer.padEnd(8)} ${condition.condition}`);
     }
+  }
+
+  out('');
+  out('  WHAT ENTERING COSTS');
+  for (const one of it.ladder.slice(0, 30)) {
+    if (one.capital.state === 'UNEXAMINED') continue;
+    out(`    ${one.path.join(' → ')}`);
+    out(`      ${one.capital.because}`);
+    for (const scenario of one.capital.scenarios) {
+      const total =
+        scenario.totals === null
+          ? 'no total — a requirement is unpriced'
+          : scenario.totals
+              .map((money) =>
+                money.lowMinor === money.highMinor
+                  ? `${money.currency} ${(money.lowMinor / 100).toLocaleString('en-US')}`
+                  : `${money.currency} ${(money.lowMinor / 100).toLocaleString('en-US')}–` +
+                    `${(money.highMinor / 100).toLocaleString('en-US')}`,
+              )
+              .join(' plus ');
+      out(`      ${scenario.scenario.padEnd(24)} ${total}`);
+    }
+  }
+
+  out('');
+  out('  COULD BE BOUGHT RATHER THAN BUILT');
+  if (it.acquisitions.length === 0) {
+    out('    nothing named. Asked only where a category requires something nothing on the');
+    out('    ladder is established to develop. Identification only: no approach, no');
+    out('    valuation, no offer, and no route in this kernel to any of them.');
+  }
+  for (const one of it.acquisitions) {
+    out(
+      `    ${one.candidate.name}${one.candidate.setAsideAt ? ' (set aside)' : ''} — ` +
+        `${one.candidate.contribution}${one.subject ? ` for ${one.subject}` : ''}`,
+    );
+  }
+
+  out('');
+  out('  OPEN QUESTIONS');
+  for (const one of it.openQuestions) {
+    out(`    ${one.topic}  ${one.state}`);
+    out(`      ${one.because}`);
+    if (one.resolution) out(`      answered: ${one.resolution}`);
   }
 
   out('');

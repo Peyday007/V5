@@ -432,6 +432,91 @@ submitting anything anywhere; making any commitment on anybody's behalf. This is
 read-only research into what is already published, and every action beyond reading needs
 a separate commercial authorization from a person.`;
 
+/**
+ * Who is actually on each side of a cross-border equipment transaction.
+ *
+ * Its own template because the completion standard is unusual: a named
+ * organisation with a published trigger is the whole deliverable, and a
+ * beautifully reasoned description of *the kind of company that would want
+ * this* answers nothing. The trade is full of plausible buyers who do not
+ * exist.
+ */
+export const DEALFLOW_PARTIES_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Market: {JURISDICTION}. Say which country each organisation is in. In this trade the
+jurisdiction decides whether the goods are lawful, so an organisation with no country
+attached establishes nothing that can be used.
+
+Evidence standard: a named organisation, from a published source identified by its URL and
+by who publishes it, carrying the date it was published or last observed. A buyer is
+established by something they or a public record actually published — a fleet or capacity
+expansion, a commissioning, an awarded contract, a tender, a procurement notice, a
+regulatory change forcing replacement. A supplier is established by what the manufacturer
+publishes about what it builds and where it has exported. An organisation's own site is
+conclusive about what that organisation says and is worth nothing as independent
+confirmation of anything else.
+
+Completion standard: every organisation you establish is declared on its own claim with
+deal_finding, deal_subject set to its own name, deal_equipment set to the class of
+equipment, and deal_jurisdiction set to its country. An organisation described in prose and
+not declared reaches nothing. Where the assignment names a class of equipment, copy that
+string verbatim into deal_equipment: a different wording is a different class and will pair
+with nothing. A plausible buyer nobody has published about is not a finding, and saying so
+is a better answer than naming one.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or
+a paid API; placing an advertisement; publishing, posting, listing, filing or submitting
+anything anywhere; making any commitment on anybody's behalf; quoting, offering or
+negotiating. This is read-only research into what is already published, and every action
+beyond reading needs a separate commercial authorization from a person.`;
+
+/**
+ * What the transaction would actually involve: whether the goods may enter and
+ * be used, what it costs to land them, and how this trade pays an
+ * intermediary.
+ *
+ * Separate from the parties template because the completion standard is the
+ * opposite shape. There the deliverable is a name; here it is a requirement, a
+ * figure or a documented absence — and the most valuable single answer this
+ * envelope can produce is *we searched this layer properly and it demands
+ * nothing*, which has to be declared to exist at all.
+ */
+export const DEALFLOW_TERMS_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Market: {JURISDICTION}. Every requirement, duty and charge is about one market. The same
+equipment is lawful in one and unregistrable in the next, so a finding with no market
+attached is a finding about nowhere.
+
+Evidence standard: a published instrument, regulation, tariff schedule, standard, rate card
+or terms page, identified by its URL and by who publishes it, carrying the date it took
+effect or was last observed. Name the authority that imposes a requirement where the source
+names one. A figure is read from a source and never produced: report it as published, in
+the currency it was published in, and say what it is per — one unit, one container, one
+shipment. Do not convert currencies, do not reconcile figures on different bases into a
+single number, and do not turn a published range into a single rate.
+
+Completion standard: every requirement is declared on its own claim with deal_finding set
+to COMPLIANCE_REQUIREMENT and deal_value set to the layer it belongs to. The layers are
+separate questions and must not be answered as one — a factory holding a quality
+certificate does not make the product approved, a product approval does not make the state
+register it, and neither means the buyer will accept it. Where you search a layer properly
+and it demands nothing, declare that with deal_finding set to REQUIREMENT_ABSENCE and list
+where you looked in searched_repositories: a layer with no answer is treated as
+unresearched rather than as clear, so an unreported empty search leaves the question open.
+Every figure is declared with deal_finding set to COST_COMPONENT, its line in deal_value,
+the amount in deal_amount_cents, and its currency in deal_currency.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or
+a paid API; obtaining, applying for or paying for any certification, approval, registration
+or inspection; placing an advertisement; publishing, posting, listing, filing or submitting
+anything anywhere; making any commitment on anybody's behalf; quoting, offering or
+negotiating. This is read-only research into what is already published, and every action
+beyond reading needs a separate commercial authorization from a person.`;
+
 export const INDUSTRY_MAP_ASSIGNMENT_TEMPLATE = `Establish, from published sources, how this part of the economy is actually put together:
 
 {QUESTION}
@@ -644,6 +729,93 @@ anything be built, bought, tooled, integrated or entered; and reporting what the
 commissioning organisation can or cannot do. This is read-only research into what is
 already published, and every action beyond reading needs a separate authorization from a
 person.`;
+
+export const MACHINE_CAPITAL_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what entering this class of machine actually costs,
+requirement by requirement:
+
+{QUESTION}
+
+Subject: the class of machine named above, and what a producer has to fund before selling
+anything of that kind. You are being asked about the industry, not about the organisation
+commissioning this research: what it can already afford is not a question here and nothing
+you establish can say anything about it.
+
+Market: {JURISDICTION}. Say which market each figure is about.
+
+What to settle, as far as published sources allow: what has to be funded before production
+— tooling and equipment, a facility, certification and type approval, engineering and
+development, working capital, inventory and parts, onboarding suppliers, a distribution
+and service network, licences and intellectual property, test and validation — and what
+each of those is published to cost, with the currency it is published in and the date the
+figure was true.
+
+Declare each on its claim with capability_finding set to CAPITAL_REQUIREMENT,
+capability_subject set to which requirement it is, capability_qualifier set to which shape
+of the business the figure is about, capability_basis set to what kind of figure it is, and
+capability_observed_on set to the date it was true. Where you have a figure, give
+capability_amount_low_minor, capability_amount_high_minor and capability_currency; a source
+that publishes one number sets the two ends equal.
+
+Evidence standard: a published price, a regulator's own fee schedule, a comparable firm's
+own disclosure, a trade publication's figure or a named analyst's estimate — each
+identified by its URL, by who published it and by the date. A regulator's published fee is
+conclusive about that fee. A supplier's own price list is conclusive about what it asks. A
+figure with no publisher and no date is not a finding.
+
+Completion standard, and this is the part that matters most here: a requirement that is
+real and that nobody publishes a figure for is a **finding**, and it is submitted as one —
+the requirement, the basis, the date, and no amount at all. Brain records it and withholds
+any total rather than summing past it. Do not estimate. Do not scale a figure from another
+class of machine. Do not convert between currencies. Do not complete a picture: a
+plausible number at the figure that would start a factory is worse than a blank, because
+a blank is visible afterwards and a number is not.
+
+Out of scope: contacting any person or organisation; requesting a quotation; buying
+access, data, a subscription or a paid API; placing an advertisement; publishing, posting,
+listing, filing or submitting anything anywhere; making any commitment on anybody's
+behalf; and recommending that anything be built, bought, tooled or entered. This is
+read-only research into what is already published, and every action beyond reading needs a
+separate authorization from a person.`;
+
+export const MACHINE_ACQUISITION_ASSIGNMENT_TEMPLATE = `Identify, from published sources, firms whose acquisition would supply something this
+class of machine requires:
+
+{QUESTION}
+
+Subject: the class of machine named above, and the firms published sources name as
+producers, suppliers, distributors or holders of approvals in it.
+
+Market: {JURISDICTION}. Say which market each firm operates in.
+
+What to settle, as far as published sources allow: which firms exist, what each one
+actually holds — a capability, production capacity, a dealer or distribution network, a
+component supply, a certification or approval, intellectual property, an engineering team,
+a market position — and which published source says so.
+
+Declare each with capability_finding set to ACQUISITION_CANDIDATE, capability_subject set
+to the firm's own name as the source gives it, and capability_qualifier set to what buying
+it would contribute.
+
+Evidence standard: a company's own filings, a regulator's register of approval holders, a
+trade association's member list, a trade publication covering the industry, a public
+registry. A company's own site is conclusive about what it says about itself and is not
+independent confirmation of anything. A firm named with no source is not a finding.
+
+Completion standard: each firm either supported by a quoted source, or not reported.
+Reporting that published sources name no such firm is a complete answer and is more useful
+than a list assembled from what seems likely.
+
+**This is identification only, and the boundary is the point of the assignment.** Do not
+contact anybody. Do not request information from a firm. Do not value anything, and do not
+estimate what any firm would sell for. Do not propose terms, structure, price or timing.
+Do not recommend pursuing any of them. Whether to approach, diligence, offer for or buy a
+firm is a decision a person makes under an authorization this research does not carry and
+cannot produce.
+
+Out of scope: everything in the paragraph above, plus buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or submitting
+anything anywhere; and making any commitment on anybody's behalf. This is read-only
+research into what is already published.`;
 
 export const CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what owner capital this actually requires — after the
 requirements have been taken apart:
@@ -1075,6 +1247,83 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     minIndependentSourcesFloor: 1,
   } satisfies ApprovalEnvelope),
 
+
+  /**
+   * Who is on each side of a cross-border equipment transaction.
+   *
+   * `RUSSELL_CASH_DISCOVERY_V1`'s permissions exactly — the same source
+   * classes, the same forbidden actions, the same zero external effect, taken
+   * by reference rather than written afresh so they cannot drift into
+   * authorizing different things. What differs is only the assignment it pins,
+   * which is why it is a separate envelope at all: `planFitsEnvelope` pins one
+   * template per envelope, and a packet has to be judged against the rules for
+   * the question it is actually asking.
+   *
+   * **It authorizes no effect that discovery did not already authorize.**
+   * Worth saying plainly because the subject is a sales pipeline: nothing here
+   * authorizes approaching a buyer, quoting, offering, negotiating or
+   * committing anything. It authorizes reading published sources about who has
+   * said they need equipment and who has said they build it. Every one of
+   * those actions is a `COMMERCIAL_ACTION` a person grants separately, and
+   * `forbiddenActions` refuses a plan that describes doing any of them.
+   */
+  RUSSELL_DEALFLOW_PARTIES_V1: Object.freeze({
+    id: 'RUSSELL_DEALFLOW_PARTIES_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it: published sources only, across any industry, business ' +
+      'model or market, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing which organisations ' +
+      'have published a need for a class of industrial equipment and which manufacturers ' +
+      'have published the capability to supply it. Approaching either of them is a commercial ' +
+      'action a person grants separately, and never this envelope.',
+    assignmentTemplate: DEALFLOW_PARTIES_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What the transaction would involve: the compliance envelope, the landed
+   * cost, and how this trade pays an intermediary.
+   *
+   * The same permissions again, and the same argument for being its own
+   * envelope. Worth saying explicitly because the subject sounds operational:
+   * nothing here authorizes obtaining a certification, applying for an
+   * approval, booking freight, clearing customs or agreeing a commission. It
+   * authorizes *reading about* what those cost and what they require, and its
+   * assignment is written so that every one of them is a thing to establish
+   * from a published source rather than a thing to do.
+   */
+  RUSSELL_DEALFLOW_TERMS_V1: Object.freeze({
+    id: 'RUSSELL_DEALFLOW_TERMS_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it: published sources only, with no spending, no paid API or purchased ' +
+      'data, no contact with any person or organisation, no advertising, no publishing and ' +
+      'no external effect of any kind. This envelope is that authorization applied to ' +
+      'establishing what a destination market demands of a class of equipment, what it costs ' +
+      'to land there, and how that trade pays an intermediary. It authorizes reading about ' +
+      'those and never doing any of them: obtaining an approval, booking freight, clearing ' +
+      'customs and agreeing a commission are commercial actions a person grants separately, ' +
+      'and never this envelope.',
+    assignmentTemplate: DEALFLOW_TERMS_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
   /**
    * The manufacturing programme's three questions.
    *
@@ -1177,6 +1426,81 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'qualifying, certifying, acquiring and producing are decisions a person makes, and this ' +
       'envelope authorizes none of them.',
     assignmentTemplate: MACHINE_CAPABILITY_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What entering a class of machine costs.
+   *
+   * Its own envelope rather than sharing the capability one, for
+   * `planFitsEnvelope`'s reason: it pins one assignment template per envelope,
+   * and *what producing requires* and *what entering costs* have two different
+   * completion standards. The second one's completion standard is the unusual
+   * half — a requirement with no published figure is a **successful** answer
+   * — and judging it by the first's would push a worker towards producing an
+   * estimate, which is the one output this question most needs never to
+   * receive.
+   */
+  RUSSELL_MACHINE_CAPITAL_V1: Object.freeze({
+    id: 'RUSSELL_MACHINE_CAPITAL_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a manufacturing programme ' +
+      'when they started it: published sources only, with no spending, no paid API or ' +
+      'purchased data, no contact with any person or organisation, no advertising, no ' +
+      'publishing and no external effect of any kind. This envelope is that authorization ' +
+      'applied to establishing what entering a class of machine costs, requirement by ' +
+      'requirement, from figures somebody has already published. It authorizes reading about ' +
+      'what things cost and never spending anything, requesting a quotation, or committing to ' +
+      'a purchase: every one of those is a commercial action a person grants separately, and ' +
+      'never this envelope.',
+    assignmentTemplate: MACHINE_CAPITAL_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * Which firms could supply what a class of machine requires.
+   *
+   * The directive asks Brain to *identify acquisition opportunities*, and its
+   * optimization rule gives the reason: *an acquisition could suddenly make an
+   * advanced category viable much earlier*. Identifying one is research about
+   * published sources and it is authorized here.
+   *
+   * **Everything that follows from one is not, and this envelope is where that
+   * is said rather than assumed.** Approaching, requesting information from,
+   * valuing, offering for, committing to, diligencing or buying a firm are
+   * separately authorized commercial actions, and no route through this kernel
+   * reaches one. The table these findings land in has no column an approach,
+   * a valuation, a term or a commitment could be written into, which is the
+   * mechanism; this paragraph and the assignment are what make the boundary
+   * legible to the worker as well as to the schema.
+   */
+  RUSSELL_MACHINE_ACQUISITION_V1: Object.freeze({
+    id: 'RUSSELL_MACHINE_ACQUISITION_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a manufacturing programme ' +
+      'when they started it: published sources only, with no spending, no paid API or ' +
+      'purchased data, no contact with any person or organisation, no advertising, no ' +
+      'publishing and no external effect of any kind. This envelope is that authorization ' +
+      'applied to identifying, from published sources, which firms hold something a class of ' +
+      'machine requires. It authorizes naming them and saying what each holds. It authorizes ' +
+      'no approach, no request for information, no valuation, no offer, no diligence ' +
+      'commitment, no negotiation and no purchase — every one of those is a decision a person ' +
+      'makes under a separate authorization, and nothing in this programme can make it.',
+    assignmentTemplate: MACHINE_ACQUISITION_ASSIGNMENT_TEMPLATE,
     jurisdiction: 'the market this question names',
     maxFragments: null,
     geography: /\S/,

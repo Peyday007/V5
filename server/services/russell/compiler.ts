@@ -75,6 +75,8 @@ import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
+import { dealRoundForCandidate } from '../../repos/dealflow.ts';
+import type { DealRoundPurpose } from '../../domain/types.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { laborRoundForCandidate } from '../../repos/labor.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
@@ -143,6 +145,21 @@ const ENVELOPE_BY_PROJECT: Readonly<Record<string, string>> = Object.freeze({
  * The in-code map wins where it has an entry, so nothing about an existing
  * project's authorization can be changed by activating a cash mode on it.
  */
+/**
+ * The dealflow purposes judged by the terms envelope.
+ *
+ * A `Set` over three of the eight rather than a `Record` over all of them,
+ * deliberately: the default here is the *safer* of the two — the parties
+ * envelope, whose completion standard demands a named organisation — so a
+ * purpose added later and forgotten is judged by the stricter deliverable
+ * rather than by the one that accepts a documented absence.
+ */
+const DEALFLOW_TERM_PURPOSES: ReadonlySet<DealRoundPurpose> = new Set<DealRoundPurpose>([
+  'COMPLIANCE',
+  'LANDED_COST',
+  'STRUCTURE',
+]);
+
 async function envelopeIdFor(
   project: Project,
   candidate: RussellCandidate,
@@ -208,9 +225,13 @@ async function envelopeIdFor(
    * declared envelope. What is refused is judging a question by the completion
    * standard of a question nobody asked.
    *
-   * Three envelopes rather than one, because `planFitsEnvelope` pins one
-   * assignment template per envelope and the three questions have three
-   * completion standards.
+   * Five envelopes rather than one, because `planFitsEnvelope` pins one
+   * assignment template per envelope and these questions have five completion
+   * standards. Two of them are unusual enough that sharing would be the
+   * Westbrook defect outright: a capital question's *successful* answer
+   * includes a requirement with no published figure, and an acquisition
+   * question's completion standard is a **boundary** rather than a quantity —
+   * naming firms and going no further.
    */
   const programme = await manufacturingRoundForCandidate(candidate.id);
   if (programme) {
@@ -218,6 +239,8 @@ async function envelopeIdFor(
       return 'RUSSELL_MACHINE_LADDER_V1';
     }
     if (programme.purpose === 'DEMAND') return 'RUSSELL_MACHINE_DEMAND_V1';
+    if (programme.purpose === 'CAPITAL') return 'RUSSELL_MACHINE_CAPITAL_V1';
+    if (programme.purpose === 'ACQUISITION') return 'RUSSELL_MACHINE_ACQUISITION_V1';
     return 'RUSSELL_MACHINE_CAPABILITY_V1';
   }
 
@@ -259,6 +282,29 @@ async function envelopeIdFor(
       return 'RUSSELL_INDUSTRY_MAP_V1';
     }
     if (kernel.purpose === 'CAPITAL') return 'RUSSELL_CAPITAL_STRUCTURE_V1';
+  }
+
+  /*
+   * A dealflow question is decided the same way, by the round that asked it.
+   *
+   * Two envelopes rather than one, because the two halves of this kernel have
+   * opposite completion standards: establishing who is on each side is a
+   * question whose deliverable is a *name*, and establishing what the
+   * transaction involves is a question whose most valuable deliverable is
+   * often a documented *absence*. `planFitsEnvelope` pins one template per
+   * envelope, so a packet judged by the wrong one would be judged against a
+   * completion standard that is not its own.
+   *
+   * Neither widens anything: both take their source classes and their
+   * forbidden actions verbatim from the discovery envelope, so nothing about
+   * this kernel authorizes an effect the sprint's own grant did not already
+   * authorize — which is nothing at all beyond reading.
+   */
+  const dealflow = await dealRoundForCandidate(candidate.id);
+  if (dealflow) {
+    return DEALFLOW_TERM_PURPOSES.has(dealflow.purpose)
+      ? 'RUSSELL_DEALFLOW_TERMS_V1'
+      : 'RUSSELL_DEALFLOW_PARTIES_V1';
   }
   if (await opportunityForOwnCandidate(project.id, candidate.id)) {
     return 'RUSSELL_CASH_VALIDATION_V1';

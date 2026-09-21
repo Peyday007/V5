@@ -49,6 +49,15 @@ import {
   GAP_CLASSIFICATIONS,
 } from '../domain/types.ts';
 import {
+  COMMERCIAL_STRUCTURES,
+  COMPLIANCE_LAYERS,
+  COST_COMPONENTS,
+  DEAL_FINDINGS,
+  DEAL_FINDING_GUIDE,
+  validateDealFinding,
+} from '../domain/dealflow.ts';
+import type { DealFinding } from '../domain/types.ts';
+import {
   TerminalEffectFailure,
   type OperationNamespace,
 } from '../services/effects/engine.ts';
@@ -100,6 +109,7 @@ import { RATE_BASES } from '../domain/types.ts';
 import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
 import {
   CAPABILITY_FINDINGS,
+  describeQualifiers,
   describeVocabularies,
   FINDING_GUIDE as CAPABILITY_FINDING_GUIDE,
   validateCapabilityFinding,
@@ -1177,18 +1187,81 @@ function capabilityOf(
   capabilityFinding: CapabilityFinding | null;
   capabilitySubject: string | null;
   capabilityObservedOn: string | null;
+  capabilityQualifier: string | null;
+  capabilityBasis: string | null;
+  capabilityAmountLowMinor: number | null;
+  capabilityAmountHighMinor: number | null;
+  capabilityCurrency: string | null;
 } {
   const parsed = validateCapabilityFinding({
     where,
     finding: row['capability_finding'],
     subject: row['capability_subject'],
     observedOn: row['capability_observed_on'],
+    qualifier: row['capability_qualifier'],
+    basis: row['capability_basis'],
+    amountLowMinor: row['capability_amount_low_minor'],
+    amountHighMinor: row['capability_amount_high_minor'],
+    currency: row['capability_currency'],
   });
   if (!parsed.ok) throw invalidInput(parsed.error);
   return {
     capabilityFinding: parsed.value.finding,
     capabilitySubject: parsed.value.subject,
     capabilityObservedOn: parsed.value.observedOn,
+    capabilityQualifier: parsed.value.qualifier,
+    capabilityBasis: parsed.value.basis,
+    capabilityAmountLowMinor: parsed.value.amountLowMinor,
+    capabilityAmountHighMinor: parsed.value.amountHighMinor,
+    capabilityCurrency: parsed.value.currency,
+  };
+}
+
+/**
+ * The dealflow declaration on one submitted claim.
+ *
+ * Delegated whole to `validateDealFinding`, which is also what the provider
+ * path in `services/research/schema.ts` calls. The wire names are snake_case
+ * and the parsed names are not, so this is a rename and nothing else.
+ *
+ * `searched_repositories` is passed through because one finding — and only
+ * one — asserts that something does not exist, and §14 is explicit that such a
+ * claim is established by a documented search or not at all. Refusing it here
+ * rather than at absorb time means the worker is told while it still has the
+ * attempt to spend.
+ */
+function dealOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  dealFinding: DealFinding | null;
+  dealSubject: string | null;
+  dealEquipment: string | null;
+  dealJurisdiction: string | null;
+  dealValue: string | null;
+  dealAmountCents: number | null;
+  dealCurrency: string | null;
+} {
+  const parsed = validateDealFinding({
+    where,
+    finding: row['deal_finding'],
+    subject: row['deal_subject'],
+    equipmentClass: row['deal_equipment'],
+    jurisdiction: row['deal_jurisdiction'],
+    value: row['deal_value'],
+    amountCents: row['deal_amount_cents'],
+    currency: row['deal_currency'],
+    searchedRepositories: row['searched_repositories'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    dealFinding: parsed.value.finding,
+    dealSubject: parsed.value.subject,
+    dealEquipment: parsed.value.equipmentClass,
+    dealJurisdiction: parsed.value.jurisdiction,
+    dealValue: parsed.value.value,
+    dealAmountCents: parsed.value.amountCents,
+    dealCurrency: parsed.value.currency,
   };
 }
 
@@ -1219,14 +1292,27 @@ const submitClaimsTool: McpTool = {
     'Separately again, where a claim establishes what building a machine takes or teaches, ' +
     'set capability_finding to the kind it is: ' +
     CAPABILITY_FINDINGS.map((one) => `${one} — ${CAPABILITY_FINDING_GUIDE[one]}`).join('; ') +
-    '. All nine require capability_subject. For a category, a capability or a component that ' +
-    'is its own name as the source calls it; for the four that have a closed set it is a value ' +
-    'from that set (' +
+    '. All of them require capability_subject. For a category, a capability, a component or a ' +
+    'firm that is its own name as the source calls it; for the kinds that have a closed set it ' +
+    'is a value from that set (' +
     describeVocabularies() +
-    '). DEMAND_EVIDENCE additionally requires capability_observed_on, the date the source ' +
-    'observed it, because an undated buying signal cannot be told apart from an old one. ' +
+    '). CAPITAL_REQUIREMENT and ACQUISITION_CANDIDATE additionally require ' +
+    'capability_qualifier, and CAPITAL_REQUIREMENT requires capability_basis (' +
+    describeQualifiers() +
+    '). DEMAND_EVIDENCE and CAPITAL_REQUIREMENT additionally require capability_observed_on, ' +
+    'the date the source observed it, because an undated buying signal cannot be told apart ' +
+    'from an old one and an undated cost from one published before a tariff changed. ' +
     'A claim can carry any of opportunity_signal, structural_finding and capability_finding ' +
     'together, and most claims carry none of the three. ' +
+    'And separately again, where a claim establishes something about a cross-border ' +
+    'transaction — who needs the equipment, who builds it, what the destination market ' +
+    'demands of it, what a line of the landed cost is, or how this trade actually pays — ' +
+    'set deal_finding to the kind it is: ' +
+    DEAL_FINDINGS.map((one) => `${one} — ${DEAL_FINDING_GUIDE[one]}`).join('; ') +
+    '. All but DECISION_MAKER also require deal_equipment, and the two requirement kinds ' +
+    'require deal_jurisdiction and deal_value. ' +
+    'The three axes are independent: a claim can carry an opportunity_signal, a ' +
+    'structural_finding and a deal_finding at once, and most claims carry none of them. ' +
     'One submission per work item; a redelivery replays it rather than adding to it.',
   inputSchema: {
     type: 'object',
@@ -1376,8 +1462,8 @@ const submitClaimsTool: McpTool = {
               type: 'string',
               description:
                 'Required whenever capability_finding is set: what the finding is about. For a ' +
-                'category, a capability or a bought-in component it is that thing\'s own name ' +
-                'as the source calls it, not a sentence about it. For the four kinds with a ' +
+                'category, a capability, a bought-in component or a firm it is that thing\'s ' +
+                'own name as the source calls it, not a sentence about it. For the kinds with a ' +
                 'closed set it is a value from that set: ' +
                 describeVocabularies() +
                 '.',
@@ -1385,11 +1471,134 @@ const submitClaimsTool: McpTool = {
             capability_observed_on: {
               type: 'string',
               description:
-                'Only for DEMAND_EVIDENCE, where it is required: the ISO-8601 date the source ' +
-                'observed what it reports. An undated buying signal cannot be told apart from ' +
-                'one somebody remembers from years ago, and this is the field that decides ' +
-                'whether a machine category counts as having established demand. Omitted for ' +
-                'every other kind.',
+                'Required for DEMAND_EVIDENCE and for CAPITAL_REQUIREMENT: the ISO-8601 date ' +
+                'the source observed what it reports, or the date its figure was true. An ' +
+                'undated buying signal cannot be told apart from one somebody remembers from ' +
+                'years ago, and an undated cost from one published before a tariff changed — ' +
+                'and both are what decide whether a machine category may be entered. Omitted ' +
+                'for every other kind.',
+            },
+            /*
+             * The five fields below are declared for the reason the comment
+             * above `capability_finding` records: §33 shipped a field its own
+             * description told a worker to set and its schema forbade, so a
+             * client honouring the schema dropped the one value that decided
+             * whether anything was ever created. Everything the prose names is
+             * declared here.
+             */
+            capability_qualifier: {
+              type: 'string',
+              description:
+                'Required for CAPITAL_REQUIREMENT and ACQUISITION_CANDIDATE, omitted for every ' +
+                'other kind. For a capital requirement it is which shape of the business the ' +
+                'figure is about; for an acquisition candidate it is what buying that firm ' +
+                'would contribute: ' +
+                describeQualifiers() +
+                '.',
+            },
+            capability_basis: {
+              type: 'string',
+              description:
+                'Required for CAPITAL_REQUIREMENT and omitted for every other kind: what kind ' +
+                'of figure this is. A regulator\'s published fee and somebody\'s market ' +
+                'estimate are both worth having and are not the same fact, and a reading that ' +
+                'could not tell them apart would present the second with the first\'s ' +
+                'authority.',
+            },
+            capability_amount_low_minor: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'Only for CAPITAL_REQUIREMENT, and optional even there. The low end of the ' +
+                'published range in minor units — 1250000 for $12,500.00. Give both ends or ' +
+                'neither; a source publishing one figure sets them equal. Leave all three money ' +
+                'fields out when the requirement is real and nothing publishes what it costs: ' +
+                'that is a finding worth submitting exactly as it is, and an estimate of your ' +
+                'own is not.',
+            },
+            capability_amount_high_minor: {
+              type: 'integer',
+              minimum: 0,
+              description: 'The high end of the published range, in minor units. See the low end.',
+            },
+            capability_currency: {
+              type: 'string',
+              description:
+                'Required whenever an amount is given: the three-letter ISO 4217 code the ' +
+                'source published the figure in. A bare number takes the unknown as a ' +
+                'favourable assumption.',
+            },
+
+            /*
+             * The fifth axis, declared rather than merely described — §33's
+             * defect, which this schema already records one field above.
+             */
+            deal_finding: {
+              type: 'string',
+              enum: [...DEAL_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes ' +
+                'something about a cross-border transaction: ' +
+                DEAL_FINDINGS.map((one) => `${one} — ${DEAL_FINDING_GUIDE[one]}`).join('; ') +
+                '. Independent of opportunity_signal and structural_finding — a claim may ' +
+                'carry any of the three, all of them, or none.',
+            },
+            deal_subject: {
+              type: 'string',
+              description:
+                'Required whenever deal_finding is set: what the finding names — the ' +
+                'organisation, the requirement, the cost line, the structure — as the source ' +
+                'writes it, not a sentence about it.',
+            },
+            deal_equipment: {
+              type: 'string',
+              description:
+                'Required for every deal_finding except DECISION_MAKER: which class of ' +
+                'equipment this is about. Where the assignment named a class, declare that ' +
+                'class back verbatim. Two spellings of one class are two classes to Brain, ' +
+                'and the second one pairs with nothing.',
+            },
+            deal_jurisdiction: {
+              type: 'string',
+              description:
+                'Required for COMPLIANCE_REQUIREMENT and REQUIREMENT_ABSENCE: the market the ' +
+                'requirement applies in. The same goods are legal in one market and ' +
+                'unregistrable in the next, so a requirement with no market attached ' +
+                'establishes nothing. Optional elsewhere, where it says which country the ' +
+                'party or the figure belongs to.',
+            },
+            deal_value: {
+              type: 'string',
+              description:
+                'Required for three findings, and refused for the others. For ' +
+                'COMPLIANCE_REQUIREMENT and REQUIREMENT_ABSENCE, which layer: ' +
+                COMPLIANCE_LAYERS.join(', ') +
+                ' — and these do not collapse into each other, because a factory quality ' +
+                'certificate does not make a product registrable and a registration does not ' +
+                'make a buyer accept it. For COST_COMPONENT, which line: ' +
+                COST_COMPONENTS.join(', ') +
+                '. For COMMERCIAL_PRECEDENT, which structure: ' +
+                COMMERCIAL_STRUCTURES.join(', ') +
+                '.',
+            },
+            deal_amount_cents: {
+              type: 'integer',
+              description:
+                'Required for COST_COMPONENT and refused for every other deal_finding: the ' +
+                'figure the source publishes, in minor units of the currency you name in ' +
+                'the claim. A cost line with no figure makes the landed cost look complete ' +
+                'while contributing nothing to it, so it is refused rather than stored — ' +
+                'submit the claim without a deal_finding if the source states no figure.',
+            },
+            deal_currency: {
+              type: 'string',
+              description:
+                'Required for COST_COMPONENT and refused for every other deal_finding: the ' +
+                'three-letter ISO 4217 code of the currency the source published the figure ' +
+                'in — USD, EUR, CNY, ZAR. Report it as published. Brain never converts ' +
+                'between currencies, so a lane whose figures are in two of them has its ' +
+                'landed cost withheld and says why; a figure relabelled into a currency the ' +
+                'source did not use would be a number nobody can check.',
             },
             retrieval_state: {
               type: 'string',
@@ -1494,6 +1703,19 @@ const submitClaimsTool: McpTool = {
          * each rather than one shared column, so no answer overwrites another.
          */
         ...capabilityOf(row, where),
+
+        /*
+         * And what it establishes about a cross-border transaction.
+         *
+         * The third axis, and the one whose columns decide whether a buyer, a
+         * supplier, a compliance requirement or a cost line ever reaches the
+         * dealflow tables. Declared here rather than only described, because
+         * §33 records what the alternative costs: `opportunity_signal` was
+         * named in a tool's prose and left out of its schema, and
+         * `additionalProperties: false` meant a client honouring the schema
+         * dropped the one field that decided whether anything was created.
+         */
+        ...dealOf(row, where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),

@@ -184,6 +184,35 @@ export function allocate(input: {
     }
 
     /*
+     * Rule 1b — the cheapest remaining gap on the whole ladder.
+     *
+     * `COST_UNKNOWN` means demand, a route, the requirements and the holdings
+     * are all settled and the only thing nobody has established is what
+     * entering costs. That is one question away from a verdict, and the
+     * directive's ENTRY dimension names required capital first — so it
+     * outranks every category that still needs a capability built, which is
+     * work measured in years rather than in one round.
+     */
+    if (
+      reading.verdict === 'COST_UNKNOWN' &&
+      !coverage.open.CAPITAL &&
+      !barrenOf(coverage, 'CAPITAL')
+    ) {
+      candidates.push({
+        purpose: 'CAPITAL',
+        categoryId: coverage.category.id,
+        round: nextRound(snapshot.rounds, 'CAPITAL', coverage.category.id),
+        rank: 150 + coverage.depth,
+        subject: where,
+        since,
+        why:
+          `${where} has buyers, a route, established requirements and every one of them held. ` +
+          'The only thing nobody has established is what entering costs, which is one ' +
+          'question rather than a capability to build.',
+      });
+    }
+
+    /*
      * Rule 2 — demand before anything else about a category.
      *
      * The brief's core principle as an ordering. A category whose demand has
@@ -263,6 +292,71 @@ export function allocate(input: {
     }
 
     /*
+     * Rule 3b — what entering a proven category costs.
+     *
+     * Behind the capability question rather than in front of it, and the order
+     * matters in the expensive direction: pricing entry into a category this
+     * company cannot yet produce spends a round on a figure nobody can act on.
+     * The directive's own sequence agrees — required capital sits under ENTRY,
+     * and ENTRY comes after demand and distribution.
+     */
+    if (
+      coverage.demand.length > 0 &&
+      coverage.requires.length > 0 &&
+      coverage.settled.CAPITAL === 0 &&
+      !coverage.open.CAPITAL
+    ) {
+      candidates.push({
+        purpose: 'CAPITAL',
+        categoryId: coverage.category.id,
+        round: nextRound(snapshot.rounds, 'CAPITAL', coverage.category.id),
+        rank: 350 + coverage.depth,
+        subject: where,
+        since,
+        why:
+          `${where} has published buyers and established requirements, and nothing has ` +
+          'established what entering it costs.',
+      });
+    }
+
+    /*
+     * Rule 4b — who could be bought instead of built.
+     *
+     * The condition is a capability gap **nothing on the ladder teaches**, and
+     * that is what makes this worth a round rather than a curiosity. The
+     * directive's optimization rule gives the reason in its own words: *an
+     * acquisition could suddenly make an advanced category viable much
+     * earlier*. A gap something already on the ladder develops has a cheaper
+     * answer — build the thing that teaches it — so asking here would be
+     * spending a round to learn something the chain already says.
+     *
+     * It identifies and nothing else. Approaching, valuing, offering,
+     * committing and buying are separately authorized and have no route
+     * through this kernel, which is a property of the tables rather than of
+     * this comment.
+     */
+    const unbridged = reading.missing.filter((gap) => gap.taughtBy.length === 0);
+    if (
+      unbridged.length > 0 &&
+      coverage.settled.ACQUISITION === 0 &&
+      !coverage.open.ACQUISITION
+    ) {
+      candidates.push({
+        purpose: 'ACQUISITION',
+        categoryId: coverage.category.id,
+        round: nextRound(snapshot.rounds, 'ACQUISITION', coverage.category.id),
+        rank: 450 + coverage.depth,
+        subject: where,
+        since,
+        why:
+          `Producing in ${where} requires ${unbridged
+            .map((gap) => gap.capability.name)
+            .join(', ')}, which nothing on the ladder is established to develop. A firm that ` +
+          'already holds one is worth naming — identifying one, never pursuing it.',
+      });
+    }
+
+    /*
      * Rule 5 — widen the ladder where something was found.
      *
      * The recursion the brief asks for, and the condition it turns on is
@@ -328,6 +422,67 @@ export function allocate(input: {
     }
   }
 
+  /*
+   * Rule 7 — the anchor escape.
+   *
+   * ---------------------------------------------------------------------
+   * The trap this exists to get out of
+   * ---------------------------------------------------------------------
+   *
+   * Every rule above asks about a category that is already on the ladder, and
+   * `MAP` attaches what it finds *underneath* the category it asked about. So
+   * a programme seeded with one anchor — or one whose opening question came
+   * back narrow — recurses forever inside that anchor's own subtree. Every row
+   * reads healthy, every round finds something, and the kernel is exploring a
+   * cone rather than the physical manufacturing world the directive asks for:
+   * *do not wait for the user to manually enumerate every possible machine or
+   * industry.*
+   *
+   * The escape is the opening question itself, asked again. It names **sources
+   * rather than categories** — classification systems, trade associations,
+   * regulators, the trade press — so what it comes back with is not bounded by
+   * anything already on the ladder. That is why the fix is a second bootstrap
+   * round rather than a list of other places to look: a list would be the
+   * declared ladder this kernel exists not to have.
+   *
+   * The condition is *concentration*, read from rows: every live category
+   * descends from one root, and that root's subtree has actually produced
+   * evidence. Both halves matter. Without the first this fires on a healthy
+   * broad ladder and spends rounds re-asking a question already answered;
+   * without the second it fires on a ladder that is narrow because nothing has
+   * been established yet, where the remedy is to research what is there rather
+   * than to look wider.
+   *
+   * It is last, so it never takes a slot from a category with published buyers
+   * waiting on its next question — breadth is worth having and it is not worth
+   * more than finishing something.
+   */
+  const anchor = soleRoot(snapshot);
+  if (
+    anchor &&
+    !snapshot.bootstrap.open &&
+    snapshot.coverage.some((one) => one.demand.length + one.requires.length > 0) &&
+    pastBootstrapCoolOff(snapshot)
+  ) {
+    candidates.push({
+      purpose: 'BOOTSTRAP',
+      categoryId: null,
+      round: nextRound(snapshot.rounds, 'BOOTSTRAP', null),
+      rank: 700,
+      subject: 'classes of machine outside the ladder',
+      since: snapshot.at,
+      why:
+        `Every category on the ladder sits under ${anchor}, and research inside it has ` +
+        'established something. Asking the sources again what classes of machine they ' +
+        'recognise is what reaches the ones no question about this anchor could ever produce.',
+    });
+  } else if (anchor && snapshot.bootstrap.open) {
+    declined.push({
+      subject: 'classes of machine outside the ladder',
+      why: 'The opening question is already running, and asking again would duplicate it.',
+    });
+  }
+
   candidates.sort(
     (a, b) => a.rank - b.rank || a.since.localeCompare(b.since) || compareAsk(a, b),
   );
@@ -375,6 +530,40 @@ export function allocate(input: {
  */
 function barrenOf(coverage: CategoryCoverage, purpose: ManufacturingRoundPurpose): boolean {
   return coverage.settled[purpose] >= BARREN_ROUNDS && coverage.found[purpose] === 0;
+}
+
+/**
+ * The one root every live category descends from, or null.
+ *
+ * Null is the healthy answer: a ladder with two or more roots is not trapped
+ * inside one anchor's adjacency graph, and nothing needs to escape it. It is
+ * read from `parentId` rather than from how a category arrived, because a
+ * category seeded by a person and one discovered by a round are equally
+ * capable of being the only thing on the ladder.
+ */
+function soleRoot(snapshot: LadderSnapshot): string | null {
+  const live = snapshot.categories.filter((one) => one.retiredAt === null);
+  if (live.length === 0) return null;
+  const roots = live.filter((one) => one.parentId === null);
+  return roots.length === 1 && roots[0] ? roots[0].name : null;
+}
+
+/**
+ * The opening question waits out a cool-off like every other settled round.
+ *
+ * Measured from the newest bootstrap round rather than from the ladder's
+ * activity, because what this bounds is how often *that question* is re-asked
+ * — a subtree that is busy is not a reason to ask the sources again about
+ * everything else.
+ */
+function pastBootstrapCoolOff(snapshot: LadderSnapshot): boolean {
+  const settled = snapshot.rounds
+    .filter((one) => one.purpose === 'BOOTSTRAP' && one.harvestedAt !== null)
+    .map((one) => one.harvestedAt ?? '')
+    .sort()
+    .at(-1);
+  if (!settled) return false;
+  return Date.parse(snapshot.at) - Date.parse(settled) >= ROUND_COOL_OFF_MS;
 }
 
 function pastCoolOff(coverage: CategoryCoverage, now: string): boolean {

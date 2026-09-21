@@ -312,6 +312,8 @@ export function mapSession(row: FactorySessionRow): FactorySession {
     usage: parseJson<FactoryUsage | null>(row.usage, null),
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    binId: row.bin_id ?? null,
+    leaseGeneration: row.lease_generation ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -354,6 +356,79 @@ export async function openSession(input: OpenSessionInput): Promise<FactorySessi
   const row = await db.get<FactorySessionRow>(`SELECT * FROM factory_sessions WHERE id = ?`, [id]);
   if (!row) throw new Error('factory: session vanished immediately after insert');
   return mapSession(row);
+}
+
+/**
+ * Record a session the hosted plane ran, from the episode Brain observed.
+ *
+ * `openSession` is for a session this process *starts*, so it opens RUNNING and
+ * is closed later by whatever was running it. There is nothing running here:
+ * the session happened on somebody else's machine, Brain fired it, leased it a
+ * bin, timed it and wrote all of that down, and this is that record being read
+ * back into the table `metrics.ts` sweeps. So it arrives already finished, with
+ * both ends of its interval, and never transitions.
+ *
+ * **Idempotent by the episode rather than by a flag.** `(bin_id,
+ * lease_generation)` is unique, so a second tick reading the same finished bin
+ * inserts nothing and the loser is an ordinary outcome — the same shape every
+ * claim in this codebase has. It returns whether this call was the one that
+ * recorded it, which is what makes the tick's report a measurement rather than
+ * a count of attempts.
+ */
+export async function recordObservedSession(input: {
+  campaignId: string;
+  unitId: string | null;
+  workerId: string;
+  accountRef: string;
+  attempt: number;
+  role: FactoryRole;
+  externalSessionId: string | null;
+  model: string;
+  state: Exclude<FactorySessionState, 'RUNNING'>;
+  exitReason: string | null;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number | null;
+  binId: string;
+  leaseGeneration: number;
+}): Promise<boolean> {
+  const db = getDb();
+  const id = newId('fss');
+  const at = factoryNow();
+  const result = await db.run(
+    `INSERT INTO factory_sessions (
+       id, campaign_id, unit_id, worker_id, account_ref, attempt, role,
+       external_session_id, model, state, exit_reason, duration_ms, num_turns,
+       usage, started_at, ended_at, bin_id, lease_generation, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)
+     -- The index is partial, so the predicate has to be repeated here: both
+     -- dialects refuse a conflict target that does not name the *whole* index,
+     -- and SQLite's refusal is at prepare time with "does not match any PRIMARY
+     -- KEY or UNIQUE constraint" — which reads like a missing index rather than
+     -- an under-specified target. Found by running it.
+     ON CONFLICT (bin_id, lease_generation) WHERE bin_id IS NOT NULL DO NOTHING`,
+    [
+      id,
+      input.campaignId,
+      input.unitId,
+      input.workerId,
+      input.accountRef,
+      input.attempt,
+      input.role,
+      input.externalSessionId,
+      input.model,
+      input.state,
+      bound(input.exitReason ?? null),
+      input.durationMs,
+      input.startedAt,
+      input.endedAt,
+      input.binId,
+      input.leaseGeneration,
+      at,
+      at,
+    ],
+  );
+  return result.changes === 1;
 }
 
 export interface CloseSessionInput {
