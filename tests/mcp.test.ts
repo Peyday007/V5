@@ -511,6 +511,36 @@ describe('authentication', () => {
     expect(response.status).toBe(401);
   });
 
+  it("refuses a person's conversation-bridge bearer, which is not a worker", async () => {
+    /*
+     * The door is an allowlist, and this is why it has to be.
+     *
+     * It used to refuse `SESSION_COOKIE` by name, which was correct for exactly
+     * as long as there were three authentication methods. `brnc_` is a fourth:
+     * it resolves to a **person**, and it sets a header rather than a cookie —
+     * so a check written as "not a cookie" admitted it, and a key somebody
+     * pasted into a chat client would have reached the worker tool surface.
+     *
+     * §21 admits the Step 4 worker credential and the Step 8 OAuth token, and
+     * nothing else. The refusal is byte-identical to an unknown credential's,
+     * because saying *which* kind of valid credential this is would tell a
+     * caller what they are holding.
+     */
+    // Minted over HTTP through the route a person uses, so this is the
+    // credential the product actually issues rather than one the test invented.
+    const minted = await api<{ secret: string }>('POST', '/api/bridge/credentials', {
+      cookie: adminCookie,
+      body: { label: 'ChatGPT' },
+    });
+    expect(minted.status).toBe(200);
+    expect(minted.body.secret.startsWith('brnc_')).toBe(true);
+
+    const refused = await mcp('server/discover', {}, { bearer: minted.body.secret });
+    const unknown = await mcp('server/discover', {}, { bearer: 'brnw_0123456789abcdef.notarealsecretvalue' });
+    expect(refused.status).toBe(401);
+    expect(JSON.stringify(refused.body)).toBe(JSON.stringify(unknown.body));
+  });
+
   it('refuses a credential smuggled through the query string', async () => {
     const response = await fetch(`${MCP}?access_token=${encodeURIComponent(workerSecret)}`, {
       method: 'POST',

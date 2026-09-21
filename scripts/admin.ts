@@ -590,7 +590,7 @@ async function main(): Promise<void> {
     /*
      * Recording that a surface this Brain already fires is somebody's.
      *
-     * The repair for the split brain migration 083 describes: four Routines
+     * The repair for the split brain migration 084 describes: four Routines
      * registered on a terminal long before `capacity_connections` existed,
      * firing every day, and a People page telling their owner that their
      * Claude account was not connected because it looked the worker up by a
