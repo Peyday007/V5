@@ -128,7 +128,7 @@ const ORDERS: Record<string, readonly string[]> = {
  * ran and failed is more known than one that never ran, and a reading that
  * moved a failing faculty back to untested would erase the failure.
  */
-function lowers(dimension: string, from: string, to: string): boolean {
+export function lowers(dimension: string, from: string, to: string): boolean {
   const order = ORDERS[dimension];
   if (!order) return false;
   const a = order.indexOf(from);
