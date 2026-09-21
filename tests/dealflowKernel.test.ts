@@ -28,7 +28,7 @@
  * **Transaction value is not our capital.** §13's whole distinction, and the
  * view is asserted to report no revenue figure at all.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
@@ -352,6 +352,53 @@ describe('the seed is an example, not the taxonomy', () => {
  * because a test that greps a `.sql` file passes whenever the string is
  * present and says nothing about whether the constraint is installed.
  */
+/**
+ * An operator report is read *beside* a running app, and both halves of that
+ * sentence are requirements on the script rather than on the reader.
+ *
+ * The dealflow kernel's only production reading is `cash-report.sh`, and on
+ * 2026-09-21 it printed the whole sprint and then died on its last query —
+ * `SELECT * FROM deal_observations` — with
+ * `EMAXCONNSESSION ... pool_size: 15`. The Supabase pooler has a shared
+ * fifteen-client limit, the app holds clients while it works, and this script
+ * carried no pool setting at all, so it took the adapter's default of ten. A
+ * reading nobody can take while the thing it reads is working is not a
+ * reading, which is the defect this repository keeps correcting at columns and
+ * at state machines and had not yet corrected at a shell script.
+ *
+ * `labor-report.sh` already carried both lines and its comments already gave
+ * both reasons. That is what makes this a **rule** rather than one fix: a rule
+ * one of five readers obeys is worse than none, because the next report is
+ * written by copying whichever one the author opened.
+ *
+ * Read out of the repository rather than driven, for
+ * `operatorConsoleRemoved`'s reason: what must be true of every file of a kind
+ * is not something a behavioural test can see.
+ */
+describe('a report read beside a running app', () => {
+  const reports = readdirSync('scripts')
+    .filter((name) => name.endsWith('-report.sh'))
+    .sort();
+
+  it('has reports to check at all, so an empty glob cannot pass silently', () => {
+    expect(reports.length).toBeGreaterThanOrEqual(4);
+  });
+
+  for (const name of reports) {
+    it(`${name} takes the smallest footprint it can on a shared pooler limit`, () => {
+      const body = readFileSync(`scripts/${name}`, 'utf8');
+      expect(body).toMatch(/export BRAIN_DATABASE_POOL_SIZE=/);
+    });
+
+    it(`${name} says which container it came out of`, () => {
+      const body = readFileSync(`scripts/${name}`, 'utf8');
+      // The deployment system's label is a claim about what it asked for. This
+      // is a reading of what is actually serving.
+      expect(body).toMatch(/SERVING_REVISION \$\{BRAIN_REVISION/);
+    });
+  }
+});
+
 describe('a figure that cannot be negative is refused by both backends', () => {
   it('refuses a negative deal_amount_cents at the column, on whichever backend is running', async () => {
     const run = await createRun({
