@@ -687,9 +687,21 @@ decision is cheap and reversible. Each grant also carries `forbiddenPaths`,
 which `validatePlan` applies — a different authority from the contract's
 mutation scope, kept apart so that a contract cannot widen it by asking.
 
-**`V5` is deliberately absent.** The factory lives in it, and a campaign that
-could rewrite the machinery executing it is the one campaign whose failure mode
-is not contained by declining a pull request.
+**`V5` used to be deliberately absent, and the correction is recorded here
+rather than edited out.** The reasoning was real and has not been waved away:
+the factory lives in this repository, so a campaign here can reach the
+machinery executing it, and that is the one failure mode declining a pull
+request does not *by itself* contain. What it was **not** is an operator
+decision — the envelope's own comment said as much at the time — and the owner
+has since named Brain as an intended target, to be improved through isolated
+branches, independent review and the existing controlled integration process.
+
+So the envelope grants `brain`, and what bounds a campaign there is
+`forbiddenPaths` rather than absence: a campaign in Brain may not own what
+authorizes it, what bounds it, or what deploys it. The list, and the four
+things around it that are the actual containment, are in *Brain itself, as a
+target* below. `oakwood-junk-removal` stays retired, which is a different
+decision on a standing operator instruction and is not reopened by this one.
 
 ### Onboarding a repository, and the half of it Brain cannot do
 
@@ -917,6 +929,55 @@ it on bins.
   unit's own recorded reason. `outstanding` excludes FAILED because nothing more
   will happen to it, and without this that meant a reviewer being asked to judge
   the base commit against a contract nothing had implemented.
+
+### What the hosted plane actually ran, and why nothing could say
+
+`maxObservedConcurrency` is the true maximum overlap of real session intervals,
+swept from `factory_sessions` — and **every writer of that table is on the local
+plane.** `architect.ts`, `dispatch.ts`, `review.ts` and `recovery.ts` each open a
+session because each one *starts* a process it can time. The hosted plane starts
+nothing: Brain fires a Routine and a worker somewhere else does the work. So it
+opened no sessions, and every hosted campaign reported `maxObservedConcurrency:
+0` with `concurrencyEvidence: UNKNOWN` — beside a `byWorker` and a `byRole`
+reading that were empty for the same reason.
+
+**That is not the UNKNOWN rule working.** A ceiling nobody has observed reads
+UNKNOWN and stays UNKNOWN, and that is right. Here Brain observed every one of
+them: it wrote the dispatch intent, recorded the arrival against the Routine it
+had chosen, stamped `BIN_ASSIGNED` when the lease was taken and `BIN_TERMINAL`
+when it ended, and timed the difference. Every fact was already in `bin_events`
+and `bin_dispatch`, and nothing read any of it into the one table the question is
+asked of. A column nothing reads, at the altitude of a whole execution plane.
+
+`services/factory/sessions.ts` is the reading, and four properties are what keep
+it a reading rather than a claim.
+
+- **Nothing in it comes from a worker.** The interval is Brain's own assignment
+  and terminal events. The worker identity is the one Brain leased the bin to.
+  The account comes from the `bin_dispatch` row Brain wrote when it chose the
+  surface, through `dispatchAttributionForLease`, which carries the same
+  one-apart correction `dispatchedSessionForLease` does — a dispatch generation
+  and a lease generation are one apart, and reading one as the other resolves
+  nothing, always. Brain's own record of which session it fired is preferred over
+  the one the worker reported, and the reported value is the fallback rather than
+  the answer.
+- **It is derived on the tick, not hooked to a completion.** So it reaches the
+  episodes already stranded — every hosted campaign this Brain has ever run —
+  survives a tick that died halfway, and cannot be missed by a code path that
+  forgot to call something.
+- **It is idempotent by the episode.** `(bin_id, lease_generation)` is unique, so
+  two ticks reading one finished bin write one row and the loser is an ordinary
+  outcome. A bin assigned twice — a release and a retake, or a takeover — is two
+  sessions rather than one long one, because that is what it was.
+- **It under-counts rather than over-counts.** An assignment Brain has no close
+  event for, which is what a lease that simply expired leaves behind, is left out
+  rather than given an invented end. The overlap reported is therefore a floor,
+  which is the safe direction for a ceiling; a figure that guessed at an ending
+  would be the projection this document refuses to report as throughput.
+
+The account it cannot resolve reads `UNKNOWN` rather than defaulting to the only
+Routine there is, and `model` reads `UNKNOWN` always, because Brain does not
+choose the model on this plane and does not observe it.
 
 ### `COWORK_ROUTINE`, and why the handshake is not an executor
 
