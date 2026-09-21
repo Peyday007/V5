@@ -26,7 +26,8 @@ import { cashTier } from '../server/services/cash/tier.ts';
 import { looksLikeAddress, personName, refuseAddressAsName } from '../server/domain/personName.ts';
 import { collectionNameFor } from '../server/services/russell/collections.ts';
 import { titleFrom } from '../server/services/russell/turn.ts';
-import { createUser, getUser, renameUser } from '../server/repos/identity.ts';
+import { createUser, createWorker, getUser, renameUser } from '../server/repos/identity.ts';
+import { bindRoutineWorker, createAccount, createRoutine } from '../server/repos/fleet.ts';
 import { createConversation, getConversation } from '../server/repos/russellConversations.ts';
 import { adoptSurface } from '../server/services/capacity/adopt.ts';
 import {
@@ -464,6 +465,82 @@ describe('an already-registered surface can be recorded as somebody’s', () => 
       actorUserId: 'usr_nobody',
     });
     expect(outcome.ok).toBe(false);
+  });
+
+  it('records the surface, idempotently, and never as healthy', async () => {
+    /*
+     * The production shape: `Brain Research A`, its real trigger reference and
+     * its real deployment secret, bound to a worker, registered long before
+     * anybody's connection journey existed.
+     */
+    const owner = await createUser({
+      email: 'owner-adopt@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const worker = await createWorker({
+      name: 'brain-worker',
+      displayName: 'Brain worker',
+      createdByType: 'HUMAN',
+      createdById: owner.id,
+    });
+    const account = await createAccount({ name: 'primary', declaredPlanPower: null });
+    const routine = await createRoutine({
+      accountId: account.id,
+      name: 'Brain Research A',
+      routineRef: 'trig_01CBLu5oCZziEwznw5q9xU7g',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN',
+      tokenDigest: 'a'.repeat(64),
+      capabilities: [],
+    });
+    await bindRoutineWorker(routine.id, worker.id);
+
+    const first = await adoptSurface({
+      userId: owner.id,
+      routineRef: 'trig_01CBLu5oCZziEwznw5q9xU7g',
+      actorUserId: owner.id,
+      channel: 'SHELL',
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.alreadyAdopted).toBe(false);
+    expect(first.connection.workerId).toBe(worker.id);
+    // The Routine's own names, not the ones `namesFor` would have derived: an
+    // administrator set that secret, and pointing a screen at a variable
+    // nothing reads is worse than no screen.
+    expect(first.connection.routineName).toBe('Brain Research A');
+    expect(first.connection.secretName).toBe('BRAIN_ROUTINE_TOKEN');
+    expect(first.connection.triggerRef).toBe('trig_01CBLu5oCZziEwznw5q9xU7g');
+    /*
+     * CONFIGURED, and never HEALTHY from somebody's say-so. Healthy is the
+     * four-row chain, read by `reconcile` on the next view.
+     */
+    expect(first.connection.state).toBe('CONFIGURED');
+
+    const again = await adoptSurface({
+      userId: owner.id,
+      routineRef: 'trig_01CBLu5oCZziEwznw5q9xU7g',
+      actorUserId: owner.id,
+      channel: 'SHELL',
+    });
+    expect(again.ok).toBe(true);
+    if (again.ok) expect(again.alreadyAdopted).toBe(true);
+
+    // And a surface belongs to one person.
+    const other = await createUser({
+      email: 'member-adopt@example.com',
+      displayName: 'Airyn',
+      password: 'a-long-enough-password',
+    });
+    const taken = await adoptSurface({
+      userId: other.id,
+      routineRef: 'trig_01CBLu5oCZziEwznw5q9xU7g',
+      actorUserId: owner.id,
+      channel: 'SHELL',
+    });
+    expect(taken.ok).toBe(false);
+    if (!taken.ok) expect(taken.reason).toContain('already recorded as somebody else');
   });
 });
 
