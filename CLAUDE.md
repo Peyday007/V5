@@ -8476,6 +8476,21 @@ rather than a reading of what is serving. The rule is held by a test that reads
 the repository, for `operatorConsoleRemoved`'s reason: what must be true of
 every file of a kind is not something a behavioural test can see.
 
+**And the first production reading found a tenth: the surface printed things a
+reader could not look up.** A live question appeared as *"LANDED_COST round 1 —
+mining dump trucks into Russia"* with no round id, and a market's compliance
+appeared as `INCOMPLETE(5 unresearched)` — which says how many layers are
+missing and not *which*. The whole reason the five do not collapse is that they
+have different remedies, so a count is the one shape that throws away what the
+separation is for. And a party appeared by name with no claim beside it,
+against §4's own rule that a party is a row a gated claim produced rather than
+a name somebody typed. Every line resolves to a row now: the round and the
+candidate on each question, the source claim on each party, the opportunity id
+or an explicit *nothing has been created* on each deal, and all five layers
+printed with their own readings — `NOT_ESTABLISHED` as loudly as the rest,
+because an absence of rows reading as a clearance is the one mistake here that
+gets equipment built for a market it cannot enter.
+
 **A third thing was corrected and is not a defect, because nothing read it:**
 three comments — the Postgres migration's header, this file's own section
 heading and the test suite's — said *four* compliance layers where

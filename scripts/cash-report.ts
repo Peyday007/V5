@@ -421,6 +421,38 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       );
     }
 
+    /*
+     * Every party with the claim that established it, because §4's whole rule
+     * is that a party is a row a gated claim produced rather than a name
+     * somebody typed. A reader who cannot walk from the name to the passage
+     * cannot check it.
+     */
+    if (dealflow.buyers.length > 0 || dealflow.suppliers.length > 0) {
+      console.log('');
+      console.log('DEALFLOW PARTIES');
+      for (const party of [...dealflow.buyers, ...dealflow.suppliers]) {
+        const side = dealflow.buyers.includes(party) ? 'BUYER' : 'SUPPLIER';
+        console.log(
+          `  [${side}] ${party.id}  ${party.name}` +
+            (party.country ? ` — ${party.country}` : '') +
+            `  class=${party.equipmentClass} deals=${party.deals}`,
+        );
+        console.log(
+          `      from claim: ${party.sourceClaimId ?? '— (seeded by a person, not a claim)'}` +
+            (party.decisionMaker ? `  decision maker: ${trim(party.decisionMaker)}` : ''),
+        );
+      }
+    }
+
+    /*
+     * The five layers, each named with its own reading.
+     *
+     * A count of unresearched layers says how many are missing; only the list
+     * says which, and the whole point of the five not collapsing is that they
+     * have different remedies. NOT_ESTABLISHED is printed as loudly as the
+     * others, because an absence of rows reading as a clearance is the one
+     * mistake here that gets equipment built for a market it cannot enter.
+     */
     for (const market of dealflow.markets) {
       console.log(
         `  ${market.destination}: buyers=${market.buyers} deals=${market.deals} — ` +
@@ -432,6 +464,12 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
             )
             .join(' '),
       );
+      for (const envelope of market.envelopes) {
+        console.log(
+          `      ${envelope.equipmentClass}: ` +
+            envelope.layers.map((one) => `${one.layer}=${one.reading}`).join(' '),
+        );
+      }
     }
 
     if (dealflow.deals.length > 0) {
@@ -439,8 +477,16 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       console.log('DEAL CANDIDATES (furthest along first)');
       for (const deal of dealflow.deals.slice(0, 20)) {
         console.log(
-          `  [${deal.stage}] ${deal.buyer} \u2194 ${deal.supplier} — ${deal.equipmentClass}` +
+          `  [${deal.stage}] ${deal.id}  ${deal.buyer} \u2194 ${deal.supplier} — ` +
+            `${deal.equipmentClass}` +
             (deal.destination ? ` into ${deal.destination}` : ' (market unknown)'),
+        );
+        // Whether this deal became work Cash Mode is pursuing, and nothing
+        // about whether anybody may act on it: that is the standing commercial
+        // grant, which this report prints separately and which is a different
+        // decision by a different person.
+        console.log(
+          `      opportunity: ${deal.opportunityId ?? '— (not promoted; nothing has been created)'}`,
         );
         console.log(
           `      transaction=${
@@ -463,7 +509,15 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       console.log('');
       console.log('DEALFLOW QUESTIONS RUNNING');
       for (const question of dealflow.live) {
-        console.log(`  ${question.purpose} round ${question.round} — ${trim(question.subject)}`);
+        console.log(
+          `  ${question.purpose} round ${question.round} — ${trim(question.subject)}`,
+        );
+        // The round and the idea it is, so a reader can walk from the question
+        // to the mission, the packet, the work item and the claims.
+        console.log(
+          `      round: ${question.id}  candidate: ${question.candidateId}  ` +
+            `opened ${question.openedAt}`,
+        );
       }
     }
 
