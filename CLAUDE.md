@@ -8815,6 +8815,51 @@ the condition was invisible.
   dialect is not true in the other. The guard scans in JavaScript outright,
   because it runs when a name is *chosen* rather than on every sign-in, and it
   is the reader that must not miss one.
+- **The cooldown announced itself, and the announcement was reachable only for
+  a real account.** `pin.ts` closes enumeration with unusual care — one refusal
+  sentence for every way of failing, and `UNMATCHABLE_PIN_VERIFIER` so that an
+  unknown identity costs the same ~60ms as a wrong PIN, *"which is exactly the
+  enumeration the single refusal sentence is there to prevent"*. Then the
+  throttle answered `429` with a `retryAt`.
+
+  The reasoning recorded beside it was careful and checked the wrong thing:
+  *"it says that you are waiting and until when, because that is a fact about
+  this caller's own recent attempts"*, with a test asserting the address does
+  not appear in the body. Both true. **The branch is reachable only when the
+  identity resolves**, so its existence says the account is real — and the
+  sign-in names in this Brain are people's first names. Three wrong guesses
+  separated a member from an invention. The constant's own doc says *one
+  sentence for every way of failing to sign in with a PIN*, and this was a
+  second one; §46's own defect, one door along, where a correct guard's
+  *reachability* is the oracle rather than its contents.
+
+  The timing was the same oracle arriving the other way. The check sat *before*
+  the verification, on the stated reason that a locked-out attacker must not
+  keep spending the scrypt budget — which protects nothing, because an unknown
+  identity already costs that same ~60ms against the unmatchable verifier, so
+  anybody wanting to burn CPU varies the name instead. What it bought was a
+  locked-out account answering **faster** than an invented one.
+
+  So the refusal is byte-identical, after the same work, and `PIN_REFUSED`
+  names the remedy — *wait a moment before trying again* — unconditionally,
+  which is how a person who genuinely mistyped is told something useful without
+  the message being different. The distinction is on the audit row, where §32
+  already says a distinction belongs.
+
+  **The password door beside it had this right all along**, which is what makes
+  it a regression rather than an oversight: `recordFailure` is called for an
+  unknown address too, so its `429` is reachable without an account, and it
+  verifies against an unmatchable verifier for the timing. The older door was
+  correct and the newer one, written by the same careful hand, reintroduced
+  what the older one had closed.
+
+  **No assertion was weakened to make this pass.** The two tests that read the
+  `429` are replaced by ones that prove the lockout refuses the **correct**
+  PIN — which is the whole of what a lockout is for and which the old ones
+  never checked — and that its refusal is byte-identical to a wrong PIN and to
+  an unknown identity. Both were run against the restored `429` to watch them
+  fail with `expected 429 to be 401`.
+
 - **One path let the person choosing the name be somebody other than an
   administrator, and §26's own sentence said it did not.** *"The acceptor
   chooses neither who they are nor what they get"* is exact about the two
