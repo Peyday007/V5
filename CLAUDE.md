@@ -9073,6 +9073,26 @@ elapsed time in the reason rather than as a failure.
 closest to being a decision go first now, counted from their own columns. It is
 a preference and never a ceiling: nothing is refused because of it.
 
+**A third way to hold a slot with nothing working on it, found by reading
+production rather than the code.** The stall backstop above is guarded on
+`mission.state === 'RUNNING'`, and a dive whose candidate was never judged has
+no mission at all — so `PENDING` counted against both slots and **nothing in
+`settleValidations` could ever take one back**. Under ordinary operation the
+Russell tick judges a candidate within minutes and it becomes a mission or
+reaches `PARKED`, which is already answered; this is what happens when that
+stops. §24's *waiting nobody can resolve*, at the one state that is also
+scarce.
+
+The first causal reading of a live sprint is what showed it: two `PENDING`
+dives holding both slots with `candidate=QUEUED mission=— packet=—`, one of
+them an hour and a half old, against four parked dives whose missions had
+appeared in 5, 19, 31 and 44 minutes. Nothing was wrong with either of them
+*yet*, and nothing would ever have been able to say so. Same window and same
+verdict as a stalled mission, for the same reason: `BLOCKED` keeps every row,
+frees the slot, and leaves the second round available. The test asserts both
+sides of the window, because a backstop that fired early would cancel a dive
+whose candidate is simply still being judged.
+
 `scripts/refinement-report.ts` is the instrument, and it exists because *why is
 refinement slow* had no answer that was not a guess. Every figure in it is the
 difference between two recorded timestamps; a stage with no timestamp reads `—`
@@ -9109,6 +9129,29 @@ grown a fourth condition of its own, which is the failure mode having one
 reader exists to prevent. And they prove the distinction from rows: filling
 every slot reads `SLOTS_TAKEN`, parking one frees it, the parked opening reads
 `AWAITING_PERSON`, and nothing re-dives it while it waits.
+
+**And the first production reading answers the question the owner actually
+asked, which turns out not to be the one I expected.** Taken on the serving
+revision, against the live sprint:
+
+    openings    40  NEEDS_PERSON=8 NOT_STARTED=30 PENDING=2
+    in flight   2 of 2 slots  ·  8 parked for a person, holding none
+
+    WHY REFINEMENT IS OR IS NOT MOVING
+      sprint      no free slot: 2 of 2 are held by live dives
+      ELIGIBLE           30  eligible — starts as soon as a slot is free
+      AWAITING_PERSON     8  waiting on a person: its mission stopped at a
+                             decision only they can make
+      IN_FLIGHT           2  a worker is on it (PENDING), holding a slot
+      VERDICT     nothing can start: no free slot: 2 of 2 are held by live dives.
+
+So the lifecycle is **not** stopped at human decisions. Thirty openings have
+nothing at all refusing them, and what they are waiting for is a provider slot.
+The eight parked ones are real and are genuinely a person's, and they are
+holding **no** capacity — which is §33's repair working, observed rather than
+asserted. Reporting `passes 0/0` would have said none of that, and the shape a
+reader would have taken from it — *everything is blocked on the owner* — is the
+opposite of what the rows say.
 
 ### Two things the gates found that reading did not.
 
@@ -9270,6 +9313,29 @@ defect — `admin.yml` put back into the release group, one wait deleted, the
 second canonical asking deleted, the envelope entry deleted — and each fails
 naming exactly what is missing.
 
+**All three halves were then proved from production rather than from the
+tests.** Deploy 305 released this tree; while its post-restart verification was
+running, `Routing show` and `Admin people list` were dispatched **four seconds
+apart** — the same pair that, at 08:20 this morning, ended with one of them
+cancelled before it started.
+
+- **Neither was cancelled.** Both went `in_progress`, both reached
+  `await-release`, and both finished `success`. That is the eviction gone,
+  observed on the two workflows it actually happened to.
+- **Both waited for the live release**, and said so by the second: *"1 Deploy
+  run(s) in flight; waiting 20s (waited 1420s so far)."*
+- **And the bound did what it is for.** At 1500s both printed *"A Deploy run
+  has been in flight for longer than 1500s. Running anyway rather than leaving
+  the Brain unadministrable"*, proceeded, and both read production correctly —
+  `ADMIN: OK` at 12:10:22 and 12:10:36, against a machine that had already
+  restarted and was stable. The fail-open is the designed behaviour and it is
+  the observed behaviour.
+
+The guard's second asking is on the same run's log, in its own words:
+`asked: immediately before flyctl deploy` / `on production, and still its tip.
+Proceeding.` — from a depth-1 checkout, which is what `git ls-remote` rather
+than a commit count is for.
+
 ### One 404 at the manufacturing door.
 
 The third door, and the one a release gate had been reporting on every deploy
@@ -9298,6 +9364,16 @@ against *not yours*; it now holds *a real project that is not yours* against
 indistinguishable and which nothing had ever checked. The readable project's
 200 is what would notice the router vanishing from the build, which is what the
 old 404 could not do.
+
+**Measured either side of the repair, on production.** Deploy 302 ran the old
+shape and reported `HOSTED-VERIFICATION: FAIL 216/217` before the restart and
+`FAIL 235/236` after it — **one** failing check in each, and it was this one,
+printing both bodies. Deploy 305 ran this tree and reported
+`HOSTED-VERIFICATION: PASS 219/219` and `PASS 238/238`, with
+`forbidden and non-existent are the same body, not just the same status —
+byte-identical` and `and says there is no programme rather than refusing —
+{"programme":null}`. `release: success`, `hosted verification: success`,
+`after the restart: success`.
 
 **It was invisible for the ordinary reason: every test in that file ran as a
 Brain administrator**, who reaches every project by design (§34), so nothing
