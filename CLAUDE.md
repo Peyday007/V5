@@ -7668,7 +7668,7 @@ scripts/
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
   admin.ts                  emergency administration, on a terminal rather than a page
-  commerce-seed-run.ts      naming the first channel, and one pass of the loop
+  commerce.ts               naming the first channel, and one pass of the loop
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one

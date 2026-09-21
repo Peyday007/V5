@@ -61,6 +61,14 @@ import { seedChannel, seedProposition, retireChannelSubject } from '../server/se
 import { commerceView } from '../server/services/commerce/view.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
+import { ownActionMatches } from '../server/services/research/actorScope.ts';
+import {
+  channelsQuestion,
+  economicsQuestion,
+  eligibilityQuestion,
+  productsQuestion,
+  supplyQuestion,
+} from '../server/services/commerce/questions.ts';
 import type { CommerceFinding, Layer } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -1417,6 +1425,113 @@ describe('the envelopes and profiles authorize reading and nothing else', () => 
       expect(profileFor(id)!.completionCriteria('a market')).not.toEqual(
         profileFor('RUSSELL_COMMERCE_DEMAND_V1')!.completionCriteria('a market'),
       );
+    }
+  });
+
+  /**
+   * Every round's own question clears its own envelope's action screen.
+   *
+   * The defect this pins was found by running the kernel against a real
+   * database rather than by reading it, and it is §33's own defect one step
+   * along. `forbiddenActions` is tested against the question, the definitions,
+   * the population and the completion criteria — all four of which say what to
+   * *look for* — and the demand round's whole subject is the difference
+   * between what was watched and what was **bought**. So it says the word in
+   * three places, none of them an instruction and one of them a prohibition:
+   * *"no evidence of purchase"*, *"Do not file attention as purchase"* and
+   * *"nothing showing a purchase"*. The plan parked at `NEEDS_HUMAN` with
+   * "instructs the researcher to purchase" before a source was read.
+   *
+   * Rewording the question to dodge the screen was available and is refused,
+   * for the reason §24 and §27 record four times about `EXECUTION_MARKERS` and
+   * the capture verbs: the sentence that found the gap is never reworded to
+   * fit the list. `actorScope.ts` gained the two governors and the negation
+   * rule instead.
+   *
+   * Asserted over the *real* question each purpose produces, joined with the
+   * real completion criteria, because a hand-written string would pin the
+   * string rather than the pipeline.
+   */
+  it('lets every round ask its own question without reading it as an instruction', async () => {
+    await activated();
+    const channel = (
+      await seedChannel({ projectId, name: 'A Channel', actorRef: userId })
+    ).channel;
+    const seeded = await seedProposition({
+      projectId,
+      channelId: channel.id,
+      product: 'A product',
+      actorRef: userId,
+    });
+    expect(seeded).toBeTruthy();
+    const proposition = seeded!.proposition;
+    const objective = 'Maximize additional usable cash over the next few weeks.';
+
+    const questions: Record<string, { envelope: string; question: string }> = {
+      CHANNELS: {
+        envelope: 'RUSSELL_COMMERCE_TERMS_V1',
+        question: channelsQuestion(objective, 1),
+      },
+      ELIGIBILITY: {
+        envelope: 'RUSSELL_COMMERCE_TERMS_V1',
+        question: eligibilityQuestion({ channel, objective }),
+      },
+      PRODUCTS: {
+        envelope: 'RUSSELL_COMMERCE_DEMAND_V1',
+        question: productsQuestion({ channel, objective, round: 1, knownSoFar: 0 }),
+      },
+      SUPPLY: {
+        envelope: 'RUSSELL_COMMERCE_SUPPLY_V1',
+        question: supplyQuestion({ proposition, channel, objective }),
+      },
+      ECONOMICS: {
+        envelope: 'RUSSELL_COMMERCE_ECONOMICS_V1',
+        question: economicsQuestion({ proposition, channel, objective, missing: [] }),
+      },
+    };
+
+    for (const purpose of COMMERCE_ROUND_PURPOSES) {
+      const asked = questions[purpose];
+      expect(asked, `${purpose} produces no question`).toBeTruthy();
+      const envelope = getApprovalEnvelope(asked!.envelope)!;
+      const profile = profileFor(asked!.envelope)!;
+      // Exactly the four fields `planFitsEnvelope` joins, in its own order.
+      const prose = [asked!.question, '', '', profile.completionCriteria('a market').join(' ')].join(
+        ' \n',
+      );
+      const matches = ownActionMatches(prose, envelope.forbiddenActions);
+      expect(
+        matches.map((one) => `${one.phrase} — ${one.clause}`),
+        `${purpose} reads its own question as an instruction`,
+      ).toEqual([]);
+    }
+  });
+
+  /**
+   * And the screen still refuses what it exists to refuse.
+   *
+   * `actorScope.ts` says the tests pin the refusals rather than the
+   * admissions, because a miss costs a sentence and an invention costs a
+   * person's trust in the control. The widening above is only safe if these
+   * still fail, so they are asserted beside it rather than in another file —
+   * including the two that would have been the easy way to make the case
+   * above pass: a negator does not reach past a contrast marker, and the
+   * researcher named as the subject wins over a negator earlier in the clause.
+   */
+  it('still refuses an instruction, however the sentence around it is arranged', () => {
+    const envelope = getApprovalEnvelope('RUSSELL_COMMERCE_DEMAND_V1')!;
+    const refused = [
+      'Email the seller and ask their price.',
+      'Find the best listing and purchase it.',
+      'Record what the listing says about delivery, and we will then contact the seller.',
+      'Do not contact the seller, but purchase one unit to confirm the price.',
+      'We will not purchase anything.',
+    ];
+    for (const prose of refused) {
+      expect(
+        ownActionMatches(prose, envelope.forbiddenActions).length,
+        `"${prose}" was admitted`,
+      ).toBeGreaterThan(0);
     }
   });
 

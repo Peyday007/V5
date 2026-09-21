@@ -28,7 +28,7 @@
     "admin": "tsx scripts/admin.ts",
     "report:packet": "tsx scripts/packet-report.ts",
     "report:cash": "tsx scripts/cash-report.ts",
-    "commerce": "tsx --env-file-if-exists=.env scripts/commerce-seed-run.ts",
+    "commerce": "tsx --env-file-if-exists=.env scripts/commerce.ts",
     "report:labor": "tsx scripts/labor-report.ts",
     "verify:capability": "tsx scripts/verify-research-capability.ts",
     "step12a:acceptance": "tsx --env-file-if-exists=.env scripts/step12a-acceptance.ts",

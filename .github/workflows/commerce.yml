@@ -1,0 +1,123 @@
+# Driving the social commerce kernel on the deployed Brain, without a terminal.
+#
+# The sibling of `manufacturing.yml`, `capability.yml` and `admin.yml`, and
+# separate from `deploy.yml` for the reason the first of those already gives:
+# asking the kernel what it would do next through the deploy pipeline would mean
+# building an image, restarting the machine and running the whole hosted
+# verification to read a loop. That is minutes and a restart per question, so in
+# practice it would not be asked and the answer would come from somebody's
+# memory instead.
+#
+# **This adds convenience and not privilege**, on `admin.yml`'s own argument.
+# Anyone who can dispatch this can already dispatch `deploy.yml`, `fleet.yml`
+# and `admin.yml`; repository write access is production administration on this
+# project however the buttons are arranged. What it must not do is grow past the
+# job it is for, so the surface is `scripts/commerce.ts` and nothing else — the
+# same closed surface a terminal reaches. It cannot publish a listing, take a
+# payment, buy stock, contact anybody or authorize a spend, because none of
+# those exist behind it: the one step that would spend money stops at a row
+# naming what is missing, and the grant that would unblock it is a person's
+# decision on the Cash surface.
+#
+# Reaching this is the authentication, as §26 says of the shell, and `--admin`
+# is the attribution — resolved against the database rather than trusted,
+# because an audit row with no author answers nothing later. §23 already names
+# this exact channel: a GitHub Actions job holding the deployment credential,
+# running `flyctl ssh console`, dispatched on a recorded instruction. It is the
+# weaker, unverifiable `authority_channel`, and recording it as a browser
+# approval would be undetectable afterwards.
+name: Social commerce kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'The project, by slug or id (e.g. cash-mode-3)'
+        required: true
+        default: ''
+      channel:
+        description: 'Seed this channel, by name (e.g. TikTok Shop). Needs admin. Leave blank to only advance.'
+        required: false
+        default: ''
+      admin:
+        description: '--admin <email>: the administrator a seed is recorded against. Required to seed.'
+        required: false
+        default: ''
+      read_only:
+        description: 'Read the loop and write nothing — no round is opened and no row moves.'
+        required: false
+        type: boolean
+        default: false
+      reason:
+        description: 'Why, recorded on the seed event.'
+        required: false
+        default: ''
+
+# Never at the same time as a deploy: the machine is being replaced during one,
+# and a reading that raced a restart would be reporting whichever half answered.
+concurrency:
+  group: deploy-brain
+  cancel-in-progress: false
+
+jobs:
+  commerce:
+    name: Social commerce kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # The inputs reach the shell as *environment variables*, never as `${{ }}`
+      # interpolated into the script, and they are quoted rather than evaluated.
+      # `-C` takes one command string, so an input pasted into it is executed by
+      # the shell inside the production container: a quote in an argument ends
+      # the string and everything after it is a command. `shlex.quote` puts the
+      # words back together so the container receives exactly what was typed,
+      # and it is deliberately not `eval`, which is the identical hole one line
+      # along because `$(…)` inside the string runs.
+      #
+      # A channel name is prose a person writes, so it is the argument the
+      # quoting bug would have bitten first and quietest.
+      - name: Run
+        timeout-minutes: 15
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          COMMERCE_PROJECT: ${{ inputs.project }}
+          COMMERCE_CHANNEL: ${{ inputs.channel }}
+          COMMERCE_ADMIN: ${{ inputs.admin }}
+          COMMERCE_READ_ONLY: ${{ inputs.read_only }}
+          COMMERCE_REASON: ${{ inputs.reason }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          # Seeding is the one thing here that writes a row a machine may never
+          # write, so it is the one thing that must name whose authority it
+          # carries. Refused before the session is opened rather than after.
+          if [ -n "$COMMERCE_CHANNEL" ] && [ -z "$COMMERCE_ADMIN" ]; then
+            echo "::error::Seeding a channel needs --admin <email> for the attribution."
+            exit 1
+          fi
+
+          remote=$(python3 - <<'PY'
+          import os, shlex
+
+          words = ['--project', os.environ.get('COMMERCE_PROJECT', '')]
+          if os.environ.get('COMMERCE_READ_ONLY', '') == 'true':
+              words.append('--read')
+          for flag, key in (('--channel', 'COMMERCE_CHANNEL'),
+                            ('--admin', 'COMMERCE_ADMIN'),
+                            ('--reason', 'COMMERCE_REASON')):
+              value = os.environ.get(key, '').strip()
+              if value:
+                  words += [flag, value]
+          print(' '.join(['sh', '/app/scripts/commerce.sh'] + [shlex.quote(w) for w in words]))
+          PY
+          )
+          echo "Running: $remote"
+          set +e
+          flyctl ssh console --app "$app" -C "$remote" 2>&1 | tee commerce.txt
+          set -e
+          # The verdict comes from a line the command printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI.
+          grep -q '^COMMERCE: ' commerce.txt
