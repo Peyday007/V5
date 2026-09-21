@@ -24,6 +24,7 @@
  * No credential is read, printed or required.
  */
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
+import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 import { listProjects } from '../server/repos/projects.ts';
 import { laborView, describeRate } from '../server/services/labor/view.ts';
 import { listOpportunities } from '../server/repos/cashPortfolio.ts';
@@ -289,7 +290,21 @@ async function main(): Promise<void> {
 
 main()
   .catch((error) => {
-    console.error('LABOR-REPORT: FAILED', error);
+    /*
+     * A pooler refusal is named rather than dumped.
+     *
+     * It arrives as an `XX000` with twenty `undefined` fields hanging off it,
+     * and printing the object says nothing about what to do. This condition
+     * refuses every operator script equally while the running app is perfectly
+     * healthy, so the one thing a reader needs is that the limit is not this
+     * application's — §27's own argument for the diagnostic beside it.
+     */
+    const pooler = describePoolerRefusal(error);
+    if (pooler) {
+      console.error(`LABOR-REPORT: FAILED ${pooler}`);
+    } else {
+      console.error('LABOR-REPORT: FAILED', error);
+    }
     process.exitCode = 1;
   })
   .finally(() => closeDatabase());

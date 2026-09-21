@@ -1457,6 +1457,46 @@ rules.
   advances, so a late completion matches nothing, and every row keeps its id,
   its attempts and the reason it stopped.
 
+- **And a finished packet must not be given a new bin either — the same
+  sentence one object along, which cost a Claude activation a minute for seven
+  hours.** `completeLaunch` rebuilds a mission's bin whenever the one it has can
+  no longer deliver, which is right for a reopened round and was asked without
+  ever looking at the packet. `repairLaunches` — the pass that *calls* it —
+  already refuses a mission whose orchestration has finished; the function it
+  delegates to did not, and the ordinary tick reaches that function directly,
+  because `launch()` replays a live mission on its own idempotency key every
+  pass. **A rule applied by one of two readers is worse than none**, here with
+  the two readers a pass and the function inside it.
+
+  Production, 2026-09-21: `orc_79abf61b5c2646609c48` and
+  `orc_ab3604d498af45e8aa81` both reached `COMPLETE_WITH_GAPS`, filed and
+  audited, each bin correctly `COMPLETE`. Their missions were still live, so
+  every cycle built another bin, which went `READY`, earned a dispatch intent
+  and **fired a real Cowork activation**. The worker arrived, was told *"This
+  bin is drained"*, completed it, and the next cycle built the next one. Four
+  fires in the five minutes this was measured — 1/B at 01:11:30, the dispatch
+  Routine at 01:13:06, 1-D at 01:13:46, 1/C at 01:14:06 — every one of them
+  `SUCCEEDED`, every bin `COMPLETE`, and not one of them carrying any work.
+  **Nothing anywhere went red**, which is why it ran for hours: what it consumed
+  was the fixed subscription allowance, so the genuine queued research never got
+  a worker. §27's sentence arriving in the launcher: *a loop that looks like
+  progress is worse than a stop.*
+
+  The condition is now the one `repairLaunches` already selects on — a working
+  status *and* something claimable in it — and it is asked exactly where that
+  pass asks it, of a mission whose bin is **spent**. A mission that has never
+  had one is still given one whatever its packet's status, because that bin is
+  part of building the packet rather than a second attempt at delivering it, and
+  refusing there would be this same defect wearing the other sign: a launch
+  permanently without a bin. `NEEDS_HUMAN` and `AWAITING_APPROVAL` come along
+  for the ride, which is the point rather than a side effect — the suite already
+  asserted that `repairLaunches` leaves a spent bin alone over a packet waiting
+  for a person, and the direct path was doing it anyway.
+
+  It removes the fire and not the mission. A finished packet's mission is
+  finished by the writeback pass, which reads the same status; one waiting for a
+  person has its own answering transition already.
+
 - **What a person is shown about coverage is what the auditor read.**
   `reconcileAcceptedFragment` moves a requirement's coverage when a fragment
   clears all seven gate conditions, and it had exactly one caller — the
