@@ -6609,12 +6609,26 @@ export type CashOpportunityState = (typeof CASH_OPPORTUNITY_STATES)[number];
  * Never stored. A row is not a decision: a stored label is stale the moment the
  * dependency it was waiting on settles, and two readers deriving it separately
  * is how one screen comes to disagree with another.
+ *
+ * The first four are **work**: something a person could act on, or something
+ * genuinely held up. The last three are not, and separating them is the whole
+ * correction recorded in §44 — a published price list is neither a thing to do
+ * nor a thing being waited for, and calling it either put thirty-one facts
+ * about other people's markets in front of somebody as their current work.
+ *
+ *   * `EVIDENCE_ONLY` — Brain found this and cannot yet say how we would be
+ *     paid from it. It belongs with the evidence, not in a queue.
+ *   * `BEING_QUALIFIED` — the capture thesis exists and Brain is establishing
+ *     the rest. Brain's own work, and nobody is waiting on a person.
+ *   * `ARCHIVED` — stopped or passed on, and kept.
  */
 export const CASH_DISPOSITIONS = [
   'EXECUTE_NOW',
   'RUN_IN_PARALLEL',
   'WAIT_FOR_DEPENDENCY',
   'TEST_A_DECISIVE_UNKNOWN',
+  'BEING_QUALIFIED',
+  'EVIDENCE_ONLY',
   'ARCHIVED',
 ] as const;
 export type CashDisposition = (typeof CASH_DISPOSITIONS)[number];
