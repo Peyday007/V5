@@ -109,6 +109,41 @@ describe('one branch owns production', () => {
     expect(guard).not.toContain('/api/russell/projects/x/sites');
   });
 
+  /*
+   * The Postgres gate's own cluster, which is not about deployment and is here
+   * because this is the suite that reads workflow files.
+   *
+   * `openTestDatabase` drops each file's schema with `DROP SCHEMA … CASCADE`,
+   * which takes one lock per object in a single transaction — 851 relations on
+   * this chain, 166 of them tables, so each drop also locks a toast relation
+   * and a toast index per table. The shared lock table is
+   * `max_locks_per_transaction × (max_connections + max_prepared_transactions)`,
+   * which is 6400 at the settings a runner ships with, and `pool: 'forks'` runs
+   * several of those drops at once while the live files hold locks of their own.
+   *
+   * It failed as `53200 out of shared memory` with Postgres naming this exact
+   * setting in its hint, and the reason it arrived as a mystery is that the
+   * margin shrinks by a few relations every time any workstream adds a
+   * migration. A run costs the best part of half an hour to find that out; this
+   * costs a file read.
+   */
+  it('gives the Postgres suite a lock table big enough for the schema it drops', () => {
+    const suite = read('.github/workflows/postgres-suite.yml');
+    expect(suite).toMatch(/ALTER SYSTEM SET max_locks_per_transaction = (\d+)/);
+    const declared = Number(
+      /ALTER SYSTEM SET max_locks_per_transaction = (\d+)/.exec(suite)?.[1] ?? '0',
+    );
+    // Room for the chain to keep growing rather than the number that just
+    // happened to work: one drop already reaches past a thousand locks.
+    expect(declared).toBeGreaterThanOrEqual(1024);
+    // A setting that needs a restart and does not get one is the same failure
+    // with a passing step in front of it.
+    expect(suite).toMatch(/restart postgresql|main restart/);
+    // And the run says what it got, because a restart that silently kept the
+    // old value would send the next reader back to the same mystery.
+    expect(suite).toContain("current_setting('max_locks_per_transaction')");
+  });
+
   it('tells a future session the rule, in the file sessions are told to read', () => {
     const claude = read('CLAUDE.md');
     expect(claude).toContain('.github/CANONICAL_BRANCH');
