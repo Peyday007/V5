@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 080. See that file for why every
+-- The Postgres half of SQLite migration 082. See that file for why every
 -- general thread in this Brain was filed under Deal Dispatch, why the two
 -- columns already disagreed with each other, and why the repair is derived
 -- from linkage rather than from a title.

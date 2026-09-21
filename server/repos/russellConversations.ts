@@ -111,7 +111,7 @@ export async function createConversation(input: {
    *
    * This wrote `'NONE'` unconditionally, which meant every row that arrived
    * with a `projectId` said, in two columns at once, *attached to this
-   * project* and *nobody attached this*. Migration 080 repairs the rows that
+   * project* and *nobody attached this*. Migration 082 repairs the rows that
    * already exist; this is the door that wrote them. `USER` rather than
    * `AUTOMATIC`, because the router's own attachment goes through
    * `recordAttachment` and this path is only ever reached by an explicit

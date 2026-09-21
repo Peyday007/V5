@@ -5920,7 +5920,7 @@ export interface RussellConversation {
    * `projectId` says *which* project a thread is about; this says whether it
    * is about one at all. They were one field, and the consequence was that a
    * client passing the first project in a list made every general conversation
-   * in this Brain a Deal Dispatch conversation — see migration 080.
+   * in this Brain a Deal Dispatch conversation — see migration 082.
    */
   purpose: ConversationPurpose;
   visibility: RussellVisibility;
@@ -7608,7 +7608,7 @@ export interface CapacityConnection {
    * says an already-registered surface is theirs. Null means *we have not been
    * told*, and the screen falls back to resolving a worker by the name it
    * would have minted — which is what made the owner of this Brain read as
-   * disconnected while their surfaces fired 350 times. See migration 081.
+   * disconnected while their surfaces fired 350 times. See migration 083.
    */
   workerId: string | null;
   state: CapacityConnectionState;

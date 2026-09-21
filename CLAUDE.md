@@ -7271,7 +7271,7 @@ between the research engine passing its tests and a real job having actually
 run, which §38 had to say about itself on the day it landed.
 
 
-## 42. A real row is not an answer to a question it never answered.
+## 43. A real row is not an answer to a question it never answered.
 
 The product-foundation closeout. Five defects were reproducible in production
 on 2026-09-21 and every one of them passed every test that existed. They are
@@ -7340,7 +7340,7 @@ The readings they are written against were taken before anything was changed:
   *nobody attached this*, and `collectionNameFor` filed a person's thinking
   about Brain under a customer's name.
 
-  `purpose` is the statement that was missing, and migration 080/071 derives it
+  `purpose` is the statement that was missing, and migration 082/071 derives it
   from **linkage** rather than from a title: attached by the router or by a
   person, or the thread actually produced a candidate, a mission, a knowledge
   row or a software request against that project. Then the inconsistency is
@@ -7361,7 +7361,7 @@ The readings they are written against were taken before anything was changed:
   with a call to action, beside a Fleet page listing twelve eligible surfaces
   and 350 fires.
 
-  Both readings were true of different questions. Migration 081/072 puts
+  Both readings were true of different questions. Migration 083/074 puts
   `worker_id` on the connection, the view reads the row first and the derived
   name only as a fallback, and `services/capacity/adopt.ts` is the transition
   that records an existing surface as somebody's. It is a **person's decision**
