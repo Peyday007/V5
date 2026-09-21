@@ -45,6 +45,7 @@ import { ensureDiscoveryAuthority, withdrawDiscoveryAuthority } from './discover
 import { opportunitiesForCandidate } from '../../repos/cashPortfolio.ts';
 import { roundForCandidate } from '../../repos/cashDiscovery.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
+import { commerceRoundForCandidate } from '../../repos/commerce.ts';
 import type {
   CashMode,
   CashModeState,
@@ -447,6 +448,23 @@ export async function launchableUnderCashMode(input: {
    * runs on, because none of those is a research launch.
    */
   if (await industryRoundForCandidate(input.candidateId)) return false;
+
+  /*
+   * And a commerce question, for the identical reason and by the identical
+   * means: a row that says so rather than an inference from another table's
+   * absence.
+   *
+   * Every one of its five purposes starts a fresh research packet to learn
+   * something the sprint does not yet know — including ECONOMICS, which is the
+   * one worth arguing about, because it is about a product the sprint already
+   * holds and so looks like support work. It is not: it is a new launch, and a
+   * person who has wound a sprint down has said to stop making those. What
+   * runs on is every obligation already entered into, and a bounded test that
+   * a person already authorized, because neither of those is a research
+   * launch — §30's rule that winding a sprint down ends new discovery and
+   * never a customer's obligation.
+   */
+  if (await commerceRoundForCandidate(input.candidateId)) return false;
 
   const linked = await opportunitiesForCandidate(input.candidateId);
   if (linked.length === 0) return true;

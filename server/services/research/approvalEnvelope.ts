@@ -645,6 +645,125 @@ commissioning organisation can or cannot do. This is read-only research into wha
 already published, and every action beyond reading needs a separate authorization from a
 person.`;
 
+/**
+ * What is actually being bought on a channel, and by whom.
+ *
+ * The one instruction this template exists to carry is the one the whole
+ * social commerce kernel turns on: a view is not a sale. It is stated in the
+ * question, again in the completion standard and again in the declaration
+ * instruction, because a worker reads an assignment before it starts looking
+ * and the distinction decides what it goes looking *for*. §33 records why an
+ * instruction on the submission tool alone arrives at the wrong end of the job.
+ */
+export const COMMERCE_DEMAND_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what is actually being bought here — not what is being
+watched:
+
+{QUESTION}
+
+Subject: the channel, product or supplier named above. Anything you establish about a
+different one is reported as being about somewhere else rather than generalized.
+
+Market: {JURISDICTION}. Say which market each finding is about.
+
+The distinction that decides this whole assignment: attention is not demand. A view count,
+a follower count, a like count, a watch time and a hashtag volume are evidence that people
+looked. They are not evidence that anybody paid. Both are worth reporting and they are
+reported as different things — ATTENTION_EVIDENCE and PURCHASE_EVIDENCE — and a figure
+about looking filed as a figure about buying is the single error that would make everything
+downstream of this confidently wrong.
+
+What counts as evidence somebody paid: a published units-sold or orders figure, a sold-out
+or out-of-stock notice, a published revenue figure, a seller stating their own volume, a
+marketplace's own bestseller ranking where it is based on sales, a review count where the
+platform only allows reviews from verified purchasers. Say which of those it is, and say
+where the source is silent about whether its number counts purchases or views — an
+ambiguous figure is reported as ambiguous rather than assumed to be the better one.
+
+Everything you establish becomes usable only if you declare it. Set commerce_finding on the
+claim to the kind it is and commerce_subject to what it is about, and put a figure in the
+field for its shape: money in commerce_amount_minor, a rate in commerce_rate_ppm as parts
+per million, a duration in commerce_days, a count in commerce_count. A claim with no
+commerce_finding is ordinary context, which is most of them and is not a deficiency.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. A platform's own published terms
+are conclusive about what that platform charges and requires, and worth nothing as evidence
+that anybody is succeeding on it. A seller's own claim about their volume is a self-report
+and is recorded as one. An undated figure about a trend is reported with its date missing
+rather than assumed current — on this subject a figure from six months ago and one from
+last week can be opposite facts.
+
+Completion standard: each item either answered from a quoted source, or explicitly recorded
+as unresolved naming what was searched and what was not found. Do not estimate a figure no
+source publishes. An unknown is recorded as unknown and withholds the derived margin, which
+is the correct outcome; a plausible number would make something look worth selling that
+nobody has shown is.
+
+Out of scope: contacting any person, seller, supplier or organisation; buying access, data,
+a subscription, a sample or a paid API; placing an advertisement; creating an account;
+listing, posting, publishing or offering anything for sale anywhere; making any commitment
+on anybody's behalf. This is read-only research into what is already published, and every
+action beyond reading needs a separate commercial authorization from a person.`;
+
+/**
+ * What one product costs and sells for, line by line.
+ *
+ * Separate from the demand template for `planFitsEnvelope`'s reason — one
+ * template per envelope, and a packet must be judged against the rules for the
+ * question it is actually asking. Its permissions are the demand envelope's
+ * verbatim, so neither authorizes anything the other does not.
+ */
+export const COMMERCE_ECONOMICS_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what this actually costs and what it actually sells
+for — figure by figure:
+
+{QUESTION}
+
+Subject: one product on one channel, named above. Everything you establish must be about
+that product, or about what that channel charges everybody who sells on it.
+
+Market: {JURISDICTION}. Say which market each figure is about, because a landed cost and a
+platform fee are both market-specific and a figure from the wrong one is worse than none.
+
+What to settle, each as its own claim with its own source: the price comparable sellers
+publish (SELLING_PRICE); the unit cost delivered from the supplier at a realistic order
+quantity, including duty where the source states it (LANDED_UNIT_COST); what it costs to
+get one unit to the buyer (SHIPPING_COST); the channel's own published commission
+(PLATFORM_FEE); the payment processing rate (PAYMENT_FEE); what creators or affiliates are
+paid (CREATOR_COMMISSION); what producing the content costs (CONTENT_COST); the published
+cost of acquiring a buyer on this channel (ADVERTISING_COST); the rates at which orders are
+returned, refunded and charged back (RETURN_RATE, REFUND_RATE, CHARGEBACK_RATE); the
+supplier's minimum order (MINIMUM_ORDER); and the channel's delay between a buyer paying
+and a seller being paid (PAYOUT_DELAY).
+
+Read the platform's fees from the platform's own published terms rather than from an
+article about them, and date the reading. These change, and a fee that was right last year
+is a figure that quietly makes a margin look better than it is.
+
+A figure is read from a source, never produced. Where nothing published settles one, record
+it as unknown and say what would settle it. Brain withholds the entire contribution when
+any one input is unknown, which is deliberate: a margin computed past a blank is wrong in
+the encouraging direction, and that is the one direction nobody checks. An honest "eleven of
+thirteen, and these two are missing" is worth more here than a complete-looking answer with
+one number invented.
+
+Money goes in commerce_amount_minor in minor units of the sprint currency. Every rate goes
+in commerce_rate_ppm as parts per million — 8% is 80000 — and a percentage sent as a
+percentage is refused rather than converted, because converting it would be Brain deciding
+what you meant.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+each carrying the date it was published or last observed. Where two sources give different
+figures for the same line, record both and say what differs — a wholesale price and a
+retail one, a domestic rate and a cross-border one, a standard fee and a promotional one.
+Do not average them: the scope that differs is usually the answer, and an average of two
+scopes is a figure about neither.
+
+Out of scope: contacting any person, seller, supplier or organisation; buying access, data,
+a subscription, a sample or a paid API; placing an advertisement; creating an account;
+listing, posting, publishing or offering anything for sale anywhere; ordering anything;
+making any commitment on anybody's behalf. Every mechanism named above is a thing to
+establish from a published source rather than a thing to do.`;
+
 export const CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what owner capital this actually requires — after the
 requirements have been taken apart:
 
@@ -1177,6 +1296,152 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'qualifying, certifying, acquiring and producing are decisions a person makes, and this ' +
       'envelope authorizes none of them.',
     assignmentTemplate: MACHINE_CAPABILITY_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What is being bought on a channel, who supplies it, and what the channel
+   * requires.
+   *
+   * `RUSSELL_CASH_DISCOVERY_V1`'s permissions exactly — the same source
+   * classes, the same forbidden actions, the same zero external effect, taken
+   * by reference rather than written afresh so the envelopes cannot drift into
+   * authorizing different things. What differs is only the assignment it pins,
+   * which is why it is a separate envelope at all: `planFitsEnvelope` pins one
+   * template per envelope, and a packet has to be judged against the rules for
+   * the question it is actually asking.
+   *
+   * **It authorizes no effect that discovery did not already authorize.** The
+   * subject sounds commercial and nothing here is: it authorizes *reading
+   * about* what people buy, what platforms charge and who supplies things.
+   * Every action — listing, ordering, advertising, contacting a supplier — is
+   * a commercial action a person grants separately, and never this envelope.
+   */
+  RUSSELL_COMMERCE_DEMAND_V1: Object.freeze({
+    id: 'RUSSELL_COMMERCE_DEMAND_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it: published sources only, across any industry, business ' +
+      'model or market, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing what people actually ' +
+      'buy on a distribution channel, who supplies it, and what that channel requires of a ' +
+      'seller. Acting on what is found — listing, ordering, advertising, contacting a ' +
+      'supplier — is authorized separately by a commercial grant a person makes, and never by ' +
+      'this envelope.',
+    assignmentTemplate: COMMERCE_DEMAND_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What a channel itself publishes about selling on it.
+   *
+   * ---------------------------------------------------------------------------
+   * Why this is a third envelope rather than a third use of the first
+   * ---------------------------------------------------------------------------
+   *
+   * **Found by running the kernel, not by reading it.** The first version
+   * routed every non-economics round to `RUSSELL_COMMERCE_DEMAND_V1`, whose
+   * required lane is `purchase` — so a question asking what TikTok Shop
+   * requires of a seller compiled with a required lane it can never satisfy.
+   * A worker would have answered the platform's terms correctly and the
+   * fragment would have been blocked for producing no purchase evidence,
+   * which is §25's *the wrong answer confidently derived* arriving through a
+   * lane rather than through a scope.
+   *
+   * `profileFor` is keyed by envelope id, so a second completion standard
+   * needs a second envelope. It **shares this one's permissions and its
+   * assignment template by reference**, so neither authorizes anything the
+   * other does not: what differs is the profile, which is what the gate
+   * judges coverage against.
+   */
+  RUSSELL_COMMERCE_TERMS_V1: Object.freeze({
+    id: 'RUSSELL_COMMERCE_TERMS_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it: published sources only, with no spending, no paid API or ' +
+      'purchased data, no contact with any person or organisation, no advertising, no ' +
+      'publishing and no external effect of any kind. This envelope is that authorization ' +
+      'applied to reading what a distribution channel itself publishes about selling on it — ' +
+      'its fees, its eligibility rules, its fulfilment obligations and what it forbids. ' +
+      'Registering an account, listing anything or selling anything is a commercial action a ' +
+      'person grants separately, and never this envelope.',
+    assignmentTemplate: COMMERCE_DEMAND_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * Who would actually supply one product, and on what published terms.
+   *
+   * The same correction one question along: a supply round produces supplier
+   * listings and lead times, and would have been blocked for producing no
+   * purchase evidence. Same permissions, same template, different completion
+   * standard — the required lane is `supply`.
+   */
+  RUSSELL_COMMERCE_SUPPLY_V1: Object.freeze({
+    id: 'RUSSELL_COMMERCE_SUPPLY_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it: published sources only, with no spending, no paid API or ' +
+      'purchased data, no contact with any person or organisation, no advertising, no ' +
+      'publishing and no external effect of any kind. This envelope is that authorization ' +
+      'applied to establishing who publishes terms for supplying one product and what those ' +
+      'terms are. Contacting a supplier, ordering a sample or placing an order are commercial ' +
+      'actions a person grants separately, and never this envelope.',
+    assignmentTemplate: COMMERCE_DEMAND_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What one product costs and sells for.
+   *
+   * Same permissions again, taken by reference, and the same argument for
+   * being its own envelope. Worth saying explicitly because the subject is
+   * money: nothing here authorizes ordering, listing, advertising or paying
+   * for anything. It authorizes reading published prices, published fees and
+   * published rates — and the figures it produces are estimates about our
+   * economics however good their sources, which is why `basisOf` records a
+   * gated claim as `ESTIMATE` and reserves `MEASURED` for a settled test.
+   */
+  RUSSELL_COMMERCE_ECONOMICS_V1: Object.freeze({
+    id: 'RUSSELL_COMMERCE_ECONOMICS_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it: published sources only, with no spending, no paid API or purchased ' +
+      'data, no contact with any person or organisation, no advertising, no publishing and no ' +
+      'external effect of any kind. This envelope is that authorization applied to ' +
+      'establishing what one product costs and sells for on one channel. It authorizes ' +
+      'reading published prices, fees and rates and never paying, ordering or listing ' +
+      'anything: every one of those is a commercial action a person grants separately.',
+    assignmentTemplate: COMMERCE_ECONOMICS_ASSIGNMENT_TEMPLATE,
     jurisdiction: 'the market this question names',
     maxFragments: null,
     geography: /\S/,

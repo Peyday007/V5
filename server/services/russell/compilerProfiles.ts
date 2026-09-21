@@ -45,7 +45,11 @@ export type CompilerProfileId =
   | 'LABOR_ALLOCATION'
   | 'MACHINE_LADDER'
   | 'MACHINE_DEMAND'
-  | 'MACHINE_CAPABILITY';
+  | 'MACHINE_CAPABILITY'
+  | 'COMMERCE_DEMAND'
+  | 'COMMERCE_TERMS'
+  | 'COMMERCE_SUPPLY'
+  | 'COMMERCE_ECONOMICS';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -1246,6 +1250,364 @@ const MACHINE_CAPABILITY: CompilerProfile = {
   ],
 };
 
+/**
+ * What is actually bought on a channel, who supplies it, and what the channel
+ * requires.
+ *
+ * The lanes are where this profile earns its existence. `purchase` and
+ * `attention` are two lanes rather than one, with two evidence kinds, because
+ * the gate applies the bar **per lane** — so a fragment that came back with
+ * nothing but view counts cannot satisfy a demand lane however many of them it
+ * has. §14's rule that the standard depends on what is being claimed, at the
+ * distinction this kernel exists for: without two lanes the separation would
+ * live only in a column, and a fragment could clear its bar on attention alone
+ * and be reported as having established demand.
+ */
+const COMMERCE_DEMAND: CompilerProfile = {
+  id: 'COMMERCE_DEMAND',
+  fragmentKey: 'commerce-demand',
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Ahead of a broad market search and behind a deep dive on something already
+   * found, for `INDUSTRY_STRUCTURE`'s reason: it is what gives the later
+   * questions a subject, and finishing what has already been spent outranks
+   * knowing more about where to spend next.
+   */
+  launchOrdinal: 300,
+  proposedSources: [
+    'a platform’s own published seller terms, fee schedule, help centre or policy pages',
+    'a marketplace, shop or storefront listing showing price and sales or stock',
+    'a published bestseller, trending or ranking page where the ranking is based on sales',
+    'a supplier, wholesale or sourcing marketplace listing with published terms',
+    'a trade publication, industry body or market research publication',
+    'a published price list, rate card or fee schedule',
+    'a company’s own announcement, filing or published revenue figure',
+    'a consumer protection, advertising standards or regulator publication',
+  ],
+  excludedSources: [
+    'a view, like, follower or watch-time figure offered as evidence of buying',
+    'a seller’s own unverified claim about volume presented as an independent figure',
+    'a “top products” list with no stated basis for its ranking',
+    'an undated figure about a trend presented as current',
+    'a forecast or projection presented as a current fact',
+    'a claim with no locatable source at all',
+  ],
+  lanes: [
+    {
+      /*
+       * One marketplace publishing a units-sold figure proves that product
+       * sold. Demanding a second independent publisher for it would demand
+       * that somebody else republish the same platform's own number, which
+       * §14 records as counting one source twice rather than as corroboration.
+       */
+      id: 'purchase',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Published evidence that money changed hands for a specific product: a units-sold ' +
+        'or orders figure, a sold-out notice, a published revenue figure, a verified-purchase ' +
+        'review count, a sales-based ranking. Declared on the claim with commerce_finding ' +
+        'set to PURCHASE_EVIDENCE and commerce_subject set to the product. A view count is ' +
+        'not this and never satisfies this lane.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'attention',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Published evidence that people looked without evidence that anybody paid: views, ' +
+        'likes, followers, watch time, hashtag volume. Declared as ATTENTION_EVIDENCE. It is ' +
+        'worth reporting and it is a finding *about* a product rather than support for it — ' +
+        'Brain reads a product with attention and no purchase as unproven, which is the ' +
+        'correct reading and the reason these are two lanes.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'supply',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Who actually supplies the product to a seller holding no stock, and what they ' +
+        'publish: minimum order, unit cost, shipping, lead time, tracking, returns terms and ' +
+        'any measure of reliability. Declared as SUPPLIER_AVAILABLE plus the figure kinds.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'channel_terms',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What the channel itself requires and forbids, from the channel’s own published ' +
+        'terms: registration, entity, country, deposit or category approval ' +
+        '(PLATFORM_ELIGIBILITY), dispatch and tracking obligations (FULFILMENT_REQUIREMENT), ' +
+        'prohibited categories (PROHIBITED_PRODUCT), and its published commission and payout ' +
+        'schedule. A platform is conclusive about its own terms and worth nothing as ' +
+        'evidence that anybody succeeds on it.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'competition',
+      description:
+        'Who is already selling this and at what published price (COMPETING_OFFER), how many ' +
+        'sellers there are (SATURATION), how long demand has persisted (TREND_DURABILITY) ' +
+        'and what creators promoting it are paid (CREATOR_ACTIVITY).',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Nothing published shows anybody buying anything on this channel — only figures about ' +
+      'how many people looked.',
+    'Every product found is prohibited by the channel’s own published terms.',
+    'The channel publishes no seller terms at all, so what it requires cannot be established.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every product reported as bought carries published evidence that money changed hands, ' +
+      'and says which kind of evidence it is.',
+    'Figures about attention are reported as attention and never as demand. A product with ' +
+      'attention and nothing showing a purchase is reported that way rather than omitted.',
+    'Every figure is declared on its claim with the matching commerce_finding and goes in the ' +
+      'field for its shape: money in minor units, a rate as parts per million, a duration in ' +
+      'whole days, a count as a count.',
+    'A platform’s fees, eligibility rules and fulfilment obligations are read from the ' +
+      'platform’s own published terms and carry the date they were read.',
+    'Where no source publishes a figure, it is recorded as unknown and what would settle it ' +
+      'is named. Nothing is estimated.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * What a channel itself publishes about selling on it.
+ *
+ * ---------------------------------------------------------------------------
+ * Found by running the kernel, not by reading it
+ * ---------------------------------------------------------------------------
+ *
+ * Every non-economics round used to compile under `COMMERCE_DEMAND`, whose
+ * required lane is `purchase` — so a question asking what a platform requires
+ * of a seller carried a required lane it could never satisfy. A worker would
+ * have answered the terms correctly and the fragment would have been blocked
+ * for producing no purchase evidence: §25's *wrong answer confidently derived*
+ * arriving through a lane instead of through a scope, and invisible to every
+ * test of either half.
+ *
+ * So the lanes are reversed here: the terms are required and a purchase is
+ * conditional. Everything else — the sources, the exclusions, the claim types,
+ * the objective — is `COMMERCE_DEMAND`'s, shared by reference so the two
+ * cannot drift into describing different permissions.
+ */
+const COMMERCE_TERMS: CompilerProfile = {
+  ...COMMERCE_DEMAND,
+  id: 'COMMERCE_TERMS',
+  fragmentKey: 'commerce-terms',
+  /*
+   * Ahead of the products search, because one answer settles every product on
+   * the channel at once — and a channel that forbids the category makes every
+   * product question on it a waste.
+   */
+  launchOrdinal: 250,
+  lanes: COMMERCE_DEMAND.lanes.map((lane) =>
+    lane.id === 'channel_terms'
+      ? { ...lane, necessity: 'REQUIRED' as const }
+      : lane.id === 'purchase'
+        ? { ...lane, necessity: 'CONDITIONAL' as const }
+        : lane,
+  ),
+  failureConditions: [
+    'The channel publishes no seller terms at all, so what it requires cannot be established.',
+    'The only account of the channel’s terms is an article about them rather than the channel’s ' +
+      'own published pages.',
+    'The published terms carry no date, so whether they are current cannot be established.',
+  ],
+  completionCriteria: (scope) => [
+    'Every requirement, fee, payout schedule, fulfilment obligation and prohibition is read ' +
+      'from the channel’s own published terms, help centre or seller documentation.',
+    'Every one of them carries the date it was published or last read, because these change ' +
+      'and an undated fee quietly makes a margin look better than it is.',
+    'Prohibited categories are reported as prohibitions rather than omitted: a category the ' +
+      'channel forbids settles every product question on it.',
+    'Where the channel publishes nothing about one of them, that is recorded as unresolved ' +
+      'naming what was searched. Nothing is inferred from how comparable platforms behave.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * Who would actually supply one product, and on what published terms.
+ *
+ * The same correction one question along, and the same construction: a supply
+ * round produces supplier listings and lead times, and under `COMMERCE_DEMAND`
+ * would have been blocked for producing no purchase evidence.
+ */
+const COMMERCE_SUPPLY: CompilerProfile = {
+  ...COMMERCE_DEMAND,
+  id: 'COMMERCE_SUPPLY',
+  fragmentKey: 'commerce-supply',
+  /*
+   * With the economics, ahead of the broad search. A product whose buyer is
+   * established and whose supplier is not is already-spent work one round from
+   * being decidable — finishing that outranks starting the next search.
+   */
+  launchOrdinal: 200,
+  lanes: COMMERCE_DEMAND.lanes.map((lane) =>
+    lane.id === 'supply'
+      ? { ...lane, necessity: 'REQUIRED' as const }
+      : lane.id === 'purchase'
+        ? { ...lane, necessity: 'CONDITIONAL' as const }
+        : lane,
+  ),
+  failureConditions: [
+    'No supplier publishes terms for supplying this at any quantity.',
+    'Every supplier found requires the seller to hold stock, so the model this kernel is about ' +
+      'does not apply — which is a finding rather than a gap.',
+    'Suppliers are found and none of them publishes a lead time, so whether the channel’s ' +
+      'dispatch obligation can be met cannot be established.',
+  ],
+  completionCriteria: (scope) => [
+    'Every supplier named publishes its own terms, and the claim carries the URL of the page ' +
+      'that states them.',
+    'Minimum order, unit cost at that quantity, shipping to the buyer, lead time, tracking and ' +
+      'returns are each reported or each recorded as not published. Nothing is estimated.',
+    'Where the channel publishes a dispatch or tracking obligation, whether the supplier can ' +
+      'meet it is stated rather than assumed.',
+    'Any published measure of how reliably the supplier delivers is reported as parts per ' +
+      'million with the date it was observed.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * What one product costs and sells for, line by line.
+ *
+ * One lane per side of the arithmetic rather than one lane for "economics",
+ * because a selling price and a return rate are found in different places and
+ * a fragment that established six prices and no rates has not established a
+ * margin. The gate applies coverage per lane, so this is what stops a
+ * half-answered economics question reading as an answered one.
+ */
+const COMMERCE_ECONOMICS: CompilerProfile = {
+  id: 'COMMERCE_ECONOMICS',
+  fragmentKey: 'commerce-economics',
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * With the deep dive, ahead of the demand search.
+   *
+   * A product whose buyer is already established and whose margin is one
+   * figure short is the most immediate question in this kernel: the rounds
+   * that found it are already paid for, and one answer turns it into
+   * something a person can decide about.
+   */
+  launchOrdinal: 200,
+  proposedSources: [
+    'a platform’s own published fee schedule, seller terms or payout policy',
+    'a payment processor’s own published pricing',
+    'a supplier, wholesale or sourcing marketplace listing with published unit prices',
+    'a published shipping rate card or carrier tariff',
+    'a marketplace or storefront listing showing the retail price',
+    'a trade publication or market research publication reporting return or refund rates',
+    'a company’s own published figures, filing or announcement',
+    'a customs, duty or tax authority publication',
+  ],
+  excludedSources: [
+    'a figure with no source that publishes it',
+    'a rate inferred from a different market, product category or order size',
+    'an article summarizing a platform’s fees where the platform publishes them itself',
+    'an undated fee presented as current',
+    'a forecast or projection presented as a current fact',
+  ],
+  lanes: [
+    {
+      id: 'revenue',
+      evidenceKind: 'MARKET_PATTERN',
+      description:
+        'What this sells for to an end buyer, from published listings by comparable sellers ' +
+        '(SELLING_PRICE), and what competitors publish (COMPETING_OFFER). Two published ' +
+        'examples rather than one, because a single listing is one seller’s asking price ' +
+        'rather than the market’s.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'cost',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What one unit costs to get to the buyer: LANDED_UNIT_COST at a realistic order ' +
+        'quantity, SHIPPING_COST, and MINIMUM_ORDER. A named supplier publishing its own ' +
+        'price is conclusive about that supplier’s price.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'fees',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What is taken off the price by somebody else, as parts per million: PLATFORM_FEE, ' +
+        'PAYMENT_FEE, CREATOR_COMMISSION, and the PAYOUT_DELAY in days. Read from the ' +
+        'platform’s and the processor’s own published terms.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'leakage',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'The rates at which shipped orders produce no revenue: RETURN_RATE, REFUND_RATE, ' +
+        'CHARGEBACK_RATE. Two independent publishers, because these are category-level ' +
+        'figures rather than facts about one transaction — and they are the line most likely ' +
+        'to turn a positive margin negative, so a single source is not enough to rest it on.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'acquisition',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'What it costs to get a buyer rather than a unit: ADVERTISING_COST and CONTENT_COST. ' +
+        'Kept apart from the per-unit lines deliberately — Brain compares them against the ' +
+        'derived contribution rather than folding them into it, so that the break-even is a ' +
+        'number to test against rather than a number that has already absorbed the answer.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'CALCULATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source states what this product sells for to an end buyer.',
+    'No supplier publishes a unit price at any order quantity.',
+    'The platform publishes no commission or payout schedule, so what it takes cannot be ' +
+      'established.',
+    'Published return or refund rates for this category cannot be found from any independent ' +
+      'publisher, and that is recorded as unresolved rather than filled with a plausible one.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'figure is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every figure is read from a source that publishes it, never produced, and carries the ' +
+      'URL, the publisher and the date it was published or last observed.',
+    'Platform and processor fees come from the platform’s and processor’s own published ' +
+      'terms rather than from an article about them.',
+    'Money is in minor units of the sprint currency in commerce_amount_minor; every rate is ' +
+      'parts per million in commerce_rate_ppm; a duration is whole days in commerce_days.',
+    'Where two sources give different figures for one line, both are recorded with what ' +
+      'differs between them — a wholesale against a retail price, a domestic against a ' +
+      'cross-border rate. They are not averaged.',
+    'Any figure no source settles is recorded as unknown, with what would settle it named. ' +
+      'Nothing is estimated to complete the set.',
+    `Every figure says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -1255,6 +1617,10 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_CASH_VALIDATION_V1: COMMERCIAL_VALIDATION,
   RUSSELL_INDUSTRY_MAP_V1: INDUSTRY_STRUCTURE,
   RUSSELL_CAPITAL_STRUCTURE_V1: CAPITAL_STRUCTURE,
+  RUSSELL_COMMERCE_DEMAND_V1: COMMERCE_DEMAND,
+  RUSSELL_COMMERCE_TERMS_V1: COMMERCE_TERMS,
+  RUSSELL_COMMERCE_SUPPLY_V1: COMMERCE_SUPPLY,
+  RUSSELL_COMMERCE_ECONOMICS_V1: COMMERCE_ECONOMICS,
   RUSSELL_LABOR_ALLOCATION_V1: LABOR_ALLOCATION,
   RUSSELL_MACHINE_LADDER_V1: MACHINE_LADDER,
   RUSSELL_MACHINE_DEMAND_V1: MACHINE_DEMAND,

@@ -136,6 +136,7 @@ import {
 import { parseJson } from '../../repos/util.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import { launchableUnderCashMode } from '../cash/lifecycle.ts';
+import { runCommerceKernel } from '../commerce/kernel.ts';
 import { runDiscovery } from '../cash/discovery.ts';
 import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
@@ -478,6 +479,25 @@ export interface TickReport {
     evidence: string[];
     settled: string[];
   }[];
+  /**
+   * The social commerce kernel's pass, reported separately from the industry
+   * kernel's because they answer different questions about different rows.
+   *
+   * `tests` is the half worth reading on a quiet tick: a bounded sales test
+   * that is prepared and blocked is the most informative thing this loop
+   * produces, because it names precisely what is missing between a qualified
+   * product and a measured result.
+   */
+  commerceKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    channels: string[];
+    propositions: string[];
+    evidence: string[];
+    settled: string[];
+    tests: { propositionId: string; blocker: string | null }[];
+    capabilitiesRaised: string[];
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -560,6 +580,7 @@ const EMPTY: TickReport = {
   researchLessons: [],
   abandonedParks: [],
   restoredParks: [],
+  commerceKernel: [],
   followOns: [],
   linkedNext: [],
   needsHuman: [],
@@ -634,6 +655,7 @@ export async function tick(owner: string): Promise<TickReport> {
      *
      * `integrityReopens` gets away without this because it is replaced whole;
      * this one is not, which is exactly the difference.
+  commerceKernel: [],
      */
     capability: {
       dispatched: 0,
@@ -1287,6 +1309,61 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a sprint whose discovery could not run is left as it was */
+      }
+
+      try {
+        /*
+         * And the loop that turns an opening into something somebody sells.
+         *
+         * The industry kernel answers *where in the economy*; this one answers
+         * *what we would actually sell, to whom, on which surface, at what
+         * margin, and what would have to be true before a person spent
+         * anything finding out*. It is one shape of transaction — bought from
+         * a supplier, discovered on a social channel, shipped without ever
+         * being held — and it is deliberately one shape rather than a general
+         * commerce engine: a small perimeter whose loop closes is worth more
+         * than a general one whose last step has never run.
+         *
+         * Its own `try`, for the reason every block here has one: a kernel
+         * pass that threw must not stop a sprint settling a need or harvesting
+         * what already ran.
+         *
+         * Nothing it creates bypasses anything. A commerce round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does. The one step that would spend
+         * money stops at a row naming what is missing.
+         */
+        const commerce = await runCommerceKernel(project.id);
+        if (
+          commerce.opened.length > 0 ||
+          commerce.absorbed.channels.length > 0 ||
+          commerce.absorbed.propositions.length > 0 ||
+          commerce.absorbed.evidence.length > 0 ||
+          commerce.absorbed.settled.length > 0 ||
+          commerce.tests.length > 0 ||
+          commerce.capabilities.raised.length > 0
+        ) {
+          report.commerceKernel.push({
+            projectId: project.id,
+            opened: commerce.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            channels: commerce.absorbed.channels.map((one) => one.id),
+            propositions: commerce.absorbed.propositions.map((one) => one.id),
+            evidence: commerce.absorbed.evidence.map((one) => one.id),
+            settled: commerce.absorbed.settled.map((one) => one.roundId),
+            tests: commerce.tests.map((one) => ({
+              propositionId: one.propositionId,
+              blocker: one.blocker,
+            })),
+            capabilitiesRaised: commerce.capabilities.raised.map((one) => one.capability),
+          });
+        }
+      } catch {
+        /* a loop that could not be advanced is left exactly as it was */
       }
 
       try {

@@ -356,6 +356,29 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'PATCH', level: 'ADMIN' },
 
   // ---------------------------------------------------------------------
+  // The social commerce kernel's channels and propositions
+  // ---------------------------------------------------------------------
+  //
+  // Word for word the section above, at the table one axis along. Naming a
+  // channel and naming a product are decisions *about* what the operation
+  // sells and where, and `SEED` is the one origin Brain itself may never
+  // write: the schema requires every other one to carry the gated claim that
+  // established it, so a machine that could name its own channels would be
+  // choosing where commerce happens. Retiring is the same decision read
+  // backwards. Reading is deliberately absent and takes the default READ, so
+  // every member can see which channels Brain is looking at and how far any
+  // product has got.
+  //
+  // **These were missing, and the routes' own docblock said they were here.**
+  // Without them a POST took `defaultLevelFor`, which is WRITE — so a member
+  // who may fill in a card could also name the channel the whole loop runs
+  // on, while the comment above the handler claimed ADMIN. A guard a comment
+  // asserts and the policy does not apply is worse than an absent one,
+  // because it is read as present.
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/commerce/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/cash\/commerce/, method: 'PATCH', level: 'ADMIN' },
+
+  // ---------------------------------------------------------------------
   // The labor kernel (§41)
   // ---------------------------------------------------------------------
   //

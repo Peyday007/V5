@@ -75,6 +75,8 @@ import { getCashMode } from '../../repos/cashMode.ts';
 import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
+import { commerceRoundForCandidate } from '../../repos/commerce.ts';
+import { COMMERCE_ROUND_ENVELOPES } from '../../domain/commerce.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { laborRoundForCandidate } from '../../repos/labor.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
@@ -260,6 +262,35 @@ async function envelopeIdFor(
     }
     if (kernel.purpose === 'CAPITAL') return 'RUSSELL_CAPITAL_STRUCTURE_V1';
   }
+  /*
+   * And a commerce question is decided by the round that asked it.
+   *
+   * `commerce_rounds` is the exact statement — this candidate is asking this
+   * purpose about this channel or this proposition — written by Brain when the
+   * round was opened, so nothing here has to reason about what the idea's
+   * prose looks like.
+   *
+   * **Four envelopes rather than two, and the correction is recorded rather
+   * than quietly applied.** The first version routed everything but ECONOMICS
+   * to `RUSSELL_COMMERCE_DEMAND_V1`, on the reasoning that CHANNELS, PRODUCTS,
+   * SUPPLY and ELIGIBILITY are all one question about one surface. They are
+   * not: `profileFor` is keyed by envelope and the profile carries the
+   * **required lane**, so an eligibility question compiled with `purchase`
+   * required — a lane a platform's terms page can never satisfy. A worker
+   * would have answered correctly and the fragment would have been blocked.
+   *
+   * The four share their permissions and their assignment template by
+   * reference, so none authorizes anything another does not. What differs is
+   * the completion standard, which is the thing the gate actually judges.
+   *
+   * The pairing is a `Record` over the purposes rather than a chain ending in
+   * a fall-through, so a purpose added later without an envelope is a compile
+   * error rather than a silent landing in whichever branch is last — §27's
+   * `REFUSAL_WAIT` correction, at the table where getting it wrong hands a
+   * question a lane its own sources cannot satisfy.
+   */
+  const commerce = await commerceRoundForCandidate(candidate.id);
+  if (commerce) return COMMERCE_ROUND_ENVELOPES[commerce.purpose];
   if (await opportunityForOwnCandidate(project.id, candidate.id)) {
     return 'RUSSELL_CASH_VALIDATION_V1';
   }

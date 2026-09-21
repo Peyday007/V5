@@ -114,6 +114,21 @@ export async function recordFragmentClaims(input: {
         structuralSubject: claim.structuralSubject ?? null,
         structuralQualifier: claim.structuralQualifier ?? null,
         structuralAmountCents: claim.structuralAmountCents ?? null,
+        /*
+         * And the commerce declaration, whole or not at all, for the identical
+         * reason. Seven fields that only mean anything together: a figure with
+         * no finding belongs to no line of a margin, and a product candidate
+         * with no channel has no fees to be judged against. Carrying six of
+         * seven here is the defect §33 records at `applyValidationAnswers` —
+         * the fact reached one reader and not the other, and both looked fine.
+         */
+        commerceFinding: claim.commerceFinding ?? null,
+        commerceSubject: claim.commerceSubject ?? null,
+        commerceQualifier: claim.commerceQualifier ?? null,
+        commerceAmountMinor: claim.commerceAmountMinor ?? null,
+        commerceRatePpm: claim.commerceRatePpm ?? null,
+        commerceDays: claim.commerceDays ?? null,
+        commerceCount: claim.commerceCount ?? null,
         // And the labor declaration, whole for the identical reason: a channel
         // without its basis is a figure nothing can compare, and a rate
         // without its finding belongs to no task.

@@ -9,6 +9,8 @@
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
 import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
 import { isCapabilityFinding } from '../domain/manufacturing.ts';
+import { isCommerceFinding } from '../domain/commerce.ts';
+import type { CommerceFinding } from '../domain/types.ts';
 import { isStructuralFinding } from '../domain/industry.ts';
 import { isLaborFinding } from '../domain/labor.ts';
 import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
@@ -201,6 +203,13 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
       ? row.structural_finding
       : null,
     structuralSubject: row.structural_subject,
+    commerceFinding: isCommerceFinding(row.commerce_finding) ? row.commerce_finding : null,
+    commerceSubject: row.commerce_subject,
+    commerceQualifier: row.commerce_qualifier,
+    commerceAmountMinor: row.commerce_amount_minor,
+    commerceRatePpm: row.commerce_rate_ppm,
+    commerceDays: row.commerce_days,
+    commerceCount: row.commerce_count,
     structuralQualifier: row.structural_qualifier,
     structuralAmountCents: row.structural_amount_cents,
     laborFinding: isLaborFinding(row.labor_finding) ? row.labor_finding : null,
@@ -795,6 +804,23 @@ export interface InsertClaimInput {
   sourceDate: string | null;
   evidenceExcerpt: string | null;
   evidenceLocator: string | null;
+  /** What it establishes about selling something on a channel, or null. */
+  commerceFinding?: CommerceFinding | null;
+  /** What that finding is about: the channel, the product, the supplier. */
+  commerceSubject?: string | null;
+  /** For a product candidate, the channel it is sold on. Null otherwise. */
+  commerceQualifier?: string | null;
+  /**
+   * The four shapes a commerce figure takes, in four fields.
+   *
+   * Never collapsed into one: a platform fee of 8 and a selling price of 8 are
+   * not the same 8, and a single number would eventually be summed with the
+   * other with nothing downstream able to tell.
+   */
+  commerceAmountMinor?: number | null;
+  commerceRatePpm?: number | null;
+  commerceDays?: number | null;
+  commerceCount?: number | null;
   evidenceLane: string | null;
   /** The kind of opening this claim establishes, from the closed set, or null. */
   opportunitySignal?: OpportunitySignal | null;
@@ -857,6 +883,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            structural_subject, structural_qualifier, structural_amount_cents,
            labor_finding, labor_subject, labor_qualifier, labor_rate_cents,
            capability_finding, capability_subject, capability_observed_on,
+           commerce_finding, commerce_subject, commerce_qualifier, commerce_amount_minor,
+           commerce_rate_ppm, commerce_days, commerce_count,
            retrieved_at, confidence,
            contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
@@ -864,7 +892,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            geography, timeframe, population, definition, requirement_ids, job_id,
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
@@ -875,6 +904,9 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.laborQualifier ?? null, input.laborRateCents ?? null,
           input.capabilityFinding ?? null, input.capabilitySubject ?? null,
           input.capabilityObservedOn ?? null,
+          input.commerceFinding ?? null, input.commerceSubject ?? null,
+          input.commerceQualifier ?? null, input.commerceAmountMinor ?? null,
+          input.commerceRatePpm ?? null, input.commerceDays ?? null, input.commerceCount ?? null,
           input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,
@@ -1134,6 +1166,46 @@ export async function capabilityClaims(input: {
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
         AND c.capability_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
+/**
+ * The accepted claims that declared a commerce finding.
+ *
+ * `structuralClaims`' shape, one axis along, and the same argument for every
+ * clause of it: the orchestrations are required rather than optional, because
+ * an oldest-first bounded window with no filter spends its whole budget on
+ * claims belonging to rounds that settled weeks ago, and a bounded scan that
+ * cannot make progress is worse than an unbounded one — it looks like it is
+ * working.
+ *
+ * `BLOCKED` fragments are read as well as `ACCEPTED` ones, unchanged, because
+ * a fragment can fall short of its coverage bar while individual claims inside
+ * it cleared the gate on their own. Discarding those is the defect
+ * `citableClaims` was written for.
+ */
+export async function commerceClaims(input: {
+  projectId: string;
+  orchestrationIds: readonly string[];
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.commerce_finding IS NOT NULL
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid

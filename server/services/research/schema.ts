@@ -34,7 +34,9 @@ import {
   type StructuralFinding,
   type LaborFinding,
   type CapabilityFinding,
+  type CommerceFinding,
 } from '../../domain/types.ts';
+import { validateCommerce } from '../../domain/commerce.ts';
 import { validateStructural } from '../../domain/industry.ts';
 import { validateLabor } from '../../domain/labor.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
@@ -526,6 +528,17 @@ export interface ParsedClaim {
   structuralFinding: StructuralFinding | null;
   /** What the finding is about: a name, or a value from that kind's own set. */
   structuralSubject: string | null;
+  /** What it establishes about selling something on a channel, or null. */
+  commerceFinding: CommerceFinding | null;
+  /** What that finding is about: the channel, the product, the supplier. */
+  commerceSubject: string | null;
+  /** For a product candidate, the channel it is sold on. Null otherwise. */
+  commerceQualifier: string | null;
+  /** The four shapes a commerce figure takes. Null means unknown, never zero. */
+  commerceAmountMinor: number | null;
+  commerceRatePpm: number | null;
+  commerceDays: number | null;
+  commerceCount: number | null;
   /** For a restructuring, the requirement it answers. Null otherwise. */
   structuralQualifier: string | null;
   /** A capital figure, where a source published one. Null means unknown. */
@@ -753,6 +766,25 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!capability.ok) return capability;
 
+  /*
+   * What this claim establishes about selling something on a channel.
+   *
+   * Delegated whole to `validateCommerce`, which is also what the MCP tool
+   * calls, for the reason directly above: two readers of one rule is how they
+   * come to disagree, and this repository has had to record that five times.
+   */
+  const commerce = validateCommerce({
+    where,
+    finding: row['commerceFinding'],
+    subject: row['commerceSubject'],
+    qualifier: row['commerceQualifier'],
+    amountMinor: row['commerceAmountMinor'],
+    ratePpm: row['commerceRatePpm'],
+    days: row['commerceDays'],
+    count: row['commerceCount'],
+  });
+  if (!commerce.ok) return commerce;
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -788,6 +820,13 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       structuralSubject: structural.value.subject,
       structuralQualifier: structural.value.qualifier,
       structuralAmountCents: structural.value.amountCents,
+      commerceFinding: commerce.value.finding,
+      commerceSubject: commerce.value.subject,
+      commerceQualifier: commerce.value.qualifier,
+      commerceAmountMinor: commerce.value.amountMinor,
+      commerceRatePpm: commerce.value.ratePpm,
+      commerceDays: commerce.value.days,
+      commerceCount: commerce.value.count,
       laborFinding: labor.value.finding,
       laborSubject: labor.value.subject,
       laborQualifier: labor.value.qualifier,
