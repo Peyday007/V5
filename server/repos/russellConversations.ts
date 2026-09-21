@@ -251,18 +251,30 @@ export async function attachConversation(input: {
    * came to disagree in the first place. `OPERATIONAL` and `TECHNICAL` are
    * left alone: those are deliberate choices about what a thread is, and a
    * router attaching a project to one does not stop it being operations work.
+   *
+   * The *guard* is what has to be in this statement, and it is. Which purpose
+   * an attachment implies is arithmetic over the value being written, so it is
+   * computed here — and it has to be, because a placeholder whose only
+   * occurrence is a nullity test is a shape Postgres cannot type: it has
+   * nothing to infer from and answers `42P18 could not determine data type of
+   * parameter $4`, while SQLite runs it happily. That is the fifth time this
+   * repository has been told something by the second backend and by nothing
+   * else, and the first where a full SQLite suite passed straight over it. In
+   * the `ELSE` arm of a CASE whose other arm is the `purpose` column the same
+   * value resolves to text, which is why the rewrite is safe rather than
+   * merely different. `russellFoundationCloseout` refuses the shape.
    */
+  const purpose: ConversationPurpose = input.projectId === null ? 'GENERAL' : 'PROJECT';
   await getDb().run(
     `UPDATE russell_conversations
         SET project_id = ?, attachment_source = ?, attachment_confidence = ?,
             purpose = CASE
               WHEN purpose IN ('OPERATIONAL','TECHNICAL') THEN purpose
-              WHEN ? IS NULL THEN 'GENERAL'
-              ELSE 'PROJECT'
+              ELSE ?
             END,
             updated_at = ?
       WHERE id = ?`,
-    [input.projectId, input.source, input.confidence, input.projectId, at, input.conversationId],
+    [input.projectId, input.source, input.confidence, purpose, at, input.conversationId],
   );
   const id = newId('rcx');
   await getDb().run(

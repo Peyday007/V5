@@ -782,3 +782,77 @@ describe('what the page counts', () => {
     expect(listed).toBe(3);
   });
 });
+
+/**
+ * A parameter whose only use is an `IS NULL` test has no type, on one of the
+ * two backends.
+ *
+ * This is the convention's own `ORDER BY` rule one shape along, and it is here
+ * because it cost a full Postgres run to learn: `WHEN ? IS NULL THEN 'GENERAL'`
+ * is perfectly ordinary SQLite and answers
+ * `42P18 could not determine data type of parameter $4` on Postgres, where the
+ * parameter is a `$n` with nothing around it to infer from. The whole SQLite
+ * suite passed over it — 4 118 tests — so nothing short of the second backend
+ * or a reading of the statement could have said so.
+ *
+ * It refuses the shape rather than the instance, because the instance is
+ * already gone and the next one will be somebody else's. A bare `?` is what is
+ * refused: `CAST(? AS TEXT) IS NULL` gives the parameter a type and is fine,
+ * which is why the pattern requires the placeholder to be immediately adjacent
+ * to the test.
+ */
+const UNTYPED_NULL_TEST = /\?\s+IS\s+(?:NOT\s+)?NULL/i;
+
+describe('a parameter Postgres cannot type', () => {
+  it('is detected in the statement that actually failed', () => {
+    // Production's own text, from the 42P18 the Postgres run reported.
+    const failed = `UPDATE russell_conversations
+        SET project_id = ?, attachment_source = ?, attachment_confidence = ?,
+            purpose = CASE
+              WHEN purpose IN ('OPERATIONAL','TECHNICAL') THEN purpose
+              WHEN ? IS NULL THEN 'GENERAL'
+              ELSE 'PROJECT'
+            END,
+            updated_at = ?
+      WHERE id = ?`;
+    expect(UNTYPED_NULL_TEST.test(failed)).toBe(true);
+
+    // And the rewrite that replaced it is not.
+    const fixed = failed.replace(/\s*WHEN \? IS NULL THEN 'GENERAL'\n/, '\n').replace(
+      "ELSE 'PROJECT'",
+      'ELSE ?',
+    );
+    expect(UNTYPED_NULL_TEST.test(fixed)).toBe(false);
+  });
+
+  it('appears nowhere in the server', async () => {
+    const { readdir, readFile } = await import('node:fs/promises');
+    const root = new URL('../server/', import.meta.url);
+
+    async function walk(dir: URL): Promise<string[]> {
+      const out: string[] = [];
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const child = new URL(entry.name + (entry.isDirectory() ? '/' : ''), dir);
+        if (entry.isDirectory()) out.push(...(await walk(child)));
+        else if (entry.name.endsWith('.ts')) out.push(child.pathname);
+      }
+      return out;
+    }
+
+    const files = await walk(root);
+    /*
+     * A scan over nothing passes, and reads as coverage. §41 records what that
+     * costs, so the reading is asserted before the absence is trusted.
+     */
+    expect(files.length).toBeGreaterThan(200);
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const lines = (await readFile(file, 'utf8')).split('\n');
+      lines.forEach((line, index) => {
+        if (UNTYPED_NULL_TEST.test(line)) offenders.push(`${file}:${index + 1}  ${line.trim()}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+  });
+});
