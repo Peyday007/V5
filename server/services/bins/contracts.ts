@@ -849,7 +849,113 @@ const EVALUATORS: Record<string, Evaluator> = {
   FACTORY_UNITS_V1: evaluateFactoryUnits,
   FACTORY_INTEGRATION_V1: evaluateFactoryIntegration,
   FACTORY_DELIVERY_V1: evaluateFactoryDelivery,
+  DESIGN_REVIEW_V1: evaluateDesignReview,
+  DESIGN_RENDER_V1: evaluateDesignRender,
 };
+
+/**
+ * One design review, answered.
+ *
+ * Shallow, for `evaluateRussellLens`' reason and with the same consequence: this
+ * decides only whether the *bin* may finish, and every judgement about whether a
+ * finding survives happens in `services/design/judge.ts` after the lease is
+ * gone. Validating the findings here would charge an attempt against a worker
+ * whose review was fine and whose third finding named a field this contract does
+ * not define.
+ *
+ * A `CLEAN` verdict with an empty `findings` array is a **pass**. "I read it and
+ * there is nothing worth changing" is the answer a healthy screen has, and a
+ * contract that refused it would be paying for pessimism — the same mistake in
+ * the opposite direction from the one the lens evaluator names.
+ */
+async function evaluateDesignReview(bin: Bin): Promise<ContractVerdict> {
+  const results = await listBinUnitResults(bin.id);
+  const submitted = results.find((row) => row.unitKey === 'design_review');
+  const observed = { unitsSubmitted: results.length, hasReview: Boolean(submitted) };
+
+  if (!submitted) {
+    return refuse(
+      'RETRY',
+      ['No review was submitted, so nothing was judged about the rendered surfaces.'],
+      observed,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(submitted.value);
+  } catch {
+    return refuse('RETRY', ['The review was not valid JSON.'], observed);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return refuse('RETRY', ['The review was not a structured object.'], observed);
+  }
+  const body = parsed as Record<string, unknown>;
+  if (body['verdict'] !== 'CLEAN' && body['verdict'] !== 'CHANGES_REQUIRED') {
+    return refuse(
+      'RETRY',
+      ['The review named no verdict, so it does not say whether anything should change.'],
+      observed,
+    );
+  }
+  if (!Array.isArray(body['findings'])) {
+    return refuse('RETRY', ['The review carried no "findings" array.'], observed);
+  }
+  return satisfied(observed);
+}
+
+/**
+ * One render, submitted.
+ *
+ * Shallow, for `evaluateDesignReview`' reason: this decides only whether the
+ * *bin* may finish, and every judgement about whether a capture is believed
+ * happens in `services/design/render.ts` after the lease is gone — a worker
+ * whose eighteen captures were fine and whose nineteenth named an undeclared
+ * width should not lose an attempt to a check that could have been made later.
+ *
+ * An **empty** capture list is refused here rather than later, and that is the
+ * one thing this evaluator is really for. A render that produced nothing is a
+ * blocker naming what stopped it — no browser, a product that would not start,
+ * an address that 404ed — and an empty submission accepted as complete would
+ * read downstream as a screen with nothing wrong with it. That is the silent
+ * success this whole kernel exists not to produce.
+ */
+async function evaluateDesignRender(bin: Bin): Promise<ContractVerdict> {
+  const results = await listBinUnitResults(bin.id);
+  const submitted = results.find((row) => row.unitKey === 'design_render');
+  const observed = { unitsSubmitted: results.length, hasRender: Boolean(submitted) };
+
+  if (!submitted) {
+    return refuse(
+      'RETRY',
+      ['No render was submitted, so Brain still has no picture of what it built.'],
+      observed,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(submitted.value);
+  } catch {
+    return refuse('RETRY', ['The render was not valid JSON.'], observed);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return refuse('RETRY', ['The render was not a structured object.'], observed);
+  }
+  const captures = (parsed as Record<string, unknown>)['captures'];
+  if (!Array.isArray(captures)) {
+    return refuse('RETRY', ['The render carried no "captures" array.'], observed);
+  }
+  if (captures.length === 0) {
+    return refuse(
+      'RETRY',
+      [
+        'The render submitted no captures. Nothing rendered is a blocker naming what stopped it, ' +
+          'never an empty result: an empty one reads as a screen with nothing wrong.',
+      ],
+      { ...observed, captures: 0 },
+    );
+  }
+  return satisfied({ ...observed, captures: captures.length });
+}
 
 /**
  * One conversation turn: is there a proposal, and is it structurally a proposal?

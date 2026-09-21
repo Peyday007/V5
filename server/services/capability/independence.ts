@@ -40,7 +40,7 @@
  * every audit for ever.
  */
 import { getDb } from '../../db/database.ts';
-import { dispatchedSessionForBin, listBinUnitResults } from '../../repos/bins.ts';
+import { dispatchedSessionForLease, listBinUnitResults } from '../../repos/bins.ts';
 import { listSources } from '../../repos/faculties.ts';
 
 export type CapabilityIndependenceTier = 'SESSION_SEPARATED' | 'WORKER_SEPARATED';
@@ -71,7 +71,7 @@ export async function extractingSessions(
   for (const result of await listBinUnitResults(extractionBinId)) {
     if (result.submittedBy) workers.add(result.submittedBy);
     if (result.leaseGeneration === null) continue;
-    const session = await dispatchedSessionForBin(extractionBinId, result.leaseGeneration);
+    const session = await dispatchedSessionForLease(extractionBinId, result.leaseGeneration);
     if (session) sessions.add(session);
   }
 
