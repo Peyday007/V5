@@ -137,6 +137,15 @@ jobs:
           # concurrent drops exhausts it and Postgres answers `53200 out of
           # shared memory` with this exact setting named in its hint.
           #
+          # **Measured rather than reasoned, because the attribution mattered.**
+          # One drop was run inside an open transaction and its `pg_locks` rows
+          # counted, per chain: `production` takes **1213** relation locks,
+          # the branch that found this takes **1264**. At 6400 slots that is
+          # `floor(6400/1213) = 5` concurrent drops and `floor(6400/1264) = 5` —
+          # **the same integer**. So this is not one workstream's tables tipping
+          # a threshold; the cluster was already at the edge and the branch that
+          # hit it was simply the one that ran.
+          #
           # It is not a per-transaction ceiling, so raising it does not let one
           # transaction misbehave; it sizes the shared table. 1024 leaves room
           # for the chain to keep growing, which it does every time a workstream
