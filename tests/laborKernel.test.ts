@@ -69,6 +69,9 @@ import { allocate, MAX_OPEN_LABOR_ROUNDS } from '../server/services/labor/alloca
 import { assignByBrain, assignByPerson } from '../server/services/labor/assign.ts';
 import { deriveFromPortfolio, workflowNameFor } from '../server/services/labor/derive.ts';
 import { runLaborKernel } from '../server/services/labor/kernel.ts';
+import { ROUND_COOL_OFF_MS } from '../server/services/cash/discovery.ts';
+import { createGoal } from '../server/repos/russellAuthority.ts';
+import { listCandidates } from '../server/repos/russellCandidates.ts';
 import { declareWorkflow, retire } from '../server/services/labor/declare.ts';
 import { laborView } from '../server/services/labor/view.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
@@ -1253,6 +1256,84 @@ describe('what it asks, and what stops it asking', () => {
     expect(await listLaborRounds(projectId)).toEqual([]);
   });
 
+  it('re-running the tick repeats nothing, and settles', async () => {
+    /*
+     * The whole pass, run to a fixed point, with a real standing authority so
+     * it actually reaches `openAsks` — which is the half a derivation-only
+     * idempotency test cannot see, and the half that spends money.
+     *
+     * **The property is convergence rather than a no-op on the second pass**,
+     * and that distinction is worth stating because the first version of this
+     * test asserted the wrong one and failed. A pass fills the free slots under
+     * `MAX_OPEN_LABOR_ROUNDS` and the allocator asks one purpose per task at a
+     * time, so pass two legitimately opens the *next* question rather than
+     * repeating the first. That is the kernel working. What would be the defect
+     * is asking anything twice, or re-deriving a task, or rewriting a decision
+     * that already says what the live one says — so those are what is asserted,
+     * across every pass, and then that a further pass moves no row at all.
+     */
+    await createGoal({
+      projectId,
+      ownerUserId: userId,
+      createdByUserId: userId,
+      name: 'Labor kernel',
+      allowedWork: ['RESEARCH'],
+      maxMissions: 8,
+      maxFragments: 8,
+      maxConcurrent: 8,
+      maxProbes: 8,
+    });
+    await seededTask({ capabilityId: 'RESEARCH_A_QUESTION' });
+
+    const asked = new Set<string>();
+    let passes = 0;
+    for (; passes < 8; passes += 1) {
+      const pass = await runLaborKernel(projectId);
+      for (const one of pass.opened) {
+        const key = `${one.taskId}/${one.purpose}/${one.round}`;
+        // Nothing is ever asked twice, on any pass.
+        expect(asked.has(key)).toBe(false);
+        asked.add(key);
+      }
+      // A task is derived once, and a settled decision is never rewritten.
+      if (passes > 0) {
+        expect(pass.derived.tasks).toEqual([]);
+        expect(pass.decided).toEqual([]);
+      }
+      if (pass.opened.length === 0) break;
+    }
+
+    // It stopped by itself rather than by running out of iterations, and it
+    // stopped at the ceiling rather than somewhere arbitrary.
+    expect(passes).toBeLessThan(8);
+    expect(asked.size).toBeGreaterThan(0);
+    const open = (await listLaborRounds(projectId)).filter((one) => one.state === 'OPEN');
+    expect(open.length).toBeLessThanOrEqual(MAX_OPEN_LABOR_ROUNDS);
+
+    const rounds = await listLaborRounds(projectId);
+    const candidates = await listCandidates({ projectId, limit: 500 });
+    const tasks = await listTasks(projectId);
+    const allocations = await listAllocations(projectId);
+
+    const again = await runLaborKernel(projectId);
+    expect(again.opened).toEqual([]);
+
+    // Every row, by id, rather than by count: a count is satisfied by one row
+    // being replaced with another.
+    expect((await listLaborRounds(projectId)).map((one) => one.id).sort()).toEqual(
+      rounds.map((one) => one.id).sort(),
+    );
+    expect((await listCandidates({ projectId, limit: 500 })).map((one) => one.id).sort()).toEqual(
+      candidates.map((one) => one.id).sort(),
+    );
+    expect((await listTasks(projectId)).map((one) => one.id).sort()).toEqual(
+      tasks.map((one) => one.id).sort(),
+    );
+    expect((await listAllocations(projectId)).map((one) => one.id).sort()).toEqual(
+      allocations.map((one) => one.id).sort(),
+    );
+  });
+
   it('is bounded by concurrency rather than by a lifetime count', () => {
     const source = readFileSync('server/services/labor/allocate.ts', 'utf8');
     expect(source).toContain('MAX_OPEN_LABOR_ROUNDS');
@@ -1279,6 +1360,25 @@ describe('absorbing is a lookup, never a reading', () => {
     const opened = await openAsks({ projectId, asks: planned.asks, snapshot });
     expect(opened).toHaveLength(1);
     return { task, candidateId: opened[0]!.candidateId };
+  }
+
+  /**
+   * Open the precedent question and leave it open.
+   *
+   * Rules 1 to 4 each `continue`, so at most one question per task is offered
+   * per pass and rule 4 outranks the re-ask in rule 5. Getting to rule 5 at all
+   * therefore means the precedent question has already been asked — which is
+   * the allocator behaving exactly as designed, and a fact about these two
+   * tests rather than about what they are testing.
+   */
+  async function parkThePrecedentQuestion(): Promise<void> {
+    const { openAsks } = await import('../server/services/labor/expand.ts');
+    const snapshot = await laborSnapshot(projectId);
+    const precedent = allocate({ snapshot, slots: MAX_OPEN_LABOR_ROUNDS }).asks.filter(
+      (one) => one.purpose === 'PRECEDENT',
+    );
+    expect(precedent).toHaveLength(1);
+    await openAsks({ projectId, asks: precedent, snapshot });
   }
 
   it('turns a declared requirement into the question it answers, and nothing else', async () => {
@@ -1385,6 +1485,116 @@ describe('absorbing is a lookup, never a reading', () => {
     // Not counted yet is a different fact from none found, and a settled round
     // has to say which.
     expect(rounds[0]!.found).toBe(0);
+  });
+
+  /**
+   * The half the test above claims in its title and did not reach.
+   *
+   * "So the question can be asked again" is the whole point of settling an
+   * abandoned round, and nothing asserted that the allocator would. It would
+   * not: `roundsByPurpose` counts every settled round, abandoned ones included,
+   * so three missions that never ran retired the question for ever — and the
+   * decline recorded the reason as "nothing published has answered it. Brain
+   * has documented that there is nothing there", which is a statement about the
+   * world Brain had made no observation of.
+   *
+   * This drives three real abandonments through `absorb` and asserts the fourth
+   * ask happens. It fails against the pre-fix allocator on the ask, and on the
+   * sentence.
+   */
+  it('re-asks a question three abandoned missions never got to, and never claims they answered it', async () => {
+    const { task } = await openOneRound();
+    await parkThePrecedentQuestion();
+
+    // Three rounds that were opened and whose missions died. Round 1 is the one
+    // `openOneRound` opened; 2 and 3 are opened the same way, through the
+    // allocator, after each abandonment.
+    for (let n = 1; n <= 3; n += 1) {
+      const live = (await listLaborRounds(projectId)).find(
+        (one) => one.state === 'OPEN' && one.purpose === 'NECESSITY',
+      );
+      expect(live?.round).toBe(n);
+      await finishedRound({ candidateId: live!.candidateId, claims: [], missionEndsAs: 'FAILED' });
+      const { absorb, openAsks } = await import('../server/services/labor/expand.ts');
+      await absorb({ projectId });
+
+      if (n === 3) break;
+      // Past the cool-off, which is a separate bound and not what is under test.
+      const at = new Date(Date.now() + n * 2 * ROUND_COOL_OFF_MS).toISOString();
+      const snapshot = await laborSnapshot(projectId, at);
+      // Only the necessity re-ask: the allocator legitimately offers a
+      // precedent round beside it, and opening that would change what is under
+      // test rather than break it.
+      const planned = allocate({ snapshot, slots: MAX_OPEN_LABOR_ROUNDS });
+      const next = planned.asks.filter((one) => one.purpose === 'NECESSITY');
+      expect(next).toHaveLength(1);
+      await openAsks({ projectId, asks: next, snapshot });
+    }
+
+    const necessity = (await listLaborRounds(projectId)).filter(
+      (one) => one.purpose === 'NECESSITY',
+    );
+    expect(necessity).toHaveLength(3);
+    expect(necessity.every((one) => one.state === 'ABANDONED')).toBe(true);
+
+    const at = new Date(Date.now() + 8 * ROUND_COOL_OFF_MS).toISOString();
+    const snapshot = await laborSnapshot(projectId, at);
+    const coverage = snapshot.coverage.find((one) => one.task.id === task.id);
+
+    // The two counts are kept apart: three settled, none of which looked.
+    expect(coverage?.roundsByPurpose.NECESSITY).toBe(3);
+    expect(coverage?.harvestedByPurpose.NECESSITY).toBe(0);
+
+    const planned = allocate({ snapshot, slots: MAX_OPEN_LABOR_ROUNDS });
+    const again = planned.asks.find((one) => one.purpose === 'NECESSITY');
+    expect(again).toBeDefined();
+    // Numbered from the settled count, so it cannot collide with round 3.
+    expect(again?.round).toBe(4);
+
+    // And nothing anywhere says Brain looked.
+    for (const one of planned.declined) {
+      expect(one.why).not.toContain('nothing there');
+    }
+  });
+
+  /**
+   * The other direction, so the bound still exists. Three rounds that actually
+   * ran and found nothing do retire the question — otherwise this fix would
+   * have removed the barren rule rather than corrected what it counts.
+   */
+  it('still stops after three rounds that ran and found nothing', async () => {
+    const { task } = await openOneRound();
+    await parkThePrecedentQuestion();
+
+    for (let n = 1; n <= 3; n += 1) {
+      const live = (await listLaborRounds(projectId)).find(
+        (one) => one.state === 'OPEN' && one.purpose === 'NECESSITY',
+      );
+      expect(live?.round).toBe(n);
+      await finishedRound({ candidateId: live!.candidateId, claims: [] });
+      const { absorb, openAsks } = await import('../server/services/labor/expand.ts');
+      await absorb({ projectId });
+
+      if (n === 3) break;
+      const at = new Date(Date.now() + n * 2 * ROUND_COOL_OFF_MS).toISOString();
+      const snapshot = await laborSnapshot(projectId, at);
+      // Only the necessity re-ask: the allocator legitimately offers a
+      // precedent round beside it, and opening that would change what is under
+      // test rather than break it.
+      const planned = allocate({ snapshot, slots: MAX_OPEN_LABOR_ROUNDS });
+      const next = planned.asks.filter((one) => one.purpose === 'NECESSITY');
+      expect(next).toHaveLength(1);
+      await openAsks({ projectId, asks: next, snapshot });
+    }
+
+    const at = new Date(Date.now() + 8 * ROUND_COOL_OFF_MS).toISOString();
+    const snapshot = await laborSnapshot(projectId, at);
+    const coverage = snapshot.coverage.find((one) => one.task.id === task.id);
+    expect(coverage?.harvestedByPurpose.NECESSITY).toBe(3);
+
+    const planned = allocate({ snapshot, slots: MAX_OPEN_LABOR_ROUNDS });
+    expect(planned.asks.some((one) => one.purpose === 'NECESSITY')).toBe(false);
+    expect(planned.declined.some((one) => one.why.includes('nothing there'))).toBe(true);
   });
 });
 
