@@ -36,6 +36,9 @@ import { assembleRegister, viewOf } from '../server/services/register/view.ts';
 import { createConversation } from '../server/repos/russellConversations.ts';
 import { captureSoftwareRequest } from '../server/repos/russellSoftware.ts';
 import { submitObjective, approveObjective } from '../server/services/factory/contract.ts';
+import { ensureCampaign, ensureUnit, factoryNow, patchCampaign } from '../server/repos/factory.ts';
+import { recordIntegration, recordReview } from '../server/repos/factoryFleet.ts';
+import { observeCampaignPullRequestMerge } from '../server/services/register/pullRequestMergeObservation.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -481,5 +484,266 @@ describe('what the register says it is holding that nobody filed', () => {
     expect(view.unfiled.every((one) => one.ref.startsWith('fcr_') || one.kind !== 'CHANGE_REQUEST')).toBe(
       true,
     );
+  });
+});
+
+/**
+ * `observeCampaignPullRequestMerge` — the forge's own answer correcting a
+ * campaign's `PULL_REQUEST` attestation once the request actually merges.
+ *
+ * The forge is stubbed rather than reached, following the pattern
+ * `tests/factoryExecutionPlane.test.ts` already uses: each test decides
+ * exactly what `/pulls/:number` answers and then checks that the module's
+ * decision follows from that and from nothing else.
+ */
+describe('observeCampaignPullRequestMerge', () => {
+  let realFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    realFetch = globalThis.fetch;
+    process.env['BRAIN_FORGE_API_BASE'] = 'https://forge.test';
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    delete process.env['BRAIN_FORGE_API_BASE'];
+  });
+
+  /** Answers `/pulls/:number` with a fixed `merged` value; everything else 404s. */
+  function stubForgePull(number: number, merged: boolean): void {
+    globalThis.fetch = (async (input: unknown): Promise<Response> => {
+      const url = String(input);
+      const json = (body: unknown, status = 200): Response =>
+        new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+      const pull = /\/pulls\/(\d+)$/.exec(url);
+      if (pull && Number(pull[1]) === number) {
+        return json({
+          number,
+          state: merged ? 'closed' : 'open',
+          merged,
+          html_url: `https://github.com/x/y/pull/${number}`,
+          title: 'a pull request',
+          updated_at: '2026-09-21T00:00:00Z',
+          head: { sha: 'b'.repeat(40), ref: `factory/${number}` },
+          base: { ref: 'main' },
+        });
+      }
+      return json({ message: 'Not Found' }, 404);
+    }) as typeof globalThis.fetch;
+  }
+
+  /** A change request whose repository parses, without touching the forge. */
+  async function approvedChangeRequestWithRemote() {
+    await exec(
+      'git',
+      ['remote', 'add', 'origin', 'https://github.com/Peyday007/register-test-fixture'],
+      { cwd: repoRoot },
+    );
+    const submitted = await submitObjective({
+      projectId,
+      objective: 'Change the fixture so the outcome is visible.',
+      expectedOutcome: 'server/one.txt contains the new text.',
+      acceptanceConditions: [
+        { statement: 'server/one.txt contains the new text', verification: 'read the file' },
+      ],
+      repositoryRoot: repoRoot,
+      mutationScope: ['server/**'],
+      submissionKey: `reg-merge-${Math.random().toString(36).slice(2, 10)}`,
+    });
+    const approved = await approveObjective({
+      changeRequestId: submitted.changeRequest.id,
+      via: 'PERSON',
+      userId,
+    });
+    expect(approved.ok).toBe(true);
+    return approved.changeRequest;
+  }
+
+  /** A COMPLETE campaign carrying an attested-but-unverified pull request. */
+  async function completeCampaignWithPullRequest(prNumber: number): Promise<string> {
+    const changeRequest = await approvedChangeRequestWithRemote();
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 1,
+      laneTargetReason: 'initial',
+    });
+    const { unit } = await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: 'only',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'only',
+      objective: 'change the file',
+      acceptance: ['it changed'],
+      ownedPaths: ['server/one.txt'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a commit',
+      state: 'INTEGRATED',
+    });
+    await recordIntegration({
+      campaignId: campaign.id,
+      unitId: unit.id,
+      attempt: 1,
+      outcome: 'MERGED',
+      reason: 'stayed inside its surface',
+      beforeSha: changeRequest.baseSha,
+      afterSha: 'deadbeefcafe',
+    });
+    await recordReview({
+      campaignId: campaign.id,
+      round: 1,
+      scope: 'CAMPAIGN',
+      unitId: null,
+      reviewerSessionId: 's-review',
+      reviewedSha: 'deadbeefcafe',
+      verdict: 'PASS',
+      summary: 'clean',
+      independence: 'SESSION_SEPARATED',
+      findings: [],
+    });
+    await patchCampaign(campaign.id, {
+      state: 'COMPLETE',
+      integrationSha: 'deadbeefcafe',
+      finishedAt: factoryNow(),
+      prUrl: `https://github.com/Peyday007/register-test-fixture/pull/${prNumber}`,
+      prRef: `#${prNumber}`,
+    });
+    return campaign.id;
+  }
+
+  /** The workstream carries the same open attestation `campaignPullRequestLink.ts` writes. */
+  async function workstreamWithOpenAttestation(campaignId: string, prUrl: string): Promise<string> {
+    const workstream = await stream();
+    await linkWorkstream({
+      workstreamId: workstream.id,
+      kind: 'CAMPAIGN',
+      ref: campaignId,
+      relation: 'PURSUES',
+      recordedBy: 'BRAIN',
+    });
+    await linkWorkstream({
+      workstreamId: workstream.id,
+      kind: 'PULL_REQUEST',
+      ref: prUrl,
+      relation: 'EVIDENCE',
+      recordedBy: 'BRAIN',
+      detail: { attestedBy: 'factory-campaign', attestedAt: '2026-09-20T00:00:00.000Z', merged: false, state: 'open' },
+    });
+    return workstream.id;
+  }
+
+  it('refuses when the campaign has no attested pull request', async () => {
+    const changeRequest = await approvedChangeRequestWithRemote();
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 1,
+      laneTargetReason: 'initial',
+    });
+
+    const result = await observeCampaignPullRequestMerge(campaign.id);
+    expect(result.ok).toBe(false);
+    expect(result.merged).toBe(false);
+    expect(result.reason).toMatch(/no attested pull request/);
+    expect(result.correctedWorkstreamIds).toEqual([]);
+  });
+
+  it('refuses when the campaign does not exist', async () => {
+    const result = await observeCampaignPullRequestMerge('no-such-campaign');
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/no such campaign/);
+    expect(result.correctedWorkstreamIds).toEqual([]);
+  });
+
+  it('refuses with the forge\'s own reason when the call itself fails', async () => {
+    const campaignId = await completeCampaignWithPullRequest(4300);
+    // Stub a pull request that never answers 4300, so the forge 404s.
+    stubForgePull(9999, true);
+
+    const result = await observeCampaignPullRequestMerge(campaignId);
+    expect(result.ok).toBe(false);
+    expect(result.merged).toBe(false);
+    expect(result.reason).toBeTruthy();
+    expect(result.correctedWorkstreamIds).toEqual([]);
+  });
+
+  it('makes its one call, changes no rows, and reports nothing merged when the forge says open', async () => {
+    const campaignId = await completeCampaignWithPullRequest(4301);
+    const prUrl = `https://github.com/Peyday007/register-test-fixture/pull/4301`;
+    const workstreamId = await workstreamWithOpenAttestation(campaignId, prUrl);
+    stubForgePull(4301, false);
+
+    const before = await listLinks(workstreamId, { includeSuperseded: true });
+
+    const result = await observeCampaignPullRequestMerge(campaignId);
+    expect(result.ok).toBe(true);
+    expect(result.merged).toBe(false);
+    expect(result.correctedWorkstreamIds).toEqual([]);
+
+    const after = await listLinks(workstreamId, { includeSuperseded: true });
+    expect(after).toEqual(before);
+  });
+
+  it('A04: corrects the stale attestation, superseding it rather than mutating it, when the forge reports merged', async () => {
+    const campaignId = await completeCampaignWithPullRequest(4302);
+    const prUrl = `https://github.com/Peyday007/register-test-fixture/pull/4302`;
+    const workstreamId = await workstreamWithOpenAttestation(campaignId, prUrl);
+    stubForgePull(4302, true);
+
+    const result = await observeCampaignPullRequestMerge(campaignId);
+    expect(result.ok).toBe(true);
+    expect(result.merged).toBe(true);
+    expect(result.correctedWorkstreamIds).toEqual([workstreamId]);
+
+    const live = await listLinks(workstreamId);
+    const pullRequestLinks = live.filter((link) => link.kind === 'PULL_REQUEST');
+    expect(pullRequestLinks).toHaveLength(1);
+    expect(pullRequestLinks[0]?.detail.merged).toBe(true);
+    expect(pullRequestLinks[0]?.detail.state).toBe('merged');
+    expect(pullRequestLinks[0]?.detail.attestedBy).toBe('pull-request-merge-observation');
+    expect(pullRequestLinks[0]?.detail.attestedBy).not.toBe('factory-campaign');
+    expect(typeof pullRequestLinks[0]?.detail.attestedAt).toBe('string');
+    expect(pullRequestLinks[0]?.ref).toBe(prUrl);
+
+    // The stale link is superseded, never destroyed.
+    const everything = await listLinks(workstreamId, { includeSuperseded: true });
+    const supersededLinks = everything.filter((link) => link.kind === 'PULL_REQUEST' && link.supersededAt !== null);
+    expect(supersededLinks).toHaveLength(1);
+    expect(supersededLinks[0]?.detail.merged).toBe(false);
+    expect(supersededLinks[0]?.supersededReason).toMatch(/merged/);
+  });
+
+  it('does not create a second correction on a second call', async () => {
+    const campaignId = await completeCampaignWithPullRequest(4303);
+    const prUrl = `https://github.com/Peyday007/register-test-fixture/pull/4303`;
+    const workstreamId = await workstreamWithOpenAttestation(campaignId, prUrl);
+    stubForgePull(4303, true);
+
+    const first = await observeCampaignPullRequestMerge(campaignId);
+    expect(first.correctedWorkstreamIds).toEqual([workstreamId]);
+
+    const afterFirst = await listLinks(workstreamId, { includeSuperseded: true });
+    const supersededAfterFirst = afterFirst.filter(
+      (link) => link.kind === 'PULL_REQUEST' && link.supersededAt !== null,
+    );
+    expect(supersededAfterFirst).toHaveLength(1);
+
+    // The second call finds `detail.merged === true` already and does nothing.
+    const second = await observeCampaignPullRequestMerge(campaignId);
+    expect(second.ok).toBe(true);
+    expect(second.merged).toBe(true);
+    expect(second.correctedWorkstreamIds).toEqual([]);
+
+    const afterSecond = await listLinks(workstreamId, { includeSuperseded: true });
+    const supersededAfterSecond = afterSecond.filter(
+      (link) => link.kind === 'PULL_REQUEST' && link.supersededAt !== null,
+    );
+    // Exactly one supersession per correction — not one per call.
+    expect(supersededAfterSecond).toHaveLength(1);
+    expect(afterSecond.filter((link) => link.kind === 'PULL_REQUEST' && link.supersededAt === null)).toHaveLength(1);
   });
 });
