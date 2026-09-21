@@ -168,12 +168,15 @@ export interface PersonDecision {
  */
 export const VERDICT_ORDER: Readonly<Record<EntryVerdict, number>> = Object.freeze({
   ENTER: 0,
-  BUILD_CAPABILITY_FIRST: 1,
-  NO_ROUTE_FOUND: 2,
-  INVESTIGATING: 3,
-  UNEXAMINED: 4,
-  NO_DEMAND_FOUND: 5,
-  RETIRED: 6,
+  // Directly under ENTER, because it is one question away from it and every
+  // other verdict below is a capability, a route or a buyer away.
+  COST_UNKNOWN: 1,
+  BUILD_CAPABILITY_FIRST: 2,
+  NO_ROUTE_FOUND: 3,
+  INVESTIGATING: 4,
+  UNEXAMINED: 5,
+  NO_DEMAND_FOUND: 6,
+  RETIRED: 7,
 });
 
 export async function programmeView(projectId: string): Promise<ProgrammeView | null> {

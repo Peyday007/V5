@@ -212,6 +212,11 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
       : null,
     capabilitySubject: row.capability_subject,
     capabilityObservedOn: row.capability_observed_on,
+    capabilityQualifier: row.capability_qualifier,
+    capabilityAmountLowMinor: row.capability_amount_low_minor,
+    capabilityAmountHighMinor: row.capability_amount_high_minor,
+    capabilityCurrency: row.capability_currency,
+    capabilityBasis: row.capability_basis,
     retrievedAt: row.retrieved_at,
     confidence: Number(row.confidence),
     contradictionState: row.contradiction_state as ContradictionState,
@@ -817,6 +822,11 @@ export interface InsertClaimInput {
   capabilityFinding?: string | null;
   capabilitySubject?: string | null;
   capabilityObservedOn?: string | null;
+  capabilityQualifier?: string | null;
+  capabilityAmountLowMinor?: number | null;
+  capabilityAmountHighMinor?: number | null;
+  capabilityCurrency?: string | null;
+  capabilityBasis?: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState?: ContradictionState;
@@ -857,6 +867,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            structural_subject, structural_qualifier, structural_amount_cents,
            labor_finding, labor_subject, labor_qualifier, labor_rate_cents,
            capability_finding, capability_subject, capability_observed_on,
+           capability_qualifier, capability_amount_low_minor, capability_amount_high_minor,
+           capability_currency, capability_basis,
            retrieved_at, confidence,
            contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
@@ -864,7 +876,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            geography, timeframe, population, definition, requirement_ids, job_id,
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
@@ -875,6 +887,9 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.laborQualifier ?? null, input.laborRateCents ?? null,
           input.capabilityFinding ?? null, input.capabilitySubject ?? null,
           input.capabilityObservedOn ?? null,
+          input.capabilityQualifier ?? null,
+          input.capabilityAmountLowMinor ?? null, input.capabilityAmountHighMinor ?? null,
+          input.capabilityCurrency ?? null, input.capabilityBasis ?? null,
           input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,

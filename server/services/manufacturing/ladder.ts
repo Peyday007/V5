@@ -39,14 +39,18 @@ import {
   getProgram,
   listCapabilities,
   listCategories,
+  listAcquisitionCandidates,
+  listCategoryCapital,
   listCategoryEvidence,
   listEdges,
   listManufacturingRounds,
 } from '../../repos/manufacturing.ts';
 import { depthOf, pathOf } from '../../domain/manufacturing.ts';
 import type {
+  AcquisitionCandidate,
   Capability,
   CapabilityEdge,
+  CategoryCapitalEntry,
   CategoryEvidenceEntry,
   MachineCategory,
   ManufacturingProgram,
@@ -87,6 +91,19 @@ export interface CategoryCoverage {
   barriers: CategoryEvidenceEntry[];
   boughtIn: CategoryEvidenceEntry[];
 
+  /**
+   * What entering it is published to cost, requirement by requirement.
+   *
+   * Carried whole rather than as a total, because the total is a derivation
+   * that has to be able to refuse: `capital.ts` withholds one when any
+   * established requirement carries no figure, and a coverage that had already
+   * summed would have destroyed the evidence it needed to know that.
+   */
+  capital: CategoryCapitalEntry[];
+
+  /** Firms a source names that could supply some of this instead of building. */
+  candidates: AcquisitionCandidate[];
+
   /** When anything about it was last asked, and when one last settled. */
   lastAskedAt: string | null;
   lastSettledAt: string | null;
@@ -100,6 +117,8 @@ export interface LadderSnapshot {
   capabilities: Capability[];
   edges: CapabilityEdge[];
   evidence: CategoryEvidenceEntry[];
+  capital: CategoryCapitalEntry[];
+  candidates: AcquisitionCandidate[];
   rounds: ManufacturingRound[];
   coverage: CategoryCoverage[];
   /** Whether the opening question has ever been asked, and how it went. */
@@ -112,6 +131,8 @@ const PURPOSES: readonly ManufacturingRoundPurpose[] = [
   'DEMAND',
   'CAPABILITY',
   'INTEGRATION',
+  'CAPITAL',
+  'ACQUISITION',
 ];
 
 export async function ladderSnapshot(
@@ -121,13 +142,16 @@ export async function ladderSnapshot(
   const program = await getProgram(projectId);
   if (!program) return null;
 
-  const [categories, capabilities, edges, evidence, rounds] = await Promise.all([
-    listCategories(program.id),
-    listCapabilities(program.id),
-    listEdges(program.id),
-    listCategoryEvidence(program.id),
-    listManufacturingRounds(program.id),
-  ]);
+  const [categories, capabilities, edges, evidence, capital, candidates, rounds] =
+    await Promise.all([
+      listCategories(program.id),
+      listCapabilities(program.id),
+      listEdges(program.id),
+      listCategoryEvidence(program.id),
+      listCategoryCapital(program.id),
+      listAcquisitionCandidates(program.id),
+      listManufacturingRounds(program.id),
+    ]);
 
   return {
     projectId,
@@ -137,8 +161,18 @@ export async function ladderSnapshot(
     capabilities,
     edges,
     evidence,
+    capital,
+    candidates,
     rounds,
-    coverage: coverageOf({ categories, capabilities, edges, evidence, rounds }),
+    coverage: coverageOf({
+      categories,
+      capabilities,
+      edges,
+      evidence,
+      capital,
+      candidates,
+      rounds,
+    }),
     bootstrap: bootstrapState(rounds),
   };
 }
@@ -169,6 +203,8 @@ export function coverageOf(input: {
   capabilities: readonly Capability[];
   edges: readonly CapabilityEdge[];
   evidence: readonly CategoryEvidenceEntry[];
+  capital: readonly CategoryCapitalEntry[];
+  candidates: readonly AcquisitionCandidate[];
   rounds: readonly ManufacturingRound[];
 }): CategoryCoverage[] {
   const byId = new Map(input.categories.map((one) => [one.id, one]));
@@ -190,6 +226,23 @@ export function coverageOf(input: {
   for (const entry of input.evidence) {
     evidenceByCategory.set(entry.categoryId, [
       ...(evidenceByCategory.get(entry.categoryId) ?? []),
+      entry,
+    ]);
+  }
+
+  const capitalByCategory = new Map<string, CategoryCapitalEntry[]>();
+  for (const entry of input.capital) {
+    capitalByCategory.set(entry.categoryId, [
+      ...(capitalByCategory.get(entry.categoryId) ?? []),
+      entry,
+    ]);
+  }
+
+  const candidatesByCategory = new Map<string, AcquisitionCandidate[]>();
+  for (const entry of input.candidates) {
+    if (!entry.categoryId) continue;
+    candidatesByCategory.set(entry.categoryId, [
+      ...(candidatesByCategory.get(entry.categoryId) ?? []),
       entry,
     ]);
   }
@@ -244,6 +297,8 @@ export function coverageOf(input: {
       weaknesses: ofKind('INCUMBENT_WEAKNESS'),
       barriers: ofKind('ENTRY_BARRIER'),
       boughtIn: ofKind('BOUGHT_IN_COMPONENT'),
+      capital: capitalByCategory.get(category.id) ?? [],
+      candidates: candidatesByCategory.get(category.id) ?? [],
       lastAskedAt: latest(mine.map((one) => one.openedAt)),
       lastSettledAt: latest(finished.map((one) => one.harvestedAt ?? one.openedAt)),
     };

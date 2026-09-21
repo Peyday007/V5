@@ -542,8 +542,19 @@ export interface ParsedClaim {
   capabilityFinding: CapabilityFinding | null;
   /** What that finding is about: a name, or a value from that kind's own set. */
   capabilitySubject: string | null;
-  /** When the source observed a demand signal. Null on every other kind. */
+  /**
+   * When the source observed it. A demand signal and a capital figure both
+   * carry one; every other kind carries null.
+   */
   capabilityObservedOn: string | null;
+  /** The second closed value, where the finding's kind has one. */
+  capabilityQualifier: string | null;
+  /** What kind of figure an amount is. Only a capital requirement has one. */
+  capabilityBasis: string | null;
+  /** The published range in minor units, and what it is priced in. */
+  capabilityAmountLowMinor: number | null;
+  capabilityAmountHighMinor: number | null;
+  capabilityCurrency: string | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -750,6 +761,11 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
     finding: row['capabilityFinding'],
     subject: row['capabilitySubject'],
     observedOn: row['capabilityObservedOn'],
+    qualifier: row['capabilityQualifier'],
+    basis: row['capabilityBasis'],
+    amountLowMinor: row['capabilityAmountLowMinor'],
+    amountHighMinor: row['capabilityAmountHighMinor'],
+    currency: row['capabilityCurrency'],
   });
   if (!capability.ok) return capability;
 
@@ -795,6 +811,11 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       capabilityFinding: capability.value.finding,
       capabilitySubject: capability.value.subject,
       capabilityObservedOn: capability.value.observedOn,
+      capabilityQualifier: capability.value.qualifier,
+      capabilityBasis: capability.value.basis,
+      capabilityAmountLowMinor: capability.value.amountLowMinor,
+      capabilityAmountHighMinor: capability.value.amountHighMinor,
+      capabilityCurrency: capability.value.currency,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

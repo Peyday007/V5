@@ -47,8 +47,13 @@
  * `UNKNOWN` until `CAPABILITIES_KNOWN` is `MET`: you cannot have established
  * that you hold all of a set nobody has established.
  */
-import type { Capability, MachineCategory } from '../../domain/types.ts';
+import type {
+  Capability,
+  MachineCategory,
+  ManufacturingRoundPurpose,
+} from '../../domain/types.ts';
 import type { CategoryCoverage, LadderSnapshot } from './ladder.ts';
+import { readCapital, label, type CapitalReading } from './capital.ts';
 
 export const CONDITION_ANSWERS = ['MET', 'NOT_MET', 'UNKNOWN'] as const;
 export type ConditionAnswer = (typeof CONDITION_ANSWERS)[number];
@@ -62,6 +67,22 @@ export const ENTRY_CONDITIONS = [
   'REQUIREMENTS_KNOWN',
   /** Every requirement established is one this company is recorded as holding. */
   'CAPABILITIES_HELD',
+  /**
+   * What entering costs is established, requirement by requirement, in figures.
+   *
+   * **This is a recorded correction rather than a quiet addition.** The four
+   * conditions above could all read `MET` with nothing anywhere saying what
+   * entering would cost, so `ENTER` was reachable on a category whose price
+   * nobody had asked about — a verdict about an easier question than the one
+   * the directive asks, whose own ENTRY dimension names *required capital*
+   * first.
+   *
+   * It is `UNKNOWN` until every established requirement carries a published
+   * figure, and `UNKNOWN` is never `MET`. Invariant 39 at the number that
+   * would start a factory: an unanswered fact is a task, it may never make
+   * something ready, and it never ranks higher.
+   */
+  'ENTRY_COST_ESTABLISHED',
 ] as const;
 export type EntryCondition = (typeof ENTRY_CONDITIONS)[number];
 
@@ -104,7 +125,22 @@ export const ENTRY_VERDICTS = [
   'NO_ROUTE_FOUND',
   /** Demand and a route are established; what it takes is not, or is not held. */
   'BUILD_CAPABILITY_FIRST',
-  /** Every condition is met: demand, a route, known requirements, all held. */
+  /**
+   * Everything else is settled and nobody has established what entering costs.
+   *
+   * Its own verdict rather than folded into the one above, for the reason
+   * `NO_ROUTE_FOUND` is its own: the remedies differ. *You cannot build it
+   * yet* is answered by building a capability or finding a bridge; *nobody has
+   * priced it* is answered by asking one more question, and it is the
+   * cheapest gap on this list to close. Collapsing them would send somebody to
+   * develop a capability they already have when the only thing missing was a
+   * figure.
+   */
+  'COST_UNKNOWN',
+  /**
+   * Every condition is met: demand, a route, known requirements, all held, and
+   * a published figure for every requirement entering is established to have.
+   */
   'ENTER',
 ] as const;
 export type EntryVerdict = (typeof ENTRY_VERDICTS)[number];
@@ -135,8 +171,16 @@ export interface CategoryReading {
   held: Capability[];
   /** What entering would create that nothing else on the ladder teaches yet. */
   wouldTeach: Capability[];
-  /** The barriers established, which are never capital and never capabilities. */
+  /**
+   * The barriers established, which are never capital and never capabilities.
+   *
+   * A barrier is a *thing to obtain*; capital is an *amount*, and it is in
+   * `capital` beside this. Filing a certification nobody can buy their way
+   * past as a cost would make an unreachable category look merely expensive.
+   */
   barriers: string[];
+  /** What entering is published to cost, with any total withheld where it must be. */
+  capital: CapitalReading;
   /** One sentence composed from the above. Never a score. */
   because: string;
 }
@@ -167,13 +211,15 @@ export function readCategory(input: {
    * whose requirements nobody has established.
    */
   const requirements = requirementsCondition(coverage);
+  const capital = readCapital(coverage.capital);
   const conditions: ConditionReading[] = [
     demandCondition(coverage),
     routeCondition(coverage),
     requirements,
-    // Last, because "every requirement is held" is only answerable once there
+    // Then, because "every requirement is held" is only answerable once there
     // are requirements to have established.
     heldCondition(coverage, requirements),
+    costCondition(coverage, capital),
   ];
 
   const held = coverage.requires.filter((one) => one.heldAt !== null);
@@ -209,7 +255,8 @@ export function readCategory(input: {
     held,
     wouldTeach,
     barriers: coverage.barriers.map((one) => one.subject),
-    because: explain({ coverage, verdict, conditions, missing }),
+    capital,
+    because: explain({ coverage, verdict, conditions, missing, capital }),
   };
 }
 
@@ -338,6 +385,58 @@ function heldCondition(
   };
 }
 
+/**
+ * What entering costs is established, in figures, requirement by requirement.
+ *
+ * Three answers and the middle one is the point. `MET` needs every
+ * established requirement to carry a published figure; a category where some
+ * are priced and some are not reads `UNKNOWN`, **not** `MET`, because a total
+ * that stepped over the blanks would be smaller than anything published says.
+ *
+ * `NOT_MET` means the question was asked and nothing published gave a figure
+ * for anything — which is a real and reportable state of the world, answered
+ * by a person deciding whether to proceed without one rather than by asking
+ * again.
+ */
+function costCondition(
+  coverage: CategoryCoverage,
+  capital: CapitalReading,
+): ConditionReading {
+  if (capital.state === 'ESTABLISHED') {
+    return {
+      condition: 'ENTRY_COST_ESTABLISHED',
+      answer: 'MET',
+      because: capital.because,
+    };
+  }
+  if (capital.state === 'PARTIAL') {
+    return {
+      condition: 'ENTRY_COST_ESTABLISHED',
+      answer: 'UNKNOWN',
+      because:
+        `${coverage.capital.length} entry requirement` +
+        (coverage.capital.length === 1 ? ' is' : 's are') +
+        ' established and nothing published gives a figure for ' +
+        `${capital.unpricedRequirements.map(label).join(', ')}. Part of an answer is not an ` +
+        'answer here: the missing figures are exactly the ones a total would have to step over.',
+    };
+  }
+  if (coverage.settled.CAPITAL > 0) {
+    return {
+      condition: 'ENTRY_COST_ESTABLISHED',
+      answer: 'NOT_MET',
+      because:
+        `${coverage.settled.CAPITAL} question${coverage.settled.CAPITAL === 1 ? ' has' : 's have'} ` +
+        'asked what entering costs and nothing published came back with a figure.',
+    };
+  }
+  return {
+    condition: 'ENTRY_COST_ESTABLISHED',
+    answer: 'UNKNOWN',
+    because: 'Nothing has asked what entering this category costs.',
+  };
+}
+
 function verdictFrom(
   coverage: CategoryCoverage,
   conditions: readonly ConditionReading[],
@@ -360,20 +459,36 @@ function verdictFrom(
      * still being researched would be a status that contradicts the rows
      * underneath it — §29's defect, and the reason this branch exists at all.
      */
-    if (answer('ROUTE_TO_BUYER_ESTABLISHED') === 'MET') return 'BUILD_CAPABILITY_FIRST';
+    if (answer('ROUTE_TO_BUYER_ESTABLISHED') === 'MET') {
+      /*
+       * Buyers, a route, and everything the ladder can settle settled.
+       *
+       * The cost is asked *last* deliberately. A category that cannot be built
+       * yet has a bigger gap than an unpriced one, and reporting `COST_UNKNOWN`
+       * over a missing capability would send somebody to research a figure for
+       * something this company cannot produce — which is the directive's own
+       * ordering, where required capital sits under ENTRY and ENTRY comes after
+       * demand and distribution.
+       */
+      const buildable =
+        answer('REQUIREMENTS_KNOWN') === 'MET' && answer('CAPABILITIES_HELD') === 'MET';
+      if (buildable) return 'COST_UNKNOWN';
+      return 'BUILD_CAPABILITY_FIRST';
+    }
     if (answer('ROUTE_TO_BUYER_ESTABLISHED') === 'NOT_MET') return 'NO_ROUTE_FOUND';
   }
 
-  const anythingAsked =
-    coverage.settled.MAP +
-      coverage.settled.DEMAND +
-      coverage.settled.CAPABILITY +
-      coverage.settled.INTEGRATION >
-      0 ||
-    coverage.open.MAP ||
-    coverage.open.DEMAND ||
-    coverage.open.CAPABILITY ||
-    coverage.open.INTEGRATION;
+  /*
+   * Every purpose but BOOTSTRAP, which is not about any one category.
+   *
+   * Read from the record rather than listed, so a purpose added later counts
+   * here without anybody remembering this line — the tally that decides
+   * between "being researched" and "nothing has been asked" is exactly where a
+   * forgotten purpose would make a busy category read as untouched.
+   */
+  const anythingAsked = (Object.keys(coverage.settled) as ManufacturingRoundPurpose[])
+    .filter((purpose) => purpose !== 'BOOTSTRAP')
+    .some((purpose) => coverage.settled[purpose] > 0 || coverage.open[purpose]);
 
   return anythingAsked ? 'INVESTIGATING' : 'UNEXAMINED';
 }
@@ -383,6 +498,7 @@ function explain(input: {
   verdict: EntryVerdict;
   conditions: readonly ConditionReading[];
   missing: readonly CapabilityGap[];
+  capital: CapitalReading;
 }): string {
   const where = input.coverage.path.join(' → ');
   switch (input.verdict) {
@@ -435,11 +551,18 @@ function explain(input: {
       }
       return parts.join(' ');
     }
+    case 'COST_UNKNOWN':
+      return (
+        `Somebody is buying in ${where}, there is a published route to them, what producing ` +
+        'there requires is established and every one of those requirements is recorded as ' +
+        `held by this company. ${input.capital.because} This is the cheapest remaining gap ` +
+        'on this category: one question, not a capability to build.'
+      );
     case 'ENTER':
       return (
         `Somebody is buying in ${where}, there is a published route to them, what producing ` +
-        'there requires is established, and every one of those requirements is recorded as ' +
-        'held by this company.'
+        'there requires is established, every one of those requirements is recorded as ' +
+        `held by this company, and what entering costs is established. ${input.capital.because}`
       );
   }
 }

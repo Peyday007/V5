@@ -39,6 +39,7 @@ import { allocate, MAX_OPEN_PROGRAMME_ROUNDS, type Ask } from './allocate.ts';
 import { absorb, openAsks, type Absorbed, type OpenedRound } from './expand.ts';
 import { ladderSnapshot, type LadderSnapshot } from './ladder.ts';
 import { ensureProgrammeAuthority, programmeMayAsk } from './program.ts';
+import { readDirective, type Directive } from './directive.ts';
 
 export interface KernelPass {
   /** Rounds opened this pass, each carrying why the allocator chose it. */
@@ -47,6 +48,17 @@ export interface KernelPass {
   absorbed: Absorbed;
   /** Considered and not asked, with the reason. Reported, never acted on. */
   declined: { subject: string; why: string }[];
+  /**
+   * Whether the programme's directive actually reached the questions, and why
+   * not when it did not.
+   *
+   * Reported rather than assumed, because *hashed* and *operative* are two
+   * facts and the whole point of `directive.ts` is that recording the first
+   * proves nothing about the second. A pass that opened work without it is
+   * visible here and on the surface, instead of producing assignments that
+   * read almost right.
+   */
+  directive: { reaching: boolean; path: string | null; why: string | null };
   /** The ladder as it stood when the decision was made. */
   categories: number;
   capabilitiesHeld: number;
@@ -55,8 +67,18 @@ export interface KernelPass {
 
 const EMPTY: KernelPass = {
   opened: [],
-  absorbed: { categories: [], capabilities: [], edges: [], evidence: [], settled: [], refused: [] },
+  absorbed: {
+    categories: [],
+    capabilities: [],
+    edges: [],
+    evidence: [],
+    capital: [],
+    candidates: [],
+    settled: [],
+    refused: [],
+  },
   declined: [],
+  directive: { reaching: false, path: null, why: null },
   categories: 0,
   capabilitiesHeld: 0,
   openRounds: 0,
@@ -89,20 +111,42 @@ export async function runManufacturingKernel(projectId: string): Promise<KernelP
     openRounds: snapshot.rounds.filter((one) => one.state === 'OPEN').length,
   };
 
+  /*
+   * The directive, read once for the whole pass.
+   *
+   * Read *before* the gate so that a paused programme still reports whether
+   * its directive is readable — that is a setup fact somebody may need to fix,
+   * and hiding it behind the gate would mean the one state where nothing else
+   * is happening is also the one where nobody can see it.
+   */
+  const directive = await directiveFor(snapshot.program.blueprintPath);
+
   const gate = await programmeMayAsk(projectId);
   if (!gate.allowed) {
     return {
       opened: [],
       absorbed,
       declined: [{ subject: 'every category on the ladder', why: gate.reason }],
+      directive: directive.report,
       ...counts,
     };
   }
 
   const plan = planFrom(snapshot);
-  const opened = await openAsks({ projectId, asks: plan.asks, snapshot });
+  const opened = await openAsks({
+    projectId,
+    asks: plan.asks,
+    snapshot,
+    directive: directive.parsed,
+  });
 
-  return { opened, absorbed, declined: plan.declined, ...counts };
+  return {
+    opened,
+    absorbed,
+    declined: plan.declined,
+    directive: directive.report,
+    ...counts,
+  };
 }
 
 /**
@@ -119,4 +163,43 @@ export function planFrom(snapshot: LadderSnapshot): { asks: Ask[]; declined: { s
     snapshot,
     slots: Math.max(0, MAX_OPEN_PROGRAMME_ROUNDS - openRounds),
   });
+}
+
+/**
+ * The directive behind one programme, and an honest report of whether it
+ * arrived.
+ *
+ * Three answers and not two. A programme that names no directive is a
+ * different fact from one that names a file nobody can open, and both are
+ * different from one whose file parsed — §30's and §37's rule that *we could
+ * not tell* must never read the same as *we checked*, arriving at a setup
+ * step. Nothing here is fatal: a programme with an unreadable directive still
+ * researches, and the assignment says out loud that it went out without one.
+ */
+async function directiveFor(
+  blueprintPath: string | null,
+): Promise<{ parsed: Directive | null; report: KernelPass['directive'] }> {
+  if (!blueprintPath) {
+    return {
+      parsed: null,
+      report: {
+        reaching: false,
+        path: null,
+        why:
+          'This programme names no directive, so its questions carry the objective alone. A ' +
+          'programme started today names one and refuses to start without it.',
+      },
+    };
+  }
+  const read = await readDirective(blueprintPath);
+  if (!read.ok) {
+    return {
+      parsed: null,
+      report: { reaching: false, path: blueprintPath, why: read.reason },
+    };
+  }
+  return {
+    parsed: read.directive,
+    report: { reaching: true, path: read.directive.path, why: null },
+  };
 }
