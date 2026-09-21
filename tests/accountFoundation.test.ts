@@ -521,7 +521,7 @@ it('writes down what happened and never what was typed', async () => {
     const failed = await pinSignIn('Ambiguous Member', '999999');
     expect(failed.status).toBe(401);
 
-    const log = await call<{ events: { action: string }[] }>(
+    const log = await call<{ events: { action: string; result: string }[] }>(
       'GET',
       '/api/admin/identity-events?limit=500',
       { cookie: ownerCookie },
@@ -548,9 +548,7 @@ it('writes down what happened and never what was typed', async () => {
     }
 
     // Both outcomes of a sign-in, so a refusal is as recorded as a success.
-    const signIns = log.body.events.filter((one) => one.action === 'PIN_SIGN_IN') as {
-      result: string;
-    }[];
+    const signIns = log.body.events.filter((one) => one.action === 'PIN_SIGN_IN');
     expect(signIns.some((one) => one.result === 'SUCCESS')).toBe(true);
     expect(signIns.some((one) => one.result === 'DENIED')).toBe(true);
 
