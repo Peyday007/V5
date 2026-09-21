@@ -87,7 +87,11 @@ const UNIVERSAL_GAPS: readonly string[] = Object.freeze([
     'measurement of the puzzle and names what it counted; mapping that onto how long a person ' +
     'takes needs playtest data this Brain does not hold.',
   'No human edit and no playtest. Enjoyment, readability, cultural fit and actual difficulty ' +
-    'are what the brief asks a person to check, and nothing here checks them.',
+    'are what the brief asks a person to check, nothing here checks them, and — said plainly ' +
+    'because the word invites the opposite reading — a **qualified** edition is one that is ' +
+    'validated, rights-clear and distinct, and is not one a person has read. Closing this ' +
+    'needs somewhere to record a review and a decision about what a stratified sample is; ' +
+    'neither exists, so it is an open gap rather than a gate with no key.',
 ]);
 
 const SUPPORT: readonly FormatSupport[] = Object.freeze([

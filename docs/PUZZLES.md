@@ -366,9 +366,15 @@ nothing; and sells, contacts and spends nothing.
 - **No difficulty calibration.** Every difficulty is a structural measurement of
   the puzzle and `difficulty_basis` names exactly what was counted. Mapping that
   onto how long a person takes needs playtest data this Brain does not hold.
-- **No human edit and no playtest.** Enjoyment, readability, cultural fit and
-  actual difficulty are what the brief asks a person to check, and nothing here
-  checks them.
+- **No human edit and no playtest, and `qualified` does not mean reviewed.**
+  Enjoyment, readability, cultural fit and actual difficulty are what the brief
+  asks a person to check, and nothing here checks them. A qualified edition is
+  validated, rights-clear and distinct — it is *not* one a person has read, and
+  the word invites the opposite reading, so it is worth saying. Closing this
+  needs somewhere to record a review and a decision about what a stratified
+  sample is. Neither exists yet, which is why it is an open gap rather than a
+  condition on qualification: a bar with no way over it is a park rather than a
+  standard (§33), and every edition would sit behind it for ever.
 - **No revenue.** Nothing links an edition to a money entry, so the three rungs
   above `SELLABLE` read `UNKNOWN` with the missing link named — not `NOT_MET`,
   which would assert that nothing has ever sold.

@@ -7322,8 +7322,13 @@ on the day they landed. Nothing here compiles a press-ready artifact: an edition
 becomes a **proof sheet** whose own first page says it has no typography, page
 architecture, trim, bleed or imposition. No difficulty is calibrated against
 human solve times, and `difficulty_basis` names the structural thing actually
-counted instead. Nothing has been published, listed, submitted or sold, and
-nothing here can do any of those.
+counted instead. **A `qualified` edition is validated, rights-clear and
+distinct, and is not one a person has read** — the brief asks for human edit and
+a stratified playtest, nothing here records either, and that is left an open gap
+rather than a condition on qualification because a bar with no way over it is a
+park rather than a standard (§33) and every edition would sit behind it for
+ever. Nothing has been published, listed, submitted or sold, and nothing here
+can do any of those.
 
 
 ## Repository map
