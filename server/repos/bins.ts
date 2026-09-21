@@ -2529,6 +2529,40 @@ export async function dispatchedSessionForBin(
 }
 
 /**
+ * The session Brain fired for the lease a submission was made under.
+ *
+ * **A dispatch generation and a lease generation are one apart, and reading one
+ * as the other resolves nothing, always.** `assignNextBin` claims with a
+ * compare-and-swap that sets `lease_generation = row.lease_generation + 1`, and
+ * credits the arrival against `row.lease_generation` — the generation *before*
+ * the claim, which is the one the intent carries. So a caller holding a lease,
+ * or a unit result submitted under one, is holding `G + 1` while the dispatch
+ * that produced it sits at `G`.
+ *
+ * Two callers had this wrong in opposite directions, and only a walk found
+ * either. `services/design/judge.ts` asked at the lease's own generation, got
+ * null every time, and refused **every** judged review for "no resolvable
+ * lineage" — a guard that fails closed, so the symptom was a lane that never
+ * worked rather than one that lied. `services/capability/independence.ts` asked
+ * the same way while building the set of sessions an audit must be independent
+ * *of*, and a session missing from that set is a session allowed to audit its
+ * own reading: the same defect failing open, which is the expensive direction.
+ *
+ * So this is a second function rather than an argument, because the two
+ * questions are genuinely different and a boolean would put the choice where
+ * the mistake already was. `dispatchedSessionForBin` stays exactly as it is for
+ * the callers that ask *before* a claim — the admission hook holds the bin at
+ * its pre-claim generation, and it is right.
+ */
+export async function dispatchedSessionForLease(
+  binId: string,
+  leaseGeneration: number,
+): Promise<string | null> {
+  if (!Number.isInteger(leaseGeneration) || leaseGeneration < 1) return null;
+  return dispatchedSessionForBin(binId, leaseGeneration - 1);
+}
+
+/**
  * How long a tick may hold an intent while it makes the HTTP call.
  *
  * Doubles as the recovery bound: a SENDING intent older than this is claimable
