@@ -2824,6 +2824,31 @@ remote.
   spending that budget to shorten a queue trades a legible timeout for
   `EMAXCONNSESSION` on whichever statement happened to be running.
 
+- **`ceiling 2` is the harness's own pool, and I read it as the deployment's.
+  The correction is recorded rather than quietly applied.** A prior report of
+  mine named `BRAIN_DATABASE_POOL_SIZE=2` as a production misconfiguration and
+  proposed raising it, on the strength of deploy 266's
+  `2/2 connection(s) in use, 0 idle, 380 caller(s) waiting, ceiling 2`. That
+  reading is real and it is `verify-hosted.ts` describing the pool it sets for
+  itself, three thousand lines into its own file, with a comment saying why.
+  **Nothing about it was ever a fact about the running Brain**, and a pool
+  raised on it would have been raised against a number that was never the
+  application's.
+
+  Measured instead, on 2026-09-21: `flyctl secrets list` names twenty-three
+  deployment secrets and `BRAIN_DATABASE_POOL_SIZE` is **not one of them**, so
+  `readPoolSize()` answers its default of ten; `flyctl status` shows **one**
+  machine. So the app holds ten of the pooler's fifteen, an operator script
+  beside it holds two, and three are left — which is the arithmetic the bullet
+  above already states, arrived at from the other end. **Ten is both the
+  intended default and the highest defensible value**, and the honest action on
+  an instruction to correct it is to report that there is nothing to correct.
+
+  The reading that would have been the right one was available the whole time
+  and is cheap: a secret's *name* says whether a default is in force, and it is
+  not a secret's value. `logs.yml` takes it now, guarded by whole command forms
+  so that `secrets list` is a read and `secrets set` is refused by name.
+
 - **What a run proved is separate from what it failed at, and `d973175` is the
   worked example.** That deploy failed both hosted verifications at the 300s
   wall above. `Deploy` nonetheless succeeded and the image was released; the
@@ -5068,6 +5093,64 @@ and a suite that exercises the stage cannot see that.**
   holds it against object storage's own character class rather than against
   the production constant, because a test sharing that constant would pass
   whatever it became.
+
+
+- **That repair hardened a function the live path does not call, and the
+  correction is recorded rather than quietly applied.** `safeSegment` is
+  correct and tested. `storeFile` reaches it only through `documentKey`, on the
+  branch taken when an `identity` is supplied — and **no caller in this
+  repository supplies one**, so the branch is dead and every stored document
+  took the other one, where the leaf is `sanitizeFilename`'d alone. `ae6f682`
+  touched `storage/keys.ts` and never `storage.ts`: the two halves of one
+  repair written at two layers with nothing holding them against each other,
+  which is the sentence the bullet above had already written about this exact
+  pair of functions. Every cash-variant report since has thrown `400
+  InvalidKey` — eleven of them, each collapsing to *"That call could not be
+  completed"* — and the defect was never only Cash Mode's, because Supabase's
+  key class is `\w` plus punctuation and `\w` is ASCII, so an accented upload
+  filename fails the same way.
+
+  Nothing in the suite could see it, because the Supabase stand-in accepts any
+  key its caller sends. **A fake that answers 200 to a key the real store
+  answers 400 to is not standing in for the store; it is standing in for a
+  store that cannot fail.** The one that found it enforces object storage's own
+  character class, written out rather than imported from `keys.ts` — a fake
+  reading Brain's copy of the rule agrees with Brain by construction and can
+  never disagree with the store.
+
+- **A failure nobody can read is one nobody fixes.** The exception was written
+  down the whole time: `runIdempotent` closes the attempt row with it, outside
+  the transaction it rolls back, so it survives the rollback that destroys the
+  synthesis pass and the report text. Three things kept it unread. The row kept
+  `error.message` and dropped the `detail` carrying the store's own answer,
+  which named the offending key. The caller's sentence led nowhere, so a worker
+  reporting it verbatim gave whoever read it no way to join the two — it
+  carries the request id now, which is Brain's own identifier and already on
+  the audit row. And `packet-report` never joined the row at all: it printed
+  the packet, the bin, the items, the claims and the documents, and the reason
+  eleven packets sat at `NEEDS_HUMAN` for three days was one join away. The
+  comment claiming the real error "is left to the process log, which is Brain's
+  to read" is corrected in place rather than deleted — it was true, and a
+  host's log buffer is measured in minutes, so by the time anybody reads a
+  worker's report of an opaque failure it is gone.
+
+- **A stage whose evidence survived needs an answering transition, and
+  `reissueMissingVerification` refuses everything that is not a verification by
+  name.** So `services/research/synthesisRecovery.ts` is that transition, and
+  it inherits the whole safety argument: a replacement is issued only for an
+  item that recorded nothing, and an item that recorded nothing has no ledger
+  for a second Step 6 scope to duplicate. **A rollback is evidence about
+  Brain's rows and nothing else** — the upload happens inside the transaction,
+  so there is a window where the bucket took the bytes and the transaction then
+  failed, and a recovery reasoning from the absent document row alone would
+  file a second copy under a second key. The store is asked: bytes that look
+  like this packet's report with no row pointing at them are
+  `AMBIGUOUS_EXTERNAL_FILING` and a person's decision, and a store that cannot
+  be read is `STORE_UNREADABLE`, because unknown must never read as absent.
+  It resets nothing, it refuses a bin with no attempts left, and every verdict
+  comes from one `assessSynthesisRecovery` that both the action and the
+  enumeration read — because a report with its own idea of eligibility is the
+  two-readers defect this file keeps correcting.
 
 - **A card told a person Brain would not be asking them, directly above the
   control asking them.** Production rendered *"29 blocked actions, one

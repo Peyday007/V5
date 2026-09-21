@@ -153,6 +153,29 @@ export async function listOperations(
   return rows.map(mapOperation);
 }
 
+/**
+ * Every operation reserved under one packet's work items, newest first.
+ *
+ * Scoped by the items rather than by the project, because a packet's failures
+ * are what a packet report is about and a busy project's operations run to
+ * thousands. Read-only, and it reserves nothing.
+ */
+export async function operationsForWorkItems(
+  workItemIds: readonly string[],
+  limit = 200,
+): Promise<IdempotencyOperation[]> {
+  if (workItemIds.length === 0) return [];
+  const capped = workItemIds.slice(0, 500);
+  const rows = await getDb().all<IdempotencyOperationRow>(
+    `SELECT * FROM idempotency_operations
+      WHERE work_item_id IN (${capped.map(() => '?').join(', ')})
+      ORDER BY created_at DESC, id
+      LIMIT ${Math.min(500, Math.max(1, limit))}`,
+    [...capped],
+  );
+  return rows.map(mapOperation);
+}
+
 /* ------------------------------------------------------------------------- */
 /* Reserving                                                                  */
 /* ------------------------------------------------------------------------- */
