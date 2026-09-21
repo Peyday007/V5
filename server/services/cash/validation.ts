@@ -111,6 +111,155 @@ export const VALIDATION_STALL_MS = 6 * 60 * 60 * 1000;
  */
 export const MAX_VALIDATION_ROUNDS = 2;
 
+/**
+ * Why a particular opening is not being qualified right now.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is a value rather than a comment
+ * ---------------------------------------------------------------------------
+ *
+ * *Why is nothing being refined* had no answer that was not a guess. Every
+ * surface could say a piece's **state** and none could say what had refused
+ * it, so the only reading available was `passes 0/0` — which is a true
+ * statement about a packet and no statement at all about whether the lifecycle
+ * is stuck, waiting on a person, or working exactly as designed.
+ *
+ * "Nothing is running" and "nothing may run, for these named reasons, read off
+ * these rows" are different facts with different remedies, and the second is
+ * the one somebody can act on. §30's rule at a new reading: an unknown is never
+ * a favourable assumption, and *we did not look* must never read the same as
+ * *we checked*.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the producer derives it rather than the report
+ * ---------------------------------------------------------------------------
+ *
+ * `startValidations` decides this on every tick; a report that re-derived it
+ * would be the *two readers of one fact* defect this repository records more
+ * than any other, and it would be the copy nobody exercises that drifts. So
+ * the loop below is written in terms of this function, and reading it is the
+ * same call the loop makes. A refusal the report prints is therefore the
+ * refusal that actually happened.
+ *
+ * `SLOTS_TAKEN` is deliberately **not** here: it is a fact about the project
+ * rather than about the opening, and it is decided before the loop reaches any
+ * of them. `sprintCanRefine` answers that, and the two are reported side by
+ * side because collapsing them would say a piece was ineligible when what was
+ * missing was capacity.
+ */
+export type DiveRefusal =
+  /** Nothing refuses it; it starts as soon as a slot is free. */
+  | { kind: 'ELIGIBLE' }
+  /** A worker is on it now. This one is holding a slot. */
+  | { kind: 'IN_FLIGHT'; state: OpportunityValidationState }
+  /**
+   * Parked at a decision only a person can make.
+   *
+   * It holds no slot, and a second dive is refused on purpose: answering the
+   * mission's own card resumes the mission that is already there, so starting
+   * another would buy the same answer twice.
+   */
+  | { kind: 'AWAITING_PERSON' }
+  /** Both bounded dives are spent. The honest answer is that the sources do not publish it. */
+  | { kind: 'ROUNDS_SPENT'; rounds: number; cap: number }
+  /** It got there. A qualified piece has nothing left for a dive to ask. */
+  | { kind: 'ALREADY_QUALIFIED'; tier: string }
+  /** Declined, archived or already being executed — the commercial questions are closed. */
+  | { kind: 'NOT_A_QUALIFYING_STATE'; state: string }
+  /** No published signal and no source claim, so there is nothing to quote into a question. */
+  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+
+/** One line, for a report or an operator. */
+export function describeDiveRefusal(refusal: DiveRefusal): string {
+  switch (refusal.kind) {
+    case 'ELIGIBLE':
+      return 'eligible — starts as soon as a slot is free';
+    case 'IN_FLIGHT':
+      return `a worker is on it (${refusal.state}), holding a slot`;
+    case 'AWAITING_PERSON':
+      return 'waiting on a person: its mission stopped at a decision only they can make';
+    case 'ROUNDS_SPENT':
+      return `both dives are spent (${refusal.rounds}/${refusal.cap}); the sources do not publish the rest`;
+    case 'ALREADY_QUALIFIED':
+      return `already ${refusal.tier} — a dive has nothing left to ask`;
+    case 'NOT_A_QUALIFYING_STATE':
+      return `state ${refusal.state}: the commercial questions are closed`;
+    case 'NOTHING_PUBLISHED_TO_ASK_ABOUT':
+      return 'no buying signal and no source claim — nothing published to ask about';
+  }
+}
+
+/**
+ * The per-opening half of the decision, in the order the loop applies it.
+ *
+ * Every branch reads a row. Nothing here consults a clock, a count of workers,
+ * or anything a caller supplied.
+ */
+export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRefusal> {
+  if (opportunity.validationState !== null) {
+    if (HOLDS_A_SLOT.has(opportunity.validationState)) {
+      return { kind: 'IN_FLIGHT', state: opportunity.validationState };
+    }
+    if (opportunity.validationState === 'NEEDS_PERSON') return { kind: 'AWAITING_PERSON' };
+    if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS) {
+      return {
+        kind: 'ROUNDS_SPENT',
+        rounds: opportunity.validationRounds,
+        cap: MAX_VALIDATION_ROUNDS,
+      };
+    }
+    const tier = await qualifiedTier(opportunity);
+    if (tier === 'QUALIFIED' || tier === 'READY_TO_TEST') {
+      return { kind: 'ALREADY_QUALIFIED', tier };
+    }
+  }
+  if (opportunity.state !== 'DISCOVERED' && opportunity.state !== 'EVIDENCE_CARD') {
+    return { kind: 'NOT_A_QUALIFYING_STATE', state: opportunity.state };
+  }
+  if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
+    return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+  }
+  return { kind: 'ELIGIBLE' };
+}
+
+/** The card's own reading of how far this piece has got. */
+async function qualifiedTier(opportunity: CashOpportunity): Promise<string> {
+  const card = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
+  return cashTier({ opportunity, card, readiness: evidenceCard(opportunity).readiness }).tier;
+}
+
+/**
+ * Why the **sprint** cannot start another dive, whatever any opening says.
+ *
+ * Reported beside the per-opening refusals rather than folded into them,
+ * because *this piece is ineligible* and *there is no capacity for any piece*
+ * are different facts with different remedies — and reading the second as the
+ * first is how somebody concludes a healthy sprint is broken.
+ */
+export type SprintRefinementState =
+  | { kind: 'NO_SPRINT' }
+  | { kind: 'WOUND_DOWN'; reason: string }
+  | { kind: 'NO_RESEARCH_AUTHORITY' }
+  | { kind: 'SLOTS_TAKEN'; inFlight: number; cap: number }
+  | { kind: 'READY'; free: number; cap: number };
+
+export async function sprintCanRefine(projectId: string): Promise<SprintRefinementState> {
+  if (!(await getCashMode(projectId))) return { kind: 'NO_SPRINT' };
+  const gate = await discoveryAllowed(projectId);
+  if (!gate.allowed) return { kind: 'WOUND_DOWN', reason: gate.reason ?? 'the sprint is not active' };
+  if (!(await discoveryAuthority(projectId))) return { kind: 'NO_RESEARCH_AUTHORITY' };
+  const all = await listOpportunities({ projectId });
+  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
+  if (inFlight >= MAX_VALIDATIONS_IN_FLIGHT) {
+    return { kind: 'SLOTS_TAKEN', inFlight, cap: MAX_VALIDATIONS_IN_FLIGHT };
+  }
+  return {
+    kind: 'READY',
+    free: MAX_VALIDATIONS_IN_FLIGHT - inFlight,
+    cap: MAX_VALIDATIONS_IN_FLIGHT,
+  };
+}
+
 export interface StartedValidation {
   opportunityId: string;
   candidateId: string;
@@ -235,14 +384,19 @@ export async function startValidations(input: {
   const out: StartedValidation[] = [];
   for (const opportunity of ordered) {
     if (room <= 0 || out.length >= limit) break;
-    if (opportunity.validationState !== null && !(await mayDiveAgain(opportunity))) continue;
-    // A piece somebody has already declined, archived or finished is not worth
-    // qualifying. DISCOVERED and EVIDENCE_CARD are the two states where the
-    // commercial questions are still open.
-    if (opportunity.state !== 'DISCOVERED' && opportunity.state !== 'EVIDENCE_CARD') continue;
-    // Nothing to quote into the question. An opening with no recorded signal is
-    // one a person entered by hand, and Brain has nothing published to work from.
-    if (!opportunity.buyingSignal && !opportunity.sourceClaimId) continue;
+    /*
+     * One condition, and `refinement-report` reads the same one.
+     *
+     * It used to be three `continue`s written out here: a dive already over,
+     * a state where the commercial questions are closed, and nothing published
+     * to ask about. They are all still applied, in the same order, by
+     * `whyNotDiving` — which exists because a report that re-derived them
+     * would be the *two readers of one fact* defect this repository records
+     * more than any other, and it would be the copy nobody exercises that
+     * drifts. What that report prints is therefore the refusal that actually
+     * happened rather than a second opinion about it.
+     */
+    if ((await whyNotDiving(opportunity)).kind !== 'ELIGIBLE') continue;
 
     const candidate = await createCandidate({
       projectId: input.projectId,
@@ -316,40 +470,6 @@ function answeredCount(one: CashOpportunity): number {
     one.peakFundingCents,
   ];
   return values.filter((value) => value !== null && value !== undefined && value !== '').length;
-}
-
-/**
- * Whether an opening that has already been dived may have one more.
- *
- * Three conditions, and none of them is a preference. The dive has to be
- * **over**, which is the state check below — a second one started beside a
- * live one is two workers answering the same question with the sprint paying
- * twice, and it is what keeps a `NEEDS_PERSON` dive from being re-asked: a
- * person answering the mission's card resumes the mission that is already
- * there, so a second dive would buy the same answer again. There has to be a
- * **round left**, which is what stops a piece being re-asked for ever. And it
- * has to be genuinely **short of qualified**, read from the card rather than
- * from a state column: a piece that answered everything is finished whatever
- * its round count says.
- *
- * Read in the loop rather than precomputed, because it is asked only of the
- * pieces that already have a terminal dive, and the loop stops at `room`.
- */
-async function mayDiveAgain(opportunity: CashOpportunity): Promise<boolean> {
-  if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED') {
-    return false;
-  }
-  if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS) return false;
-  const card = cashEngineCard({
-    opportunity,
-    facts: await cardFactsFor(opportunity.id),
-  });
-  const reading = cashTier({
-    opportunity,
-    card,
-    readiness: evidenceCard(opportunity).readiness,
-  });
-  return reading.tier !== 'QUALIFIED' && reading.tier !== 'READY_TO_TEST';
 }
 
 /**
@@ -437,8 +557,8 @@ export async function settleValidations(projectId: string): Promise<
      *
      * It is a park with an answering transition rather than a failure: the
      * mission's own Needs You card is what resolves it, the branch above puts
-     * the opening back to `RUNNING` when somebody does, and `mayDiveAgain`
-     * refuses a second dive meanwhile so the answer is not bought twice.
+     * the opening back to `RUNNING` when somebody does, and `whyNotDiving`
+     * answers `AWAITING_PERSON` meanwhile so the answer is not bought twice.
      */
     if (mission.state === 'NEEDS_HUMAN') {
       if (opportunity.validationState !== 'NEEDS_PERSON') {
@@ -475,7 +595,7 @@ export async function settleValidations(projectId: string): Promise<
      * here however long it runs.
      *
      * `BLOCKED` rather than failed, with the gap in the reason, so
-     * `mayDiveAgain` can offer another round instead of writing it off. And
+     * `whyNotDiving` can offer another round instead of writing it off. And
      * nothing is destroyed: every pass, claim and raw response stays exactly
      * where it is.
      */

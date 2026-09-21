@@ -1,27 +1,11 @@
 /**
  * The manufacturing programme's door.
  *
- * Every route here resolves through `manufacturingProject`, which is
- * `requireProject` — `decideProjectAccess` against the authenticated principal
- * — with one sentence over the top of it, so absent, forbidden and *this
- * project has no programme* are one 404 **with one body**: invariant 23 at a
- * new door.
- *
- * **That paragraph used to claim the property and the code did not apply it,
- * which is worse than not claiming it: a guard a comment asserts is read as
- * present.** `requireProject` answered `No project with that id.` and the
- * programme read answered `This project has no manufacturing programme.`, and
- * the hosted verification compared the two bodies and said so —
- * `HOSTED-VERIFICATION: FAIL 216/217`, the same one line on both sides of a
- * restart.
- *
- * The shared sentence is the programme's rather than the project's, and that
- * is the half worth explaining. `No project with that id.` is **false** told
- * to a member of a project that plainly exists and that they may read, and
- * this codebase does not buy uniformity with a false sentence. *This project
- * has no manufacturing programme* is true when there is none and commits to
- * nothing when the caller may not look — which is the whole of what the
- * invariant asks for.
+ * Every route here resolves through `requireProject`, which is
+ * `decideProjectAccess` against the authenticated principal, so absent and
+ * forbidden are the same 404 **with the same body** — invariant 23 at a new
+ * door. Nothing here composes a second 404 sentence of its own; the one that
+ * tried is the first thing below, and why it stopped is written there.
  *
  * Every handler additionally calls `requirePerson`. A worker is already refused
  * at every write by level, because `services/identity/policy.ts` puts all four
@@ -48,8 +32,6 @@ import {
   badRequest,
   bodyOf,
   handler,
-  HttpError,
-  notFound,
   optionalString,
   pathId,
   requirePerson,
@@ -75,34 +57,8 @@ import {
   withdrawHeld,
 } from '../services/manufacturing/declare.ts';
 import { programmeView } from '../services/manufacturing/view.ts';
-import type { Project } from '../domain/types.ts';
 
 export const manufacturingRouter = Router();
-
-/** The one sentence every refusal at this door answers with. */
-const NO_PROGRAMME = 'This project has no manufacturing programme.';
-
-/**
- * Resolve the project, or refuse in the one sentence this door uses.
- *
- * `requireProject` already makes absent and forbidden identical; what it
- * cannot know is that a third condition at this door — a project that exists,
- * that the caller may read, and that has no programme — must be identical to
- * both. So its 404 is re-worded here and nothing else about it changes: the
- * access decision, the denial audit row and the status are `requireProject`'s,
- * and only the body is this door's.
- *
- * A non-404 is re-thrown untouched. Turning an unrelated failure into a
- * not-found would be hiding a fault behind a refusal.
- */
-async function manufacturingProject(projectId: string): Promise<Project> {
-  try {
-    return await requireProject(projectId);
-  } catch (error: unknown) {
-    if (error instanceof HttpError && error.status === 404) throw notFound(NO_PROGRAMME);
-    throw error;
-  }
-}
 
 /* --------------------------------------------------------------------------
  * Reading
@@ -114,16 +70,42 @@ async function manufacturingProject(projectId: string): Promise<Project> {
  * sentence.
  * ------------------------------------------------------------------------ */
 
+/**
+ * There is exactly **one** 404 at this door, and it is `requireProject`'s.
+ *
+ * It used to be two. A project the caller may not have answered
+ * `No project with that id.`, and a project they *may* have with no programme
+ * on it answered `This project has no manufacturing programme.` — same status,
+ * different body, which is invariant 23 broken by the half nobody looks at:
+ * *"including the body of the refusal, not only its status"*. The hosted gate
+ * compares the two bodies rather than the two statuses, and reported it on
+ * every deploy.
+ *
+ * The tempting repair is to make the second refusal say the first one's
+ * sentence. That is worse, and worth writing down rather than discovering
+ * again: a member opening their own project would be told it does not exist,
+ * and the screen behind that 404 is the one offering to **start** a
+ * programme — so a project somebody may not touch would render a Start button
+ * that can only ever be refused (§35: a control that cannot succeed should not
+ * be offered).
+ *
+ * So the third body is removed rather than disguised. *A project you may read
+ * has no programme* is not a refusal at all — it is an ordinary answer to
+ * somebody entitled to it — and it answers 200 with `programme: null`. What is
+ * left is one refusal, thrown by the resolver every other route shares, so the
+ * two cannot drift apart again: there is no second sentence here to keep in
+ * step with `authorizeProject`'s.
+ *
+ * The envelope is deliberate rather than a bare `null` body. `{ programme:
+ * null }` says *there is none*; a bare `null` is indistinguishable from a body
+ * that failed to parse.
+ */
 manufacturingRouter.get(
   '/projects/:projectId/manufacturing',
   handler(async (req) => {
     requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
-    const view = await programmeView(project.id);
-    if (!view) {
-      throw notFound(NO_PROGRAMME);
-    }
-    return view;
+    const project = await requireProject(pathId(req, 'projectId'));
+    return { programme: await programmeView(project.id) };
   }),
 );
 
@@ -131,7 +113,7 @@ manufacturingRouter.get(
   '/projects/:projectId/manufacturing/capabilities',
   handler(async (req) => {
     requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     return { capabilities: await ledger(project.id) };
   }),
 );
@@ -144,7 +126,7 @@ manufacturingRouter.post(
   '/projects/:projectId/manufacturing',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const outcome = await startProgramme({
@@ -166,7 +148,7 @@ manufacturingRouter.patch(
   '/projects/:projectId/manufacturing',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const to = requiredString(body['state'], 'state');
@@ -198,7 +180,7 @@ manufacturingRouter.post(
   '/projects/:projectId/manufacturing/categories',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const kindRaw = optionalString(body['kind'], 'kind');
@@ -224,7 +206,7 @@ manufacturingRouter.patch(
   '/projects/:projectId/manufacturing/categories/:categoryId',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const outcome = await retireCategoryDecision({
@@ -251,7 +233,7 @@ manufacturingRouter.post(
   '/projects/:projectId/manufacturing/capabilities',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     /*
@@ -285,7 +267,7 @@ manufacturingRouter.patch(
   '/projects/:projectId/manufacturing/capabilities/:capabilityId',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const outcome = await withdrawHeld({
@@ -317,7 +299,7 @@ manufacturingRouter.patch(
   '/projects/:projectId/manufacturing/acquisitions/:candidateId',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const outcome = await setAsideAcquisition({
@@ -355,7 +337,7 @@ manufacturingRouter.post(
   '/projects/:projectId/manufacturing/decisions/:topic',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     /*
@@ -383,7 +365,7 @@ manufacturingRouter.patch(
   '/projects/:projectId/manufacturing/decisions/:topic',
   handler(async (req) => {
     const principal = requirePerson();
-    const project = await manufacturingProject(pathId(req, 'projectId'));
+    const project = await requireProject(pathId(req, 'projectId'));
     const body = bodyOf(req);
 
     const outcome = await reopenDecision({
