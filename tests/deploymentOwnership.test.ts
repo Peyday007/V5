@@ -307,6 +307,30 @@ describe('every workstream is present in the canonical tree', () => {
       'server/db/migrations/037_software_factory.sql',
       'server/db/migrations/038_factory_repository_root.sql',
     ],
+    /*
+     * The work register and the conversation entrance (§42).
+     *
+     * This entry is here because the convergence it guards actually happened to
+     * it: production moved 079/070 ahead while this workstream was open, and
+     * reconciling it meant a merge, a renumbered migration and a conflict in
+     * two shared files. A merge that resolved any of that by dropping a file
+     * would leave every row-level test passing — none of them opens the tree —
+     * and fail here.
+     *
+     * The migration is named by its *number* on purpose, so a second renumbering
+     * has to be made deliberately rather than by a rename nobody reads.
+     */
+    'Work register and bridge': [
+      'server/routes/register.ts',
+      'server/routes/bridge.ts',
+      'server/repos/register.ts',
+      'server/repos/bridge.ts',
+      'server/services/register/view.ts',
+      'server/services/bridge/sync.ts',
+      'client/src/russell/Register.tsx',
+      'server/db/migrations/080_work_register_and_bridge.sql',
+      'server/db/pg-migrations/071_work_register_and_bridge.sql',
+    ],
   };
 
   for (const [workstream, files] of Object.entries(MUST_EXIST)) {
