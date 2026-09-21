@@ -1520,8 +1520,17 @@ function Status({ page }: { page: CashPage }): JSX.Element {
           <span>Discovery</span>
         </li>
         <li>
+          {/*
+            * "Evidence", not "Signals".
+            *
+            * `SIGNAL` is what the column is called and it is the right name
+            * for a typed classification; it is the wrong word on a first
+            * screen, where a count of *signals found* reads as a count of
+            * openings. What the tier actually means is in its own summary
+            * sentence — this is evidence, not work — so that is the word.
+            */}
           <strong>{tiers.SIGNAL}</strong>
-          <span>Signals found</span>
+          <span>Evidence found</span>
         </li>
         <li>
           <strong>{tiers.CANDIDATE}</strong>
@@ -1553,14 +1562,14 @@ function Status({ page }: { page: CashPage }): JSX.Element {
       <p className="rs-decision-why">{frontier.roadmap.whatHappensNext}</p>
       {!page.capabilities.mayViewPrivateJob ? (
         <p className="rs-hint">
-          This is the shared frontier: what Brain has found, and how far it has got. A signal is
-          evidence Brain found and is still working out how money would be made from it; it is not
+          This is the shared frontier: what Brain has found, and how far it has got. Evidence is
+          something Brain found and is still working out how money would be made from it; it is not
           work for you. Decisions about an execution job belong to whoever owns that job.
         </p>
       ) : blocking.length === 0 ? (
         <p className="rs-hint">
-          Nothing is waiting on you. A signal is evidence Brain found and is still working out how
-          money would be made from it; it is not work for you.
+          Nothing is waiting on you. Evidence is something Brain found and is still working out
+          how money would be made from it; it is not work for you.
         </p>
       ) : (
         <p className="rs-hint">
@@ -1574,7 +1583,7 @@ function Status({ page }: { page: CashPage }): JSX.Element {
 }
 
 const TIER_LABEL: Record<string, string> = {
-  SIGNAL: 'Signal — evidence, not yet work',
+  SIGNAL: 'Evidence — not yet work',
   CANDIDATE: 'Being qualified',
   QUALIFIED: 'Qualified',
   READY_TO_TEST: 'Ready to test',
@@ -1738,10 +1747,11 @@ function BestOpportunities({
       <h3>Best opportunities</h3>
       {best.length === 0 ? (
         <p className="rs-hint">
-          Nothing is qualified yet, and nothing is being padded out to fill this space.{' '}
+          Nothing is qualified yet, and nothing is being padded out with evidence to fill this
+          space.{' '}
           {byTier.CANDIDATE > 0
             ? `${byTier.CANDIDATE} ${byTier.CANDIDATE === 1 ? 'idea has' : 'ideas have'} a capture thesis and ${byTier.CANDIDATE === 1 ? 'is' : 'are'} being qualified.`
-            : `Brain is working out how money would be made from ${byTier.SIGNAL} ${byTier.SIGNAL === 1 ? 'signal' : 'signals'} it has found.`}
+            : `Brain is working out how money would be made from ${byTier.SIGNAL} ${byTier.SIGNAL === 1 ? 'piece' : 'pieces'} of evidence it has found.`}
         </p>
       ) : (
         <>
