@@ -253,6 +253,36 @@ and Cash Mode's own bridge turns a signalled claim into a ranked opening. The
 route from *"a publisher publishes what it pays"* to *"this is a ranked opening"*
 already exists.
 
+
+### The "100 puzzles for about a dollar" question
+
+The brief asks for that product to be reverse-engineered specifically: what the
+publisher actually receives from a roughly one-dollar retail price, the
+retailer and distributor shares, the print quantity and method, page count,
+paper, binding, trim, packaging, case packs, freight density, editorial cost,
+returns and markdowns, working capital, catalog size, cadence, required
+sell-through, and the resulting contribution per book and per run.
+
+**Nothing hard-codes it, and that is the point.** Every one of those is an input
+the `PRODUCTION` and `CHANNEL` templates already ask for by name — volume
+breaks rather than one figure, what a route *takes* as well as what it pays,
+published spoilage and return rates, and the ownership figures that decide
+outsourcing against owning a machine. A specific question written into code
+would be the limit on the universe the brief says not to impose, and it would
+answer for one product what the mechanism answers for any.
+
+What reaching it requires is what reaching any production question requires: a
+qualified edition to ask about, a standing research authority, and a free slot.
+It is rule 6 in the allocator — last, deliberately — because asking what a print
+run costs before anything is established about who buys the thing is costing a
+run for a book nobody wants.
+
+The brief's own warning is carried in the profile rather than in a comment: a
+cost at one volume presented as the cost at another, and an advertised machine
+speed presented as what a staffed run produces, are both in `excludedSources`.
+And the answer is not permitted to set a ceiling on anything — it is a
+`PRICE_POINT` finding about `PRINT_BOOK`, which is one product class among ten.
+
 ---
 
 ## The research half

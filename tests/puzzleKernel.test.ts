@@ -25,6 +25,7 @@ import {
   supportFor,
   supportForGenerator,
   supportedSlugs,
+  unimplementedBlocker,
   unimplementedReason,
 } from '../server/services/puzzles/registry.ts';
 import { prngFor } from '../server/services/puzzles/prng.ts';
@@ -427,6 +428,38 @@ describe('the registry, which is the only thing entitled to say a format is supp
     // Found at declaration for one call, rather than at the first batch with
     // the least context — §27's rule at a generator.
     expect(impossible.ok).toBe(false);
+  });
+
+
+  /*
+   * The rule that decides whether a rights question is worth a research slot
+   * is a declared value, never a match against the sentence beside it.
+   *
+   * The first version of `allocate.ts` rule 4 tested a regular expression
+   * against the blocker's prose. That is deciding from prose at the function
+   * that spends a slot, and rewording the sentence would have silently stopped
+   * it firing — §34's *declared, not inferred*, one kernel along.
+   */
+  it('declares whether a missing generator is a rights question or a coding one', () => {
+    // The crossword is the case the brief names: the grid is not what is missing.
+    expect(unimplementedBlocker('CROSSWORD')).toBe('RIGHTS');
+    expect(unimplementedBlocker('ACROSTIC')).toBe('RIGHTS');
+    // A nonogram needs somebody to write a solver, and no source settles that.
+    expect(unimplementedBlocker('NONOGRAM')).toBe('CODE');
+    expect(unimplementedBlocker('LOGIC_GRID')).toBe('CODE');
+    /*
+     * Anything nobody classified answers CODE, which is the direction that
+     * cannot waste anything: the worst it costs is a question nobody asked,
+     * where the other way round spends the allowance on a rights question
+     * about a format whose only obstacle is unwritten code.
+     */
+    expect(unimplementedBlocker('SOMETHING_NOBODY_CLASSIFIED')).toBe('CODE');
+
+    // And the allocator reads it rather than the prose.
+    const source = stripCommentsAndStrings(
+      readFileSync(new URL('../server/services/puzzles/allocate.ts', import.meta.url), 'utf8'),
+    );
+    expect(source).toContain('unimplementedBlocker');
   });
 
   it('every registered generator is reachable by its key and by its slug', () => {

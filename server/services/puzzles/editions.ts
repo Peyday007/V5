@@ -46,7 +46,6 @@ import {
   addEditionInstance,
   getEdition,
   getInstance,
-  getMaster,
   listAllEditionInstances,
   listEditions,
   listFormats,
@@ -435,9 +434,4 @@ export async function placeInEdition(input: {
     instanceId: input.instanceId,
     position: input.position,
   }).then((result) => ({ ok: true as const, created: result.created }));
-}
-
-/** The master behind an edition, for callers that need its rights basis. */
-export async function masterFor(edition: PuzzleEdition): Promise<PuzzleMaster | null> {
-  return getMaster(edition.masterId);
 }

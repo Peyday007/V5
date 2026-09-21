@@ -44,7 +44,7 @@ import { checkAuthority } from '../../repos/russellAuthority.ts';
 import { RESEARCH_WORK_CLASS } from '../russell/launch.ts';
 import { allocate, MAX_OPEN_PUZZLE_ROUNDS } from './allocate.ts';
 import { puzzleSnapshot, type PuzzleSnapshot } from './map.ts';
-import { supportFor, supportedSlugs, unimplementedReason } from './registry.ts';
+import { supportFor, supportedSlugs } from './registry.ts';
 import { readValidation } from './validate.ts';
 import { rightsPermitPublication } from '../../domain/puzzles.ts';
 import { TICK_STOCK } from './kernel.ts';
@@ -437,9 +437,4 @@ export async function puzzleView(projectId: string): Promise<PuzzleView> {
     needsPerson,
     next,
   };
-}
-
-/** The honest sentence about a format nothing implements, for a caller that needs one. */
-export function whyNotGeneratable(slug: string, name: string): string {
-  return unimplementedReason(slug, name);
 }

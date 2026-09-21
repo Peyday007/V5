@@ -275,11 +275,7 @@ export async function compileEdition(input: {
         '',
       ].join('\n'),
     );
-    keys.push(
-      ['### Puzzle ${n}'.replace('${n}', String(index + 1)), '', '```', drawn.answer, '```', ''].join(
-        '\n',
-      ),
-    );
+    keys.push([`### Puzzle ${index + 1}`, '', '```', drawn.answer, '```', ''].join('\n'));
   });
 
   const rights =

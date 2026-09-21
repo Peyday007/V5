@@ -33,6 +33,7 @@
  * already spent. Asking what exists in the world comes far below that.
  */
 import { BARREN_ROUNDS, ROUND_COOL_OFF_MS } from '../cash/discovery.ts';
+import { unimplementedBlocker } from './registry.ts';
 import type { PuzzleSnapshot } from './map.ts';
 import type { PuzzleRoundPurpose } from '../../domain/types.ts';
 
@@ -214,8 +215,17 @@ export function allocate(input: { snapshot: PuzzleSnapshot; slots: number }): Al
     const row = formatRow.get(format.formatId);
     if (!row) continue;
     if (format.rungs.find((one) => one.rung === 'GENERATABLE')?.state === 'MET') continue;
+    /*
+     * Read from a declared value rather than matched against the sentence.
+     *
+     * The first version tested a regular expression against the blocker's
+     * prose, which is deciding from prose at the function that spends a
+     * research slot — and rewording the sentence would have silently stopped
+     * the rule firing. An unclassified format answers `CODE`, so it is never
+     * asked a rights question it has no use for.
+     */
+    if (unimplementedBlocker(format.slug) !== 'RIGHTS') continue;
     const blocker = format.rungs.find((one) => one.rung === 'GENERATABLE')?.why ?? '';
-    if (!/right|licen|lexicon|corpus|quotation/i.test(blocker)) continue;
     consider(
       format.formatId,
       'RIGHTS',

@@ -57,7 +57,6 @@ import {
   validateSudoku,
   validateWordSearch,
 } from './validators.ts';
-import { slugFor } from '../../domain/puzzles.ts';
 import type { Generator, Validator } from './kinds.ts';
 
 export interface FormatSupport {
@@ -171,29 +170,68 @@ const BY_GENERATOR = new Map(SUPPORT.map((one) => [one.generatorKey, one]));
  * needs a lexicon and a clue bank whose rights somebody has established, and
  * `RIGHTS_CONSTRAINT` findings are what would establish them.
  */
-export const UNIMPLEMENTED_REASONS: Readonly<Record<string, string>> = Object.freeze({
-  CROSSWORD:
-    'A crossword needs a lexicon and a clue bank whose commercial-use rights are established. ' +
-    'Generating a grid is the easy half; filling it legally from a corpus nobody holds the ' +
-    'rights to is the half that would make the product unsellable. Open a RIGHTS round on this ' +
-    'format, and a DATABASE_OR_LEXICON_RIGHTS or NO_CONSTRAINT_FOUND finding is what would ' +
-    'unblock it.',
-  MINI_CROSSWORD:
-    'The same lexicon and clue-bank rights question as a full crossword, at a smaller grid. ' +
-    'The grid size is not what is missing.',
-  NONOGRAM:
-    'A nonogram generator is tractable and is not written. What it needs beyond the carve is a ' +
-    'solver that establishes the clues admit exactly one picture, which is the same uniqueness ' +
-    'burden the Sudoku generator already carries.',
-  LOGIC_GRID:
-    'A logic grid needs a constraint generator and a deduction-path solver to establish that ' +
-    'the clues are sufficient and not redundant. Neither is written.',
-  ACROSTIC:
-    'An acrostic needs the same rights-established quotation corpus a cryptogram needs, plus a ' +
-    'clue bank. The quotation half is the blocker.',
-  CRYPTIC_CROSSWORD:
-    'Cryptic clue construction is an editorial craft this Brain has no generator for, and a ' +
-    'generated cryptic clue that does not parse is worse than none.',
+export interface Unimplemented {
+  /**
+   * Which kind of thing is actually missing, declared rather than read out of
+   * the sentence beside it.
+   *
+   * `RIGHTS` means the obstacle is a rights or licensing question a published
+   * source could settle, so researching it is what would unblock building the
+   * generator. `CODE` means somebody has to write the generator, and no amount
+   * of research changes that.
+   *
+   * The first version of `allocate.ts` matched a regular expression against
+   * `why` to decide this. That is deciding from prose — §8's rule at the
+   * function that spends a research slot — and it had the failure mode prose
+   * matching always has: rewording the sentence would have silently stopped
+   * the rule firing, with nothing to say so. §34's rule, one kernel along:
+   * declared, not inferred.
+   */
+  blocker: 'RIGHTS' | 'CODE';
+  why: string;
+}
+
+export const UNIMPLEMENTED_REASONS: Readonly<Record<string, Unimplemented>> = Object.freeze({
+  CROSSWORD: {
+    blocker: 'RIGHTS',
+    why:
+      'A crossword needs a lexicon and a clue bank whose commercial-use rights are ' +
+      'established. Generating a grid is the easy half; filling it legally from a corpus ' +
+      'nobody holds the rights to is the half that would make the product unsellable. A ' +
+      'DATABASE_OR_LEXICON_RIGHTS or NO_CONSTRAINT_FOUND finding is what would unblock it.',
+  },
+  MINI_CROSSWORD: {
+    blocker: 'RIGHTS',
+    why:
+      'The same lexicon and clue-bank rights question as a full crossword, at a smaller grid. ' +
+      'The grid size is not what is missing.',
+  },
+  NONOGRAM: {
+    blocker: 'CODE',
+    why:
+      'A nonogram generator is tractable and is not written. What it needs beyond the carve is ' +
+      'a solver that establishes the clues admit exactly one picture, which is the same ' +
+      'uniqueness burden the Sudoku generator already carries. No research unblocks this.',
+  },
+  LOGIC_GRID: {
+    blocker: 'CODE',
+    why:
+      'A logic grid needs a constraint generator and a deduction-path solver to establish that ' +
+      'the clues are sufficient and not redundant. Neither is written, and neither is a ' +
+      'question about the world.',
+  },
+  ACROSTIC: {
+    blocker: 'RIGHTS',
+    why:
+      'An acrostic needs the same rights-established quotation corpus a cryptogram needs, plus ' +
+      'a clue bank. The quotation half is the blocker.',
+  },
+  CRYPTIC_CROSSWORD: {
+    blocker: 'CODE',
+    why:
+      'Cryptic clue construction is an editorial craft this Brain has no generator for, and a ' +
+      'generated cryptic clue that does not parse is worse than none.',
+  },
 });
 
 /** What this Brain can do with the format a slug names, or null. */
@@ -224,7 +262,7 @@ export function allSupport(): readonly FormatSupport[] {
  */
 export function unimplementedReason(slug: string, name: string): string {
   const known = UNIMPLEMENTED_REASONS[slug];
-  if (known) return known;
+  if (known) return known.why;
   return (
     `No generator in this repository produces ${name}, so nothing can be made or checked for ` +
     'it. That is a statement about this Brain rather than about the format: the remedy is a ' +
@@ -232,7 +270,16 @@ export function unimplementedReason(slug: string, name: string): string {
   );
 }
 
-/** Whether a name resolves to something this Brain can make. Slug-based, and honest about it. */
-export function supportForName(name: string): FormatSupport | null {
-  return supportFor(slugFor(name));
+/**
+ * What is actually missing for a format nothing implements.
+ *
+ * `CODE` for anything nobody has classified, which is the direction that
+ * cannot waste anything: an unclassified format is treated as needing a
+ * generator rather than a research slot, and the worst that costs is a
+ * question nobody asked. Reading it the other way would spend the allowance on
+ * a rights question about a format whose only obstacle is that nobody has
+ * written the code.
+ */
+export function unimplementedBlocker(slug: string): 'RIGHTS' | 'CODE' {
+  return UNIMPLEMENTED_REASONS[slug]?.blocker ?? 'CODE';
 }
