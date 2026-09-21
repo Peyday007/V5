@@ -26,10 +26,36 @@ on:
         required: false
         default: ''
 
-# Never at the same time as a deploy: the machine is being replaced during one,
-# and a report that raced a restart would be reporting whichever half answered.
+# ---------------------------------------------------------------------------
+# Why this is not in the `deploy-brain` group, and why that is not a hole
+# ---------------------------------------------------------------------------
+#
+# It was. The reasoning written here said "never at the same time as a deploy:
+# the machine is being replaced during one, and a report that raced a restart
+# would be reporting whichever half answered." That is a sound-sounding
+# sentence and it is **wrong about this Brain**, which `closeout-report.yml`
+# established first and this file is adopting rather than re-deriving:
+# **the database is not on the machine.** In cloud mode the rows are in
+# Supabase Postgres and the documents are in the bucket (§18), so a restart
+# does not change what this reads. What a restart can do is interrupt the ssh
+# session, and that fails loudly at the `grep` below — a missing
+# `LABOR-REPORT: OK` line — rather than quietly reporting half a Brain.
+#
+# The measured cost of the old group is that the read cannot be taken at all.
+# GitHub keeps exactly one *pending* run per group, so a new dispatch cancels
+# the one that was waiting; with a dozen sessions working this repository at
+# once, a deploy plus the next dispatch behind it is enough. A reading you
+# cannot take is not a control, it is a reading nobody has — §29's defect at a
+# concurrency key.
+#
+# So it shares the read-only group instead of carrying its own. That is
+# deliberate: the serialization worth keeping is not against deploys, it is
+# against *other reads*, because the binding limit on this Brain is the
+# Supabase pooler's shared client count and not anything on the machine. One
+# read at a time over that limit is the whole point, and it is the same reason
+# the script below asks for a pool of one.
 concurrency:
-  group: deploy-brain
+  group: closeout-report
   cancel-in-progress: false
 
 jobs:
