@@ -909,11 +909,26 @@ describe('the capability kernel', () => {
 
     it('refuses the session that produced the reading', async () => {
       const { extractionBinId } = await readyForAudit();
-      // Brain's own dispatch row is what says which session it fired.
+      /*
+       * Brain's own dispatch row is what says which session it fired, and it
+       * sits at generation **0** because a claim increments: `assignNextBin`
+       * swaps `lease_generation` to `row.lease_generation + 1` and credits the
+       * arrival against the row's own generation, so a unit result submitted
+       * under lease generation 1 was produced by the dispatch at 0.
+       *
+       * This fixture said 1, which is the number the reader was asking for —
+       * and the reader was wrong. It used `dispatchedSessionForBin` at the
+       * lease's own generation, which resolves nothing against a real dispatch,
+       * so in production **no extracting session was ever found** and an audit
+       * by the very session that produced the reading would have been admitted.
+       * The fixture agreed with the defect, so the suite stayed green over it.
+       * `dispatchedSessionForLease` is the corrected reader and this is the row
+       * Brain actually writes.
+       */
       await getDb().run(
         `INSERT INTO bin_dispatch (id, bin_id, lease_generation, state, attempt_count,
            next_attempt_at, session_ref, created_at, updated_at)
-         VALUES (?, ?, 1, 'SENT', 1, ?, 'cse_extractor', ?, ?)`,
+         VALUES (?, ?, 0, 'SENT', 1, ?, 'cse_extractor', ?, ?)`,
         [
           'bdp_1',
           extractionBinId,

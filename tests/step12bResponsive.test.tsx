@@ -152,7 +152,18 @@ describe('touch, keyboard, motion and both themes', () => {
      * white on the accent, and the near-black on the ochre badge.
      */
     const afterTokens = CSS.slice(CSS.indexOf('/* ------------------------------------------------------------------ boot -- */'));
-    const literals = [...afterTokens.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((match) => match[0]);
+    /*
+     * Comments are stripped first, and that is the guard doing what it says
+     * rather than a loosening of it. What it forbids is a *rule* naming a hex,
+     * because that rule is right in one theme and wrong in the other. A comment
+     * naming one is the opposite: it is the evidence for a token's value —
+     * "`--fg-dim` is `#b3c1d1`, measured at 1.66:1 on `--paper` `#f2f4f6`" is
+     * exactly the sentence a later reader needs, and a check that forbade it
+     * would be pushing the reasoning out of the file. Every literal inside a
+     * declaration is still caught.
+     */
+    const rulesOnly = afterTokens.replace(/\/\*[\s\S]*?\*\//g, '');
+    const literals = [...rulesOnly.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].map((match) => match[0]);
     const allowed = new Set(['#ffffff', '#1a1408']);
     for (const literal of literals) {
       expect(allowed.has(literal.toLowerCase())).toBe(true);

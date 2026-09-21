@@ -40,6 +40,7 @@
     "step12b:acceptance": "tsx --env-file-if-exists=.env scripts/step12b-acceptance.ts",
     "step12b:combine": "tsx scripts/step12b-combine.ts",
     "design:manifest": "tsx scripts/design-manifest.ts",
+    "design": "tsx --env-file-if-exists=.env scripts/design.ts",
     "capability": "tsx --env-file-if-exists=.env scripts/capability.ts",
     "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts"
   },

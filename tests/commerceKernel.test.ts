@@ -1602,7 +1602,7 @@ describe('the envelopes and profiles authorize reading and nothing else', () => 
 
 describe('rows, not prose', () => {
   it('stores no stage, no margin and no rank', () => {
-    const migration = readFileSync('server/db/migrations/080_commerce_kernel.sql', 'utf8');
+    const migration = readFileSync('server/db/migrations/082_commerce_kernel.sql', 'utf8');
     for (const column of ['stage', 'margin', 'contribution', 'rank', 'score', 'basis']) {
       expect(
         new RegExp(`^\\s+${column}\\s+(TEXT|INTEGER|REAL)`, 'im').test(migration),
@@ -1612,7 +1612,7 @@ describe('rows, not prose', () => {
   });
 
   it('carries seq on every table in the Postgres half', () => {
-    const pg = readFileSync('server/db/pg-migrations/071_commerce_kernel.sql', 'utf8');
+    const pg = readFileSync('server/db/pg-migrations/073_commerce_kernel.sql', 'utf8');
     const tables = pg.match(/CREATE TABLE IF NOT EXISTS (\w+)/g) ?? [];
     expect(tables.length).toBe(5);
     // §25 and §27 both record what its absence costs: a tiebreak on a column
