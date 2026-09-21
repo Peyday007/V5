@@ -84,6 +84,7 @@ import {
   verifyUnitReport,
 } from './remote.ts';
 import { parseRemote } from './forge.ts';
+import { requestDesignCycle } from '../design/route.ts';
 import { pullRequestFor } from './pullRequest.ts';
 
 /** How long a dispatcher may hold a campaign's tick, and how often it renews. */
@@ -638,6 +639,59 @@ async function ingestIntegrateBin(
   });
 
   await promoteReadyUnits(campaign.id);
+
+  /*
+   * Does this change reach the interface, and which screens?
+   *
+   * Asked here because this is the moment a change is *confirmed by the forge* —
+   * the unit's declared paths are known, the objective is known, and the commit
+   * is known. Asking earlier would be asking about work that had not landed;
+   * asking later would mean nothing asked at all.
+   *
+   * It opens a cycle and does not run one. A render needs a browser and this
+   * machine has none, so the cycle waits for something that does — which is a
+   * state with an answering transition (`npm run design resume`, or the visual
+   * harness) rather than a park. A change with no UI consequence produces no
+   * cycle and a recorded reason, which is most changes and has to stay cheap.
+   *
+   * Its own `try`, and a failure is a note rather than a refusal: a design
+   * classification that threw must not undo an integration the forge has already
+   * confirmed.
+   */
+  try {
+    /*
+     * The paths the integrated units declared they own, not a diff.
+     *
+     * §27 makes a unit's mutation scope a boundary the integration already
+     * verified the diff stayed inside, so it is both authoritative and free —
+     * and reading the diff again here would be a second account of the same
+     * fact, which is the two-readers-disagree shape this repository keeps
+     * correcting.
+     */
+    const byKey = new Map(implemented.map((unit) => [unit.unitKey, unit]));
+    const paths = [
+      ...new Set(
+        accepted.integrated.flatMap((key) => byKey.get(key)?.ownedPaths ?? []),
+      ),
+    ];
+    const routed = await requestDesignCycle({
+      triggerKind: 'UI_IMPACT',
+      triggerRef: campaign.id,
+      changedPaths: paths,
+      description: `${changeRequest.objective} ${changeRequest.expectedOutcome}`,
+      revision: parsed.value.headSha,
+    });
+    report.notes.push(
+      routed.cycle
+        ? `design cycle ${routed.cycle.id} opened for ${routed.impact.surfaces.length} surface(s)`
+        : `no design cycle: ${routed.because}`,
+    );
+  } catch (error) {
+    report.notes.push(
+      `the UI-impact classification could not run: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   report.ingested.push(`integrate:${bin.id}`);
   report.notes.push(
     `${accepted.integrated.length} unit(s) integrated at ${parsed.value.headSha.slice(0, 12)}` +
