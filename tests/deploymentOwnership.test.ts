@@ -363,8 +363,8 @@ describe('every workstream is present in the canonical tree', () => {
       'server/services/register/view.ts',
       'server/services/bridge/sync.ts',
       'client/src/russell/Register.tsx',
-      'server/db/migrations/080_work_register_and_bridge.sql',
-      'server/db/pg-migrations/071_work_register_and_bridge.sql',
+      'server/db/migrations/082_work_register_and_bridge.sql',
+      'server/db/pg-migrations/073_work_register_and_bridge.sql',
     ],
   };
 

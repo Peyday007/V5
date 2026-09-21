@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 080. See that file for why a workstream
+-- The Postgres half of SQLite migration 082. See that file for why a workstream
 -- is a join plus an intent, why no state is stored, why the bridge keeps its
 -- own message table rather than writing another model's turns as Russell's,
 -- and why a bridge credential can never name a worker.

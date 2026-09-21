@@ -1460,6 +1460,46 @@ rules.
   advances, so a late completion matches nothing, and every row keeps its id,
   its attempts and the reason it stopped.
 
+- **And a finished packet must not be given a new bin either — the same
+  sentence one object along, which cost a Claude activation a minute for seven
+  hours.** `completeLaunch` rebuilds a mission's bin whenever the one it has can
+  no longer deliver, which is right for a reopened round and was asked without
+  ever looking at the packet. `repairLaunches` — the pass that *calls* it —
+  already refuses a mission whose orchestration has finished; the function it
+  delegates to did not, and the ordinary tick reaches that function directly,
+  because `launch()` replays a live mission on its own idempotency key every
+  pass. **A rule applied by one of two readers is worse than none**, here with
+  the two readers a pass and the function inside it.
+
+  Production, 2026-09-21: `orc_79abf61b5c2646609c48` and
+  `orc_ab3604d498af45e8aa81` both reached `COMPLETE_WITH_GAPS`, filed and
+  audited, each bin correctly `COMPLETE`. Their missions were still live, so
+  every cycle built another bin, which went `READY`, earned a dispatch intent
+  and **fired a real Cowork activation**. The worker arrived, was told *"This
+  bin is drained"*, completed it, and the next cycle built the next one. Four
+  fires in the five minutes this was measured — 1/B at 01:11:30, the dispatch
+  Routine at 01:13:06, 1-D at 01:13:46, 1/C at 01:14:06 — every one of them
+  `SUCCEEDED`, every bin `COMPLETE`, and not one of them carrying any work.
+  **Nothing anywhere went red**, which is why it ran for hours: what it consumed
+  was the fixed subscription allowance, so the genuine queued research never got
+  a worker. §27's sentence arriving in the launcher: *a loop that looks like
+  progress is worse than a stop.*
+
+  The condition is now the one `repairLaunches` already selects on — a working
+  status *and* something claimable in it — and it is asked exactly where that
+  pass asks it, of a mission whose bin is **spent**. A mission that has never
+  had one is still given one whatever its packet's status, because that bin is
+  part of building the packet rather than a second attempt at delivering it, and
+  refusing there would be this same defect wearing the other sign: a launch
+  permanently without a bin. `NEEDS_HUMAN` and `AWAITING_APPROVAL` come along
+  for the ride, which is the point rather than a side effect — the suite already
+  asserted that `repairLaunches` leaves a spent bin alone over a packet waiting
+  for a person, and the direct path was doing it anyway.
+
+  It removes the fire and not the mission. A finished packet's mission is
+  finished by the writeback pass, which reads the same status; one waiting for a
+  person has its own answering transition already.
+
 - **What a person is shown about coverage is what the auditor read.**
   `reconcileAcceptedFragment` moves a requirement's coverage when a fragment
   clears all seven gate conditions, and it had exactly one caller — the
@@ -7233,9 +7273,314 @@ allocated**, because both need a deploy and a fire — the separation Step 3 dre
 between the research engine passing its tests and a real job having actually
 run, which §38 had to say about itself on the day it landed.
 
+## 42. A render is the interface. Code is a claim about it.
+
+The Design Kernel (`server/services/design/`, `server/repos/design.ts`,
+`server/domain/design.ts`, `docs/DESIGN-KERNEL.md`) is the smallest thing that
+can do one bounded design job end to end and get better at it by doing it. It is
+a new **entrance** to machinery Steps 4 to 12C already built — bins, leases,
+fencing, the dispatcher, the Russell candidate path, the Software Factory, the
+approval envelope — and none of it is a second set of rules.
+
+The loop it replaces is a person's, and the owner described it exactly: a
+feature lands, a screen appears, they say fix this, something useful is removed,
+they say bring that back but change this, another part breaks. Every round of
+that is a design judgement made once, applied to one screen, and written down
+nowhere.
+
+- **A render is the evidence, and code is not.** §9 draws the line for documents
+  — *a file on disk is not something Brain has read* — and it is the same line
+  one artifact along: a component's source is not the interface, because what a
+  person sees is the product of every stylesheet, every container width and
+  every font that did or did not load. §29 records what reading the wrong one
+  costs: a `mode === 'BAR'` branch that was written, tested and reachable by
+  nothing, because a CSS rule removed the element it lived in, and **no test of
+  either half could see the other**. So a finding is about a `design_captures`
+  row, and a capture is bytes with a hash, an engine, a version and a revision
+  on them.
+- **A browser is a local capability Brain discovers, never one it assumes.**
+  `renderRuntime.ts` is `ocrRuntime.ts`'s shape and §9's rule: with no engine
+  here, nothing is rendered, nothing is evaluated, and the cycle closes
+  `NO_RENDER_RUNTIME` naming the remedy — never a layout inferred from the
+  source. The deployed Brain has no Chromium and must not acquire one, which is
+  why the tick runs the learning and expansion halves and deliberately not the
+  rendering one.
+- **A measurement and a judgement are two kinds of answer and never one
+  column.** Whether a control is covered at its own centre is a reading; that a
+  screen emphasises the wrong thing is a view. The measured lane is a pure
+  function over readings taken in the live page, so acting on it needs nobody.
+  The judged lane is a bin, a fired worker, a validated submission and recorded
+  lineage — §8 at a new artifact — and `validateJudgedSubmission` refuses a
+  judgement submitted under a *measured* kind's name, because a view wearing a
+  reading's name is the one thing here that could not be argued with afterwards.
+- **An unreadable reading is never a clean one, and a partial one is not
+  unreadable.** The first half is §9 exactly: a capture whose contrast reader
+  threw has no contrast findings, and calling that clean is the false confidence
+  the engine exists to prevent. The second half was a correction the tests
+  found — the contrast reader names every element with no opaque backdrop, every
+  real page has one, so putting those on `unreadable` made `SETTLED` unreachable.
+  **A bar with no way over it is a park rather than a standard** (§24), so a
+  partial measurement is reported beside the verdict and blocks nothing.
+- **The taxonomy is seeded and not declared.** Ten design concerns and nothing
+  beneath them; a branch — *dense chronology*, *editorial layout*, *destructive
+  actions* — is free text on a pattern, and exists because patterns accumulated
+  under it rather than because somebody predicted it. §38's first rule at a new
+  subject: a hardcoded list answers the question the kernel exists to ask. The
+  seed patterns are seven, and every one of them cites a section of this file —
+  they are defects this repository has already paid for, written as the rule that
+  would have caught them, rather than taste.
+- **An owner correction is evidence with a scope, and the scope never widens on
+  its own.** "Make this smaller" is one instruction about one thing; turned into
+  a rule it removes something useful on four other screens, which is the cycle
+  the owner described. `suggestScope` advises the *narrowest* reading of what was
+  pointed at and is never a silent default; a `ONE_OFF` correction can never
+  become a pattern; and a promoted pattern carries the correction's own scope
+  exactly. The words are stored verbatim and what Brain took from them is a
+  separate column, so somebody can say *that is not what I meant* without the
+  evidence having been overwritten.
+- **The repair loop stops, and says which of five ways.** Three rounds, and a
+  cycle that reaches the ceiling closes `REPAIR_EXHAUSTED` with its findings
+  still open — then `UNRESOLVED`, which is a thing somebody has to answer rather
+  than a thing the loop is still working on. Closing them to read as finished is
+  the silent success this whole kernel exists not to produce. A finding closes
+  because a **later capture no longer shows it**, and the resolution names that
+  capture's hash and revision: §27's standard that a worker's summary is never
+  evidence, where the branch is the picture.
+- **The kernel does not write to a repository, and that is the boundary rather
+  than a limitation being apologised for.** Almost every design repair here is a
+  change to client code, and §27 reserves authorizing one to a person on Build. A
+  cycle whose repairs are all code changes closes `NEEDS_PERSON` — a different
+  stop from `REPAIR_EXHAUSTED`, because the two have different remedies and
+  reporting the second as the first sends somebody to look at the loop.
+- **The self-model is read, never declared.** Two dimensions and deliberately no
+  aggregate (§37): is there a mechanism, and has it been shown to work. Seeding
+  writes titles, routes, evaluation methods and limitations and **no state at
+  all** — a seed that could set one would be the path by which *we wrote this
+  down* becomes *this works*, which is the most expensive available lie because
+  it stops the work that exists to close the gap. A capability with no stated way
+  of being checked can never leave `UNTESTED`, which is exactly what it means to
+  have no way of checking. `limitations` is the half a registry usually omits and
+  the half that stops it being trusted past its evidence.
+- **The third loop originates its own work, and zero demand is not the same fact
+  as no demand.** It runs on the tick with no trigger: nothing has to fail,
+  nothing has to be complained about, and nobody has to name a capability.
+  Demand is *measured* — findings landing on a capability's primitive — so a
+  weakness rises because work keeps running into it. The correction that made it
+  reachable is recorded rather than quietly applied: refusing any capability with
+  zero demand made the three abilities this kernel most obviously lacks, among
+  them judging a picture at all, permanently invisible to the loop that exists to
+  find them, because **a capability nothing implements cannot have produced a
+  finding**. §30's unknown, failing in the direction that quietly ends
+  self-expansion.
+- **Every expansion route is machinery that already exists**, and there is
+  deliberately none meaning *the design kernel will build this itself*. Cheapest
+  first: a reading Brain can take from its own rows, then a bounded research
+  question as a Russell candidate — archive check, compiler, approval envelope,
+  evidence gate, three audit roles, all unchanged — then an objective a person
+  authorizes on Build, then a decision no amount of building closes. A gap that
+  settles is left alone for a cool-off, which was a defect the tests found: a
+  parked expansion is not *live*, so the partial unique index allowed another and
+  every tick wrote two more rows about the same three gaps for ever. Which
+  project a research route files against is `ARCHITECTURE_SLUG` — §37's own
+  answer to the identical question — before the `purpose = 'TECHNICAL'` fallback,
+  because two kernels resolving *Brain's architecture scope* by two different
+  rules would file into two different projects and the disagreement would read
+  as research going missing. It **reads and never creates**: a loop that made
+  itself a project to have somewhere to put its own work would be a machine
+  creating its own scope, so a Brain with none parks naming `npm run admin`.
+- **Research that came back becomes knowledge, or it was a pile of links.**
+  `design_patterns.origin` declared `RESEARCH` and nothing wrote it, so an
+  expansion could run the whole research pipeline and what came back sat in
+  `research_claims` while the next design problem was assembled from the same
+  seven seed patterns — the *mechanism nothing calls* defect at the one place
+  the brief names it. `absorb.ts` turns each **citable** claim into one pattern:
+  the statement verbatim, because composing a nicer sentence out of a claim
+  would be prose becoming a rule with the citation still attached; the claim id,
+  the URL and the publisher as its evidence; the claim's own geography,
+  timeframe and population as the scope outside which it is *unestablished*
+  rather than false; `MEDIUM` at most, because a well-sourced statement about
+  interfaces in general is not a lesson this product has paid for; and
+  `PROPOSED`, like everything else the kernel compiles for itself. The expansion
+  settles `EVALUATED` rather than `PROMOTED`, because knowing how something is
+  done is not being able to do it.
+- **Nothing is promoted because the work it was routed to finished.** A
+  capability dimension moves only when a *reading* of that capability says it
+  moved — §37's sentence, and the reason it matters is that a campaign routinely
+  succeeds at something narrower than the packet asked for, so the two come apart
+  precisely when things go well.
+- **Priority is lexicographic over observable facts and there is no weighted
+  score anywhere.** A score needs weights, weights are a judgement nobody made,
+  and the number then reads like a measurement — §38's own argument, at a second
+  allocator. A surface nobody has rendered ranks first, because it is the only
+  one about which nothing is known; failure ranks third among capabilities on
+  purpose, because putting it first is how a kernel only ever improves in
+  response to being hurt.
+- **A false finding costs more than the defect it was looking for**, and the
+  first real run produced two. A responsive-regression finding named Search,
+  Build, Connected sites, Cash and Sign out as lost at phone width — they live in
+  a sheet that is not in the DOM until something opens it, and §29's rule is
+  *reached in one press or in two*. And every control below the fold of Brain's
+  internally-scrolling reading column reported as covered by the command bar,
+  which scrolling reaches. Both corrections are in the readers, with the run that
+  found them recorded beside each.
+- **The existing evidence model was extended, never weakened.**
+  `design_approvals` and `scripts/design-manifest.ts` are untouched; a cycle
+  writes the `index.json` the manifest tool refuses to guess at, and the cycle's
+  own capture digest and the manifest's digest are **the same number over the
+  same bytes** — verified, `17d9a70a3d9b1c6e…`, nine pictures, two paths.
+  Nothing in `scripts/` can record an approval, still deliberately.
+
+- **A capture needs a browser and a judgement needs the fleet, and those are two
+  machines. For a while there was nothing between them.** That is the defect at
+  the centre of this kernel and it is recorded rather than quietly repaired,
+  because every part of it passed its own tests. `requestDesignCycle` opened a
+  cycle where a change integrates — a server with no browser — and the only
+  thing that could ever render it was `npm run design resume`, which boots its
+  *own* SQLite Brain against a throwaway directory and cannot see that cycle at
+  all. Meanwhile `openDesignReview` had exactly **one caller in the repository
+  and it was a test**: nothing in the server ever opened a review bin, so
+  `ingestFinishedReviews` walked cycles looking for bins that could not exist
+  and `JUDGE_COMPOSITION` could never leave `UNTESTED`. This file's own header
+  named `advanceDesignCycles` as the function that read the answer back, and
+  there was no such function. **A mechanism nothing calls is not a mechanism**,
+  for the seventh time, and the sentence was right about the design and wrong
+  about the code.
+
+  A render is work Brain wants done by a machine with a capability Brain lacks,
+  reported as structured rows and validated before it is believed — which is a
+  **bin**, and every property it needs is Step 10's, unchanged. So
+  `DESIGN_RENDER_V1` is the route, with its own `GENERAL_DESIGN_RENDER` class so
+  the fire router can send it somewhere that can actually drive a browser, and
+  `npm run design render` is the worker half: the same `capture.ts` a local
+  cycle uses, printing one object to hand back. The bytes stay with the renderer
+  and the hashes travel, because the address is an address and the digest is the
+  evidence. The tick then has the whole loop — ask for a render, read one back
+  and measure it with the same `measurePass` a local run uses, ask for the
+  judgement, read that back, close the cycle with a reason derived from what is
+  still open — every step idempotent by a row rather than by a flag.
+
+- **A review is bound to the evidence it was briefed on, and was not.**
+  `openDesignReview` computed `digestCaptures(input.captures)` and used it for
+  nothing at all, so the digest a review was finally recorded with came from
+  reading the table back **at ingest time** — a different question. A capture
+  written in between would have been folded in silently, and a judgement about
+  one set would have settled another. `design_bin_requests` (075 / pg 066) is
+  the binding, written when the question is asked and compared before the
+  answer is believed; §23's audit reopen answers the identical shape the
+  identical way. A bin carrying a *render* request is refused by kind rather
+  than falling through to a digest comparison that would call it stale, and a
+  bin Brain has no record of at all is refused before anything about its
+  submission is read.
+
+- **A REFUSED review is not a judgement, and was settling the cycle.** A refusal
+  is recorded as a row — deliberately, because §8 requires the failure and its
+  raw response to persist — so *there is a JUDGED row for this pass* was true of
+  a review that established nothing. A cycle whose evidence had moved underneath
+  its reviewer closed reading **rendered, measured and judged**, which is the
+  silent success this whole kernel exists not to produce. It closes
+  `NEEDS_PERSON` with the refusal's own words now, and still **closes**: nothing
+  would ever ask again, so leaving it open would be a park.
+
+- **A dispatch generation and a lease generation are one apart, and two kernels
+  read one as the other.** `assignNextBin` swaps `lease_generation` to
+  `row.lease_generation + 1` and credits the arrival against the row's own
+  generation, so a unit result submitted under a lease holds one more than the
+  dispatch that produced it. Asking at the lease's own generation resolves
+  nothing, always. `services/design/judge.ts` therefore refused **every** judged
+  review for "no resolvable lineage" — failing closed, so the symptom was a lane
+  that never worked. `services/capability/independence.ts` (§37) asked the same
+  way while building the set of sessions an audit must be independent *of*, and
+  a session missing from that set is a session allowed to audit its own reading
+  — **failing open, which is the expensive direction**. Its fixture wrote the
+  dispatch row at the generation the broken reader wanted, so the suite stayed
+  green over it. `dispatchedSessionForLease` is the corrected reader, a second
+  function rather than an argument because the two questions genuinely differ;
+  `dispatchedSessionForBin` is untouched for the admission hook, which asks
+  before a claim and is right.
+
+- **`authorsOf` selected three columns that do not exist.** `factory_sessions`
+  declares `external_session_id`, `worker_id` and `account_ref`; the query asked
+  for `session_ref`, `account_id` and `routine_id`, threw on every UI-impact
+  cycle, and the `catch` — whose own comment promised to say so out loud —
+  swallowed it. So every design review of a real change reported
+  `NOT_APPLICABLE`: *nobody for the reviewer to be independent of*, about a
+  change a session had demonstrably written. The guard silently never ran, which
+  is worse than the guard being absent, because the tier was recorded and read
+  as a deliberate answer.
+
+- **Every one of those was found by walking the journey, and none of them by
+  reading it.** `tests/designJudgedWalk.test.ts` drives one cycle from a change
+  landing to a cycle closing and simulates only the Cowork activation — the
+  workers are `WORKER` principals claiming real bins off the real queue, exactly
+  as `cashIntegrationPass` and `sharedKnowledge` already have to say of
+  themselves. §24 and §30 both record the same lesson at the same altitude: a
+  test that arranges its own starting state cannot tell a mechanism from a
+  function nobody calls.
+
+- **The product surface did not own its own elements.** `main.tsx` imports the
+  legacy console's stylesheet and the product's, globally, and the legacy one
+  styles bare elements — so its `h4 { color: var(--fg-dim); text-transform:
+  uppercase }` applied to every h4 in the application. `--fg-dim` is `#b3c1d1`,
+  chosen for a near-black background and painted on `--paper`: the conversation
+  names on Home rendered at **1.66:1**, in capitals nobody chose. Repairing it
+  found bare `label` doing the same thing at 3.36:1 one screen along, so the fix
+  is the class of defect rather than the instance — inside `.rs-shell`,
+  headings, labels, legends, selects and textareas take their colour from what
+  contains them and impose no case or tracking. Size is untouched, because size
+  is what a Russell class decides, and `/legacy` is untouched because that
+  surface is not this kernel's to restyle.
+
+- **A surface colour is not a text colour, and `--verdigris-ink` already knew
+  it.** `--ochre` measured 3.15:1 as text on `--paper` and 3.01:1 on its own
+  wash; `--moss` 4.07:1 on its wash. Both now have the ink companion verdigris
+  has always had, sized by computing luminances rather than by eye, and the
+  surface tokens are **untouched** — every chip, border and background is the
+  colour it was. Dark mode already measured 7:1 and better, so its inks resolve
+  to what it already uses.
+
+- **The reader was wrong twice more, and both are in the readers.** A native
+  radio is 13×13 in every browser and nobody aims at it: it sits in a `<label>`
+  and the words are the target, so measuring the control hid the honest number —
+  870×**23**, one pixel under the floor, a repair rather than a redesign. And
+  Fleet's link-styled buttons came back as small targets while sitting *in a
+  sentence*, which is WCAG 2.2 SC 2.5.8's own Inline exception; a criterion that
+  flagged those would be asking for the sentence to be broken to satisfy a rule
+  that excludes it. **A false finding costs more than the defect it was looking
+  for**, for the third and fourth time in this kernel's short life.
+
+- **Nothing here is deployed, and the distinction is the whole of §37's first
+  sentence.** The branch is unmerged; production does not contain
+  `server/services/design` at all, so the deployed Brain has no design table and
+  runs no design tick. An earlier report of mine named two Russell candidates as
+  evidence that proactive expansion had routed research — they were rows in a
+  throwaway directory, and production's `brain-architecture` project holds zero
+  work items. The machinery is complete and **no fleet worker has answered a
+  design bin**; that needs a deploy, which is a person's.
+
+**The sharpest limitation, because it is the one most worth being honest about:
+the judged lane reads a structured description of the rendered page, not the
+picture.** A reviewer gets the heading outline in document order, the controls a
+person can actually press, the counts, the nesting depth, every measurement
+already taken, and the full product context. That is a great deal and it is not
+*seeing*: the kernel can establish that an outline skips a level and cannot
+establish that a composition is ugly. It is recorded as a limitation on
+`JUDGE_COMPOSITION`, stated in the bin's own brief so a reviewer knows which
+questions it may not answer, and declared as the absent capability
+`VISUAL_COMPOSITION_FROM_PIXELS` so the expansion loop can find it.
+
+**What the first run actually established.** Against the real client, a real
+server and Chromium 141 at three widths, the kernel found that `--ink-faint`
+measured 3.90 / 3.54 / 3.31 against the three surface tokens — under the 4.5:1
+floor everywhere it is used, and 35 rules read it. The repair took the Russell
+surface from seventeen open findings to five, measured by re-rendering rather
+than by anybody's say-so. What is left — `--ochre` at 3.15:1 on the *You are
+needed* line, which is also used as a background and is therefore an accent
+decision the owner owns — is reported and not repaired, and the cycle closed
+`NEEDS_PERSON` saying so.
+
 ---
 
-## 42. A register stores an intent. Everything else about it is derived.
+## 43. A register stores an intent. Everything else about it is derived.
 
 Brain has always held every *part* of what it is doing — candidates, missions,
 packets, campaigns, change requests, faculties, industry rounds, cash
@@ -7422,12 +7767,14 @@ server/
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
+    design.ts           ten design concerns, and the kinds a reading may establish
     manufacturing.ts    what a capability finding creates, and what it may never
     opportunitySignals.ts  what kind of opening a claim is, and what it becomes
     industry.ts         what a structural finding means, and what it may create
     labor.ts            what a labor finding means, and the one validator both doors call
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
+    design.ts           surfaces, captures, findings, patterns, corrections, gaps
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     factory.ts          the contract, the campaign, and units that own a surface
@@ -7569,6 +7916,27 @@ server/
       operate.ts        acting on a need: raise, settle, resume, start work
       view.ts           one private section, derived in one place
       readiness.ts      four people and four surfaces, counted from rows
+    design/
+      surfaces.ts       what can be looked at, and what each screen is about
+      renderRuntime.ts  whether this machine can render the product, discovered
+      browser.ts        a headless browser over the debugger, bounded everywhere
+      observe.ts        what is read in the page while it is on the screen
+      capture.ts        a render, bound to its bytes, its engine and its revision
+      evaluate.ts       readings become findings, deterministically
+      model.ts          the design problem: what it represents, and how much exists
+      patterns.ts       reusable knowledge, seeded small and grown from evidence
+      corrections.ts    what the owner said, kept at the scope they gave it
+      capabilities.ts   what this kernel can and cannot do, read from rows
+      priority.ts       three altitudes, and no weighted score anywhere
+      impact.ts         whether a change reaches the interface, and which screens
+      route.ts          a landed change becomes design work, where it landed
+      judge.ts          the view a measurement cannot establish, through a bin
+      render.ts         the route a picture takes from a machine that has a browser
+      scope.ts          which project design work is filed against; one reader
+      operate.ts        loop 1: render, measure, repair, render, stop honestly
+      learn.ts          loop 2: what recurred, what they said, what it cannot do
+      expand.ts         loop 3: its own weakest ability, routed somewhere real
+      kernel.ts         the tick, and the seed
     labor/
       necessity.ts      the twelve questions, and the two Brain reads from its own rows
       derive.ts         where a workflow comes from when nobody types one in
@@ -7741,6 +8109,7 @@ client/                 React UI
 blueprints/             the blueprint and its amendments, preserved with their hashes
 objectives/             software objectives a person approved, in the image by design
 scripts/
+  design.ts                 render a real screen, measure it, and ask what is next
   capability.ts             the kernel's operator surface: register, advance, derive
   factory.ts                the operator's factory surface: register, submit, run
   manufacturing.ts          the programme's terminal door, until a surface exists
@@ -7754,6 +8123,8 @@ scripts/
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
   migrate-cloud.ts          npm run migrate:cloud
 tests/                  Vitest suites
+  designKernel.test.ts       what a design kernel may conclude, and what it may not
+  designJudgedWalk.test.ts   one cycle, walked: a change lands, two bins, a closed cycle
   manufacturingKernel.test.ts  a gated round files everything and holds nothing
   researchIntelligence.test.ts   the judgement layer, in three unrelated domains
   researchIntelligencePass.test.ts  one campaign, walked, with only the world simulated
