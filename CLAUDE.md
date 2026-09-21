@@ -7460,6 +7460,44 @@ thirteen unrelated regressions. **A parameter list is the one place in this
 codebase where the compiler cannot help**, and the only thing that catches it is
 running everything.
 
+**Reconciling with production found a seventh and an eighth, and both are the
+same mistake pointed in opposite directions: a figure that is not there, and a
+figure that is zero.**
+
+**The backstop that existed was on the backend nobody deploys.**
+`deal_amount_cents` carried `CHECK (… >= 0)` on the SQLite column and nothing
+at all on the Postgres one. `validateDealFinding` refuses a negative at both
+submission doors, so the constraint only ever catches a path around them —
+which is precisely the case where it matters that it runs where production
+runs. Every SQLite run in the world would have reported it installed. §3's
+rule that a schema change is not done until both chains have it, at a
+constraint rather than at a column, and **the fifth time this repository has
+been told something by the second backend and by nothing else.** The
+regression drives the database rather than reading the migration text, because
+a test that greps a `.sql` file passes whenever the string is present and says
+nothing about whether the constraint was installed; it was run against a real
+Postgres to watch it accept `-1` before the fix was written.
+
+**And a published zero read as a line nobody had found.**
+`landedEconomics` decided which load-bearing components were missing with
+`!row?.amountCents`, so a duty of **0** — a duty-free tariff line, which is
+one of the facts that actually makes one of these deals work, and which is
+published as a zero rather than as a silence — was counted as absent. The
+landed cost was then withheld with every line established, naming the duty as
+the thing nobody had looked up. That is §30's rule about an unknown never
+being an assumption, in the direction nobody checks it in: the *unfavourable*
+one, which is rarer and no less wrong, and which reads as caution. `=== null`
+now, beside a `present` filter that already said `!== null` four lines below
+it — the two readers of one column had disagreed about what a zero means.
+
+**A third thing was corrected and is not a defect, because nothing read it:**
+three comments — the Postgres migration's header, this file's own section
+heading and the test suite's — said *four* compliance layers where
+`COMPLIANCE_LAYERS` has always declared five. Nothing branches on a sentence,
+so no behaviour was ever wrong. It is corrected here rather than left, because
+a comment that miscounts the vocabulary beside it is how a reader concludes
+one of the five is decorative.
+
 ---
 
 ## Repository map

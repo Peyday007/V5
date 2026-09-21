@@ -15,7 +15,7 @@
  * `opportunity_signal` and `structural_finding` already made, one axis along,
  * so the tests that matter are the **refusals** rather than the acceptances.
  *
- * **The four compliance layers do not collapse, and an absence of rows is not
+ * **The five compliance layers do not collapse, and an absence of rows is not
  * a clearance.** This is the one place in the kernel where being confidently
  * wrong means equipment gets built for a market it cannot enter, so both
  * halves are pinned: a layer nobody researched reads NOT_ESTABLISHED, and only
@@ -31,6 +31,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
 import { createUser } from '../server/repos/identity.ts';
 import { createRun } from '../server/repos/runs.ts';
 import {
@@ -333,6 +334,88 @@ describe('the seed is an example, not the taxonomy', () => {
         expect(`${path}:${word}:${code.includes(word)}`).toBe(`${path}:${word}:false`);
       }
     }
+  });
+});
+
+/**
+ * The backstop that exists is the one that has to run where production runs.
+ *
+ * `deal_amount_cents` is refused negative by `validateDealFinding` at both
+ * doors, and the column carries `CHECK (… >= 0)` as the backstop behind them.
+ * The SQLite chain had it and the Postgres chain did not — so the one guard
+ * that would have caught a path around the validators was absent on the
+ * backend the deployed Brain actually runs. §3's rule that a schema change is
+ * not done until both chains have it, at a constraint rather than a column,
+ * and the drift was invisible to every SQLite run.
+ *
+ * Driven against the database rather than read out of the migration text,
+ * because a test that greps a `.sql` file passes whenever the string is
+ * present and says nothing about whether the constraint is installed.
+ */
+describe('a figure that cannot be negative is refused by both backends', () => {
+  it('refuses a negative deal_amount_cents at the column, on whichever backend is running', async () => {
+    const run = await createRun({
+      projectId,
+      layerId: layer.id,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'a cost line',
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId: layer.id,
+      runId: run.id,
+      title: 'a cost line',
+      assignment: 'what a line of the landed cost is',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    const [claim] = await insertClaims([
+      {
+        orchestrationId: orchestration.id,
+        fragmentId: null,
+        passId: null,
+        passKey: 'BROAD_SCAN' as const,
+        claim: 'The published import duty on fuel tank trailers into Zambia is 25 per cent.',
+        sourceUrl: 'https://example.test/tariff',
+        sourceTitle: 'The tariff schedule',
+        sourcePublisher: 'A revenue authority',
+        sourceDate: '2026-08-01',
+        evidenceExcerpt: 'the duty line',
+        evidenceLocator: 'the page body',
+        evidenceLane: 'official_source',
+        dealFinding: 'COST_COMPONENT' as const,
+        dealSubject: 'import duty on fuel tank trailers',
+        dealEquipment: 'fuel tank trailers',
+        dealJurisdiction: 'Zambia',
+        dealValue: 'IMPORT_DUTY',
+        dealAmountCents: 5_700_00,
+        dealCurrency: 'USD',
+        retrievedAt: '2026-09-12',
+        confidence: 0.8,
+        validationState: 'SOURCED' as const,
+        validationDetail: null,
+        sourced: true,
+        claimType: 'SOURCED_FACT' as const,
+        contentHash: 'duty|zambia|IMPORT_DUTY',
+      },
+    ]);
+
+    await expect(
+      getDb().run('UPDATE research_claims SET deal_amount_cents = ? WHERE id = ?', [
+        -1,
+        claim!.id,
+      ]),
+    ).rejects.toThrow();
+
+    // And the figure it was given is exactly what came back, so the refusal
+    // above is the constraint rather than a write that silently did nothing.
+    const after = await getDb().get<{ deal_amount_cents: number }>(
+      'SELECT deal_amount_cents FROM research_claims WHERE id = ?',
+      [claim!.id],
+    );
+    expect(Number(after!.deal_amount_cents)).toBe(5_700_00);
   });
 });
 
@@ -673,6 +756,27 @@ describe('a total past an unknown is withheld', () => {
     expect(reading.landedCents).toBe(null);
     expect(reading.withheld).toContain('MISSING_LOAD_BEARING');
     expect(reading.missing).toContain('IMPORT_DUTY');
+  });
+
+  /**
+   * A published zero is a figure, and reading it as an absence is the unknown
+   * taken as the *unfavourable* assumption — which is the rarer direction and
+   * no less wrong. A duty-free tariff line is exactly the fact that makes one
+   * of these deals work, and it is published as zero rather than as silence.
+   * `missing` was a truthiness test, so a zero duty read as *nobody has looked
+   * at the duty* and the landed cost was withheld with every line established.
+   */
+  it('treats a published zero as a figure rather than as a line nobody found', () => {
+    const rows = allFive();
+    rows[2] = cost('IMPORT_DUTY', 0);
+    const reading = landedEconomics({
+      equipmentClass: 'fuel tank trailers',
+      destination: 'Zambia',
+      costs: rows,
+    });
+    expect(reading.missing).not.toContain('IMPORT_DUTY');
+    expect(reading.withheld).toEqual([]);
+    expect(reading.landedCents).toBe(36_000_00);
   });
 
   it('sums it when every load-bearing line has a figure on one basis', () => {

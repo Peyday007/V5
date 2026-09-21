@@ -227,4 +227,22 @@ ALTER TABLE research_claims ADD COLUMN IF NOT EXISTS deal_equipment TEXT;
 ALTER TABLE research_claims ADD COLUMN IF NOT EXISTS deal_jurisdiction TEXT;
 ALTER TABLE research_claims ADD COLUMN IF NOT EXISTS deal_value TEXT;
 ALTER TABLE research_claims ADD COLUMN IF NOT EXISTS deal_amount_cents INTEGER;
+
+-- The same backstop the SQLite column carries.
+--
+-- `validateDealFinding` refuses a negative at both submission doors, so this
+-- only catches a path around them — which is exactly why it has to exist on
+-- the backend the deployed Brain runs on rather than on the one every test
+-- run happens to use. The first version of this file had the CHECK on the
+-- SQLite column and not this one: a constraint present in the chain nobody
+-- deploys is a guard that reads as installed and is not. §3's rule that a
+-- schema change is not done until both chains have it, at a constraint.
+--
+-- Named explicitly, because `ADD CONSTRAINT` has no `IF NOT EXISTS` in
+-- Postgres 16 and a named constraint is the only thing a later migration
+-- could address.
+ALTER TABLE research_claims
+  ADD CONSTRAINT research_claims_deal_amount_cents_check
+  CHECK (deal_amount_cents IS NULL OR deal_amount_cents >= 0);
+
 ALTER TABLE research_claims ADD COLUMN IF NOT EXISTS deal_currency TEXT;

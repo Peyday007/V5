@@ -199,8 +199,18 @@ export function landedEconomics(input: {
     },
   );
 
+  /*
+   * `=== null` rather than a truthiness test, because a published **zero** is a
+   * figure and reading it as an absence is an unknown taken as the assumption
+   * — here the unfavourable one, which is the rarer direction and no less
+   * wrong. A duty-free tariff line is published as `0`, and it is often the
+   * exact fact that makes one of these deals work; the first version of this
+   * filter withheld the whole landed cost over it while every line was
+   * established, and said the duty was a line nobody had found.
+   */
   const missing = LOAD_BEARING_COMPONENTS.filter(
-    (component) => !components.find((one) => one.component === component)?.amountCents,
+    (component) =>
+      (components.find((one) => one.component === component)?.amountCents ?? null) === null,
   );
 
   const present = components.filter(
