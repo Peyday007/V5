@@ -8501,7 +8501,7 @@ one of the five is decorative.
 
 ---
 
-## 46. A real row is not an answer to a question it never answered.
+## 47. A real row is not an answer to a question it never answered.
 
 The product-foundation closeout. Five defects were reproducible in production
 on 2026-09-21 and every one of them passed every test that existed. They are
@@ -8708,7 +8708,47 @@ The same rule settled the section numbers: two sessions wrote a §43 and two
 more wrote a §44, and each time the one on `production` kept its index while
 this one moved, because two sections sharing a number is two readers of one
 index. `deploymentOwnership` is what would have refused either merge had a
-renumber been missed, and it walks both chains rather than one.
+renumber been missed, and it walks both chains rather than one. A third pair collided
+after that, and the tiebreak was genuinely ambiguous for the first time: two
+sections numbered `46`, one authored at 01:51 and landed second, one authored
+at 04:47 and landed first, on branches neither of which descends from the
+other. So the rule that actually settles it is **uniqueness over precedence** —
+this one moved again, because renumbering your own heading is the edit least
+likely to collide with a session still running, and because a reader looking
+for a number needs one answer rather than the right one.
+
+### Two concurrency defects the deploy found, both recorded and neither fixed here.
+
+**§28's guard is evaluated once, at job start, so a deploy can go stale while
+it runs.** A `Deploy` dispatched at 04:27 passed *Refuse a branch that is not
+canonical* legitimately — `production` genuinely was its SHA at 05:13:37 — and
+then released that tree at about 05:30, six minutes after a fast-forward had
+moved the branch two commits on. Nothing was re-run and nothing was wrong with
+the ref; the checkout simply became behind while the job was in flight. That is
+the rollback §28 is written from, reached by *timing* rather than by a stale
+dispatch, and the guard as written cannot see it because it asks its question
+before the build rather than before the release.
+
+**And the `deploy-brain` group lets a report cancel a deployment.**
+`deploy.yml`, `admin.yml` and `cash-report.yml` share it, GitHub keeps exactly
+one *pending* run per group, and the newest pending evicts the one waiting. A
+queued `Deploy` was cancelled two seconds after an unrelated `Admin` dispatch,
+with `jobs: 0` — it never started, and nothing anywhere was red except a
+conclusion nobody was watching. The closeout-report workflow's own header
+already records the cost of that group in the other direction, as *a reading
+you cannot take is not a control*; this direction is worse, because a silently
+cancelled deployment leaves the branch and the released image disagreeing while
+every surface looks healthy. Winning the slot back for one administration
+command took repeated dispatches against four other sessions.
+
+**Neither is fixed here, and the reason is the file rather than the
+difficulty.** §27 states that `deploy.yml` is the one place two workstreams
+editing at once has already cost this repository twice, and both remedies are
+in it: the first needs the guard re-asked immediately before `flyctl deploy`,
+and the second cannot simply move the reports out of the group, because sharing
+it is what stops a report racing a restart. A third opinion about that file,
+written by a session that is not editing it for any other reason, is exactly
+what that rule exists to prevent.
 
 **What this section does not claim.** The prompt that produced it asked that
 evidence-only records never enter refinement at all. Taken literally that would
@@ -8718,6 +8758,9 @@ built is the bounded, ordered, answerable version — evidence never appears as 
 person's work, never starves a piece that is closer to a decision, and never
 holds a slot while nobody is working on it. Saying that plainly is better than
 a sentence that is nearly true.
+
+---
+
 ## Repository map
 
 ```
