@@ -52,7 +52,12 @@ import {
   listTests,
   recordEvidence,
 } from '../server/repos/commerce.ts';
-import { validateCommerce, basisOf, commerceSpec } from '../server/domain/commerce.ts';
+import {
+  COMMERCE_ROUND_ENVELOPES,
+  basisOf,
+  commerceSpec,
+  validateCommerce,
+} from '../server/domain/commerce.ts';
 import { COMMERCE_FINDINGS, COMMERCE_ROUND_PURPOSES } from '../server/domain/types.ts';
 import { readEconomics, REQUIRED_FOR_MARGIN } from '../server/services/commerce/economics.ts';
 import { runCommerceKernel, snapshot, planFrom } from '../server/services/commerce/kernel.ts';
@@ -1387,6 +1392,13 @@ describe('the envelopes and profiles authorize reading and nothing else', () => 
    * Asserted as a pairing rather than as five examples, so a purpose added
    * later without an envelope is a visible absence rather than a silent
    * fall-through to whichever envelope is listed last.
+   *
+   * The table is written out here rather than read from
+   * `COMMERCE_ROUND_ENVELOPES`, and that is the one place in this suite where
+   * a second copy is the point: the constant is what the compiler applies, and
+   * a test that read it could only ever prove the constant equals itself. What
+   * this catches is somebody re-pointing a purpose at another envelope, which
+   * is exactly the defect that shipped.
    */
   it('gives every round purpose a required lane its own question produces', () => {
     const expected: Record<string, { envelope: string; lane: string }> = {
@@ -1403,6 +1415,10 @@ describe('the envelopes and profiles authorize reading and nothing else', () => 
       expect(profile, `${pairing!.envelope} has no profile`).toBeTruthy();
       const lane = profile!.lanes.find((one) => one.id === pairing!.lane);
       expect(lane?.necessity, `${purpose} requires a lane it cannot fill`).toBe('REQUIRED');
+      // And the compiler agrees with the table, which is the half that ships.
+      expect(COMMERCE_ROUND_ENVELOPES[purpose], `${purpose} compiles elsewhere`).toBe(
+        pairing!.envelope,
+      );
     }
   });
 

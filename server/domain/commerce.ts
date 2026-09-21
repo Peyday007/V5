@@ -38,7 +38,36 @@ import {
   type CommerceEvidenceOrigin,
   type CommerceFigure,
   type CommerceFinding,
+  type CommerceRoundPurpose,
 } from './types.ts';
+
+/**
+ * Which reviewed envelope each round purpose compiles under.
+ *
+ * A `Record` over the union rather than a chain of `if`s ending in a
+ * fall-through, which is §27's own correction at `REFUSAL_WAIT` and
+ * `REFUSAL_SCOPE`: two sets that must be total between them were not, and a
+ * value added later fell into the default branch silently. A purpose added
+ * here without an envelope is a compile error instead.
+ *
+ * It matters more than most fall-throughs would, because the default was the
+ * demand envelope and `profileFor` is keyed by envelope: an eligibility
+ * question landing there would carry `purchase` as its required lane, which a
+ * platform's own terms page can never satisfy. That defect was real, and it
+ * was found by running the kernel rather than by reading it.
+ *
+ * The four share their permissions and their assignment template by reference,
+ * so none authorizes anything another does not. What differs is the completion
+ * standard, which is what the gate actually judges.
+ */
+export const COMMERCE_ROUND_ENVELOPES: Readonly<Record<CommerceRoundPurpose, string>> =
+  Object.freeze({
+    CHANNELS: 'RUSSELL_COMMERCE_TERMS_V1',
+    ELIGIBILITY: 'RUSSELL_COMMERCE_TERMS_V1',
+    PRODUCTS: 'RUSSELL_COMMERCE_DEMAND_V1',
+    SUPPLY: 'RUSSELL_COMMERCE_SUPPLY_V1',
+    ECONOMICS: 'RUSSELL_COMMERCE_ECONOMICS_V1',
+  });
 
 export { COMMERCE_FINDINGS };
 export type { CommerceFinding };

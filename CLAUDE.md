@@ -7380,6 +7380,7 @@ server/
     pg-migrations/*.sql the Postgres schema, generated from it
   domain/
     types.ts            enums, row types, view types — the contract
+    commerce.ts         what a commerce finding means, and which figure column it owns
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
     jurisdiction.ts     states, postal codes, and where each one may be read from
@@ -7389,6 +7390,7 @@ server/
     labor.ts            what a labor finding means, and the one validator both doors call
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
+    commerce.ts         channels, propositions, every reading, and the one test that spends
     auditReopens.ts     the record behind a re-audit, and its one reservation
     fleet.ts            accounts, Routines, capacity policy, and the fire slot
     factory.ts          the contract, the campaign, and units that own a surface

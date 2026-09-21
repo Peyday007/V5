@@ -76,6 +76,7 @@ import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { commerceRoundForCandidate } from '../../repos/commerce.ts';
+import { COMMERCE_ROUND_ENVELOPES } from '../../domain/commerce.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { laborRoundForCandidate } from '../../repos/labor.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
@@ -281,16 +282,15 @@ async function envelopeIdFor(
    * The four share their permissions and their assignment template by
    * reference, so none authorizes anything another does not. What differs is
    * the completion standard, which is the thing the gate actually judges.
+   *
+   * The pairing is a `Record` over the purposes rather than a chain ending in
+   * a fall-through, so a purpose added later without an envelope is a compile
+   * error rather than a silent landing in whichever branch is last — §27's
+   * `REFUSAL_WAIT` correction, at the table where getting it wrong hands a
+   * question a lane its own sources cannot satisfy.
    */
   const commerce = await commerceRoundForCandidate(candidate.id);
-  if (commerce) {
-    if (commerce.purpose === 'ECONOMICS') return 'RUSSELL_COMMERCE_ECONOMICS_V1';
-    if (commerce.purpose === 'SUPPLY') return 'RUSSELL_COMMERCE_SUPPLY_V1';
-    if (commerce.purpose === 'CHANNELS' || commerce.purpose === 'ELIGIBILITY') {
-      return 'RUSSELL_COMMERCE_TERMS_V1';
-    }
-    return 'RUSSELL_COMMERCE_DEMAND_V1';
-  }
+  if (commerce) return COMMERCE_ROUND_ENVELOPES[commerce.purpose];
   if (await opportunityForOwnCandidate(project.id, candidate.id)) {
     return 'RUSSELL_CASH_VALIDATION_V1';
   }
