@@ -485,6 +485,12 @@ export const EVENT_TYPES = [
    */
   'MANUFACTURING_CAPABILITY_HELD',
   'MANUFACTURING_CAPABILITY_WITHDRAWN',
+  /** A person read an acquisition candidate and said no. The row stays. */
+  'MANUFACTURING_CANDIDATE_SET_ASIDE',
+  /** A person answered a question this kernel raises and cannot settle. */
+  'MANUFACTURING_DECISION_RESOLVED',
+  /** And unanswered one, which the directive's own caution is a reason for. */
+  'MANUFACTURING_DECISION_REOPENED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

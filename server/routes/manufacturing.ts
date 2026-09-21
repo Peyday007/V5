@@ -39,13 +39,21 @@ import {
   requiredString,
   unprocessable,
 } from './helpers.ts';
-import { MACHINE_CATEGORY_KINDS, type MachineCategoryKind } from '../domain/types.ts';
+import {
+  MACHINE_CATEGORY_KINDS,
+  PROGRAMME_DECISION_TOPICS,
+  type MachineCategoryKind,
+  type ProgrammeDecisionTopic,
+} from '../domain/types.ts';
 import { moveProgramme, startProgramme } from '../services/manufacturing/program.ts';
 import {
   declareHeld,
   ledger,
+  reopenDecision,
+  resolveDecision,
   retireCategoryDecision,
   seedCategory,
+  setAsideAcquisition,
   withdrawHeld,
 } from '../services/manufacturing/declare.ts';
 import { programmeView } from '../services/manufacturing/view.ts';
@@ -244,5 +252,103 @@ manufacturingRouter.patch(
     });
     if ('error' in outcome) throw unprocessable(outcome.error);
     return { capability: outcome };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Acquisition candidates
+ *
+ * One verb, and that is the whole surface: a person may set one aside.
+ *
+ * There is deliberately no route that approaches a firm, requests information
+ * from one, values one, proposes terms, records an offer or marks one as being
+ * pursued — and that is a property of there being no such route and no column
+ * to write into rather than a rule somebody is following. The directive asks
+ * Brain to *identify* acquisition opportunities; every effect that follows
+ * from one is a commercial action a person authorizes separately (§30), and
+ * nothing in this kernel reaches one.
+ * ------------------------------------------------------------------------ */
+
+manufacturingRouter.patch(
+  '/projects/:projectId/manufacturing/acquisitions/:candidateId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const outcome = await setAsideAcquisition({
+      projectId: project.id,
+      candidateId: pathId(req, 'candidateId'),
+      reason: requiredString(body['reason'], 'reason'),
+      actorRef: principal.id,
+    });
+    if ('error' in outcome) throw unprocessable(outcome.error);
+    return { candidate: outcome };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The questions this kernel cannot answer
+ *
+ * A person answers one in their own words, or unanswers one they had. Both are
+ * guarded single-shot transitions in the repository, so two requests produce
+ * one decision.
+ *
+ * `topic` is matched against a closed set rather than read as free text, for
+ * `PREFERENCES`' reason: a topic somebody could invent by posting is one
+ * nobody reviewed the criteria for, and the criteria are what make a decision
+ * answerable at all.
+ * ------------------------------------------------------------------------ */
+
+function topicOf(raw: string): ProgrammeDecisionTopic {
+  if (!(PROGRAMME_DECISION_TOPICS as readonly string[]).includes(raw)) {
+    throw badRequest(`"topic" must be one of: ${PROGRAMME_DECISION_TOPICS.join(', ')}.`);
+  }
+  return raw as ProgrammeDecisionTopic;
+}
+
+manufacturingRouter.post(
+  '/projects/:projectId/manufacturing/decisions/:topic',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    /*
+     * Read as optional here and required by the service, for the reason the
+     * capability note is.
+     *
+     * `requiredString` would refuse an empty answer with *"resolution" is
+     * required* — true, and useless about why. `resolveDecision` says what an
+     * answer is: the words you would say, because an empty one reads
+     * afterwards as a decision taken with nothing behind it. Nothing is
+     * weakened; the service refuses either way.
+     */
+    const outcome = await resolveDecision({
+      projectId: project.id,
+      topic: topicOf(pathId(req, 'topic')),
+      resolution: optionalString(body['resolution'], 'resolution') ?? '',
+      actorRef: principal.id,
+    });
+    if ('error' in outcome) throw unprocessable(outcome.error);
+    return { decision: outcome };
+  }),
+);
+
+manufacturingRouter.patch(
+  '/projects/:projectId/manufacturing/decisions/:topic',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const outcome = await reopenDecision({
+      projectId: project.id,
+      topic: topicOf(pathId(req, 'topic')),
+      reason: requiredString(body['reason'], 'reason'),
+      actorRef: principal.id,
+    });
+    if ('error' in outcome) throw unprocessable(outcome.error);
+    return { decision: outcome };
   }),
 );

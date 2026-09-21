@@ -208,9 +208,13 @@ async function envelopeIdFor(
    * declared envelope. What is refused is judging a question by the completion
    * standard of a question nobody asked.
    *
-   * Three envelopes rather than one, because `planFitsEnvelope` pins one
-   * assignment template per envelope and the three questions have three
-   * completion standards.
+   * Five envelopes rather than one, because `planFitsEnvelope` pins one
+   * assignment template per envelope and these questions have five completion
+   * standards. Two of them are unusual enough that sharing would be the
+   * Westbrook defect outright: a capital question's *successful* answer
+   * includes a requirement with no published figure, and an acquisition
+   * question's completion standard is a **boundary** rather than a quantity —
+   * naming firms and going no further.
    */
   const programme = await manufacturingRoundForCandidate(candidate.id);
   if (programme) {
@@ -218,6 +222,8 @@ async function envelopeIdFor(
       return 'RUSSELL_MACHINE_LADDER_V1';
     }
     if (programme.purpose === 'DEMAND') return 'RUSSELL_MACHINE_DEMAND_V1';
+    if (programme.purpose === 'CAPITAL') return 'RUSSELL_MACHINE_CAPITAL_V1';
+    if (programme.purpose === 'ACQUISITION') return 'RUSSELL_MACHINE_ACQUISITION_V1';
     return 'RUSSELL_MACHINE_CAPABILITY_V1';
   }
 

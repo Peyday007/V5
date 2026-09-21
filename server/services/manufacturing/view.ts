@@ -9,13 +9,19 @@
  * performs no effect at all — no round opened, no capability held, no category
  * created — which is asserted by the tests rather than stated in this comment.
  */
+export { VERDICT_ORDER } from './verdictOrder.ts';
+import { VERDICT_ORDER } from './verdictOrder.ts';
 import { ladderSnapshot, type LadderSnapshot } from './ladder.ts';
 import { listEvents } from '../../repos/events.ts';
 import { pathOf } from '../../domain/manufacturing.ts';
 import { planFrom } from './kernel.ts';
 import { bridgesTo, readLadder, type CategoryReading, type EntryVerdict } from './readiness.ts';
 import { programmeAuthority } from './program.ts';
+import { rankCategories, type PriorityEntry } from './priority.ts';
+import { readDecisions, type DecisionReading } from './decisions.ts';
+import { readDirective, type Directive, type ScaleBand } from './directive.ts';
 import type {
+  AcquisitionCandidate,
   Capability,
   ManufacturingProgram,
   ManufacturingRound,
@@ -39,6 +45,47 @@ export interface ProgrammeView {
    */
   authorized: boolean;
 
+  /**
+   * The directive this programme runs under, and whether it is actually
+   * reaching the questions.
+   *
+   * Two facts, reported separately. A path and a hash prove the file has not
+   * changed; `reaching` is whether one word of it reached a worker, and that
+   * is the one a hash cannot answer. A programme whose directive stopped being
+   * readable says so here rather than quietly producing assignments that carry
+   * only its objective.
+   */
+  directive: {
+    path: string | null;
+    sha256: string | null;
+    reaching: boolean;
+    why: string | null;
+    /**
+     * The directive's example levels, as illustrations of scale.
+     *
+     * Carried with the directive's own refusal of its own sequencing beside
+     * them, because printing the levels without it is the rigid roadmap the
+     * directive explicitly declines to mandate. Nothing on the ladder is
+     * compared to one, no category carries a level, and they appear in no
+     * ordering Brain acts on.
+     */
+    bands: ScaleBand[];
+    sequencingRefusal: string | null;
+  };
+
+  /**
+   * The frontier: every live category ranked, with the factor that separated
+   * each one from the one above it.
+   *
+   * The directive asks for both halves — *do not blindly follow 1 → 2 → 3* and
+   * *continuously calculate the strongest next expansion* — and a flat list of
+   * identical verdicts answers only the first. This is a **derived** order over
+   * named factors, never a stored one and never a score, so it moves the day
+   * an acquisition, a breakthrough or one piece of evidence changes what is
+   * reachable.
+   */
+  frontier: PriorityEntry[];
+
   counts: {
     categories: number;
     retired: number;
@@ -46,6 +93,12 @@ export interface ProgrammeView {
     capabilitiesHeld: number;
     openRounds: number;
     settledRounds: number;
+    /** Rows of published entry cost, and how many carry a figure. */
+    capitalRequirements: number;
+    capitalRequirementsPriced: number;
+    /** Firms named, and how many a person has set aside. */
+    acquisitionCandidates: number;
+    acquisitionCandidatesSetAside: number;
   };
 
   /**
@@ -59,6 +112,21 @@ export interface ProgrammeView {
 
   /** The categories that are enterable now, if any. Usually none, honestly. */
   enterable: CategoryReading[];
+
+  /**
+   * Firms published sources name that hold something a category requires.
+   *
+   * Identification, and the shape of this field is where that is visible: a
+   * name, what it would contribute, the claim it came from, and whether a
+   * person set it aside. There is no valuation, no price, no approach and no
+   * recommendation here, because there is no column any of those could have
+   * been written into.
+   */
+  acquisitions: {
+    candidate: AcquisitionCandidate;
+    /** Where it was found, in words. Null when the category has since retired. */
+    subject: string | null;
+  }[];
 
   /**
    * The nearest thing to enterable that is not, with what would close the gap.
@@ -117,6 +185,19 @@ export interface ProgrammeView {
    * could close.
    */
   decisions: PersonDecision[];
+
+  /**
+   * The questions this kernel cannot answer and must not forget.
+   *
+   * Distinct from `decisions` above, which are things a person could settle
+   * today. These are open by design — the master brand is the one the
+   * directive raises and then tells Brain not to settle early — and each
+   * carries its criteria, what it depends on, and when leaving it open stops
+   * being the right answer. All three derived from the ladder rather than
+   * stored, because a stored criterion is stale the moment the span it is
+   * about changes.
+   */
+  openQuestions: DecisionReading[];
 }
 
 /** One capability, and what holding it would unlock. */
@@ -153,31 +234,6 @@ export interface PersonDecision {
   capabilities: { id: string; name: string; taughtBy: string[] }[];
 }
 
-/**
- * What a reader wants to see first.
- *
- * A `Record` over the whole union rather than an array, so a verdict added
- * later is a compile error until somebody says where it ranks. An array would
- * have let `indexOf` return `-1` and sort an unnamed verdict silently to the
- * top — §27 records what two collections that must be total between them cost,
- * and this is the same shape at a sort.
- *
- * It is presentation only. Nothing here decides anything: the verdict itself is
- * derived in `readiness.ts` from rows, and this says only which order to read
- * them in.
- */
-export const VERDICT_ORDER: Readonly<Record<EntryVerdict, number>> = Object.freeze({
-  ENTER: 0,
-  // Directly under ENTER, because it is one question away from it and every
-  // other verdict below is a capability, a route or a buyer away.
-  COST_UNKNOWN: 1,
-  BUILD_CAPABILITY_FIRST: 2,
-  NO_ROUTE_FOUND: 3,
-  INVESTIGATING: 4,
-  UNEXAMINED: 5,
-  NO_DEMAND_FOUND: 6,
-  RETIRED: 7,
-});
 
 export async function programmeView(projectId: string): Promise<ProgrammeView | null> {
   const snapshot = await ladderSnapshot(projectId);
@@ -192,6 +248,18 @@ export async function programmeView(projectId: string): Promise<ProgrammeView | 
   );
 
   const plan = planFrom(snapshot);
+  /*
+   * Split rather than spread, so the parsed document cannot reach the wire.
+   *
+   * `directiveFor` returns both because the decisions reading needs the
+   * document and the surface needs four fields off it. Assigning the whole
+   * thing onto the view would put a 13 KB file into every read of this page —
+   * and worse, it would do so silently, because TypeScript admits an excess
+   * property that arrives through a variable.
+   */
+  const { parsed: parsedDirective, ...directive } = await directiveFor(
+    snapshot.program.blueprintPath,
+  );
 
   const next = ranked
     .filter((one) => one.verdict === 'BUILD_CAPABILITY_FIRST')
@@ -205,9 +273,13 @@ export async function programmeView(projectId: string): Promise<ProgrammeView | 
       })),
     }));
 
+  const byCategoryId = new Map(snapshot.categories.map((one) => [one.id, one]));
+
   return {
     program: snapshot.program,
     authorized: (await programmeAuthority(projectId)) !== null,
+    directive,
+    frontier: rankCategories(readings),
     counts: {
       categories: snapshot.categories.filter((one) => one.retiredAt === null).length,
       retired: snapshot.categories.filter((one) => one.retiredAt !== null).length,
@@ -215,9 +287,30 @@ export async function programmeView(projectId: string): Promise<ProgrammeView | 
       capabilitiesHeld: snapshot.capabilities.filter((one) => one.heldAt !== null).length,
       openRounds: snapshot.rounds.filter((one) => one.state === 'OPEN').length,
       settledRounds: snapshot.rounds.filter((one) => one.state !== 'OPEN').length,
+      capitalRequirements: snapshot.capital.length,
+      capitalRequirementsPriced: snapshot.capital.filter((one) => one.amountLowMinor !== null)
+        .length,
+      acquisitionCandidates: snapshot.candidates.length,
+      acquisitionCandidatesSetAside: snapshot.candidates.filter((one) => one.setAsideAt !== null)
+        .length,
     },
     ladder: ranked,
     enterable: ranked.filter((one) => one.verdict === 'ENTER'),
+    acquisitions: [...snapshot.candidates]
+      .sort(
+        (a, b) =>
+          // A candidate somebody set aside reads last: it is history rather
+          // than a live option, and it is kept rather than deleted so the same
+          // firm does not arrive next round as a fresh discovery.
+          Number(a.setAsideAt !== null) - Number(b.setAsideAt !== null) ||
+          a.name.localeCompare(b.name),
+      )
+      .map((candidate) => ({
+        candidate,
+        subject: candidate.categoryId
+          ? (pathOf(candidate.categoryId, byCategoryId).join(' → ') || null)
+          : null,
+      })),
     next,
     plan: {
       asks: plan.asks.map((one) => ({
@@ -232,6 +325,55 @@ export async function programmeView(projectId: string): Promise<ProgrammeView | 
     history: historyOf(snapshot),
     refusals: await recentRefusals(projectId),
     decisions: decisionsFrom(snapshot, ranked),
+    openQuestions: await readDecisions(snapshot, parsedDirective),
+  };
+}
+
+/**
+ * The directive as the surface reports it, and whether it is operative.
+ *
+ * `parsed` is deliberately not on `ProgrammeView`: a browser has no use for
+ * the whole document, and putting it there would make a projection that is
+ * meant to be read carry a file. What crosses is the path, the digest, whether
+ * the contents are reaching the questions, and the example bands together with
+ * the refusal they must never be printed without.
+ */
+async function directiveFor(
+  blueprintPath: string | null,
+): Promise<ProgrammeView['directive'] & { parsed: Directive | null }> {
+  if (!blueprintPath) {
+    return {
+      path: null,
+      sha256: null,
+      reaching: false,
+      why:
+        'This programme names no directive, so its questions carry the objective alone. A ' +
+        'programme started today names one and refuses to start without it.',
+      bands: [],
+      sequencingRefusal: null,
+      parsed: null,
+    };
+  }
+  const read = await readDirective(blueprintPath);
+  if (!read.ok) {
+    return {
+      path: blueprintPath,
+      sha256: null,
+      reaching: false,
+      why: read.reason,
+      bands: [],
+      sequencingRefusal: null,
+      parsed: null,
+    };
+  }
+  return {
+    path: read.directive.path,
+    sha256: read.directive.sha256,
+    reaching: true,
+    why: null,
+    bands: read.directive.bands,
+    sequencingRefusal: read.directive.sequencingRefusal,
+    parsed: read.directive,
   };
 }
 

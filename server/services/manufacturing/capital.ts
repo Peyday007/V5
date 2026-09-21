@@ -142,11 +142,22 @@ export function readCapital(entries: readonly CategoryCapitalEntry[]): CapitalRe
    */
   const cheapestFullyPriced = fullyPriced[0] ?? null;
 
+  /*
+   * Grouped, for `readScenario`'s reason and at programme scope.
+   *
+   * A requirement is unpriced only where *nothing* has published a figure for
+   * it. Reading the rows individually would keep naming a requirement as
+   * unpriced for ever because the round that first established it returned no
+   * figure — and rows are append-only, so that row never goes away.
+   */
+  const pricedRequirements = new Set(
+    entries.filter((one) => one.amountLowMinor !== null).map((one) => one.requirement),
+  );
   const unpricedRequirements = [
-    ...new Set(
-      entries.filter((one) => one.amountLowMinor === null).map((one) => one.requirement),
-    ),
-  ].sort();
+    ...new Set(entries.map((one) => one.requirement)),
+  ]
+    .filter((one) => !pricedRequirements.has(one))
+    .sort();
 
   const state = unpricedRequirements.length === 0 ? 'ESTABLISHED' : 'PARTIAL';
 
@@ -159,42 +170,108 @@ export function readCapital(entries: readonly CategoryCapitalEntry[]): CapitalRe
   };
 }
 
+/**
+ * One scenario's reading, grouped by requirement.
+ *
+ * ---------------------------------------------------------------------------
+ * Why grouping is the rule rather than a convenience
+ * ---------------------------------------------------------------------------
+ *
+ * Rows are append-only (§5), so a requirement established in one round with no
+ * published figure and priced in a later one has **two** rows — and the first
+ * version of this read them row-wise. That made a blank permanent: once any
+ * round returned an unpriced requirement, no later evidence could ever clear
+ * it, and the category could never leave `COST_UNKNOWN` however much was
+ * subsequently published. A rule that cannot be satisfied by evidence is not a
+ * bar, it is a park.
+ *
+ * So a **requirement** is unpriced only when no row for it carries a figure,
+ * and it is that grouping the total is built over. It does not soften
+ * anything: one unpriced requirement still withholds the whole total.
+ *
+ * ---------------------------------------------------------------------------
+ * Several published figures for one requirement are a span, never an average
+ * ---------------------------------------------------------------------------
+ *
+ * §14 is explicit that incompatible figures are never averaged to produce an
+ * answer. Where two sources price one requirement differently, the requirement
+ * contributes the **span** of what was published — the lowest low and the
+ * highest high — so the total widens rather than converging on a number nobody
+ * published. A reader who wants to know why it is wide has both rows.
+ */
 function readScenario(
   scenario: CapitalScenario,
   entries: readonly CategoryCapitalEntry[],
 ): ScenarioReading {
-  const priced = entries.filter((one) => one.amountLowMinor !== null);
-  const unpriced = entries.filter((one) => one.amountLowMinor === null);
+  const byRequirement = new Map<MachineCapitalRequirement, CategoryCapitalEntry[]>();
+  for (const entry of entries) {
+    byRequirement.set(entry.requirement, [
+      ...(byRequirement.get(entry.requirement) ?? []),
+      entry,
+    ]);
+  }
 
-  if (unpriced.length > 0) {
+  const priced = entries.filter((one) => one.amountLowMinor !== null);
+  const unpricedRequirements = [...byRequirement.entries()]
+    .filter(([, rows]) => rows.every((one) => one.amountLowMinor === null))
+    .map(([requirement]) => requirement)
+    .sort();
+  const unpriced = entries.filter(
+    (one) => one.amountLowMinor === null && unpricedRequirements.includes(one.requirement),
+  );
+
+  if (unpricedRequirements.length > 0) {
+    const total = byRequirement.size;
     return {
       scenario,
       totals: null,
       priced,
       unpriced,
       because:
-        `${unpriced.length} of ${entries.length} established requirement` +
-        (entries.length === 1 ? '' : 's') +
-        ` here ${unpriced.length === 1 ? 'has' : 'have'} no published figure — ` +
-        `${unpriced.map((one) => label(one.requirement)).join(', ')} — so no total is ` +
-        'reported. A sum over what happens to be priced would be smaller than anything ' +
-        'published says entering costs.',
+        `${unpricedRequirements.length} of ${total} established requirement` +
+        (total === 1 ? '' : 's') +
+        ` here ${unpricedRequirements.length === 1 ? 'has' : 'have'} no published figure — ` +
+        `${unpricedRequirements.map(label).join(', ')} — so no total is reported. A sum over ` +
+        'what happens to be priced would be smaller than anything published says entering ' +
+        'costs.',
     };
   }
 
   const byCurrency = new Map<string, MoneyRange>();
-  for (const entry of priced) {
-    // Every priced entry carries a currency: the validator refuses an amount
-    // without one, and the schema refuses the pair being half-null.
-    const currency = entry.currency ?? '';
-    const low = entry.amountLowMinor ?? 0;
-    const high = entry.amountHighMinor ?? 0;
-    const existing = byCurrency.get(currency);
-    if (existing) {
-      existing.lowMinor += low;
-      existing.highMinor += high;
-    } else {
-      byCurrency.set(currency, { currency, lowMinor: low, highMinor: high });
+  for (const rows of byRequirement.values()) {
+    /*
+     * One contribution per requirement, spanning what was published for it.
+     *
+     * Summing the rows instead would count a requirement once per source that
+     * priced it, so a well-researched requirement would inflate the total in
+     * proportion to how much evidence stood behind it — an error that gets
+     * worse the better the research is, which is the shape §30 records nobody
+     * noticing.
+     */
+    const withFigures = rows.filter((one) => one.amountLowMinor !== null);
+    const byRowCurrency = new Map<string, MoneyRange>();
+    for (const row of withFigures) {
+      // Every priced entry carries a currency: the validator refuses an amount
+      // without one, and the schema refuses the pair being half-null.
+      const currency = row.currency ?? '';
+      const low = row.amountLowMinor ?? 0;
+      const high = row.amountHighMinor ?? 0;
+      const span = byRowCurrency.get(currency);
+      if (span) {
+        span.lowMinor = Math.min(span.lowMinor, low);
+        span.highMinor = Math.max(span.highMinor, high);
+      } else {
+        byRowCurrency.set(currency, { currency, lowMinor: low, highMinor: high });
+      }
+    }
+    for (const span of byRowCurrency.values()) {
+      const running = byCurrency.get(span.currency);
+      if (running) {
+        running.lowMinor += span.lowMinor;
+        running.highMinor += span.highMinor;
+      } else {
+        byCurrency.set(span.currency, { ...span });
+      }
     }
   }
   const totals = [...byCurrency.values()].sort((a, b) => a.currency.localeCompare(b.currency));
@@ -205,8 +282,8 @@ function readScenario(
     priced,
     unpriced,
     because:
-      `All ${priced.length} established requirement` +
-      (priced.length === 1 ? ' is' : 's are') +
+      `All ${byRequirement.size} established requirement` +
+      (byRequirement.size === 1 ? ' is' : 's are') +
       ' published with a figure, so a total can be reported: ' +
       totals.map((one) => describeRange(one)).join(' plus ') +
       (totals.length > 1

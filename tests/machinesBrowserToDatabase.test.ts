@@ -198,8 +198,9 @@ describe('the Machines screen, over the real route', () => {
     expect(screen.getAllByText(/Commercial pressure washers/).length).toBeGreaterThan(0);
     expect(screen.getByText(reading.because)).toBeTruthy();
 
-    // Every condition's own sentence, all four of them.
-    expect(reading.conditions).toHaveLength(4);
+    // Every condition's own sentence, all five of them — the fifth being what
+    // entering costs, which a verdict that could not see it was silent about.
+    expect(reading.conditions).toHaveLength(5);
     for (const condition of reading.conditions) {
       expect(screen.getByText(condition.because)).toBeTruthy();
     }

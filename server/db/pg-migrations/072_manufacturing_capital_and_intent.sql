@@ -118,3 +118,13 @@ ALTER TABLE research_claims ADD CONSTRAINT research_claims_capability_amount_low
   CHECK (capability_amount_low_minor IS NULL OR capability_amount_low_minor >= 0);
 ALTER TABLE research_claims ADD CONSTRAINT research_claims_capability_amount_high_minor_check
   CHECK (capability_amount_high_minor IS NULL OR capability_amount_high_minor >= 0);
+
+-- Two more questions a round can ask. Named exactly as Postgres names an inline
+-- column CHECK — the table plus the column the constraint mentions — and written
+-- without `IF EXISTS` deliberately: §35 records what the tolerant form costs,
+-- which is the old constraint left standing beside the new one and the first
+-- write in production refused by something nobody is looking at.
+ALTER TABLE manufacturing_rounds DROP CONSTRAINT manufacturing_rounds_purpose_check;
+ALTER TABLE manufacturing_rounds ADD CONSTRAINT manufacturing_rounds_purpose_check
+  CHECK (purpose IN ('BOOTSTRAP', 'MAP', 'DEMAND', 'CAPABILITY', 'INTEGRATION',
+                     'CAPITAL', 'ACQUISITION'));

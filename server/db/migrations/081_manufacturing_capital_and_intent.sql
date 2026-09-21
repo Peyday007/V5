@@ -1,3 +1,15 @@
+-- brain:rebuild-without-foreign-keys
+--
+-- 075 wrote `manufacturing_rounds.purpose` as an inline CHECK over five values,
+-- and SQLite cannot widen one in place. Two more questions exist now — what
+-- entering a category costs, and which firms hold something it requires — so the
+-- table is rebuilt by §32's twelve-step procedure: the pragma outside the
+-- transaction, the rebuild inside it, and `PRAGMA foreign_key_check` before the
+-- commit, which is the half that makes it safe rather than merely permitted.
+--
+-- Nothing references `manufacturing_rounds`, so the rebuild strands nothing —
+-- and that is checked rather than asserted, by the pragma above.
+--
 -- ---------------------------------------------------------------------------
 -- WHAT ENTERING COSTS, WHAT COULD BE BOUGHT INSTEAD, AND WHAT IS STILL UNDECIDED
 --
@@ -287,3 +299,56 @@ ALTER TABLE research_claims ADD COLUMN capability_currency TEXT;
 -- estimate are both useful and are not the same fact, and a reading that could
 -- not tell them apart would present the second with the first's authority.
 ALTER TABLE research_claims ADD COLUMN capability_basis TEXT;
+
+
+-- ---------------------------------------------------------------------------
+-- TWO MORE QUESTIONS A ROUND CAN ASK
+--
+-- A rebuild rather than an ALTER, because SQLite cannot widen an inline CHECK.
+-- Every row is carried across, every index is recreated, and the constraint that
+-- says a bootstrap round is the one with no category is carried across with it —
+-- dropping a constraint while rebuilding for an unrelated reason is how a rule
+-- stops being enforced without anybody deciding to stop enforcing it.
+-- ---------------------------------------------------------------------------
+CREATE TABLE manufacturing_rounds_rebuilt (
+  id            TEXT PRIMARY KEY,
+  program_id    TEXT NOT NULL REFERENCES manufacturing_programs(id),
+  project_id    TEXT NOT NULL REFERENCES projects(id),
+  category_id   TEXT REFERENCES machine_categories(id),
+
+  purpose       TEXT NOT NULL CHECK (purpose IN (
+                  'BOOTSTRAP', 'MAP', 'DEMAND', 'CAPABILITY', 'INTEGRATION',
+                  'CAPITAL', 'ACQUISITION')),
+
+  round         INTEGER NOT NULL CHECK (round >= 1),
+  candidate_id  TEXT NOT NULL,
+  state         TEXT NOT NULL CHECK (state IN ('OPEN', 'HARVESTED', 'ABANDONED')),
+  opened_at     TEXT NOT NULL,
+  harvested_at  TEXT,
+  found         INTEGER,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL,
+
+  CHECK ((purpose = 'BOOTSTRAP') = (category_id IS NULL)),
+  CHECK (state = 'OPEN' OR found IS NOT NULL)
+);
+
+INSERT INTO manufacturing_rounds_rebuilt
+  (id, program_id, project_id, category_id, purpose, round, candidate_id, state,
+   opened_at, harvested_at, found, created_at, updated_at)
+SELECT id, program_id, project_id, category_id, purpose, round, candidate_id, state,
+       opened_at, harvested_at, found, created_at, updated_at
+  FROM manufacturing_rounds;
+
+DROP TABLE manufacturing_rounds;
+
+ALTER TABLE manufacturing_rounds_rebuilt RENAME TO manufacturing_rounds;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_manufacturing_rounds_ask
+  ON manufacturing_rounds(program_id, COALESCE(category_id, '-'), purpose, round);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_manufacturing_rounds_candidate
+  ON manufacturing_rounds(candidate_id);
+
+CREATE INDEX IF NOT EXISTS idx_manufacturing_rounds_program
+  ON manufacturing_rounds(program_id, state);
