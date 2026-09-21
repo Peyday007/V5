@@ -288,7 +288,13 @@ function describe(error: unknown): string {
 export function MachinesView({ projectId }: { projectId: string | null }): JSX.Element {
   const query = useAsync<ProgrammeView | null>(
     async () =>
-      projectId ? api<ProgrammeView>(`/api/projects/${projectId}/manufacturing`) : null,
+      projectId
+        ? (
+            await api<{ programme: ProgrammeView | null }>(
+              `/api/projects/${projectId}/manufacturing`,
+            )
+          ).programme
+        : null,
     [projectId],
   );
 
@@ -311,14 +317,20 @@ export function MachinesView({ projectId }: { projectId: string | null }): JSX.E
   if (query.loading && !query.data) {
     return <p className="rs-empty">Reading the programme…</p>;
   }
-  if (query.error?.status === 404) {
-    return <StartProgramme projectId={projectId} onStarted={query.reload} />;
-  }
+  /*
+   * A 404 here is the project's, never the programme's.
+   *
+   * It used to be both, and the screen could not tell them apart: the route
+   * answered 404 for *no programme yet* and 404 for *not your project*, so this
+   * branch offered to start a programme on a project the person may not touch.
+   * The route now answers a readable project with `{ programme: null }`, so a
+   * 404 means exactly one thing and falls through to the server's own sentence.
+   */
   if (query.error) {
     return <p className="rs-empty">{query.error.message}</p>;
   }
   const view = query.data;
-  if (!view) return <p className="rs-empty">Nothing to show.</p>;
+  if (!view) return <StartProgramme projectId={projectId} onStarted={query.reload} />;
 
   return (
     <div className="rs-stack rs-machines">

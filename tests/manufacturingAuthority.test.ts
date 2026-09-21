@@ -669,8 +669,41 @@ describe('the live proof is in the gate that runs on the deployed image', () => 
     expect(script).toContain('await manufacturingBoundary(fixtures, cookie);');
   });
 
-  it('proves absent and forbidden are the same body, not just the same status', () => {
-    expect(script).toContain('the two refusals are the same body, not just the same status');
+  /**
+   * The pair being compared moved, and it moved to the stronger one.
+   *
+   * It used to hold *a project with no programme* against *a project you may
+   * not see*. Those differed in production on every deploy, because the route
+   * composed a third sentence of its own — and the repair was to stop composing
+   * it, so a readable project answers 200 rather than a refusal. There is now
+   * one refusal at that door, so the pair worth comparing is the one that was
+   * never checked: a real project that is not yours, against an id that is not
+   * a project at all.
+   *
+   * Asserted as a pair rather than as a sentence, because the comparison is
+   * only a comparison if both operands are really fetched.
+   */
+  it('proves forbidden and non-existent are the same body, not just the same status', () => {
+    expect(script).toContain(
+      'forbidden and non-existent are the same body, not just the same status',
+    );
+    const body = script.slice(
+      script.indexOf('async function manufacturingBoundary('),
+      script.indexOf('async function workerAuthentication('),
+    );
+    // Both operands are real requests, and one of them is an id no project has.
+    expect(body).toMatch(/prj_\$\{'0'\.repeat\(32\)\}\/manufacturing/);
+    expect(body).toContain('${fixtures.holdout.id}/manufacturing');
+    expect(body).toContain('JSON.stringify(theirs.json) === JSON.stringify(invented.json)');
+  });
+
+  /**
+   * And the readable project is read as an answer rather than as a refusal,
+   * which is the half that would notice the router vanishing from the build.
+   */
+  it('reads a programme-less project as 200 rather than as a refusal', () => {
+    expect(script).toContain('a project the member may read answers the programme read');
+    expect(script).toContain('and says there is no programme rather than refusing');
   });
 
   it('proves a machine is refused at the read and at both person-only writes', () => {
