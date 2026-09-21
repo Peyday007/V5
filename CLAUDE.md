@@ -8764,6 +8764,7 @@ server/
     pg-migrations/*.sql the Postgres schema, generated from it
   domain/
     types.ts            enums, row types, view types — the contract
+    puzzle.ts           what a puzzle finding means, and the one validator both doors call
     personName.ts       what a person is called; an address is never it
     version.ts          version parsing/ordering/next-version (never sort strings)
     naming.ts           canonical name / conversation title / filename
@@ -8794,6 +8795,7 @@ server/
     register.ts       workstreams, what they point at, and what happened to them
     bridge.ts         a person's bearer, a transcript exactly as it arrived, and its receipts
     dealflow.ts       both sides of a transaction, and everything hard between them
+    puzzle.ts         masters, instances, validations, outputs, the ledger, the rounds
     faculties.ts      sources, candidates, faculties and their typed edges
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
     cashDiscovery.ts  which questions discovery asked, and which idea asked each
@@ -8966,6 +8968,22 @@ server/
       declare.ts        the three things only a person can say
       kernel.ts         one project's pass, derived on the tick
       view.ts           the ladder, the gaps, and what would close the nearest one
+    puzzle/
+      engines/          deterministic generators, and validators that judge a payload
+      produce.ts        generate and validate in one pass; a run of failures blocks the batch
+      graph.ts          everything the kernel knows, read once per pass
+      maturity.ts       how far a format has got, and what an output actually became
+      leverage.ts       three multipliers kept apart, and the figures nothing measures
+      economics.ts      the contribution, and every reason it is withheld
+      ledger.ts         the monetization ledger: ranked, named, never pruned
+      lessons.ts        observations into rules, with the sample shown
+      directive.ts      the operator's order, parsed so its words reach a worker
+      questions.ts      what each round actually asks
+      allocate.ts       a pure decision, finishing before starting
+      expand.ts         opening the questions, and filing what a gated claim declared
+      declare.ts        the eight decisions a person makes, and the origin Brain may not write
+      view.ts           the operator surface: what exists, what is next, what needs a person
+      kernel.ts         the tick: file, observe, allocate
     dealflow/
       compliance.ts     the five layers, and why no rows is not a clearance
       economics.ts      the landed cost, and every reason it is withheld
@@ -9097,6 +9115,7 @@ server/
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
+    puzzle.ts           the puzzle kernel's door: formats, routes, masters, outputs
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     passkeys.ts         enrolling, signing in with a device, and your own devices
@@ -9153,6 +9172,8 @@ tests/                  Vitest suites
   researchIntelligence.test.ts   the judgement layer, in three unrelated domains
   researchIntelligencePass.test.ts  one campaign, walked, with only the world simulated
   dealflowKernel.test.ts     two sides, five layers, and every figure it refuses to invent
+  puzzleEngines.test.ts      a good payload, broken one thing at a time
+  puzzleKernel.test.ts       the universe is rows, a reskin is not a product, a total is withheld
   dealflowIntegrationPass.test.ts  one deal, walked the whole way, over the wire
   capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
   capabilityReopen.test.ts   a failed reading put back, and everything it must not destroy
@@ -9501,3 +9522,158 @@ sixteen — and it asserts the property rather than the picture. Its first
 version failed on a **comment** explaining why `type="number"` is wrong, which
 is the third time a test in this repository has read prose as code; it strips
 comments now.
+
+## 47. One validated production system, many qualified outputs.
+
+The puzzle products + production kernel (`server/services/puzzle/`,
+`server/repos/puzzle.ts`, `server/domain/puzzle.ts`,
+`blueprints/PUZZLE-PRODUCTS-KERNEL.md`, `docs/PUZZLE-KERNEL.md`) adds the axis
+nothing above it can express, and it is the only axis in this Brain about
+something Brain **makes**.
+
+§38 gave Cash Mode *where* in the economy to look. §45 gave it the two sides a
+transaction has. This holds the artifact: a master that generates, an instance
+it generated, the validation run that proved that instance works, and the
+products compiled from instances that passed. A `cash_opportunities` row cannot
+carry any of that — it is one payer, one price, one offer, one exposure — and
+flattening a catalog into it is how a kernel comes to report fifty products
+when it has one generator run fifty times with different covers.
+
+Everything it adds is an **entrance**. A round is a Russell candidate; the
+compiler writes the specification, the approval envelope decides whether it may
+start, the evidence gate decides what may be claimed, and all three audit roles
+decide whether it stands. There is no second work queue, no second approval, no
+second identity, no second money ledger and no second policy module.
+
+- **There is no list of puzzle formats in this repository**, and a test reads
+  the source to say so. The directive names a long seed list and then says, in
+  its own words, *seed — but do not permanently limit*; `universeSeed` returns
+  the list **and that instruction as one string**, so no caller can print a
+  bounded taxonomy. §39 had to make the same repair at a manufacturing pyramid,
+  and for the same reason: erasing the examples loses real search seeds, and
+  treating them as the taxonomy answers the question the kernel exists to ask.
+- **A generator is an implementation and a format is not.** §37's sentence at a
+  new artifact. A `puzzle_formats` row says a format exists in the world; an
+  engine is code somebody wrote. They meet at `formatKey` and nowhere else and
+  are allowed to disagree in both directions, because the directive's own
+  instruction is *do not falsely claim support for puzzle formats lacking real
+  validators* — so a format with no engine reports RESEARCHED and one whose
+  evidence demands a check nothing runs reports GENERATABLE with that check
+  named.
+- **A puzzle is evidence only if a validation run passed.** §9's rule one
+  artifact along: append-only runs, exactly one current, and an instance with
+  no current PASSED run is something this kernel **does not have**.
+  `compileOutput` refuses whole rather than filtering — a shorter book than the
+  one somebody asked for, with nothing saying so, is the failure the refusal
+  exists to prevent. `UNCHECKED` is a third verdict on purpose: *the validator
+  could not answer* has a different remedy from *the puzzle is wrong*.
+- **Validation is a hundred per cent structurally rather than as a setting.**
+  Generation and validation are one pass and there is no path that writes an
+  instance without a run. A sampling rate would be a number somebody could
+  lower, and the first thing anybody lowers it for is a batch running late. A
+  run of failures on one check **blocks the batch** and records the defect
+  against the generator; the failures keep their rows, because they are the
+  evidence it existed and the record a repair is judged against.
+- **A reskin is not a product, and the rule is a `Record` rather than a
+  promise.** `TITLE`, `COVER` and `PAGE_ORDER` are named in the vocabulary
+  rather than absent — recording that two books differ by their cover is honest
+  and counting it is not — and an axis added later is a compile error until
+  somebody says whether it qualifies.
+
+  **The first version marked *both* of two identical books as reprints**, so
+  the catalog held a reprint of nothing. The earlier sibling is the product;
+  order decides it, deterministically and in both dialects.
+- **Three multipliers, kept apart, and two of them report unmeasured.**
+  Master-to-SKU is editorial reuse, setup-to-unit is a machine, contribution
+  per setup is money; one number would be an average over three unrelated
+  denominators and would read like a measurement. Nothing in this Brain records
+  a print run, a tooling setup or an editorial hour, so those three report
+  `null` with what would measure them. **Ten producing fifty is reported as the
+  directive's own search target** beside its own caveat, and nothing in the
+  kernel creates an output to move it.
+- **A total past an unknown is withheld, and the direction is the point.** Four
+  named reasons — a missing load-bearing line for this production class, two
+  currencies, two bases, no revenue line. A total that steps over a missing
+  printing cost is *smaller* than anything published says, which makes a
+  product look cheaper to make than it is, and too low at the number that
+  decides whether to print reads as a bargain rather than as a mistake. §30
+  records `conservativeContribution` making exactly that error one kernel
+  along. A negative margin reports no breakeven and says it is a reason to
+  decline rather than to raise the price.
+- **The ledger is never pruned.** No `DELETE FROM puzzle_*` exists anywhere in
+  the kernel and a test reads the source to say so; there is no `DELETED`
+  disposition and there must never be one. Rank is lexicographic over seven
+  observable facts with **no weighted score anywhere**, two routes that differ
+  are separated by exactly one of them and the reading names it, and two with
+  nothing between them say so. The routes whose proof needs capital are their
+  own view rather than a tail ranked away.
+- **An unknown is never a favourable assumption, at three columns.** A demand
+  signal with no observation date is refused. *Nobody has looked* and *somebody
+  looked and there is nothing* are different rows with different remedies, and
+  the absence of rows says only the first. And a format with **no standards at
+  all** cannot be VALIDATABLE: an empty requirement list is nobody having
+  looked, never a format with no requirements, and treating the second as the
+  first is the unknown read favourably at the one place it puts unsolvable
+  puzzles in somebody's hands.
+- **Eight decisions are a person's and nothing automatic reaches any of them.**
+  Naming a format, naming a route, every disposition, creating a master,
+  reviewing one, producing a batch, compiling an output and releasing one.
+  Two carry the weight: **reviewing a master** is the editorial review the
+  directive requires of every new generator, and a review Brain could record
+  itself would not be one; **releasing an output** is the moment something goes
+  out under somebody's name. Every write is ADMIN plus `requirePerson` — a
+  worker refused by level and again by principal type — and recording a
+  playtest is WRITE, because it is the one reading no validator here can
+  produce.
+- **The directive is read rather than hashed.** §39's defect, closed the same
+  way: a kernel that stored the sha-256 of its brief and never opened it would
+  have proved integrity and nothing else. `readPuzzleDirective` parses it,
+  every getter refuses a missing section rather than returning an empty string,
+  and a test asserts the directive's own words are in the question a worker
+  would read.
+- **Every rendered question goes through the real forbidden-actions screen.**
+  A brief that trips it is a round that can never run, and the directive's own
+  text is full of commercial verbs because it is a brief about a business — so
+  the screening is asserted rather than reasoned about, exactly as §39 had to.
+- **Nothing here authorizes an effect the sprint's grant did not already
+  authorize**, which is nothing beyond reading. Both envelopes take their
+  source classes and their forbidden actions verbatim from the cash discovery
+  envelope. Nothing publishes, prices, lists, prints, buys or contacts anybody.
+
+**Uniqueness is proved in two of the three engines, and that is why those two
+are where this starts.** A Sudoku validator searches the grid from scratch and
+stops at two solutions; a maze is a spanning tree by construction, so
+uniqueness is a passage count against a cell count plus a connectivity walk.
+Both are properties a complete search establishes rather than judges, and a
+book of grids with two answers is the exact commercial failure a validator
+exists to prevent. Every generator is deterministic in
+`(engine, version, seed, params)`, because the directive's repair rule — *block
+the batch and repair the generator, do not patch the outputs* — is
+unenforceable against a defect nobody can reproduce.
+
+`tests/puzzleEngines.test.ts` takes a good payload, breaks exactly one thing,
+and asserts the validator names that one thing. Asserting that a freshly
+generated puzzle passes its own validator proves almost nothing, because the
+same code made both — and three of those assertions were run against a neutered
+check to watch them fail before they were trusted to pass.
+
+**The declaration reaches the row over the wire, and that is the only place the
+defect shows.** §33 and §45 both record it at two axes: a validator that ran, a
+tool that accepted the claim, an insert with the columns, and the fields
+arriving NULL because a mapper between them carried only what it had been told
+about. So the eight fields are declared in the tool schema as well as described
+in it — §33's `opportunity_signal` defect, where `additionalProperties: false`
+dropped the one field that decided whether anything was created — and a walk
+submits through `brain_submit_claims` and reads the rows back. That test was
+run against a mapper with one line removed, to watch it fail.
+
+**What is true today, said plainly.** The kernel operates end to end against a
+local Brain and both suites pass. **No fleet worker has answered a puzzle
+question in production**, because that needs a deploy and a fire — the
+separation Step 3 drew between the research engine passing its tests and a real
+job having actually run, which §38 and §39 both had to say about their own
+kernels on the day they landed. **Nothing has been sold, printed, published or
+listed**, and nothing here can. No production run has been recorded, so every
+figure above Stage 1 of the physical ladder reports as unmeasured with what
+would measure it. No person has playtested anything, and the surface says so
+rather than implying the sample was taken.

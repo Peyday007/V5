@@ -2169,6 +2169,14 @@ export interface ResearchClaimRow {
   deal_value: string | null;
   deal_amount_cents: number | null;
   deal_currency: string | null;
+  puzzle_finding: string | null;
+  puzzle_subject: string | null;
+  puzzle_format: string | null;
+  puzzle_value: string | null;
+  puzzle_basis: string | null;
+  puzzle_amount_minor: number | null;
+  puzzle_currency: string | null;
+  puzzle_observed_on: string | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -3460,6 +3468,47 @@ export interface ResearchClaim {
    * calls, at the number that decides a deal. Brain never converts.
    */
   dealCurrency: string | null;
+
+  /**
+   * The sixth axis: what this claim establishes about the puzzle trade.
+   *
+   * Its own column beside the other five for the reason stated at
+   * `dealFinding` above — they answer different questions about one claim, a
+   * claim may carry several of them or none, and a column with two masters is
+   * invariant 31.
+   */
+  puzzleFinding: PuzzleFinding | null;
+  /** What the finding names: the format, the route, the buyer, the cost line. */
+  puzzleSubject: string | null;
+  /**
+   * Which puzzle format, as the trade writes it.
+   *
+   * Its own field so two spellings of one format are visibly two formats
+   * rather than silently one, and so a question naming a format verbatim can
+   * be declared back unchanged.
+   */
+  puzzleFormat: string | null;
+  /** The closed-set value the finding's own vocabulary demands. */
+  puzzleValue: string | null;
+  /**
+   * What a figure is *per*, in the source's own words.
+   *
+   * Required with a figure and refused without one. A per-copy cost added to a
+   * per-run setup is wrong in the direction nobody checks, and Brain cannot
+   * recover a basis the source stated and the claim dropped.
+   */
+  puzzleBasis: string | null;
+  puzzleAmountMinor: number | null;
+  puzzleCurrency: string | null;
+  /**
+   * When the source observed a buying signal.
+   *
+   * Required for BUYER_DEMAND: an undated signal cannot be told apart from one
+   * somebody remembers from years ago, and dated demand is the whole of what
+   * the ledger ranks on.
+   */
+  puzzleObservedOn: string | null;
+
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -9156,4 +9205,702 @@ export interface ProgrammeDecision {
   resolvedBy: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/* ==========================================================================
+ * THE PUZZLE PRODUCTS + PRODUCTION KERNEL (§47)
+ *
+ * The one axis in this Brain about something Brain **makes**. Everything else
+ * here researches the world; this holds the master that generates, the
+ * instance it generated, the validation run that proved that instance works,
+ * and the outputs compiled from instances that passed.
+ *
+ * Every vocabulary below is a closed set matched exactly, declared by whoever
+ * read the source or wrote the code, and read by a lookup rather than by
+ * inspecting a sentence. There is deliberately **no list of puzzle formats**
+ * anywhere in this file: the universe is rows, from evidence or from a person.
+ * ========================================================================== */
+
+/**
+ * What a claim establishes about the puzzle trade.
+ *
+ * Its own axis beside `opportunity_signal`, `structural_finding`,
+ * `labor_finding`, `capability_finding` and `deal_finding`, because they
+ * answer different questions about the same claim and one claim may carry
+ * several of them or none.
+ */
+export const PUZZLE_FINDINGS = [
+  /** A puzzle format that is published or sold, and who it is for. */
+  'FORMAT_EXISTS',
+  /** What a good one of these must satisfy, named as a check a validator can run. */
+  'QUALITY_STANDARD',
+  /** A published rule about rights, licensing, trademark or platform policy. */
+  'RIGHTS_CONSTRAINT',
+  /** A published way money is captured in this trade. */
+  'MONETIZATION_ROUTE',
+  /** A named buyer publishing that they buy or commission this, with a date. */
+  'BUYER_DEMAND',
+  /** A documented search establishing that nobody publishes demand on a route. */
+  'DEMAND_ABSENCE',
+  /** One published figure for one line of the economics, with what it is per. */
+  'ECONOMIC_FIGURE',
+] as const;
+export type PuzzleFinding = (typeof PUZZLE_FINDINGS)[number];
+
+/**
+ * The checks a validator can actually implement.
+ *
+ * This is the vocabulary that makes VALIDATABLE a question about rows. A
+ * QUALITY_STANDARD claim declares which of these the trade demands of a
+ * format; an engine declares which its validator implements; and a format is
+ * VALIDATABLE only when the second covers the first. A format whose evidence
+ * demands a check nothing implements is reported as exactly that, with the
+ * check named — never rounded up.
+ */
+export const VALIDATION_CHECKS = [
+  'SOLUTION_UNIQUENESS',
+  'SOLVABILITY',
+  'ANSWER_KEY_AGREEMENT',
+  'COORDINATE_AGREEMENT',
+  'GRID_LEGALITY',
+  'CONNECTIVITY',
+  'CLUE_AGREEMENT',
+  'REACHABILITY',
+  'DUPLICATE_DETECTION',
+  'DIFFICULTY_CALIBRATION',
+  'PROHIBITED_CONTENT',
+] as const;
+export type ValidationCheck = (typeof VALIDATION_CHECKS)[number];
+
+export const RIGHTS_KINDS = [
+  'COPYRIGHT',
+  'TRADEMARK',
+  'LICENSE_REQUIRED',
+  'PUBLIC_DOMAIN',
+  'PLATFORM_POLICY',
+  'CONTENT_RULE',
+] as const;
+export type RightsKind = (typeof RIGHTS_KINDS)[number];
+
+/** How money is captured. A classification of routes, never of formats. */
+export const ROUTE_CLASSES = [
+  'DIGITAL_SALE',
+  'SUBSCRIPTION',
+  'ADVERTISING',
+  'SYNDICATION',
+  'CUSTOM_COMMISSION',
+  'INSTITUTIONAL',
+  'WHITE_LABEL',
+  'PRINT_PRODUCT',
+  'PHYSICAL_PRODUCT',
+  'SOFTWARE',
+  'ACQUISITION',
+  'CONTRACT_PRODUCTION',
+] as const;
+export type RouteClass = (typeof ROUTE_CLASSES)[number];
+
+/**
+ * A person's disposition on a route.
+ *
+ * There is no DELETED and there must never be one: the directive says in as
+ * many words never to delete or hide a slower, blocked, experimental or
+ * long-term path, and a ledger that can forget is not a ledger.
+ */
+export const ROUTE_DISPOSITIONS = [
+  'ACTIVE',
+  'WATCHLIST',
+  'BLOCKED',
+  'ARCHIVED',
+  'REJECTED',
+] as const;
+export type RouteDisposition = (typeof ROUTE_DISPOSITIONS)[number];
+
+/** Both sides of the arithmetic, with the side derived from the component. */
+export const ECONOMIC_COMPONENTS = [
+  'RETAIL_PRICE',
+  'NET_RECEIPTS',
+  'LICENSE_FEE',
+  'SYNDICATION_FEE',
+  'SUBSCRIPTION_PRICE',
+  'CUSTOM_COMMISSION',
+  'EDITORIAL_COST',
+  'PLATFORM_FEE',
+  'RETAILER_SHARE',
+  'PREPRESS_COST',
+  'TOOLING_SETUP',
+  'PRINTING_COST',
+  'MATERIALS_COST',
+  'PACKAGING_COST',
+  'FREIGHT_COST',
+  'FULFILLMENT_COST',
+  'STORAGE_COST',
+  'RETURNS_ALLOWANCE',
+  'LABOR_COST',
+  'ROYALTY',
+] as const;
+export type EconomicComponent = (typeof ECONOMIC_COMPONENTS)[number];
+
+/**
+ * The axes on which one output differs from its siblings.
+ *
+ * The directive's honesty rule lives in this vocabulary: a cover-color change,
+ * a title change or a reordering does not create a new qualified output. Which
+ * of these qualify is a `Record` in `domain/puzzle.ts` rather than a second
+ * list here, so an axis added later is a compile error until somebody says
+ * whether it counts.
+ */
+export const DIFFERENTIATOR_AXES = [
+  'PUZZLE_CONTENT',
+  'MECHANIC',
+  'AUDIENCE',
+  'DIFFICULTY',
+  'DELIVERY_FORMAT',
+  'USE_OCCASION',
+  'LANGUAGE',
+  'BUYER',
+  'CHANNEL',
+  'ACCESSIBILITY',
+  /* Cosmetic. Recorded honestly and never counted as qualifying. */
+  'TITLE',
+  'COVER',
+  'PAGE_ORDER',
+] as const;
+export type DifferentiatorAxis = (typeof DIFFERENTIATOR_AXES)[number];
+
+/**
+ * How a product is actually made.
+ *
+ * The directive is explicit that a book, a card deck, a jigsaw and a boxed kit
+ * share intellectual property and share almost nothing else — different
+ * materials, workflows, factories, machines, safety rules and capital
+ * decisions — so this is on the output rather than on the format.
+ */
+export const PRODUCTION_CLASSES = [
+  'DIGITAL_ONLY',
+  'PRINTABLE',
+  'BOOK',
+  'ACTIVITY_PAD',
+  'CARD',
+  'JIGSAW',
+  'BOXED_KIT',
+  'MECHANICAL',
+  'FEED',
+] as const;
+export type ProductionClass = (typeof PRODUCTION_CLASSES)[number];
+
+/**
+ * The physical production ladder, as the directive states it.
+ *
+ * Derived per production class from rows, never stored: which stage an
+ * operation is at is a fact about what it has actually done, and a stored
+ * stage is stale the moment a batch is printed.
+ */
+export const PRODUCTION_STAGES = [
+  'STAGE_0_DIGITAL',
+  'STAGE_1_POD',
+  'STAGE_2_OUTSOURCED_BATCH',
+  'STAGE_3_IN_HOUSE_FINISHING',
+  'STAGE_4_OWNED_MACHINERY',
+  'STAGE_5_CONTRACT_CAPACITY',
+] as const;
+export type ProductionStage = (typeof PRODUCTION_STAGES)[number];
+
+/**
+ * A format's honest maturity, in the directive's own vocabulary.
+ *
+ * A ladder, and every rung is one question answered from rows. The reading
+ * stops at the first unanswered one with no partial credit, because a format
+ * that can be generated but not validated is not most of the way to sellable —
+ * it is one fact away from being worth nothing.
+ */
+export const FORMAT_MATURITIES = [
+  'DISCOVERED',
+  'RESEARCHED',
+  'GENERATABLE',
+  'VALIDATABLE',
+  'PRODUCTIZABLE',
+  'SELLABLE',
+  'REVENUE_PROVEN',
+  'REPEATABLE',
+  'SCALABLE',
+  'PRODUCTION_OWNED',
+] as const;
+export type FormatMaturity = (typeof FORMAT_MATURITIES)[number];
+
+/** What an output has actually become. Derived, never stored. */
+export const OUTPUT_QUALIFICATIONS = [
+  /** Declared, with no validated members yet. */
+  'DRAFT',
+  /** Every member passed its current validation. */
+  'ASSEMBLED',
+  /** Assembled, differentiated on a qualifying axis, and aimed at a buyer. */
+  'QUALIFIED',
+  /** Qualified, on a route whose transaction path is established. */
+  'SELLABLE',
+  /** A settled payment in the money ledger resolves to it. */
+  'REVENUE_PROVEN',
+  /** Assembled but differentiated only cosmetically from a sibling. */
+  'REPRINT',
+] as const;
+export type OutputQualification = (typeof OUTPUT_QUALIFICATIONS)[number];
+
+export const PUZZLE_ROUND_PURPOSES = [
+  /** The opening question, which names sources rather than formats. */
+  'UNIVERSE',
+  /** Who actually buys this, and when they said so. */
+  'DEMAND',
+  /** How money is captured here, and whether a transaction route is reachable. */
+  'ROUTE',
+  /** What it pays and what it costs, line by line, with each figure's basis. */
+  'ECONOMICS',
+  /** What the rights rules are for this format. */
+  'RIGHTS',
+  /** What a good one of these must satisfy, as checks a validator could run. */
+  'STANDARD',
+  /** The directive's own reverse-engineering of the roughly one-dollar book. */
+  'CHEAP_BOOK',
+] as const;
+export type PuzzleRoundPurpose = (typeof PUZZLE_ROUND_PURPOSES)[number];
+
+export const PUZZLE_ROUND_STATES = ['OPEN', 'HARVESTED', 'ABANDONED'] as const;
+export type PuzzleRoundState = (typeof PUZZLE_ROUND_STATES)[number];
+
+export const PUZZLE_OBSERVATION_KINDS = [
+  'GENERATOR_DEFECT',
+  'VALIDATION_FAILURE',
+  'PLAYTEST_RESULT',
+  'BUYER_RESPONSE',
+  'PRICING_RESULT',
+  'CHANNEL_ECONOMICS',
+  'VENDOR_PERFORMANCE',
+  'PRODUCTION_RESULT',
+  'CUSTOMER_COMPLAINT',
+  'RIGHTS_ISSUE',
+] as const;
+export type PuzzleObservationKind = (typeof PUZZLE_OBSERVATION_KINDS)[number];
+
+export const PUZZLE_ORIGINS = ['SEED', 'DISCOVERED'] as const;
+export type PuzzleOrigin = (typeof PUZZLE_ORIGINS)[number];
+
+export const VALIDATION_VERDICTS = ['PASSED', 'FAILED', 'UNCHECKED'] as const;
+export type ValidationVerdict = (typeof VALIDATION_VERDICTS)[number];
+
+export const DEMAND_POSTURES = ['DEMAND_FOUND', 'NONE_FOUND'] as const;
+export type DemandPosture = (typeof DEMAND_POSTURES)[number];
+
+/* -------------------------------------------------------------------------
+ * Rows and views
+ * ----------------------------------------------------------------------- */
+
+export interface PuzzleFormatRow {
+  id: string;
+  project_id: string;
+  name: string;
+  format_key: string;
+  audience: string | null;
+  note: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleFormat {
+  id: string;
+  projectId: string;
+  name: string;
+  formatKey: string;
+  audience: string | null;
+  note: string | null;
+  origin: PuzzleOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleStandardRow {
+  id: string;
+  project_id: string;
+  format_key: string;
+  check_kind: string;
+  statement: string;
+  authority: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface PuzzleStandard {
+  id: string;
+  projectId: string;
+  formatKey: string;
+  checkKind: ValidationCheck;
+  statement: string;
+  authority: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface PuzzleRightsRow {
+  id: string;
+  project_id: string;
+  format_key: string;
+  rights_kind: string;
+  statement: string;
+  authority: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface PuzzleRightsConstraint {
+  id: string;
+  projectId: string;
+  formatKey: string;
+  rightsKind: RightsKind;
+  statement: string;
+  authority: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface PuzzleMasterRow {
+  id: string;
+  project_id: string;
+  format_key: string;
+  name: string;
+  engine_id: string;
+  engine_version: string;
+  params_json: string;
+  corpus_ref: string | null;
+  rights_basis: string;
+  reviewed_at: string | null;
+  reviewed_by_id: string | null;
+  reviewed_note: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleMaster {
+  id: string;
+  projectId: string;
+  formatKey: string;
+  name: string;
+  engineId: string;
+  engineVersion: string;
+  /** Opaque to everything but the engine that reads it. */
+  params: Record<string, unknown>;
+  corpusRef: string | null;
+  /** NOT NULL in the schema: there is nowhere to put an unaccounted-for corpus. */
+  rightsBasis: string;
+  reviewedAt: string | null;
+  reviewedById: string | null;
+  reviewedNote: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleInstanceRow {
+  id: string;
+  project_id: string;
+  master_id: string;
+  format_key: string;
+  seed: string;
+  engine_id: string;
+  engine_version: string;
+  payload_json: string;
+  content_hash: string;
+  difficulty: string | null;
+  expected_solve_seconds: number | null;
+  locale: string | null;
+  created_at: string;
+}
+
+export interface PuzzleInstance {
+  id: string;
+  projectId: string;
+  masterId: string;
+  formatKey: string;
+  seed: string;
+  engineId: string;
+  engineVersion: string;
+  /** The puzzle, its solution and its answer key, from one canonical source. */
+  payload: PuzzlePayload;
+  contentHash: string;
+  difficulty: string | null;
+  expectedSolveSeconds: number | null;
+  locale: string | null;
+  createdAt: string;
+}
+
+/**
+ * What a generator produced.
+ *
+ * The puzzle, the solution and the answer key together, because the directive
+ * requires them to come from the same canonical source so they cannot silently
+ * diverge — and a second table reachable by a second write is exactly how they
+ * diverge.
+ */
+export interface PuzzlePayload {
+  /** What a solver is shown. Shape is the engine's own. */
+  puzzle: unknown;
+  /** The full solution. */
+  solution: unknown;
+  /** What is printed at the back of the book. */
+  answerKey: unknown;
+  /** The rules, in the words a solver reads. */
+  instructions: string;
+  /** Anything else the engine recorded about this instance. */
+  meta: Record<string, unknown>;
+}
+
+export interface PuzzleValidationRow {
+  id: string;
+  project_id: string;
+  instance_id: string;
+  validator_id: string;
+  validator_version: string;
+  verdict: string;
+  checks_json: string;
+  failed_check: string | null;
+  superseded_at: string | null;
+  created_at: string;
+}
+
+/** One check's own result, so a verdict is never a bare word. */
+export interface ValidationCheckResult {
+  check: ValidationCheck;
+  ok: boolean;
+  /** What the check actually found. Present on a pass as well as a failure. */
+  detail: string;
+}
+
+export interface PuzzleValidation {
+  id: string;
+  projectId: string;
+  instanceId: string;
+  validatorId: string;
+  validatorVersion: string;
+  verdict: ValidationVerdict;
+  checks: ValidationCheckResult[];
+  failedCheck: ValidationCheck | null;
+  supersededAt: string | null;
+  createdAt: string;
+}
+
+export interface PuzzleRouteRow {
+  id: string;
+  project_id: string;
+  name: string;
+  route_key: string;
+  route_class: string;
+  note: string | null;
+  disposition: string;
+  disposition_reason: string | null;
+  disposition_by_id: string | null;
+  disposition_at: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleRoute {
+  id: string;
+  projectId: string;
+  name: string;
+  routeKey: string;
+  routeClass: RouteClass;
+  note: string | null;
+  disposition: RouteDisposition;
+  dispositionReason: string | null;
+  dispositionById: string | null;
+  dispositionAt: string | null;
+  origin: PuzzleOrigin;
+  sourceClaimId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleRouteEvidenceRow {
+  id: string;
+  project_id: string;
+  route_id: string;
+  posture: string;
+  buyer: string;
+  format_key: string | null;
+  statement: string;
+  observed_on: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface PuzzleRouteEvidence {
+  id: string;
+  projectId: string;
+  routeId: string;
+  posture: DemandPosture;
+  buyer: string;
+  formatKey: string | null;
+  statement: string;
+  /** NOT NULL for a found signal: an undated signal cannot be dated later. */
+  observedOn: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface PuzzleEconomicsRow {
+  id: string;
+  project_id: string;
+  route_id: string | null;
+  format_key: string | null;
+  output_id: string | null;
+  component: string;
+  basis: string;
+  amount_minor: number;
+  currency: string;
+  statement: string;
+  observed_on: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface PuzzleEconomicLine {
+  id: string;
+  projectId: string;
+  routeId: string | null;
+  formatKey: string | null;
+  outputId: string | null;
+  component: EconomicComponent;
+  /** What the figure is per, in the source's own words. */
+  basis: string;
+  amountMinor: number;
+  currency: string;
+  statement: string;
+  observedOn: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface PuzzleOutputRow {
+  id: string;
+  project_id: string;
+  master_id: string;
+  title: string;
+  production_class: string;
+  differentiators_json: string;
+  target_buyer: string | null;
+  route_id: string | null;
+  released_at: string | null;
+  released_by_id: string | null;
+  opportunity_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleOutput {
+  id: string;
+  projectId: string;
+  masterId: string;
+  title: string;
+  productionClass: ProductionClass;
+  differentiators: DifferentiatorAxis[];
+  targetBuyer: string | null;
+  routeId: string | null;
+  /** A person's decision. Nothing automatic writes it. */
+  releasedAt: string | null;
+  releasedById: string | null;
+  opportunityId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleOutputMemberRow {
+  id: string;
+  output_id: string;
+  instance_id: string;
+  position: number;
+  created_at: string;
+}
+
+export interface PuzzleOutputMember {
+  id: string;
+  outputId: string;
+  instanceId: string;
+  position: number;
+  createdAt: string;
+}
+
+export interface PuzzleRoundRow {
+  id: string;
+  project_id: string;
+  purpose: string;
+  subject_key: string | null;
+  subject_label: string | null;
+  round: number;
+  candidate_id: string;
+  why: string;
+  state: string;
+  found: number | null;
+  settled_at: string | null;
+  settled_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleRound {
+  id: string;
+  projectId: string;
+  purpose: PuzzleRoundPurpose;
+  subjectKey: string | null;
+  subjectLabel: string | null;
+  round: number;
+  candidateId: string;
+  /** The allocator's own sentence, written when the decision was made. */
+  why: string;
+  state: PuzzleRoundState;
+  /** Null while OPEN. Not counted yet and counted as none are different facts. */
+  found: number | null;
+  settledAt: string | null;
+  settledReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleObservationRow {
+  id: string;
+  project_id: string;
+  kind: string;
+  subject_key: string | null;
+  statement: string;
+  observer: string;
+  observer_id: string | null;
+  master_id: string | null;
+  output_id: string | null;
+  source_claim_id: string | null;
+  created_at: string;
+}
+
+export interface PuzzleObservation {
+  id: string;
+  projectId: string;
+  kind: PuzzleObservationKind;
+  subjectKey: string | null;
+  statement: string;
+  observer: 'BRAIN' | 'PERSON';
+  observerId: string | null;
+  masterId: string | null;
+  outputId: string | null;
+  sourceClaimId: string | null;
+  createdAt: string;
 }

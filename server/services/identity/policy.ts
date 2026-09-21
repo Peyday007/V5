@@ -405,6 +405,42 @@ const OVERRIDES: Override[] = [
   // Brain is looking.
   { pattern: /^\/api\/projects\/[^/]+\/manufacturing/, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/manufacturing/, method: 'PATCH', level: 'ADMIN' },
+  // ---------------------------------------------------------------------
+  // The puzzle products + production kernel
+  // ---------------------------------------------------------------------
+  //
+  // The same split again, and here the stakes of drawing it at ADMIN rather
+  // than WRITE are a product with somebody's name on it. Naming a format,
+  // naming a route, deciding a route's disposition, creating a master,
+  // reviewing one, producing a batch, compiling an output, releasing one and
+  // retiring any of them are decisions *about* what this operation makes and
+  // sells rather than work inside it.
+  //
+  // Two of them are why the line is there. **Releasing an output** is the
+  // moment a person says something is fit to go out under their name, and it
+  // is the one decision here that reaches the world. **Reviewing a master** is
+  // the editorial review the directive requires of every new generator before
+  // it produces anything, and a review Brain could record itself would not be
+  // one.
+  //
+  // **No entry here names a worker scope, and that is the design.** An ADMIN
+  // route refuses a worker by level, so no machine credential reaches any of
+  // these however its membership is configured — §22's rule at the surface
+  // where a machine creating its own work would be a machine publishing under
+  // somebody else's name. Every handler additionally calls `requirePerson`,
+  // which refuses by principal *type*: two independent guards, because a guard
+  // on one entrance is not a guard.
+  //
+  // Recording what a person observed is WRITE, deliberately: saying you played
+  // a puzzle and found a clue ambiguous is an ordinary contribution, and it is
+  // the one reading no validator in this kernel can produce.
+  //
+  // Reading is deliberately absent and takes the default READ, so every member
+  // of the project can see what exists, how far it has got and what needs a
+  // person.
+  { pattern: /^\/api\/projects\/[^/]+\/puzzle\/observations$/, method: 'POST', level: 'WRITE' },
+  { pattern: /^\/api\/projects\/[^/]+\/puzzle/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/puzzle/, method: 'PATCH', level: 'ADMIN' },
   // The cross-border dealflow kernel
   // ---------------------------------------------------------------------
   //

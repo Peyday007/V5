@@ -141,6 +141,7 @@ import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
 import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
+import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -499,6 +500,27 @@ export interface TickReport {
     promoted: string[];
     settled: string[];
   }[];
+  /**
+   * The puzzle kernel's pass, with the allocator's own reason on each round.
+   *
+   * `why` travels with the round for `industryKernel`'s exact reason — the
+   * allocator is pure over a snapshot that has since moved, so the sentence
+   * has to be the one written when the decision was made.
+   */
+  puzzleKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    formats: string[];
+    standards: string[];
+    rights: string[];
+    routes: string[];
+    routeEvidence: string[];
+    economics: string[];
+    settled: string[];
+    observed: string[];
+    /** Set when the directive could not be read, which stops questions only. */
+    blocked: string | null;
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -593,6 +615,7 @@ const EMPTY: TickReport = {
   laborKernel: [],
   manufacturingKernel: [],
   dealflowKernel: [],
+  puzzleKernel: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -679,6 +702,7 @@ export async function tick(owner: string): Promise<TickReport> {
     laborKernel: [],
     manufacturingKernel: [],
     dealflowKernel: [],
+    puzzleKernel: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -1469,6 +1493,61 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a dealflow pass that could not run leaves every row exactly as it was */
+      }
+
+      try {
+        /*
+         * The puzzle kernel (§47), which adds the one axis in this Brain about
+         * something Brain **makes**: one validated production system compiling
+         * into many qualified outputs, with the master that generates, the
+         * instance it generated and the validation run that proved that
+         * instance works all resolving to each other.
+         *
+         * Its own `try`, for the reason every block around it has one: a
+         * puzzle pass that threw must not stop a sprint settling a need,
+         * harvesting what already ran, or advancing its map.
+         *
+         * Nothing it creates bypasses anything. A round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does. And nothing in the pass
+         * produces, compiles, releases or sells: generation is a person's
+         * instruction, compiling and releasing are a person's decisions, and
+         * every commercial effect needs a grant somebody made separately.
+         */
+        const puzzle = await runPuzzleKernel(project.id);
+        if (
+          puzzle.opened.length > 0 ||
+          puzzle.observed.length > 0 ||
+          puzzle.filed.formats.length > 0 ||
+          puzzle.filed.standards.length > 0 ||
+          puzzle.filed.rights.length > 0 ||
+          puzzle.filed.routes.length > 0 ||
+          puzzle.filed.routeEvidence.length > 0 ||
+          puzzle.filed.economics.length > 0 ||
+          puzzle.filed.settled.length > 0 ||
+          puzzle.blocked !== null
+        ) {
+          report.puzzleKernel.push({
+            projectId: project.id,
+            opened: puzzle.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            formats: puzzle.filed.formats,
+            standards: puzzle.filed.standards,
+            rights: puzzle.filed.rights,
+            routes: puzzle.filed.routes,
+            routeEvidence: puzzle.filed.routeEvidence,
+            economics: puzzle.filed.economics,
+            settled: puzzle.filed.settled.map((one) => one.roundId),
+            observed: puzzle.observed,
+            blocked: puzzle.blocked,
+          });
+        }
+      } catch {
+        /* a puzzle pass that could not run leaves every row exactly as it was */
       }
 
       try {

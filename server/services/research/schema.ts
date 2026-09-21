@@ -35,11 +35,13 @@ import {
   type LaborFinding,
   type CapabilityFinding,
   type DealFinding,
+  type PuzzleFinding,
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
 import { validateLabor } from '../../domain/labor.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
 import { validateDealFinding } from '../../domain/dealflow.ts';
+import { validatePuzzleFinding } from '../../domain/puzzle.ts';
 import {
   booleanField,
   confidenceField,
@@ -571,6 +573,22 @@ export interface ParsedClaim {
   dealAmountCents: number | null;
   /** Which currency that figure is in. Declared, never taken from the sprint. */
   dealCurrency: string | null;
+  /** What the claim establishes about the puzzle trade, or null. */
+  puzzleFinding: PuzzleFinding | null;
+  /** What that finding names: the format, the route, the buyer, the cost line. */
+  puzzleSubject: string | null;
+  /** Which puzzle format, as the trade writes it. Read from this field, never prose. */
+  puzzleFormat: string | null;
+  /** The closed-set value: a check, a rights kind, a route class, a component. */
+  puzzleValue: string | null;
+  /** What a figure is per, in the source's own words. */
+  puzzleBasis: string | null;
+  /** The figure on an economic line, in minor units. */
+  puzzleAmountMinor: number | null;
+  /** Which currency that figure is in. Declared, never taken from the sprint. */
+  puzzleCurrency: string | null;
+  /** When the source observed a buying signal. */
+  puzzleObservedOn: string | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -805,6 +823,25 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!deal.ok) return deal;
 
+  /*
+   * The sixth axis, delegated whole for the reason directly above: the MCP
+   * tool calls the same function, and two readers of one rule is how the two
+   * doors come to disagree about what a valid declaration is.
+   */
+  const puzzle = validatePuzzleFinding({
+    where,
+    finding: row['puzzleFinding'],
+    subject: row['puzzleSubject'],
+    format: row['puzzleFormat'],
+    value: row['puzzleValue'],
+    basis: row['puzzleBasis'],
+    amountMinor: row['puzzleAmountMinor'],
+    currency: row['puzzleCurrency'],
+    observedOn: row['puzzleObservedOn'],
+    searchedRepositories: row['searchedRepositories'],
+  });
+  if (!puzzle.ok) return puzzle;
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -859,6 +896,14 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       dealValue: deal.value.value,
       dealAmountCents: deal.value.amountCents,
       dealCurrency: deal.value.currency,
+      puzzleFinding: puzzle.value.finding,
+      puzzleSubject: puzzle.value.subject,
+      puzzleFormat: puzzle.value.format,
+      puzzleValue: puzzle.value.value,
+      puzzleBasis: puzzle.value.basis,
+      puzzleAmountMinor: puzzle.value.amountMinor,
+      puzzleCurrency: puzzle.value.currency,
+      puzzleObservedOn: puzzle.value.observedOn,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

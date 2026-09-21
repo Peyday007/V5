@@ -58,6 +58,16 @@ import {
 } from '../domain/dealflow.ts';
 import type { DealFinding } from '../domain/types.ts';
 import {
+  ECONOMIC_COMPONENTS,
+  PUZZLE_FINDINGS,
+  PUZZLE_FINDING_GUIDE,
+  RIGHTS_KINDS,
+  ROUTE_CLASSES,
+  VALIDATION_CHECKS,
+  validatePuzzleFinding,
+} from '../domain/puzzle.ts';
+import type { PuzzleFinding } from '../domain/types.ts';
+import {
   TerminalEffectFailure,
   type OperationNamespace,
 } from '../services/effects/engine.ts';
@@ -1265,6 +1275,53 @@ function dealOf(
   };
 }
 
+/**
+ * The puzzle declaration, validated at the door.
+ *
+ * The same shape as `dealOf` directly above and for the same reason: the
+ * provider path calls `validatePuzzleFinding` too, so a rule written twice
+ * would be two doors that eventually disagree about what a valid declaration
+ * is. Refusing here rather than at absorb time means the worker is told while
+ * it still has the attempt to spend.
+ */
+function puzzleOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  puzzleFinding: PuzzleFinding | null;
+  puzzleSubject: string | null;
+  puzzleFormat: string | null;
+  puzzleValue: string | null;
+  puzzleBasis: string | null;
+  puzzleAmountMinor: number | null;
+  puzzleCurrency: string | null;
+  puzzleObservedOn: string | null;
+} {
+  const parsed = validatePuzzleFinding({
+    where,
+    finding: row['puzzle_finding'],
+    subject: row['puzzle_subject'],
+    format: row['puzzle_format'],
+    value: row['puzzle_value'],
+    basis: row['puzzle_basis'],
+    amountMinor: row['puzzle_amount_minor'],
+    currency: row['puzzle_currency'],
+    observedOn: row['puzzle_observed_on'],
+    searchedRepositories: row['searched_repositories'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    puzzleFinding: parsed.value.finding,
+    puzzleSubject: parsed.value.subject,
+    puzzleFormat: parsed.value.format,
+    puzzleValue: parsed.value.value,
+    puzzleBasis: parsed.value.basis,
+    puzzleAmountMinor: parsed.value.amountMinor,
+    puzzleCurrency: parsed.value.currency,
+    puzzleObservedOn: parsed.value.observedOn,
+  };
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1313,6 +1370,17 @@ const submitClaimsTool: McpTool = {
     'require deal_jurisdiction and deal_value. ' +
     'The three axes are independent: a claim can carry an opportunity_signal, a ' +
     'structural_finding and a deal_finding at once, and most claims carry none of them. ' +
+    'And separately again, where a claim establishes something about the puzzle trade — a ' +
+    'format that is published, what the trade demands of one, what the rights rules are, how ' +
+    'money is captured, who buys, or what something pays or costs — set puzzle_finding to the ' +
+    'kind it is: ' +
+    PUZZLE_FINDINGS.map((one) => `${one} — ${PUZZLE_FINDING_GUIDE[one]}`).join('; ') +
+    '. FORMAT_EXISTS, QUALITY_STANDARD and RIGHTS_CONSTRAINT require puzzle_format; ' +
+    'QUALITY_STANDARD, RIGHTS_CONSTRAINT, MONETIZATION_ROUTE and ECONOMIC_FIGURE require ' +
+    'puzzle_value from that finding\u2019s own list; ECONOMIC_FIGURE requires ' +
+    'puzzle_amount_minor, puzzle_currency and puzzle_basis together; BUYER_DEMAND requires ' +
+    'puzzle_observed_on; and DEMAND_ABSENCE requires searched_repositories naming where you ' +
+    'looked. ' +
     'One submission per work item; a redelivery replays it rather than adding to it.',
   inputSchema: {
     type: 'object',
@@ -1600,6 +1668,91 @@ const submitClaimsTool: McpTool = {
                 'landed cost withheld and says why; a figure relabelled into a currency the ' +
                 'source did not use would be a number nobody can check.',
             },
+
+            /*
+             * The sixth axis. Declared rather than merely described, which is
+             * the defect §33 records at `opportunity_signal`: a schema whose
+             * description named a field it did not declare, under
+             * `additionalProperties: false`, so a client honouring the schema
+             * dropped it and the one column that decides whether anything is
+             * created could never be filled.
+             */
+            puzzle_finding: {
+              type: 'string',
+              enum: [...PUZZLE_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes ' +
+                'something about the puzzle trade: ' +
+                PUZZLE_FINDINGS.map((one) => `${one} — ${PUZZLE_FINDING_GUIDE[one]}`).join('; ') +
+                '. Independent of every other axis — a claim may carry any of them, all of ' +
+                'them, or none.',
+            },
+            puzzle_subject: {
+              type: 'string',
+              description:
+                'Required whenever puzzle_finding is set: what the finding names — the format, ' +
+                'the route, the buyer, the requirement, the cost line — as the source writes ' +
+                'it, not a sentence about it.',
+            },
+            puzzle_format: {
+              type: 'string',
+              description:
+                'Required for FORMAT_EXISTS, QUALITY_STANDARD and RIGHTS_CONSTRAINT: which ' +
+                'puzzle format this is about. Where the assignment named a format, declare ' +
+                'that format back verbatim. Two spellings of one format are two formats to ' +
+                'Brain, and the second one joins to nothing. Optional elsewhere, where it says ' +
+                'which format a buyer or a figure is about.',
+            },
+            puzzle_value: {
+              type: 'string',
+              description:
+                'Required for four findings and refused for the others. For QUALITY_STANDARD, ' +
+                'which check a validator could run: ' +
+                VALIDATION_CHECKS.join(', ') +
+                ' — a standard nothing can run is a sentence rather than a gate. For ' +
+                'RIGHTS_CONSTRAINT, which kind of rule: ' +
+                RIGHTS_KINDS.join(', ') +
+                '. For MONETIZATION_ROUTE, how the money is captured: ' +
+                ROUTE_CLASSES.join(', ') +
+                '. For ECONOMIC_FIGURE, which line: ' +
+                ECONOMIC_COMPONENTS.join(', ') +
+                '.',
+            },
+            puzzle_basis: {
+              type: 'string',
+              description:
+                'Required for ECONOMIC_FIGURE and refused for every other puzzle_finding: what ' +
+                'the figure is *per*, in the source\u2019s own words — one copy, one print run ' +
+                'of 10,000, one month, one commission, one thousand impressions. A per-unit ' +
+                'cost added to a per-run setup is wrong in the direction nobody checks, and ' +
+                'Brain cannot recover a basis the source stated and the claim dropped.',
+            },
+            puzzle_amount_minor: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'Required for ECONOMIC_FIGURE and refused for every other puzzle_finding: the ' +
+                'figure the source publishes, in minor units of the currency you name. A line ' +
+                'with no figure makes a contribution reading look complete while contributing ' +
+                'nothing to it, so it is refused rather than stored — submit the claim without ' +
+                'a puzzle_finding if the source states no figure.',
+            },
+            puzzle_currency: {
+              type: 'string',
+              description:
+                'Required for ECONOMIC_FIGURE and refused for every other puzzle_finding: the ' +
+                'three-letter ISO 4217 code the source published the figure in. Report it as ' +
+                'published. Brain never converts, so a route whose figures are in two ' +
+                'currencies has its contribution withheld and says why.',
+            },
+            puzzle_observed_on: {
+              type: 'string',
+              description:
+                'Required for BUYER_DEMAND: when the source observed it, as 2026-04-19, ' +
+                '2026-04 or 2026 — the granularity the source actually gives. An undated ' +
+                'buying signal cannot be told apart from one somebody remembers from years ' +
+                'ago, and dated demand is the whole of what this ledger ranks on.',
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
@@ -1716,6 +1869,7 @@ const submitClaimsTool: McpTool = {
          * dropped the one field that decided whether anything was created.
          */
         ...dealOf(row, where),
+        ...puzzleOf(row, where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),

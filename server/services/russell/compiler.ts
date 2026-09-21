@@ -76,7 +76,10 @@ import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
-import type { DealRoundPurpose } from '../../domain/types.ts';
+import { roundForCandidate as puzzleRoundForCandidate } from '../../repos/puzzle.ts';
+import type { DealRoundPurpose,
+  PuzzleRoundPurpose,
+} from '../../domain/types.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { laborRoundForCandidate } from '../../repos/labor.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
@@ -158,6 +161,20 @@ const DEALFLOW_TERM_PURPOSES: ReadonlySet<DealRoundPurpose> = new Set<DealRoundP
   'COMPLIANCE',
   'LANDED_COST',
   'STRUCTURE',
+]);
+
+/**
+ * Which puzzle purposes are craft questions rather than market ones.
+ *
+ * A `Set` over two of the seven rather than a `Record` over all of them,
+ * deliberately and for `DEALFLOW_TERM_PURPOSES`' reason: the default here is
+ * the market envelope, whose completion standard demands a name and a date —
+ * so a purpose added later and forgotten is judged by the standard that asks
+ * for evidence rather than by the one that accepts a rule.
+ */
+const PUZZLE_CRAFT_PURPOSES: ReadonlySet<PuzzleRoundPurpose> = new Set<PuzzleRoundPurpose>([
+  'STANDARD',
+  'RIGHTS',
 ]);
 
 async function envelopeIdFor(
@@ -300,6 +317,30 @@ async function envelopeIdFor(
    * this kernel authorizes an effect the sprint's own grant did not already
    * authorize — which is nothing at all beyond reading.
    */
+  /*
+   * A puzzle question is decided the same way, by the round that asked it.
+   *
+   * Two envelopes rather than one, because the two halves of that kernel have
+   * opposite completion standards: establishing what is published and who buys
+   * it is a question whose deliverable is a *name*, and establishing what the
+   * trade demands and what the rights rules are is a question whose deliverable
+   * is a *rule* — and whose most valuable single answer is often a documented
+   * absence. `planFitsEnvelope` pins one template per envelope, so a packet
+   * judged by the wrong one would be judged against a completion standard that
+   * is not its own.
+   *
+   * Neither widens anything: both take their source classes and their
+   * forbidden actions verbatim from the discovery envelope, so nothing about
+   * that kernel authorizes an effect the sprint's own grant did not already
+   * authorize — which is nothing at all beyond reading.
+   */
+  const puzzle = await puzzleRoundForCandidate(candidate.id);
+  if (puzzle) {
+    return PUZZLE_CRAFT_PURPOSES.has(puzzle.purpose)
+      ? 'RUSSELL_PUZZLE_CRAFT_V1'
+      : 'RUSSELL_PUZZLE_MARKET_V1';
+  }
+
   const dealflow = await dealRoundForCandidate(candidate.id);
   if (dealflow) {
     return DEALFLOW_TERM_PURPOSES.has(dealflow.purpose)

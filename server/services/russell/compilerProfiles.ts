@@ -49,7 +49,9 @@ export type CompilerProfileId =
   | 'MACHINE_CAPITAL'
   | 'MACHINE_ACQUISITION'
   | 'DEALFLOW_PARTIES'
-  | 'DEALFLOW_TERMS';
+  | 'DEALFLOW_TERMS'
+  | 'PUZZLE_MARKET'
+  | 'PUZZLE_CRAFT';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -1656,6 +1658,214 @@ const MACHINE_ACQUISITION: CompilerProfile = {
   ],
 };
 
+/**
+ * What the puzzle trade publishes: which formats are sold, who buys them, how
+ * money is captured, and what it pays and costs.
+ *
+ * `SPECIFIC_INSTANCE` on the demand lane rather than a two-publisher bar, for
+ * §14's reason and `DEALFLOW_PARTIES`' before it: one published rate card
+ * proves one published rate card, and requiring a second publisher for "this
+ * syndicate pays for crosswords" requires somebody else to have published the
+ * same rate card.
+ */
+const PUZZLE_MARKET: CompilerProfile = {
+  id: 'PUZZLE_MARKET',
+  fragmentKey: 'puzzle-market',
+  // The puzzle trade is worldwide and a great deal of the interesting demand
+  // is institutional and non-English. A question naming several markets is one
+  // question about a trade that spans them, and refusing it would refuse the
+  // work this envelope exists to permit.
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the dealflow parties question: both give later questions somewhere
+  // to point, and both yield to anything finishing something already paid for.
+  launchOrdinal: 320,
+  proposedSources: [
+    'a publisher\u2019s, syndicate\u2019s or magazine\u2019s own submission or contributor guidelines',
+    'a published rate card, fee schedule, price list or commission rate',
+    'a marketplace, retailer or distributor catalogue or category listing',
+    'a procurement or tender notice, or a published supplier or vendor page',
+    'a freelance, commissioning or job posting for this work',
+    'a trade association, industry body or trade publication',
+    'a company filing, annual report or investor presentation',
+    'a census, statistical or government publication',
+  ],
+  excludedSources: [
+    'an organisation named as a likely buyer with nothing published showing that it buys',
+    'a format described as a kind of puzzle with nothing showing it is published or sold',
+    'a price inferred from a competitor rather than published by the party that charges it',
+    'a demand signal with no date the source actually carries',
+    'a forecast or a market-size projection presented as a current buyer',
+  ],
+  lanes: [
+    {
+      id: 'published_buyer',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A named organisation, publication, platform, retailer or institution with something ' +
+        'published showing that it buys, commissions or licenses this — guidelines, a rate ' +
+        'card, a procurement notice, a supplier page, a catalogue listing, a commissioning ' +
+        'posting. Declared with puzzle_finding BUYER_DEMAND, its own name in puzzle_subject, ' +
+        'and the date the source carries in puzzle_observed_on.',
+      necessity: 'OPTIONAL',
+    },
+    {
+      id: 'published_format',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A puzzle format that is actually published or sold, named as the trade names it, ' +
+        'with who it is for. Declared with puzzle_finding FORMAT_EXISTS.',
+      necessity: 'OPTIONAL',
+    },
+    {
+      id: 'capture_route',
+      evidenceKind: 'MARKET_PATTERN',
+      description:
+        'A way money is actually captured in this trade, evidenced by somebody doing it ' +
+        'rather than by it being plausible. Declared with puzzle_finding MONETIZATION_ROUTE ' +
+        'and its class in puzzle_value.',
+      necessity: 'OPTIONAL',
+    },
+    {
+      id: 'published_figure',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'One published figure for one line of the economics, with the currency it was ' +
+        'published in and what it is per. Declared with puzzle_finding ECONOMIC_FIGURE, the ' +
+        'line in puzzle_value, the amount in puzzle_amount_minor, the currency in ' +
+        'puzzle_currency and the basis in puzzle_basis.',
+      necessity: 'OPTIONAL',
+    },
+    {
+      id: 'documented_absence',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A documented search of the places a buyer would publish, establishing that nobody ' +
+        'does. Declared with puzzle_finding DEMAND_ABSENCE and the places searched listed in ' +
+        'searched_repositories. This is an answer, not a gap.',
+      necessity: 'OPTIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Formats can be described but nothing published shows any of them being sold, which is ' +
+      'recorded as no format established rather than as a list of kinds of puzzle.',
+    'Buyers can be named from directories with nothing published saying they buy, so nothing ' +
+      'is declared.',
+    'A buying signal exists with no date the source carries, so it is reported without a ' +
+      'declaration rather than dated by inference.',
+    'Figures are published on incompatible bases or in different currencies, so they are ' +
+      'reported as published and no total is produced.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every finding is declared on its own claim with puzzle_finding set. One described in ' +
+      'prose and not declared changes nothing.',
+    'A buyer rests on something published showing that it buys, not on it being the kind of ' +
+      'organisation that would. A plausible buyer is not a finding, and reporting that none ' +
+      'was established is a better answer than naming one.',
+    'Every buying signal carries the date the source itself gives, in puzzle_observed_on. An ' +
+      'undated signal cannot be told apart from one somebody remembers from years ago.',
+    'A figure is read from a source and never produced. It is reported in the currency and ' +
+      'on the basis the source published, with no conversion and no reconciliation of ' +
+      'incompatible figures into one number.',
+    'A search that found nobody is declared with DEMAND_ABSENCE and the places searched ' +
+      'listed. An empty search that is not declared leaves the question unresearched.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is ` +
+      'reported as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * What a publishable puzzle must satisfy, and what may not lawfully be sold.
+ *
+ * Its completion standard is a **rule expressed as a check something can
+ * run**, which is the one thing a worker here will find unusual. A
+ * requirement that fits no check is reported without a declaration rather than
+ * forced into the nearest one: a mis-declared check would make this kernel
+ * report a format as validated against something nothing actually runs, which
+ * is the single claim it may never make.
+ */
+const PUZZLE_CRAFT: CompilerProfile = {
+  id: 'PUZZLE_CRAFT',
+  fragmentKey: 'puzzle-craft',
+  multipleJurisdictions: 'DESCRIBE',
+  // Ahead of the market question: a format that already produces is one fact
+  // from being usable, and finishing outranks starting.
+  launchOrdinal: 315,
+  proposedSources: [
+    'a publisher\u2019s or syndicate\u2019s published construction or submission specification',
+    'an editor\u2019s or association\u2019s published style guide or construction rules',
+    'a competition, association or accreditation standard',
+    'a marketplace\u2019s or retailer\u2019s published content and originality policy',
+    'a copyright office, court reporting, or an official register of trade marks',
+    'the published licence terms of a word list, lexicon, font or artwork collection',
+    'a trade association, industry body or trade publication',
+  ],
+  excludedSources: [
+    'a convention nobody has written down, presented as a requirement',
+    'a rule asserted about a format without a source that states it',
+    'a public-domain claim with nothing establishing the term, dedication or register entry',
+    'one publisher\u2019s house style reported as a rule of the format',
+  ],
+  lanes: [
+    {
+      id: 'published_standard',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Something the trade demands of a puzzle of this format before it is fit to publish, ' +
+        'stated by somebody who publishes it, and expressed as one of the checks a validator ' +
+        'could run. Declared with puzzle_finding QUALITY_STANDARD and the check in ' +
+        'puzzle_value.',
+      necessity: 'OPTIONAL',
+    },
+    {
+      id: 'rights_rule',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A published rule about copyright, trade marks, licensing, a platform policy or ' +
+        'content that binds what may be made or sold in this format. Declared with ' +
+        'puzzle_finding RIGHTS_CONSTRAINT and its kind in puzzle_value.',
+      necessity: 'OPTIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'A requirement is widely followed and nothing publishes it, which is reported as a ' +
+      'convention rather than as a requirement.',
+    'A requirement fits none of the checks a validator could run, so it is reported in the ' +
+      'claim without a declaration rather than forced into the nearest one.',
+    'A rights position turns on something being in the public domain and nothing establishes ' +
+      'the term, the dedication or the register entry, so it is recorded as unresolved.',
+    'One publisher\u2019s house style is the only source, so it is reported as that ' +
+      'publisher\u2019s rather than as the format\u2019s.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)}`
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: () => [
+    'Every requirement is declared with puzzle_finding set to QUALITY_STANDARD and the check ' +
+      'it corresponds to in puzzle_value, with the requirement in the source\u2019s own words ' +
+      'in the claim itself.',
+    'A requirement that fits none of those checks is reported without a declaration. A ' +
+      'mis-declared check would make this Brain report a format as validated against ' +
+      'something nothing runs.',
+    'Every rights rule is declared with RIGHTS_CONSTRAINT and its kind in puzzle_value, and a ' +
+      'public-domain position says what establishes it rather than asserting it.',
+    'The format named in the question is copied verbatim into puzzle_format. A different ' +
+      'wording is a different format and joins to nothing.',
+    'Every source carries its URL, who publishes it, and the date it took effect or was last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+  ],
+};
+
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -1673,6 +1883,8 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_MACHINE_ACQUISITION_V1: MACHINE_ACQUISITION,
   RUSSELL_DEALFLOW_PARTIES_V1: DEALFLOW_PARTIES,
   RUSSELL_DEALFLOW_TERMS_V1: DEALFLOW_TERMS,
+  RUSSELL_PUZZLE_MARKET_V1: PUZZLE_MARKET,
+  RUSSELL_PUZZLE_CRAFT_V1: PUZZLE_CRAFT,
 });
 
 export function profileFor(envelopeId: string): CompilerProfile | null {

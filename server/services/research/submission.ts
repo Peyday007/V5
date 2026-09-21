@@ -170,6 +170,26 @@ export async function recordFragmentClaims(input: {
         dealValue: claim.dealValue ?? null,
         dealAmountCents: claim.dealAmountCents ?? null,
         dealCurrency: claim.dealCurrency ?? null,
+        /*
+         * And the puzzle declaration, for the reason directly above — which
+         * this mapper has now proved by omission twice, at two axes.
+         *
+         * Eight fields that only mean anything together: a demand signal with
+         * no observation date is one nobody can date, a figure with no basis
+         * cannot be added to another figure, and a finding with no subject
+         * names nothing. Carrying some of them is §33's
+         * `applyValidationAnswers` defect, and the walk that submits through
+         * `brain_submit_claims` is the only thing that catches it — a unit
+         * test writing the columns directly passes either way.
+         */
+        puzzleFinding: claim.puzzleFinding ?? null,
+        puzzleSubject: claim.puzzleSubject ?? null,
+        puzzleFormat: claim.puzzleFormat ?? null,
+        puzzleValue: claim.puzzleValue ?? null,
+        puzzleBasis: claim.puzzleBasis ?? null,
+        puzzleAmountMinor: claim.puzzleAmountMinor ?? null,
+        puzzleCurrency: claim.puzzleCurrency ?? null,
+        puzzleObservedOn: claim.puzzleObservedOn ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though

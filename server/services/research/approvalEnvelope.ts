@@ -517,6 +517,95 @@ anything anywhere; making any commitment on anybody's behalf; quoting, offering 
 negotiating. This is read-only research into what is already published, and every action
 beyond reading needs a separate commercial authorization from a person.`;
 
+/**
+ * The puzzle kernel's market half: what exists, who buys it, how money is
+ * captured, and what it pays and costs.
+ *
+ * Its completion standard is a **name and a date**. A buyer nobody has
+ * published about is not a finding, and a demand signal with no observation
+ * date cannot be told apart from one somebody remembers from years ago — so
+ * the template demands both and says why.
+ */
+export const PUZZLE_MARKET_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Evidence standard: a published source identified by its URL and by who publishes it,
+carrying the date it was published or last observed. A buyer is established by something
+they themselves published — submission or contributor guidelines, a rate card, a
+procurement notice, a supplier or vendor page, a tender record, a catalogue listing, a
+freelance or commissioning posting, a published price. An organisation's own site is
+conclusive about what that organisation says and is worth nothing as independent
+confirmation of anything else. A format is established by it being actually published or
+sold, not by somebody describing it as a kind of puzzle.
+
+A figure is read from a source and never produced: report it as published, in the currency
+it was published in, and say what it is per — one copy, one print run of a stated size, one
+month, one commission. Do not convert currencies, do not reconcile figures on different
+bases into a single number, and do not turn a published range into a single rate.
+
+Completion standard: every finding is declared on its own claim. A format with
+puzzle_finding set to FORMAT_EXISTS and puzzle_subject its own name. A buyer with
+BUYER_DEMAND, puzzle_subject the buyer as the source names them, and puzzle_observed_on the
+date the source carries. A way money is captured with MONETIZATION_ROUTE and puzzle_value
+its class. A figure with ECONOMIC_FIGURE, its line in puzzle_value, the amount in
+puzzle_amount_minor, the currency in puzzle_currency and what it is per in puzzle_basis.
+A finding described in prose and not declared reaches nothing.
+
+Where a careful search of the places such a buyer would publish turns up nobody, declare
+that with puzzle_finding set to DEMAND_ABSENCE and list where you looked in
+searched_repositories. A route with no answer is treated as unresearched rather than as
+empty, so an unreported empty search leaves the question open — and an established absence
+is one of the most useful answers this assignment can produce.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or
+a paid API; placing an advertisement; publishing, posting, listing, filing or submitting
+anything anywhere; making any commitment on anybody's behalf; quoting, offering or
+negotiating. This is read-only research into what is already published, and every action
+beyond reading needs a separate commercial authorization from a person.`;
+
+/**
+ * The puzzle kernel's craft half: what the trade demands of a puzzle before it
+ * is fit to publish, and what may not lawfully be made or sold.
+ *
+ * Separate from the market template because the completion standard is the
+ * opposite shape. There the deliverable is a name; here it is a **rule**, and
+ * for a standard it must be a rule expressed as a check something could
+ * actually run — because a standard nothing can run is a sentence rather than
+ * a gate, and this kernel refuses to report a format as validated on the
+ * strength of one.
+ */
+export const PUZZLE_CRAFT_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Evidence standard: a published specification, construction rule, style guide, submission
+requirement, competition or association standard, licence term, register entry or platform
+policy, identified by its URL and by who publishes it, carrying the date it took effect or
+was last observed. Name the authority that imposes a rule where the source names one. A
+convention that everybody follows and nobody has written down is worth reporting as exactly
+that rather than as a requirement.
+
+Completion standard: every requirement is declared on its own claim with puzzle_finding set
+to QUALITY_STANDARD and puzzle_value set to the check it corresponds to, from the closed
+list the question gives. Put the requirement in the source's own words in the claim itself.
+A requirement that fits none of those checks is reported in the claim without a declaration
+rather than forced into the nearest one: a mis-declared check would make this kernel report
+a format as validated against something nothing actually runs.
+
+Every rights rule is declared with puzzle_finding set to RIGHTS_CONSTRAINT and puzzle_value
+set to its kind. Where a rule turns on something being in the public domain, say what
+establishes that — a stated term of protection, an explicit dedication, or a register entry
+— rather than asserting it. Copy the format named in the question verbatim into
+puzzle_format: a different wording is a different format and will join to nothing.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or
+a paid API; obtaining, applying for or paying for any licence, registration or
+certification; placing an advertisement; publishing, posting, listing, filing or submitting
+anything anywhere; making any commitment on anybody's behalf. This is read-only research
+into what is already published, and every action beyond reading needs a separate commercial
+authorization from a person.`;
+
 export const INDUSTRY_MAP_ASSIGNMENT_TEMPLATE = `Establish, from published sources, how this part of the economy is actually put together:
 
 {QUESTION}
@@ -1345,6 +1434,83 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
    * those are decisions with a factory on the end of them, and there is no
    * route to one through any envelope.
    */
+  /**
+   * The puzzle kernel's two questions, and what they authorize — which is
+   * nothing the sprint's own grant did not already authorize.
+   *
+   * Two envelopes rather than one for `RUSSELL_CASH_VALIDATION_V1`'s reason:
+   * `planFitsEnvelope` pins one assignment template per envelope, and these
+   * two halves have opposite completion standards. Establishing what is
+   * published and who buys it is a question whose deliverable is a **name**;
+   * establishing what the trade demands and what the rights rules are is a
+   * question whose deliverable is a **rule**, and whose most valuable single
+   * answer is often a documented absence. Judging one by the other's standard
+   * is §25's Westbrook defect at a compiler.
+   *
+   * Both take their source classes and their forbidden actions verbatim from
+   * the cash discovery envelope rather than restating them, so a class or a
+   * prohibition added there reaches these without anybody remembering.
+   *
+   * **They authorize no effect that discovery did not already authorize.**
+   * Worth saying plainly because the subject is a business with products in
+   * it: nothing here authorizes publishing anything, listing anything for
+   * sale, pricing anything, printing anything, buying a font or a word list,
+   * signing up to a marketplace, or contacting a buyer. Every one of those is
+   * a `COMMERCIAL_ACTION` a person grants separately, and `forbiddenActions`
+   * refuses a plan that describes doing any of them.
+   *
+   * Neither bounds geography, and that is stated rather than hidden. The
+   * puzzle trade is worldwide and a great deal of the interesting demand is
+   * institutional and non-English; an envelope that refused a finding for
+   * being in the wrong country would refuse precisely the work it exists to
+   * permit. What bounds these is what they may *do*.
+   */
+  RUSSELL_PUZZLE_MARKET_V1: Object.freeze({
+    id: 'RUSSELL_PUZZLE_MARKET_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it: published sources only, across any industry, business ' +
+      'model or market, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing which puzzle formats ' +
+      'are actually published and sold, who has published that they buy or commission them, ' +
+      'how money is captured in that trade, and what it pays and costs. Approaching a buyer, ' +
+      'listing a product, pricing one or publishing anything is a commercial action a person ' +
+      'grants separately, and never this envelope.',
+    assignmentTemplate: PUZZLE_MARKET_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'any market the evidence is about',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  RUSSELL_PUZZLE_CRAFT_V1: Object.freeze({
+    id: 'RUSSELL_PUZZLE_CRAFT_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it: published sources only, with no spending, no paid API or purchased ' +
+      'data, no contact with any person or organisation, no advertising, no publishing and no ' +
+      'external effect of any kind. This envelope is that authorization applied to ' +
+      'establishing what the trade demands of a puzzle before it is fit to publish, and what ' +
+      'published rules govern what may lawfully be made and sold in a format. It authorizes ' +
+      'reading about those and never doing any of them: obtaining a licence, registering a ' +
+      'mark, buying a word list or a font, and agreeing terms with a rights holder are ' +
+      'commercial actions a person grants separately, and never this envelope.',
+    assignmentTemplate: PUZZLE_CRAFT_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'any market the evidence is about',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
   RUSSELL_MACHINE_LADDER_V1: Object.freeze({
     id: 'RUSSELL_MACHINE_LADDER_V1',
     authorization:

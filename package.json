@@ -43,7 +43,8 @@
     "design:manifest": "tsx scripts/design-manifest.ts",
     "design": "tsx --env-file-if-exists=.env scripts/design.ts",
     "capability": "tsx --env-file-if-exists=.env scripts/capability.ts",
-    "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts"
+    "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts",
+    "puzzle": "tsx --env-file-if-exists=.env scripts/puzzle.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
