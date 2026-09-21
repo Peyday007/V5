@@ -505,6 +505,85 @@ describe('what an administrator is told', () => {
     }
   }, 120_000);
 
+it('writes down what happened and never what was typed', async () => {
+    /*
+     * §2's audit requirement is two halves, and only one of them had a test.
+     * That every step is *recorded* is easy to believe from reading the calls;
+     * that none of them records the **secret** is the half worth asserting,
+     * because it is a claim about bytes in a table that outlives everything
+     * else here and is read by a person looking for exactly this kind of
+     * mistake.
+     *
+     * Driven rather than read: the events are whatever the journey above
+     * actually produced, so a step that started writing a PIN tomorrow fails
+     * here rather than passing a review of the code that writes it.
+     */
+    const failed = await pinSignIn('Ambiguous Member', '999999');
+    expect(failed.status).toBe(401);
+
+    const log = await call<{ events: { action: string }[] }>(
+      'GET',
+      '/api/admin/identity-events?limit=500',
+      { cookie: ownerCookie },
+    );
+    expect(log.status).toBe(200);
+
+    const actions = new Set(log.body.events.map((one) => one.action));
+    for (const expected of [
+      'CREATE_MEMBER_SLOT',
+      'ENROLL_PIN',
+      'PIN_SIGN_IN',
+      'SET_PIN',
+      'RENAME_USER',
+      'REISSUE_ENROLLMENT',
+      /*
+       * `CREATE_USER` is deliberately absent. The only `POST /api/admin/users`
+       * in this file is the one the name guard **refuses**, so no account is
+       * created that way — naming it here would be asserting an action this
+       * journey does not take, which is how a list of expectations becomes a
+       * list of hopes.
+       */
+    ]) {
+      expect(actions, `${expected} is not on the identity trail`).toContain(expected);
+    }
+
+    // Both outcomes of a sign-in, so a refusal is as recorded as a success.
+    const signIns = log.body.events.filter((one) => one.action === 'PIN_SIGN_IN') as {
+      result: string;
+    }[];
+    expect(signIns.some((one) => one.result === 'SUCCESS')).toBe(true);
+    expect(signIns.some((one) => one.result === 'DENIED')).toBe(true);
+
+    /*
+     * And not one digit of any of it. Every PIN this file has used, the
+     * owner's password, the scrypt prefix a verifier would carry, and the
+     * invitation token's own prefix — checked against the whole serialized
+     * body at any depth, because a secret in a nested `metadata` bag is the
+     * same secret.
+     */
+    for (const secret of [
+      '202020',
+      '212121',
+      '232323',
+      '242424',
+      '252525',
+      '262626',
+      '272727',
+      '282828',
+      '303030',
+      '525252',
+      '535353',
+      '545454',
+      '999999',
+      OWNER_PIN,
+      OWNER_PASSWORD,
+    ]) {
+      expect(log.text, `a secret reached the identity trail`).not.toContain(secret);
+    }
+    expect(log.text).not.toMatch(/scrypt\$/);
+    expect(log.text).not.toMatch(/"token"|tokenDigest|pin_verifier|pinVerifier/);
+  }, 120_000);
+
   it('never puts a PIN, a verifier or a token anywhere a reader can see one', async () => {
     const rows = await call('GET', '/api/people', { cookie: ownerCookie });
     for (const secret of ['202020', '212121', '232323', '242424', OWNER_PIN, OWNER_PASSWORD]) {
