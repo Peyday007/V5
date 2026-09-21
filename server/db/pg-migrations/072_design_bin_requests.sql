@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 075. See that file for why a review is
+-- The Postgres half of SQLite migration 081. See that file for why a review is
 -- bound to the capture set it was briefed on, why an outstanding request is
 -- what distinguishes "nothing has looked yet" from "a reader has not answered",
 -- and why one table carries both kinds.

@@ -212,7 +212,7 @@ export class InvalidFacultyDefinition extends Error {
 const MAX_TEXT = 4_000;
 const MAX_LIST = 40;
 const MAX_LIST_ITEM = 1_000;
-const MAX_CONNECTIONS = 40;
+export const MAX_CONNECTIONS = 40;
 
 /** The exact key set. Anything else refuses the candidate; see above. */
 export const DEFINITION_KEYS: readonly string[] = [
@@ -237,7 +237,20 @@ export const DEFINITION_KEYS: readonly string[] = [
   'connections',
 ];
 
-const CONNECTION_KEYS: readonly string[] = [
+/**
+ * The closed set of keys a proposed connection may carry.
+ *
+ * Exported for one reason: the extraction contract has to *tell* a worker these
+ * names, and the only safe way to tell it is to read them from here. The first
+ * version of that instruction was hand-written prose two lines below two lines
+ * that were composed from `DEFINITION_KEYS` and `LIST_FIELDS` — and it named
+ * "kind", "faculty" and "note", which are exactly the three field names
+ * `validateConnections` refuses. A fired Routine obeyed the contract, every one
+ * of its fifteen candidates was rejected for obeying it, and the blueprint went
+ * to FAILED. A rule applied by one of two readers is worse than none; here the
+ * two readers were nine lines apart inside one function.
+ */
+export const CONNECTION_KEYS: readonly string[] = [
   'relationship',
   'toFacultySlug',
   'toComponent',

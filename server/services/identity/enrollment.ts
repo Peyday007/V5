@@ -53,6 +53,7 @@ import {
   getUser,
   recordIdentityEvent,
   revokeSessionsForUser,
+  setUserPin,
 } from '../../repos/identity.ts';
 import { constantTimeEquals, digestSecret, generateInvitationToken, parseInvitationToken } from './secrets.ts';
 import type { MemberEnrollment, User } from '../../domain/types.ts';
@@ -285,8 +286,61 @@ export async function previewEnrollment(token: unknown): Promise<PreviewOutcome>
   };
 }
 
+/**
+ * Spend the link and set a PIN, which is the ordinary way a member joins now.
+ *
+ * The same guarded spend as `completeEnrollment`, in the same order and for the
+ * same reason: the claim comes first, so a second request holding one
+ * intercepted link finds nothing to spend, and a crash between the two costs
+ * the link rather than leaving it live beside a working credential.
+ *
+ * It exists because the device half could not be relied on. A member whose
+ * browser refuses WebAuthn — which is the condition that locked the owner out
+ * of this Brain — had no way to finish joining at all, and a journey whose last
+ * step can be refused with no alternative is one that strands people.
+ * Registering a device is still offered and is still optional.
+ */
+export async function completeEnrollmentWithPin(input: {
+  token: unknown;
+  pinVerifier: string;
+}): Promise<CompleteOutcome> {
+  const enrollment = await liveEnrollmentFor(input.token);
+  if (!enrollment) return { ok: false, reason: LINK_REFUSED };
+
+  if (!(await spendEnrollment({ id: enrollment.id, now: nowIso() }))) {
+    return { ok: false, reason: LINK_REFUSED };
+  }
+
+  /*
+   * No session is kept, because there is none yet: this is the link being
+   * exchanged for a credential, and the route opens the session afterwards.
+   * Passing `null` means any session the slot somehow held is ended, which is
+   * the right answer for a recovery — the point of one is that what came
+   * before stops working.
+   */
+  await setUserPin(enrollment.userId, input.pinVerifier, { keepSessionId: null });
+
+  const user = await getUser(enrollment.userId);
+  if (!user) return { ok: false, reason: LINK_REFUSED };
+
+  await recordIdentityEvent({
+    actorType: 'HUMAN',
+    actorId: user.id,
+    action: 'ENROLL_PIN',
+    targetType: 'USER',
+    targetId: user.id,
+    projectId: null,
+    result: 'SUCCESS',
+    // The enrollment, never the PIN and never its verifier.
+    metadata: { enrollmentId: enrollment.id, kind: enrollment.kind },
+  });
+
+  return { ok: true, user, passkeyId: null };
+}
+
 export type CompleteOutcome =
-  | { ok: true; user: User; passkeyId: string }
+  /** `passkeyId` is null when the link was spent on a PIN rather than a device. */
+  | { ok: true; user: User; passkeyId: string | null }
   | { ok: false; reason: string };
 
 /**

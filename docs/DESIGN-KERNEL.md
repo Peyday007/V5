@@ -4,7 +4,7 @@ A small seed with a complete loop: render the real interface, measure it, judge
 what measurement cannot settle, repair what it can, learn from the outcome,
 notice what it cannot do, and route that somewhere that already exists.
 
-This document is the operator's account. `CLAUDE.md` §39 is the rule set;
+This document is the operator's account. `CLAUDE.md` §42 is the rule set;
 `server/services/design/` carries the reasoning in the code.
 
 ---

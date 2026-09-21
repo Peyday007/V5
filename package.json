@@ -28,6 +28,7 @@
     "admin": "tsx scripts/admin.ts",
     "report:packet": "tsx scripts/packet-report.ts",
     "report:cash": "tsx scripts/cash-report.ts",
+    "report:labor": "tsx scripts/labor-report.ts",
     "verify:capability": "tsx scripts/verify-research-capability.ts",
     "step12a:acceptance": "tsx --env-file-if-exists=.env scripts/step12a-acceptance.ts",
     "factory": "tsx --env-file-if-exists=.env scripts/factory.ts",
@@ -39,7 +40,8 @@
     "step12b:combine": "tsx scripts/step12b-combine.ts",
     "design:manifest": "tsx scripts/design-manifest.ts",
     "design": "tsx --env-file-if-exists=.env scripts/design.ts",
-    "capability": "tsx --env-file-if-exists=.env scripts/capability.ts"
+    "capability": "tsx --env-file-if-exists=.env scripts/capability.ts",
+    "manufacturing": "tsx --env-file-if-exists=.env scripts/manufacturing.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",

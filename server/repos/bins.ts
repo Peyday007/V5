@@ -2010,6 +2010,35 @@ export async function recordBinRefusal(proof: BinProof, reason: string): Promise
  * For the reconciliation pass, which decides what to do with a bin that is
  * nonterminal, unleased and out of attempts. Guarded on the generation so it
  * cannot race an assignment that happened a moment ago.
+ *
+ * ---------------------------------------------------------------------------
+ * "Unleased" has to mean *nobody holds it*, and for a long time it meant READY
+ * ---------------------------------------------------------------------------
+ *
+ * The match was `state IN ('READY','DRAFT')`, and §19 is explicit that **an
+ * expired lease is claimable work** — a bin whose holder died is not held, and
+ * every other reader in this file already treats it that way:
+ * `DISPATCHABLE_SQL` offers it, `isDispatchable` offers it, and `reconcileBins`
+ * counts it as healthy *while it still has attempts*.
+ *
+ * So the one state this could not reach was the one it existed for: a bin whose
+ * **final** attempt ended by the lease lapsing rather than by an explicit
+ * release. It is LEASED, its lease is dead, and its budget is spent — refused
+ * by the assigner, refused by the dispatcher, and unreachable by the pass whose
+ * whole job is to turn exactly that into one decision. `reconcileBins` then
+ * read the failed UPDATE as *somebody assigned it between the read and the
+ * write. Ordinary.* and counted it healthy, every tick, for ever.
+ *
+ * That is §24's sentence at yet another altitude, and worse than the usual
+ * shape: there was no state saying a person was needed, so nothing was waiting
+ * and nothing was stuck — the bin simply stopped existing as far as every
+ * surface was concerned.
+ *
+ * The widening is narrow. An expired lease only, compared to the clock in the
+ * statement that makes the change; the fencing generation still guards it, so a
+ * real assignment a moment ago (which advances the generation) matches nothing;
+ * and the lease columns are cleared in the same statement, because a terminal
+ * bin carrying a dead lease id is a row two readers would disagree about.
  */
 export async function terminateUnleasedBin(
   binId: string,
@@ -2019,9 +2048,13 @@ export async function terminateUnleasedBin(
 ): Promise<boolean> {
   const now = binNow();
   const result = await getDb().run(
-    `UPDATE bins SET state = ?, terminal_reason = ?, completed_at = ?, updated_at = ?
-      WHERE id = ? AND lease_generation = ? AND state IN ('READY', 'DRAFT')`,
-    [state, bounded(reason, MAX_REASON_CHARS), now, now, binId, leaseGeneration],
+    `UPDATE bins SET state = ?, terminal_reason = ?, completed_at = ?, updated_at = ?,
+            lease_id = NULL, worker_id = NULL, lease_credential_id = NULL,
+            leased_at = NULL, heartbeat_at = NULL, lease_expires_at = NULL
+      WHERE id = ? AND lease_generation = ?
+        AND (state IN ('READY', 'DRAFT')
+             OR (state = 'LEASED' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?))`,
+    [state, bounded(reason, MAX_REASON_CHARS), now, now, binId, leaseGeneration, now],
   );
   if (result.changes !== 1) return false;
   await recordBinEvent({
@@ -2350,13 +2383,17 @@ export async function reopenNoShowDispatches(
     lease_generation: number;
     attempt_count: number;
     max_attempts: number;
+    bin_attempt_count: number;
+    bin_max_attempts: number;
   }>(
     `SELECT d.id AS id,
             d.bin_id AS bin_id,
             b.project_id AS project_id,
             d.lease_generation AS lease_generation,
             d.attempt_count AS attempt_count,
-            d.max_attempts AS max_attempts
+            d.max_attempts AS max_attempts,
+            b.attempt_count AS bin_attempt_count,
+            b.max_attempts AS bin_max_attempts
        FROM bin_dispatch d
        JOIN bins b ON b.id = d.bin_id
       WHERE d.state = 'SENT'
@@ -2371,18 +2408,54 @@ export async function reopenNoShowDispatches(
 
   const out: { dispatchId: string; binId: string; outcome: 'REOPENED' | 'ABANDONED' }[] = [];
   for (const row of rows) {
-    const exhausted = row.attempt_count >= row.max_attempts;
+    /*
+     * Two budgets, and this read only ever asked about one of them.
+     *
+     * The intent's own `attempt_count` bounds how many times Brain will fire
+     * for it. The **bin's** bounds whether there is any work left to fire for
+     * at all — `DISPATCHABLE_SQL` carries `attempt_count < max_attempts`, so a
+     * bin at its ceiling is refused by the assigner and by every one of the
+     * dispatcher's four readers.
+     *
+     * Asking only the first one produced a loop that looked like progress and
+     * was not: a bin whose own attempts were spent, still `READY` because
+     * `reconcileBins` had not yet turned it into a decision, had its unanswered
+     * intent put back to `PENDING` every window, for ever. Nothing was ever
+     * fired — the pre-fire re-read correctly refused it — so the only visible
+     * effect was a `DISPATCH_INTENT` row every thirty minutes on a bin nobody
+     * could be sent for, and an intent that could never reach a terminal state
+     * because the thing that advances its attempt counter is the claim it would
+     * never get.
+     *
+     * Abandoning is strictly better than skipping. A skip leaves the row `SENT`
+     * and the condition invisible; this closes the intent, says which budget
+     * ran out, and leaves `reconcileBins` to turn the bin into the one decision
+     * a person can answer. Every attempt and every event keeps its row.
+     */
+    const dispatchSpent = row.attempt_count >= row.max_attempts;
+    const binSpent = row.bin_attempt_count >= row.bin_max_attempts;
+    const exhausted = dispatchSpent || binSpent;
     const result = await getDb().run(
       exhausted
         ? `UPDATE bin_dispatch SET state = 'ABANDONED', updated_at = ?,
              last_error_kind = 'NO_SHOW',
-             last_error = 'Fired, and no worker ever claimed the bin. Attempts exhausted.'
+             last_error = ?
             WHERE id = ? AND state = 'SENT'`
         : `UPDATE bin_dispatch SET state = 'PENDING', next_attempt_at = ?, updated_at = ?,
              last_error_kind = 'NO_SHOW',
              last_error = 'Fired, and no worker ever claimed the bin before the in-flight window closed.'
             WHERE id = ? AND state = 'SENT'`,
-      (exhausted ? [now, row.id] : [now, now, row.id]) as never[],
+      (exhausted
+        ? [
+            now,
+            binSpent
+              ? 'Fired, and no worker ever claimed the bin. The BIN is out of attempts ' +
+                `(${row.bin_attempt_count}/${row.bin_max_attempts}), so nothing can be sent for ` +
+                'it and reopening this intent would fire at work the assigner already refuses.'
+              : 'Fired, and no worker ever claimed the bin. Attempts exhausted.',
+            row.id,
+          ]
+        : [now, now, row.id]) as never[],
     );
     if (result.changes !== 1) continue;
     await recordBinEvent({
@@ -2391,7 +2464,13 @@ export async function reopenNoShowDispatches(
       projectId: row.project_id,
       leaseGeneration: row.lease_generation,
       outcome: exhausted ? 'ABANDONED' : 'PENDING',
-      measures: { noShow: true, attempt: row.attempt_count, maxAttempts: row.max_attempts },
+      measures: {
+        noShow: true,
+        attempt: row.attempt_count,
+        maxAttempts: row.max_attempts,
+        binAttempt: row.bin_attempt_count,
+        binMaxAttempts: row.bin_max_attempts,
+      },
     });
     out.push({
       dispatchId: row.id,

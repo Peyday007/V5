@@ -266,7 +266,12 @@ npm run capability -- register <file> --title <t> [--amends <id>]
 npm run capability -- sources | advance | read <id> | candidates | faculties | history <slug>
 npm run capability -- scan | model | staleness
 npm run capability -- packet open <slug> | derive <id> | show <id> | research <id>
-npm run capability -- packet compile <id> | prove <id> [--apply]
+npm run capability -- packet compile <id> | prove <id> [--apply] | realize <id> [--apply]
+npm run capability -- packet judge <gapId> --kind <k> --evidence "…"
+npm run capability -- packet outstanding <id> | ask <id> | handoff <id>
+npm run capability -- reopen <sourceId> --admin <email> --reason "…"
+npm run capability -- packet awaiting <id> | answer <gapId> --grant|--refuse --admin <e> --statement "…"
+npm run capability -- packets
 npm run capability -- submit <binId> <file.json> --worker <handle>
 npm run capability -- verdicts <binId> <file.json> --worker <handle>
 ```
@@ -296,6 +301,69 @@ times, committed a sixth, and the suite that proved the tick worked could not
 see it because it called the tick directly. `capabilityKernel.test.ts` now
 asserts the loop's own source reaches it.
 
+**And the rest of the chain, which was six commands in the right order.**
+`advanceSources` stops at the registry: a blueprint becomes a canonical
+definition and then nothing happens, because deriving the gaps, asking the
+world, moving the dimensions, compiling the contract and handing it off were
+each an invocation somebody had to remember. A packet whose authority gap a
+person answered on Tuesday sat exactly where it was. That is the same defect
+the paragraph above records, one altitude up, and the remedy it had been given
+four times was itself a command — **an operator's memory is not a caller.**
+
+`services/realize/advance.ts` runs beside `advanceSources` on the same tick and
+is the ordering and nothing else. Every transition it performs is the identical
+function this section's commands call, and a test holds both to the same names,
+because a second implementation is exactly what passes a behavioural test and
+drifts a month later. There is no second orchestrator, queue, policy module or
+state machine, and the commands stay as the inspectable manual recovery beside
+it.
+
+**And it opens the packet the chain has reached, which was a seventh command in
+front of the six.** Nothing opened a realization packet for a faculty that had
+just become canonical, so the walk above had an empty list to walk for ever —
+and both functions that could have done it carry a comment naming the tick as
+their caller: `openPacket`'s idempotency is *"what makes this safe to call from
+a tick"*, and `facultiesWithoutPackets` exists *"so a tick can see what has not
+been started"*. Each had one production caller and it was `scripts/capability.ts`.
+
+**One per pass, which is a rate rather than a ceiling.** A concurrency bound of
+one was the obvious shape and is wrong here, because nothing in `server/` moves
+a realization packet's state — `advance` in `packet.ts` is a compare-and-swap
+with no production caller, so every packet is `DRAFT` for ever and a ceiling of
+one is a ceiling nothing can release. The order is the blueprint's own
+`ordinal`; a faculty with any packet is skipped, terminal ones included; and
+`openPacket` itself refuses a definition that is not canonical.
+
+Two further properties of the pass are worth stating because they are what make
+running it every thirty seconds safe:
+
+- **It re-derives only a packet with no gaps at all.** Re-deriving on a timer
+  would replace a reader's classifications with `NEEDS_A_READING` on a loop,
+  which is the one thing that would make the chain permanently unfinishable.
+- **It is idempotent by its own effects rather than by a cursor or a flag** — a
+  flag can be set by a tick that then dies. `moveDimension` records nothing when
+  a faculty is already in the state; `askHuman` is `ON CONFLICT (resume_key) DO
+  NOTHING`; `handOff` claims on `change_request_id IS NULL`; `askTheWorld` moves
+  the gap to `ASSIGNED` carrying its candidate. Four passes over the same rows
+  produce one reading, and that is asserted on the append-only rows.
+
+**A person-owned gap reaches the surface that already exists.** A
+`REQUIRES_PERSON_AUTHORITY` gap becomes a `russell_human_requests` row: the same
+Needs You card, the same route behind `requirePerson`, the same
+`resumeAnsweredRequest`. No second decision framework, because §24 already built
+the one this is. It offers a grant *and* a refusal, because a card with one
+answer is not a decision, and a refusal is recorded as `WAIVED` rather than
+`CLOSED` — the packet then correctly stays short of whatever that requirement
+was load-bearing for.
+
+The resume had to be placed **before** that function's mission check, and this
+is the part worth keeping: `resumeAnsweredRequest` returns `settled: true` for
+any request with no mission — *"the request was not about a mission"* — so a
+capability card somebody answered would have been marked RESUMED having carried
+out nothing, vanished from the surface, and been raised again identically on the
+next tick. A person could have answered the same question every day and never
+learned their decision was recorded and ignored.
+
 ---
 
 ## 10. What is not built, said plainly
@@ -310,3 +378,128 @@ asserts the loop's own source reaches it.
   Brain does not have this code, so no fired Routine has read a blueprint.
 - **No change request has been compiled or approved.** `compile` refuses the
   Research Intelligence packet on its remaining person clause, which is correct.
+
+---
+
+## 9. The three ends that were built and reachable by nothing
+
+§8 above is the honest report this kernel shipped with, and three of its
+sentences named the same defect rather than three different ones. Each was a
+complete, tested mechanism whose only caller printed its result or did not
+exist — this repository's most-recorded failure, arriving at the layer whose
+whole job is telling a sentence in a document from a mechanism that runs.
+
+| What existed | What called it | What that cost |
+|---|---|---|
+| `moveDimension`, which can write all six dimensions | `promoteCandidate`, moving `DEFINITION` only | Five columns written by nothing; every faculty read `ABSENT` and `UNTESTED` off a row nobody had asked |
+| `compile()`, composing a complete `ObjectiveSubmission` | `scripts/capability.ts`, which printed it | A decision-ready packet and a Factory waiting for exactly this ask, with a person retyping between them |
+| `directorPass`, composing bounded questions | nothing | *"No research mission has been run for a capability gap"* — the faculty that decides what Brain should learn about itself could learn nothing |
+
+### `realized.ts` — the five dimensions, and the one it may not touch
+
+Three are derived: `CONTRACT` from the packet's own sections, `IMPLEMENTATION`
+from its classified gaps held against the self-model, `EVALUATION` from the
+faculty's declared standard held against what covers it. Three are refused by
+name in a constant, each with the reason beside it, so a later change that wants
+one has to delete a sentence somebody wrote.
+
+What makes it worth having is what it will not say:
+
+- **An unclassified packet yields no implementation reading at all** — not
+  `ABSENT`. `NEEDS_A_READING` is the kernel saying somebody has to look, and
+  deriving a state over it answers the question the gap exists to ask.
+- **An `UNKNOWN` may raise a state and may never lower one.** The deployed image
+  carries `server` and `client` and not `tests`, so a Brain scanning itself in
+  production reads `EVALUATED: UNKNOWN` about everything it is made of. Without
+  the guard every proven faculty walks back to untested on every pass, and the
+  next reader rebuilds something that works.
+- **`FAILING` is unreachable from here.** The self-model records that a suite
+  *exists* and says nothing about whether it passes, so inferring failure from
+  an absence would produce an alarm nobody can act on.
+- **`AVAILABILITY` has no mover.** Not a check inside one — the absence of a
+  function, asserted by a test that reads the file. Whether a faculty is
+  switched on for real work is the one dimension whose wrong answer is a wrong
+  *action*, and a Brain that could switch its own faculties on is §22's worker
+  creating its own work one altitude up.
+
+**A second hole came out of re-reading the diff rather than from a test**, which
+is the discipline §34 records and the reason it is worth naming. `served`
+counts a `CLOSED` or `WAIVED` gap — correctly, since those requirements are not
+outstanding — while the reach count is asked only of the gaps something actually
+matches. A packet whose every gap was waived therefore had nothing outstanding,
+an empty matched set, every count zero, and fell through to **`LIVE`**. A waiver
+means *another faculty's packet owns this*, which is the opposite of a reading
+that the thing works. There is no reading at all in that case now — not
+`CONNECTED`, which would be the same invention one rung lower.
+
+Writing the fixture found the first one. `judgeGap` could not record *which*
+component a reader matched, so a reader answering `EXISTS_AND_LIVE` said
+something serves the requirement and could not say what — and the reach count
+read an empty set of keys as *no unknowns*, which walked straight to `LIVE`. A
+served requirement with no component behind it is an unknown now. Both halves
+were invisible to reading and visible from one fixture.
+
+### `handoff.ts` — the ask, and nothing after it
+
+`compile()` unchanged, then `submitObjective`, then stop. It does not import the
+approval; a test matches the import statements rather than the file, because
+this module's own header names `approveAndStartCampaign` in order to say it is
+somewhere else. The packet is claimed with a guarded `UPDATE` on
+`change_request_id IS NULL` — the one value that means nobody holds this yet and
+is never what a winner leaves behind, which is §34's correction at the probe
+claim where a guard satisfied by the state it claimed *into* turned out to be no
+guard at all on the second backend.
+
+### `askTheWorld.ts` — a question becomes an idea, never a packet
+
+The obvious shape is `startPacket` with the question in it. It is wrong for the
+reason §25 settled at the connected-site boundary: **a connector may ask, and
+only a person in Russell may authorise the spending.** A capability question is
+in exactly that position, and it is Brain reasoning about Brain — the least
+supervised thing in this codebase and therefore the last place to invent a
+second way of starting research.
+
+So a question becomes a `russell_candidates` row, which spends nothing, and
+every rule that already governs an idea applies unchanged: the archive check
+runs again inside the compiler, the standing authority decides whether a mission
+launches, the approval envelope decides whether the plan may start unasked, and
+the gate, the verification pass and three audit roles are where they were. There
+is **no authorization in the module and no import that could grant one**, which
+a test asserts against the import statements by name.
+
+The gap moves to `ASSIGNED` carrying the candidate, so the next pass — which
+reads only `OPEN` gaps — asks nothing twice, and the link from a gap to its work
+is a join rather than a search that a merge could answer wrongly.
+
+### The joint that made all three unreachable
+
+`NEEDS_A_READING` is where a derivation leaves a gap whose requirement matched
+nothing, and `judgeGap` is the only transition out of it. It existed, four
+suites exercised it, and **no route, tool or command called it** — so in
+production a packet could enter that state and never leave, and everything
+guarded on it is everything: `readiness`, `decisionReadiness`, `compile`,
+`handOff` and the implementation reading all refuse while one gap is open.
+
+The three mechanisms above were therefore reachable in tests and unreachable in
+practice, and §5's record of *a reader then classified the 25* was made through
+something that is not a shipped surface. Every part passed its own tests
+throughout. It is the same defect as the three it blocks, one joint further in.
+
+`npm run capability -- packet judge <gapId> --kind <k> --evidence "…"` is the
+reading, on a terminal because reaching the shell is the authentication. A
+reader may answer **any** kind: `DERIVABLE` bounds what *Brain* derives by
+itself and `NEEDS_JUDGEMENT` is precisely the set a person is here to supply.
+What is not settable is who the answer is recorded as — `derivedBy` is always
+`PERSON`, with no flag that changes it. And `packet show` prints gap ids now,
+because a command taking one beside a listing that printed none is §24's remedy
+the person cannot use, at a terminal.
+
+### What is still not true
+
+- **No faculty is implemented.** `realized.ts` can now *say* one is, from rows,
+  and on this repository every faculty's packet still holds unread gaps.
+- **Nothing has been deployed.** Every reading here is local, and the hosted
+  tool list not carrying `brain_propose_plan_revision` is what says so.
+- **No capability research has actually run.** `askTheWorld` captures the idea;
+  whether a mission follows is the standing authority's decision, and none has
+  been granted on the architecture project.

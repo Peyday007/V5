@@ -1,7 +1,7 @@
 -- ---------------------------------------------------------------------------
 -- WHAT A DESIGN BIN WAS ASKED ABOUT
 --
--- Migration 074 gave the design kernel two lanes and no record of what it had
+-- Migration 080 gave the design kernel two lanes and no record of what it had
 -- *asked*. That omission had two consequences, and both are the kind this
 -- repository keeps having to correct rather than the kind a reader spots.
 --
