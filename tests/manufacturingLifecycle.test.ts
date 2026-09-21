@@ -56,6 +56,7 @@ import {
   listCategoryEvidence,
   listEdges,
   listManufacturingRounds,
+  listCategoryCapital,
 } from '../server/repos/manufacturing.ts';
 import { startProgramme, moveProgramme } from '../server/services/manufacturing/program.ts';
 import { declareHeld, seedCategory } from '../server/services/manufacturing/declare.ts';
@@ -91,6 +92,7 @@ let workerId = '';
 let layer: Layer;
 
 beforeEach(async () => {
+  certificationNowPriced = false;
   fixture = await freshProject();
   projectId = fixture.project.id;
   layer = await fixture.layerByName('Discovery Logic');
@@ -248,6 +250,11 @@ interface Declared {
   finding: string;
   subject: string;
   observedOn?: string;
+  qualifier?: string;
+  basis?: string;
+  amountLowMinor?: number;
+  amountHighMinor?: number;
+  currency?: string;
 }
 
 /**
@@ -304,6 +311,15 @@ async function workerAnswers(input: {
       capability_finding: one.finding,
       capability_subject: one.subject,
       ...(one.observedOn ? { capability_observed_on: one.observedOn } : {}),
+      ...(one.qualifier ? { capability_qualifier: one.qualifier } : {}),
+      ...(one.basis ? { capability_basis: one.basis } : {}),
+      ...(one.amountLowMinor === undefined
+        ? {}
+        : {
+            capability_amount_low_minor: one.amountLowMinor,
+            capability_amount_high_minor: one.amountHighMinor,
+            capability_currency: one.currency,
+          }),
     })),
     search_queries: ['what the sources publish'],
   });
@@ -569,8 +585,76 @@ describe('one manufacturing programme, from a person starting it to a verdict', 
     });
     view = await programmeView(projectId);
     reading = view!.ladder.find((one) => one.categoryId === categoryId)!;
+
+    /* --------------------------------------------------------------------
+     * 13b. And the verdict stops one short of ENTER, because nobody has
+     *      established what entering costs.
+     *
+     * The correction the fifth condition exists for. Before it this read
+     * ENTER with nothing anywhere saying what entering would cost — a verdict
+     * about an easier question than the directive's own ENTRY dimension asks,
+     * whose first item is required capital.
+     * ------------------------------------------------------------------ */
+    expect(reading.verdict).toBe('COST_UNKNOWN');
+    expect(
+      reading.conditions.find((one) => one.condition === 'ENTRY_COST_ESTABLISHED')!.answer,
+    ).toBe('UNKNOWN');
+    expect(view!.enterable).toEqual([]);
+
+    /* --------------------------------------------------------------------
+     * 13c. So Brain asks it, on its own, and a worker answers through the
+     *      same door as everything else.
+     * ------------------------------------------------------------------ */
+    await drainUntil(
+      'the entry cost filed onto the ladder',
+      async () =>
+        (await listCategoryCapital(program!.id)).filter(
+          (one) => one.categoryId === categoryId,
+        ).length >= 2,
+    );
+    const capital = (await listCategoryCapital(program!.id)).filter(
+      (one) => one.categoryId === categoryId,
+    );
+    expect(capital.map((one) => one.requirement).sort()).toEqual([
+      'CERTIFICATION_AND_APPROVAL',
+      'TOOLING_AND_EQUIPMENT',
+    ]);
+
+    /* --------------------------------------------------------------------
+     * 13d. One of the two has no published figure, so no total is reported
+     *      and the verdict does not move. A blank is a finding here, and it
+     *      is one Brain refuses to sum past.
+     * ------------------------------------------------------------------ */
+    view = await programmeView(projectId);
+    reading = view!.ladder.find((one) => one.categoryId === categoryId)!;
+    expect(reading.capital.state).toBe('PARTIAL');
+    expect(reading.capital.unpricedRequirements).toEqual(['CERTIFICATION_AND_APPROVAL']);
+    expect(
+      reading.capital.scenarios.find((one) => one.scenario === 'SMALLEST_CREDIBLE_ENTRY')!.totals,
+    ).toBeNull();
+    expect(reading.verdict).toBe('COST_UNKNOWN');
+
+    /* --------------------------------------------------------------------
+     * 13e. A second source publishes the missing fee, and only then does the
+     *      category read ENTER.
+     * ------------------------------------------------------------------ */
+    await pricedTheRest({ programId: program!.id, categoryId });
+    view = await programmeView(projectId);
+    reading = view!.ladder.find((one) => one.categoryId === categoryId)!;
+    expect(reading.capital.state).toBe('ESTABLISHED');
     expect(reading.verdict).toBe('ENTER');
-    expect(view!.enterable.map((one) => one.categoryId)).toEqual([categoryId]);
+    /*
+     * Contains rather than equals, and the reason is worth keeping.
+     *
+     * The bootstrap round put a second category on the ladder, the simulated
+     * worker answers every category's questions the same way, and a capability
+     * is one row per programme rather than one per category — so the holding
+     * declared for this category satisfies the other one too, and it reaches
+     * ENTER as well. That is the chain working rather than a fixture leaking:
+     * the whole point of `capability_edges` is that several categories can
+     * require one capability.
+     */
+    expect(view!.enterable.map((one) => one.categoryId)).toContain(categoryId);
 
     /* --------------------------------------------------------------------
      * 14. And the whole thing advanced with nobody editing a row.
@@ -587,6 +671,18 @@ describe('one manufacturing programme, from a person starting it to a verdict', 
  * declared. These are the sentences a reader of a source would have written;
  * everything about whether they are accepted is Brain's.
  */
+/**
+ * Whether the second source that prices the certification has been published.
+ *
+ * A flag rather than a second `pick` function, because what is under test is
+ * that **the same worker path** can clear an earlier blank: rows are
+ * append-only, so the unpriced row from the first round is still there, and
+ * `readCapital` has to group by requirement rather than read row by row. A
+ * fixture that filed the priced row through a different door would have proved
+ * nothing about that.
+ */
+let certificationNowPriced = false;
+
 function declarationsFor(context: { fragmentKey: string; laneIds: string[] }): Declared[] {
   if (context.fragmentKey === 'machine-demand') {
     return [
@@ -615,6 +711,55 @@ function declarationsFor(context: { fragmentKey: string; laneIds: string[] }): D
       },
     ];
   }
+  if (context.fragmentKey === 'machine-capital') {
+    /*
+     * Two requirements, and one of them deliberately carries no figure.
+     *
+     * The unpriced one is the case this question exists to be able to return:
+     * the requirement is real and nothing publishes what it costs. A worker
+     * that filled it in would be inventing a number at the figure that would
+     * start a factory, and a Brain that summed past it would report a total
+     * smaller than anything published says.
+     */
+    return [
+      {
+        claim: 'A machine-tool supplier lists a pump and frame assembly line at $480,000.',
+        lane: 'requirement',
+        finding: 'CAPITAL_REQUIREMENT',
+        subject: 'TOOLING_AND_EQUIPMENT',
+        qualifier: 'SMALLEST_CREDIBLE_ENTRY',
+        basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+        observedOn: '2026-05-01',
+        amountLowMinor: 48_000_000,
+        amountHighMinor: 48_000_000,
+        currency: 'USD',
+      },
+      certificationNowPriced
+        ? {
+            claim: 'The regulator has since published a type-approval fee of $36,000.',
+            lane: 'requirement',
+            finding: 'CAPITAL_REQUIREMENT',
+            subject: 'CERTIFICATION_AND_APPROVAL',
+            qualifier: 'SMALLEST_CREDIBLE_ENTRY',
+            basis: 'REGULATORY_FEE_SCHEDULE',
+            observedOn: '2026-08-14',
+            amountLowMinor: 3_600_000,
+            amountHighMinor: 3_600_000,
+            currency: 'USD',
+          }
+        : {
+            claim:
+              'The regulator requires safety certification for machines of this class and ' +
+              'publishes no fee schedule for it.',
+            lane: 'requirement',
+            finding: 'CAPITAL_REQUIREMENT',
+            subject: 'CERTIFICATION_AND_APPROVAL',
+            qualifier: 'SMALLEST_CREDIBLE_ENTRY',
+            basis: 'REGULATORY_FEE_SCHEDULE',
+            observedOn: '2026-05-01',
+          },
+    ];
+  }
   return [
     {
       claim: 'The association recognises portable generators as a category of its own.',
@@ -623,6 +768,29 @@ function declarationsFor(context: { fragmentKey: string; laneIds: string[] }): D
       subject: 'Portable generators',
     },
   ];
+}
+
+/**
+ * A second round publishes the figure the first could not find.
+ *
+ * Driven the whole way: the allocator opens the round because the verdict is
+ * `COST_UNKNOWN`, a worker answers it through the tools, and the absorption
+ * files a second row for the same requirement. The first row stays — evidence
+ * is never overwritten — which is exactly the case that made row-wise reading
+ * wrong.
+ */
+async function pricedTheRest(input: { programId: string; categoryId: string }): Promise<void> {
+  certificationNowPriced = true;
+  await drainUntil(
+    'a published figure for the certification',
+    async () =>
+      (await listCategoryCapital(input.programId)).some(
+        (one) =>
+          one.categoryId === input.categoryId &&
+          one.requirement === 'CERTIFICATION_AND_APPROVAL' &&
+          one.amountLowMinor !== null,
+      ),
+  );
 }
 
 describe('both validation doors, and every honest stop', () => {
@@ -760,8 +928,8 @@ describe('both validation doors, and every honest stop', () => {
     const reading = view!.ladder.find(
       (one) => one.path.at(-1) === 'Commercial pressure washers',
     )!;
-    // Four conditions, always all four, each with the rows it was read from.
-    expect(reading.conditions).toHaveLength(4);
+    // Five conditions, always all five, each with the rows it was read from.
+    expect(reading.conditions).toHaveLength(5);
     for (const condition of reading.conditions) {
       expect(condition.because.length).toBeGreaterThan(10);
     }

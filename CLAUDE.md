@@ -6973,19 +6973,201 @@ when the brief's whole optimization rule is that it is not.**
   the one the rule actually applies, so the route reads the field as optional
   and lets the rule speak. Nothing is weakened: the service refuses either way.
 
+- **A verdict that could not see what entering costs was answering an easier
+  question, and the correction is recorded rather than quietly applied.** The
+  four entry conditions could all read `MET` with nothing anywhere saying what
+  entering would cost — so `ENTER` was reachable on a category nobody had
+  priced, while the directive's own ENTRY dimension names *required capital*
+  first. `ENTRY_COST_ESTABLISHED` is the fifth, `COST_UNKNOWN` the verdict
+  between `BUILD_CAPABILITY_FIRST` and `ENTER`, and its own verdict for
+  `NO_ROUTE_FOUND`'s reason: the remedy is one question rather than a capability
+  measured in years, and collapsing them would send somebody to develop
+  something they already have.
+
+  It is a **table** rather than a thirteenth barrier kind, because a barrier is
+  a *thing to obtain* and capital is an *amount* — a figure, a currency, a date,
+  a shape of business and a source, none of which a barrier row could carry.
+  And **a total is withheld whenever any established requirement carries no
+  published figure**, which is the direction of the error rather than its size:
+  a sum that steps over a blank is *smaller* than anything published says, so it
+  makes a category look cheaper to enter than it is, and too low at the number
+  that would start a factory reads as a bargain rather than as a mistake. §30
+  records `conservativeContribution` making exactly that error one section
+  along — the card refused the blank and the ranking rewarded it.
+
+  **A requirement nobody publishes a figure for is a finding, not a failure**,
+  and the assignment says so twice. Refusing it would leave a worker with
+  nothing to submit but an estimate of their own, which is the one output this
+  question most needs never to receive.
+
+  Three refusals underneath it, each found by running it. A requirement is
+  unpriced only where **no** row for it carries a figure — rows are append-only,
+  so reading them row-wise made a blank *permanent* and no later evidence could
+  clear it, which is a park rather than a bar. Two published figures for one
+  requirement **widen the range** rather than summing, because summing counts a
+  requirement once per source that priced it and inflates the total in
+  proportion to how much evidence stands behind it. And nothing converts a
+  currency: two are reported side by side, because a rate is a fact about a day
+  nobody recorded.
+
+- **Naming and hashing a blueprint proves integrity and never use, and this
+  programme proved only the first.** The directive was copied into the image,
+  hashed, recorded on the programme row and **never opened**: not one word of
+  its core principle, its evaluation dimensions, its compounding questions or
+  its vertical-integration test reached a worker, and the whole of what an
+  assignment carried was one sentence a person typed at start. Every row about
+  it read healthy, because a hash cannot answer the question.
+
+  `services/manufacturing/directive.ts` parses the committed file and
+  `questions.ts` pastes its own sentences into every assignment.
+  `startProgramme` **refuses to start** when it cannot be read, so the column
+  cannot be decorative; every getter refuses a missing section by name rather
+  than returning an empty list, because a brief that quietly lost its core
+  principle would produce questions that read almost right; and the surface
+  reports *path*, *digest* and *reaching* as three separate facts.
+  `tests/manufacturingDirective.test.ts` drives a programme to an opened work
+  item and reads the assignment — delete the calls and every other
+  manufacturing suite still passes, while that one fails naming the sentence
+  that stopped arriving.
+
+  **Two parser defects came out of running it**, and both are the same shape.
+  Wrapped list items were cut mid-clause and the truncation was reported as
+  success (§27's unrecoverable outcome), and then the last item swallowed every
+  paragraph after its list. Neither was visible from reading the file.
+
+  **And the excerpts had to be quoted behind a governor**, which is true as well
+  as convenient. The directive is full of imperatives aimed at the company —
+  *"Observe what customers actually purchase"*, *"purchase frequency"* — that
+  read to `planFitsEnvelope`'s screen as instructions to go and buy something,
+  which is §33's defect exactly. The 40-character governor window makes the
+  spacing load-bearing, so it is **asserted rather than reasoned about**: a test
+  runs every rendered brief through the real screen with the real envelope
+  patterns.
+
+- **Erasing the pyramid took only half of what the directive said, and the
+  correction is recorded rather than quietly applied.** It names six levels and
+  then says, in its own capitals, that they are *examples, NOT mandatory
+  sequencing*. Both halves are load-bearing, and dropping the levels entirely
+  lost real discovery intelligence: *pressure washers through to cargo aircraft*
+  is a genuine spread of scale and a genuine set of search seeds.
+
+  What keeps both is narrow by construction. The bands are **parsed from the
+  file, never declared in code**, so this repository still contains no list of
+  machine categories and the test that says so still reads the source.
+  `searchSpread` returns the bands and the directive's own refusal of its own
+  ordering as **one string**, so there is no call anywhere that could print a
+  ladder. They reach exactly two places — the opening question as a spread to
+  search across, and the surface as illustrations of scale — and are never rows,
+  never an ordering, never a `level` column, and nothing compares a category to
+  one.
+
+  **And one anchor trapped discovery inside its own subtree.** Every allocator
+  rule asks about a category already on the ladder and `MAP` attaches what it
+  finds *underneath* the one it asked about, so a programme seeded with a single
+  category recursed inside it for ever — every row healthy, every round finding
+  something, and the kernel exploring a cone rather than the physical
+  manufacturing world the directive asks for. The escape is the opening question
+  itself, because it names **sources rather than categories**: asking it again
+  is the one thing that reaches outside. Derived from concentration in rows, and
+  last in rank, so it never takes a slot from a category with published buyers
+  waiting on its next question.
+
+- **Refusing a ladder is not refusing to judge, and a flat collection of
+  identical verdicts was doing the second.** The directive refuses a *stored*
+  sequence and demands a *derived* one in the same breath. Reading only the
+  first hands a person eleven categories with no way to tell them apart, while
+  the machinery has an opinion anyway in whatever order its list came back.
+
+  `priority.ts` ranks lexicographically over eight named factors, each a fact
+  about rows, each carried with its own value and its own sentence. There is
+  **no total, no percentage and no coefficient**: two entries that differ are
+  separated by exactly one factor and the reading names it, so *why is this
+  above that* resolves to rows rather than to arithmetic nobody can inspect.
+  Two entries with nothing between them say so, which is itself a finding.
+  **An unknown never ranks higher** — an unexamined category does not count as
+  having no gaps, a partial capital reading does not count as an established
+  one, and *we asked and nobody is buying* ranks below *nobody has asked*.
+
+- **Identifying an acquisition is research; everything that follows from one is
+  not.** The directive asks for the first and its optimization rule says why —
+  *an acquisition could suddenly make an advanced category viable much earlier*.
+  Approaching, requesting information from, valuing, offering for, negotiating
+  with, committing to or buying a firm are separately authorized commercial
+  actions, and no route through this kernel reaches one.
+
+  That is the **schema** rather than a rule somebody follows:
+  `acquisition_candidates` has no column an approach, a valuation Brain
+  produced, a term, a price or a commitment could be written into, so recording
+  one would need a migration somebody reviews. Setting a candidate aside
+  destroys nothing — deleting it would let the same firm arrive next round as a
+  fresh discovery. The round is asked only where a requirement is **unbridged**,
+  because a gap something on the ladder already develops has a cheaper answer.
+
+- **The master brand is not named and not forgotten, and `OPEN` is the correct
+  state.** The directive asks for one brand that could sit on a pressure washer
+  and on a cargo aircraft, then says *do not lock these division names
+  prematurely*. Inventing one would be Brain deciding something reserved to a
+  person; dropping the concern because it cannot be decided yet loses the
+  requirement, and the first time anybody noticed would be when a category
+  outgrew a name chosen by accident.
+
+  `programme_decisions` holds it, and what makes that useful rather than a note
+  is **derived from the ladder**: the criteria any answer would have to satisfy,
+  what it depends on, and the condition under which leaving it open stops being
+  safe — *reconsider when a category is first actually entered*, a condition on
+  rows rather than a date that would fire while the answer was still correctly
+  unknown. **Nothing proposes a name**: not a shortlist, not a generator, not an
+  example, and a test reads the source to say so. Reopening is the answering
+  transition, because the directive's own caution is precisely a reason a name
+  chosen early may need unchoosing.
+
+- **`submission.ts` carried three of eight capability fields, directly beneath a
+  comment naming that exact defect.** A worker submitted a correct capital
+  requirement over the wire, the door validated all eight, five were dropped
+  silently, and every capital claim then reached the absorption with no
+  scenario, no basis and no amount — was refused for it, and **the refusal named
+  the worker**. Every row read healthy and the whole suite passed, because
+  nothing in it submitted one through that door. §33's `applyValidationAnswers`
+  again: the fact reached one reader and not the other, and both looked fine.
+
+- **The three decisions a person makes are controls on the surface now, and
+  driving them found §29's unmounting defect again.** Starting a programme and
+  moving its lifecycle had a route and no button, so the only way to make
+  either was a terminal — and pressing a control that did exist blanked the
+  whole page: `reload()` sets `loading`, and the loading branch returned before
+  every section, taking the form a person was part-way through down with it.
+  That is the People-surface defect one screen along, and every server test
+  passed either way. A re-read leaves the previous answer up until the new one
+  arrives.
+
+  Starting says what it authorizes **and what it does not** before it is
+  pressed, because pressing Start *is* the authorization. Archiving asks for
+  confirmation and pausing does not: the two are not equally reversible, and
+  archiving withdraws a grant that reactivating has to write again. Neither
+  control decides anything — the transitions are guarded in the service, a
+  hidden button is not authorization, and the route refuses a worker by
+  principal type as well as by level.
+
 `npm run manufacturing` remains the terminal door, calling exactly what the
 routes call, for the operations a browser is not needed for.
 
 **What has and has not happened, said plainly.** The kernel operates end to end
-against both backends: a programme started, the opening question opened by the
-allocator, categories filed from gated claims, demand and capability rounds, the
-chain derived across two categories, a person recording a holding, and the
-verdict moving to `ENTER` and back when that holding is withdrawn. **No fleet
-worker has answered a manufacturing question in production**, because that needs
-a deploy and a fire — and until one has, the engine passing its tests says
-nothing about the research, which is the separation Step 3 drew between the
-research engine and a real job having actually run. **Nothing has been built,
-bought, tooled or entered**, and nothing here can do any of those.
+against both backends: a programme started, its directive read and parsed and
+its own words in the assignment, the opening question opened by the allocator,
+categories filed from gated claims, demand and capability rounds, the chain
+derived across two categories, a person recording a holding, a capital round
+filing both a priced requirement and an unpriced one, the verdict correctly
+stopping at `COST_UNKNOWN` until a later round publishes the missing figure, and
+moving back when the holding is withdrawn. **No fleet worker has answered a
+manufacturing question in production**, because that needs a deploy and a fire —
+and until one has, the engine passing its tests says nothing about the research,
+which is the separation Step 3 drew between the research engine and a real job
+having actually run. In particular **no `CAPITAL` or `ACQUISITION` round has
+been answered by a real worker**, and **no acquisition candidate has been named
+by research**: the tables, the routes and the transitions are exercised by a
+simulated worker through the real tools, which is a different claim. **The
+master-brand question is OPEN and nothing has proposed a name.** **Nothing has
+been built, bought, tooled or entered**, and nothing here can do any of those.
 
 ## 40. Research is a decision about what to learn, and Brain had no place to make it.
 

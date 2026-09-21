@@ -47,15 +47,28 @@ import {
   listCategories,
   openManufacturingRound,
   openRoundsByCandidate,
+  recordAcquisitionCandidate,
+  recordCategoryCapital,
   recordCategoryEvidence,
   recordEdge,
 } from '../../repos/manufacturing.ts';
-import { pathOf, targetForFinding } from '../../domain/manufacturing.ts';
 import {
+  isAcquisitionContribution,
+  isCapitalBasis,
+  isCapitalScenario,
+  isMachineCapitalRequirement,
+  pathOf,
+  targetForFinding,
+} from '../../domain/manufacturing.ts';
+import {
+  acquisitionQuestion,
+  acquisitionTitle,
   bootstrapQuestion,
   BOOTSTRAP_TITLE,
   capabilityQuestion,
   capabilityTitle,
+  capitalQuestion,
+  capitalTitle,
   demandQuestion,
   demandTitle,
   integrationQuestion,
@@ -63,11 +76,14 @@ import {
   mapQuestion,
   mapTitle,
 } from './questions.ts';
+import type { Directive } from './directive.ts';
 import type { Ask } from './allocate.ts';
 import type { LadderSnapshot } from './ladder.ts';
 import type {
+  AcquisitionCandidate,
   Capability,
   CapabilityEdge,
+  CategoryCapitalEntry,
   CategoryEvidenceEntry,
   MachineCategory,
   ManufacturingRound,
@@ -98,14 +114,23 @@ export async function openAsks(input: {
   projectId: string;
   asks: readonly Ask[];
   snapshot: LadderSnapshot;
+  /**
+   * The programme's directive, parsed, or null when it could not be read.
+   *
+   * Passed in rather than read here, so one pass opens every question against
+   * one reading of one file. A per-question read would let two assignments in
+   * the same pass carry two different versions of the directive if somebody
+   * edited it between them — the same reason `ladderSnapshot` is taken once.
+   */
+  directive: Directive | null;
 }): Promise<OpenedRound[]> {
-  const { snapshot } = input;
+  const { snapshot, directive } = input;
   const byId = new Map(snapshot.categories.map((one) => [one.id, one]));
   const coverageById = new Map(snapshot.coverage.map((one) => [one.category.id, one]));
   const out: OpenedRound[] = [];
 
   for (const ask of input.asks) {
-    const composed = compose({ ask, snapshot, byId, coverageById });
+    const composed = compose({ ask, snapshot, byId, coverageById, directive });
     if (!composed) continue;
 
     const candidate = await createCandidate({
@@ -170,12 +195,13 @@ function compose(input: {
   snapshot: LadderSnapshot;
   byId: Map<string, MachineCategory>;
   coverageById: Map<string, LadderSnapshot['coverage'][number]>;
+  directive: Directive | null;
 }): { title: string; question: string } | null {
-  const { ask, snapshot } = input;
+  const { ask, snapshot, directive } = input;
   const objective = snapshot.program.objective;
 
   if (ask.purpose === 'BOOTSTRAP') {
-    return { title: BOOTSTRAP_TITLE, question: bootstrapQuestion(objective, ask.round) };
+    return { title: BOOTSTRAP_TITLE, question: bootstrapQuestion(objective, ask.round, directive) };
   }
   if (!ask.categoryId) return null;
 
@@ -191,6 +217,7 @@ function compose(input: {
         objective,
         round: ask.round,
         childrenSoFar: coverage?.children ?? 0,
+        directive,
       }),
     };
   }
@@ -205,6 +232,7 @@ function compose(input: {
           (coverage?.demand.length ?? 0) +
           (coverage?.distribution.length ?? 0) +
           (coverage?.weaknesses.length ?? 0),
+        directive,
       }),
     };
   }
@@ -216,6 +244,33 @@ function compose(input: {
         objective,
         round: ask.round,
         knownSoFar: coverage?.requires.length ?? 0,
+        directive,
+      }),
+    };
+  }
+  if (ask.purpose === 'CAPITAL') {
+    return {
+      title: capitalTitle(path),
+      question: capitalQuestion({
+        path,
+        objective,
+        round: ask.round,
+        knownSoFar: (coverage?.capital ?? []).filter((one) => one.amountLowMinor !== null).length,
+        directive,
+      }),
+    };
+  }
+  if (ask.purpose === 'ACQUISITION') {
+    return {
+      title: acquisitionTitle(path),
+      question: acquisitionQuestion({
+        path,
+        objective,
+        round: ask.round,
+        missingCapabilities: (coverage?.requires ?? [])
+          .filter((one) => one.heldAt === null)
+          .map((one) => one.name),
+        directive,
       }),
     };
   }
@@ -225,6 +280,7 @@ function compose(input: {
       path,
       objective,
       requiredSoFar: (coverage?.requires ?? []).map((one) => one.name),
+      directive,
     }),
   };
 }
@@ -234,6 +290,8 @@ export interface Absorbed {
   capabilities: Capability[];
   edges: CapabilityEdge[];
   evidence: CategoryEvidenceEntry[];
+  capital: CategoryCapitalEntry[];
+  candidates: AcquisitionCandidate[];
   /** Rounds settled this pass, with what each one produced. */
   settled: { roundId: string; found: number }[];
   /** Declarations that could not be filed, and why. Reported, never guessed. */
@@ -245,6 +303,8 @@ const EMPTY_ABSORBED = (): Absorbed => ({
   capabilities: [],
   edges: [],
   evidence: [],
+  capital: [],
+  candidates: [],
   settled: [],
   refused: [],
 });
@@ -463,6 +523,88 @@ async function file(input: {
       return true;
     }
     return created;
+  }
+
+  if (target.table === 'CAPITAL') {
+    /*
+     * Every field the row needs was validated on submission, so nothing here
+     * defaults one.
+     *
+     * A claim that reached this branch has a requirement from the closed set,
+     * a scenario, a basis and a date, because `validateCapabilityFinding`
+     * refuses the submission otherwise. The **amount may be absent**, and that
+     * is carried rather than filled: *this is required and nobody publishes
+     * what it costs* is the finding, and `readCapital` is where it withholds a
+     * total instead of being summed past.
+     */
+    if (
+      !isMachineCapitalRequirement(subject) ||
+      !isCapitalScenario(claim.capabilityQualifier) ||
+      !isCapitalBasis(claim.capabilityBasis) ||
+      !claim.capabilityObservedOn
+    ) {
+      out.refused.push({
+        claimId: claim.id,
+        why:
+          'A CAPITAL_REQUIREMENT was declared without the requirement, the scenario, the kind ' +
+          'of figure or the date it was true, so there is nothing that could be compared ' +
+          'against another category. It stays as evidence on its claim.',
+      });
+      return false;
+    }
+    const capital = await recordCategoryCapital({
+      programId: input.programId,
+      categoryId: round.categoryId,
+      requirement: subject,
+      scenario: claim.capabilityQualifier,
+      amountLowMinor: claim.capabilityAmountLowMinor,
+      amountHighMinor: claim.capabilityAmountHighMinor,
+      currency: claim.capabilityCurrency,
+      basis: claim.capabilityBasis,
+      asOf: claim.capabilityObservedOn,
+      statement: claim.claim,
+      sourceClaimId: claim.id,
+    });
+    if (capital) {
+      out.capital.push(capital);
+      return true;
+    }
+    return false;
+  }
+
+  if (target.table === 'ACQUISITION') {
+    if (!isAcquisitionContribution(claim.capabilityQualifier)) {
+      out.refused.push({
+        claimId: claim.id,
+        why:
+          'An ACQUISITION_CANDIDATE was declared without saying what buying it would ' +
+          'contribute, and a candidate nobody can say what it supplies is one nobody can ' +
+          'argue with. It stays as evidence on its claim.',
+      });
+      return false;
+    }
+    /*
+     * A candidate is about the category the round asked about.
+     *
+     * It is deliberately not resolved to a *capability* from the claim's own
+     * words — which capability a firm would supply is a judgement, and reading
+     * it out of prose is §25's Westbrook defect. A candidate that names one
+     * arrives that way only if something records it, and nothing does today.
+     */
+    const candidate = await recordAcquisitionCandidate({
+      programId: input.programId,
+      categoryId: round.categoryId,
+      capabilityId: null,
+      name: subject,
+      contribution: claim.capabilityQualifier,
+      statement: claim.claim,
+      sourceClaimId: claim.id,
+    });
+    if (candidate) {
+      out.candidates.push(candidate);
+      return true;
+    }
+    return false;
   }
 
   const recorded = await recordCategoryEvidence({

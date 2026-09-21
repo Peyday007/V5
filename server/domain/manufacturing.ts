@@ -16,7 +16,7 @@
  * The rule that is specific to this kernel
  * ---------------------------------------------------------------------------
  *
- * Two of the nine findings create a **capability row**, and neither of them
+ * Two of the eleven findings create a **capability row**, and neither of them
  * may ever mark it held. `CAPABILITY_REQUIRED` says producing in a category
  * needs something; `CAPABILITY_TAUGHT` says producing there develops it. Both
  * are facts about machines. Whether *this company* holds a capability is a
@@ -30,20 +30,28 @@
  * implementation" arriving in a factory.
  */
 import {
+  ACQUISITION_CONTRIBUTIONS,
   CAPABILITY_FINDINGS,
+  CAPITAL_BASES,
+  CAPITAL_SCENARIOS,
   CATEGORY_EVIDENCE_KINDS,
   DEMAND_SIGNAL_KINDS,
   DISTRIBUTION_CHANNEL_KINDS,
   ENTRY_BARRIER_KINDS,
   INCUMBENT_WEAKNESS_KINDS,
+  MACHINE_CAPITAL_REQUIREMENTS,
   MACHINE_CATEGORY_KINDS,
+  type AcquisitionContribution,
   type CapabilityFinding,
   type CapabilityRelation,
+  type CapitalBasis,
+  type CapitalScenario,
   type CategoryEvidenceKind,
   type DemandSignalKind,
   type DistributionChannelKind,
   type EntryBarrierKind,
   type IncumbentWeaknessKind,
+  type MachineCapitalRequirement,
   type MachineCategoryKind,
 } from './types.ts';
 
@@ -85,6 +93,27 @@ export function isEntryBarrierKind(value: unknown): value is EntryBarrierKind {
   return typeof value === 'string' && (ENTRY_BARRIER_KINDS as readonly string[]).includes(value);
 }
 
+export function isMachineCapitalRequirement(value: unknown): value is MachineCapitalRequirement {
+  return (
+    typeof value === 'string' &&
+    (MACHINE_CAPITAL_REQUIREMENTS as readonly string[]).includes(value)
+  );
+}
+
+export function isCapitalScenario(value: unknown): value is CapitalScenario {
+  return typeof value === 'string' && (CAPITAL_SCENARIOS as readonly string[]).includes(value);
+}
+
+export function isCapitalBasis(value: unknown): value is CapitalBasis {
+  return typeof value === 'string' && (CAPITAL_BASES as readonly string[]).includes(value);
+}
+
+export function isAcquisitionContribution(value: unknown): value is AcquisitionContribution {
+  return (
+    typeof value === 'string' && (ACQUISITION_CONTRIBUTIONS as readonly string[]).includes(value)
+  );
+}
+
 /**
  * What a finding produces: a category, a capability edge, or a row of evidence
  * about the category the round was asking about.
@@ -97,7 +126,9 @@ export function isEntryBarrierKind(value: unknown): value is EntryBarrierKind {
 export type FindingTarget =
   | { table: 'CATEGORY'; kind: MachineCategoryKind }
   | { table: 'CAPABILITY'; relation: CapabilityRelation }
-  | { table: 'EVIDENCE'; kind: CategoryEvidenceKind };
+  | { table: 'EVIDENCE'; kind: CategoryEvidenceKind }
+  | { table: 'CAPITAL' }
+  | { table: 'ACQUISITION' };
 
 const CREATES: Readonly<Record<CapabilityFinding, FindingTarget>> = Object.freeze({
   PRODUCT_CATEGORY: { table: 'CATEGORY', kind: 'PRODUCT_CATEGORY' },
@@ -109,6 +140,8 @@ const CREATES: Readonly<Record<CapabilityFinding, FindingTarget>> = Object.freez
   INCUMBENT_WEAKNESS: { table: 'EVIDENCE', kind: 'INCUMBENT_WEAKNESS' },
   ENTRY_BARRIER: { table: 'EVIDENCE', kind: 'ENTRY_BARRIER' },
   BOUGHT_IN_COMPONENT: { table: 'EVIDENCE', kind: 'BOUGHT_IN_COMPONENT' },
+  CAPITAL_REQUIREMENT: { table: 'CAPITAL' },
+  ACQUISITION_CANDIDATE: { table: 'ACQUISITION' },
 });
 
 export function targetForFinding(finding: CapabilityFinding): FindingTarget {
@@ -116,15 +149,19 @@ export function targetForFinding(finding: CapabilityFinding): FindingTarget {
 }
 
 /**
- * Every finding names what it is about, and for four of them the name comes
+ * Every finding names what it is about, and for five of them the name comes
  * from a closed set.
  *
  * A category and a capability carry a *name* — free text, because nobody can
  * enumerate the world's machine categories or engineering capabilities in
  * advance, which is the whole premise of this kernel and the reason there is
- * no list of either in this repository. The four evidence kinds that have a
- * vocabulary carry a *value*, and reading either out of the claim sentence
- * would be the prose-parsing §25's Westbrook defect records.
+ * no list of either in this repository. The kinds that have a vocabulary carry
+ * a *value*, and reading either out of the claim sentence would be the
+ * prose-parsing §25's Westbrook defect records.
+ *
+ * `ACQUISITION_CANDIDATE` is free text for the same reason a category is:
+ * nobody can enumerate the world's firms in advance. What it *would
+ * contribute* is closed, and that is its qualifier.
  *
  * `BOUGHT_IN_COMPONENT` is the fifth evidence kind and is deliberately free
  * text: a starter motor, a hydraulic pump and a flight control computer are
@@ -138,7 +175,38 @@ export function subjectVocabularyFor(finding: CapabilityFinding): readonly strin
   if (finding === 'DISTRIBUTION_CHANNEL') return DISTRIBUTION_CHANNEL_KINDS;
   if (finding === 'INCUMBENT_WEAKNESS') return INCUMBENT_WEAKNESS_KINDS;
   if (finding === 'ENTRY_BARRIER') return ENTRY_BARRIER_KINDS;
+  if (finding === 'CAPITAL_REQUIREMENT') return MACHINE_CAPITAL_REQUIREMENTS;
   return null;
+}
+
+/**
+ * The *second* closed value a finding names, where its kind has one.
+ *
+ * `null` means the finding has no qualifier, and a qualifier given for one of
+ * those is refused rather than stored: a value nothing will ever read, stored,
+ * looks like it did something. §38's `structural_qualifier` is the same column
+ * one kernel along and for the same reason — the judgement is made once by
+ * whoever read the source, and everything after is a lookup.
+ */
+export function qualifierVocabularyFor(finding: CapabilityFinding): readonly string[] | null {
+  if (finding === 'CAPITAL_REQUIREMENT') return CAPITAL_SCENARIOS;
+  if (finding === 'ACQUISITION_CANDIDATE') return ACQUISITION_CONTRIBUTIONS;
+  return null;
+}
+
+/**
+ * Whether a finding may carry a money range, and must say what kind of figure
+ * it is.
+ *
+ * Only a capital requirement, and the amount is **optional** even there: *the
+ * requirement is real and nobody publishes what it costs* is a finding worth
+ * having, and refusing it would push a worker towards producing an estimate —
+ * which is the one output this kernel most needs never to receive. What is not
+ * optional is the basis, because a figure whose kind nobody stated cannot be
+ * weighed against one whose kind they did.
+ */
+export function findingTakesAmount(finding: CapabilityFinding): boolean {
+  return finding === 'CAPITAL_REQUIREMENT';
 }
 
 /**
@@ -152,7 +220,7 @@ export function subjectVocabularyFor(finding: CapabilityFinding): readonly strin
  * produce invented ones.
  */
 export function findingTakesObservedOn(finding: CapabilityFinding): boolean {
-  return finding === 'DEMAND_EVIDENCE';
+  return finding === 'DEMAND_EVIDENCE' || finding === 'CAPITAL_REQUIREMENT';
 }
 
 /**
@@ -244,6 +312,19 @@ export const FINDING_GUIDE: Readonly<Record<CapabilityFinding, string>> = Object
   BOUGHT_IN_COMPONENT:
     'the source establishes a component or subsystem that producers in this category buy in ' +
     'rather than make — set capability_subject to the component',
+  CAPITAL_REQUIREMENT:
+    'the source establishes something entering this category costs owner money — set ' +
+    'capability_subject to which requirement it is, capability_qualifier to which shape of ' +
+    'the business the figure is about, capability_basis to what kind of figure it is, and ' +
+    'capability_observed_on to the date it was true. Give the amount as ' +
+    'capability_amount_low_minor and capability_amount_high_minor in minor units with ' +
+    'capability_currency, or leave all three out: a requirement nobody publishes a figure ' +
+    'for is a real finding and is worth submitting, and an estimate of your own is not',
+  ACQUISITION_CANDIDATE:
+    'the source names a firm that could be bought rather than built past — set ' +
+    'capability_subject to its name and capability_qualifier to what buying it would ' +
+    'contribute. This is identification only: nothing here approaches, values, offers to or ' +
+    'commits to anybody, and no part of this system can',
 });
 
 /**
@@ -259,6 +340,22 @@ export function describeVocabularies(): string {
     `DISTRIBUTION_CHANNEL: ${DISTRIBUTION_CHANNEL_KINDS.join(', ')}`,
     `INCUMBENT_WEAKNESS: ${INCUMBENT_WEAKNESS_KINDS.join(', ')}`,
     `ENTRY_BARRIER: ${ENTRY_BARRIER_KINDS.join(', ')}`,
+    `CAPITAL_REQUIREMENT: ${MACHINE_CAPITAL_REQUIREMENTS.join(', ')}`,
+  ].join('; ');
+}
+
+/**
+ * The two qualifier sets, and the bases, as one sentence for a tool
+ * description.
+ *
+ * Composed rather than restated, so a value added to one appears here without
+ * anybody remembering a string.
+ */
+export function describeQualifiers(): string {
+  return [
+    `CAPITAL_REQUIREMENT capability_qualifier: ${CAPITAL_SCENARIOS.join(', ')}`,
+    `CAPITAL_REQUIREMENT capability_basis: ${CAPITAL_BASES.join(', ')}`,
+    `ACQUISITION_CANDIDATE capability_qualifier: ${ACQUISITION_CONTRIBUTIONS.join(', ')}`,
   ].join('; ');
 }
 
@@ -290,6 +387,22 @@ export interface CapabilityDeclaration {
   finding: CapabilityFinding | null;
   subject: string | null;
   observedOn: string | null;
+  /** The second closed value, where the finding's kind has one. */
+  qualifier: string | null;
+  /** What kind of figure the amount is. Only a capital requirement has one. */
+  basis: string | null;
+  /**
+   * The published range in minor units, or null on all three.
+   *
+   * Null is a *finding* rather than a blank: the requirement is established and
+   * nothing publishes what it costs. Everything downstream withholds a total
+   * rather than summing past it, because a total that skipped an unpriced
+   * requirement is smaller than anything published says — the direction nobody
+   * checks, because it looks like a bargain.
+   */
+  amountLowMinor: number | null;
+  amountHighMinor: number | null;
+  currency: string | null;
 }
 
 export type CapabilityCheck =
@@ -304,6 +417,11 @@ export function validateCapabilityFinding(input: {
   finding: unknown;
   subject: unknown;
   observedOn: unknown;
+  qualifier?: unknown;
+  basis?: unknown;
+  amountLowMinor?: unknown;
+  amountHighMinor?: unknown;
+  currency?: unknown;
 }): CapabilityCheck {
   const { where } = input;
   const absent = (value: unknown) => value === undefined || value === null || value === '';
@@ -334,7 +452,21 @@ export function validateCapabilityFinding(input: {
         error: `${where}: capability_observed_on was given with no capability_finding.`,
       };
     }
-    return { ok: true, value: { finding: null, subject: null, observedOn: null } };
+    for (const [name, value] of [
+      ['capability_qualifier', input.qualifier],
+      ['capability_basis', input.basis],
+      ['capability_amount_low_minor', input.amountLowMinor],
+      ['capability_amount_high_minor', input.amountHighMinor],
+      ['capability_currency', input.currency],
+    ] as const) {
+      if (!absent(value)) {
+        return {
+          ok: false,
+          error: `${where}: ${name} was given with no capability_finding.`,
+        };
+      }
+    }
+    return { ok: true, value: EMPTY_DECLARATION };
   }
 
   if (!isCapabilityFinding(input.finding)) {
@@ -369,9 +501,10 @@ export function validateCapabilityFinding(input: {
       return {
         ok: false,
         error:
-          `${where}: a DEMAND_EVIDENCE finding must set capability_observed_on to the date the ` +
+          `${where}: a ${finding} finding must set capability_observed_on to the date the ` +
           'source observed it. An undated buying signal cannot be told apart from one somebody ' +
-          'remembers from years ago, and it is what decides whether a category is enterable.',
+          'remembers from years ago, and an undated cost from one published before a tariff ' +
+          'changed — and both are what decide whether a category may be entered.',
       };
     }
     if (!OBSERVED_ON.test(observedOn)) {
@@ -385,14 +518,213 @@ export function validateCapabilityFinding(input: {
       ok: false,
       error:
         `${where}: a ${finding} finding carries no observation date, so capability_observed_on ` +
-        'must be omitted. Only DEMAND_EVIDENCE has one.',
+        'must be omitted. Only DEMAND_EVIDENCE and CAPITAL_REQUIREMENT have one.',
     };
   }
 
+  const qualifierVocabulary = qualifierVocabularyFor(finding);
+  const qualifier = tidy(input.qualifier);
+  if (qualifierVocabulary) {
+    if (!qualifier) {
+      return {
+        ok: false,
+        error:
+          `${where}: a ${finding} finding must set capability_qualifier to one of ` +
+          `${qualifierVocabulary.join(', ')}. ${describeQualifier(finding)}`,
+      };
+    }
+    if (!qualifierVocabulary.includes(qualifier)) {
+      return {
+        ok: false,
+        error:
+          `${where}: capability_qualifier for a ${finding} finding must be one of ` +
+          `${qualifierVocabulary.join(', ')}. "${qualifier}" is not one of them.`,
+      };
+    }
+  } else if (qualifier) {
+    return {
+      ok: false,
+      error:
+        `${where}: a ${finding} finding carries no capability_qualifier, so it must be ` +
+        'omitted. Put the detail in the claim itself.',
+    };
+  }
+
+  const money = validateAmount({ where, finding, input });
+  if (!money.ok) return money;
+
   return {
     ok: true,
-    value: { finding, subject, observedOn: observedOn || null },
+    value: {
+      finding,
+      subject,
+      observedOn: observedOn || null,
+      qualifier: qualifier || null,
+      basis: money.basis,
+      amountLowMinor: money.amountLowMinor,
+      amountHighMinor: money.amountHighMinor,
+      currency: money.currency,
+    },
   };
+}
+
+const EMPTY_DECLARATION: CapabilityDeclaration = Object.freeze({
+  finding: null,
+  subject: null,
+  observedOn: null,
+  qualifier: null,
+  basis: null,
+  amountLowMinor: null,
+  amountHighMinor: null,
+  currency: null,
+});
+
+/** A declaration that says nothing, for a claim that carries no finding. */
+export function emptyCapabilityDeclaration(): CapabilityDeclaration {
+  return EMPTY_DECLARATION;
+}
+
+type AmountCheck =
+  | {
+      ok: true;
+      basis: string | null;
+      amountLowMinor: number | null;
+      amountHighMinor: number | null;
+      currency: string | null;
+    }
+  | { ok: false; error: string };
+
+/**
+ * The money half, and the asymmetry in it is the point.
+ *
+ * The **basis is required** wherever a figure could exist, because a figure
+ * whose kind nobody stated cannot be weighed against one whose kind they did —
+ * §14's rule that a claim must be judged by a standard that fits what it
+ * claims, arriving at a column. The **amount is optional**, because *this is
+ * required and nobody publishes what it costs* is a real finding: refusing it
+ * would leave a worker with nothing to submit but an estimate of their own,
+ * which is the one output this kernel most needs never to receive.
+ *
+ * A bare number is refused for `figures.ts`' reason one section along: reading
+ * a currency into it would be the unknown taken as the favourable assumption,
+ * and a thousandfold error reported as something somebody published is worse
+ * than no figure at all.
+ */
+function validateAmount(args: {
+  where: string;
+  finding: CapabilityFinding;
+  input: {
+    basis?: unknown;
+    amountLowMinor?: unknown;
+    amountHighMinor?: unknown;
+    currency?: unknown;
+  };
+}): AmountCheck {
+  const { where, finding, input } = args;
+  const absent = (value: unknown) => value === undefined || value === null || value === '';
+  const basis = typeof input.basis === 'string' ? input.basis.trim() : '';
+  const currency = typeof input.currency === 'string' ? input.currency.trim().toUpperCase() : '';
+
+  if (!findingTakesAmount(finding)) {
+    for (const [name, value] of [
+      ['capability_basis', input.basis],
+      ['capability_amount_low_minor', input.amountLowMinor],
+      ['capability_amount_high_minor', input.amountHighMinor],
+      ['capability_currency', input.currency],
+    ] as const) {
+      if (!absent(value)) {
+        return {
+          ok: false,
+          error:
+            `${where}: a ${finding} finding carries no money, so ${name} must be omitted. ` +
+            'Only CAPITAL_REQUIREMENT does.',
+        };
+      }
+    }
+    return { ok: true, basis: null, amountLowMinor: null, amountHighMinor: null, currency: null };
+  }
+
+  if (!basis) {
+    return {
+      ok: false,
+      error:
+        `${where}: a ${finding} finding must set capability_basis to one of ` +
+        `${CAPITAL_BASES.join(', ')}. A regulator's published fee and somebody's market ` +
+        'estimate are both worth having and are not the same fact.',
+    };
+  }
+  if (!isCapitalBasis(basis)) {
+    return {
+      ok: false,
+      error:
+        `${where}: capability_basis must be one of ${CAPITAL_BASES.join(', ')}. ` +
+        `"${basis}" is not one of them.`,
+    };
+  }
+
+  const lowGiven = !absent(input.amountLowMinor);
+  const highGiven = !absent(input.amountHighMinor);
+  if (!lowGiven && !highGiven) {
+    if (currency) {
+      return {
+        ok: false,
+        error:
+          `${where}: capability_currency was given with no amount. Either give the published ` +
+          'range, or leave the currency out as well — a requirement nobody publishes a figure ' +
+          'for is a finding worth submitting exactly as it is.',
+      };
+    }
+    return { ok: true, basis, amountLowMinor: null, amountHighMinor: null, currency: null };
+  }
+  if (lowGiven !== highGiven) {
+    return {
+      ok: false,
+      error:
+        `${where}: give both capability_amount_low_minor and capability_amount_high_minor, or ` +
+        'neither. A source that publishes one figure sets them equal, so every reader has one ' +
+        'shape to handle.',
+    };
+  }
+
+  const low = asMinor(input.amountLowMinor);
+  const high = asMinor(input.amountHighMinor);
+  if (low === null || high === null) {
+    return {
+      ok: false,
+      error:
+        `${where}: capability_amount_low_minor and capability_amount_high_minor must be whole ` +
+        'non-negative numbers of minor units — 1250000 for $12,500.00, never "12,500" or "$12.5k".',
+    };
+  }
+  if (high < low) {
+    return {
+      ok: false,
+      error: `${where}: capability_amount_high_minor must not be below capability_amount_low_minor.`,
+    };
+  }
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    return {
+      ok: false,
+      error:
+        `${where}: an amount must carry capability_currency as a three-letter ISO 4217 code. ` +
+        'A bare number takes the unknown as a favourable assumption, and a figure in the wrong ' +
+        "currency reported as something somebody published is worse than no figure.",
+    };
+  }
+  return { ok: true, basis, amountLowMinor: low, amountHighMinor: high, currency };
+}
+
+function asMinor(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return null;
+  return n;
+}
+
+function describeQualifier(finding: CapabilityFinding): string {
+  if (finding === 'CAPITAL_REQUIREMENT') {
+    return 'It is which shape of the business the figure is about, not how large it is.';
+  }
+  return 'It is what buying this firm would contribute, not why it is attractive.';
 }
 
 function describeSubject(finding: CapabilityFinding): string {

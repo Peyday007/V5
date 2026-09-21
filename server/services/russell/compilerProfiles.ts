@@ -46,6 +46,8 @@ export type CompilerProfileId =
   | 'MACHINE_LADDER'
   | 'MACHINE_DEMAND'
   | 'MACHINE_CAPABILITY'
+  | 'MACHINE_CAPITAL'
+  | 'MACHINE_ACQUISITION'
   | 'DEALFLOW_PARTIES'
   | 'DEALFLOW_TERMS';
 
@@ -1472,6 +1474,188 @@ const DEALFLOW_TERMS: CompilerProfile = {
   ],
 };
 
+/**
+ * What entering a class of machine costs.
+ *
+ * The profile whose completion standard is the opposite of every other one
+ * here: **a requirement with no published figure is a successful answer.**
+ * That is stated in the lanes, in the failure conditions and in the completion
+ * criteria, because it is the one thing a worker will assume is wrong. A
+ * profile that treated a blank as a gap would push somebody towards producing
+ * an estimate, and an invented figure at the number that would start a factory
+ * is the worst output this kernel could receive — worse than the blank,
+ * because a blank is visible afterwards and a plausible number is not.
+ *
+ * It is a separate profile from `MACHINE_CAPABILITY` rather than a lane inside
+ * it because `planFitsEnvelope` pins one assignment template per envelope, and
+ * judging *what does entering cost* by *what does producing require* is §25's
+ * Westbrook defect at a compiler: a worker answers correctly and Brain grades
+ * it against the wrong standard.
+ */
+const MACHINE_CAPITAL: CompilerProfile = {
+  id: 'MACHINE_CAPITAL',
+  fragmentKey: 'machine-capital',
+  multipleJurisdictions: 'DESCRIBE',
+  // Behind the capability question. Pricing entry into a category this company
+  // cannot yet produce spends a round on a figure nobody can act on, and the
+  // directive's own sequence agrees: required capital sits under ENTRY.
+  launchOrdinal: 275,
+  proposedSources: [
+    'a regulator\u2019s published fee schedule for approval, certification or homologation',
+    'a machine-tool, equipment or plant supplier\u2019s published price list or specification',
+    'a comparable producer\u2019s own filing, annual report or capital-expenditure disclosure',
+    'a government or development-agency publication on plant investment in this industry',
+    'a trade publication reporting what a facility, line or tooling programme cost',
+    'a published industrial property or lease listing giving a rate',
+    'a standards or testing body\u2019s published charge for qualification or type testing',
+    'a named analyst\u2019s or consultancy\u2019s published estimate, reported as an estimate',
+  ],
+  excludedSources: [
+    'a figure the researcher calculated, scaled or inferred rather than found published',
+    'a figure with no currency stated',
+    'a figure with no date the source states',
+    'a cost from a different class of machine presented as this one\u2019s',
+    'a claim with no locatable source at all',
+  ],
+  lanes: [
+    {
+      id: 'requirement',
+      // One supplier's published price is conclusive about what that supplier
+      // asks. Demanding a second publisher for it demands something that does
+      // not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What a producer of this kind of machine has to fund before selling anything, and ' +
+        'what published sources say each item costs. Each declared with capability_finding ' +
+        'set to CAPITAL_REQUIREMENT, capability_subject set to which requirement it is, ' +
+        'capability_qualifier set to which shape of the business the figure is about, ' +
+        'capability_basis set to what kind of figure it is, and capability_observed_on set to ' +
+        'the date it was true. Where a published figure exists give the range and its ' +
+        'currency; where none does, submit the requirement with no amount at all \u2014 that is a ' +
+        'finding and Brain records it as one.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'scale',
+      description:
+        'The same requirements at a different shape of the business, where sources publish ' +
+        'both \u2014 what the smallest credible entry costs against what production at scale ' +
+        'costs. Declared the same way with a different capability_qualifier. Figures from ' +
+        'different shapes are never added together, so each one says which it is about.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Requirements are established and nothing published gives a figure for any of them. This ' +
+      'is a complete answer rather than a gap: it is recorded, no total is reported, and an ' +
+      'estimate produced in its place would defeat the purpose of asking.',
+    'Every figure found is undated, so none of them can be told apart from one published ' +
+      'before the costs changed.',
+    'Published figures exist only for a different class of machine, and carrying one across ' +
+      'would answer a question nobody asked.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'figure is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'A requirement that is real and that nobody publishes a figure for is submitted with no ' +
+      'amount. It is a finding, not a failure: Brain records the requirement and withholds ' +
+      'any total rather than summing past it.',
+    'Nothing is estimated, scaled from another class of machine, converted between currencies ' +
+      'or calculated to complete a picture. A plausible number here is worse than a blank.',
+    'Every figure carries the currency the source published it in and the date it was true.',
+    'Every figure says which shape of the business it is about, because what the first ' +
+      'credible machine costs and what volume production costs are two facts and adding them ' +
+      'produces a number nobody can act on.',
+    'A published price, a regulator\u2019s fee, a firm\u2019s own disclosure and an analyst\u2019s ' +
+      'estimate are each reported as the kind of figure they are, never as one another.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * Which firms hold something a class of machine requires.
+ *
+ * Its completion standard is a **boundary** rather than a quantity, and that
+ * is why it is its own profile. Every other question here is answered better
+ * by finding more; this one is answered wrongly by going one step further than
+ * naming. So the criteria say, twice, that valuing, approaching, pricing and
+ * recommending are outside it \u2014 not because a worker is likely to buy a
+ * company, but because a worker asked "who could we acquire" naturally drifts
+ * into "and here is what it would take", and that sentence in a report is an
+ * unauthorized recommendation with a source list attached.
+ */
+const MACHINE_ACQUISITION: CompilerProfile = {
+  id: 'MACHINE_ACQUISITION',
+  fragmentKey: 'machine-acquisition',
+  multipleJurisdictions: 'DESCRIBE',
+  // Last of the manufacturing questions. It is asked of a category whose
+  // requirements are established and unbridged, so it has nothing to say until
+  // the capability question has been answered.
+  launchOrdinal: 325,
+  proposedSources: [
+    'a company\u2019s own regulatory filing, annual report or prospectus',
+    'a regulator\u2019s published register of approval, certificate or licence holders',
+    'a trade association\u2019s published member or supplier directory',
+    'a trade publication covering producers, suppliers or distributors in this industry',
+    'a public company or business register',
+    'a published supplier, dealer or distributor list',
+    'a published patent assignment or intellectual-property register entry',
+  ],
+  excludedSources: [
+    'a firm named with no source that says what it holds',
+    'a valuation, price or multiple produced by the researcher rather than published',
+    'a recommendation that a firm be approached, pursued or bought',
+    'a claim with no locatable source at all',
+  ],
+  lanes: [
+    {
+      id: 'candidate',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Firms published sources name as producers, suppliers, distributors or holders of ' +
+        'approvals in this class of machine, and what each one actually holds. Each declared ' +
+        'with capability_finding set to ACQUISITION_CANDIDATE, capability_subject set to the ' +
+        'firm\u2019s own name, and capability_qualifier set to what buying it would contribute.',
+      necessity: 'REQUIRED',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Published sources name no firm holding what this class of machine requires. This is a ' +
+      'complete answer: reporting it is more useful than a list assembled from what seems ' +
+      'likely.',
+    'Firms are named and no source says what any of them actually holds, so nothing can be ' +
+      'said about what buying one would contribute.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Identify, from published sources, ${lowerFirst(question)} Say which market each firm ` +
+        'operates in; nothing about this names one of its own.'
+      : `Identify, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every firm is supported by a quoted source saying what it holds. A firm named with no ' +
+      'source is not reported.',
+    'Nothing is valued, priced or estimated. What a firm would sell for is not established ' +
+      'here and is not guessed.',
+    'Nothing is recommended. Whether to approach, diligence, offer for or buy any of these is ' +
+      'a decision a person makes under a separate authorization that this research neither ' +
+      'carries nor can produce.',
+    'Nobody is contacted, and no information is requested from any firm named.',
+    'Reporting that published sources name no such firm is a complete answer.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every firm says which market it operates in. Where that is not ${scope}, it is reported ` +
+      'as being somewhere else rather than generalized.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -1485,6 +1669,8 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_MACHINE_LADDER_V1: MACHINE_LADDER,
   RUSSELL_MACHINE_DEMAND_V1: MACHINE_DEMAND,
   RUSSELL_MACHINE_CAPABILITY_V1: MACHINE_CAPABILITY,
+  RUSSELL_MACHINE_CAPITAL_V1: MACHINE_CAPITAL,
+  RUSSELL_MACHINE_ACQUISITION_V1: MACHINE_ACQUISITION,
   RUSSELL_DEALFLOW_PARTIES_V1: DEALFLOW_PARTIES,
   RUSSELL_DEALFLOW_TERMS_V1: DEALFLOW_TERMS,
 });

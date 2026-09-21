@@ -730,6 +730,93 @@ commissioning organisation can or cannot do. This is read-only research into wha
 already published, and every action beyond reading needs a separate authorization from a
 person.`;
 
+export const MACHINE_CAPITAL_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what entering this class of machine actually costs,
+requirement by requirement:
+
+{QUESTION}
+
+Subject: the class of machine named above, and what a producer has to fund before selling
+anything of that kind. You are being asked about the industry, not about the organisation
+commissioning this research: what it can already afford is not a question here and nothing
+you establish can say anything about it.
+
+Market: {JURISDICTION}. Say which market each figure is about.
+
+What to settle, as far as published sources allow: what has to be funded before production
+— tooling and equipment, a facility, certification and type approval, engineering and
+development, working capital, inventory and parts, onboarding suppliers, a distribution
+and service network, licences and intellectual property, test and validation — and what
+each of those is published to cost, with the currency it is published in and the date the
+figure was true.
+
+Declare each on its claim with capability_finding set to CAPITAL_REQUIREMENT,
+capability_subject set to which requirement it is, capability_qualifier set to which shape
+of the business the figure is about, capability_basis set to what kind of figure it is, and
+capability_observed_on set to the date it was true. Where you have a figure, give
+capability_amount_low_minor, capability_amount_high_minor and capability_currency; a source
+that publishes one number sets the two ends equal.
+
+Evidence standard: a published price, a regulator's own fee schedule, a comparable firm's
+own disclosure, a trade publication's figure or a named analyst's estimate — each
+identified by its URL, by who published it and by the date. A regulator's published fee is
+conclusive about that fee. A supplier's own price list is conclusive about what it asks. A
+figure with no publisher and no date is not a finding.
+
+Completion standard, and this is the part that matters most here: a requirement that is
+real and that nobody publishes a figure for is a **finding**, and it is submitted as one —
+the requirement, the basis, the date, and no amount at all. Brain records it and withholds
+any total rather than summing past it. Do not estimate. Do not scale a figure from another
+class of machine. Do not convert between currencies. Do not complete a picture: a
+plausible number at the figure that would start a factory is worse than a blank, because
+a blank is visible afterwards and a number is not.
+
+Out of scope: contacting any person or organisation; requesting a quotation; buying
+access, data, a subscription or a paid API; placing an advertisement; publishing, posting,
+listing, filing or submitting anything anywhere; making any commitment on anybody's
+behalf; and recommending that anything be built, bought, tooled or entered. This is
+read-only research into what is already published, and every action beyond reading needs a
+separate authorization from a person.`;
+
+export const MACHINE_ACQUISITION_ASSIGNMENT_TEMPLATE = `Identify, from published sources, firms whose acquisition would supply something this
+class of machine requires:
+
+{QUESTION}
+
+Subject: the class of machine named above, and the firms published sources name as
+producers, suppliers, distributors or holders of approvals in it.
+
+Market: {JURISDICTION}. Say which market each firm operates in.
+
+What to settle, as far as published sources allow: which firms exist, what each one
+actually holds — a capability, production capacity, a dealer or distribution network, a
+component supply, a certification or approval, intellectual property, an engineering team,
+a market position — and which published source says so.
+
+Declare each with capability_finding set to ACQUISITION_CANDIDATE, capability_subject set
+to the firm's own name as the source gives it, and capability_qualifier set to what buying
+it would contribute.
+
+Evidence standard: a company's own filings, a regulator's register of approval holders, a
+trade association's member list, a trade publication covering the industry, a public
+registry. A company's own site is conclusive about what it says about itself and is not
+independent confirmation of anything. A firm named with no source is not a finding.
+
+Completion standard: each firm either supported by a quoted source, or not reported.
+Reporting that published sources name no such firm is a complete answer and is more useful
+than a list assembled from what seems likely.
+
+**This is identification only, and the boundary is the point of the assignment.** Do not
+contact anybody. Do not request information from a firm. Do not value anything, and do not
+estimate what any firm would sell for. Do not propose terms, structure, price or timing.
+Do not recommend pursuing any of them. Whether to approach, diligence, offer for or buy a
+firm is a decision a person makes under an authorization this research does not carry and
+cannot produce.
+
+Out of scope: everything in the paragraph above, plus buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or submitting
+anything anywhere; and making any commitment on anybody's behalf. This is read-only
+research into what is already published.`;
+
 export const CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE = `Establish, from published sources, what owner capital this actually requires — after the
 requirements have been taken apart:
 
@@ -1339,6 +1426,81 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'qualifying, certifying, acquiring and producing are decisions a person makes, and this ' +
       'envelope authorizes none of them.',
     assignmentTemplate: MACHINE_CAPABILITY_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What entering a class of machine costs.
+   *
+   * Its own envelope rather than sharing the capability one, for
+   * `planFitsEnvelope`'s reason: it pins one assignment template per envelope,
+   * and *what producing requires* and *what entering costs* have two different
+   * completion standards. The second one's completion standard is the unusual
+   * half — a requirement with no published figure is a **successful** answer
+   * — and judging it by the first's would push a worker towards producing an
+   * estimate, which is the one output this question most needs never to
+   * receive.
+   */
+  RUSSELL_MACHINE_CAPITAL_V1: Object.freeze({
+    id: 'RUSSELL_MACHINE_CAPITAL_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a manufacturing programme ' +
+      'when they started it: published sources only, with no spending, no paid API or ' +
+      'purchased data, no contact with any person or organisation, no advertising, no ' +
+      'publishing and no external effect of any kind. This envelope is that authorization ' +
+      'applied to establishing what entering a class of machine costs, requirement by ' +
+      'requirement, from figures somebody has already published. It authorizes reading about ' +
+      'what things cost and never spending anything, requesting a quotation, or committing to ' +
+      'a purchase: every one of those is a commercial action a person grants separately, and ' +
+      'never this envelope.',
+    assignmentTemplate: MACHINE_CAPITAL_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * Which firms could supply what a class of machine requires.
+   *
+   * The directive asks Brain to *identify acquisition opportunities*, and its
+   * optimization rule gives the reason: *an acquisition could suddenly make an
+   * advanced category viable much earlier*. Identifying one is research about
+   * published sources and it is authorized here.
+   *
+   * **Everything that follows from one is not, and this envelope is where that
+   * is said rather than assumed.** Approaching, requesting information from,
+   * valuing, offering for, committing to, diligencing or buying a firm are
+   * separately authorized commercial actions, and no route through this kernel
+   * reaches one. The table these findings land in has no column an approach,
+   * a valuation, a term or a commitment could be written into, which is the
+   * mechanism; this paragraph and the assignment are what make the boundary
+   * legible to the worker as well as to the schema.
+   */
+  RUSSELL_MACHINE_ACQUISITION_V1: Object.freeze({
+    id: 'RUSSELL_MACHINE_ACQUISITION_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a manufacturing programme ' +
+      'when they started it: published sources only, with no spending, no paid API or ' +
+      'purchased data, no contact with any person or organisation, no advertising, no ' +
+      'publishing and no external effect of any kind. This envelope is that authorization ' +
+      'applied to identifying, from published sources, which firms hold something a class of ' +
+      'machine requires. It authorizes naming them and saying what each holds. It authorizes ' +
+      'no approach, no request for information, no valuation, no offer, no diligence ' +
+      'commitment, no negotiation and no purchase — every one of those is a decision a person ' +
+      'makes under a separate authorization, and nothing in this programme can make it.',
+    assignmentTemplate: MACHINE_ACQUISITION_ASSIGNMENT_TEMPLATE,
     jurisdiction: 'the market this question names',
     maxFragments: null,
     geography: /\S/,

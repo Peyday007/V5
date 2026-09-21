@@ -485,6 +485,12 @@ export const EVENT_TYPES = [
    */
   'MANUFACTURING_CAPABILITY_HELD',
   'MANUFACTURING_CAPABILITY_WITHDRAWN',
+  /** A person read an acquisition candidate and said no. The row stays. */
+  'MANUFACTURING_CANDIDATE_SET_ASIDE',
+  /** A person answered a question this kernel raises and cannot settle. */
+  'MANUFACTURING_DECISION_RESOLVED',
+  /** And unanswered one, which the directive's own caution is a reason for. */
+  'MANUFACTURING_DECISION_REOPENED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -2151,6 +2157,11 @@ export interface ResearchClaimRow {
   capability_finding: string | null;
   capability_subject: string | null;
   capability_observed_on: string | null;
+  capability_qualifier: string | null;
+  capability_amount_low_minor: number | null;
+  capability_amount_high_minor: number | null;
+  capability_currency: string | null;
+  capability_basis: string | null;
   deal_finding: string | null;
   deal_subject: string | null;
   deal_equipment: string | null;
@@ -3376,6 +3387,37 @@ export interface ResearchClaim {
    * be entered.
    */
   capabilityObservedOn: string | null;
+  /**
+   * The second closed value a finding names, where its kind has one.
+   *
+   * A capital requirement names which shape of the business its figure is
+   * about; an acquisition candidate names what it would contribute. One column
+   * for both, which is `structural_qualifier`'s shape one kernel along and for
+   * its reason: the judgement is made once by whoever read the source, and
+   * everything after that is a lookup.
+   */
+  capabilityQualifier: string | null;
+  /**
+   * The published range, in minor units, and what it is priced in.
+   *
+   * Both ends or neither. A source that publishes one figure sets them equal,
+   * so every reader has one shape; a requirement nobody publishes a figure for
+   * carries none, and the reading above it withholds the total rather than
+   * summing past the gap.
+   */
+  capabilityAmountLowMinor: number | null;
+  capabilityAmountHighMinor: number | null;
+  capabilityCurrency: string | null;
+  /**
+   * What kind of figure the amount is.
+   *
+   * A regulator's published fee schedule and an analyst's market estimate are
+   * both worth having and are not the same fact. Without this a reading would
+   * present the second with the first's authority, which is the shape of error
+   * §14 exists to refuse: a claim judged by a standard that does not fit what
+   * it claims.
+   */
+  capabilityBasis: string | null;
   /**
    * What this claim establishes about a cross-border transaction, if anything.
    *
@@ -7941,6 +7983,23 @@ export const CAPABILITY_FINDINGS = [
   'ENTRY_BARRIER',
   /** A component or subsystem producers in this category buy rather than make. */
   'BOUGHT_IN_COMPONENT',
+  /**
+   * A published figure for one thing entering this category costs.
+   *
+   * The directive names required capital as the first item under ENTRY, and it
+   * is the one entry fact the other eight cannot carry: a barrier is a *thing
+   * to obtain* and this is an *amount*, with a range, a currency, a date, a
+   * shape of business it is about and a kind of figure it is.
+   */
+  'CAPITAL_REQUIREMENT',
+  /**
+   * A firm a source names, and what buying it would contribute.
+   *
+   * Identifying one is research. Approaching, valuing, offering, committing to
+   * or buying one is not, is separately authorized, and no route in this kernel
+   * reaches any of them.
+   */
+  'ACQUISITION_CANDIDATE',
 ] as const;
 export type CapabilityFinding = (typeof CAPABILITY_FINDINGS)[number];
 
@@ -8064,6 +8123,10 @@ export const MANUFACTURING_ROUND_PURPOSES = [
   'DEMAND',
   'CAPABILITY',
   'INTEGRATION',
+  /** What entering costs, requirement by requirement, from published figures. */
+  'CAPITAL',
+  /** Who could be bought instead of built, and what that would contribute. */
+  'ACQUISITION',
 ] as const;
 export type ManufacturingRoundPurpose = (typeof MANUFACTURING_ROUND_PURPOSES)[number];
 
@@ -8075,6 +8138,8 @@ export interface ManufacturingProgramRow {
   project_id: string;
   objective: string;
   state: string;
+  blueprint_path: string | null;
+  blueprint_sha256: string | null;
   owner_user_id: string;
   created_by_user_id: string;
   created_at: string;
@@ -8118,6 +8183,17 @@ export interface ManufacturingProgram {
   projectId: string;
   objective: string;
   state: ManufacturingProgramState;
+  /**
+   * The directive this programme runs under, and the sha-256 of its bytes.
+   *
+   * Both written by the server from the file it opened. A hash is integrity and
+   * never use: what makes the directive *operative* is
+   * `services/manufacturing/directive.ts` carrying its contents into the
+   * questions, and a test fails if that stops happening while these keep being
+   * written.
+   */
+  blueprintPath: string | null;
+  blueprintSha256: string | null;
   ownerUserId: string;
   createdByUserId: string;
   createdAt: string;
@@ -8872,4 +8948,206 @@ export interface DealObservation {
   recordedBy: string;
   sourceClaimId: string | null;
   createdAt: string;
+}
+
+
+/**
+ * What owner capital entering a machine category is actually spent on.
+ *
+ * Deliberately **not** §38's `CAPITAL_REQUIREMENTS`, and the reason is the
+ * subject rather than the words. That list answers what opening a service
+ * business in an industry needs — labour, customer acquisition, insurance, a
+ * minimum order — and it hangs off `cash_opportunities`. This answers what
+ * producing a machine needs, and it hangs off `machine_categories`. The two
+ * can never be about one observation, so they cannot drift into disagreeing
+ * about one; what forcing a factory's tooling, type approval and test rig into
+ * EQUIPMENT, COMPLIANCE and COMPLIANCE *would* do is make the grouped reading
+ * answer an easier question than the one asked.
+ */
+export const MACHINE_CAPITAL_REQUIREMENTS = [
+  'TOOLING_AND_EQUIPMENT',
+  'FACILITY',
+  'CERTIFICATION_AND_APPROVAL',
+  'ENGINEERING_AND_DEVELOPMENT',
+  'WORKING_CAPITAL',
+  'INVENTORY_AND_PARTS',
+  'SUPPLIER_ONBOARDING',
+  'DISTRIBUTION_AND_SERVICE_NETWORK',
+  'INTELLECTUAL_PROPERTY_OR_LICENCE',
+  'TEST_AND_VALIDATION',
+] as const;
+export type MachineCapitalRequirement = (typeof MACHINE_CAPITAL_REQUIREMENTS)[number];
+
+/**
+ * Which shape of the business a figure is about.
+ *
+ * The directive asks for a range or a scenario, and the scenario is the half
+ * that carries meaning: what it costs to build the first credible machine and
+ * what it costs to produce at volume are two facts, and a reading that summed
+ * them would report a number nobody could act on. Ordered smallest first, and
+ * that order is read — `capital.ts` reports the cheapest scenario any
+ * requirement is priced under rather than guessing across them.
+ */
+export const CAPITAL_SCENARIOS = [
+  'SMALLEST_CREDIBLE_ENTRY',
+  'TYPICAL_ENTRY',
+  'AT_PRODUCTION_SCALE',
+] as const;
+export type CapitalScenario = (typeof CAPITAL_SCENARIOS)[number];
+
+/**
+ * What kind of figure a published amount is.
+ *
+ * Ordered strongest first, and the order is reported rather than used to
+ * discount anything: a reader weighing a regulator's fee schedule against an
+ * analyst's estimate is doing §14's job — *no claim judged by a standard that
+ * does not fit what it claims* — and Brain's part is to make the difference
+ * visible, never to apply a coefficient to it.
+ */
+export const CAPITAL_BASES = [
+  'REGULATORY_FEE_SCHEDULE',
+  'PUBLISHED_PRICE_OR_SCHEDULE',
+  'COMPARABLE_FIRM_DISCLOSURE',
+  'TRADE_PUBLICATION_ESTIMATE',
+  'ANALYST_OR_MARKET_ESTIMATE',
+] as const;
+export type CapitalBasis = (typeof CAPITAL_BASES)[number];
+
+export interface CategoryCapitalRow {
+  id: string;
+  program_id: string;
+  category_id: string;
+  requirement: string;
+  scenario: string;
+  amount_low_minor: number | null;
+  amount_high_minor: number | null;
+  currency: string | null;
+  basis: string;
+  as_of: string;
+  statement: string;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CategoryCapitalEntry {
+  id: string;
+  programId: string;
+  categoryId: string;
+  requirement: MachineCapitalRequirement;
+  scenario: CapitalScenario;
+  /**
+   * The published range in minor units, or null on both when the requirement is
+   * established and nothing publishes a figure for it.
+   *
+   * Null is a fact the reading uses rather than a blank to be filled: a total
+   * summed past an unpriced requirement is smaller than anything published
+   * says, which is the direction nobody checks because it looks like a
+   * bargain.
+   */
+  amountLowMinor: number | null;
+  amountHighMinor: number | null;
+  currency: string | null;
+  basis: CapitalBasis;
+  /** When the figure was true, per the source. Money ages. */
+  asOf: string;
+  statement: string;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * What buying a firm would contribute.
+ *
+ * Every value names something the ladder already reasons about, so a candidate
+ * resolves to a gap rather than to an impression. There is deliberately no
+ * `STRATEGIC_FIT` and no `SYNERGY`: an acquisition nobody can say what it
+ * supplies is one nobody can argue with.
+ */
+export const ACQUISITION_CONTRIBUTIONS = [
+  'CAPABILITY',
+  'PRODUCTION_CAPACITY',
+  'DISTRIBUTION_OR_DEALER_NETWORK',
+  'SUPPLY_OR_COMPONENT_SOURCE',
+  'CERTIFICATION_OR_APPROVAL',
+  'INTELLECTUAL_PROPERTY',
+  'ENGINEERING_TEAM',
+  'BRAND_OR_MARKET_POSITION',
+] as const;
+export type AcquisitionContribution = (typeof ACQUISITION_CONTRIBUTIONS)[number];
+
+export interface AcquisitionCandidateRow {
+  id: string;
+  program_id: string;
+  category_id: string | null;
+  capability_id: string | null;
+  name: string;
+  contribution: string;
+  statement: string;
+  source_claim_id: string;
+  set_aside_at: string | null;
+  set_aside_reason: string | null;
+  set_aside_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AcquisitionCandidate {
+  id: string;
+  programId: string;
+  categoryId: string | null;
+  capabilityId: string | null;
+  name: string;
+  contribution: AcquisitionContribution;
+  statement: string;
+  sourceClaimId: string;
+  /** A person read it and said no. The row and its evidence stay. */
+  setAsideAt: string | null;
+  setAsideReason: string | null;
+  setAsideBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A decision this kernel cannot make and must not forget.
+ *
+ * One topic, because one is what the directive raises: it asks for a single
+ * master brand that could sit on a pressure washer and on a cargo aircraft,
+ * and then says not to lock the division names prematurely. Both halves are
+ * load-bearing — inventing a name would be Brain deciding something reserved
+ * to a person, and dropping the concern because it cannot be decided would
+ * lose the requirement. **`OPEN` is valid state.**
+ *
+ * There is no free-text topic, for the reason `PREFERENCES` is a closed set: a
+ * topic somebody could invent by posting is one nobody reviewed the criteria
+ * for, and the criteria are what make a decision answerable.
+ */
+export const PROGRAMME_DECISION_TOPICS = ['MASTER_BRAND_ARCHITECTURE'] as const;
+export type ProgrammeDecisionTopic = (typeof PROGRAMME_DECISION_TOPICS)[number];
+
+export interface ProgrammeDecisionRow {
+  id: string;
+  program_id: string;
+  topic: string;
+  state: string;
+  resolution: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgrammeDecision {
+  id: string;
+  programId: string;
+  topic: ProgrammeDecisionTopic;
+  state: 'OPEN' | 'RESOLVED';
+  /** A person's own words. Nothing derives it and no round may write it. */
+  resolution: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

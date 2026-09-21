@@ -33,6 +33,17 @@ import type {
   MachineCategoryKind,
   MachineCategoryOrigin,
   MachineCategoryRow,
+  AcquisitionCandidate,
+  AcquisitionCandidateRow,
+  AcquisitionContribution,
+  CapitalBasis,
+  CapitalScenario,
+  CategoryCapitalEntry,
+  CategoryCapitalRow,
+  MachineCapitalRequirement,
+  ProgrammeDecision,
+  ProgrammeDecisionRow,
+  ProgrammeDecisionTopic,
   ManufacturingProgram,
   ManufacturingProgramRow,
   ManufacturingProgramState,
@@ -51,6 +62,8 @@ function mapProgram(row: ManufacturingProgramRow): ManufacturingProgram {
     projectId: row.project_id,
     objective: row.objective,
     state: row.state as ManufacturingProgramState,
+    blueprintPath: row.blueprint_path,
+    blueprintSha256: row.blueprint_sha256,
     ownerUserId: row.owner_user_id,
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
@@ -73,6 +86,17 @@ export async function createProgram(input: {
   objective: string;
   ownerUserId: string;
   createdByUserId: string;
+  /**
+   * The directive as the *server* read it, never as a caller described it.
+   *
+   * There is no path here a request could choose and no hash a request could
+   * supply: `startProgramme` opens the file, parses it and computes the digest,
+   * and what arrives here is what it found. A caller-supplied hash would be
+   * indistinguishable afterwards from one Brain computed, which is the whole
+   * value the column has.
+   */
+  blueprintPath?: string | null;
+  blueprintSha256?: string | null;
 }): Promise<{ program: ManufacturingProgram; created: boolean }> {
   const objective = input.objective.replace(/\s+/g, ' ').trim();
   if (!objective) throw new Error('A manufacturing program needs an objective somebody wrote.');
@@ -80,10 +104,21 @@ export async function createProgram(input: {
   const at = nowIso();
   await getDb().run(
     `INSERT INTO manufacturing_programs
-       (id, project_id, objective, state, owner_user_id, created_by_user_id, created_at, updated_at)
-     VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?, ?)
+       (id, project_id, objective, state, blueprint_path, blueprint_sha256,
+        owner_user_id, created_by_user_id, created_at, updated_at)
+     VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?)
      ON CONFLICT DO NOTHING`,
-    [id, input.projectId, objective, input.ownerUserId, input.createdByUserId, at, at],
+    [
+      id,
+      input.projectId,
+      objective,
+      input.blueprintPath ?? null,
+      input.blueprintSha256 ?? null,
+      input.ownerUserId,
+      input.createdByUserId,
+      at,
+      at,
+    ],
   );
   const program = await getProgram(input.projectId);
   if (!program) throw new Error('The manufacturing program disappeared immediately after being written.');
@@ -680,4 +715,302 @@ export async function countFiledFromOrchestration(orchestrationId: string): Prom
     [orchestrationId, orchestrationId, orchestrationId],
   );
   return Number(row?.total ?? 0);
+}
+
+
+// ---------------------------------------------------------------------------
+// WHAT ENTERING COSTS
+//
+// One row per established requirement, keyed by the claim it came from, so a
+// tick re-reading a finished packet writes what it wrote before rather than a
+// second copy of it. A row with no amount is the honest record of *this is
+// required and nobody publishes what it costs*, and `capital.ts` is where that
+// stops a total being reported rather than being quietly summed past.
+// ---------------------------------------------------------------------------
+
+function mapCapital(row: CategoryCapitalRow): CategoryCapitalEntry {
+  return {
+    id: row.id,
+    programId: row.program_id,
+    categoryId: row.category_id,
+    requirement: row.requirement as MachineCapitalRequirement,
+    scenario: row.scenario as CapitalScenario,
+    amountLowMinor: row.amount_low_minor === null ? null : Number(row.amount_low_minor),
+    amountHighMinor: row.amount_high_minor === null ? null : Number(row.amount_high_minor),
+    currency: row.currency,
+    basis: row.basis as CapitalBasis,
+    asOf: row.as_of,
+    statement: row.statement,
+    sourceClaimId: row.source_claim_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function recordCategoryCapital(input: {
+  programId: string;
+  categoryId: string;
+  requirement: MachineCapitalRequirement;
+  scenario: CapitalScenario;
+  amountLowMinor: number | null;
+  amountHighMinor: number | null;
+  currency: string | null;
+  basis: CapitalBasis;
+  asOf: string;
+  statement: string;
+  sourceClaimId: string;
+}): Promise<CategoryCapitalEntry | null> {
+  const id = newId('mcap');
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO category_capital
+       (id, program_id, category_id, requirement, scenario, amount_low_minor, amount_high_minor,
+        currency, basis, as_of, statement, source_claim_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT DO NOTHING`,
+    [
+      id,
+      input.programId,
+      input.categoryId,
+      input.requirement,
+      input.scenario,
+      input.amountLowMinor,
+      input.amountHighMinor,
+      input.currency,
+      input.basis,
+      input.asOf,
+      input.statement,
+      input.sourceClaimId,
+      at,
+      at,
+    ],
+  );
+  const rows = await getDb().all<CategoryCapitalRow>(
+    'SELECT * FROM category_capital WHERE source_claim_id = ?',
+    [input.sourceClaimId],
+  );
+  if (!rows[0]) return null;
+  return rows[0].id === id ? mapCapital(rows[0]) : null;
+}
+
+export async function listCategoryCapital(programId: string): Promise<CategoryCapitalEntry[]> {
+  const rows = await getDb().all<CategoryCapitalRow>(
+    `SELECT * FROM category_capital WHERE program_id = ? ORDER BY created_at ASC, id ASC`,
+    [programId],
+  );
+  return rows.map(mapCapital);
+}
+
+// ---------------------------------------------------------------------------
+// WHO COULD BE BOUGHT
+//
+// Identification only. There is no function here that approaches, values,
+// offers to or commits to anybody, and there is no column one could write
+// into — which is the mechanism rather than a promise. `setAsideCandidate` is
+// the one verdict no derivation reaches: a person read it and said no, and the
+// row keeps its evidence so the same candidate does not arrive again next
+// round as a fresh discovery.
+// ---------------------------------------------------------------------------
+
+function mapCandidate(row: AcquisitionCandidateRow): AcquisitionCandidate {
+  return {
+    id: row.id,
+    programId: row.program_id,
+    categoryId: row.category_id,
+    capabilityId: row.capability_id,
+    name: row.name,
+    contribution: row.contribution as AcquisitionContribution,
+    statement: row.statement,
+    sourceClaimId: row.source_claim_id,
+    setAsideAt: row.set_aside_at,
+    setAsideReason: row.set_aside_reason,
+    setAsideBy: row.set_aside_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function recordAcquisitionCandidate(input: {
+  programId: string;
+  categoryId: string | null;
+  capabilityId: string | null;
+  name: string;
+  contribution: AcquisitionContribution;
+  statement: string;
+  sourceClaimId: string;
+}): Promise<AcquisitionCandidate | null> {
+  const id = newId('macq');
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO acquisition_candidates
+       (id, program_id, category_id, capability_id, name, contribution, statement,
+        source_claim_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT DO NOTHING`,
+    [
+      id,
+      input.programId,
+      input.categoryId,
+      input.capabilityId,
+      input.name,
+      input.contribution,
+      input.statement,
+      input.sourceClaimId,
+      at,
+      at,
+    ],
+  );
+  const rows = await getDb().all<AcquisitionCandidateRow>(
+    'SELECT * FROM acquisition_candidates WHERE source_claim_id = ?',
+    [input.sourceClaimId],
+  );
+  if (!rows[0]) return null;
+  return rows[0].id === id ? mapCandidate(rows[0]) : null;
+}
+
+export async function listAcquisitionCandidates(
+  programId: string,
+): Promise<AcquisitionCandidate[]> {
+  const rows = await getDb().all<AcquisitionCandidateRow>(
+    `SELECT * FROM acquisition_candidates WHERE program_id = ? ORDER BY created_at ASC, id ASC`,
+    [programId],
+  );
+  return rows.map(mapCandidate);
+}
+
+/**
+ * A person says no to a candidate.
+ *
+ * Guarded on it not already being set, so two requests produce one decision
+ * and the first reason stands. It destroys nothing and it is not a delete:
+ * deleting would let the same firm arrive again on the next round as a fresh
+ * discovery, spending the allowance to learn something somebody had settled.
+ */
+export async function setAsideCandidate(input: {
+  candidateId: string;
+  programId: string;
+  reason: string;
+  actorUserId: string;
+}): Promise<AcquisitionCandidate | null> {
+  const at = nowIso();
+  await getDb().run(
+    `UPDATE acquisition_candidates
+        SET set_aside_at = ?, set_aside_reason = ?, set_aside_by = ?, updated_at = ?
+      WHERE id = ? AND program_id = ? AND set_aside_at IS NULL`,
+    [at, input.reason, input.actorUserId, at, input.candidateId, input.programId],
+  );
+  const row = await getDb().get<AcquisitionCandidateRow>(
+    'SELECT * FROM acquisition_candidates WHERE id = ? AND program_id = ?',
+    [input.candidateId, input.programId],
+  );
+  return row ? mapCandidate(row) : null;
+}
+
+// ---------------------------------------------------------------------------
+// THE DECISIONS THIS KERNEL CANNOT MAKE
+//
+// `OPEN` is valid state, and the row exists so that a question nobody can
+// answer yet is not the same thing as a question nobody remembers. What its
+// criteria, dependencies and reconsideration trigger *are* is derived in
+// `services/manufacturing/decisions.ts` rather than stored: a stored criterion
+// is stale the moment the thing it depends on changes.
+// ---------------------------------------------------------------------------
+
+function mapDecision(row: ProgrammeDecisionRow): ProgrammeDecision {
+  return {
+    id: row.id,
+    programId: row.program_id,
+    topic: row.topic as ProgrammeDecisionTopic,
+    state: row.state as 'OPEN' | 'RESOLVED',
+    resolution: row.resolution,
+    resolvedAt: row.resolved_at,
+    resolvedBy: row.resolved_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function ensureProgrammeDecision(input: {
+  programId: string;
+  topic: ProgrammeDecisionTopic;
+}): Promise<ProgrammeDecision> {
+  const id = newId('mdec');
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO programme_decisions
+       (id, program_id, topic, state, created_at, updated_at)
+     VALUES (?, ?, ?, 'OPEN', ?, ?)
+     ON CONFLICT DO NOTHING`,
+    [id, input.programId, input.topic, at, at],
+  );
+  const row = await getDb().get<ProgrammeDecisionRow>(
+    'SELECT * FROM programme_decisions WHERE program_id = ? AND topic = ?',
+    [input.programId, input.topic],
+  );
+  if (!row) throw new Error(`programme decision ${input.topic} could not be read back`);
+  return mapDecision(row);
+}
+
+export async function listProgrammeDecisions(programId: string): Promise<ProgrammeDecision[]> {
+  const rows = await getDb().all<ProgrammeDecisionRow>(
+    `SELECT * FROM programme_decisions WHERE program_id = ? ORDER BY topic ASC`,
+    [programId],
+  );
+  return rows.map(mapDecision);
+}
+
+/**
+ * A person resolves one, in their own words.
+ *
+ * Guarded on `OPEN`, so two requests produce one resolution. Nothing validates
+ * the words against a vocabulary and no research round can reach this: the
+ * whole point of the row is that the question is not a researchable one.
+ */
+export async function resolveProgrammeDecision(input: {
+  programId: string;
+  topic: ProgrammeDecisionTopic;
+  resolution: string;
+  actorUserId: string;
+}): Promise<ProgrammeDecision | null> {
+  const at = nowIso();
+  await getDb().run(
+    `UPDATE programme_decisions
+        SET state = 'RESOLVED', resolution = ?, resolved_at = ?, resolved_by = ?, updated_at = ?
+      WHERE program_id = ? AND topic = ? AND state = 'OPEN'`,
+    [input.resolution, at, input.actorUserId, at, input.programId, input.topic],
+  );
+  const row = await getDb().get<ProgrammeDecisionRow>(
+    'SELECT * FROM programme_decisions WHERE program_id = ? AND topic = ?',
+    [input.programId, input.topic],
+  );
+  return row ? mapDecision(row) : null;
+}
+
+/**
+ * A person reopens one they had resolved.
+ *
+ * The answering transition, and it exists because the directive's own reason
+ * for leaving the brand open — *do not lock these division names prematurely*
+ * — is a reason a name chosen early may need unchoosing. Guarded on
+ * `RESOLVED`, and the previous resolution is cleared rather than kept, because
+ * a decision that reads OPEN while still carrying an answer is the status
+ * contradicting the control beside it.
+ */
+export async function reopenProgrammeDecision(input: {
+  programId: string;
+  topic: ProgrammeDecisionTopic;
+}): Promise<ProgrammeDecision | null> {
+  const at = nowIso();
+  await getDb().run(
+    `UPDATE programme_decisions
+        SET state = 'OPEN', resolution = NULL, resolved_at = NULL, resolved_by = NULL,
+            updated_at = ?
+      WHERE program_id = ? AND topic = ? AND state = 'RESOLVED'`,
+    [at, input.programId, input.topic],
+  );
+  const row = await getDb().get<ProgrammeDecisionRow>(
+    'SELECT * FROM programme_decisions WHERE program_id = ? AND topic = ?',
+    [input.programId, input.topic],
+  );
+  return row ? mapDecision(row) : null;
 }
