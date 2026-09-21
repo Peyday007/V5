@@ -44,7 +44,7 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
-import { citableClaims, getOrchestration } from '../../repos/research.ts';
+import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
@@ -73,19 +73,23 @@ export const MAX_VALIDATIONS_IN_FLIGHT = 2;
 const HOLDS_A_SLOT: ReadonlySet<string> = Object.freeze(new Set(['PENDING', 'RUNNING']));
 
 /**
- * How long a deep dive may show no progress at all before Brain stops calling
- * it running.
+ * How long a deep dive may go **without a pass finishing** before Brain stops
+ * calling it running.
  *
- * Not a guess about how long research takes — `settleValidations` reads the
- * mission and moves the moment it moves, so a dive that is genuinely working
- * settles on its own however long it takes. This is the backstop for the case
- * the mission row cannot express: launched, never advanced, and nothing left
- * that will ever advance it. Six hours is longer than any production deep dive
- * this Brain has completed and short enough that a slot is not lost for a day.
+ * Not a bound on how long research may take, and the difference is the whole
+ * of it: a validation packet is a plan, its fragments, a verification, a
+ * synthesis and three separately-sessioned audit roles, each waiting on an
+ * activation, and §27 measures one judge pass alone at nine minutes and
+ * forty-four seconds. A clock started at launch would cancel live work doing
+ * exactly what it should. What is measured is the gap since the last thing a
+ * worker actually finished, so a dive whose passes keep completing is never
+ * reached however long it runs.
  *
- * A stalled dive is `BLOCKED` rather than failed, with the elapsed time in the
- * reason, so it can be dived again inside `MAX_VALIDATION_ROUNDS` rather than
- * being written off.
+ * Six hours is longer than the gap between any two completed passes this
+ * Brain has recorded, and short enough that a slot is not lost for a day. A
+ * stalled dive is `BLOCKED` rather than failed, with the gap in the reason, so
+ * it can be asked again inside `MAX_VALIDATION_ROUNDS` rather than written
+ * off — and nothing it produced is destroyed.
  */
 export const VALIDATION_STALL_MS = 6 * 60 * 60 * 1000;
 
@@ -317,16 +321,16 @@ function answeredCount(one: CashOpportunity): number {
 /**
  * Whether an opening that has already been dived may have one more.
  *
- * Four conditions, and none of them is a preference. The dive has to be
- * **over** — a second one started beside a live one is two workers answering
- * the same question with the sprint paying twice. The mission behind it has to
- * be **terminal**, which is the same rule one row along: a dive settled
- * `NEEDS_PERSON` is parked rather than finished, and a person answering it
- * resumes the mission that is already there, so starting a second one would
- * buy the same answer twice. There has to be a **round left**, which is what
- * stops a piece being re-asked for ever. And it has to be genuinely **short of
- * qualified**, read from the card rather than from a state column: a piece
- * that answered everything is finished whatever its round count says.
+ * Three conditions, and none of them is a preference. The dive has to be
+ * **over**, which is the state check below — a second one started beside a
+ * live one is two workers answering the same question with the sprint paying
+ * twice, and it is what keeps a `NEEDS_PERSON` dive from being re-asked: a
+ * person answering the mission's card resumes the mission that is already
+ * there, so a second dive would buy the same answer again. There has to be a
+ * **round left**, which is what stops a piece being re-asked for ever. And it
+ * has to be genuinely **short of qualified**, read from the card rather than
+ * from a state column: a piece that answered everything is finished whatever
+ * its round count says.
  *
  * Read in the loop rather than precomputed, because it is asked only of the
  * pieces that already have a terminal dive, and the loop stops at `room`.
@@ -457,30 +461,48 @@ export async function settleValidations(projectId: string): Promise<
     }
 
     /*
-     * Launched, never advanced, and nothing left that will advance it.
+     * Launched, and nothing has happened since.
      *
-     * The backstop for what the mission row cannot express. Everything above
-     * moves the moment the mission moves, so a dive that is genuinely working
-     * is never reached here however long it takes; what is reached here is a
-     * dive whose mission has been `RUNNING` since before
-     * `VALIDATION_STALL_MS` and has produced nothing. `BLOCKED` rather than
-     * failed, with the elapsed time in the reason, so `mayDiveAgain` can offer
-     * it another round instead of writing it off.
+     * The backstop for what the mission row cannot express, and the condition
+     * is **no progress** rather than elapsed time. That distinction is the
+     * whole of it: a research packet legitimately takes hours — §27 measures a
+     * single judge pass at nine minutes and forty-four seconds, and a
+     * validation packet is a plan, fragments, a verification, a synthesis and
+     * three separately-sessioned audit roles — so a clock started at launch
+     * would cancel live work that is doing exactly what it should. What is
+     * measured instead is the gap since the last thing a worker actually
+     * *finished*, and a dive whose passes keep completing is never reached
+     * here however long it runs.
+     *
+     * `BLOCKED` rather than failed, with the gap in the reason, so
+     * `mayDiveAgain` can offer another round instead of writing it off. And
+     * nothing is destroyed: every pass, claim and raw response stays exactly
+     * where it is.
      */
     const startedAt = opportunity.validationStartedAt;
-    if (startedAt && Date.now() - Date.parse(startedAt) > VALIDATION_STALL_MS) {
-      const hours = Math.floor((Date.now() - Date.parse(startedAt)) / (60 * 60 * 1000));
-      await settle(
-        projectId,
-        opportunity,
-        'BLOCKED',
-        `The deep dive was launched ${hours} hours ago and its mission has not reached a ` +
-          'result. Brain has stopped calling it running and freed the slot; it can be asked ' +
-          'again.',
-        mission.orchestrationId,
-      );
-      out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
-      continue;
+    if (startedAt) {
+      const passes = mission.orchestrationId ? await listPasses(mission.orchestrationId) : [];
+      const finished = passes
+        .map((pass) => pass.completedAt)
+        .filter((at): at is string => at !== null);
+      // The most recent sign of life, which is the launch itself when a worker
+      // has not finished anything yet.
+      const lastMovedAt = finished.reduce((latest, at) => (at > latest ? at : latest), startedAt);
+      const quiet = Date.now() - Date.parse(lastMovedAt);
+      if (quiet > VALIDATION_STALL_MS) {
+        const hours = Math.floor(quiet / (60 * 60 * 1000));
+        await settle(
+          projectId,
+          opportunity,
+          'BLOCKED',
+          `The deep dive has produced nothing for ${hours} hours` +
+            `${finished.length > 0 ? ` — its last completed pass was ${lastMovedAt}` : ' and no pass has finished at all'}. ` +
+            'Brain has stopped calling it running and freed the slot; it can be asked again.',
+          mission.orchestrationId,
+        );
+        out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
+        continue;
+      }
     }
 
     if (mission.state === 'DONE') {
