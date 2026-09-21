@@ -3797,6 +3797,35 @@ of an older dispatch is the same rollback wearing the right branch name.
   branch, do not add a second workflow that runs `flyctl deploy`, and do not
   "temporarily" deploy a branch to test something — that is precisely what
   happened, twice, and the cost was a deleted surface coming back.
+- **The guard was asked before the tests and the release happens after them,
+  and that gap is a fourth way the same damage arrives.** `workflow_dispatch`
+  evaluates the `canonical` job first and `flyctl deploy` runs after a
+  typecheck, a full suite and a build — so a run that was legitimately the tip
+  when it started can ship a tree the branch has moved past. Run 283,
+  2026-09-21: the guard passed on `c94bef0`, two pull requests merged while its
+  tests ran, and it released `c94bef0` at 01:02:31, taking both merged changes
+  off the live Brain until a later deploy restored them. **The guard has to be
+  in the statement that makes the change** — this repository's own recurring
+  sentence, at the altitude of a workflow rather than an `UPDATE`.
+
+  Two sessions reached that independently and the resolution keeps both halves.
+  `canonical-guard.sh` is the freshness question in one file asked twice, which
+  is better than the copy I wrote: it uses `git ls-remote`, so it needs no
+  history and also refuses a branch that was *rewound*, which a commit count
+  silently passes.
+
+  Beside it is the question being level with the branch does not answer:
+  whether this tree is **older than what is already running**.
+  `deployed/production` is a lightweight tag the workflow moves *after* a
+  release succeeds — before it, and a deploy that then failed would refuse the
+  re-deploy that fixes it — so a commit that is a strict ancestor of it is a
+  rollback and is refused. A deliberate rollback stays possible by name, as an
+  input somebody sets, because a guard with no way past it is deleted the first
+  time it stands in front of something correct. It is written in git alone
+  rather than by reading the running revision out of `flyctl`: an unverified
+  CLI shape in the one workflow that ships the product is a way to break every
+  deploy in order to prevent a rare one.
+
 - **A worktree holding the canonical branch is a third way the same damage
   arrives, and one turned up.** A scratch worktree had `production` checked out
   with a *reversal of a whole session* staged in its index: `packets.yml`
