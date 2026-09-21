@@ -218,6 +218,12 @@ describe('who can reach any of this', () => {
     { method: 'POST', route: `${CASH()}/money` },
     { method: 'POST', route: `${CASH()}/commitments` },
     { method: 'POST', route: `${CASH()}/needs` },
+    // The dealflow kernel's door. Reading it is any member's; seeding a party,
+    // retiring one and recording what an attempt taught are ADMIN — and none
+    // of them is reachable by a machine at all.
+    { method: 'GET', route: `${CASH()}/dealflow` },
+    { method: 'POST', route: `${CASH()}/dealflow/parties` },
+    { method: 'POST', route: `${CASH()}/dealflow/observations` },
   ];
 
   it('refuses an anonymous caller everywhere', async () => {
@@ -308,6 +314,104 @@ describe('the two decisions that are a person’s', () => {
       },
     });
     expect(result.status).toBe(400);
+  });
+});
+
+/**
+ * The dealflow kernel's door.
+ *
+ * The service tests prove the decisions; this proves the routes are actually
+ * behind the gate against a booted server. A route added after a catch-all, a
+ * policy override whose pattern does not fire, an ADMIN decision reachable at
+ * WRITE — none of those is visible from a unit test of either half.
+ */
+describe('the dealflow door', () => {
+  it('lets a project member read both sides of the map', async () => {
+    const result = await call<{ counts: { deals: number }; next: unknown[] }>(
+      'GET',
+      `${CASH()}/dealflow`,
+      { cookie: memberCookie },
+    );
+    expect(result.status).toBe(200);
+    expect(typeof result.body.counts.deals).toBe('number');
+  });
+
+  it('refuses a member who does not administer the project when they name a party', async () => {
+    const result = await call('POST', `${CASH()}/dealflow/parties`, {
+      cookie: memberCookie,
+      body: {
+        kind: 'BUYER',
+        name: 'A mine a member typed',
+        equipmentClass: 'fuel tank trailers',
+      },
+    });
+    // The same 404 everything else gives them: naming a counterparty decides
+    // who the market is, which is a decision about the operation.
+    expect(result.status).toBe(404);
+  });
+
+  it('lets an administrator seed one, and says nothing was spent or started', async () => {
+    const result = await call<{ created: boolean; message: string; party: { origin: string } }>(
+      'POST',
+      `${CASH()}/dealflow/parties`,
+      {
+        cookie: adminCookie,
+        body: {
+          kind: 'BUYER',
+          name: 'Kabwe Mining',
+          country: 'Zambia',
+          equipmentClass: 'fuel tank trailers',
+          note: 'A published haulage fleet expansion.',
+        },
+      },
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.created).toBe(true);
+    // `SEED` is the one origin Brain itself may never write.
+    expect(result.body.party.origin).toBe('SEED');
+    expect(result.body.message).toContain('nothing');
+  });
+
+  it('refuses a side that is not one of the two, rather than storing it', async () => {
+    const result = await call('POST', `${CASH()}/dealflow/parties`, {
+      cookie: adminCookie,
+      body: { kind: 'INTERMEDIARY', name: 'Somebody', equipmentClass: 'fuel tank trailers' },
+    });
+    expect(result.status).toBe(400);
+  });
+
+  it('refuses an outcome kind it does not hold', async () => {
+    const result = await call('POST', `${CASH()}/dealflow/observations`, {
+      cookie: adminCookie,
+      body: { kind: 'FELT_PROMISING', statement: 'it felt promising' },
+    });
+    expect(result.status).toBe(400);
+  });
+
+  it('records an observation and says it gates nothing', async () => {
+    const result = await call<{ message: string; observation: { kind: string } }>(
+      'POST',
+      `${CASH()}/dealflow/observations`,
+      {
+        cookie: adminCookie,
+        body: {
+          kind: 'CERTIFICATION_SURPRISE',
+          jurisdiction: 'Zambia',
+          equipmentClass: 'fuel tank trailers',
+          statement: 'An inspection certificate the public record did not carry.',
+        },
+      },
+    );
+    expect(result.status).toBe(200);
+    expect(result.body.observation.kind).toBe('CERTIFICATION_SURPRISE');
+    expect(result.body.message).toContain('gates nothing');
+  });
+
+  it('gives a deal id in somebody else’s operation the same answer as an invented one', async () => {
+    const invented = await call('GET', `${CASH()}/dealflow/dl_does_not_exist`, {
+      cookie: adminCookie,
+    });
+    expect(invented.status).toBe(404);
   });
 });
 

@@ -34,10 +34,12 @@ import {
   type StructuralFinding,
   type LaborFinding,
   type CapabilityFinding,
+  type DealFinding,
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
 import { validateLabor } from '../../domain/labor.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
+import { validateDealFinding } from '../../domain/dealflow.ts';
 import {
   booleanField,
   confidenceField,
@@ -555,6 +557,20 @@ export interface ParsedClaim {
   capabilityAmountLowMinor: number | null;
   capabilityAmountHighMinor: number | null;
   capabilityCurrency: string | null;
+  /** What the claim establishes about a cross-border transaction, or null. */
+  dealFinding: DealFinding | null;
+  /** What that finding names: the organisation, the requirement, the cost line. */
+  dealSubject: string | null;
+  /** Which class of equipment, as the source writes it. */
+  dealEquipment: string | null;
+  /** The market a requirement applies in. Read from this field, never prose. */
+  dealJurisdiction: string | null;
+  /** The closed-set value: a compliance layer, a cost component, a structure. */
+  dealValue: string | null;
+  /** The figure on a cost component, in minor units. */
+  dealAmountCents: number | null;
+  /** Which currency that figure is in. Declared, never taken from the sprint. */
+  dealCurrency: string | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -769,6 +785,26 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!capability.ok) return capability;
 
+  /*
+   * And what this claim establishes about a cross-border transaction.
+   *
+   * Delegated whole for the reason directly above: the MCP tool calls the
+   * same function, and two readers of one rule is how the two doors come to
+   * disagree about what a valid declaration is.
+   */
+  const deal = validateDealFinding({
+    where,
+    finding: row['dealFinding'],
+    subject: row['dealSubject'],
+    equipmentClass: row['dealEquipment'],
+    jurisdiction: row['dealJurisdiction'],
+    value: row['dealValue'],
+    amountCents: row['dealAmountCents'],
+    currency: row['dealCurrency'],
+    searchedRepositories: row['searchedRepositories'],
+  });
+  if (!deal.ok) return deal;
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -816,6 +852,13 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       capabilityAmountLowMinor: capability.value.amountLowMinor,
       capabilityAmountHighMinor: capability.value.amountHighMinor,
       capabilityCurrency: capability.value.currency,
+      dealFinding: deal.value.finding,
+      dealSubject: deal.value.subject,
+      dealEquipment: deal.value.equipmentClass,
+      dealJurisdiction: deal.value.jurisdiction,
+      dealValue: deal.value.value,
+      dealAmountCents: deal.value.amountCents,
+      dealCurrency: deal.value.currency,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

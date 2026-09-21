@@ -78,7 +78,57 @@ export interface PeopleAndCapacity {
   /** Which members' connections are usable capacity, and why not when they are not. */
   contributed: ContributedCapacity;
   me: ConnectionView;
+  /**
+   * The foundation matrix. Administrator only, and **absent** rather than
+   * emptied for anybody else — so there is nothing for a client to forget to
+   * hide, which is the only form of that distinction a missing `.filter()`
+   * cannot undo.
+   */
+  foundation?: FoundationReading;
   contract: { mcpUrl: string; bootstrapRepository: string };
+}
+
+/**
+ * Mirrors `server/services/identity/foundation.ts`.
+ *
+ * Every sentence in it is composed by the server; nothing here derives a
+ * verdict, chooses a remedy or decides who a finding belongs to. The client's
+ * whole job is to print what it is handed, which is what keeps one account's
+ * reading from ever being described differently to two readers.
+ */
+export type FoundationVerdict = 'PASS' | 'BLOCKED' | 'NOT_APPLICABLE';
+
+export interface FoundationFinding {
+  dimension: string;
+  verdict: FoundationVerdict;
+  because: string;
+  nextAction: string | null;
+  owner: string;
+}
+
+export interface AccountFoundation {
+  userId: string;
+  displayName: string;
+  isBrainAdmin: boolean;
+  findings: FoundationFinding[];
+  verdict: 'PASS' | 'BLOCKED';
+}
+
+export interface UnattributedSurface {
+  routineId: string;
+  routineName: string;
+  workerId: string;
+  workerLabel: string | null;
+  enabled: boolean;
+  because: string;
+  nextAction: string;
+}
+
+export interface FoundationReading {
+  accounts: AccountFoundation[];
+  passing: number;
+  blocked: number;
+  unattributed: UnattributedSurface[];
 }
 
 export interface ConnectionSummary {
