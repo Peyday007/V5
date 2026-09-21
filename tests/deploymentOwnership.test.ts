@@ -461,12 +461,40 @@ describe('and the log surface reads, and only reads', () => {
   const BODY = logs.slice(logs.indexOf('run: |'));
 
   it('runs no flyctl subcommand that could change anything', () => {
-    const READS = new Set(['logs', 'status']);
-    const used = [...logs.matchAll(/flyctl\s+([a-z-]+)/g)].map((m) => m[1] ?? '');
+    /*
+     * Exact command forms rather than bare subcommands, because one of these
+     * has mutating siblings under the same first word: `secrets list` reads,
+     * and `secrets set`, `secrets unset` and `secrets import` each replace a
+     * deployment secret and restart the machine. A set holding `secrets` would
+     * admit all four, so what is allowed is the whole command.
+     */
+    const READS = new Set(['logs', 'status', 'secrets list']);
+    const used = [...logs.matchAll(/flyctl\s+([a-z-]+(?:\s+[a-z-]+)?)/g)].map((m) => m[1] ?? '');
     expect(used.length).toBeGreaterThan(0);
     for (const one of used) {
-      expect(READS.has(one), `logs.yml runs "flyctl ${one}"`).toBe(true);
+      // A flag is not a second word: `flyctl logs --app` is `logs`. Anything
+      // whose first word is not itself a complete read has to match in full.
+      const head = one.split(' ')[0] ?? '';
+      const ok = READS.has(one) || READS.has(head);
+      expect(ok, `logs.yml runs "flyctl ${one}"`).toBe(true);
     }
+  });
+
+  it('never writes a deployment secret', () => {
+    // Named separately from the set above, so the one command that could
+    // restart production from this surface fails by its own name rather than
+    // as a set membership somebody could widen without noticing.
+    for (const verb of ['secrets set', 'secrets unset', 'secrets import']) {
+      expect(BODY, `logs.yml runs "flyctl ${verb}"`).not.toContain(verb);
+    }
+  });
+
+  it('prints secret names and never a value or a digest', () => {
+    // `flyctl secrets list` prints NAME, DIGEST, CREATED AT. A digest is not
+    // recoverable, and it is still derived from a secret and has no reader
+    // here — §17's rule is about what reaches a log, not about what could be
+    // reversed out of it. Only the name column crosses.
+    expect(BODY).toMatch(/secrets list[^\n]*\|[^\n]*awk/);
   });
 
   it('has no way into the machine and no script to run there', () => {

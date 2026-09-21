@@ -6,9 +6,12 @@
 # replaces the machine, and replacing the machine is how you lose the log you
 # came for.
 #
-# **This is strictly read-only and it is the whole of what it does.** Two
-# commands, both of which only read: `flyctl logs` and `flyctl status`. There is
-# no `ssh console` here, no script, no subcommand allowlist to widen, and no
+# **This is strictly read-only and it is the whole of what it does.** Three
+# commands, all of which only read: `flyctl logs`, `flyctl status` and
+# `flyctl secrets list` — the last one printing names alone, and allowed by its
+# whole form rather than by its first word, because `secrets set`, `unset` and
+# `import` sit under that same word and each one replaces a deployment secret
+# and restarts the machine. There is no `ssh console` here, no script, and no
 # input that reaches a shell — `SECONDS` is compared against a numeric class and
 # then used as an argument to `timeout`, and nothing else crosses. It changes no
 # image, restarts nothing, deploys nothing, and alters no behaviour of the
@@ -106,6 +109,27 @@ jobs:
 
           echo "::group::Machine state"
           flyctl status --app "$app" 2>&1 | tail -40 || true
+          echo "::endgroup::"
+
+          # How many clients this deployment is entitled to open, which is a
+          # question about capacity rather than about the log.
+          #
+          # The binding ceiling is not the database's. Measured in production
+          # on 2026-09-20, the boot banner read `pool ceiling 10 of 57 usable
+          # (max_connections 60, 3 reserved for superusers)` while the Supabase
+          # pooler refused an ordinary operator read with `max clients are
+          # limited to pool_size: 15` — so 57 is the database's number and 15
+          # is the one that binds, shared between the app and every operator
+          # script beside it. Sizing the app's pool therefore needs two
+          # readings this job can take without touching anything: how many
+          # machines are running, and whether the deployment overrides the
+          # default at all.
+          #
+          # Names only. `flyctl secrets list` prints NAME, DIGEST, CREATED AT;
+          # a digest is not recoverable and it is still derived from a secret
+          # and has no reader here, so only the first column crosses.
+          echo "::group::Which deployment secrets are set (names only)"
+          flyctl secrets list --app "$app" 2>&1 | awk '{ print $1 }' || true
           echo "::endgroup::"
 
           echo "Watching $app for ${LOG_SECONDS}s. The recent buffer comes first."
