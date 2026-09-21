@@ -83,6 +83,14 @@ const LOGIN_FIELDS = [
   },
 ] as const;
 
+/** Every screen a person types into between opening Brain and being inside it. */
+const LOGIN_SCREENS = [
+  'client/src/components/SignIn.tsx',
+  'client/src/components/Enrol.tsx',
+  'client/src/components/Recovery.tsx',
+  'client/src/components/AcceptInvitation.tsx',
+] as const;
+
 describe('the login journey on a phone', () => {
   it('never focuses a field small enough for iOS to zoom the page', () => {
     for (const field of LOGIN_FIELDS) {
@@ -100,6 +108,38 @@ describe('the login journey on a phone', () => {
           `${NO_ZOOM_MINIMUM_PX}px when it is focused`,
       ).toBeGreaterThanOrEqual(NO_ZOOM_MINIMUM_PX);
     }
+  });
+
+  it('has a rule for every input class those screens actually use', () => {
+    /*
+     * The list above is the journey rather than a pattern, deliberately — but
+     * a named list is complete only until somebody adds a screen. Three of the
+     * four screens share two classes today and the fourth,
+     * `AcceptInvitation.tsx`, is covered **by coincidence**: it happens to
+     * reuse `signin__input`.
+     *
+     * So this reads the classes off the screens and fails on one the list does
+     * not name. A new field with a new class is then a failing test rather
+     * than a field nobody thought about, which is precisely what this whole
+     * file exists for.
+     */
+    const named = new Set(LOGIN_FIELDS.map((one) => one.selector.slice(1)));
+    const missing: string[] = [];
+    for (const file of LOGIN_SCREENS) {
+      const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8');
+      // Only the elements a person types into; a label or a card is not one.
+      for (const tag of source.match(/<input[^>]*>/g) ?? []) {
+        const attr = /className="([^"]*)"/.exec(tag);
+        if (!attr) {
+          missing.push(`${file}: an input with no className at all`);
+          continue;
+        }
+        for (const cls of (attr[1] ?? '').split(/\s+/).filter(Boolean)) {
+          if (!named.has(cls)) missing.push(`${file}: .${cls}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
   });
 
   it('keeps the sign-in card inside a phone, with no width it cannot fit', () => {
