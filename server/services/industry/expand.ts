@@ -31,6 +31,7 @@ import { listMissions } from '../../repos/russellMissions.ts';
 import { structuralClaims } from '../../repos/research.ts';
 import {
   closeIndustryRound,
+  countFiledFromOrchestration,
   createNode,
   listCapitalFor,
   listNodes,
@@ -279,7 +280,6 @@ export async function absorb(input: {
 
   const nodes = await listNodes(input.projectId);
   const byNodeId = new Map(nodes.map((one) => [one.id, one]));
-  const foundPerRound = new Map<string, number>();
 
   const claims = await structuralClaims({
     projectId: input.projectId,
@@ -289,16 +289,13 @@ export async function absorb(input: {
   for (const entry of claims) {
     const context = byOrchestration.get(entry.orchestrationId);
     if (!context) continue;
-    const filed = await file({
+    await file({
       projectId: input.projectId,
       claim: entry.claim,
       round: context.round,
       byNodeId,
       out,
     });
-    if (filed) {
-      foundPerRound.set(context.round.id, (foundPerRound.get(context.round.id) ?? 0) + 1);
-    }
   }
 
   /*
@@ -338,8 +335,25 @@ export async function absorb(input: {
    */
   for (const [orchestrationId, { round, missionDone }] of byOrchestration) {
     if (!missionDone) continue;
+    /*
+     * Derived from the rows this orchestration's findings filed, rather than
+     * tallied from what this pass wrote.
+     *
+     * Tallying is correct only while every pass that absorbs a round also
+     * closes it, and a tick dying between the two breaks exactly that: the
+     * findings are filed, the round is still OPEN, and the next pass writes
+     * nothing because every insert conflicts. It would then record a round that
+     * established five subjects as having established none — and `found` is
+     * what barrenness is decided against, so the subject would be documented as
+     * one nobody should look at again, from an accident of timing.
+     *
+     * The openings half was already derived, read from `cash_opportunities` by
+     * orchestration. This makes the other half the same shape, so the whole
+     * number is the same however many times it is asked — which is the property
+     * a crash window needs.
+     */
     const found =
-      (foundPerRound.get(round.id) ?? 0) +
+      (await countFiledFromOrchestration(orchestrationId)) +
       (round.purpose === 'SCAN' ? (openingsPerOrchestration.get(orchestrationId) ?? 0) : 0);
     if (await closeIndustryRound({ id: round.id, to: 'HARVESTED', found })) {
       out.settled.push({ roundId: round.id, found });

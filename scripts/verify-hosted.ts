@@ -53,6 +53,7 @@ import { describePersistence, persistenceConfig } from '../server/config.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ModernMcpClient } from './mcpModernClient.ts';
+import { boundedRequest, type BoundedReply } from './boundedRequest.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listBins, terminateUnleasedBin } from '../server/repos/bins.ts';
 import {
@@ -84,6 +85,7 @@ import {
   completeWork,
   enqueueWork,
   getWorkItem,
+  heartbeatWork,
   releaseWork,
 } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
@@ -121,6 +123,8 @@ import {
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { readObject, storageKeyOf } from '../server/services/storage.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
+import { listUncertainties } from '../server/repos/researchIntelligence.ts';
+import { researchIntelligenceView } from '../server/services/research/intelligence/view.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import type { Project, WorkerScope } from '../server/domain/types.ts';
 
@@ -235,45 +239,46 @@ async function call(
   if (init.origin) headers['origin'] = init.origin;
 
   /*
-   * An explicit bound with a named failure, because the default one is silent.
+   * An explicit bound with a named failure — and `fetch` could not give one.
    *
-   * This helper passed no `signal`, so every request carried Node's own
-   * default — measured at **300.8 seconds**, throwing `fetch failed` with
-   * cause `UND_ERR_HEADERS_TIMEOUT`. Six deploys have died at the judge audit
-   * step, two of them reporting exactly that at 5m18s and 5m23s, and the
-   * repository recorded the shape as a work item losing a five-minute lease.
-   * It is not: the lease is the server's and this is the client giving up, and
-   * an unattributable `fetch failed` is what let the two readings look alike
-   * for five runs.
+   * This helper grew `signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)` after
+   * six deploys died at the judge audit step, on a comment that named the
+   * mechanism correctly: no bound meant Node's own default, measured at
+   * **300.8 seconds**, thrown as `fetch failed` with cause
+   * `UND_ERR_HEADERS_TIMEOUT`. What that change could not do is *apply*. An
+   * `AbortSignal` and undici's `headersTimeout` are two different bounds, the
+   * second defaults to five minutes, and it is the one that fires — so run 274
+   * gave up 320 seconds after the adversarial pass while reporting, in words,
+   * that it had waited nine hundred.
    *
-   * **This is not a fix for the slowness and must not be read as one.** The
-   * judge pass takes longer than five minutes and nobody knows how much
-   * longer, because nothing has ever waited long enough to find out. The bound
-   * is set where the next occurrence either finishes — and the timestamps say
-   * what it costs — or fails naming the request and the wait, which is a
-   * measurement rather than a mystery. Raising a timeout past a real slowness
-   * is how a slow thing becomes a permanent one nobody looks at.
+   * A bound that does not reach the request it exists for is not a bound, and
+   * one that reports a wait it never performed is a false measurement on top.
+   * `boundedRequest` is `node:https`, where the only clock is this one.
+   *
+   * **This is still not a fix for the slowness and must not be read as one.**
+   * The judge pass takes longer than five minutes and nobody yet knows how
+   * much longer, because until now nothing had actually waited past five. The
+   * bound is set where the next occurrence either finishes — and the
+   * timestamps say what it costs — or fails naming the request and the wait it
+   * really performed.
    */
-  let response: Response;
+  let response: BoundedReply;
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await boundedRequest(`${base}${path}`, {
       method: init.method ?? 'GET',
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      redirect: 'manual',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
   } catch (error) {
-    const cause = (error as { cause?: { code?: string } }).cause?.code;
     throw new Error(
-      `${init.method ?? 'GET'} ${path} did not answer within ` +
-        `${Math.round(REQUEST_TIMEOUT_MS / 1000)}s ` +
-        `(${error instanceof Error ? error.message : String(error)}` +
-        `${cause ? `, ${cause}` : ''}). The request was not refused; nothing answered it.`,
+      `${init.method ?? 'GET'} ${path}: ` +
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        'The request was not refused; nothing answered it.',
       { cause: error },
     );
   }
-  const body = await response.text();
+  const body = response.body;
   let json: unknown = null;
   try {
     json = JSON.parse(body);
@@ -283,7 +288,7 @@ async function call(
   return {
     status: response.status,
     body,
-    cookie: response.headers.get('set-cookie'),
+    cookie: response.headers['set-cookie'] ?? null,
     json,
   };
 }
@@ -715,22 +720,25 @@ async function anonymousIsRefused(fixtures: Fixtures): Promise<void> {
  * What an unauthenticated person is actually served.
  *
  * The rest of this script asks the API questions. This asks the **bundle**,
- * because the defect it exists for was a screen: `SignIn.tsx` rendered an
- * address and a password under the device button, and no API check could ever
- * have seen it — the route it posted to went on working perfectly, which is
- * exactly why it survived.
+ * because both defects it has been written for were screens that no API check
+ * could see.
+ *
+ * The first was a password form under a device button. The second was the
+ * device button with nothing beside it: `/api/auth/passkey/verify` worked
+ * perfectly the whole time, and the owner still could not get in, because
+ * their browser refused the WebAuthn operation and the screen had no second
+ * control. **A door that only one kind of hardware can open is a locked door
+ * to everybody else**, and the API cannot tell you that.
  *
  * Read from the served assets rather than from the repository, so what is
  * asserted is what this deployment hands a browser rather than what the tree it
- * was built from says. §33 records why that distinction earns its place here:
- * the one change that reached every fixture in `tests/` and not this script was
- * the one that failed in production with the whole suite green.
+ * was built from says. §33 records why that distinction earns its place here.
  *
- * It classifies rather than bans. A bundle may contain the word *password* —
- * the recovery screen is in it, deliberately — so what is looked for is the
- * sign-in screen's own removed words, which nothing else composes.
+ * It classifies rather than bans. A bundle contains the enrolment and device
+ * screens deliberately, so what is looked for is the sign-in screen's own
+ * words: the PIN it must ask for, and the device sign-in it must not.
  */
-async function signInSurfaceIsDeviceOnly(): Promise<void> {
+async function signInSurfaceAsksForAPin(): Promise<void> {
   console.log('\nThe sign-in screen, as it is served');
 
   const index = await fetch(`${base}/`, { redirect: 'manual' });
@@ -750,23 +758,43 @@ async function signInSurfaceIsDeviceOnly(): Promise<void> {
   record('the script itself is served', bundle.length > 0, `${bundle.length} bytes`);
   if (bundle.length === 0) return;
 
-  record(
-    'the sign-in screen offers a device',
-    bundle.includes('SIGN IN WITH YOUR DEVICE'),
-    bundle.includes('SIGN IN WITH YOUR DEVICE') ? 'present' : 'the one way in is missing',
-  );
-  for (const phrase of ['OR WITH A PASSWORD', 'WAITING FOR YOUR DEVICE']) {
+  for (const phrase of ['SIX-DIGIT PIN', 'YOUR NAME OR EMAIL']) {
     const present = bundle.includes(phrase);
-    if (phrase === 'OR WITH A PASSWORD') {
-      record(
-        'the sign-in screen offers no password beside it',
-        !present,
-        present ? 'the password alternative is still being served' : 'absent',
-      );
-    } else {
-      record('the device button reports what it is waiting for', present, present ? '' : 'absent');
-    }
+    record(
+      `the sign-in screen asks for ${phrase.toLowerCase()}`,
+      present,
+      present ? 'present' : 'the ordinary way in is missing from the served bundle',
+    );
   }
+
+  const deviceButton = bundle.includes('SIGN IN WITH YOUR DEVICE');
+  record(
+    'the sign-in screen demands no device',
+    !deviceButton,
+    deviceButton
+      ? 'SIGN IN WITH YOUR DEVICE is still being served, so a browser that refuses WebAuthn is still locked out'
+      : 'absent',
+  );
+
+  const passwordAlternative = bundle.includes('OR WITH A PASSWORD');
+  record(
+    'the sign-in screen offers no password beside it',
+    !passwordAlternative,
+    passwordAlternative ? 'the password alternative is still being served' : 'absent',
+  );
+
+  // And the door itself answers, from outside any session. An unknown identity
+  // is refused rather than erroring, which is what says the route is wired.
+  const probe = await call('/api/auth/pin', {
+    method: 'POST',
+    origin: base,
+    body: { identity: 'nobody-at-all@brain.invalid', pin: '000000' },
+  });
+  record(
+    'the PIN door answers an unknown identity with a refusal',
+    probe.status === 401,
+    `${probe.status}`,
+  );
 }
 
 async function humanAuthentication(fixtures: Fixtures): Promise<string> {
@@ -1481,6 +1509,65 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   await worker.call('brain_complete_work', { ...proofOf(verifyClaim), summary: 'gated' });
 
+  /* --- The judgement layer, on the released image ----------------------- */
+  /*
+   * Read from rows rather than asserted about code, and read *here* because
+   * this is the first moment the runner has advanced a real packet on this
+   * server: the questions were seeded when the plan landed and the disposition
+   * moved when the gate answered.
+   *
+   * §33's lesson is the reason it is in this script at all. A change that
+   * reaches every fixture in `tests/` and not the scripted worker is a change
+   * whose release gate cannot see it — which is how a required field reached
+   * production and refused the very packet the gate submits.
+   */
+  {
+    const questions = await listUncertainties(orchestrationId);
+    record(
+      'the packet carries a decision-relevant question per planned fragment',
+      questions.length >= planned.length,
+      `${questions.length} question(s) for ${planned.length} fragment(s)`,
+    );
+    const settled = questions.filter((one) => one.disposition === 'RESOLVED');
+    record(
+      'and the gate answering a fragment settles the question it was asking',
+      settled.length >= 1 && settled.every((one) => one.beliefBasis === 'EVIDENCE'),
+      settled.length >= 1
+        ? `${settled.length} settled on evidence`
+        : `none settled of ${questions.length}`,
+    );
+    record(
+      'every closed question says why it closed, rather than only that it did',
+      questions
+        .filter((one) => one.disposition !== 'OPEN' && one.disposition !== 'INVESTIGATING')
+        .every((one) => (one.dispositionReason ?? '').length > 0),
+      `${questions.filter((one) => one.dispositionReason).length} of ${questions.length} carry a reason`,
+    );
+
+    /*
+     * Reading the mental state performs nothing. Asserted against the queue
+     * rather than stated in a comment, because a projection that enqueued
+     * something would make opening a page a decision.
+     */
+    const before = (await listWorkItems(fixtures.scope.id, { limit: 200 })).length;
+    const orchestration = await getOrchestration(orchestrationId);
+    const view = orchestration ? await researchIntelligenceView(orchestration) : null;
+    const after = (await listWorkItems(fixtures.scope.id, { limit: 200 })).length;
+    record(
+      'reading what Brain thinks it is researching changes nothing',
+      view !== null && before === after,
+      `${before} work item(s) before and ${after} after`,
+    );
+    record(
+      'and reports decisive coverage with its denominator rather than a bare percentage',
+      view !== null && view.sufficiency.decisive.total >= 0 && view.understanding !== null,
+      view
+        ? `${view.sufficiency.decisive.settled}/${view.sufficiency.decisive.total} decisive · ` +
+          `${view.sufficiency.verdict}`
+        : 'no view',
+    );
+  }
+
   /* --- The synthesis, and what it may cite ------------------------------ */
 
   const synthClaim = await claimResearch(fixtures, 'RESEARCH_SYNTHESIZE', orchestrationId);
@@ -1507,11 +1594,16 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
     citedRejected ? 'it was filed' : 'refused',
   );
 
-  const filed = await worker.call('brain_submit_synthesis', {
-    ...proofOf(synthClaim),
-    report: `The deployed Brain recorded and gated a worker's claim [${accepted[0]?.id}].`,
-    cited_claim_ids: accepted.map((claim) => claim.id),
-  });
+  // Held open while it runs: this one filed in 3m23s on deploy 277, which is
+  // inside a five-minute lease and will not stay inside it as the live
+  // archive grows. The audit below it had already crossed.
+  const filed = await holdingLease(synthClaim, fixtures.researchWorkerId, () =>
+    worker.call('brain_submit_synthesis', {
+      ...proofOf(synthClaim),
+      report: `The deployed Brain recorded and gated a worker's claim [${accepted[0]?.id}].`,
+      cited_claim_ids: accepted.map((claim) => claim.id),
+    }),
+  );
   const withDocument = await getOrchestration(orchestrationId);
   record(
     'and a report citing only accepted claims is filed as a document',
@@ -1620,7 +1712,9 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
                 confidence: 0.5,
               },
             };
-    const result = await roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body });
+    const result = await holdingLease(auditClaim, surface.workerId, () =>
+      roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body }),
+    );
     if (result['role'] === role) auditRolesRun += 1;
     if (role !== 'JUDGE') {
       record(
@@ -1795,6 +1889,75 @@ function proofOf(claimed: { workItemId: string; leaseId: string; leaseGeneration
     lease_id: claimed.leaseId,
     lease_generation: claimed.leaseGeneration,
   };
+}
+
+/**
+ * How often a held lease is renewed while one submission is still in flight.
+ *
+ * `DEFAULT_LEASE_MS` is five minutes, and renewing at a third of that means two
+ * beats are missed before a lease can lapse — so a single slow query on the
+ * beat's own connection is not enough to drop the work this harness is holding.
+ */
+const BEAT_EVERY_MS = 100_000;
+
+/**
+ * Hold a lease open across a call that takes longer than the lease does.
+ *
+ * Measured, on deploy 277 against the released image: the JUDGE role's
+ * `brain_submit_audit` began at 22:35:38.4Z and recorded its verdict at
+ * 22:45:22.9Z — **nine minutes and forty-four seconds** — against a work item
+ * lease of five. The submission itself succeeded; the `brain_complete_work`
+ * after it was then refused with `FENCE_LOST`, correctly, because by then the
+ * lease had lapsed and the item was claimable again.
+ *
+ * That is the number §27 asked for and never got: three earlier runs threw
+ * `fetch failed` at 5m18s, 5m22s and 5m23s, because undici's own 300-second
+ * header timeout pre-empted the bound the script thought it had set. With the
+ * bound actually applied the pass finishes, and what it finishes into is this.
+ *
+ * **It is one reading rather than the cost of a judge pass.** Timed from the
+ * ADVERSARIAL pass to the judge's verdict in five runs' own logs: 3m34s (run
+ * 253, 374 documents), 4m10s (252, 373), at least 5m20s (274, 396, where the
+ * client gave up), 9m22s (`41f8741`, 397) and 9m44s here (399). The first two
+ * finished inside the five-minute lease, which is why nothing was refused on
+ * them — **the pass used to fit and now does not**, across a measured spread
+ * of 2.7x. The beat is what lets the harness survive whichever end of that
+ * range it gets; nothing here makes it faster, and what is driving the growth
+ * is a correlation with the archive rather than an established cause.
+ *
+ * So the queue was right and the harness was wrong: an at-least-once queue
+ * expires a lease precisely so that a worker which stopped working cannot hold
+ * work for ever, and a worker still working says so by beating. Asking for a
+ * longer lease at claim time was the other option and is worse — it is an
+ * estimate made before the work starts, and a process that dies inside it
+ * strands the item for the whole of it, whereas a beat is evidence the worker
+ * is alive now. `heartbeatWork` clamps the extension itself, so nothing here
+ * decides how long Brain is willing to wait.
+ *
+ * A beat that is refused is left alone rather than raised: the call in flight
+ * is what this run is measuring, and its own result says what happened to it.
+ */
+async function holdingLease<T>(
+  claimed: { workItemId: string; leaseId: string; leaseGeneration: number },
+  workerId: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const proof = {
+    workItemId: claimed.workItemId,
+    workerId,
+    leaseId: claimed.leaseId,
+    leaseGeneration: claimed.leaseGeneration,
+  };
+  const beat = setInterval(() => {
+    void heartbeatWork(proof).catch(() => undefined);
+  }, BEAT_EVERY_MS);
+  // The timer must not be what keeps this process alive once the work is done.
+  beat.unref?.();
+  try {
+    return await run();
+  } finally {
+    clearInterval(beat);
+  }
 }
 
 /**
@@ -2710,6 +2873,11 @@ async function mcpChecks(fixtures: Fixtures): Promise<void> {
     'brain_submit_synthesis',
     'brain_get_audit_brief',
     'brain_submit_audit',
+    // The one door a worker's judgement about the *plan* comes through. Named
+    // here for the same reason as the rest: a count passes when a tool is
+    // renamed, and renaming one the connector already knows is exactly the
+    // change that breaks a live worker and nothing else.
+    'brain_propose_plan_revision',
   ];
   const missingResearch = RESEARCH_TOOL_NAMES.filter((name) => !modernNames.includes(name));
   record(
@@ -3716,6 +3884,38 @@ async function main(): Promise<void> {
    */
   if (!process.env['BRAIN_DATABASE_POOL_SIZE']) process.env['BRAIN_DATABASE_POOL_SIZE'] = '2';
 
+  /**
+   * And a patience to match it, because the sentence above is wrong about the
+   * concurrency and the measurement says by how much.
+   *
+   * "The only concurrency here is the six-way idempotency race" was true when
+   * it was written and is not true now. Deploy 265 and deploy 277 both failed
+   * their post-restart pass on `pg-pool`'s checkout timeout with the counts
+   * read at the instant of failure: `2/2 connection(s) in use, 0 idle, **380**
+   * caller(s) waiting, ceiling 2` and `383 caller(s) waiting, ceiling 2`. That
+   * is a fan-out of the order of the live archive — 399 readable documents on
+   * the same run — queued behind two connections, which is the pool doing
+   * exactly what a pool of two is for.
+   *
+   * Pre-restart the identical section got through it in nineteen seconds; the
+   * tail caller was inside ten and nothing was reported. Post-restart, with a
+   * freshly booted Brain replaying its own ticks against the same pooler, it
+   * was not. So the ten-second wall is what separates the two runs, and a wall
+   * that turns correct serialization into "the database is unreachable" is
+   * answering a different question from the one it was put there for.
+   *
+   * **Raising it fixes nothing about the fan-out**, and it is not claimed to.
+   * The ceiling is deliberately not raised either: two plus the Brain's own
+   * ten is twelve of the Supabase pooler's fifteen session-mode clients, and
+   * spending that budget to shorten a queue would trade a legible timeout for
+   * `EMAXCONNSESSION` on whichever statement happened to be running. What
+   * changes is only that this process, which chose a small pool knowing why,
+   * now also says how long it is willing to wait for it.
+   */
+  if (!process.env['BRAIN_DATABASE_CONNECT_TIMEOUT_MS']) {
+    process.env['BRAIN_DATABASE_CONNECT_TIMEOUT_MS'] = '120000';
+  }
+
   await initDatabase();
   /**
    * The store, opened explicitly.
@@ -3744,7 +3944,7 @@ async function main(): Promise<void> {
     if (phase === 'check' || phase === 'both') await checkFactoryBeacon(phase === 'check');
 
     await anonymousIsRefused(fixtures);
-    await signInSurfaceIsDeviceOnly();
+    await signInSurfaceAsksForAPin();
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await sharedCashBoundary(fixtures, cookie);

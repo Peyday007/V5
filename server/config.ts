@@ -27,6 +27,13 @@ export interface DatabaseConfig {
   connectionString: string | null;
   poolSize: number;
   /**
+   * How long a caller may wait for a free connection before the checkout is
+   * called a failure. Read from the environment for Postgres; left unset by
+   * callers that build a config themselves, where the adapter's own ten
+   * seconds applies.
+   */
+  connectTimeoutMs?: number;
+  /**
    * Confine this connection to one Postgres schema.
    *
    * Never read from the environment — it exists so the test harness can give
@@ -84,6 +91,37 @@ function readPoolSize(): number {
 }
 
 /**
+ * How long a checkout may wait, and why it is a separate decision from the
+ * ceiling.
+ *
+ * `pg-pool`'s own default answers "is the database reachable", and against an
+ * ordinary pool that is what a checkout timeout means. Against a pool
+ * deliberately sized very small it stops meaning that: the pool is serializing
+ * correctly, and a caller deep in its own queue crosses the wall for a reason
+ * that is not a fault. Deploy 265 and 277 both measured that exact shape —
+ * `ceiling 2` with 380 and 383 callers queued — in the hosted verification,
+ * whose pool is two by choice because it shares the Supabase pooler's
+ * fifteen-client budget with the Brain it is verifying.
+ *
+ * So a process that chose a small pool may also say how patient it is, and
+ * every other process is unchanged at ten seconds. **Raising this is not a
+ * remedy for a deep fan-out**: it stops correct serialization being reported
+ * as an unreachable database, and the fan-out is still there to be measured.
+ */
+function readConnectTimeoutMs(): number {
+  const raw = read('BRAIN_DATABASE_CONNECT_TIMEOUT_MS');
+  if (raw === null) return 10_000;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1_000 || value > 600_000) {
+    throw new DatabaseConfigurationError(
+      `BRAIN_DATABASE_CONNECT_TIMEOUT_MS is "${raw}", which is not a whole number of ` +
+        'milliseconds between 1000 and 600000.',
+    );
+  }
+  return value;
+}
+
+/**
  * The database half, validated.
  *
  * A Postgres URL is checked for shape here rather than at first query: a
@@ -126,7 +164,12 @@ export function databaseConfig(): DatabaseConfig {
     throw new DatabaseConfigurationError('BRAIN_DATABASE_URL names no host.');
   }
 
-  return { provider, connectionString, poolSize: readPoolSize() };
+  return {
+    provider,
+    connectionString,
+    poolSize: readPoolSize(),
+    connectTimeoutMs: readConnectTimeoutMs(),
+  };
 }
 
 /** The storage half, validated on the same terms. */

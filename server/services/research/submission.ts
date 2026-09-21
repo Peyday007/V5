@@ -114,6 +114,24 @@ export async function recordFragmentClaims(input: {
         structuralSubject: claim.structuralSubject ?? null,
         structuralQualifier: claim.structuralQualifier ?? null,
         structuralAmountCents: claim.structuralAmountCents ?? null,
+        // And the labor declaration, whole for the identical reason: a channel
+        // without its basis is a figure nothing can compare, and a rate
+        // without its finding belongs to no task.
+        laborFinding: claim.laborFinding ?? null,
+        laborSubject: claim.laborSubject ?? null,
+        laborQualifier: claim.laborQualifier ?? null,
+        laborRateCents: claim.laborRateCents ?? null,
+        /*
+         * And the capability declaration, for the same reason.
+         *
+         * Three fields that only mean anything together: a demand signal
+         * without its observation date is one nobody can date, and a finding
+         * without its subject names nothing. Carrying two of three here is the
+         * shape of defect §33 records at `applyValidationAnswers`.
+         */
+        capabilityFinding: claim.capabilityFinding ?? null,
+        capabilitySubject: claim.capabilitySubject ?? null,
+        capabilityObservedOn: claim.capabilityObservedOn ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though

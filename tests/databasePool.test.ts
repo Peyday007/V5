@@ -12,8 +12,106 @@
  * The live half needs a real Postgres and says so rather than pretending.
  */
 import { describe, expect, it } from 'vitest';
-import { PostgresAdapter, describePoolExhaustion } from '../server/db/adapters/postgres.ts';
+import {
+  PostgresAdapter,
+  describeConnectionHeadroom,
+  describePoolExhaustion,
+  readServerConnectionLimit,
+} from '../server/db/adapters/postgres.ts';
 import { postgresTestConnection } from './helpers.ts';
+
+/**
+ * The other half of the number, and the reason it took eight deploys.
+ *
+ * `describePoolExhaustion` says what the *pool* was doing. Sizing the ceiling
+ * needs what the *server* will allow, and §27 refused to raise it seven times
+ * for exactly that reason. The production reading that finally forced this was
+ * `2/2 connection(s) in use, 0 idle, 380 caller(s) waiting, ceiling 2`, so the
+ * ceiling-of-two case is pinned by name rather than left as a general one.
+ *
+ * Pure, so both dialects draw every branch.
+ */
+describe('how much room the pool has above it', () => {
+  it('reports the ceiling against what the server will actually give out', () => {
+    const message = describeConnectionHeadroom(
+      { maxConnections: 100, superuserReserved: 3, backendsInUse: 41 },
+      2,
+    );
+
+    expect(message).toContain('pool ceiling 2');
+    expect(message).toContain('97 usable');
+    expect(message).toContain('max_connections 100');
+    expect(message).toContain('3 reserved for superusers');
+    expect(message).toContain('41 backend(s) connected now');
+    expect(message).toContain('BRAIN_DATABASE_POOL_SIZE sets the ceiling');
+  });
+
+  it('says a ceiling at the server limit cannot be raised into more connections', () => {
+    const message = describeConnectionHeadroom(
+      { maxConnections: 20, superuserReserved: 3, backendsInUse: 17 },
+      17,
+    );
+
+    expect(message).toContain('at or above what the database will give out');
+    expect(message).toContain('refused connections rather than more of them');
+  });
+
+  /*
+   * The half the reading cannot take, and the reason it is said on every
+   * branch rather than only where it happens to matter.
+   *
+   * Production on 2026-09-20 printed `pool ceiling 10 of 57 usable
+   * (max_connections 60, 3 reserved for superusers)` while an ordinary
+   * operator read was refused by the pooler in front of it — *max clients are
+   * limited to pool_size: 15*. Fifty-seven was a true number about Postgres
+   * and a false one about what was binding, and nine runs of §27's
+   * investigation were spent on a banner that read as headroom. A sentence
+   * that only appeared when somebody already suspected a pooler would be a
+   * remedy for a reader who does not need one.
+   */
+  it('never presents the database limit as necessarily the binding one', () => {
+    const readings = [
+      describeConnectionHeadroom({ maxConnections: 60, superuserReserved: 3, backendsInUse: 18 }, 10),
+      describeConnectionHeadroom({ maxConnections: 20, superuserReserved: 3, backendsInUse: 17 }, 17),
+      describeConnectionHeadroom({ maxConnections: null, superuserReserved: null, backendsInUse: null }, 10),
+    ];
+
+    for (const message of readings) {
+      expect(message).toContain('pooler');
+      expect(message).toContain('not readable from here');
+      expect(message).toContain('shared with every other client');
+    }
+  });
+
+  /*
+   * The direction that matters. A server that would not say must read as
+   * *unknown*, never as roomy: §30's rule that an unknown is never a
+   * favourable assumption, at the one number somebody would raise a ceiling
+   * on. An under-reading here is what talks an operator into exhausting a
+   * server's own limit and turning a failed verification into a failed boot.
+   */
+  it('calls an unreadable limit unknown rather than large', () => {
+    const message = describeConnectionHeadroom(
+      { maxConnections: null, superuserReserved: null, backendsInUse: null },
+      10,
+    );
+
+    expect(message).toContain('pool ceiling 10');
+    expect(message).toContain('unknown rather than large');
+    expect(message).not.toContain('usable');
+  });
+
+  it('reports a backend count it could not read as unknown, and still gives the limit', () => {
+    const message = describeConnectionHeadroom(
+      { maxConnections: 60, superuserReserved: null, backendsInUse: null },
+      10,
+    );
+
+    expect(message).toContain('60 usable');
+    expect(message).toContain('unknown backend(s) connected now');
+    expect(message).not.toContain('reserved for superusers');
+  });
+});
 
 describe('a pool timeout names its condition', () => {
   it('calls a fully checked-out pool the ceiling, and names the knob', () => {
@@ -181,5 +279,66 @@ describe.runIf(postgres)('a real saturated pool reports itself', () => {
     } finally {
       await adapter.close();
     }
+  });
+});
+
+/**
+ * The reading against a real server, because a describer over a hand-written
+ * object proves the sentence and not the query.
+ *
+ * `current_setting` and `pg_stat_database` are what the boot actually asks,
+ * and either could be refused to a non-superuser on a managed Postgres — which
+ * is precisely the case the null branch above exists for. This is what says
+ * which of the two this repository is in.
+ */
+describe.runIf(postgres)('the server says what it will allow', () => {
+  it('reads a real max_connections and a real backend count', async () => {
+    if (!postgres) return;
+    const adapter = new PostgresAdapter({
+      connectionString: postgres.connectionString,
+      schema: postgres.schema,
+      max: 2,
+    });
+    try {
+      const limit = await readServerConnectionLimit(adapter);
+
+      // Not `toBeGreaterThan(0)` on a nullable: a null here would be a genuine
+      // finding about this server rather than a failure, and the assertion says
+      // which it got rather than accepting either.
+      expect(limit.maxConnections).not.toBeNull();
+      expect(limit.maxConnections).toBeGreaterThan(0);
+      expect(limit.backendsInUse).not.toBeNull();
+      // This connection is one of them, so the count cannot be zero.
+      expect(limit.backendsInUse).toBeGreaterThan(0);
+
+      const message = describeConnectionHeadroom(limit, 2);
+      expect(message).toContain('pool ceiling 2');
+      expect(message).toContain(`max_connections ${limit.maxConnections}`);
+      expect(message).not.toContain('unknown rather than large');
+    } finally {
+      await adapter.close();
+    }
+  });
+
+  /*
+   * It must never be able to fail a boot. §18 forbids cloud mode falling back
+   * and this is the other half of that rule: a *diagnostic* that threw would
+   * stop a Brain whose database had already answered a real query.
+   */
+  it('answers nulls rather than throwing when the adapter is unusable', async () => {
+    if (!postgres) return;
+    const adapter = new PostgresAdapter({
+      connectionString: postgres.connectionString,
+      schema: postgres.schema,
+      max: 1,
+    });
+    await adapter.close();
+
+    const limit = await readServerConnectionLimit(adapter);
+    expect(limit).toEqual({
+      maxConnections: null,
+      superuserReserved: null,
+      backendsInUse: null,
+    });
   });
 });

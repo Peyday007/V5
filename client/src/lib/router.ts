@@ -25,6 +25,7 @@ export type Route =
   | { name: 'NEEDS_YOU' }
   | { name: 'SITES' }
   | { name: 'CASH' }
+  | { name: 'MACHINES' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -85,6 +86,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'SITES' };
     case 'cash':
       return { name: 'CASH' };
+    case 'machines':
+      return { name: 'MACHINES' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -126,6 +129,8 @@ export function pathFor(route: Route): string {
       return '/sites';
     case 'CASH':
       return '/cash';
+    case 'MACHINES':
+      return '/machines';
     case 'SEARCH':
       return '/search';
     case 'INVITE':
