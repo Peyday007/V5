@@ -2750,6 +2750,51 @@ remote.
   before the work starts, and a process that dies inside it strands the item
   for the whole of it.
 
+  **The beat was the wrong remedy, it took two production deploys and a
+  measurement to establish that, and the first explanation I gave for it was
+  also wrong.** Both corrections are recorded rather than quietly applied.
+
+  Deploy `c94bef0` carried the beat and failed identically — judge pass 9m19.7s
+  at 384 documents, then `brain_complete_work: FENCE_LOST`. The first diagnosis
+  was that a beat is *defeated* by the effect's own fence: `proveLeaseOwnership`
+  is an `UPDATE work_items … WHERE <owned>` **inside the effect's transaction**
+  (§20's commit-boundary fence), so a nine-minute submission holds that row's
+  lock for nine minutes and a concurrent beat blocks on it rather than skipping.
+
+  Measured on a real cluster, half of that holds and the conclusion does not.
+  The beat **does** block for the whole effect — 7005ms against a 7000ms
+  transaction — and it then **succeeds**, because `heartbeatWork` captures
+  `queueNow()` in JavaScript *before* the statement runs, so both the
+  `lease_expires_at > ?` comparison and the new expiry are computed from the
+  pre-block clock. A blocked beat is not refused. It lands.
+
+  What it lands *as* is the actual ceiling, and it is arithmetic rather than a
+  refusal: the lease now ends `DEFAULT_LEASE_MS` after the beat was **issued**,
+  not after it landed. Blocking for nine minutes buys nothing beyond that. With
+  beats every 100s and the harness's deliberate two-connection pool, only two
+  are ever in flight — later ones cannot get a connection — so the lease tops
+  out near the second beat's issue time plus five minutes, about `t+500s`,
+  against a submission that ends at `t+560s`. Which is a `FENCE_LOST` at the
+  end, exactly as observed.
+
+  So the remedy is a lease taken **at claim time**, which never needs
+  extending. That is an estimate made before the work starts, and the paragraph
+  above argued against it on the grounds that a process dying inside one
+  strands the item for the whole of it. That argument is right about a real
+  worker whose duration nobody knows, and weak about this caller: the release
+  gate is a scripted client whose one long call is bounded and now measured six
+  times. `RESEARCH_LEASE_MS` is an hour, which is what two other claim sites in
+  that file already use and six times the measured ceiling.
+
+  **The mechanism was unreachable by any test, which is why it shipped twice.**
+  `holdingLease` lived inside `verify-hosted.ts`, so nothing could import it
+  and a deploy was the only way to exercise it — forty-five minutes a reading.
+  It is deleted rather than kept beside the lease, because two mechanisms where
+  one is known not to work is the *two readers of one fact* defect this file
+  records more than any other. What survives is the reading: a Postgres-only
+  test that blocks a beat behind a real fence and pins both the block and the
+  ceiling it lands with.
+
   **Two words for one condition, and knowing which is a fact about the live
   queue rather than about the code.** Writing the regression established it: an
   unbeaten lease in isolation is refused `LEASE_EXPIRED`, and production said
