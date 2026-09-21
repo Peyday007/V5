@@ -223,8 +223,8 @@ export interface Absorbed {
   channels: CommerceChannel[];
   propositions: CommerceProposition[];
   evidence: CommerceEvidence[];
-  /** Rounds settled this pass, with what each one produced. */
-  settled: { roundId: string; found: number }[];
+  /** Rounds settled this pass, with what each one produced and how it ended. */
+  settled: { roundId: string; found: number; to: 'HARVESTED' | 'ABANDONED' }[];
   /** Declarations that could not be filed, and why. Reported, never guessed. */
   refused: { claimId: string; why: string }[];
 }
@@ -267,7 +267,10 @@ export async function absorb(input: {
    * its claims would file findings against a proposition nothing chose.
    */
   const missions = await listMissions({ projectId: input.projectId });
-  const byOrchestration = new Map<string, { round: CommerceRound; missionDone: boolean }>();
+  const byOrchestration = new Map<
+    string,
+    { round: CommerceRound; missionDone: boolean; missionOver: boolean }
+  >();
   for (const mission of missions) {
     if (!mission.orchestrationId || !mission.candidateId) continue;
     const round = live.get(mission.candidateId);
@@ -275,6 +278,21 @@ export async function absorb(input: {
       byOrchestration.set(mission.orchestrationId, {
         round,
         missionDone: mission.state === 'DONE',
+        /*
+         * A mission that ended without finishing still ends the round.
+         *
+         * `harvest` and the industry kernel both settle a round only on DONE,
+         * and a mission that reached FAILED or CANCELLED therefore leaves its
+         * round OPEN for ever — at which point `nextRound` declines that
+         * (subject, purpose) pair with "a round is already open for it" on
+         * every tick, and the kernel silently stops asking about that channel
+         * at all. §24's sentence at a new table: a state that says waiting
+         * which nobody can resolve is not waiting, it is stuck.
+         *
+         * `NEEDS_HUMAN` is deliberately absent: that one has its own guarded
+         * way out and a person is genuinely going to be asked.
+         */
+        missionOver: mission.state === 'FAILED' || mission.state === 'CANCELLED',
       });
     }
   }
@@ -317,11 +335,24 @@ export async function absorb(input: {
    * again while looking like it was still running, which is the state this
    * whole kernel is built to make impossible.
    */
-  for (const [, { round, missionDone }] of byOrchestration) {
-    if (!missionDone) continue;
+  for (const [, { round, missionDone, missionOver }] of byOrchestration) {
+    if (!missionDone && !missionOver) continue;
     const found = foundPerRound.get(round.id) ?? 0;
-    if (await closeCommerceRound({ id: round.id, to: 'HARVESTED', found })) {
-      out.settled.push({ roundId: round.id, found });
+    /*
+     * `HARVESTED` means the question was answered; `ABANDONED` means the
+     * mission carrying it ended without answering. They are two facts and the
+     * allocator reads them differently: only a harvested round with nothing in
+     * it is evidence that there is nothing there, which is why the barren
+     * count ignores an abandoned one. *We could not tell* must never read the
+     * same as *we checked*.
+     *
+     * Whatever the mission did file is absorbed either way, above — the
+     * spending happened when it ran, and a fragment that fell short of its
+     * coverage bar can still hold claims that cleared the gate on their own.
+     */
+    const to = missionDone ? 'HARVESTED' : 'ABANDONED';
+    if (await closeCommerceRound({ id: round.id, to, found })) {
+      out.settled.push({ roundId: round.id, found, to });
     }
   }
 

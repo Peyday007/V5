@@ -137,7 +137,18 @@ export function allocate(input: AllocationInput): Allocation {
     const history = historyOf(purpose, channelId, propositionId);
     if (history.length === 0) return 1;
 
-    const barren = history.filter((one) => (one.found ?? 0) === 0).length;
+    /*
+     * Only a *harvested* round with nothing in it is evidence of absence.
+     *
+     * An `ABANDONED` round is one whose mission ended without answering the
+     * question — a mechanical failure, not a reading about the world. Counting
+     * it as barren would retire a subject for a reason that was never about
+     * the subject, which is *we could not tell* reading the same as *we
+     * checked*.
+     */
+    const barren = history.filter(
+      (one) => one.state === 'HARVESTED' && (one.found ?? 0) === 0,
+    ).length;
     if (barren >= BARREN_ROUNDS) {
       declined.push({
         subject,

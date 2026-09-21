@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 074. See that file for why the
+-- The Postgres half of SQLite migration 080. See that file for why the
 -- channels are discovered rather than declared, why a commerce finding is
 -- declared by whoever read the source, why nothing derivable is stored, why an
 -- unknown figure withholds the margin rather than lowering it, and why

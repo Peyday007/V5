@@ -56,6 +56,7 @@ import { validateCommerce, basisOf, commerceSpec } from '../server/domain/commer
 import { COMMERCE_FINDINGS, COMMERCE_ROUND_PURPOSES } from '../server/domain/types.ts';
 import { readEconomics, REQUIRED_FOR_MARGIN } from '../server/services/commerce/economics.ts';
 import { runCommerceKernel, snapshot, planFrom } from '../server/services/commerce/kernel.ts';
+import { allocate } from '../server/services/commerce/allocate.ts';
 import { seedChannel, seedProposition, retireChannelSubject } from '../server/services/commerce/seed.ts';
 import { commerceView } from '../server/services/commerce/view.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
@@ -206,6 +207,31 @@ async function finishedRound(input: {
   await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
   await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'DONE' });
   return orchestration.id;
+}
+
+/**
+ * A mission for one kernel round that ended without answering.
+ *
+ * Built from the real repositories like `finishedRound`, because the thing
+ * under test is which mission states the absorption reads.
+ */
+async function failedRound(input: { candidateId: string }): Promise<void> {
+  const run = await createRun({
+    projectId, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED',
+    provider: 'WORKER', prompt: 'a commerce round',
+  });
+  const orchestration = await createOrchestration({
+    projectId, layerId: layer.id, runId: run.id, title: 'a commerce round',
+    assignment: 'what is bought here', provider: 'WORKER', autoApprove: false,
+  });
+  const { mission } = await launchMission({
+    projectId, layerId: layer.id, visibility: 'SHARED',
+    objective: 'a commerce round', whyNow: 'the sprint is active',
+    idempotencyKey: `mission:${orchestration.id}`, candidateId: input.candidateId,
+  });
+  await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
+  await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+  await transitionMission({ missionId: mission.id, from: 'RUNNING', to: 'FAILED' });
 }
 
 /** The candidate a commerce round of this purpose is asking, if one is open. */
@@ -893,6 +919,82 @@ describe('the loop runs, and every round is an ordinary Russell candidate', () =
     expect(pass.declined[0]?.why).toBeTruthy();
   });
 
+  /**
+   * A mission that ends without answering still ends its round.
+   *
+   * Found by auditing the merge rather than by a failing test: `harvest` and
+   * the industry kernel both settle a round only on `DONE`, so a mission that
+   * reached FAILED left its round OPEN for ever — and `nextRound` then
+   * declined that (subject, purpose) pair with "a round is already open for
+   * it" on every subsequent tick. The kernel would have stopped asking about
+   * the seeded channel entirely, with every row reading healthy. §24's
+   * sentence at a new table.
+   */
+  it('abandons a round whose mission ended without answering', async () => {
+    await activated();
+    await seedChannel({ projectId, name: 'A channel', actorRef: userId });
+    await runCommerceKernel(projectId);
+
+    const before = (await listCommerceRounds(projectId)).find((one) => one.purpose === 'PRODUCTS');
+    expect(before?.state).toBe('OPEN');
+
+    await failedRound({ candidateId: before!.candidateId });
+    const pass = await runCommerceKernel(projectId);
+
+    const after = (await listCommerceRounds(projectId)).find((one) => one.id === before!.id);
+    expect(after?.state).toBe('ABANDONED');
+    expect(pass.absorbed.settled.some((one) => one.to === 'ABANDONED')).toBe(true);
+  });
+
+  /**
+   * And an abandoned round is not evidence that there is nothing there.
+   *
+   * The barren count retires a subject after `BARREN_ROUNDS` empty rounds,
+   * which is right for a question that was asked and answered with nothing and
+   * wrong for one the machinery never delivered. Counting a mechanical failure
+   * as an absence is *we could not tell* reading the same as *we checked*.
+   */
+  it('does not count an abandoned round toward the barren ceiling', async () => {
+    const now = new Date().toISOString();
+    const base = {
+      id: '', projectId, cashModeId: 'csm_x', purpose: 'PRODUCTS' as const,
+      channelId: 'cch_1', propositionId: null, round: 1, candidateId: '',
+      openedAt: now, harvestedAt: now, found: 0,
+      createdAt: now, updatedAt: now,
+    };
+    const channel = {
+      id: 'cch_1', projectId, name: 'A channel', description: null,
+      origin: 'SEED' as const, sourceClaimId: null, retiredAt: null,
+      retiredReason: null, createdAt: new Date(0).toISOString(), updatedAt: now,
+    };
+    const abandoned = [1, 2, 3, 4].map((round) => ({
+      ...base, id: `crn_${round}`, candidateId: `rcn_${round}`, round,
+      state: 'ABANDONED' as const,
+    }));
+    // Four abandoned rounds, well past BARREN_ROUNDS, and the question is
+    // still asked — because none of them was a reading about the channel.
+    const plan = allocate({
+      channels: [channel],
+      readings: [],
+      rounds: abandoned,
+      slots: 3,
+      now: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(plan.asks.some((one) => one.purpose === 'PRODUCTS')).toBe(true);
+
+    // The same four, harvested, do retire it: that is a documented absence.
+    const harvested = abandoned.map((one) => ({ ...one, state: 'HARVESTED' as const }));
+    const retired = allocate({
+      channels: [channel],
+      readings: [],
+      rounds: harvested,
+      slots: 3,
+      now: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(retired.asks.some((one) => one.purpose === 'PRODUCTS')).toBe(false);
+    expect(retired.declined.some((one) => one.why.includes('found nothing'))).toBe(true);
+  });
+
   it('classifies a commerce round as discovery work the wind-down guard stops', async () => {
     await activated();
     const pass = await runCommerceKernel(projectId);
@@ -1332,7 +1434,7 @@ describe('the envelopes and profiles authorize reading and nothing else', () => 
 
 describe('rows, not prose', () => {
   it('stores no stage, no margin and no rank', () => {
-    const migration = readFileSync('server/db/migrations/074_commerce_kernel.sql', 'utf8');
+    const migration = readFileSync('server/db/migrations/080_commerce_kernel.sql', 'utf8');
     for (const column of ['stage', 'margin', 'contribution', 'rank', 'score', 'basis']) {
       expect(
         new RegExp(`^\\s+${column}\\s+(TEXT|INTEGER|REAL)`, 'im').test(migration),
@@ -1342,7 +1444,7 @@ describe('rows, not prose', () => {
   });
 
   it('carries seq on every table in the Postgres half', () => {
-    const pg = readFileSync('server/db/pg-migrations/065_commerce_kernel.sql', 'utf8');
+    const pg = readFileSync('server/db/pg-migrations/071_commerce_kernel.sql', 'utf8');
     const tables = pg.match(/CREATE TABLE IF NOT EXISTS (\w+)/g) ?? [];
     expect(tables.length).toBe(5);
     // §25 and §27 both record what its absence costs: a tiebreak on a column
