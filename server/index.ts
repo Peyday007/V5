@@ -37,6 +37,7 @@ import { getDefaultProject, listProjects } from './repos/projects.ts';
 import { errorMiddleware, withRequestContext } from './routes/helpers.ts';
 import { createApiRouter } from './routes/index.ts';
 import { seedIfEmpty } from './seed.ts';
+import { seedDesignKernel } from './services/design/kernel.ts';
 import { initStorage, activeStorageConfig } from './services/storage/index.ts';
 import { StorageConfigurationError } from './services/storage/types.ts';
 import { serveStoredObject } from './routes/files.ts';
@@ -550,6 +551,28 @@ async function main(): Promise<void> {
   // First boot creates Deal Dispatch; later boots only backfill missing layers
   // and re-create the folder tree.
   await seedIfEmpty();
+
+  /*
+   * The design kernel's seed: what can be looked at, what is already known about
+   * interfaces, and what this kernel can and cannot do.
+   *
+   * Idempotent by key on every boot, and it writes **no capability state** — only
+   * a reading moves one of those, which is the separation `capabilities.ts`
+   * exists to keep. A failure here is reported and does not stop the boot: a
+   * kernel that could not seed is a design surface that cannot be evaluated,
+   * never a Brain that cannot serve.
+   */
+  try {
+    const design = await seedDesignKernel();
+    console.log(
+      `  Design kernel: ${design.surfaces} surface(s), ${design.patterns} pattern(s), ` +
+        `${design.capabilities} declared capability(ies).`,
+    );
+  } catch (error) {
+    console.log(
+      `  Design kernel could not be seeded: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   // An extraction still marked in-flight was interrupted by a crash or a
   // restart. Mark it so, before anything can mistake a half-read document for a

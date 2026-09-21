@@ -150,6 +150,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 
@@ -224,6 +225,23 @@ export interface TickReport {
       changeRequests: string[];
       failed: number;
     };
+  };
+  /**
+   * The design kernel's pass, fleet-wide.
+   *
+   * Three things, and not the fourth: judged reviews read back, closed cycles
+   * learned from, and one pass of the proactive expansion loop. Rendering is
+   * deliberately absent — a capture needs a headless browser and a running
+   * product, and the deployed Brain has neither, so a tick that tried would
+   * either fail every pass or quietly decide a surface was fine. See
+   * `services/design/kernel.ts`.
+   */
+  design: {
+    ingested: number;
+    learned: number;
+    expansionsOpened: number;
+    expansionsSettled: number;
+    problems: string[];
   };
   /**
    * Ideas the project's own archive already answered, judged and parked without
@@ -541,6 +559,7 @@ const EMPTY: TickReport = {
       failed: 0,
     },
   },
+  design: { ingested: 0, learned: 0, expansionsOpened: 0, expansionsSettled: 0, problems: [] },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -979,6 +998,42 @@ export async function tick(owner: string): Promise<TickReport> {
       if (scan) report.capability.selfModelDrift = scan.drift.length;
     } catch {
       /* a reading that could not be taken is not a reason to stop the tick */
+    }
+
+    /*
+     * 1a-iv-f. Advance the design kernel, fleet-wide.
+     *
+     * A judged review whose bin finished, a closed cycle nothing has learned
+     * from, and a weakness in the kernel's own capability map that nobody has
+     * been asked about are three states nothing else moves. Every one of them is
+     * derived from rows, so a cycle that closed before this existed is learned
+     * from on the next tick with nobody pressing anything.
+     *
+     * The expansion pass is the half that matters here: it needs no browser, no
+     * failure and no complaint, so **this is where the kernel gets more capable
+     * simply by Brain running**. It is bounded by how many expansions may be
+     * open at once rather than by any lifetime count — §24's correction, which
+     * this kernel does not undo.
+     *
+     * Fleet-wide rather than per-project, because a design capability is a fact
+     * about Brain rather than about somebody's work — the same reasoning that
+     * puts the capability kernel here rather than in the per-project loop below.
+     *
+     * Its own `try`, for the reason the block above has one: a design pass that
+     * threw must not stop Russell writing back a mission or reconciling a
+     * stranded lease.
+     */
+    try {
+      const design = await runDesignKernel();
+      report.design.ingested = design.ingested.length;
+      report.design.learned =
+        design.learned.length +
+        (design.fleetWide ? design.fleetWide.compiled.length + design.fleetWide.moved.length : 0);
+      report.design.expansionsOpened = design.expansion?.opened.length ?? 0;
+      report.design.expansionsSettled = design.expansion?.settled.length ?? 0;
+      report.design.problems = design.problems;
+    } catch {
+      /* a design pass that could not run leaves the kernel exactly as it was */
     }
 
     /*

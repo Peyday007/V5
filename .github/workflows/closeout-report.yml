@@ -1,0 +1,101 @@
+# Reading production for the Russell product-foundation closeout.
+#
+# ---------------------------------------------------------------------------
+# Why this exists rather than a `--report` flag on one of the others
+# ---------------------------------------------------------------------------
+#
+# Every read-only report in this repository shares one concurrency group,
+# `deploy-brain`, and the reason for that is sound: a deploy replaces the
+# machine, and a report that raced a restart would be reporting whichever half
+# answered.
+#
+# The measured cost of it is that a read cannot be taken at all. GitHub keeps
+# exactly one *pending* run per group, so a new dispatch cancels the one that
+# was waiting — and with a dozen sessions working this repository at once, four
+# consecutive attempts at `Cash report` were cancelled before any of them
+# started. A reading you cannot take is not a control; it is a reading nobody
+# has.
+#
+# So this one carries its own group, and the reason that is safe rather than a
+# hole in the rule is specific: **the database is not on the machine.** In
+# cloud mode the rows are in Supabase Postgres and the documents are in the
+# bucket (§18), so a restart does not change what this reads. What a restart
+# can do is interrupt the ssh session, and that fails loudly with a missing
+# `OK` line rather than quietly reporting half a Brain.
+#
+# It is read-only in the script as well as here: `cash-report.ts`,
+# `admin.ts people list` and `fleet.ts show` open the database, print and
+# close. No deploy, no restart, no migration, no write.
+name: Closeout report
+
+on:
+  workflow_dispatch:
+    inputs:
+      what:
+        description: 'cash | people | fleet | refinement'
+        required: true
+        default: cash
+      project:
+        description: 'Optional project id (prj_...), for cash and refinement'
+        required: false
+        default: ''
+
+concurrency:
+  group: closeout-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -eu
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          project="${{ inputs.project }}"
+
+          # The allowlist is the control. The input's description is a label,
+          # and a label is not a guard: a command composed from free text would
+          # be a way to run anything inside the container.
+          case "${{ inputs.what }}" in
+            cash)
+              cmd="sh /app/scripts/cash-report.sh"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              marker='^CASH-REPORT: OK'
+              ;;
+            people)
+              cmd="sh /app/scripts/admin.sh people list"
+              marker='kind=PERSON'
+              ;;
+            fleet)
+              cmd="sh /app/scripts/fleet.sh show"
+              marker='.'
+              ;;
+            refinement)
+              cmd="sh /app/scripts/refinement-report.sh"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              marker='^REFINEMENT-REPORT: OK'
+              ;;
+            *)
+              echo "::error::Unknown report '${{ inputs.what }}'."
+              exit 1
+              ;;
+          esac
+
+          set +e
+          flyctl ssh console --app "$app" -C "$cmd" 2>&1 | tee closeout-report.txt
+          set -e
+          grep -q "$marker" closeout-report.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: closeout-report
+          path: closeout-report.txt
