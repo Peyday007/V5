@@ -51,8 +51,12 @@ jobs:
             args="--project ${{ inputs.project }}"
           fi
           set +e
+          # The pool size is set here as well as in the script, because the
+          # workflow runs from the checked-out repository and the script runs
+          # from the image — so this one takes effect without a deploy, which
+          # is what matters when the pooler is already tight.
           flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/labor-report.sh $args" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/labor-report.sh $args" \
             2>&1 | tee labor-report.txt
           set -e
           grep -q '^LABOR-REPORT: OK' labor-report.txt
