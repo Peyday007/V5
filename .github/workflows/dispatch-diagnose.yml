@@ -78,6 +78,12 @@ jobs:
           echo "=============== step10 tick-failures ==============="
           flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh tick-failures" 2>&1 | tail -120
 
+          # How long a mutation actually takes, from rows Brain already writes.
+          # §27 has carried "nobody yet knows what the judge pass costs" across
+          # ten deploys while `idempotency_operations` held both timestamps.
+          echo "=============== step10 effect-times ==============="
+          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh effect-times 20" 2>&1 | tail -80
+
           echo "=============== step10 fire-check ==============="
           flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh fire-check" 2>&1 | tail -80
 

@@ -1876,6 +1876,93 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === 'effect-times') {
+    /*
+     * How long a mutation actually takes, from rows Brain already writes.
+     *
+     * §27 has carried this as an open question across ten deploys: the hosted
+     * gate failed at 5m18s, 5m22s and 5m23s and those turned out to be a
+     * client giving up at 300 seconds, and what lies past that wall was
+     * measured exactly twice, by hand, out of two runs' log timestamps. The
+     * sentence it ends on is that nobody knows what the judge pass costs.
+     *
+     * `idempotency_operations` has known the whole time. `started_at` is
+     * stamped when the effect begins and `completed_at` when it commits, so
+     * the duration of every mutation this Brain has ever performed is two
+     * columns apart, per namespace, already recorded.
+     *
+     * The seam this was written for is one altitude up from a slow pass:
+     * `brain_submit_audit`'s JUDGE branch outran the Cowork connector's
+     * sixty-second tool timeout, so the worker was told its submission failed
+     * while the server committed it — 2026-09-21, `wki_8ec24cf67707419aae39`,
+     * recorded at 10:35:06.165Z against a call that had been abandoned at
+     * about 10:34:30. Whether that is ninety seconds or nine minutes is the
+     * difference between a contract to tighten and a query to find, and until
+     * now the only way to ask was to read a deploy log.
+     *
+     * Slowest first, because the tail is the thing that breaks a client. The
+     * count and the median are printed beside it so that one outlier is not
+     * mistaken for a cost. Read-only, and it names no payload: a namespace, a
+     * state and two timestamps.
+     */
+    const limit = Math.min(200, Math.max(1, Number(arg(0) ?? '20')));
+    const rows = await getDb().all<{
+      namespace: string;
+      state: string;
+      started_at: string | null;
+      completed_at: string | null;
+      work_item_id: string | null;
+    }>(
+      `SELECT namespace, state, started_at, completed_at, work_item_id
+         FROM idempotency_operations
+        WHERE started_at IS NOT NULL AND completed_at IS NOT NULL
+        ORDER BY completed_at DESC
+        LIMIT 2000`,
+    );
+    if (rows.length === 0) {
+      console.log('STEP10: OK effect-times none — no operation has both timestamps.');
+      return;
+    }
+    const timed = rows
+      .map((row) => ({
+        namespace: row.namespace,
+        state: row.state,
+        workItemId: row.work_item_id,
+        completedAt: row.completed_at!,
+        ms: Date.parse(row.completed_at!) - Date.parse(row.started_at!),
+      }))
+      .filter((row) => Number.isFinite(row.ms) && row.ms >= 0);
+
+    const byNamespace = new Map<string, number[]>();
+    for (const row of timed) {
+      const list = byNamespace.get(row.namespace) ?? [];
+      list.push(row.ms);
+      byNamespace.set(row.namespace, list);
+    }
+    console.log(`STEP10: OK effect-times sampled=${timed.length} namespaces=${byNamespace.size}`);
+    console.log('');
+    console.log('  namespace                     n    median      p90       max');
+    for (const [namespace, all] of [...byNamespace].sort((a, b) => b[1].length - a[1].length)) {
+      const sorted = [...all].sort((a, b) => a - b);
+      const at = (q: number): number => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+      const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+      console.log(
+        `  ${namespace.padEnd(26)} ${String(all.length).padStart(4)}  ` +
+          `${secs(at(0.5)).padStart(8)} ${secs(at(0.9)).padStart(8)} ` +
+          `${secs(sorted[sorted.length - 1]!).padStart(9)}`,
+      );
+    }
+    console.log('');
+    console.log(`  The ${limit} slowest, newest first within ties:`);
+    for (const row of [...timed].sort((a, b) => b.ms - a.ms).slice(0, limit)) {
+      console.log(
+        `    ${(row.ms / 1000).toFixed(1).padStart(8)}s  ${row.namespace.padEnd(24)} ` +
+          `${row.state.padEnd(10)} ${row.workItemId ?? '\u2014'}  ${row.completedAt}`,
+      );
+    }
+    return;
+  }
+
   if (command === 'regrant-work') {
     /*
      * The same thing one object down, and it exists because the ceiling now
