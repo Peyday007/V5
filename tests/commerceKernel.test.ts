@@ -67,6 +67,7 @@ import { commerceView } from '../server/services/commerce/view.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import { getApprovalEnvelope } from '../server/services/research/approvalEnvelope.ts';
 import { ownActionMatches } from '../server/services/research/actorScope.ts';
+import { requirementFor } from '../server/services/identity/policy.ts';
 import {
   channelsQuestion,
   economicsQuestion,
@@ -1549,6 +1550,42 @@ describe('the envelopes and profiles authorize reading and nothing else', () => 
         `"${prose}" was admitted`,
       ).toBeGreaterThan(0);
     }
+  });
+
+  /**
+   * Naming a channel is the level a membership change carries, in the policy
+   * module and not only in a comment above the handler.
+   *
+   * The routes were written claiming "ADMIN plus `requirePerson`, the same
+   * pair the industry map carries" and `policy.ts` had no entry for them, so
+   * a POST took `defaultLevelFor` — WRITE. A member who may fill in a card
+   * could have named the channel the whole loop runs on, while the comment
+   * said otherwise. **A guard a comment asserts and the policy does not apply
+   * is worse than an absent one, because it is read as present.**
+   *
+   * Asserted through `requirementFor`, which is what the resolvers actually
+   * call, rather than by reading the override table — a test over the table
+   * would pass on an entry that some earlier pattern shadows.
+   */
+  it('asks for the level a membership change carries before a channel is named', () => {
+    const writes: [string, string][] = [
+      ['POST', '/api/projects/prj_1/cash/commerce/channels'],
+      ['POST', '/api/projects/prj_1/cash/commerce/propositions'],
+      ['PATCH', '/api/projects/prj_1/cash/commerce/channels/cch_1'],
+      ['PATCH', '/api/projects/prj_1/cash/commerce/propositions/cpr_1'],
+    ];
+    for (const [method, path] of writes) {
+      const requirement = requirementFor(method, path);
+      expect(requirement.level, `${method} ${path} is not ADMIN`).toBe('ADMIN');
+      /*
+       * And no worker scope, which is how a machine is refused by *level* as
+       * well as by the handler's `requirePerson`. An entry naming one would
+       * make a worker's membership configuration the thing that decides.
+       */
+      expect(requirement.scope, `${method} ${path} names a worker scope`).toBeUndefined();
+    }
+    // The read stays at READ, so every member sees where Brain is looking.
+    expect(requirementFor('GET', '/api/projects/prj_1/cash/commerce').level).toBe('READ');
   });
 
   it('forbids every acting verb in both assignment templates', () => {
