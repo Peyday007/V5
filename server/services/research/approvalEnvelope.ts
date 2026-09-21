@@ -432,6 +432,91 @@ submitting anything anywhere; making any commitment on anybody's behalf. This is
 read-only research into what is already published, and every action beyond reading needs
 a separate commercial authorization from a person.`;
 
+/**
+ * Who is actually on each side of a cross-border equipment transaction.
+ *
+ * Its own template because the completion standard is unusual: a named
+ * organisation with a published trigger is the whole deliverable, and a
+ * beautifully reasoned description of *the kind of company that would want
+ * this* answers nothing. The trade is full of plausible buyers who do not
+ * exist.
+ */
+export const DEALFLOW_PARTIES_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Market: {JURISDICTION}. Say which country each organisation is in. In this trade the
+jurisdiction decides whether the goods are lawful, so an organisation with no country
+attached establishes nothing that can be used.
+
+Evidence standard: a named organisation, from a published source identified by its URL and
+by who publishes it, carrying the date it was published or last observed. A buyer is
+established by something they or a public record actually published — a fleet or capacity
+expansion, a commissioning, an awarded contract, a tender, a procurement notice, a
+regulatory change forcing replacement. A supplier is established by what the manufacturer
+publishes about what it builds and where it has exported. An organisation's own site is
+conclusive about what that organisation says and is worth nothing as independent
+confirmation of anything else.
+
+Completion standard: every organisation you establish is declared on its own claim with
+deal_finding, deal_subject set to its own name, deal_equipment set to the class of
+equipment, and deal_jurisdiction set to its country. An organisation described in prose and
+not declared reaches nothing. Where the assignment names a class of equipment, copy that
+string verbatim into deal_equipment: a different wording is a different class and will pair
+with nothing. A plausible buyer nobody has published about is not a finding, and saying so
+is a better answer than naming one.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or
+a paid API; placing an advertisement; publishing, posting, listing, filing or submitting
+anything anywhere; making any commitment on anybody's behalf; quoting, offering or
+negotiating. This is read-only research into what is already published, and every action
+beyond reading needs a separate commercial authorization from a person.`;
+
+/**
+ * What the transaction would actually involve: whether the goods may enter and
+ * be used, what it costs to land them, and how this trade pays an
+ * intermediary.
+ *
+ * Separate from the parties template because the completion standard is the
+ * opposite shape. There the deliverable is a name; here it is a requirement, a
+ * figure or a documented absence — and the most valuable single answer this
+ * envelope can produce is *we searched this layer properly and it demands
+ * nothing*, which has to be declared to exist at all.
+ */
+export const DEALFLOW_TERMS_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Market: {JURISDICTION}. Every requirement, duty and charge is about one market. The same
+equipment is lawful in one and unregistrable in the next, so a finding with no market
+attached is a finding about nowhere.
+
+Evidence standard: a published instrument, regulation, tariff schedule, standard, rate card
+or terms page, identified by its URL and by who publishes it, carrying the date it took
+effect or was last observed. Name the authority that imposes a requirement where the source
+names one. A figure is read from a source and never produced: report it as published, in
+the currency it was published in, and say what it is per — one unit, one container, one
+shipment. Do not convert currencies, do not reconcile figures on different bases into a
+single number, and do not turn a published range into a single rate.
+
+Completion standard: every requirement is declared on its own claim with deal_finding set
+to COMPLIANCE_REQUIREMENT and deal_value set to the layer it belongs to. The layers are
+separate questions and must not be answered as one — a factory holding a quality
+certificate does not make the product approved, a product approval does not make the state
+register it, and neither means the buyer will accept it. Where you search a layer properly
+and it demands nothing, declare that with deal_finding set to REQUIREMENT_ABSENCE and list
+where you looked in searched_repositories: a layer with no answer is treated as
+unresearched rather than as clear, so an unreported empty search leaves the question open.
+Every figure is declared with deal_finding set to COST_COMPONENT, its line in deal_value,
+the amount in deal_amount_cents, and its currency in deal_currency.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or
+a paid API; obtaining, applying for or paying for any certification, approval, registration
+or inspection; placing an advertisement; publishing, posting, listing, filing or submitting
+anything anywhere; making any commitment on anybody's behalf; quoting, offering or
+negotiating. This is read-only research into what is already published, and every action
+beyond reading needs a separate commercial authorization from a person.`;
+
 export const INDUSTRY_MAP_ASSIGNMENT_TEMPLATE = `Establish, from published sources, how this part of the economy is actually put together:
 
 {QUESTION}
@@ -1065,6 +1150,83 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'commitment, deposit, borrowing and purchase is a commercial action a person grants ' +
       'separately, and never this envelope.',
     assignmentTemplate: CAPITAL_STRUCTURE_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+
+  /**
+   * Who is on each side of a cross-border equipment transaction.
+   *
+   * `RUSSELL_CASH_DISCOVERY_V1`'s permissions exactly — the same source
+   * classes, the same forbidden actions, the same zero external effect, taken
+   * by reference rather than written afresh so they cannot drift into
+   * authorizing different things. What differs is only the assignment it pins,
+   * which is why it is a separate envelope at all: `planFitsEnvelope` pins one
+   * template per envelope, and a packet has to be judged against the rules for
+   * the question it is actually asking.
+   *
+   * **It authorizes no effect that discovery did not already authorize.**
+   * Worth saying plainly because the subject is a sales pipeline: nothing here
+   * authorizes approaching a buyer, quoting, offering, negotiating or
+   * committing anything. It authorizes reading published sources about who has
+   * said they need equipment and who has said they build it. Every one of
+   * those actions is a `COMMERCIAL_ACTION` a person grants separately, and
+   * `forbiddenActions` refuses a plan that describes doing any of them.
+   */
+  RUSSELL_DEALFLOW_PARTIES_V1: Object.freeze({
+    id: 'RUSSELL_DEALFLOW_PARTIES_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it: published sources only, across any industry, business ' +
+      'model or market, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing which organisations ' +
+      'have published a need for a class of industrial equipment and which manufacturers ' +
+      'have published the capability to supply it. Approaching either of them is a commercial ' +
+      'action a person grants separately, and never this envelope.',
+    assignmentTemplate: DEALFLOW_PARTIES_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * What the transaction would involve: the compliance envelope, the landed
+   * cost, and how this trade pays an intermediary.
+   *
+   * The same permissions again, and the same argument for being its own
+   * envelope. Worth saying explicitly because the subject sounds operational:
+   * nothing here authorizes obtaining a certification, applying for an
+   * approval, booking freight, clearing customs or agreeing a commission. It
+   * authorizes *reading about* what those cost and what they require, and its
+   * assignment is written so that every one of them is a thing to establish
+   * from a published source rather than a thing to do.
+   */
+  RUSSELL_DEALFLOW_TERMS_V1: Object.freeze({
+    id: 'RUSSELL_DEALFLOW_TERMS_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it: published sources only, with no spending, no paid API or purchased ' +
+      'data, no contact with any person or organisation, no advertising, no publishing and ' +
+      'no external effect of any kind. This envelope is that authorization applied to ' +
+      'establishing what a destination market demands of a class of equipment, what it costs ' +
+      'to land there, and how that trade pays an intermediary. It authorizes reading about ' +
+      'those and never doing any of them: obtaining an approval, booking freight, clearing ' +
+      'customs and agreeing a commission are commercial actions a person grants separately, ' +
+      'and never this envelope.',
+    assignmentTemplate: DEALFLOW_TERMS_ASSIGNMENT_TEMPLATE,
     jurisdiction: 'the market this question names',
     maxFragments: null,
     geography: /\S/,

@@ -82,8 +82,10 @@ import {
   sendProbe,
   submitTrigger,
   verifyConnection,
+  settleConnection,
 } from '../services/capacity/connection.ts';
 import { adoptSurface } from '../services/capacity/adopt.ts';
+import { foundationReading } from '../services/identity/foundation.ts';
 import { decideBrainAdmin } from '../services/identity/policy.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 
@@ -172,6 +174,19 @@ peopleRouter.get(
        * the client — §24's manifest lesson — so what a member is told to paste
        * and what Brain actually reads are one object.
        */
+      /*
+       * The foundation matrix, for the reader who can act on it.
+       *
+       * Administrator depth, because it is a per-account judgement about other
+       * people and names the remedies only an administrator holds — and it is
+       * *here* rather than only on a terminal because the controls it sends
+       * somebody to (invite, recovery) are on this page already. §26's rule:
+       * a decision a person makes belongs on the surface they already use.
+       *
+       * It reports and changes nothing, so reading this page still performs no
+       * effect.
+       */
+      ...(admin ? { foundation: await foundationReading() } : {}),
       contract: { mcpUrl: mcpUrlFor(originOf(req)), bootstrapRepository: BOOTSTRAP_REPOSITORY },
     };
   }),
@@ -455,9 +470,26 @@ peopleRouter.get(
     const connections = await listConnections();
     return {
       connections: await Promise.all(
-        connections.map(async (one) => ({
+        connections.map(async (stale) => {
+          const user = await getUser(stale.userId);
+          /*
+           * Settled, so an administrator and the member read one lifecycle.
+           *
+           * This list used to report `capacity_connections.state` as written,
+           * while the member's own page reported the state `reconcile` derives
+           * — so a repointed Routine read MISBOUND to the member and
+           * CONFIGURED here, to the only person who can repoint it. A reader
+           * that holds the remedy and is shown the stale half is the worst
+           * shape that defect has.
+           *
+           * A user this connection's member no longer resolves to cannot be
+           * settled (the names are derived from the row), so it is reported as
+           * it stands rather than guessed at.
+           */
+          const one = user ? (await settleConnection(user, stale)).connection : stale;
+          return {
           userId: one.userId,
-          displayName: (await getUser(one.userId))?.displayName ?? one.userId,
+          displayName: user?.displayName ?? one.userId,
           state: one.state,
           secretName: one.secretName,
           triggerRef: one.triggerRef,
@@ -476,7 +508,8 @@ peopleRouter.get(
           revokedAt: one.revokedAt,
           revokedReason: one.revokedReason,
           updatedAt: one.updatedAt,
-        })),
+          };
+        }),
       ),
     };
   }),

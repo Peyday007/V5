@@ -825,6 +825,112 @@ function headlineFor(
 /* ------------------------------------------------------------------------ */
 
 /**
+ * Where this connection actually is, settled against the rows behind it.
+ *
+ * This is the reconciliation `connectionView` has always done, lifted out so
+ * that it is not something only the member's own page performs.
+ *
+ * **The defect it corrects is two readers of one fact.** `reconcile` had
+ * exactly one caller — the member's read path — while the administrator's
+ * `/people/connections` list and `contributedCapacity` both read
+ * `capacity_connections.state` straight out of the row. So a connection whose
+ * Routine had been repointed read `MISBOUND` on the member's screen and
+ * `CONFIGURED` on the administrator's list, until the member happened to open
+ * their page. The administrator is the person who repoints a surface, and the
+ * dispatcher's own capacity reading was using the same stale column — which is
+ * the fourth time this repository has had to write that a rule applied by one
+ * of two readers is worse than none, and the first time the reader that was
+ * wrong was the one holding the remedy.
+ *
+ * It is safe for a second caller for the reason the first one was safe: every
+ * move inside `reconcile` is a guarded compare-and-swap naming the state it
+ * comes from, so two readers settling the same connection at the same instant
+ * produce one move and one ordinary loser. It writes nothing else, and it
+ * cannot move a proven surface backwards.
+ *
+ * It deliberately does **not** call `ensureConnection`. Creating a row is the
+ * member's own read path establishing the names they are about to paste into
+ * Claude; an administrator glancing at a list must not mint connections for
+ * people who have never opened the page.
+ */
+export interface SettledConnection {
+  connection: CapacityConnection;
+  worker: Awaited<ReturnType<typeof getWorkerByName>>;
+  /** The worker's OAuth rows, so a caller need not read them a second time. */
+  tokens: Awaited<ReturnType<typeof listTokensForWorker>>;
+  authorization: ReturnType<typeof authorizationFrom>;
+  /** A live connector of theirs has authenticated as this worker. */
+  connectorAuthenticated: boolean;
+  /** It authenticated once and holds nothing live now. Two facts, two fields. */
+  authorizationExpired: boolean;
+}
+
+/**
+ * Which worker this connection *is* — the recorded binding first, the derived
+ * name only as a fallback.
+ *
+ * A name is not a binding, and for a long time this resolved one by composing
+ * the member's display name with a slice of their user id. That finds a worker
+ * Brain minted through this journey and finds **nothing** for a surface
+ * registered on a terminal before the journey existed — which in production is
+ * the four Routines doing most of the research. So the owner's page read no
+ * worker, no tokens and `NOT_STARTED`, and told them their Claude account was
+ * not connected while `Brain Research A` was firing for the three hundred and
+ * fiftieth time.
+ *
+ * `capacity_connections.worker_id` is the binding: written when Brain mints the
+ * worker, and when a person adopts an existing surface. The name lookup stays
+ * for rows written before that column, so nothing that worked before stops
+ * working, and where both answer the row wins.
+ *
+ * It is **one** function because all three callers are the same question asked
+ * for different reasons, and the third is the one with teeth: `revoke` resolves
+ * a worker to revoke its tokens, so a name-only lookup there would leave an
+ * adopted surface's credentials live after a member had taken their connection
+ * back. A rule applied by one of three readers is worse than none.
+ */
+async function workerFor(
+  connection: CapacityConnection | null,
+  workerName: string,
+): Promise<Awaited<ReturnType<typeof getWorkerByName>>> {
+  return (
+    (connection?.workerId ? await getWorker(connection.workerId) : null) ??
+    (await getWorkerByName(workerName))
+  );
+}
+
+export async function settleConnection(
+  user: Pick<User, 'id' | 'displayName'>,
+  known?: CapacityConnection,
+): Promise<SettledConnection> {
+  const names = namesFor(user);
+  let connection = known ?? (await connectionForUser(user.id));
+  if (!connection) throw new Error('No connection for this member.');
+
+  const worker = await workerFor(connection, names.workerName);
+  const tokens = worker ? await listTokensForWorker(worker.id) : [];
+  const authorization = authorizationFrom(tokens);
+  const connectorAuthenticated = authorization.live && authorization.everUsed;
+  const authorizationExpired = authorization.everUsed && !authorization.live;
+
+  if (
+    (connection.state === 'NOT_STARTED' || connection.state === 'INVITATION_REQUESTED') &&
+    connectorAuthenticated
+  ) {
+    await moveConnection({
+      connectionId: connection.id,
+      from: connection.state,
+      to: 'CONNECTOR_AUTHORIZED',
+    });
+    connection = (await connectionForUser(user.id)) ?? connection;
+  }
+
+  connection = await reconcile(connection, worker?.id ?? null, connectorAuthenticated);
+
+  return { connection, worker, tokens, authorization, connectorAuthenticated, authorizationExpired };
+}
+
+/**
  * One member's connection as it stands, creating the row if they have none.
  *
  * Creating is safe on a read because it is the *assignment of three names* and
@@ -857,44 +963,9 @@ export async function connectionView(input: {
    * an authorized connector for ever. A revoke that the screen above it
    * disagrees with is §29's defect at the one place it would matter most.
    */
-  /*
-   * The recorded binding first, and the derived name only as a fallback.
-   *
-   * This was `getWorkerByName(names.workerName)` alone — a name composed from
-   * the member's display name and a slice of their user id. That resolves a
-   * worker Brain minted through this journey and resolves **nothing** for a
-   * surface registered on a terminal before the journey existed, which in
-   * production is the four Routines that do most of the research. So the
-   * owner's page read no worker, no tokens and `NOT_STARTED`, and told them
-   * their Claude account was not connected while `Brain Research A` was firing
-   * for the three hundred and fiftieth time.
-   *
-   * A name is not a binding. `connection.workerId` is, and it is written when
-   * Brain mints the worker or when a person adopts an existing surface. The
-   * name lookup stays for rows written before that column, so nothing that
-   * worked before stops working — and where both answer, the row wins.
-   */
-  const worker =
-    (connection.workerId ? await getWorker(connection.workerId) : null) ??
-    (await getWorkerByName(names.workerName));
-  const tokens = worker ? await listTokensForWorker(worker.id) : [];
-  const authorization = authorizationFrom(tokens);
-  const connectorAuthenticated = authorization.live && authorization.everUsed;
-  const authorizationExpired = authorization.everUsed && !authorization.live;
-
-  if (
-    (connection.state === 'NOT_STARTED' || connection.state === 'INVITATION_REQUESTED') &&
-    connectorAuthenticated
-  ) {
-    await moveConnection({
-      connectionId: connection.id,
-      from: connection.state,
-      to: 'CONNECTOR_AUTHORIZED',
-    });
-    connection = (await connectionForUser(input.user.id)) ?? connection;
-  }
-
-  connection = await reconcile(connection, worker?.id ?? null, connectorAuthenticated);
+  const settled = await settleConnection(input.user, connection);
+  const { worker, tokens, authorization, connectorAuthenticated, authorizationExpired } = settled;
+  connection = settled.connection;
 
   const routine = connection.routineId ? await getRoutine(connection.routineId) : null;
   const account = routine ? await getAccount(routine.accountId) : null;
@@ -1479,7 +1550,7 @@ export async function submitTrigger(input: {
         declaredPlanPower: 'unknown',
       }));
 
-    const worker = await getWorkerByName(names.workerName);
+    const worker = await workerFor(connection, names.workerName);
     if (!worker) {
       return {
         ok: false,
@@ -1732,7 +1803,7 @@ export async function revokeOwnConnection(input: {
     return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
   }
 
-  const worker = await getWorkerByName(names.workerName);
+  const worker = await workerFor(connection, names.workerName);
   if (worker) {
     await revokeTokensForWorker(worker.id);
     await revokeInvitationsForWorker(worker.id);

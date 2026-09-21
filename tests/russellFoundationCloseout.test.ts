@@ -552,6 +552,86 @@ describe('an already-registered surface can be recorded as somebody’s', () => 
     expect(taken.ok).toBe(false);
     if (!taken.ok) expect(taken.reason).toContain('already recorded as somebody else');
   });
+
+  /**
+   * Every reader of "which worker is this connection" reads the binding.
+   *
+   * The repair started as one line inside the member's own read path, and a
+   * merge with the work-register branch showed why that was not enough: the
+   * same question is asked in three places — settling a connection, registering
+   * its Routine, and **revoking it** — and all three resolved a worker by
+   * composing the member's display name.
+   *
+   * The third is the one with teeth. `revoke` looks a worker up in order to
+   * revoke its tokens, so a name-only lookup there leaves an adopted surface's
+   * credentials live after somebody has taken their connection back — the
+   * failure being silent and in the unsafe direction. So it is one `workerFor`
+   * with three callers, and this asserts the property at the caller where being
+   * wrong costs something rather than at the one where it only misinforms.
+   */
+  it('reaches an adopted worker from every reader, including the one that revokes', async () => {
+    const { connectionForUser } = await import('../server/repos/capacityConnections.ts');
+    const { revokeOwnConnection, settleConnection } = await import(
+      '../server/services/capacity/connection.ts'
+    );
+    const { listTokensForWorker } = await import('../server/repos/oauth.ts');
+
+    const person = await createUser({
+      email: 'adopted-revoke@example.com',
+      displayName: 'Peyton',
+      password: 'a-long-enough-password',
+    });
+    /*
+     * A worker whose name is deliberately nothing `namesFor` would ever
+     * derive — which is the whole production shape: four Routines registered
+     * on a terminal years before this journey existed.
+     */
+    const worker = await createWorker({
+      name: 'research-registered-on-a-terminal',
+      displayName: 'Registered on a terminal',
+      createdByType: 'HUMAN',
+      createdById: person.id,
+    });
+    const account = await createAccount({ name: 'primary-revoke', declaredPlanPower: null });
+    const routine = await createRoutine({
+      accountId: account.id,
+      name: 'Brain Research A',
+      routineRef: 'trig_adopted_revoke',
+      tokenSecretName: 'BRAIN_ROUTINE_TOKEN',
+      tokenDigest: 'b'.repeat(64),
+      capabilities: [],
+    });
+    await bindRoutineWorker(routine.id, worker.id);
+    await adoptSurface({
+      userId: person.id,
+      routineRef: 'trig_adopted_revoke',
+      actorUserId: person.id,
+      channel: 'SHELL',
+    });
+
+    // The settler finds it by the row rather than by a name it cannot guess.
+    const settled = await settleConnection(person);
+    expect(settled.worker?.id).toBe(worker.id);
+
+    const before = await listTokensForWorker(worker.id);
+    const outcome = await revokeOwnConnection({
+      user: person,
+      actor: person,
+      reason: 'a different Claude account',
+      origin: 'https://brain.invalid',
+    });
+    expect(outcome.ok).toBe(true);
+
+    // Whatever this worker held is revoked, because revoke found the worker.
+    const after = await listTokensForWorker(worker.id);
+    expect(after.length).toBe(before.length);
+    expect(after.every((one) => one.revokedAt !== null)).toBe(true);
+
+    const row = await connectionForUser(person.id);
+    expect(row?.state).toBe('REVOKED');
+    // And the binding is history rather than something a revoke destroys.
+    expect(row?.workerId).toBe(worker.id);
+  });
 });
 
 // ---------------------------------------------------------------------------

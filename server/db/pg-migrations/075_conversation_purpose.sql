@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 083. See that file for why every
+-- The Postgres half of SQLite migration 084. See that file for why every
 -- general thread in this Brain was filed under Deal Dispatch, why the two
 -- columns already disagreed with each other, and why the repair is derived
 -- from linkage rather than from a title.
@@ -45,7 +45,7 @@ SELECT
   NULL,
   'MIGRATED',
   NULL,
-  'Detached from ' || project_id || ' by migration 083: this thread carried a project and '
+  'Detached from ' || project_id || ' by migration 084: this thread carried a project and '
     || 'attachment_source = ''NONE'', which is the schema''s own way of saying nothing attached '
     || 'it. It was the value a client default wrote. Re-attach it from the conversation if it '
     || 'really is about that project.',

@@ -32,10 +32,6 @@
  *   npm run admin -- workers disable <name> --admin someone@example.com
  *   npm run admin -- workers archive <name> --admin someone@example.com
  *   npm run admin -- research start <project> --admin someone@example.com
- *   npm run admin -- people list
- *   npm run admin -- people rename <user id|address> "A name" --admin someone@example.com
- *   npm run admin -- capacity show
- *   npm run admin -- capacity adopt <user id|address> <trig_...> --admin someone@example.com
  *   npm run admin -- projects list
  *   npm run admin -- projects create "A name" --admin someone@example.com
  *   npm run admin -- access grant <worker> <project> --admin someone@example.com
@@ -87,8 +83,8 @@ import {
   getWorkerByName,
   grantMembership,
   listMembershipsForPrincipal,
-  renameUser,
   listUsers,
+  renameUser,
   listWorkers,
   recordIdentityEvent,
   revokeMembership,
@@ -96,6 +92,7 @@ import {
 } from '../server/repos/identity.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../server/repos/projects.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
+import { foundationReading } from '../server/services/identity/foundation.ts';
 import { countLivePasskeys } from '../server/repos/passkeys.ts';
 import { listOrchestrationsByProject, currentFragments } from '../server/repos/research.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
@@ -544,6 +541,53 @@ async function main(): Promise<void> {
       console.log('  signs-in=pin and signs-in=password are ways in; the screen asks for a PIN.');
       console.log('  signs-in=device holds a passkey the sign-in screen no longer offers:');
       console.log('  that person needs a new link, which People has a control for.');
+      break;
+    }
+    /*
+     * The foundation matrix: every intended human account against every
+     * dimension, with the one next action and who performs it.
+     *
+     * `people list` answers *what does this row hold*; this answers *is this
+     * person set up, and if not what is the single thing that would fix it* —
+     * which is the question the other readings are collectively for and which
+     * none of them could answer alone. It reads and changes nothing.
+     */
+    case 'people foundation': {
+      const reading = await foundationReading();
+      for (const account of reading.accounts) {
+        console.log('');
+        console.log(
+          `  ${account.displayName}${account.isBrainAdmin ? '  (Brain administrator)' : ''}  ` +
+            `— ${account.verdict}`,
+        );
+        for (const finding of account.findings) {
+          console.log(`    ${finding.verdict.padEnd(15)} ${finding.dimension}`);
+          console.log(`      ${finding.because}`);
+          if (finding.nextAction) {
+            console.log(`      -> ${finding.nextAction}  [${finding.owner}]`);
+          }
+        }
+      }
+      console.log('');
+      console.log(
+        `  ${reading.passing} of ${reading.accounts.length} account(s) satisfy every dimension ` +
+          `that applies to them; ${reading.blocked} are short of at least one.`,
+      );
+      console.log('  NOT_APPLICABLE is not PASS: it is a dimension this account has not reached.');
+      if (reading.unattributed.length > 0) {
+        console.log('');
+        console.log(`  ${reading.unattributed.length} surface(s) run under an identity no account owns:`);
+        for (const one of reading.unattributed) {
+          console.log(
+            `    ${one.routineName}  worker=${one.workerLabel ?? one.workerId}` +
+              `${one.enabled ? '  ENABLED' : ''}`,
+          );
+          console.log(`      ${one.because}`);
+          console.log(`      -> ${one.nextAction}`);
+        }
+      } else {
+        console.log('  No surface runs under an identity no account owns.');
+      }
       break;
     }
     /*

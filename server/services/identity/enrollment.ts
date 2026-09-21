@@ -54,6 +54,7 @@ import {
   recordIdentityEvent,
   revokeSessionsForUser,
   setUserPin,
+  clearUserPin,
 } from '../../repos/identity.ts';
 import { constantTimeEquals, digestSecret, generateInvitationToken, parseInvitationToken } from './secrets.ts';
 import type { MemberEnrollment, User } from '../../domain/types.ts';
@@ -199,6 +200,26 @@ export async function issueRecovery(input: {
   });
 
   /*
+   * And the PIN, which is the credential this Brain actually signs people in
+   * with — so leaving it was leaving the door open while retiring the lock
+   * nobody was using.
+   *
+   * `recoveryContract.ts` is where the classes a recovery must retire are
+   * declared, and this is one of the three readers of that list. The reason it
+   * had to become a list is that the original failure was *forgetting*: 078
+   * added a credential class and nothing came back to this function, so the
+   * recovery went on being correct about passkeys and silently incomplete
+   * about the thing that opens the door. A class added to `CREDENTIAL_CLASSES`
+   * and not retired here fails `tests/recoveryContract.test.ts`.
+   *
+   * It is retired **before** the link is issued, for the same ordering reason
+   * the passkeys are: §32's rule is that a recovery stops the old credential
+   * working *now* rather than when the replacement is redeemed, and an
+   * unredeemed link otherwise leaves the old PIN live indefinitely.
+   */
+  const pinRetired = await clearUserPin(input.userId);
+
+  /*
    * And every session those devices opened.
    *
    * Retiring the credentials and leaving the sessions is half a recovery: a
@@ -229,6 +250,9 @@ export async function issueRecovery(input: {
     metadata: {
       enrollmentId: link.enrollmentId,
       retiredCredentials: String(retired),
+      // What was actually taken away, so an audit row can answer "was this
+      // account still reachable afterwards" rather than only "a link was sent".
+      retiredPin: String(pinRetired),
       endedSessions: String(endedSessions),
     },
   });

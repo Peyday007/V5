@@ -1345,3 +1345,34 @@ export async function listIdentityEvents(
     )
   ).map(mapIdentityEvent);
 }
+
+/**
+ * Retire this account's PIN, so nothing about it opens the door any more.
+ *
+ * The counterpart to `setUserPin`, and deliberately not a call to it with a
+ * verifier nobody knows: a random verifier is still a verifier, and a column
+ * that holds one reads as *this account has a PIN* to `people.ts`,
+ * `foundation.ts` and the sign-in screen alike. NULL is the only value that
+ * means what a retirement means.
+ *
+ * The throttle goes with it for `setUserPin`'s reason — a cooldown earned
+ * against a credential that no longer exists is a punishment for a PIN nobody
+ * holds — and the sessions are ended by `issueRecovery`, which is the only
+ * caller and ends all of them anyway.
+ *
+ * Returns whether a PIN was actually there, so a recovery can record what it
+ * retired rather than asserting it.
+ */
+export async function clearUserPin(id: string): Promise<boolean> {
+  const before = await getUser(id);
+  if (!before || before.pinUpdatedAt === null) return false;
+  const at = nowIso();
+  await getDb().run(
+    `UPDATE users
+        SET pin_algorithm = NULL, pin_verifier = NULL, pin_updated_at = NULL,
+            pin_failed_count = 0, pin_locked_until = NULL, updated_at = ?
+      WHERE id = ?`,
+    [at, id],
+  );
+  return true;
+}
