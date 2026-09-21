@@ -196,13 +196,27 @@ describe('the Machines screen, over the real route', () => {
     // It appears as the category heading and again in the rounds table; both
     // are the same name from the same row rather than two opinions.
     expect(screen.getAllByText(/Commercial pressure washers/).length).toBeGreaterThan(0);
-    expect(screen.getByText(reading.because)).toBeTruthy();
+    /*
+     * `getAllBy`, because the same server sentence legitimately appears twice.
+     *
+     * Once on the category card, and once as the READINESS factor inside the
+     * frontier's collapsed factor list — which is the point rather than a
+     * duplication defect: both are the *server's* string, so the two places a
+     * person can read it cannot disagree. A screen that composed a shorter
+     * version for one of them is exactly what §29 keeps having to remove.
+     */
+    expect(screen.getAllByText(reading.because).length).toBeGreaterThan(0);
 
     // Every condition's own sentence, all five of them — the fifth being what
     // entering costs, which a verdict that could not see it was silent about.
     expect(reading.conditions).toHaveLength(5);
     for (const condition of reading.conditions) {
-      expect(screen.getByText(condition.because)).toBeTruthy();
+      // Same reason as above: a condition's sentence is also the frontier's
+      // factor sentence, from one server string rather than two.
+      expect(
+        screen.getAllByText(condition.because).length,
+        `${condition.condition} is not on the screen`,
+      ).toBeGreaterThan(0);
     }
 
     // And the objective a person wrote, rather than a paraphrase.

@@ -49,6 +49,7 @@
  */
 import type {
   Capability,
+  CategoryEvidenceEntry,
   MachineCategory,
   ManufacturingRoundPurpose,
 } from '../../domain/types.ts';
@@ -172,6 +173,23 @@ export interface CategoryReading {
   /** What entering would create that nothing else on the ladder teaches yet. */
   wouldTeach: Capability[];
   /**
+   * The evidence the conditions were read from, carried rather than counted.
+   *
+   * A condition's `because` says *how many* and *when*; these are the rows
+   * themselves, so a person can disagree with the verdict by reading what it
+   * rests on rather than by trusting the sentence. `against` is the half that
+   * matters most and is easiest to omit: what published sources say is wrong
+   * with what is on the market, and what has to be obtained first, are the
+   * facts that cut against entering, and a screen that showed only the demand
+   * would be an encouraging reading of the same rows.
+   */
+  evidence: {
+    demand: CategoryEvidenceEntry[];
+    distribution: CategoryEvidenceEntry[];
+    against: CategoryEvidenceEntry[];
+    boughtIn: CategoryEvidenceEntry[];
+  };
+  /**
    * The barriers established, which are never capital and never capabilities.
    *
    * A barrier is a *thing to obtain*; capital is an *amount*, and it is in
@@ -255,6 +273,14 @@ export function readCategory(input: {
     held,
     wouldTeach,
     barriers: coverage.barriers.map((one) => one.subject),
+    evidence: {
+      demand: coverage.demand,
+      distribution: coverage.distribution,
+      // The weaknesses and the barriers together: both are reasons entering is
+      // harder or later than the demand alone suggests.
+      against: [...coverage.weaknesses, ...coverage.barriers],
+      boughtIn: coverage.boughtIn,
+    },
     capital,
     because: explain({ coverage, verdict, conditions, missing, capital }),
   };
