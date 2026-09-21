@@ -424,6 +424,19 @@ export const CashApi = {
       body: JSON.stringify({ reason }),
     }),
 
+  /**
+   * Correct somebody's name, which is what they type to sign in.
+   *
+   * A label and nothing else: no role, no membership, no credential and no
+   * session moves with it. The server refuses a name somebody else already
+   * signs in with, so this cannot move a collision rather than fixing one.
+   */
+  renameMember: (userId: string, displayName: string): Promise<{ user: { id: string } }> =>
+    api(`/api/admin/users/${p(userId)}/display-name`, {
+      method: 'POST',
+      body: JSON.stringify({ displayName }),
+    }),
+
   withdrawLink: (enrollmentId: string, reason: string): Promise<{ revoked: boolean }> =>
     api(`/api/members/enrollments/${p(enrollmentId)}/revoke`, {
       method: 'POST',

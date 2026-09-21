@@ -33,7 +33,7 @@ import {
   previewEnrollment,
   withdrawLink,
   LINK_REFUSED,
-} from '../services/identity/enrollment.ts';
+  NameAlreadyInUseError,} from '../services/identity/enrollment.ts';
 import {
   SIGN_IN_REFUSED,
   authenticationOptions,
@@ -438,12 +438,19 @@ passkeyRouter.post(
   handler(async (req) => {
     const principal = requirePerson();
     await requireBrainAdmin();
-    const link = await createMemberSlot({
-      displayName: requiredString(bodyOf(req)['displayName'], 'displayName'),
-      issuedByUserId: principal.id,
-    });
-    // Shown once. The token is not stored and cannot be read back.
-    return { enrollment: link };
+    try {
+      const link = await createMemberSlot({
+        displayName: requiredString(bodyOf(req)['displayName'], 'displayName'),
+        issuedByUserId: principal.id,
+      });
+      // Shown once. The token is not stored and cannot be read back.
+      return { enrollment: link };
+    } catch (error) {
+      // A name somebody already signs in with is a refusal on the merits, and
+      // its sentence is the remedy. Anything else is a fault and stays one.
+      if (error instanceof NameAlreadyInUseError) throw unprocessable(error.message);
+      throw error;
+    }
   }),
 );
 

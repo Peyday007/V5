@@ -54,6 +54,7 @@ import {
   recordIdentityEvent,
   revokeSessionsForUser,
   setUserPin,
+  signInNameTaken,
 } from '../../repos/identity.ts';
 import { constantTimeEquals, digestSecret, generateInvitationToken, parseInvitationToken } from './secrets.ts';
 import type { MemberEnrollment, User } from '../../domain/types.ts';
@@ -70,6 +71,15 @@ export const ENROLLMENT_TTL_MS = 48 * 60 * 60 * 1000;
 /** One refusal for every way a link can fail to be usable. */
 export const LINK_REFUSED =
   'This enrollment link cannot be used. Ask the person who sent it for a new one.';
+
+/**
+ * A name that would not be this person's alone.
+ *
+ * Its own class so the route can answer 422 — *understood, and refused on its
+ * merits* — rather than the 500 a bare `Error` would become. An administrator
+ * being told to pick another name is an ordinary outcome, not a fault.
+ */
+export class NameAlreadyInUseError extends Error {}
 
 export interface IssuedLink {
   enrollmentId: string;
@@ -94,6 +104,27 @@ export async function createMemberSlot(input: {
 }): Promise<IssuedLink> {
   const displayName = input.displayName.trim();
   if (displayName.length < 2) throw new Error('A member needs a name to be shown as.');
+
+  /*
+   * The name is the credential's other half, so it has to be theirs alone.
+   *
+   * A member enrolled from a link holds no address, so this name is the only
+   * thing they can type at the sign-in screen — and `getPinCredentialByIdentity`
+   * refuses a name two live accounts answer to, with the same sentence a wrong
+   * PIN gets. Issuing a second slot under a name somebody already signs in with
+   * therefore locks **both** of them out, silently, and the likeliest way to do
+   * it is the most ordinary one: re-inviting somebody whose first link expired.
+   *
+   * Refused here, where it is cheap and where the person choosing the name is
+   * the person who can choose another. The sentence names the remedy rather
+   * than the row, because the remedy is the only part they can act on.
+   */
+  if (await signInNameTaken(displayName)) {
+    throw new NameAlreadyInUseError(
+      'Somebody already signs in with that name. Give this person a name that tells them ' +
+        'apart — a surname, or an initial — because the name is how they sign in.',
+    );
+  }
 
   /*
    * Not `createUser`, which requires an email and a password. This is the row

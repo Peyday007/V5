@@ -54,7 +54,8 @@ import {
   setUserDisabled,
   setUserPassword,
   setWorkerStatus,
-} from '../repos/identity.ts';
+  setUserDisplayName,
+  signInNameTaken,} from '../repos/identity.ts';
 import {
   createInvitation,
   INVITATION_TTL_MS,
@@ -78,7 +79,7 @@ import {
   pathId,
   requireProject,
   requiredString,
-} from './helpers.ts';
+  unprocessable,} from './helpers.ts';
 
 export const adminRouter = Router();
 
@@ -255,6 +256,57 @@ adminRouter.post(
       targetType: 'USER',
       targetId: userId,
       metadata: { email: user.email },
+    });
+    return { user: updated };
+  }),
+);
+
+/**
+ * Correct somebody's name.
+ *
+ * The answering transition for an ambiguous sign-in identity, and until it
+ * existed the reading that names one was a diagnosis rather than a remedy:
+ * there was no rename anywhere in this repository, so a collision — creatable
+ * by an ordinary invitation, and most easily by re-inviting somebody whose
+ * first link expired — could not be corrected through any surface at all. §24's
+ * sentence at the sign-in screen, where the person who is stuck is the one the
+ * whole PIN migration exists to let in.
+ *
+ * It is a **label** and nothing else. No role, no membership, no credential,
+ * no session and no PIN moves, which is the difference between correcting
+ * somebody's name and replacing them — and it is why this is safe at ADMIN
+ * rather than needing a decision of its own.
+ *
+ * It refuses a name somebody else already signs in with, through the same
+ * `signInNameTaken` an invitation is refused by, because a rename that could
+ * create the collision would be a second door into the condition this exists
+ * to close.
+ */
+adminRouter.post(
+  '/users/:userId/display-name',
+  handler(async (req) => {
+    const userId = pathId(req, 'userId');
+    const displayName = requiredString(bodyOf(req)['displayName'], 'displayName').trim();
+    if (displayName.length < 2) throw badRequest('A person needs a name to be shown as.');
+
+    const user = await getUser(userId);
+    if (!user) throw notFound(`No user with id "${userId}".`);
+    if (await signInNameTaken(displayName, { exceptUserId: userId })) {
+      throw unprocessable(
+        'Somebody already signs in with that name. Pick one that tells them apart, because ' +
+          'the name is how they sign in.',
+      );
+    }
+
+    const updated = await setUserDisplayName(userId, displayName);
+    await audit(req, {
+      action: 'RENAME_USER',
+      targetType: 'USER',
+      targetId: userId,
+      // Both ends of the move, because a rename read back afterwards with only
+      // its destination on it cannot be told from an account that always had
+      // that name. Never an address, and never a credential.
+      metadata: { from: user.displayName, to: displayName },
     });
     return { user: updated };
   }),

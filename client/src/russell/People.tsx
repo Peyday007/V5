@@ -72,6 +72,10 @@ const MEMBER_STATE_LABEL: Record<PersonRow['state'], string> = {
   // The remedy, rather than the condition. Somebody reading this row has to
   // know what to press, and the control that does it is the next column.
   NEEDS_A_NEW_LINK: 'Needs a new link',
+  // The condition, because here the remedy is a *decision* rather than a
+  // button: which of the two people keeps the name is not something a screen
+  // can choose, so it says what is wrong and the control beside it asks.
+  NAME_IS_AMBIGUOUS: 'Cannot sign in — two accounts share this name',
 };
 
 /**
@@ -331,6 +335,77 @@ function Recover({ person, onChanged }: { person: PersonRow; onChanged(): void }
   );
 }
 
+/**
+ * Give one of them a name of their own.
+ *
+ * The answering transition for `NAME_IS_AMBIGUOUS`. A member enrolled from a
+ * link holds no address, so their display name is the only identity they can
+ * type — and a name two live accounts answer to is refused at the door, with
+ * the same sentence a wrong PIN gets. Both of them are locked out, and neither
+ * can do anything about it.
+ *
+ * It moves a label and nothing else: the account keeps its role, its
+ * memberships, its PIN, its sessions and everything it owns. Which of the two
+ * is renamed is a decision, so this asks rather than choosing — and the server
+ * refuses a name that would simply move the collision.
+ */
+function Rename({ person, onChanged }: { person: PersonRow; onChanged(): void }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button type="button" className="rs-button-quiet" onClick={() => setOpen(true)}>
+        Give them their own name
+      </button>
+    );
+  }
+  return (
+    <div className="rs-field">
+      <label className="rs-field-label" htmlFor={`rename-${person.userId}`}>
+        A name that tells them apart
+      </label>
+      <input
+        id={`rename-${person.userId}`}
+        className="rs-input"
+        type="text"
+        value={name}
+        placeholder="A surname, or an initial"
+        onChange={(event) => setName(event.target.value)}
+      />
+      <button
+        type="button"
+        className="rs-button-quiet"
+        disabled={busy || name.trim().length < 2}
+        onClick={() => {
+          setBusy(true);
+          setProblem(null);
+          CashApi.renameMember(person.userId, name.trim()).then(
+            () => {
+              setBusy(false);
+              setOpen(false);
+              onChanged();
+            },
+            (error: unknown) => {
+              setProblem(describe(error));
+              setBusy(false);
+            },
+          );
+        }}
+      >
+        {busy ? 'Saving…' : 'Save'}
+      </button>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      <p className="rs-hint">
+        This changes what they type to sign in, and nothing else — they keep their PIN, their
+        access and everything on their account. Tell them the new name.
+      </p>
+    </div>
+  );
+}
+
 function People({
   page,
   onChanged,
@@ -368,6 +443,9 @@ function People({
             ) : null}
             {page.you.isBrainAdmin && one.state === 'NEEDS_A_NEW_LINK' ? (
               <Recover person={one} onChanged={onChanged} />
+            ) : null}
+            {page.you.isBrainAdmin && one.state === 'NAME_IS_AMBIGUOUS' ? (
+              <Rename person={one} onChanged={onChanged} />
             ) : null}
           </li>
         ))}

@@ -530,7 +530,31 @@ authRouter.post('/auth/pin', (req: Request, res: Response) => {
         return;
       }
 
-      const found = await getPinCredentialByIdentity(identity);
+      const lookup = await getPinCredentialByIdentity(identity);
+      const found = lookup.outcome === 'FOUND' ? lookup : null;
+
+      /*
+       * An identity two live accounts answer to.
+       *
+       * The caller is told nothing that a wrong PIN would not tell them, and
+       * the same scrypt verification below runs against the unmatchable
+       * verifier, so it costs the same and reveals the same. What is different
+       * is the **audit row**: this is a condition only an administrator can
+       * correct, and a category that could not name it would leave the one
+       * reader who can fix it with nothing to read. `peopleReading` names it
+       * too, on the surface where the rename lives.
+       */
+      if (lookup.outcome === 'AMBIGUOUS') {
+        await pinMatches(pin, UNMATCHABLE_PIN_VERIFIER);
+        await audit(req, {
+          action: 'PIN_SIGN_IN',
+          result: 'DENIED',
+          reason: 'INVALID_CREDENTIALS',
+          metadata: { category: 'AMBIGUOUS_IDENTITY', candidates: String(lookup.candidates) },
+        });
+        res.status(401).json({ error: PIN_REFUSED });
+        return;
+      }
 
       // The cooldown, read from rows. Checked before the verification so a
       // locked-out attacker cannot keep spending the server's scrypt budget.

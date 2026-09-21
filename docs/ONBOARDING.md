@@ -73,6 +73,29 @@ It travels in the URL **fragment** (`/enrol#…`), which is never sent to a serv
 and never written to an access log. That is what makes it safe to put in a
 message and is why the address bar is cleared as soon as the page reads it.
 
+#### The name is how they sign in, so it has to be theirs alone
+
+A member holds no email address — that is deliberate, and it means the name you
+type here is the *only* thing they can put in the sign-in box. So Brain refuses
+a name somebody already signs in with, and says so, rather than making a second
+slot: two live accounts answering to one name lock **both** of those people out,
+with the sign-in screen giving the same answer it gives a wrong PIN.
+
+Give people something that tells them apart — a surname, or an initial. Two
+names differing only in capitals count as one, because a person typing their own
+name cannot be expected to reproduce yours.
+
+If you ever see **Cannot sign in — two accounts share this name** on the People
+list, that is this condition on a Brain old enough to predate the refusal. The
+control beside it — **Give them their own name** — is the fix. It changes what
+that person types to sign in and nothing else: they keep their PIN, their access
+and everything on their account. Tell them the new name afterwards; nothing
+else has to be reissued.
+
+A retired account does not hold its name hostage. Disabling somebody frees the
+name for the next person, because a row nobody can sign into cannot be the
+account somebody is claiming to be.
+
 ### What the person does
 
 Open the link. They see the name it was made for and nothing else — no email, no
