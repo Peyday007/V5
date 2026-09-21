@@ -41,6 +41,8 @@
  *   npm run admin -- packets approve <orchestration> --admin someone@example.com
  *   npm run admin -- packets retry-fragment <fragment> --admin someone@example.com
  *   npm run admin -- packets reissue <workItem> --admin someone@example.com
+ *   npm run admin -- packets syntheses <project>
+ *   npm run admin -- packets recover-synthesis <workItem> --admin someone@example.com
  *   npm run admin -- packets independence [project]
  *   npm run admin -- packets scope [project]
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
@@ -101,6 +103,10 @@ import {
   repositoryIdOf,
 } from '../server/services/bins/routing.ts';
 import type { Principal, User } from '../server/domain/types.ts';
+import {
+  assessProjectSyntheses,
+  recoverFailedSynthesis,
+} from '../server/services/research/synthesisRecovery.ts';
 import { workerIdentity } from '../server/services/identity/authenticate.ts';
 import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
 
@@ -1288,6 +1294,47 @@ async function main(): Promise<void> {
       if (!outcome.ok) fail(outcome.detail);
       break;
     }
+    /*
+     * The two halves of the synthesis recovery: read the packet, then act on
+     * one named item.
+     *
+     * A list and a targeted action rather than a sweep, for
+     * `findStrandedVerifications`' reason — a sweep is how a narrow recovery
+     * becomes a general one. Both verdicts come from the same assessment, so
+     * what this prints about a packet is what the action would do to it.
+     */
+    case 'packets syntheses': {
+      const project = await projectFrom(rest[0] ?? fail(`Name a project.`));
+      const rows = await assessProjectSyntheses(project.id);
+      console.log(`SYNTHESES (${rows.length} stopped)`);
+      for (const row of rows) {
+        console.log(
+          `  ${row.workItemId}  ${row.workItemState}  attempts ${row.attempts}` +
+            `  packet ${row.orchestrationId ?? '—'} ${row.packetStatus ?? '—'}`,
+        );
+        console.log(
+          `      claims ${row.citableClaims} citable  document ${row.documentId ?? 'NONE'}` +
+            `  bin ${row.binId ?? '—'} ${row.binState ?? '—'} ${row.binAttempts ?? ''}` +
+            `  mission ${row.missionState ?? '—'}`,
+        );
+        console.log(`      ${row.eligible ? 'ELIGIBLE' : `REFUSED ${row.refusal}`} — ${row.reason}`);
+      }
+      break;
+    }
+
+    case 'packets recover-synthesis': {
+      const actor = await administrator();
+      const id = rest[0] ?? fail('Name a synthesis work item.');
+      const outcome = await recoverFailedSynthesis({
+        workItemId: id,
+        actor: { type: 'HUMAN', id: actor.id },
+        reason: flag('reason') ?? 'Recovered after the filing path was repaired.',
+      });
+      console.log(`  ${JSON.stringify(outcome)}`);
+      if (!outcome.ok) fail(outcome.reason);
+      break;
+    }
+
     case 'packets reissue': {
       const actor = await administrator();
       const id = rest[0] ?? fail('Name a work item.');

@@ -464,6 +464,81 @@ async function binCanStillDeliver(mission: RussellMission): Promise<boolean> {
   return !SPENT_BIN.has(bin.state);
 }
 
+/**
+ * The statuses in which a packet is still doing something.
+ *
+ * One list, read by both things that need it: the function below, and
+ * `repairLaunches`' own selection SQL. They were two copies of six strings, and
+ * two copies of one rule is how the two come to disagree.
+ */
+const WORKING_ORCHESTRATION = [
+  'PLANNING',
+  'RESEARCHING',
+  'VERIFYING',
+  'SYNTHESIZING',
+  'AUDITING',
+  'AWAITING_REPAIR',
+] as const;
+
+/**
+ * Whether a packet whose bin is spent may be given another one.
+ *
+ * `binCanStillDeliver` asks about the bin. This asks about the packet, and the
+ * two were being answered as one — which is the defect this file records at
+ * four other altitudes: **a rule applied by one of two readers is worse than
+ * none.** Here the two readers are a pass and the function inside it.
+ * `repairLaunches` selects a mission for re-binning only when its orchestration
+ * is in a *working* status and still holds an item a worker could claim;
+ * `completeLaunch`, which is what `repairLaunches` then calls and what the
+ * ordinary tick reaches directly, asked nothing about the packet at all.
+ *
+ * **Production, 2026-09-21.** `orc_79abf61b5c2646609c48` and
+ * `orc_ab3604d498af45e8aa81` both reached `COMPLETE_WITH_GAPS`, each with its
+ * report filed and audited and each bin correctly `COMPLETE` against
+ * `RESEARCH_PACKET_V1`. Their missions were still live, so `launch()` replayed
+ * them — which it is meant to do and which is safe — found a spent bin, and
+ * built another. That bin went `READY`, earned a dispatch intent, and Brain
+ * fired a real Cowork activation at it. The worker arrived, called
+ * `brain_bin_next_item`, was told *"This bin is drained"*, completed it, and
+ * the next cycle built the next one. Four fires in the five minutes it was
+ * measured — 01:11:30, 01:13:06, 01:13:46, 01:14:06 — every Routine run
+ * `SUCCEEDED`, every bin `COMPLETE`, and not one of them carrying any work.
+ *
+ * **Nothing about that reads as broken**, which is why it ran for hours. What
+ * it consumes is the fixed subscription allowance, so the genuine queued
+ * research never gets a worker — and the live missions hold the standing
+ * authority's concurrency slots while they do it. §27's sentence arriving in
+ * the launcher: *a loop that looks like progress is worse than a stop.*
+ *
+ * It is asked only where `repairLaunches` asks it — of a mission whose bin is
+ * **spent**. A mission that has never had one is still given one whatever its
+ * packet's status, because that bin is part of building the packet rather than
+ * a second attempt at delivering it, and refusing there would be this same
+ * defect wearing the other sign: a launch permanently without a bin.
+ *
+ * It removes the fire and not the mission. A finished packet's mission is
+ * finished by the writeback pass, which reads the same status; one waiting for
+ * a person has its own answering transition, and sending a worker to be told
+ * that again spends a fire to learn nothing.
+ */
+async function packetMayHaveAnotherBin(orchestrationId: string | null): Promise<boolean> {
+  if (!orchestrationId) return false;
+  const orchestration = await getOrchestration(orchestrationId);
+  // A packet Brain cannot read is not one it may spend a fire on either.
+  if (!orchestration) return false;
+  if (!(WORKING_ORCHESTRATION as readonly string[]).includes(orchestration.status)) {
+    return false;
+  }
+  // And something a worker could actually be handed. A bin over a packet with
+  // nothing claimable is the drained bin above, one status along.
+  const rows = await getDb().all<{ total: number }>(
+    `SELECT COUNT(*) AS total FROM work_items
+      WHERE orchestration_id = ? AND state IN ('QUEUED','LEASED')`,
+    [orchestrationId],
+  );
+  return Number(rows[0]?.total ?? 0) > 0;
+}
+
 async function completeLaunch(
   mission: RussellMission,
   input: LaunchInput,
@@ -570,7 +645,15 @@ async function completeLaunch(
    * spent goes terminal by itself and stops qualifying, so this cannot loop and
    * adds no ceiling of its own.
    */
-  if (!(await binCanStillDeliver(current))) {
+  /*
+   * A first bin is unconditional; a replacement is not. See
+   * `packetMayHaveAnotherBin`.
+   */
+  const everHadABin = current.binId !== null;
+  if (
+    !(await binCanStillDeliver(current)) &&
+    (!everHadABin || (await packetMayHaveAnotherBin(current.orchestrationId)))
+  ) {
     const bin = await createBin({
       projectId: input.projectId,
       layerId: input.layerId,
@@ -680,7 +763,7 @@ export async function repairLaunches(): Promise<RepairReport> {
               JOIN research_orchestrations o ON o.id = m.orchestration_id
              WHERE b.id = m.bin_id
                AND b.state IN ('COMPLETE','FAILED','CANCELLED')
-               AND o.status IN ('PLANNING','RESEARCHING','VERIFYING','SYNTHESIZING','AUDITING','AWAITING_REPAIR')
+               AND o.status IN (${WORKING_ORCHESTRATION.map(() => '?').join(', ')})
                AND EXISTS (
                  SELECT 1 FROM work_items w
                   WHERE w.orchestration_id = m.orchestration_id
@@ -689,6 +772,7 @@ export async function repairLaunches(): Promise<RepairReport> {
           )
         )
       ORDER BY m.created_at, m.rowid`,
+    [...WORKING_ORCHESTRATION],
   );
   const report: RepairReport = { inspected: rows.length, completed: [], orphaned: [] };
 

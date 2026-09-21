@@ -1,0 +1,47 @@
+[
+  {
+    "screen": "russell/default",
+    "width": 1180,
+    "file": "russell-default-1180w-p0.png"
+  },
+  {
+    "screen": "russell/default",
+    "width": 953,
+    "file": "russell-default-953w-p0.png"
+  },
+  {
+    "screen": "russell/default",
+    "width": 390,
+    "file": "russell-default-390w-p0.png"
+  },
+  {
+    "screen": "build/default",
+    "width": 1180,
+    "file": "build-default-1180w-p0.png"
+  },
+  {
+    "screen": "build/default",
+    "width": 953,
+    "file": "build-default-953w-p0.png"
+  },
+  {
+    "screen": "build/default",
+    "width": 390,
+    "file": "build-default-390w-p0.png"
+  },
+  {
+    "screen": "fleet/default",
+    "width": 1180,
+    "file": "fleet-default-1180w-p0.png"
+  },
+  {
+    "screen": "fleet/default",
+    "width": 953,
+    "file": "fleet-default-953w-p0.png"
+  },
+  {
+    "screen": "fleet/default",
+    "width": 390,
+    "file": "fleet-default-390w-p0.png"
+  }
+]
