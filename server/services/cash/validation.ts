@@ -63,6 +63,33 @@ import type { CashOpportunity, OpportunityValidationState } from '../../domain/t
 export const MAX_VALIDATIONS_IN_FLIGHT = 2;
 
 /**
+ * The states that actually occupy one of those slots.
+ *
+ * `NEEDS_PERSON` is deliberately absent, and that absence is the whole repair.
+ * A slot is provider capacity; a dive parked for a person is using none of it,
+ * and counting it made a Brain with two parked missions unable to start a
+ * thirty-ninth dive for ever. What holds a slot is what a worker is working on.
+ */
+const HOLDS_A_SLOT: ReadonlySet<string> = Object.freeze(new Set(['PENDING', 'RUNNING']));
+
+/**
+ * How long a deep dive may show no progress at all before Brain stops calling
+ * it running.
+ *
+ * Not a guess about how long research takes — `settleValidations` reads the
+ * mission and moves the moment it moves, so a dive that is genuinely working
+ * settles on its own however long it takes. This is the backstop for the case
+ * the mission row cannot express: launched, never advanced, and nothing left
+ * that will ever advance it. Six hours is longer than any production deep dive
+ * this Brain has completed and short enough that a slot is not lost for a day.
+ *
+ * A stalled dive is `BLOCKED` rather than failed, with the elapsed time in the
+ * reason, so it can be dived again inside `MAX_VALIDATION_ROUNDS` rather than
+ * being written off.
+ */
+export const VALIDATION_STALL_MS = 6 * 60 * 60 * 1000;
+
+/**
  * How many bounded deep dives one opening may have, in total.
  *
  * A second one exists because the qualification bar rose after some pieces had
@@ -165,9 +192,7 @@ export async function startValidations(input: {
   if (!(await discoveryAuthority(input.projectId))) return [];
 
   const all = await listOpportunities({ projectId: input.projectId });
-  const inFlight = all.filter(
-    (one) => one.validationState === 'PENDING' || one.validationState === 'RUNNING',
-  ).length;
+  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
   let room = Math.max(0, MAX_VALIDATIONS_IN_FLIGHT - inFlight);
   const limit = Math.max(1, input.limit ?? 2);
 
@@ -181,9 +206,26 @@ export async function startValidations(input: {
    * group arrival order is kept, so which of two never-dived pieces goes first
    * is still a property of when they were found.
    */
+  /*
+   * And inside each group, the ones closest to being a decision first.
+   *
+   * Inside, not across: a re-dive has more answers on it by definition, so one
+   * sort over the whole list would put every second dive ahead of every first
+   * and undo the rule above. `Array.prototype.sort` is stable, so arrival
+   * order still decides between two pieces that have answered the same amount.
+   *
+   * The ordering is a count of rows rather than a judgement: an opening whose
+   * payer and reach are already established needs one more question before a
+   * person can act on it, and a raw market observation needs every question it
+   * has. Spending both slots on the second while the first waits is exactly
+   * what "actionable work sitting behind background work" means here.
+   *
+   * It is a preference and never a ceiling. Nothing is refused because of it,
+   * and a piece at the back still takes a slot the moment one is free.
+   */
   const ordered = [
-    ...all.filter((one) => one.validationState === null),
-    ...all.filter((one) => one.validationState !== null),
+    ...all.filter((one) => one.validationState === null).sort(closestFirst),
+    ...all.filter((one) => one.validationState !== null).sort(closestFirst),
   ];
 
   const out: StartedValidation[] = [];
@@ -246,15 +288,45 @@ export async function startValidations(input: {
 }
 
 /**
+ * How far along one opening's own card already is, counted from its columns.
+ *
+ * The columns `answers.ts` maps card fields onto, plus the two evidence
+ * columns a signal is born with. Nothing here reads prose and nothing here
+ * forms a view about how good any of it is; it is a count of rows, used only
+ * to decide which of two pieces is asked about first.
+ */
+function closestFirst(a: CashOpportunity, b: CashOpportunity): number {
+  return answeredCount(b) - answeredCount(a);
+}
+
+function answeredCount(one: CashOpportunity): number {
+  const values = [
+    one.payer,
+    one.reachableChannel,
+    one.offerScope,
+    one.acceptanceCondition,
+    one.priceCents,
+    one.deliveryMethod,
+    one.fulfillmentOwner,
+    one.economicsNote,
+    one.peakFundingCents,
+  ];
+  return values.filter((value) => value !== null && value !== undefined && value !== '').length;
+}
+
+/**
  * Whether an opening that has already been dived may have one more.
  *
- * Three conditions, and none of them is a preference. The dive has to be
+ * Four conditions, and none of them is a preference. The dive has to be
  * **over** — a second one started beside a live one is two workers answering
- * the same question with the sprint paying twice. There has to be a **round
- * left**, which is what stops a piece being re-asked for ever. And it has to
- * be genuinely **short of qualified**, read from the card rather than from a
- * state column: a piece that answered everything is finished whatever its
- * round count says.
+ * the same question with the sprint paying twice. The mission behind it has to
+ * be **terminal**, which is the same rule one row along: a dive settled
+ * `NEEDS_PERSON` is parked rather than finished, and a person answering it
+ * resumes the mission that is already there, so starting a second one would
+ * buy the same answer twice. There has to be a **round left**, which is what
+ * stops a piece being re-asked for ever. And it has to be genuinely **short of
+ * qualified**, read from the card rather than from a state column: a piece
+ * that answered everything is finished whatever its round count says.
  *
  * Read in the loop rather than precomputed, because it is asked only of the
  * pieces that already have a terminal dive, and the loop stops at `room`.
@@ -295,7 +367,22 @@ export async function settleValidations(projectId: string): Promise<
   const out: { opportunityId: string; to: OpportunityValidationState }[] = [];
 
   for (const opportunity of await listOpportunities({ projectId })) {
-    if (opportunity.validationState !== 'PENDING' && opportunity.validationState !== 'RUNNING') {
+    /*
+     * `NEEDS_PERSON` is re-read on every tick as well, and that is the half
+     * that makes it a park rather than a dead end.
+     *
+     * A person answering the mission's Needs You card puts it back to
+     * `RUNNING`, and nothing else in this loop would notice: the opening would
+     * sit at `NEEDS_PERSON` while the packet it names finished. So the states
+     * this pass reconciles are every non-terminal one, and the mission below
+     * decides where each goes — which is the same shape `settleValidations`
+     * already had, with the state that was missing from it added.
+     */
+    if (
+      opportunity.validationState !== 'PENDING' &&
+      opportunity.validationState !== 'RUNNING' &&
+      opportunity.validationState !== 'NEEDS_PERSON'
+    ) {
       continue;
     }
     if (!opportunity.candidateId) continue;
@@ -319,12 +406,80 @@ export async function settleValidations(projectId: string): Promise<
       continue;
     }
 
-    if (opportunity.validationState === 'PENDING' && mission.state === 'RUNNING') {
+    if (opportunity.validationState !== 'RUNNING' && mission.state === 'RUNNING') {
+      /*
+       * Reached from `PENDING` — the ordinary launch — and from
+       * `NEEDS_PERSON`, which is a person having answered the mission's card.
+       * Both are the same fact: a worker is on it now.
+       */
       await updateOpportunity(opportunity.id, {
         validation_state: 'RUNNING',
+        validation_settled_at: null,
         validation_orchestration_id: mission.orchestrationId,
       });
       out.push({ opportunityId: opportunity.id, to: 'RUNNING' });
+      continue;
+    }
+
+    /*
+     * The mission stopped at a decision only a person can make.
+     *
+     * This branch did not exist, and its absence was a deadlock rather than an
+     * untidy state. `NEEDS_HUMAN` is none of `DONE`, `FAILED` or `CANCELLED`,
+     * so the opening stayed `RUNNING` for ever while nothing ran — and because
+     * `RUNNING` counts against `MAX_VALIDATIONS_IN_FLIGHT`, production had
+     * **both** of its two slots held by parked missions. Thirty-eight openings
+     * could never be qualified, and no deep dive could ever start again.
+     *
+     * It is a park with an answering transition rather than a failure: the
+     * mission's own Needs You card is what resolves it, the branch above puts
+     * the opening back to `RUNNING` when somebody does, and `mayDiveAgain`
+     * refuses a second dive meanwhile so the answer is not bought twice.
+     */
+    if (mission.state === 'NEEDS_HUMAN') {
+      if (opportunity.validationState !== 'NEEDS_PERSON') {
+        const packet = mission.orchestrationId
+          ? await getOrchestration(mission.orchestrationId)
+          : null;
+        await settle(
+          projectId,
+          opportunity,
+          'NEEDS_PERSON',
+          packet?.failureReason ??
+            mission.terminalReason ??
+            'The deep dive stopped at a decision only a person can make. Answering it in Needs ' +
+              'you is what restarts it.',
+          mission.orchestrationId,
+        );
+        out.push({ opportunityId: opportunity.id, to: 'NEEDS_PERSON' });
+      }
+      continue;
+    }
+
+    /*
+     * Launched, never advanced, and nothing left that will advance it.
+     *
+     * The backstop for what the mission row cannot express. Everything above
+     * moves the moment the mission moves, so a dive that is genuinely working
+     * is never reached here however long it takes; what is reached here is a
+     * dive whose mission has been `RUNNING` since before
+     * `VALIDATION_STALL_MS` and has produced nothing. `BLOCKED` rather than
+     * failed, with the elapsed time in the reason, so `mayDiveAgain` can offer
+     * it another round instead of writing it off.
+     */
+    const startedAt = opportunity.validationStartedAt;
+    if (startedAt && Date.now() - Date.parse(startedAt) > VALIDATION_STALL_MS) {
+      const hours = Math.floor((Date.now() - Date.parse(startedAt)) / (60 * 60 * 1000));
+      await settle(
+        projectId,
+        opportunity,
+        'BLOCKED',
+        `The deep dive was launched ${hours} hours ago and its mission has not reached a ` +
+          'result. Brain has stopped calling it running and freed the slot; it can be asked ' +
+          'again.',
+        mission.orchestrationId,
+      );
+      out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
       continue;
     }
 
@@ -371,6 +526,16 @@ async function settle(
   await recordCashEvent({
     projectId,
     opportunityId: opportunity.id,
+    /*
+     * Two event kinds for five states, and `NEEDS_PERSON` deliberately reports
+     * as the blocked one rather than gaining a third.
+     *
+     * The vocabulary is what the history reads back, and a park is what a
+     * reader of that history most needs to see beside a block — both mean "no
+     * answer arrived and here is why". The `detail` carries the exact state,
+     * so nothing is lost, and adding a kind would have meant a reader that did
+     * not know it showing a blank row.
+     */
     kind: to === 'COMPLETE' ? 'CASH_VALIDATION_COMPLETE' : 'CASH_VALIDATION_BLOCKED',
     actorRef: 'BRAIN',
     summary: why,

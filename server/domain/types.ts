@@ -5647,6 +5647,7 @@ export interface RussellConversationRow {
   owner_user_id: string;
   project_id: string | null;
   title: string;
+  purpose: string;
   visibility: string;
   attachment_confidence: number | null;
   attachment_source: string;
@@ -5658,6 +5659,20 @@ export interface RussellConversationRow {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * What a conversation is for.
+ *
+ * `GENERAL` is the default and the overwhelmingly common case: somebody
+ * thinking out loud with Russell. `PROJECT` is a thread that belongs to a
+ * project — attached by a person or by the router, or one that produced work
+ * against it. The other two exist so that a thread deliberately opened as
+ * operations or as technical work can say so; nothing derives either of them,
+ * because deriving a category from a thread's words is the guess this whole
+ * field replaces.
+ */
+export const CONVERSATION_PURPOSES = ['GENERAL', 'PROJECT', 'OPERATIONAL', 'TECHNICAL'] as const;
+export type ConversationPurpose = (typeof CONVERSATION_PURPOSES)[number];
 
 export interface RussellConversationContextRow {
   id: string;
@@ -5899,6 +5914,15 @@ export interface RussellConversation {
   ownerUserId: string;
   projectId: string | null;
   title: string;
+  /**
+   * What this thread is for, stated rather than inferred from a default.
+   *
+   * `projectId` says *which* project a thread is about; this says whether it
+   * is about one at all. They were one field, and the consequence was that a
+   * client passing the first project in a list made every general conversation
+   * in this Brain a Deal Dispatch conversation — see migration 080.
+   */
+  purpose: ConversationPurpose;
   visibility: RussellVisibility;
   attachmentConfidence: number | null;
   attachmentSource: AttachmentSource;
@@ -6890,10 +6914,25 @@ export interface CashAuthority {
  * Where a piece of the portfolio is in its bounded commercial validation.
  *
  * `null` is "not started", which is the state every opening is born in.
+ *
+ * `NEEDS_PERSON` is the fifth, and it exists because of a measured production
+ * deadlock. A deep dive's mission can reach `NEEDS_HUMAN` — the packet stopped
+ * at a decision only a person can make — and `settleValidations` had a branch
+ * for `DONE`, for `FAILED` and for `CANCELLED` and none for that. So the
+ * opening stayed `RUNNING` for ever while nothing was running, and because
+ * `RUNNING` counts against `MAX_VALIDATIONS_IN_FLIGHT`, **both** of the two
+ * slots in this Brain were held by parked missions: the other thirty-eight
+ * openings could never be qualified and no new deep dive could ever start.
+ *
+ * It is not a failure and it is not terminal. The mission has its own answering
+ * transition — the Needs You card §24 built — and this says, truthfully, that
+ * the deep dive is waiting on a person rather than on a provider. It holds no
+ * provider capacity, because no provider is working on it.
  */
 export const OPPORTUNITY_VALIDATION_STATES = [
   'PENDING',
   'RUNNING',
+  'NEEDS_PERSON',
   'COMPLETE',
   'BLOCKED',
 ] as const;

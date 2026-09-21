@@ -44,6 +44,7 @@ import {
   listTurnAttempts,
   listTurns,
   recordProduced,
+  renameConversation,
   resolveMessage,
 } from '../../repos/russellConversations.ts';
 import { decideProjectAccess } from '../identity/policy.ts';
@@ -116,6 +117,52 @@ function usableAdapter(adapter: ChatAdapter | undefined): ChatAdapter {
   return adapter;
 }
 
+/**
+ * A thread's name, derived from the first thing said in it.
+ *
+ * Deterministic and total: the first sentence of the person's own message,
+ * collapsed and clamped. No model is asked, for `collectionNameFor`'s reason —
+ * a title Russell invented would be indistinguishable from one a person chose,
+ * and a thread list is something people navigate by.
+ *
+ * Two guards, and both are about not overwriting a decision. It renames only a
+ * thread still carrying a **placeholder** — the shell's own `Conversation — …`
+ * or the older `New conversation` — so a title somebody typed stays; and only
+ * on the **first** message, so a thread does not rename itself every time the
+ * subject drifts.
+ *
+ * It never throws. A name is a convenience, and a failure to derive one must
+ * not be a reason a person's message does not send.
+ */
+const PLACEHOLDER_TITLE = /^(new conversation|conversation \u2014 .*|untitled)$/i;
+
+export function titleFrom(content: string): string {
+  const flat = content.replace(/\s+/g, ' ').trim();
+  // The first sentence, where there is one worth taking. A question mark or a
+  // full stop ends it; otherwise the whole thing is clamped.
+  const stop = flat.search(/[.?!](\s|$)/);
+  const first = stop > 0 ? flat.slice(0, stop + 1) : flat;
+  const chosen = first.length >= 12 || stop <= 0 ? first : flat;
+  return chosen.length > 72 ? `${chosen.slice(0, 69).trimEnd()}\u2026` : chosen;
+}
+
+async function titleFromFirstMessage(
+  conversation: { id: string; title: string },
+  content: string,
+): Promise<void> {
+  try {
+    if (!PLACEHOLDER_TITLE.test(conversation.title.trim())) return;
+    // The message just written is the first one when it is the only one.
+    if ((await listTurns(conversation.id, 2)).length !== 1) return;
+    const title = titleFrom(content);
+    if (title.length < 3) return;
+    await renameConversation(conversation.id, title);
+  } catch {
+    /* a thread with a placeholder name is a smaller harm than a turn that
+       failed to start over what it is called */
+  }
+}
+
 export async function beginTurn(input: {
   principal: Principal;
   conversationId: string;
@@ -139,6 +186,23 @@ export async function beginTurn(input: {
     authorUserId: input.principal.id,
     content,
   });
+
+  /*
+   * And a name, from what they actually said.
+   *
+   * A list of threads all called *New conversation* or *Conversation — Sep 21,
+   * 02:14* is a list nobody can navigate. The title is taken from the person's
+   * own first message, deterministically — the first sentence, clamped —
+   * rather than from a model: a title a model wrote would be the same class of
+   * thing as a category Russell guessed, and §8 keeps those out of state.
+   *
+   * It runs only while the thread is still carrying a placeholder and only on
+   * the first message, so a title somebody typed is never overwritten. And it
+   * is **after** the message is stored and outside anything that could refuse:
+   * a name is a convenience, and failing to derive one must never be a reason
+   * a person's message does not send.
+   */
+  await titleFromFirstMessage(conversation, content);
 
   /*
    * Route before answering.

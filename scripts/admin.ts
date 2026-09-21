@@ -32,6 +32,8 @@
  *   npm run admin -- workers disable <name> --admin someone@example.com
  *   npm run admin -- workers archive <name> --admin someone@example.com
  *   npm run admin -- research start <project> --admin someone@example.com
+ *   npm run admin -- people list
+ *   npm run admin -- people rename <user id|address> "A name" --admin someone@example.com
  *   npm run admin -- projects list
  *   npm run admin -- projects create "A name" --admin someone@example.com
  *   npm run admin -- access grant <worker> <project> --admin someone@example.com
@@ -81,6 +83,7 @@ import {
   getWorkerByName,
   grantMembership,
   listMembershipsForPrincipal,
+  renameUser,
   listUsers,
   listWorkers,
   recordIdentityEvent,
@@ -103,6 +106,7 @@ import {
 import type { Principal, User } from '../server/domain/types.ts';
 import { workerIdentity } from '../server/services/identity/authenticate.ts';
 import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
+import { refuseAddressAsName } from '../server/domain/personName.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -530,6 +534,47 @@ async function main(): Promise<void> {
       console.log('  signs-in=pin and signs-in=password are ways in; the screen asks for a PIN.');
       console.log('  signs-in=device holds a passkey the sign-in screen no longer offers:');
       console.log('  that person needs a new link, which People has a control for.');
+      break;
+    }
+    /*
+     * Saying what somebody is called.
+     *
+     * The repair for an account whose `display_name` is an address — which the
+     * first administrator's always was, because `bootstrap.ts` had nothing else
+     * to work from. `personName` keeps such a row readable; this is what makes
+     * it unnecessary, and it is the only path in this repository that sets a
+     * person's name after their account exists.
+     *
+     * It changes the name and nothing else: not the address, not the
+     * administration flag, not a membership, not a credential. A person is
+     * still reached, contacted and authenticated exactly as they were.
+     *
+     * On a terminal because reaching the shell is the authentication (§26), and
+     * `--admin` is the attribution, resolved against `users` rather than
+     * trusted — an audit row with no author answers nothing later.
+     */
+    case 'people rename': {
+      const actor = await administrator();
+      const target = rest[0] ?? fail('Name the user id or address to rename.');
+      const name = rest.slice(1).join(' ').trim() || fail('Give the name to show them as.');
+      refuseAddressAsName(name);
+      const user = (await listUsers()).find((one) => one.id === target || one.email === target);
+      if (!user) fail(`No user with id or address ${target}.`);
+      const before = user.displayName;
+      await renameUser(user.id, name);
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'RENAME_USER',
+        targetType: 'USER',
+        targetId: user.id,
+        result: 'SUCCESS',
+        // The names, because a rename with no before and after is a change
+        // nobody can check afterwards. Neither is a credential.
+        metadata: { from: before, to: name },
+      });
+      console.log(`  ${user.id} is shown as "${name}" (was "${before}").`);
+      console.log('  The address, the administration flag and every membership are unchanged.');
       break;
     }
     case 'projects list': {
