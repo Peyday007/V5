@@ -112,7 +112,7 @@ describe('identifying an acquisition is not acquiring one', () => {
    * guarantee than a rule in a comment, and this is what asserts it.
    */
   it('has no column an offer, a valuation or a commitment could go in', () => {
-    const migration = SOURCE('server/db/migrations/081_manufacturing_capital_and_intent.sql');
+    const migration = SOURCE('server/db/migrations/082_manufacturing_capital_and_intent.sql');
     const table = migration.slice(
       migration.indexOf('CREATE TABLE IF NOT EXISTS acquisition_candidates'),
     );

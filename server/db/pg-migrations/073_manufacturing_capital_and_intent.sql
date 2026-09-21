@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 081. See that file for why required
+-- The Postgres half of SQLite migration 082. See that file for why required
 -- capital is a table rather than a thirteenth barrier kind, why identifying an
 -- acquisition is research while every effect that follows from one is not, and
 -- why a decision nobody has made is a row in the OPEN state rather than a
