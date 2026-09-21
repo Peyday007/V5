@@ -92,6 +92,7 @@ import {
 } from '../../repos/fleet.ts';
 import {
   createWorker,
+  getWorker,
   getWorkerByName,
   grantMembership,
   listMembershipsForPrincipal,
@@ -856,7 +857,26 @@ export async function connectionView(input: {
    * an authorized connector for ever. A revoke that the screen above it
    * disagrees with is §29's defect at the one place it would matter most.
    */
-  const worker = await getWorkerByName(names.workerName);
+  /*
+   * The recorded binding first, and the derived name only as a fallback.
+   *
+   * This was `getWorkerByName(names.workerName)` alone — a name composed from
+   * the member's display name and a slice of their user id. That resolves a
+   * worker Brain minted through this journey and resolves **nothing** for a
+   * surface registered on a terminal before the journey existed, which in
+   * production is the four Routines that do most of the research. So the
+   * owner's page read no worker, no tokens and `NOT_STARTED`, and told them
+   * their Claude account was not connected while `Brain Research A` was firing
+   * for the three hundred and fiftieth time.
+   *
+   * A name is not a binding. `connection.workerId` is, and it is written when
+   * Brain mints the worker or when a person adopts an existing surface. The
+   * name lookup stays for rows written before that column, so nothing that
+   * worked before stops working — and where both answer, the row wins.
+   */
+  const worker =
+    (connection.workerId ? await getWorker(connection.workerId) : null) ??
+    (await getWorkerByName(names.workerName));
   const tokens = worker ? await listTokensForWorker(worker.id) : [];
   const authorization = authorizationFrom(tokens);
   const connectorAuthenticated = authorization.live && authorization.everUsed;

@@ -7575,6 +7575,7 @@ export interface CapacityConnectionRow {
   trigger_ref: string | null;
   account_id: string | null;
   routine_id: string | null;
+  worker_id: string | null;
   state: string;
   failure_reason: string | null;
   probe_bin_id: string | null;
@@ -7600,6 +7601,16 @@ export interface CapacityConnection {
   triggerRef: string | null;
   accountId: string | null;
   routineId: string | null;
+  /**
+   * The worker this connection's Claude account authenticates as.
+   *
+   * Written when Brain mints the worker, and by `adoptSurface` when a person
+   * says an already-registered surface is theirs. Null means *we have not been
+   * told*, and the screen falls back to resolving a worker by the name it
+   * would have minted — which is what made the owner of this Brain read as
+   * disconnected while their surfaces fired 350 times. See migration 081.
+   */
+  workerId: string | null;
   state: CapacityConnectionState;
   failureReason: string | null;
   probeBinId: string | null;

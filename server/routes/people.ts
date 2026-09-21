@@ -83,6 +83,7 @@ import {
   submitTrigger,
   verifyConnection,
 } from '../services/capacity/connection.ts';
+import { adoptSurface } from '../services/capacity/adopt.ts';
 import { decideBrainAdmin } from '../services/identity/policy.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 
@@ -324,6 +325,48 @@ peopleRouter.post(
     const outcome = await reconnectOwnConnection({ user, actor: user, origin: originOf(req) });
     if (!outcome.ok) throw unprocessable(outcome.reason);
     return outcome.view;
+  }),
+);
+
+/**
+ * Record that a surface this Brain already fires is somebody's.
+ *
+ * A Brain administrator's decision, at the level every other change to what a
+ * principal may reach already carries, and a worker principal is refused at
+ * `requirePerson` before the level is even asked.
+ *
+ * It exists because no row could answer the question. Four production Routines
+ * were registered on a terminal before this journey existed, fire every day,
+ * and were attributable to nobody — so the People page told the owner of this
+ * Brain that their Claude account was not connected. `services/identity/
+ * ownership.ts` explains why the approver on an OAuth code is not the answer:
+ * approving a grant is not the same fact as whose capacity it is. So the
+ * evidence is a person saying so, recorded, with the channel it came in by.
+ *
+ * It creates no account, Routine, worker, credential or token, and it cannot
+ * make a connection healthy — that stays `reconcile`'s, from the four-row
+ * chain, on the next read.
+ */
+peopleRouter.post(
+  '/people/:userId/claude/adopt',
+  handler(async (req) => {
+    const principal = requirePerson();
+    await requireBrainAdmin();
+    const body = bodyOf(req);
+    const subject = await getUser(requiredString(req.params['userId'], 'userId'));
+    // Absent and forbidden are one answer, exactly as the revoke route beside
+    // this one has it.
+    if (!subject) throw notFound('No such person.');
+    const outcome = await adoptSurface({
+      userId: subject.id,
+      routineRef: requiredString(body['routineRef'], 'routineRef'),
+      actorUserId: principal.id,
+      // Somebody signed in, on a surface that authenticated them. The terminal
+      // path records `SHELL` instead, and neither assumes the other.
+      channel: 'BROWSER',
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return { connection: outcome.connection, alreadyAdopted: outcome.alreadyAdopted };
   }),
 );
 

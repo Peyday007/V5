@@ -34,6 +34,8 @@
  *   npm run admin -- research start <project> --admin someone@example.com
  *   npm run admin -- people list
  *   npm run admin -- people rename <user id|address> "A name" --admin someone@example.com
+ *   npm run admin -- capacity show
+ *   npm run admin -- capacity adopt <user id|address> <trig_...> --admin someone@example.com
  *   npm run admin -- projects list
  *   npm run admin -- projects create "A name" --admin someone@example.com
  *   npm run admin -- access grant <worker> <project> --admin someone@example.com
@@ -107,6 +109,8 @@ import type { Principal, User } from '../server/domain/types.ts';
 import { workerIdentity } from '../server/services/identity/authenticate.ts';
 import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
 import { refuseAddressAsName } from '../server/domain/personName.ts';
+import { adoptSurface } from '../server/services/capacity/adopt.ts';
+import { listConnections } from '../server/repos/capacityConnections.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -575,6 +579,54 @@ async function main(): Promise<void> {
       });
       console.log(`  ${user.id} is shown as "${name}" (was "${before}").`);
       console.log('  The address, the administration flag and every membership are unchanged.');
+      break;
+    }
+    /*
+     * Recording that a surface this Brain already fires is somebody's.
+     *
+     * The repair for the split brain migration 081 describes: four Routines
+     * registered on a terminal long before `capacity_connections` existed,
+     * firing every day, and a People page telling their owner that their
+     * Claude account was not connected because it looked the worker up by a
+     * name Brain would have minted.
+     *
+     * It creates no account, Routine, worker, credential or token, and it
+     * cannot promote a connection to healthy — that stays `reconcile`'s, from
+     * the four-row chain. Every refusal names what to do instead.
+     */
+    case 'capacity adopt': {
+      const actor = await administrator();
+      const who = rest[0] ?? fail('Name the user id or address whose connection this is.');
+      const ref = rest[1] ?? fail('Name the Routine reference (trig_…) being adopted.');
+      const person = (await listUsers()).find((one) => one.id === who || one.email === who);
+      if (!person) fail(`No user with id or address ${who}.`);
+      const outcome = await adoptSurface({
+        userId: person.id,
+        routineRef: ref,
+        actorUserId: actor.id,
+        // Reaching this shell is the authentication; the channel says so rather
+        // than claiming the stronger, browser-authenticated one (§23).
+        channel: 'SHELL',
+      });
+      if (!outcome.ok) fail(outcome.reason);
+      console.log(
+        `  ${person.displayName}: ${outcome.connection.routineName} (${outcome.connection.triggerRef})` +
+          `${outcome.alreadyAdopted ? ' — already recorded, nothing changed' : ''}`,
+      );
+      console.log(`  state ${outcome.connection.state}. Healthy is the four-row chain, read on the next view.`);
+      break;
+    }
+    case 'capacity show': {
+      for (const one of await listConnections()) {
+        const person = (await listUsers()).find((user) => user.id === one.userId);
+        console.log(
+          `  ${one.userId}  ${String(person?.displayName ?? '—').padEnd(24)} ${one.state.padEnd(22)} ` +
+            `routine=${one.routineId ?? '—'} worker=${one.workerId ?? '—'} ref=${one.triggerRef ?? '—'}`,
+        );
+      }
+      console.log('');
+      console.log('  worker=— is a connection whose surface Brain has not been told about.');
+      console.log('  `capacity adopt <user> <trig_…>` is what records one.');
       break;
     }
     case 'projects list': {
