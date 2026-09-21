@@ -583,6 +583,119 @@ never a process-local lock.
 - Deleting an operation record must never make a successful effect silently
   repeatable.
 
+- **The caller's own timeout is part of the boundary, and it is shorter than
+  Brain thinks.** A mutation that commits after the client has given up is
+  reported to the worker as a failure it did not have, and the worker then acts
+  on that report. Production, 2026-09-21: a JUDGE submission on
+  `wki_8ec24cf67707419aae39` came back `timed out after 60s`; the server
+  committed the operation at **10:35:06.165Z**, and resending exactly the same
+  arguments answered `ALREADY_RECORDED` with that timestamp. The verdict was in
+  the table. The worker reported *"Cloud Brain MCP connector is down, JUDGE
+  verdict not submitted"* — about a connector that was up throughout and a
+  verdict that had been submitted — and a person got a phone notification
+  saying so. **The mechanism worked perfectly and the story around it was
+  false**, which is this file's most expensive shape of defect.
+
+  Three things follow, and only the first is about speed.
+
+  **The client's bound is not Brain's to choose.** §27 measured the same seam
+  from `verify-hosted.ts` at undici's 300-second default; the Cowork connector
+  gives up at 60. Every number there is a property of whichever client is
+  connected, so the contract cannot rest on the operation being quick — and
+  making it quick on a guess is what §27 explicitly refuses. What the judge
+  branch actually spends its time on is still **not established**, and a reader
+  starting from `recomputeProject` should know that Cash Mode 1 holds one layer
+  and fourteen documents, so the archive scan is seconds rather than minutes
+  there.
+
+  **A retry is the answer, and nothing was telling anybody.** The server's own
+  instruction block has always said a mutation is idempotent by work item; the
+  worker contract — the thing a Routine actually reads — said nothing about
+  what a timeout means. It does now, as its own section: a timeout, a transport
+  error or a reset is a fact about the *reply*, the same call is sent again
+  with the same arguments, and `ALREADY_RECORDED` and `IN_PROGRESS` are both
+  ordinary answers. Reporting a connector as down because one reply was slow is
+  the one mistake that section exists to prevent.
+
+  **And the commonest reason a worker finds the connector unreachable is not a
+  fault at all.** Measured from outside the runner while deploy 305 was
+  restarting the machine on 2026-09-21: `GET /healthz` answered **503 after
+  35.7s**, again **503 after 35.7s**, then **200 after 28.8s**, and **0.44s** a
+  minute later — about two minutes in which every MCP call fails, on an
+  endpoint that is a fixed string with no database behind it. The slow 200 is
+  the tail of a cold start rather than a standing condition, which is why the
+  last reading is recorded beside it. Every deploy does this, and a fired worker that
+  arrives in that window sees exactly what the notification described. A third
+  shape was observed the same day and is the same category: the connector proxy
+  answering `-32600 Anthropic Proxy: Invalid content from server`, which
+  succeeded on the next call. None of the three is a reason to stop; all three
+  are answered by asking again.
+
+- **A role that has already been argued is not work, and the redelivery was
+  charged for it.** `reconcileArguedAuditRoles` retires exactly that item on
+  the tick, and it cannot win the race: the item becomes claimable the instant
+  the lease lapses and the tick arrives afterwards. So the next session
+  re-argues a settled role — minutes of judging whose submission
+  `idempotentEffect` then correctly refuses as a replay — and the reasoning is
+  discarded while **the attempt is not**. `RESEARCH_AUDIT` carries two, so two
+  such redeliveries exhaust an item whose work is already done.
+  `auditEligibility` refuses it now, scoped to the current round and only on a
+  `COMPLETE` pass, ahead of the compare-and-swap where §23's correction already
+  put the rest of this rule: no attempt, no lease, no generation.
+
+- **The attempt ceiling meant nothing on the path that reaches it.**
+  `failWork` has always honoured `max_attempts`, so an item a worker *reports*
+  failed retires correctly. An item whose lease merely **expires** — which is
+  what an infrastructure failure looks like from the queue — was re-offered for
+  ever, charged another attempt each time, and nothing ever read the number
+  again. Production, Cash Mode 1: `wki_207ff7c14abf46c19fd8` at attempt 4 of 2
+  and `wki_7b51a43e958f42f7b5ba` at 5 of 2, both `LEASED` on leases that lapsed
+  days earlier, both still candidates. **A bin cannot reach that state**,
+  because §23 put the same clause in `DISPATCHABLE_SQL`; the work item inside
+  the bin could, because it never got one. That asymmetry is the whole defect,
+  and the clause is now in the candidate read *and* in the swap — the second is
+  where it binds, since two claimants racing for an item's last attempt must
+  not both get one. An exhausted item stops being offered instead of cycling,
+  which is what lets `concludeUnworkablePackets` see it and turn the stop into
+  a decision.
+
+  **A ceiling that binds needs a way past it**, and before this there was no
+  escalation to answer because the item simply cycled. `regrantWorkAttempts` is
+  `regrantBinAttempts` one object down, with every restriction verbatim: it
+  raises and never resets, it only ever raises, it refuses a terminal item, and
+  it records why on the project's own append-only history.
+  `step10 regrant-work` is the surface, and its reason comes from a closed set
+  because a free-text one there would be a caller writing its own audit trail.
+
+  **The same seam was walked at every other stage and is deliberately not
+  widened, which is a reading rather than an omission.** Discovery, the launch,
+  the fragment gate, the packet, the bin, the writeback, the dispatch intent and
+  the arrival each already hold both halves — a durable record, and a
+  reconciliation on the tick that closes it once the owner is gone. What is left
+  is one case: a `RESEARCH_FRAGMENT`, `RESEARCH_VERIFY` or `RESEARCH_SYNTHESIZE`
+  item whose effect committed and whose worker never completed it is re-leased
+  and the work re-done, until the submission replays and the item finishes. It
+  is self-healing and, now, bounded.
+
+  The obvious generalisation is refused for a specific reason.
+  `researchItemRecorded` is the only predicate for *did this item record its
+  effect*, and it answers `true` for several cases that mean **not
+  applicable** — a fragment item with no `fragmentId`, an orchestration that
+  cannot be read — which is the safe direction for its own caller, which asks
+  whether an item may be *replaced*, and the unsafe direction for a caller
+  deciding whether to retire one. Its synthesis answer is `documentId !== null`,
+  which is true of every packet being re-synthesised after a handoff. A
+  retirement built on it would retire work that still has to happen, in order to
+  save an activation. The audit case is exact — one item is one role is one
+  pass — and that is why it is the one that moved.
+
+  `releaseWork`'s docstring said the opposite of `releaseWork`, and is
+  corrected in place rather than deleted: it claimed a release does not refund
+  the attempt, while the body — and the body's own comment, recording what that
+  belief cost the first real packet — refunds it. With the ceiling now binding
+  at the claim, a reader who believed the docstring would conclude that an
+  honest handover costs a packet one of its attempts.
+
 
 ## 21. The protocol is a door, not a second set of rules.
 
@@ -3720,6 +3833,35 @@ of an older dispatch is the same rollback wearing the right branch name.
   branch, do not add a second workflow that runs `flyctl deploy`, and do not
   "temporarily" deploy a branch to test something — that is precisely what
   happened, twice, and the cost was a deleted surface coming back.
+- **The guard was asked before the tests and the release happens after them,
+  and that gap is a fourth way the same damage arrives.** `workflow_dispatch`
+  evaluates the `canonical` job first and `flyctl deploy` runs after a
+  typecheck, a full suite and a build — so a run that was legitimately the tip
+  when it started can ship a tree the branch has moved past. Run 283,
+  2026-09-21: the guard passed on `c94bef0`, two pull requests merged while its
+  tests ran, and it released `c94bef0` at 01:02:31, taking both merged changes
+  off the live Brain until a later deploy restored them. **The guard has to be
+  in the statement that makes the change** — this repository's own recurring
+  sentence, at the altitude of a workflow rather than an `UPDATE`.
+
+  Two sessions reached that independently and the resolution keeps both halves.
+  `canonical-guard.sh` is the freshness question in one file asked twice, which
+  is better than the copy I wrote: it uses `git ls-remote`, so it needs no
+  history and also refuses a branch that was *rewound*, which a commit count
+  silently passes.
+
+  Beside it is the question being level with the branch does not answer:
+  whether this tree is **older than what is already running**.
+  `deployed/production` is a lightweight tag the workflow moves *after* a
+  release succeeds — before it, and a deploy that then failed would refuse the
+  re-deploy that fixes it — so a commit that is a strict ancestor of it is a
+  rollback and is refused. A deliberate rollback stays possible by name, as an
+  input somebody sets, because a guard with no way past it is deleted the first
+  time it stands in front of something correct. It is written in git alone
+  rather than by reading the running revision out of `flyctl`: an unverified
+  CLI shape in the one workflow that ships the product is a way to break every
+  deploy in order to prevent a rare one.
+
 - **A worktree holding the canonical branch is a third way the same damage
   arrives, and one turned up.** A scratch worktree had `production` checked out
   with a *reversal of a whole session* staged in its index: `packets.yml`

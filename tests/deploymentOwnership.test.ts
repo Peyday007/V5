@@ -104,6 +104,55 @@ describe('one branch owns production', () => {
     expect(deploy).not.toContain('CANONICAL_BRANCH < ');
   });
 
+  it('refuses a commit older than the one already released', () => {
+    /*
+     * Being level with the branch and being newer than what is running are two
+     * questions, and the step beside this one answers only the first.
+     *
+     * Run 283, 2026-09-21: the early guard passed on `c94bef0`, two pull
+     * requests merged while its tests ran, and it released `c94bef0` at
+     * 01:02:31 — taking both merged changes off the live Brain. The
+     * re-asked freshness guard closes that particular window. It does not
+     * close a dispatch that was never the tip, or a marker-less rollback, and
+     * neither does a branch comparison: only comparing against what was
+     * actually released can.
+     *
+     * So `deployed/production` is written after a release succeeds and read
+     * before the next one, and this pins all three halves of that being true.
+     */
+    const deploy = read('.github/workflows/deploy.yml');
+
+    const reask = deploy.indexOf('- name: Refuse to overwrite a newer production revision');
+    const release = deploy.indexOf('- name: Deploy\n        id: release');
+    const marker = deploy.indexOf('- name: Record what was released');
+    expect(reask).toBeGreaterThan(-1);
+    expect(release).toBeGreaterThan(-1);
+    expect(marker).toBeGreaterThan(-1);
+
+    // Asked before the release, inside the job that performs it — which is
+    // where the window was — and answered by ancestry rather than by a branch.
+    expect(reask).toBeLessThan(release);
+    expect(reask).toBeGreaterThan(deploy.indexOf('name: Deploy to Fly'));
+    expect(deploy.slice(reask, release)).toContain('merge-base --is-ancestor');
+    expect(deploy.slice(reask, release)).toContain('deployed/production');
+
+    // The marker moves only after a release succeeded, or it would refuse the
+    // very re-deploy that fixes a failed one.
+    expect(marker).toBeGreaterThan(release);
+    expect(deploy.slice(marker)).toContain('if: success()');
+
+    // Comparing commits needs a history to compare them in. A shallow checkout
+    // answers "unrelated histories" to every ancestry question, which is
+    // neither a refusal nor a pass.
+    const deployJob = deploy.slice(deploy.indexOf('name: Deploy to Fly'));
+    expect(deployJob.slice(0, deployJob.indexOf('- name: Deploy\n'))).toContain('fetch-depth: 0');
+
+    // And a deliberate rollback stays possible, as a decision somebody makes
+    // by name. A guard with no way past it gets deleted the first time it is
+    // in the way of something correct.
+    expect(deploy).toContain('allow_rollback');
+  });
+
   it('leaves exactly one workflow able to deploy', () => {
     /*
      * A *command*, not the phrase.

@@ -71,6 +71,19 @@ jobs:
           echo "=============== step10 in-flight ==============="
           flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh in-flight" 2>&1 | tail -120
 
+          # What the ticks themselves have thrown, grouped by what they said.
+          # A cumulative counter is not a reading: 32 occurrences of one
+          # sentence is one defect, and 32 different sentences is a fleet in
+          # trouble, and the count alone cannot tell you which.
+          echo "=============== step10 tick-failures ==============="
+          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh tick-failures" 2>&1 | tail -120
+
+          # How long a mutation actually takes, from rows Brain already writes.
+          # §27 has carried "nobody yet knows what the judge pass costs" across
+          # ten deploys while `idempotency_operations` held both timestamps.
+          echo "=============== step10 effect-times ==============="
+          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh effect-times 20" 2>&1 | tail -80
+
           echo "=============== step10 fire-check ==============="
           flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh fire-check" 2>&1 | tail -80
 

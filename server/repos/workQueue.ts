@@ -55,6 +55,7 @@
  * is work that is safe to perform more than once.
  */
 import { getDb } from '../db/database.ts';
+import { recordEvent } from './events.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
 import type {
@@ -466,6 +467,23 @@ function eligibleFor(item: WorkItemRow, held: Set<string>): boolean {
  * Returns an empty array when there is nothing to do. That is a normal answer
  * and not an error: an idle fleet asks this constantly.
  */
+/**
+ * What a worker could actually be handed, as one string.
+ *
+ * `DISPATCHABLE_SQL` is this fragment one object up, and it exists for the
+ * same reason: the claim and the reading that reports how much claimable work
+ * there is must not be two different opinions. They were, the moment the
+ * ceiling went into the claim — `queueMetrics.claimable` would have gone on
+ * counting items no worker can be given, which is a diagnostic lying about
+ * exactly the state the ceiling creates.
+ *
+ * Two placeholders, both the current time: one for the queued branch and one
+ * for the expired-lease branch.
+ */
+export const CLAIMABLE_SQL = `( (state = 'QUEUED' AND available_at <= ?)
+       OR (state = 'LEASED' AND lease_expires_at <= ?) )
+      AND attempt_count < max_attempts`;
+
 export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
   const db = getDb();
   const limit = Math.min(MAX_CLAIM_BATCH, Math.max(1, input.limit ?? 1));
@@ -529,8 +547,7 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
     // faster under a contention level this fleet does not yet have.
     const candidates = await db.all<WorkItemRow>(
       `SELECT * FROM work_items
-        WHERE ( (state = 'QUEUED' AND available_at <= ?)
-             OR (state = 'LEASED' AND lease_expires_at <= ?) )
+        WHERE ${CLAIMABLE_SQL}
           AND project_id IN (${projectIds.map(() => '?').join(', ')})${typeClause}
           AND (target_worker_id IS NULL OR target_worker_id = ?)
         ORDER BY priority DESC, available_at, created_at, id
@@ -563,7 +580,27 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
 
       // The compare-and-swap. Everything that must happen exactly once happens
       // in this one statement: ownership, the attempt count, and the fencing
-      // generation.
+      // generation — and the ceiling, in the same statement that spends it.
+      //
+      // `attempt_count < max_attempts` is in both the candidate read and here,
+      // and it is here that it binds: two claimants racing for an item's last
+      // attempt must not both get one.
+      //
+      // It was in neither, and the ceiling therefore meant nothing on the path
+      // that actually needs it. `failWork` honours it, so an item a worker
+      // *reports* failed retires correctly — but an item whose lease merely
+      // **expires** was re-offered forever, charged another attempt each time,
+      // and nothing ever looked at the number again. Production, Cash Mode 1:
+      // `wki_207ff7c14abf46c19fd8` at 4/2 and `wki_7b51a43e958f42f7b5ba` at
+      // 5/2, both LEASED on leases that lapsed days earlier, both still
+      // candidates. A bin cannot reach that state, because §23 put the same
+      // clause in `DISPATCHABLE_SQL`; the work item inside the bin could,
+      // because it never got one. That asymmetry is the whole defect.
+      //
+      // An exhausted item now stops being offered instead of cycling, which is
+      // what lets `concludeUnworkablePackets` see it: that sweep selects a live
+      // packet holding only work past its own ceilings, and its answering
+      // transition is what turns the stop into a decision rather than a stall.
       const result = await db.run(
         `UPDATE work_items
             SET state = 'LEASED',
@@ -576,6 +613,7 @@ export async function claimWork(input: ClaimInput): Promise<ClaimedWork[]> {
           WHERE id = ?
             AND lease_generation = ?
             AND available_at <= ?
+            AND attempt_count < max_attempts
             AND ( state = 'QUEUED'
                OR (state = 'LEASED' AND lease_expires_at <= ?) )`,
         [
@@ -834,12 +872,14 @@ export async function failWork(proof: OwnershipProof, input: FailInput): Promise
 }
 
 /**
- * Give the work back without consuming another attempt's worth of goodwill.
+ * Give the work back, and give the attempt back with it.
  *
- * The attempt is already counted — it was counted at claim time, which is the
- * only moment it can be counted exactly once. Releasing therefore does not
- * refund it, and a worker that claims and releases in a loop exhausts the item
- * rather than spinning on it forever.
+ * This docstring used to say the opposite — that the attempt is spent at claim
+ * time and a release does not refund it — and the body below stopped being
+ * that function before the sentence was changed. Corrected here rather than
+ * deleted: a reader who believes it concludes that a clean release costs a
+ * packet one of its attempts, which is exactly the reasoning the body's own
+ * comment records as having cost the first real packet its Texas verification.
  */
 export async function releaseWork(
   proof: OwnershipProof,
@@ -900,6 +940,72 @@ export async function releaseWork(
 export type CancelResult =
   | { ok: true; item: WorkItem }
   | { ok: false; reason: 'NOT_FOUND' | 'ALREADY_TERMINAL' };
+
+/**
+ * Give one work item more attempts, because a fault outside the work spent
+ * the ones it had.
+ *
+ * `regrantBinAttempts` is this function one object up, and its argument is
+ * inherited verbatim: the budget exists to stop Brain bouncing workers off
+ * work that is not moving, and it was never meant to measure how *long* a
+ * piece of work legitimately is. What is new is that the ceiling now binds at
+ * the claim as well as at `failWork`, so an item that used to be re-offered
+ * for ever now stops — correctly, and with no way past it. An escalation with
+ * no answering transition is stuck rather than waiting, for the umpteenth
+ * time in this repository, so here is the transition.
+ *
+ * Every restriction is load-bearing and every one of them is `regrantBinAttempts`'s:
+ *
+ *   - It **raises the ceiling and never resets the count**. §5: the spent
+ *     attempts stay in the history, where a reader can see how this happened.
+ *   - It **only ever raises**, so it cannot be used to strand an item.
+ *   - It **refuses a terminal item**, so a finished, failed or cancelled one
+ *     cannot be quietly reopened by widening a number.
+ *   - It **records why**, on the project's own append-only history. An
+ *     operator action with no audit row is invariant 3.
+ *
+ * It is not a retry and it performs no effect: an item whose lease is live
+ * stays exactly where it is, and one that is `QUEUED` becomes claimable again
+ * the next time somebody asks, through the ordinary path and with the ordinary
+ * admission checks.
+ */
+export async function regrantWorkAttempts(input: {
+  workItemId: string;
+  maxAttempts: number;
+  reason: string;
+  actorType: ActorType;
+  actorId?: string | null;
+}): Promise<{ item: WorkItem | null; raised: boolean }> {
+  const db = getDb();
+  const now = queueNow();
+  const result = await db.run(
+    `UPDATE work_items SET max_attempts = ?, updated_at = ?
+      WHERE id = ? AND max_attempts < ?
+        AND state IN ('QUEUED', 'LEASED')`,
+    [input.maxAttempts, now, input.workItemId, input.maxAttempts],
+  );
+  const item = await getWorkItem(input.workItemId);
+  if (result.changes === 1 && item) {
+    await recordEvent({
+      projectId: item.projectId,
+      entityType: 'RUN',
+      entityId: item.id,
+      eventType: 'WORK_ATTEMPTS_REGRANTED',
+      payload: {
+        // The actor travels in the payload because `project_events` records
+        // one, and an operator action with no author answers nothing later.
+        actorType: input.actorType,
+        actorId: input.actorId ?? null,
+        workItemId: item.id,
+        workType: item.workType,
+        attemptCount: item.attemptCount,
+        maxAttempts: item.maxAttempts,
+        reason: input.reason,
+      },
+    });
+  }
+  return { item, raised: result.changes === 1 };
+}
 
 /**
  * Cancellation wins, deterministically.
@@ -998,6 +1104,8 @@ export async function sweepExpiredLeases(): Promise<number> {
 export interface QueueMetrics {
   queued: number;
   claimable: number;
+  /** Still open, and past its own attempt ceiling, so no worker will be given it. */
+  exhausted: number;
   leased: number;
   expiredLeases: number;
   succeeded: number;
@@ -1017,12 +1125,28 @@ export async function queueMetrics(projectId: string): Promise<QueueMetrics> {
   const by = (state: string): number =>
     Number(counts.find((row) => row.state === state)?.n ?? 0);
 
+  // From the same string the claim reads, so the number and the behaviour
+  // cannot disagree about what "claimable" means.
   const claimable = await db.get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM work_items
-      WHERE project_id = ?
-        AND ( (state = 'QUEUED' AND available_at <= ?)
-           OR (state = 'LEASED' AND lease_expires_at <= ?) )`,
+      WHERE project_id = ? AND ${CLAIMABLE_SQL}`,
     [projectId, now, now],
+  );
+  /*
+   * And the items the ceiling now stops, counted separately.
+   *
+   * They used to be inside `claimable`, because nothing stopped them being
+   * handed out; folding them back in would make the metric agree with the old
+   * behaviour rather than with the new one, and leaving them out entirely
+   * would hide the one number an operator needs to decide whether to regrant.
+   * Two facts, two fields.
+   */
+  const exhausted = await db.get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM work_items
+      WHERE project_id = ?
+        AND state IN ('QUEUED', 'LEASED')
+        AND attempt_count >= max_attempts`,
+    [projectId],
   );
   const expired = await db.get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM work_items
@@ -1041,6 +1165,7 @@ export async function queueMetrics(projectId: string): Promise<QueueMetrics> {
   return {
     queued: by('QUEUED'),
     claimable: Number(claimable?.n ?? 0),
+    exhausted: Number(exhausted?.n ?? 0),
     leased: by('LEASED'),
     expiredLeases: Number(expired?.n ?? 0),
     succeeded: by('SUCCEEDED'),
