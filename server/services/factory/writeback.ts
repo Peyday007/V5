@@ -48,6 +48,7 @@ import { getDb } from '../../db/database.ts';
 import { CAMPAIGN_TICK_LEASE_MS, mapCampaign } from '../../repos/factory.ts';
 import { failOperation, getOperation } from '../../repos/idempotency.ts';
 import type { FactoryCampaign, FactoryCampaignRow, FactoryCampaignState } from '../../domain/factory.ts';
+import { attestCampaignPullRequest } from '../register/campaignPullRequestLink.ts';
 import {
   OperationConflict,
   OperationInProgress,
@@ -208,6 +209,16 @@ export async function recordCampaignOutcome(
   if (!campaign.finishedAt) {
     return { recorded: false, event: null, reason: 'campaign has not finished' };
   }
+
+  /*
+   * Runs on every call for a terminal, finished campaign — including a call
+   * that finds the outcome event already recorded below — rather than only
+   * on the call that happens to win the outcome-event reservation. Its own
+   * write is idempotent (see campaignPullRequestLink.ts), so repeating it is
+   * free and a workstream linked to this campaign after its first outcome
+   * write still gets the attestation on a later tick.
+   */
+  await attestCampaignPullRequest(campaign);
 
   const already = await findRecordedOutcome(campaign.id);
   if (already) {

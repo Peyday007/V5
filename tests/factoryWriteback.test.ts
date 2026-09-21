@@ -19,6 +19,7 @@ import {
 } from '../server/repos/factory.ts';
 import { recordIntegration, recordReview } from '../server/repos/factoryFleet.ts';
 import { recordCampaignOutcome, FACTORY_CAMPAIGN_OUTCOME } from '../server/services/factory/writeback.ts';
+import { createWorkstream, linkWorkstream, listAllLiveLinks } from '../server/repos/register.ts';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';
 
 let fixture: TestProject;
@@ -80,7 +81,7 @@ async function approvedChangeRequest(): Promise<FactoryChangeRequest> {
 }
 
 /** A COMPLETE campaign with one integrated unit, a review and an open finding. */
-async function completeCampaign(): Promise<string> {
+async function completeCampaign(options?: { prUrl?: string; prRef?: string }): Promise<string> {
   const changeRequest = await approvedChangeRequest();
   const { campaign } = await ensureCampaign({
     changeRequestId: changeRequest.id,
@@ -142,6 +143,8 @@ async function completeCampaign(): Promise<string> {
     state: 'COMPLETE',
     integrationSha,
     finishedAt: factoryNow(),
+    ...(options?.prUrl ? { prUrl: options.prUrl } : {}),
+    ...(options?.prRef ? { prRef: options.prRef } : {}),
   });
 
   return campaign.id;
@@ -244,5 +247,105 @@ describe('recordCampaignOutcome', () => {
     expect(result.recorded).toBe(false);
     expect(result.event).toBeNull();
     expect(result.reason).toMatch(/no such campaign/);
+  });
+});
+
+async function stream(): Promise<string> {
+  const workstream = await createWorkstream({
+    projectId: fixture.project.id,
+    title: 'A piece of work',
+    intent: 'The outcome somebody actually asked for.',
+    purpose: 'CAPABILITY',
+    createdByUserId: approverId,
+  });
+  return workstream.id;
+}
+
+describe('recordCampaignOutcome attests a finished campaign\'s pull request', () => {
+  it('A01: creates exactly one live PULL_REQUEST/EVIDENCE link per workstream, across repeated calls', async () => {
+    const campaignId = await completeCampaign({
+      prUrl: 'https://github.com/Peyday007/V5/pull/4200',
+      prRef: '#4200',
+    });
+    const workstreamId = await stream();
+    await linkWorkstream({
+      workstreamId,
+      kind: 'CAMPAIGN',
+      ref: campaignId,
+      relation: 'PURSUES',
+      recordedBy: 'BRAIN',
+    });
+
+    await recordCampaignOutcome(campaignId);
+    // The existing idempotent-write test above already proves the
+    // project-history side stays single-row across repeats; calling this a
+    // second and third time proves the same is true of the new link.
+    await recordCampaignOutcome(campaignId);
+    await recordCampaignOutcome(campaignId);
+
+    const links = (await listAllLiveLinks([workstreamId])).filter((link) => link.kind === 'PULL_REQUEST');
+    expect(links).toHaveLength(1);
+    expect(links[0]?.ref).toBe('https://github.com/Peyday007/V5/pull/4200');
+    expect(links[0]?.relation).toBe('EVIDENCE');
+    expect(links[0]?.recordedBy).toBe('BRAIN');
+  });
+
+  it('A02: leaves no PULL_REQUEST link when the campaign carries no prUrl', async () => {
+    const campaignId = await completeCampaign();
+    const workstreamId = await stream();
+    await linkWorkstream({
+      workstreamId,
+      kind: 'CAMPAIGN',
+      ref: campaignId,
+      relation: 'PURSUES',
+      recordedBy: 'BRAIN',
+    });
+
+    await recordCampaignOutcome(campaignId);
+
+    const links = (await listAllLiveLinks([workstreamId])).filter((link) => link.kind === 'PULL_REQUEST');
+    expect(links).toHaveLength(0);
+  });
+
+  it('A02: leaves an unrelated workstream untouched', async () => {
+    const campaignId = await completeCampaign({
+      prUrl: 'https://github.com/Peyday007/V5/pull/4201',
+      prRef: '#4201',
+    });
+    const unrelatedId = await stream();
+    // No CAMPAIGN link at all to this campaign.
+
+    await recordCampaignOutcome(campaignId);
+
+    const links = await listAllLiveLinks([unrelatedId]);
+    expect(links.filter((link) => link.kind === 'PULL_REQUEST')).toHaveLength(0);
+    expect(links).toHaveLength(0);
+  });
+
+  it('A04: attests merged: false and state: open, never inferred from the URL text', async () => {
+    const campaignId = await completeCampaign({
+      // The URL text itself would read as a merged, closed request if it were
+      // ever inspected for its words — which is exactly why this module must
+      // never do that.
+      prUrl: 'https://github.com/Peyday007/V5/pull/9999-closed-and-merged',
+      prRef: '#9999',
+    });
+    const workstreamId = await stream();
+    await linkWorkstream({
+      workstreamId,
+      kind: 'CAMPAIGN',
+      ref: campaignId,
+      relation: 'PURSUES',
+      recordedBy: 'BRAIN',
+    });
+
+    await recordCampaignOutcome(campaignId);
+
+    const links = (await listAllLiveLinks([workstreamId])).filter((link) => link.kind === 'PULL_REQUEST');
+    expect(links).toHaveLength(1);
+    expect(links[0]?.detail.merged).toBe(false);
+    expect(links[0]?.detail.state).toBe('open');
+    expect(links[0]?.detail.attestedBy).toBe('factory-campaign');
+    expect(typeof links[0]?.detail.attestedAt).toBe('string');
   });
 });
