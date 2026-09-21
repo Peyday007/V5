@@ -7341,6 +7341,34 @@ when the brief's whole optimization rule is that it is not.**
   that no longer exists is a vacuous guard, and §41 already records what one
   costs — it reads as coverage.
 
+- **The one command on that door that reads could not be taken while the Brain
+  was working, and the two doors disagreed about it within one minute.**
+  `manufacturing.sh` carried no pool setting, so it took the adapter's default
+  of ten clients against a Supabase pooler with a shared limit of fifteen —
+  beside an app already holding up to ten. Measured on 2026-09-21 against one
+  image: `manufacturing show manufacturing-empire` through
+  `closeout-report.yml`, which sets `BRAIN_DATABASE_POOL_SIZE=1` at the call
+  site, printed the whole ladder; the identical command through
+  `manufacturing.yml`, which set nothing, died on
+  `SELECT * FROM manufacturing_rounds` with *(EMAXCONNSESSION) max clients
+  reached in session mode — max clients are limited to pool_size: 15*.
+
+  §45 already states the rule and the reason — *a rule one of five readers
+  obeys is worse than none, because the next report is written by copying
+  whichever one the author opened* — and its guard reads `scripts/*-report.sh`,
+  which this file is not. Both halves are fixed, because they answer different
+  failures: the script carries it for a terminal and for every future door, and
+  the workflow carries it at the call site so the fix reaches an image whose
+  copy of the script predates it, which is the case an operator command exists
+  for. The guard was run against both lines removed to watch it fail first.
+
+  **The wider condition is reported rather than changed.** Fourteen of the
+  seventeen wrappers under `scripts/` and twenty of the twenty-two workflows
+  that open an ssh console carry no pool setting at all, so the same reading is
+  unavailable at each of them whenever production is busy. Widening the guard
+  would refuse those files rather than fix them, and each belongs to the
+  workstream that owns it.
+
 `npm run manufacturing` remains the terminal door, calling exactly what the
 routes call, for the operations a browser is not needed for.
 

@@ -453,6 +453,48 @@ describe('a report read beside a running app', () => {
   }
 });
 
+/**
+ * The same rule one file along, and the one place it was measured twice.
+ *
+ * `manufacturing.sh` is not a `*-report.sh`, so the rule above never reached
+ * it — and it is the script an operator runs to ask the kernel what it would
+ * do next, which is exactly the command somebody reaches for while production
+ * is busy. On 2026-09-21 the identical `show` was run through two doors within
+ * one minute of each other, against one image: through `closeout-report.yml`,
+ * which sets `BRAIN_DATABASE_POOL_SIZE=1` at the call site, it printed the
+ * whole ladder; through `manufacturing.yml`, which set nothing, it took the
+ * adapter's default of ten against a shared fifteen-client pooler and died
+ * with `(EMAXCONNSESSION) ... limited to pool_size: 15` on
+ * `SELECT * FROM manufacturing_rounds`.
+ *
+ * Both halves are asserted, because they answer different failures: the script
+ * carries the rule for a terminal and for every future door, and the workflow
+ * carries it for an image whose copy of the script predates the line — which
+ * is the case an operator command exists for, since the app that needs driving
+ * is the one already running.
+ *
+ * **What is deliberately not asserted here is every other operator wrapper.**
+ * Fourteen of the seventeen scripts under `scripts/` and twenty of the
+ * twenty-two workflows that open an ssh console carry no pool setting at all,
+ * which is the same condition waiting in each of them. Widening this guard
+ * would refuse those files rather than fix them, and each one belongs to the
+ * workstream that owns it. It is reported rather than changed, the way §45
+ * reports the identical tallying defect one kernel along.
+ */
+describe('the manufacturing operator surface is readable beside a running app', () => {
+  it('takes one pooler client from the script, so a terminal and every door inherit it', () => {
+    const body = readFileSync('scripts/manufacturing.sh', 'utf8');
+    expect(body).toMatch(/export BRAIN_DATABASE_POOL_SIZE="\$\{BRAIN_DATABASE_POOL_SIZE:-1\}"/);
+  });
+
+  it('asks for it at the call site too, so the fix does not wait for a deploy', () => {
+    const body = readFileSync('.github/workflows/manufacturing.yml', 'utf8');
+    // The setting has to reach the command rather than merely appear in the
+    // file: a comment naming the variable would satisfy a bare substring.
+    expect(body).toMatch(/-C "env BRAIN_DATABASE_POOL_SIZE=1 \$remote"/);
+  });
+});
+
 describe('a figure that cannot be negative is refused by both backends', () => {
   it('refuses a negative deal_amount_cents at the column, on whichever backend is running', async () => {
     const run = await createRun({
