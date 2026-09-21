@@ -38,12 +38,7 @@ import type {
 } from '../domain/types.ts';
 import { WORKER_SCOPES } from '../domain/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
-import {
-  ambiguousSignInNames,
-  identitiesOf,
-  signInName,
-  signInNameIsTaken,
-} from '../domain/signInName.ts';
+import { identitiesOf, signInName, signInNameIsTaken } from '../domain/signInName.ts';
 // Safe in this direction only: repos/oauth.ts imports nothing from here, so
 // there is no cycle. Archiving revokes tokens through the same function the
 // console's Disable uses rather than repeating the statement.
@@ -418,11 +413,6 @@ export async function signInNameTaken(
   options: { exceptUserId?: string } = {},
 ): Promise<boolean> {
   return signInNameIsTaken(proposed, await listUsers(), options);
-}
-
-/** The sign-in names more than one live account answers to, folded. */
-export async function ambiguousIdentities(): Promise<Set<string>> {
-  return ambiguousSignInNames(await listUsers());
 }
 
 /**

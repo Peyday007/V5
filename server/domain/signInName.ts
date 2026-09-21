@@ -47,12 +47,6 @@ export function signInName(typed: string): string {
   return typed.trim().toLowerCase();
 }
 
-/** Do these two names name one sign-in identity? */
-export function sameSignInName(a: string, b: string): boolean {
-  const left = signInName(a);
-  return left.length > 0 && left === signInName(b);
-}
-
 /**
  * The identities an account can be signed in as.
  *
