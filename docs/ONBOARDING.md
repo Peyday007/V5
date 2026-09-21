@@ -117,6 +117,23 @@ credential that still works is a second door, not a recovery, and if the device
 was lost because somebody else has it, the whole point is that it stops working
 now rather than when the replacement is used. The revoked rows keep their reason.
 
+### If somebody never opened their link
+
+A different fact, and a different button. On **People & capacity** that member
+reads *No link yet* or *Link sent*, and **Send them a link** issues another
+one — the same slot, the same account, a new token, and the stale link
+withdrawn so there is only ever one live way in.
+
+It is not recovery and does not say so, because there is nothing to retire:
+telling somebody who has never signed in that their credentials have been taken
+out of service is alarming and untrue. For the same reason it is **refused** for
+anybody who already has a way in — a PIN, a password or a registered device.
+Those people want a recovery link, and the refusal says so.
+
+Do not invite them again to solve this. That makes a **second account** under
+one name, and since the name is how a member signs in, two rows answering to it
+lock both people out. Brain refuses the second invitation for that reason.
+
 Every enrollment, revocation, recovery and administration step is written to
 `identity_events`, which is append-only and records the enrollment's **id**,
 never its token.
