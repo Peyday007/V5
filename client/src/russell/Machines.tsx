@@ -254,7 +254,7 @@ function StartProgramme({
   }, [busy, objective, projectId, onStarted]);
 
   return (
-    <section className="rs-card rs-machines-start">
+    <section className="rs-card rs-machines rs-machines-start">
       <h2>No manufacturing programme</h2>
       <p className="rs-hint">
         This project has none. Starting one authorizes Brain to research, from published sources,
@@ -268,20 +268,19 @@ function StartProgramme({
       </p>
       <p className="rs-item-meta">{objective}</p>
       {editing ? (
-        <>
+        <div className="rs-machines-declare">
           <label className="rs-field-label" htmlFor="machines-objective">
             What this programme is trying to establish
           </label>
           <textarea
             id="machines-objective"
-            className="rs-field"
             rows={4}
             value={objective}
             onChange={(event) => setObjective(event.target.value)}
           />
-        </>
+        </div>
       ) : null}
-      {problem ? <p className="rs-error">{problem}</p> : null}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
       <div className="rs-cash-actions">
         <button type="button" className="rs-primary" disabled={busy} onClick={start}>
           {busy ? 'Starting…' : 'Start the programme'}
