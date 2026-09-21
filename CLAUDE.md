@@ -665,6 +665,28 @@ never a process-local lock.
   `step10 regrant-work` is the surface, and its reason comes from a closed set
   because a free-text one there would be a caller writing its own audit trail.
 
+  **The same seam was walked at every other stage and is deliberately not
+  widened, which is a reading rather than an omission.** Discovery, the launch,
+  the fragment gate, the packet, the bin, the writeback, the dispatch intent and
+  the arrival each already hold both halves — a durable record, and a
+  reconciliation on the tick that closes it once the owner is gone. What is left
+  is one case: a `RESEARCH_FRAGMENT`, `RESEARCH_VERIFY` or `RESEARCH_SYNTHESIZE`
+  item whose effect committed and whose worker never completed it is re-leased
+  and the work re-done, until the submission replays and the item finishes. It
+  is self-healing and, now, bounded.
+
+  The obvious generalisation is refused for a specific reason.
+  `researchItemRecorded` is the only predicate for *did this item record its
+  effect*, and it answers `true` for several cases that mean **not
+  applicable** — a fragment item with no `fragmentId`, an orchestration that
+  cannot be read — which is the safe direction for its own caller, which asks
+  whether an item may be *replaced*, and the unsafe direction for a caller
+  deciding whether to retire one. Its synthesis answer is `documentId !== null`,
+  which is true of every packet being re-synthesised after a handoff. A
+  retirement built on it would retire work that still has to happen, in order to
+  save an activation. The audit case is exact — one item is one role is one
+  pass — and that is why it is the one that moved.
+
   `releaseWork`'s docstring said the opposite of `releaseWork`, and is
   corrected in place rather than deleted: it claimed a release does not refund
   the attempt, while the body — and the body's own comment, recording what that
