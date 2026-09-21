@@ -485,6 +485,15 @@ export const EVENT_TYPES = [
    */
   'MANUFACTURING_CAPABILITY_HELD',
   'MANUFACTURING_CAPABILITY_WITHDRAWN',
+  /** A person read an acquisition candidate and said no. The row stays. */
+  'MANUFACTURING_CANDIDATE_SET_ASIDE',
+  /** A person answered a question this kernel raises and cannot settle. */
+  'MANUFACTURING_DECISION_RESOLVED',
+  /** And unanswered one, which the directive's own caution is a reason for. */
+  'MANUFACTURING_DECISION_REOPENED',
+  // The answering transition for a work item whose attempt ceiling now
+  // binds at the claim as well as at `failWork`.
+  'WORK_ATTEMPTS_REGRANTED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -2151,6 +2160,18 @@ export interface ResearchClaimRow {
   capability_finding: string | null;
   capability_subject: string | null;
   capability_observed_on: string | null;
+  capability_qualifier: string | null;
+  capability_amount_low_minor: number | null;
+  capability_amount_high_minor: number | null;
+  capability_currency: string | null;
+  capability_basis: string | null;
+  deal_finding: string | null;
+  deal_subject: string | null;
+  deal_equipment: string | null;
+  deal_jurisdiction: string | null;
+  deal_value: string | null;
+  deal_amount_cents: number | null;
+  deal_currency: string | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -3369,6 +3390,79 @@ export interface ResearchClaim {
    * be entered.
    */
   capabilityObservedOn: string | null;
+  /**
+   * The second closed value a finding names, where its kind has one.
+   *
+   * A capital requirement names which shape of the business its figure is
+   * about; an acquisition candidate names what it would contribute. One column
+   * for both, which is `structural_qualifier`'s shape one kernel along and for
+   * its reason: the judgement is made once by whoever read the source, and
+   * everything after that is a lookup.
+   */
+  capabilityQualifier: string | null;
+  /**
+   * The published range, in minor units, and what it is priced in.
+   *
+   * Both ends or neither. A source that publishes one figure sets them equal,
+   * so every reader has one shape; a requirement nobody publishes a figure for
+   * carries none, and the reading above it withholds the total rather than
+   * summing past the gap.
+   */
+  capabilityAmountLowMinor: number | null;
+  capabilityAmountHighMinor: number | null;
+  capabilityCurrency: string | null;
+  /**
+   * What kind of figure the amount is.
+   *
+   * A regulator's published fee schedule and an analyst's market estimate are
+   * both worth having and are not the same fact. Without this a reading would
+   * present the second with the first's authority, which is the shape of error
+   * §14 exists to refuse: a claim judged by a standard that does not fit what
+   * it claims.
+   */
+  capabilityBasis: string | null;
+  /**
+   * What this claim establishes about a cross-border transaction, if anything.
+   *
+   * The third axis, and separate from the two above it because the three
+   * answer different questions about one claim: *is this a piece of work*,
+   * *is this how the industry is put together*, and *what does this say about
+   * a transaction between two parties in two countries*. A column with two
+   * masters is invariant 31, so they are three columns.
+   */
+  dealFinding: DealFinding | null;
+  /** What the finding names: the organisation, the requirement, the cost line. */
+  dealSubject: string | null;
+  /**
+   * Which class of equipment, as the source writes it.
+   *
+   * Its own field so that two spellings of one class are visibly two classes
+   * rather than silently one, and so that a question naming a class verbatim
+   * can be declared back unchanged.
+   */
+  dealEquipment: string | null;
+  /**
+   * The market it applies in.
+   *
+   * A column rather than a sentence for §25's reason at its sharpest: the same
+   * trailer is legal in one market and unregistrable in the next, so a
+   * requirement whose destination was recovered from prose is a confidently
+   * wrong answer that every row around it agrees with.
+   */
+  dealJurisdiction: string | null;
+  /** The closed-set value: a compliance layer, a cost component, a structure. */
+  dealValue: string | null;
+  /** The figure on a cost component, in minor units. Required there, refused elsewhere. */
+  dealAmountCents: number | null;
+  /**
+   * Which currency that figure is in.
+   *
+   * Declared rather than taken from the sprint, because cross-border prices
+   * genuinely arrive in several currencies and stamping them all with one
+   * would make the mixed-currency reading unreachable — a mechanism nothing
+   * calls, at the number that decides a deal. Brain never converts.
+   */
+  dealCurrency: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -3907,7 +4001,17 @@ export const FACTORY_WORKER_SCOPES: readonly WorkerScope[] = [
  * principal: it resolves to the same WORKER principal a `brnw_` credential
  * would, so nothing downstream has to know which door was used.
  */
-export const AUTH_METHODS = ['SESSION_COOKIE', 'WORKER_BEARER', 'OAUTH_BEARER'] as const;
+export const AUTH_METHODS = [
+  'SESSION_COOKIE',
+  'WORKER_BEARER',
+  'OAUTH_BEARER',
+  /*
+   * A person's conversation-bridge bearer. The only one of the four that
+   * resolves to a HUMAN principal without a cookie — a chat client is not a
+   * browser, and §21 refuses a cookie on a mutating cross-origin endpoint.
+   */
+  'BRIDGE_BEARER',
+] as const;
 export type AuthMethod = (typeof AUTH_METHODS)[number];
 
 /**
@@ -3949,6 +4053,12 @@ export const DENIAL_REASONS = [
   'UNSAFE_TRANSPORT',
   'LAST_ADMIN',
   'PASSWORD_CHANGE_REQUIRED',
+  // A name somebody else already signs in by. It is a category about *this
+  // Brain's* rows rather than about the caller, so it tells an attacker
+  // nothing they could not learn by trying the name at the door — and the
+  // administrator reading the audit needs to be able to tell it from a
+  // refusal that means the invitation itself was bad.
+  'NAME_UNAVAILABLE',
   'INTERNAL_ERROR',
 ] as const;
 export type DenialReason = (typeof DENIAL_REASONS)[number];
@@ -5667,6 +5777,7 @@ export interface RussellConversationRow {
   owner_user_id: string;
   project_id: string | null;
   title: string;
+  purpose: string;
   visibility: string;
   attachment_confidence: number | null;
   attachment_source: string;
@@ -5678,6 +5789,20 @@ export interface RussellConversationRow {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * What a conversation is for.
+ *
+ * `GENERAL` is the default and the overwhelmingly common case: somebody
+ * thinking out loud with Russell. `PROJECT` is a thread that belongs to a
+ * project — attached by a person or by the router, or one that produced work
+ * against it. The other two exist so that a thread deliberately opened as
+ * operations or as technical work can say so; nothing derives either of them,
+ * because deriving a category from a thread's words is the guess this whole
+ * field replaces.
+ */
+export const CONVERSATION_PURPOSES = ['GENERAL', 'PROJECT', 'OPERATIONAL', 'TECHNICAL'] as const;
+export type ConversationPurpose = (typeof CONVERSATION_PURPOSES)[number];
 
 export interface RussellConversationContextRow {
   id: string;
@@ -5919,6 +6044,15 @@ export interface RussellConversation {
   ownerUserId: string;
   projectId: string | null;
   title: string;
+  /**
+   * What this thread is for, stated rather than inferred from a default.
+   *
+   * `projectId` says *which* project a thread is about; this says whether it
+   * is about one at all. They were one field, and the consequence was that a
+   * client passing the first project in a list made every general conversation
+   * in this Brain a Deal Dispatch conversation — see migration 084.
+   */
+  purpose: ConversationPurpose;
   visibility: RussellVisibility;
   attachmentConfidence: number | null;
   attachmentSource: AttachmentSource;
@@ -6629,12 +6763,26 @@ export type CashOpportunityState = (typeof CASH_OPPORTUNITY_STATES)[number];
  * Never stored. A row is not a decision: a stored label is stale the moment the
  * dependency it was waiting on settles, and two readers deriving it separately
  * is how one screen comes to disagree with another.
+ *
+ * The first four are **work**: something a person could act on, or something
+ * genuinely held up. The last three are not, and separating them is the whole
+ * correction recorded in §44 — a published price list is neither a thing to do
+ * nor a thing being waited for, and calling it either put thirty-one facts
+ * about other people's markets in front of somebody as their current work.
+ *
+ *   * `EVIDENCE_ONLY` — Brain found this and cannot yet say how we would be
+ *     paid from it. It belongs with the evidence, not in a queue.
+ *   * `BEING_QUALIFIED` — the capture thesis exists and Brain is establishing
+ *     the rest. Brain's own work, and nobody is waiting on a person.
+ *   * `ARCHIVED` — stopped or passed on, and kept.
  */
 export const CASH_DISPOSITIONS = [
   'EXECUTE_NOW',
   'RUN_IN_PARALLEL',
   'WAIT_FOR_DEPENDENCY',
   'TEST_A_DECISIVE_UNKNOWN',
+  'BEING_QUALIFIED',
+  'EVIDENCE_ONLY',
   'ARCHIVED',
 ] as const;
 export type CashDisposition = (typeof CASH_DISPOSITIONS)[number];
@@ -6896,10 +7044,25 @@ export interface CashAuthority {
  * Where a piece of the portfolio is in its bounded commercial validation.
  *
  * `null` is "not started", which is the state every opening is born in.
+ *
+ * `NEEDS_PERSON` is the fifth, and it exists because of a measured production
+ * deadlock. A deep dive's mission can reach `NEEDS_HUMAN` — the packet stopped
+ * at a decision only a person can make — and `settleValidations` had a branch
+ * for `DONE`, for `FAILED` and for `CANCELLED` and none for that. So the
+ * opening stayed `RUNNING` for ever while nothing was running, and because
+ * `RUNNING` counts against `MAX_VALIDATIONS_IN_FLIGHT`, **both** of the two
+ * slots in this Brain were held by parked missions: the other thirty-eight
+ * openings could never be qualified and no new deep dive could ever start.
+ *
+ * It is not a failure and it is not terminal. The mission has its own answering
+ * transition — the Needs You card §24 built — and this says, truthfully, that
+ * the deep dive is waiting on a person rather than on a provider. It holds no
+ * provider capacity, because no provider is working on it.
  */
 export const OPPORTUNITY_VALIDATION_STATES = [
   'PENDING',
   'RUNNING',
+  'NEEDS_PERSON',
   'COMPLETE',
   'BLOCKED',
 ] as const;
@@ -7542,6 +7705,7 @@ export interface CapacityConnectionRow {
   trigger_ref: string | null;
   account_id: string | null;
   routine_id: string | null;
+  worker_id: string | null;
   state: string;
   failure_reason: string | null;
   probe_bin_id: string | null;
@@ -7567,6 +7731,16 @@ export interface CapacityConnection {
   triggerRef: string | null;
   accountId: string | null;
   routineId: string | null;
+  /**
+   * The worker this connection's Claude account authenticates as.
+   *
+   * Written when Brain mints the worker, and by `adoptSurface` when a person
+   * says an already-registered surface is theirs. Null means *we have not been
+   * told*, and the screen falls back to resolving a worker by the name it
+   * would have minted — which is what made the owner of this Brain read as
+   * disconnected while their surfaces fired 350 times. See migration 085.
+   */
+  workerId: string | null;
   state: CapacityConnectionState;
   failureReason: string | null;
   probeBinId: string | null;
@@ -7818,6 +7992,23 @@ export const CAPABILITY_FINDINGS = [
   'ENTRY_BARRIER',
   /** A component or subsystem producers in this category buy rather than make. */
   'BOUGHT_IN_COMPONENT',
+  /**
+   * A published figure for one thing entering this category costs.
+   *
+   * The directive names required capital as the first item under ENTRY, and it
+   * is the one entry fact the other eight cannot carry: a barrier is a *thing
+   * to obtain* and this is an *amount*, with a range, a currency, a date, a
+   * shape of business it is about and a kind of figure it is.
+   */
+  'CAPITAL_REQUIREMENT',
+  /**
+   * A firm a source names, and what buying it would contribute.
+   *
+   * Identifying one is research. Approaching, valuing, offering, committing to
+   * or buying one is not, is separately authorized, and no route in this kernel
+   * reaches any of them.
+   */
+  'ACQUISITION_CANDIDATE',
 ] as const;
 export type CapabilityFinding = (typeof CAPABILITY_FINDINGS)[number];
 
@@ -7941,6 +8132,10 @@ export const MANUFACTURING_ROUND_PURPOSES = [
   'DEMAND',
   'CAPABILITY',
   'INTEGRATION',
+  /** What entering costs, requirement by requirement, from published figures. */
+  'CAPITAL',
+  /** Who could be bought instead of built, and what that would contribute. */
+  'ACQUISITION',
 ] as const;
 export type ManufacturingRoundPurpose = (typeof MANUFACTURING_ROUND_PURPOSES)[number];
 
@@ -7952,6 +8147,8 @@ export interface ManufacturingProgramRow {
   project_id: string;
   objective: string;
   state: string;
+  blueprint_path: string | null;
+  blueprint_sha256: string | null;
   owner_user_id: string;
   created_by_user_id: string;
   created_at: string;
@@ -7995,6 +8192,17 @@ export interface ManufacturingProgram {
   projectId: string;
   objective: string;
   state: ManufacturingProgramState;
+  /**
+   * The directive this programme runs under, and the sha-256 of its bytes.
+   *
+   * Both written by the server from the file it opened. A hash is integrity and
+   * never use: what makes the directive *operative* is
+   * `services/manufacturing/directive.ts` carrying its contents into the
+   * questions, and a test fails if that stops happening while these keep being
+   * written.
+   */
+  blueprintPath: string | null;
+  blueprintSha256: string | null;
   ownerUserId: string;
   createdByUserId: string;
   createdAt: string;
@@ -8260,6 +8468,695 @@ export interface ManufacturingRound {
   harvestedAt: string | null;
   /** Null while OPEN. Not counted yet is a different fact from none found. */
   found: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* --------------------------------------------------------------------------
+ * The cross-border industrial dealflow kernel
+ *
+ * A third declaration axis on a research claim, beside `opportunity_signal`
+ * (what kind of opening this is) and `structural_finding` (how an industry is
+ * put together). This one answers a different question again: **what does this
+ * source establish about a cross-border transaction** — who needs the
+ * equipment, who can build it, what the destination market demands of it, what
+ * it costs to land, and how people in this trade actually get paid.
+ *
+ * It is a separate axis rather than more values on an existing one because the
+ * three answer different questions about one claim and a column with two
+ * masters is invariant 31. A claim may carry all three, any one, or — as most
+ * claims do — none.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What a claim establishes about a cross-border transaction.
+ *
+ * Seven kinds, and the discipline is `opportunitySignals.ts`': the judgement
+ * is made once, by the only party that can make it — somebody who read the
+ * source — and everything after that is Brain matching a value from a closed
+ * set exactly. Nothing downstream inspects a sentence.
+ */
+export const DEAL_FINDINGS = [
+  /** A named organisation that needs a named class of equipment. */
+  'BUYER_NEED',
+  /** A named manufacturer or supplier that can build or supply that class. */
+  'SUPPLIER_CAPABILITY',
+  /** Who decides a purchase at an organisation already on the map. */
+  'DECISION_MAKER',
+  /** Something the destination market, or the buyer, demands of the goods. */
+  'COMPLIANCE_REQUIREMENT',
+  /**
+   * A documented search establishing that one layer demands nothing.
+   *
+   * Its own kind rather than a flag, because §14 is explicit: a claim that
+   * something does not exist is established by a documented search of the
+   * places it would be, or not at all. So this kind — and only this kind —
+   * requires the claim to name where the worker looked.
+   */
+  'REQUIREMENT_ABSENCE',
+  /** A published figure for one component of the landed cost. */
+  'COST_COMPONENT',
+  /** Evidence that a named commercial structure is actually used in this trade. */
+  'COMMERCIAL_PRECEDENT',
+] as const;
+export type DealFinding = (typeof DEAL_FINDINGS)[number];
+
+/**
+ * The four layers of "may this equipment be sold and operated there", kept
+ * apart because collapsing them is the single most expensive mistake available
+ * in this trade.
+ *
+ * ISO 9001 at a factory does not prove a particular tanker may be registered
+ * in the destination market, and a market approval does not prove the buyer
+ * will accept it. A kernel that reported one as the other would tell somebody
+ * a deal was clear when it was not — and the equipment would be built before
+ * anybody found out.
+ *
+ * `IMPORT_BARRIER` is a fifth entry and deliberately not a "layer" in the same
+ * sense: it is the one posture that cannot be satisfied by doing more work.
+ */
+export const COMPLIANCE_LAYERS = [
+  /** What the factory itself must hold: quality systems, welding approvals. */
+  'FACTORY_CERTIFICATION',
+  /** What this product must hold: type approval, pressure testing, marking. */
+  'PRODUCT_CERTIFICATION',
+  /** What the destination state demands before it may be registered or used. */
+  'MARKET_APPROVAL',
+  /** What this buyer demands beyond anything a government requires. */
+  'BUYER_ACCEPTANCE',
+  /** A duty, quota, ban or restriction on bringing the goods in at all. */
+  'IMPORT_BARRIER',
+] as const;
+export type ComplianceLayer = (typeof COMPLIANCE_LAYERS)[number];
+
+/**
+ * What a requirement row says about the layer it names.
+ *
+ * `NOT_ESTABLISHED` is never written: it is the *absence* of rows, and the
+ * whole reason `REQUIREMENT_ABSENCE` exists as its own finding is so that
+ * "nobody has looked" and "somebody looked and there is nothing" can never
+ * read the same. §30's rule, at the number that decides whether a deal is
+ * legal.
+ */
+export const REQUIREMENT_POSTURES = [
+  /** It applies and something must be done about it. */
+  'REQUIRED',
+  /** A documented search found the layer demands nothing here. */
+  'NONE_FOUND',
+  /** The goods may not enter, or may not be used, at all. */
+  'PROHIBITED',
+] as const;
+export type RequirementPosture = (typeof REQUIREMENT_POSTURES)[number];
+
+/**
+ * The components a landed cost is actually made of.
+ *
+ * Closed, because a total assembled from free-text components is a total
+ * nobody can check for a missing one — and a landed cost missing its duty line
+ * is exactly the error that makes a deal look profitable.
+ *
+ * `BUYER_ALTERNATIVE` is not a cost of ours. It is what the buyer pays today,
+ * and it is here because it is the only figure that says whether the saving is
+ * real; keeping it in the same table as the costs, with its own kind, is what
+ * stops it being added to them.
+ */
+export const COST_COMPONENTS = [
+  'FACTORY_PRICE',
+  'INLAND_ORIGIN',
+  'EXPORT_HANDLING',
+  'OCEAN_FREIGHT',
+  'INSURANCE',
+  'IMPORT_DUTY',
+  'IMPORT_TAX',
+  'CUSTOMS_CLEARANCE',
+  'INLAND_DESTINATION',
+  'INSPECTION',
+  'CERTIFICATION_COST',
+  'FINANCING_COST',
+  'BUYER_ALTERNATIVE',
+] as const;
+export type CostComponent = (typeof COST_COMPONENTS)[number];
+
+/**
+ * How we could be paid, and — the half that matters — what each one requires
+ * us to fund.
+ *
+ * The request's own §13: separate the transaction's value from our required
+ * capital. A tanker costing a quarter of a million dollars is not a quarter of
+ * a million dollars of ours unless the structure makes it so, and most of
+ * these structures do not.
+ */
+export const COMMERCIAL_STRUCTURES = [
+  'REFERRAL_COMMISSION',
+  'SALES_REPRESENTATION',
+  'SOURCING_FEE',
+  'PROCUREMENT_FEE',
+  'BROKER_COMMISSION',
+  'BUYER_SIDE_REPRESENTATION',
+  'SUPPLIER_SIDE_REPRESENTATION',
+  'TRADING_COMPANY_MARKUP',
+  'LOGISTICS_COORDINATION_FEE',
+  'INSPECTION_COORDINATION',
+  'SPARE_PARTS_SUPPLY',
+  'AFTER_SALES_COORDINATION',
+  'RECURRING_PROCUREMENT',
+] as const;
+export type CommercialStructure = (typeof COMMERCIAL_STRUCTURES)[number];
+
+/** Which side of the transaction a party is on. */
+export const DEAL_PARTY_KINDS = ['BUYER', 'SUPPLIER'] as const;
+export type DealPartyKind = (typeof DEAL_PARTY_KINDS)[number];
+
+export const DEAL_PARTY_ORIGINS = ['SEED', 'DISCOVERED'] as const;
+export type DealPartyOrigin = (typeof DEAL_PARTY_ORIGINS)[number];
+
+export interface DealPartyRow {
+  id: string;
+  project_id: string;
+  kind: string;
+  name: string;
+  country: string | null;
+  equipment_class: string;
+  equipment_key: string;
+  note: string | null;
+  decision_maker: string | null;
+  decision_maker_claim_id: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealParty {
+  id: string;
+  projectId: string;
+  kind: DealPartyKind;
+  name: string;
+  /** Where they are. Read from the claim's own column, never from its prose. */
+  country: string | null;
+  /** As the source writes it, for a person to read. */
+  equipmentClass: string;
+  /** The normalized form two rows are matched on. Never shown. */
+  equipmentKey: string;
+  note: string | null;
+  decisionMaker: string | null;
+  decisionMakerClaimId: string | null;
+  origin: DealPartyOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DealRequirementRow {
+  id: string;
+  project_id: string;
+  destination: string;
+  equipment_class: string;
+  equipment_key: string;
+  layer: string;
+  posture: string;
+  statement: string;
+  authority: string | null;
+  effective_date: string | null;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealRequirement {
+  id: string;
+  projectId: string;
+  /** The market the requirement applies in. */
+  destination: string;
+  equipmentClass: string;
+  equipmentKey: string;
+  layer: ComplianceLayer;
+  posture: RequirementPosture;
+  statement: string;
+  /** Who imposes it, where the source names them. */
+  authority: string | null;
+  /** When the source says it took effect, so freshness is readable. */
+  effectiveDate: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DealCostRow {
+  id: string;
+  project_id: string;
+  equipment_class: string;
+  equipment_key: string;
+  origin_country: string | null;
+  destination: string | null;
+  component: string;
+  amount_cents: number;
+  currency: string;
+  basis: string;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealCost {
+  id: string;
+  projectId: string;
+  equipmentClass: string;
+  equipmentKey: string;
+  originCountry: string | null;
+  destination: string | null;
+  component: CostComponent;
+  amountCents: number;
+  currency: string;
+  /** What the figure is per — one unit, one container, one shipment. */
+  basis: string;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DealStructureEvidenceRow {
+  id: string;
+  project_id: string;
+  equipment_class: string;
+  equipment_key: string;
+  structure: string;
+  statement: string;
+  rate_note: string | null;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealStructureEvidence {
+  id: string;
+  projectId: string;
+  equipmentClass: string;
+  equipmentKey: string;
+  structure: CommercialStructure;
+  statement: string;
+  /** What the source says it pays, in its own words. Never parsed into a rate. */
+  rateNote: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * How far a deal has actually got.
+ *
+ * Everything through `OUTREACH_READY` is **derived** from rows on the read
+ * path and stored nowhere, for `tier.ts`' reason: a row is not a decision, and
+ * a stored stage is stale the moment the evidence it was waiting on arrives.
+ *
+ * Everything after it is read from the Cash opportunity the deal was promoted
+ * into, because those stages record things that happened in the world and no
+ * derivation recovers them.
+ *
+ * **`NEGOTIATING` is in this list and is never derived.** It is a real stage
+ * of this trade and the brief names it, and Brain holds no row that
+ * establishes it: `COMMERCIAL_ACTIONS` has no action for negotiating, so there
+ * is nothing to read. Inferring it from a quote having gone out would be a
+ * status more precise than the evidence, which §29 records teaching a person
+ * to stop believing the status. It stays here so a reader can see that it is a
+ * gap in what Brain can observe rather than a stage somebody forgot — and
+ * `maturity.ts` says the same thing beside the map that does the deriving.
+ */
+export const DEAL_STAGES = [
+  'SIGNAL',
+  'HYPOTHESIS',
+  'DISCOVERED',
+  'RESEARCHED',
+  'QUALIFIED',
+  'COMMERCIAL_PATH',
+  'OUTREACH_READY',
+  'ENGAGED',
+  'QUOTING',
+  'NEGOTIATING',
+  'CONTRACTING',
+  'PAID',
+  'LOST',
+  'BLOCKED',
+] as const;
+export type DealStage = (typeof DEAL_STAGES)[number];
+
+export interface DealRow {
+  id: string;
+  project_id: string;
+  buyer_party_id: string;
+  supplier_party_id: string;
+  equipment_class: string;
+  equipment_key: string;
+  opportunity_id: string | null;
+  blocked_reason: string | null;
+  outcome: string | null;
+  outcome_note: string | null;
+  outcome_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Deal {
+  id: string;
+  projectId: string;
+  buyerPartyId: string;
+  supplierPartyId: string;
+  equipmentClass: string;
+  equipmentKey: string;
+  /** The Cash opportunity this was promoted into, once it was. */
+  opportunityId: string | null;
+  /** An operational fact with an operational remedy, never a verdict. */
+  blockedReason: string | null;
+  outcome: string | null;
+  outcomeNote: string | null;
+  outcomeAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What the kernel asks about next, from a closed set of purposes. */
+export const DEAL_ROUND_PURPOSES = [
+  /** The first question of all: which classes this pattern actually trades. */
+  'SEED_EQUIPMENT',
+  /** Who needs this class, and what triggered it. */
+  'DEMAND',
+  /** Who builds this class competitively for export. */
+  'SUPPLY',
+  /** The four-layer envelope for this class into this destination. */
+  'COMPLIANCE',
+  /** What it costs to land one, component by component. */
+  'LANDED_COST',
+  /** Which commercial structures this trade actually uses, and what they pay. */
+  'STRUCTURE',
+  /** Who decides the purchase at one named organisation. */
+  'DECISION_MAKER',
+  /** What else a buyer we have actually transacted with procures. */
+  'ADJACENT',
+] as const;
+export type DealRoundPurpose = (typeof DEAL_ROUND_PURPOSES)[number];
+
+export const DEAL_ROUND_STATES = ['OPEN', 'SETTLED'] as const;
+export type DealRoundState = (typeof DEAL_ROUND_STATES)[number];
+
+export interface DealRoundRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  purpose: string;
+  equipment_key: string | null;
+  equipment_class: string | null;
+  destination: string | null;
+  party_id: string | null;
+  deal_id: string | null;
+  round: number;
+  candidate_id: string;
+  state: string;
+  opened_at: string;
+  harvested_at: string | null;
+  found: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealRound {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  purpose: DealRoundPurpose;
+  equipmentKey: string | null;
+  equipmentClass: string | null;
+  destination: string | null;
+  partyId: string | null;
+  dealId: string | null;
+  round: number;
+  candidateId: string;
+  state: DealRoundState;
+  openedAt: string;
+  harvestedAt: string | null;
+  /**
+   * What the round established. Null while OPEN, and both readers say *not
+   * counted yet* rather than nought — §33's defect, not repeated here.
+   */
+  found: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * What an attempt taught, recorded one observation at a time.
+ *
+ * A lesson is never written by generalizing: each row is one observed outcome
+ * with its own jurisdiction, equipment class and provenance. Whether several
+ * of them amount to a rule is **derived** on the read path, with the sample
+ * size reported beside it, because §10's own instruction is not to generalize
+ * prematurely — and a stored rule is a generalization nobody can see the
+ * sample behind.
+ */
+export const DEAL_OBSERVATION_KINDS = [
+  'BUYER_RESPONDED',
+  'BUYER_IGNORED',
+  'SUPPLIER_ENGAGED',
+  'SUPPLIER_REFUSED',
+  'PRICE_DISCREPANCY',
+  'CERTIFICATION_SURPRISE',
+  'LOGISTICS_SURPRISE',
+  'PAYMENT_PREFERENCE',
+  'COMMISSION_ACCEPTED',
+  'COMMISSION_REFUSED',
+  'FALSE_SIGNAL',
+  'CYCLE_LENGTH',
+] as const;
+export type DealObservationKind = (typeof DEAL_OBSERVATION_KINDS)[number];
+
+export interface DealObservationRow {
+  id: string;
+  project_id: string;
+  deal_id: string | null;
+  kind: string;
+  jurisdiction: string | null;
+  equipment_key: string | null;
+  statement: string;
+  recorded_by: string;
+  source_claim_id: string | null;
+  created_at: string;
+}
+
+export interface DealObservation {
+  id: string;
+  projectId: string;
+  dealId: string | null;
+  kind: DealObservationKind;
+  jurisdiction: string | null;
+  equipmentKey: string | null;
+  statement: string;
+  /** Whose observation it is: a person, or Brain reading its own rows. */
+  recordedBy: string;
+  sourceClaimId: string | null;
+  createdAt: string;
+}
+
+
+/**
+ * What owner capital entering a machine category is actually spent on.
+ *
+ * Deliberately **not** §38's `CAPITAL_REQUIREMENTS`, and the reason is the
+ * subject rather than the words. That list answers what opening a service
+ * business in an industry needs — labour, customer acquisition, insurance, a
+ * minimum order — and it hangs off `cash_opportunities`. This answers what
+ * producing a machine needs, and it hangs off `machine_categories`. The two
+ * can never be about one observation, so they cannot drift into disagreeing
+ * about one; what forcing a factory's tooling, type approval and test rig into
+ * EQUIPMENT, COMPLIANCE and COMPLIANCE *would* do is make the grouped reading
+ * answer an easier question than the one asked.
+ */
+export const MACHINE_CAPITAL_REQUIREMENTS = [
+  'TOOLING_AND_EQUIPMENT',
+  'FACILITY',
+  'CERTIFICATION_AND_APPROVAL',
+  'ENGINEERING_AND_DEVELOPMENT',
+  'WORKING_CAPITAL',
+  'INVENTORY_AND_PARTS',
+  'SUPPLIER_ONBOARDING',
+  'DISTRIBUTION_AND_SERVICE_NETWORK',
+  'INTELLECTUAL_PROPERTY_OR_LICENCE',
+  'TEST_AND_VALIDATION',
+] as const;
+export type MachineCapitalRequirement = (typeof MACHINE_CAPITAL_REQUIREMENTS)[number];
+
+/**
+ * Which shape of the business a figure is about.
+ *
+ * The directive asks for a range or a scenario, and the scenario is the half
+ * that carries meaning: what it costs to build the first credible machine and
+ * what it costs to produce at volume are two facts, and a reading that summed
+ * them would report a number nobody could act on. Ordered smallest first, and
+ * that order is read — `capital.ts` reports the cheapest scenario any
+ * requirement is priced under rather than guessing across them.
+ */
+export const CAPITAL_SCENARIOS = [
+  'SMALLEST_CREDIBLE_ENTRY',
+  'TYPICAL_ENTRY',
+  'AT_PRODUCTION_SCALE',
+] as const;
+export type CapitalScenario = (typeof CAPITAL_SCENARIOS)[number];
+
+/**
+ * What kind of figure a published amount is.
+ *
+ * Ordered strongest first, and the order is reported rather than used to
+ * discount anything: a reader weighing a regulator's fee schedule against an
+ * analyst's estimate is doing §14's job — *no claim judged by a standard that
+ * does not fit what it claims* — and Brain's part is to make the difference
+ * visible, never to apply a coefficient to it.
+ */
+export const CAPITAL_BASES = [
+  'REGULATORY_FEE_SCHEDULE',
+  'PUBLISHED_PRICE_OR_SCHEDULE',
+  'COMPARABLE_FIRM_DISCLOSURE',
+  'TRADE_PUBLICATION_ESTIMATE',
+  'ANALYST_OR_MARKET_ESTIMATE',
+] as const;
+export type CapitalBasis = (typeof CAPITAL_BASES)[number];
+
+export interface CategoryCapitalRow {
+  id: string;
+  program_id: string;
+  category_id: string;
+  requirement: string;
+  scenario: string;
+  amount_low_minor: number | null;
+  amount_high_minor: number | null;
+  currency: string | null;
+  basis: string;
+  as_of: string;
+  statement: string;
+  source_claim_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CategoryCapitalEntry {
+  id: string;
+  programId: string;
+  categoryId: string;
+  requirement: MachineCapitalRequirement;
+  scenario: CapitalScenario;
+  /**
+   * The published range in minor units, or null on both when the requirement is
+   * established and nothing publishes a figure for it.
+   *
+   * Null is a fact the reading uses rather than a blank to be filled: a total
+   * summed past an unpriced requirement is smaller than anything published
+   * says, which is the direction nobody checks because it looks like a
+   * bargain.
+   */
+  amountLowMinor: number | null;
+  amountHighMinor: number | null;
+  currency: string | null;
+  basis: CapitalBasis;
+  /** When the figure was true, per the source. Money ages. */
+  asOf: string;
+  statement: string;
+  sourceClaimId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * What buying a firm would contribute.
+ *
+ * Every value names something the ladder already reasons about, so a candidate
+ * resolves to a gap rather than to an impression. There is deliberately no
+ * `STRATEGIC_FIT` and no `SYNERGY`: an acquisition nobody can say what it
+ * supplies is one nobody can argue with.
+ */
+export const ACQUISITION_CONTRIBUTIONS = [
+  'CAPABILITY',
+  'PRODUCTION_CAPACITY',
+  'DISTRIBUTION_OR_DEALER_NETWORK',
+  'SUPPLY_OR_COMPONENT_SOURCE',
+  'CERTIFICATION_OR_APPROVAL',
+  'INTELLECTUAL_PROPERTY',
+  'ENGINEERING_TEAM',
+  'BRAND_OR_MARKET_POSITION',
+] as const;
+export type AcquisitionContribution = (typeof ACQUISITION_CONTRIBUTIONS)[number];
+
+export interface AcquisitionCandidateRow {
+  id: string;
+  program_id: string;
+  category_id: string | null;
+  capability_id: string | null;
+  name: string;
+  contribution: string;
+  statement: string;
+  source_claim_id: string;
+  set_aside_at: string | null;
+  set_aside_reason: string | null;
+  set_aside_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AcquisitionCandidate {
+  id: string;
+  programId: string;
+  categoryId: string | null;
+  capabilityId: string | null;
+  name: string;
+  contribution: AcquisitionContribution;
+  statement: string;
+  sourceClaimId: string;
+  /** A person read it and said no. The row and its evidence stay. */
+  setAsideAt: string | null;
+  setAsideReason: string | null;
+  setAsideBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A decision this kernel cannot make and must not forget.
+ *
+ * One topic, because one is what the directive raises: it asks for a single
+ * master brand that could sit on a pressure washer and on a cargo aircraft,
+ * and then says not to lock the division names prematurely. Both halves are
+ * load-bearing — inventing a name would be Brain deciding something reserved
+ * to a person, and dropping the concern because it cannot be decided would
+ * lose the requirement. **`OPEN` is valid state.**
+ *
+ * There is no free-text topic, for the reason `PREFERENCES` is a closed set: a
+ * topic somebody could invent by posting is one nobody reviewed the criteria
+ * for, and the criteria are what make a decision answerable.
+ */
+export const PROGRAMME_DECISION_TOPICS = ['MASTER_BRAND_ARCHITECTURE'] as const;
+export type ProgrammeDecisionTopic = (typeof PROGRAMME_DECISION_TOPICS)[number];
+
+export interface ProgrammeDecisionRow {
+  id: string;
+  program_id: string;
+  topic: string;
+  state: string;
+  resolution: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgrammeDecision {
+  id: string;
+  programId: string;
+  topic: ProgrammeDecisionTopic;
+  state: 'OPEN' | 'RESOLVED';
+  /** A person's own words. Nothing derives it and no round may write it. */
+  resolution: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }

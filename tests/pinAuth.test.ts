@@ -329,7 +329,7 @@ describe('the throttle, which is the whole strength of six digits', () => {
   const email = 'throttled@example.invalid';
   const pin = '135791';
 
-  it('locks the account out after repeated failures, with a cooldown it names', async () => {
+  it('locks the account out after repeated failures, and says nothing a guesser could use', async () => {
     const owner = await pinSignIn(OWNER_EMAIL, OWNER_PIN);
     const created = await call<{ user: { id: string } }>('POST', '/api/admin/users', {
       cookie: owner.cookie,
@@ -356,42 +356,64 @@ describe('the throttle, which is the whole strength of six digits', () => {
     });
     await call('POST', '/api/auth/pin/set', { cookie: theirs.cookie, body: { pin } });
 
-    let cooledOff: Result<{ retryAt?: string }> | null = null;
+    /*
+     * Climbed to the top of the ladder. Every rung answers identically, so
+     * there is nothing in the responses to tell them apart by — which is the
+     * property, and is why the lockout is proved by what it *does* below
+     * rather than by a status code that announces it.
+     *
+     * This used to break out on a `429` and assert its `retryAt`. That was a
+     * second sentence for one way of failing, reachable only when the identity
+     * resolves, so three wrong guesses separated a real member from an
+     * invented name. The replacement is strictly stronger: it asserts the
+     * lockout refuses the **correct** PIN, which is the whole of what a
+     * lockout is for and which the old assertion never checked.
+     */
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      const refused = await call<{ retryAt?: string }>('POST', '/api/auth/pin', {
+      const refused = await call('POST', '/api/auth/pin', {
         body: { identity: email, pin: '000002' },
       });
-      if (refused.status === 429) {
-        cooledOff = refused;
-        break;
-      }
       expect(refused.status).toBe(401);
     }
 
-    expect(cooledOff, 'the ladder never produced a cooldown').not.toBeNull();
-    expect(cooledOff!.status).toBe(429);
-    // It says *that* you are waiting and until when, because that is a fact
-    // about this caller's own recent attempts. It names no identity and no
-    // count of what remains.
-    expect(cooledOff!.body.retryAt).toMatch(/^\d{4}-/);
-    expect(cooledOff!.text).not.toContain(email);
+    // The lockout, observed as a lockout: the right PIN does not get in.
+    const rightPin = await call('POST', '/api/auth/pin', {
+      body: { identity: email, pin },
+    });
+    expect(rightPin.status, 'the ladder never produced a cooldown').toBe(401);
+
+    /*
+     * And byte-identical to the two refusals that must not be distinguishable
+     * from it. A wrong PIN on a real account, an identity that does not exist,
+     * and this account cooling off are one answer — status and body.
+     */
+    const wrong = await pinSignIn(OWNER_EMAIL, '000009');
+    const unknown = await pinSignIn('nobody-at-all@example.invalid', '000009');
+    expect(rightPin.status).toBe(wrong.status);
+    expect(rightPin.status).toBe(unknown.status);
+    expect(rightPin.text).toBe(wrong.text);
+    expect(rightPin.text).toBe(unknown.text);
+    expect(rightPin.text).not.toContain(email);
   }, 60_000);
 
   it('holds the lockout across a restart, because it is rows and not memory', async () => {
-    // The condition this exists for: a Brain restarts on every deploy, so an
-    // in-memory counter is a budget an attacker gets back on a schedule.
-    const before = await call<{ retryAt?: string }>('POST', '/api/auth/pin', {
-      body: { identity: email, pin: '000003' },
-    });
-    expect(before.status).toBe(429);
+    /*
+     * The condition this exists for: a Brain restarts on every deploy, so an
+     * in-memory counter is a budget an attacker gets back on a schedule.
+     *
+     * Asserted on the **correct** PIN either side of the restart, for the
+     * reason above: a refusal of the right credential is the lockout, and it
+     * is the only form of it a caller can observe now that every refusal reads
+     * the same.
+     */
+    const before = await call('POST', '/api/auth/pin', { body: { identity: email, pin } });
+    expect(before.status).toBe(401);
 
     await stopServer();
     await startServer();
 
-    const after = await call<{ retryAt?: string }>('POST', '/api/auth/pin', {
-      body: { identity: email, pin: '000004' },
-    });
-    expect(after.status).toBe(429);
+    const after = await call('POST', '/api/auth/pin', { body: { identity: email, pin } });
+    expect(after.status, 'the lockout did not survive the restart').toBe(401);
   }, 120_000);
 
   it('is cleared by setting a new PIN, because the old one is gone', async () => {

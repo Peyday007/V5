@@ -86,6 +86,7 @@ import {
 import { parseRemote } from './forge.ts';
 import { requestDesignCycle } from '../design/route.ts';
 import { pullRequestFor } from './pullRequest.ts';
+import { recordObservedSessions } from './sessions.ts';
 
 /** How long a dispatcher may hold a campaign's tick, and how often it renews. */
 const TICK_HEARTBEAT_MS = 15_000;
@@ -1483,6 +1484,44 @@ async function noteBin(campaign: FactoryCampaign, bin: Bin, why: string): Promis
  * two dispatchers both deciding a stage is next would create two bins for it, and
  * the loser is refused rather than retried.
  */
+/**
+ * Read this campaign's finished assignment episodes into `factory_sessions`.
+ *
+ * Wrapped so that a sweep which cannot run never stops a tick: what it records
+ * is a *measurement*, and losing a measurement must not lose the work. The
+ * failure is said out loud in the report rather than swallowed, because a
+ * metric that quietly stopped being written is the column nothing reads all
+ * over again.
+ */
+async function sweepSessionsInto(report: RemoteTickReport, campaignId: string): Promise<void> {
+  try {
+    const swept = await recordObservedSessions(campaignId);
+    if (swept.recorded > 0) {
+      report.notes.push(
+        `${swept.recorded} execution session(s) recorded from Brain's own dispatch and lease rows.`,
+      );
+    }
+    if (swept.partialReads > 0) {
+      report.notes.push(
+        `${swept.partialReads} bin(s) have more recorded history than one read returns, so ` +
+          'their session reading is partial and the concurrency figure below them is a floor.',
+      );
+    }
+    if (swept.unclosed > 0) {
+      report.notes.push(
+        `${swept.unclosed} assignment(s) have no close event, so no interval could be read for ` +
+          'them and they are left out of the concurrency measurement rather than guessed at.',
+      );
+    }
+  } catch (error: unknown) {
+    report.notes.push(
+      `The session sweep failed and the campaign was not stopped for it: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
 export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTickReport> {
   const campaign = await getCampaign(campaignId);
   if (!campaign) return empty(campaignId, '', 'UNKNOWN', 'unknown', 'no such campaign');
@@ -1509,7 +1548,22 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
     );
   }
   if (campaign.state === 'CANCELLED') {
-    return empty(campaignId, campaign.projectId, campaign.state, campaign.state, 'cancelled');
+    /*
+     * Still swept. A cancelled campaign's sessions happened, and what stops
+     * being true when it is cancelled is that anything more will happen — not
+     * that Brain fired nobody. Recording them is what makes `npm run factory
+     * remote-tick --campaign …` a usable repair for a campaign whose last
+     * episodes were closed by a process that then died.
+     */
+    const cancelled = empty(
+      campaignId,
+      campaign.projectId,
+      campaign.state,
+      campaign.state,
+      'cancelled',
+    );
+    await sweepSessionsInto(cancelled, campaignId);
+    return cancelled;
   }
 
   const owner = `factory-remote-${process.pid}`;
@@ -1535,6 +1589,14 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
      * that is what the row said a second ago is an operator surface lying about the
      * thing it just did. One re-read, at the one place every path returns through.
      */
+    /*
+     * What this pass's bins actually cost in sessions, recorded after the work
+     * rather than before it, so an episode closed *by* this tick is in the
+     * sweep it belongs to. A campaign reaches COMPLETE inside a tick, and this
+     * is the last thing that tick does, so the final stage's session is
+     * recorded before anything stops looking at the campaign.
+     */
+    await sweepSessionsInto(report, campaignId);
     const after = await getCampaign(campaignId);
     if (after) {
       report.state = after.state;

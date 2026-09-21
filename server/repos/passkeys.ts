@@ -266,6 +266,26 @@ export async function revokeEnrollment(input: { id: string; reason: string }): P
   return result.changes === 1;
 }
 
+/**
+ * Withdraw every link this person is still holding.
+ *
+ * One statement rather than a read and a loop, so two administrators pressing
+ * at once produce one outcome and the count is what this call actually did.
+ * Spent and already-revoked rows are excluded by the same `WHERE` that makes
+ * a single withdrawal correct.
+ */
+export async function revokeEnrollmentsForUser(
+  userId: string,
+  reason: string,
+): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE member_enrollments SET revoked_at = ?, revoked_reason = ?
+      WHERE user_id = ? AND used_at IS NULL AND revoked_at IS NULL`,
+    [nowIso(), reason, userId],
+  );
+  return result.changes;
+}
+
 /* ----------------------------------------------------------- challenges */
 
 export async function rememberChallenge(input: {

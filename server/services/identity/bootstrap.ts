@@ -33,6 +33,7 @@ import {
   setUserPassword,
 } from '../../repos/identity.ts';
 import { WeakPasswordError } from './secrets.ts';
+import { personName } from '../../domain/personName.ts';
 
 export interface BootstrapOutcome {
   created: boolean;
@@ -157,7 +158,18 @@ export async function bootstrapFirstAdmin(): Promise<BootstrapOutcome> {
   try {
     const user = await createUser({
       email,
-      displayName: read('BRAIN_BOOTSTRAP_ADMIN_NAME') ?? email,
+      /*
+       * The address's local part, never the address.
+       *
+       * This line used to be `?? email`, and it is where the product's idea of
+       * who its owner is came from: with `BRAIN_BOOTSTRAP_ADMIN_NAME` unset,
+       * the first administrator was called `rosserpeyton@gmail.com` on every
+       * screen, in every activity row and on the consent screen. A bootstrap
+       * has no name to work from and must not invent one — so the fallback is
+       * the honest shortening rather than a guess, and `people rename` is how
+       * a real name arrives.
+       */
+      displayName: read('BRAIN_BOOTSTRAP_ADMIN_NAME') ?? personName({ displayName: email }),
       password,
       isBrainAdmin: true,
       mustChangePassword: true,

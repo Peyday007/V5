@@ -2714,13 +2714,23 @@ button.rs-card:hover {
   color: var(--ink-faint);
 }
 
+/*
+ * The two PIN boxes a new member fills in, most often on a phone.
+ *
+ * `font: inherit` resolved to the 15px body step, and Safari on iOS zooms the
+ * page to fit for anything under 16px — so the first screen of somebody's
+ * first visit jumped under their thumb, twice, while they were choosing the
+ * credential this Brain now runs on. The size is stated here rather than
+ * inherited, because inheriting is what made it wrong.
+ */
 .rs-enrol-input {
   padding: var(--gap-1);
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
   background: var(--surface);
   color: var(--ink);
-  font: inherit;
+  font-family: inherit;
+  font-size: 16px;
 }
 
 .rs-enrol-go {
@@ -3207,4 +3217,447 @@ details.rs-card > section.rs-card {
  * nothing in is a reading of that market. */
 .rs-machines-barren {
   opacity: 0.65;
+}
+
+/* ---------------------------------------------------------------------------
+ * The rest of the manufacturing programme: the directive, the frontier, what
+ * entering costs, the firms that could supply it, and the questions nobody has
+ * answered.
+ *
+ * Every one of these lays out with `@container` rather than `@media`, for
+ * §29's reason: the clipping that reached production was a column inside a
+ * rail being asked how wide the *viewport* was. `.rs-machines` already
+ * declares `container-type: inline-size`, so the same components are correct
+ * on a phone, on an iPad in either orientation, and inside a drawer, from one
+ * set of rules.
+ *
+ * Nothing here hides an `rs-machines-*` section at any width. The mobile More
+ * menu (§29) is the recorded cost of a stylesheet removing the element a
+ * control lives in: every branch stayed reachable in React and nothing could
+ * see that CSS had taken it off the page.
+ * ------------------------------------------------------------------------ */
+
+.rs-machines-directive {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+}
+
+.rs-machines-directive h4 {
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-digest {
+  opacity: 0.7;
+  /* An identifier, so it wraps rather than widening the card it sits in. */
+  overflow-wrap: anywhere;
+}
+
+.rs-machines-bands ul,
+.rs-machines-criteria,
+.rs-machines-deps {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.rs-machines-ranked {
+  margin: 0;
+  padding-left: 1.4rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.rs-machines-rank-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  /* The name may be long and the separating factor must stay beside it rather
+   * than pushing the card wider than the rail it is in. */
+  min-width: 0;
+}
+
+.rs-machines-sep,
+.rs-machines-contribution {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+/* Two entries Brain cannot tell apart. Dimmed rather than hidden: that the
+ * order between them means nothing is itself a finding. */
+.rs-machines-sep-tied {
+  opacity: 0.55;
+}
+
+.rs-machines-factors ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-machines-capital,
+.rs-machines-evidence {
+  margin-top: 0.75rem;
+}
+
+.rs-machines-capital h5 {
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-scenario {
+  margin-top: 0.5rem;
+}
+
+.rs-machines-scenario-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.rs-machines-total {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A scenario with an unpriced requirement, and a requirement with no figure.
+ * Both read as words rather than as an absent number, because a blank where a
+ * figure would go is the one thing a reader completes for themselves. */
+.rs-machines-nototal,
+.rs-machines-unpriced {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.rs-machines-figure {
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-machines-requirements,
+.rs-machines-candidates {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.rs-machines-cand-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* A candidate somebody set aside. Kept on the page: deleting it would let the
+ * same firm arrive next round as a fresh discovery. */
+.rs-machines-aside {
+  opacity: 0.6;
+}
+
+.rs-machines-setaside,
+.rs-machines-answerform {
+  margin-top: 0.4rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.rs-machines-setaside label,
+.rs-machines-answerform label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rs-machines-setaside input,
+.rs-machines-answerform textarea {
+  /* Fills its container and never sets it: an input that carried an intrinsic
+   * width is how a form makes the card around it overflow a narrow rail. */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rs-machines-question + .rs-machines-question {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+}
+
+.rs-machines-question header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.rs-machines-question h4,
+.rs-machines-question h5 {
+  margin: 0;
+}
+
+.rs-machines-qstate {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+}
+
+.rs-machines-qstate-OPEN {
+  opacity: 0.8;
+}
+
+.rs-machines-qstate-RESOLVED {
+  color: var(--moss);
+}
+
+.rs-machines-answer {
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--rule);
+}
+
+.rs-machines-trigger {
+  margin-top: 0.5rem;
+}
+
+.rs-machines-unlocks {
+  margin-top: 0.5rem;
+}
+
+.rs-machines-evidence h5 {
+  margin: 0.6rem 0 0.2rem;
+}
+
+.rs-machines-evidence ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* At a wide container the requirements and the candidates sit two across; at a
+ * rail or a phone they stack. The threshold is in `rem` against the
+ * *container*, so an iPad in portrait inside a rail gets the narrow
+ * arrangement and the same iPad full-width gets the wide one — which a
+ * viewport query could not tell apart. */
+@container (min-width: 40rem) {
+  .rs-machines-requirements,
+  .rs-machines-candidates {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.rs-machines-start label,
+.rs-machines-start textarea {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rs-machines-start > button,
+.rs-machines-lifecycle-controls,
+.rs-machines-confirm {
+  margin-top: 0.75rem;
+}
+
+/* The controls wrap rather than widening the card, and stay reachable at every
+ * width: §29 records a stylesheet taking a control off the page while every
+ * branch stayed reachable in React and no test of either half could see it. */
+.rs-machines-lifecycle-controls,
+.rs-machines-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.rs-machines-confirm p {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+/* How far an open round has got. `STALLED` and `NEEDS_A_PERSON` are the two a
+ * reader has to be able to find, so they are the two that are not dimmed —
+ * §24's rule that a pending state which cannot become wrong is not an
+ * explanation, arriving at a colour. */
+.rs-machines-progress {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.rs-machines-progress-WORKING {
+  color: var(--moss);
+  opacity: 1;
+}
+
+.rs-machines-progress-STALLED,
+.rs-machines-progress-NEEDS_A_PERSON,
+.rs-machines-progress-UNKNOWN {
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   The work register
+   ---------------------------------------------------------------------------
+
+   Container queries throughout, never a viewport media query. §29 records the
+   defect this avoids: the element that clips is a column inside a rail, and a
+   media query asks the viewport instead — so the same component was right on a
+   phone and wrong in a drawer. Nothing here sets a `min-width` wider than a
+   phone and nothing scrolls sideways.
+   --------------------------------------------------------------------------- */
+
+.rs-register {
+  container-type: inline-size;
+}
+
+.rs-register-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  list-style: none;
+  margin: 0 0 var(--gap-3);
+  padding: 0;
+}
+
+.rs-register-question {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gap-1);
+  padding: var(--gap-1) var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rs-register-question:hover {
+  border-color: var(--ink-faint);
+}
+
+.rs-register-question.is-selected {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.rs-register-question-label {
+  font-size: var(--step--1);
+}
+
+/* The state word carries a colour and the colour is never the only signal:
+   every card prints the state in words and the row that decided it. */
+.rs-workstream-blocked {
+  border-left: 3px solid var(--warn, var(--accent));
+}
+
+.rs-workstream-verified_live,
+.rs-workstream-deployed,
+.rs-workstream-merged,
+.rs-workstream-done {
+  border-left: 3px solid var(--ok, var(--accent));
+}
+
+.rs-evidence {
+  font-size: var(--step--2);
+  color: var(--ink-faint);
+  margin: var(--gap-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.rs-owner-action {
+  margin: var(--gap-2) 0 0;
+}
+
+.rs-next-action {
+  margin: var(--gap-2) 0 0;
+  color: var(--ink-soft, var(--ink-faint));
+}
+
+.rs-blockers {
+  margin: var(--gap-2) 0 0;
+  padding-left: var(--gap-3);
+  font-size: var(--step--1);
+}
+
+.rs-disclosure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gap-1);
+  margin-top: var(--gap-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.rs-readings {
+  margin-top: var(--gap-2);
+  font-size: var(--step--1);
+}
+
+.rs-reading-kind {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+/* A link whose target is gone reads as gone, rather than quietly as absent. */
+.rs-reading-missing {
+  color: var(--warn, var(--ink));
+}
+
+.rs-register-unknown,
+.rs-register-unfiled {
+  margin-top: var(--gap-4);
+}
+
+.rs-file-one {
+  margin-top: var(--gap-3);
+}
+
+.rs-field {
+  display: block;
+  margin: var(--gap-3) 0;
+}
+
+.rs-field > span,
+.rs-field > legend {
+  display: block;
+  margin-bottom: var(--gap-1);
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+}
+
+.rs-field input,
+.rs-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.rs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  margin-top: var(--gap-3);
 }

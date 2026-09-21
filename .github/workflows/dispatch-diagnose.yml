@@ -1,15 +1,21 @@
 # Reading the dispatcher while a deploy is running.
 #
 # Every production read surface in this repository — `fleet.yml`, `step10.yml`,
-# `packet-report.yml`, `admin.yml`, `cash-report.yml` and the rest — sits in the
-# `deploy-brain` concurrency group. That is right for a *measurement*, because
-# the machine is replaced during a deploy and a reading that raced the restart
-# would be reporting whichever half answered. It is wrong for a *diagnosis*: a
-# deploy is forty minutes of tests, build, release and two hosted verifications,
-# and the moment somebody most needs to know why the fleet has stopped firing is
-# precisely the moment one of those is running.
+# `packet-report.yml`, `admin.yml`, `cash-report.yml` and the rest — waits for
+# an in-flight deploy before it opens an ssh session. That is right for a
+# *measurement*, because the machine is replaced during a deploy and a reading
+# that raced the restart would be reporting whichever half answered. It is
+# wrong for a *diagnosis*: a deploy is forty minutes of tests, build, release
+# and two hosted verifications, and the moment somebody most needs to know why
+# the fleet has stopped firing is precisely the moment one of those is running.
 #
-# So this is the same reads, outside that group, and it is read-only in the
+# (They used to *share* the deploy's concurrency group, which waited in the
+# same sense and also let any one of them silently cancel a queued deploy. The
+# group was split and the waiting moved into
+# `.github/actions/await-release`; this file's reason for existing is
+# unchanged, because it is the wait rather than the group that it opts out of.)
+#
+# So this is the same reads, without that wait, and it is read-only in the
 # strongest available sense: every command it can run is one of five named here,
 # the input is a bin id validated against a character class, and nothing it
 # invokes writes a row. It cannot deploy, restart, migrate, register, fire,
@@ -64,6 +70,19 @@ jobs:
 
           echo "=============== step10 in-flight ==============="
           flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh in-flight" 2>&1 | tail -120
+
+          # What the ticks themselves have thrown, grouped by what they said.
+          # A cumulative counter is not a reading: 32 occurrences of one
+          # sentence is one defect, and 32 different sentences is a fleet in
+          # trouble, and the count alone cannot tell you which.
+          echo "=============== step10 tick-failures ==============="
+          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh tick-failures" 2>&1 | tail -120
+
+          # How long a mutation actually takes, from rows Brain already writes.
+          # §27 has carried "nobody yet knows what the judge pass costs" across
+          # ten deploys while `idempotency_operations` held both timestamps.
+          echo "=============== step10 effect-times ==============="
+          flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh effect-times 20" 2>&1 | tail -80
 
           echo "=============== step10 fire-check ==============="
           flyctl ssh console --app "$app" -C "sh /app/scripts/step10.sh fire-check" 2>&1 | tail -80

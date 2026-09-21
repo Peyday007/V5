@@ -38,6 +38,55 @@ import type { CashDisposition, CashOpportunity } from '../../domain/types.ts';
 const IN_FLIGHT = new Set(['EXECUTING', 'DELIVERING']);
 
 /**
+ * The tiers at which a piece is a thing to **do** rather than something Brain
+ * found.
+ *
+ * This is the one predicate that separates evidence from work, and it is read
+ * by the placement, the plan, the aggregate and the review rather than restated
+ * in each — a rule applied by one of four readers is worse than none.
+ *
+ * Why the line is drawn *here* and not one tier lower. `cashTier` calls a piece
+ * a CANDIDATE the moment a capture thesis exists: Brain can say how we would be
+ * paid, and everything else — the price, the cost, the exposure, the timing,
+ * what would rule it out — is still open. That is a real and useful step, and
+ * it is not something a person can act on: acting means a bounded action with a
+ * price, an exposure and a decisive unknown, which is exactly the set
+ * `UNIVERSAL_QUALIFICATION` requires and `QUALIFIED` reports as answered. So a
+ * candidate is Brain's work and a qualified opening is the person's.
+ *
+ * The consequence is deliberate and is the point: **a piece can be genuine,
+ * gated, well-sourced evidence and contribute nothing to "what shall I do
+ * today".** A published price list is a fact about a vendor; ranking it beside
+ * a qualified opening on time-to-cash compares two different kinds of thing,
+ * and putting it in a queue asks somebody to work on a market.
+ */
+export const WORKABLE_TIERS: ReadonlySet<CashTier> = Object.freeze(
+  new Set<CashTier>(['QUALIFIED', 'READY_TO_TEST']),
+);
+
+/**
+ * Whether this piece may appear as work, as waiting, or in the aggregate.
+ *
+ * A piece a person has already **taken** is work whatever its tier, and that is
+ * the half this must not get wrong. `READY` is reached only through
+ * `markReady`, which is somebody deciding this is worth a bounded test;
+ * `EXECUTING`, `DELIVERING` and `COLLECTED` are reached only through a recorded
+ * `cash_actions` row. A derivation that removed any of those from the work list
+ * because the *engine* card was thin would be overruling a person's decision
+ * with a reading, which is the opposite of the rule this module exists for.
+ *
+ * Nothing here moves a state. `markReady` still refuses while a load-bearing
+ * field is unknown and `beginExecution` still refuses a piece that is not
+ * READY; this only decides what a screen calls the ones that are already there.
+ */
+const TAKEN = new Set(['READY', 'EXECUTING', 'DELIVERING', 'COLLECTED']);
+
+export function isWorkable(input: { tier: CashTier; state: string }): boolean {
+  if (TAKEN.has(input.state)) return true;
+  return WORKABLE_TIERS.has(input.tier);
+}
+
+/**
  * What a piece reads as when the caller supplied no tier for it.
  *
  * The weakest one, deliberately. A caller that forgot to compose a tier must
@@ -149,6 +198,27 @@ export function placements(input: PortfolioInput): Placement[] {
       };
     }
 
+    /*
+     * Evidence, and the qualifying that might one day make it work.
+     *
+     * Ahead of the dependency, the card and the money, because none of those
+     * questions applies yet. Asking whether a published price list is blocked
+     * on cash, or which of four things on its card are unknown, invites
+     * somebody to go and fill them in — which is the homework this whole
+     * correction exists to stop handing out. What each one says is what the
+     * tier reading already established, so the sentence and the placement can
+     * never disagree.
+     */
+    if (!isWorkable({ tier: tier.tier, state: opportunity.state })) {
+      return {
+        opportunity,
+        disposition: tier.tier === 'SIGNAL' ? ('EVIDENCE_ONLY' as const) : ('BEING_QUALIFIED' as const),
+        because: tier.summary,
+        missing,
+        tier,
+      };
+    }
+
     const blocker = dependencyBlocker(opportunity, byId);
     if (blocker) {
       return {
@@ -161,23 +231,20 @@ export function placements(input: PortfolioInput): Placement[] {
     }
 
     if (!card.readiness.ready) {
+      /*
+       * Qualified, and the short card a bounded test runs against is short.
+       *
+       * The two sets overlap and are not the same set — see `cashTier` — so
+       * this is reachable with every decision-bearing field answered. It is
+       * the card's own sentence because at this tier the remaining blanks are
+       * genuinely the test's, and naming them is an instruction rather than
+       * homework. Everything below qualified was answered above and can no
+       * longer arrive here.
+       */
       return {
         opportunity,
         disposition: 'TEST_A_DECISIVE_UNKNOWN' as const,
-        /*
-         * The tier's sentence below qualified, and the card's above it.
-         *
-         * A piece with no capture thesis is not a test waiting on an unknown;
-         * it is evidence, and saying "four things on this card are unknown"
-         * about a published price list invites somebody to go and fill them in
-         * — which is the homework this whole correction exists to stop
-         * handing out. The disposition vocabulary is closed and is stored
-         * nowhere, so what changes is the sentence rather than the enum.
-         */
-        because:
-          tier.tier === 'SIGNAL' || tier.tier === 'CANDIDATE'
-            ? tier.summary
-            : card.readiness.summary,
+        because: card.readiness.summary,
         missing,
         tier,
       };
@@ -386,8 +453,31 @@ export interface AssembledPlan {
   executeNow: Placement[];
   /** What is waiting, and on what. */
   waiting: Placement[];
-  /** Total conservative contribution of everything not archived, in cents. */
-  combinedContributionCents: number;
+  /**
+   * The openings Brain is still establishing a payer, a price or an exposure
+   * for. Brain's own work; nobody is waiting on a person for any of it.
+   */
+  beingQualified: Placement[];
+  /**
+   * What Brain found and cannot yet say how we would be paid from.
+   *
+   * A list rather than an omission. Deleting evidence to make a count come
+   * out is the one thing this correction may not do — §5 — and a reader
+   * asking "where did the thirty-one go" deserves an answer that is not
+   * silence.
+   */
+  evidence: Placement[];
+  /**
+   * Total conservative contribution of the pieces that are actually work, in
+   * cents — and **null** when there are none.
+   *
+   * Null rather than zero, and the distinction is the point: zero is a figure
+   * and reads like a measurement of an empty portfolio, while null is the
+   * honest *there is nothing to total*. It used to sum every live piece,
+   * which added up the difference between other people's published prices and
+   * called the result what this sprint would contribute.
+   */
+  combinedContributionCents: number | null;
   /** Peak funding of everything that would be running at once, in cents. */
   peakFundingCents: number;
 }
@@ -447,23 +537,39 @@ export function assemble(input: PortfolioInput): AssembledPlan {
 
   const chosen = chooseBest(live, (p) => p.tier);
 
+  const executeNow = live.filter(
+    (p) => p.disposition === 'EXECUTE_NOW' || p.disposition === 'RUN_IN_PARALLEL',
+  );
+  const waiting = live.filter(
+    (p) => p.disposition === 'WAIT_FOR_DEPENDENCY' || p.disposition === 'TEST_A_DECISIVE_UNKNOWN',
+  );
+  /*
+   * The aggregate is over the work, and it is withheld when there is none.
+   *
+   * Both halves matter. Summing evidence produced a "combined conservative
+   * contribution" out of the gaps between other people's published prices —
+   * a figure with no payer behind a single term of it. And reporting zero
+   * over an empty work list is a measurement of nothing presented as a
+   * measurement, which is the shape of wrong answer nobody checks.
+   */
+  const workable = [...executeNow, ...waiting];
+
   return {
     placements: all,
     byTier,
     best: chosen.best,
     bestAreNearlyQualified: chosen.bestAreNearlyQualified,
-    executeNow: live.filter(
-      (p) => p.disposition === 'EXECUTE_NOW' || p.disposition === 'RUN_IN_PARALLEL',
-    ),
-    waiting: live.filter(
-      (p) => p.disposition === 'WAIT_FOR_DEPENDENCY' || p.disposition === 'TEST_A_DECISIVE_UNKNOWN',
-    ),
-    combinedContributionCents: live.reduce(
-      (total, p) => total + conservativeContribution(p.opportunity),
+    executeNow,
+    waiting,
+    beingQualified: live.filter((p) => p.disposition === 'BEING_QUALIFIED'),
+    evidence: live.filter((p) => p.disposition === 'EVIDENCE_ONLY'),
+    combinedContributionCents:
+      workable.length === 0
+        ? null
+        : workable.reduce((total, p) => total + conservativeContribution(p.opportunity), 0),
+    peakFundingCents: executeNow.reduce(
+      (total, p) => total + (p.opportunity.peakFundingCents ?? 0),
       0,
     ),
-    peakFundingCents: live
-      .filter((p) => p.disposition === 'EXECUTE_NOW' || p.disposition === 'RUN_IN_PARALLEL')
-      .reduce((total, p) => total + (p.opportunity.peakFundingCents ?? 0), 0),
   };
 }

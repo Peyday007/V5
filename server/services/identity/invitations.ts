@@ -66,6 +66,7 @@ import {
   listMembershipsForPrincipal,
   normalizeEmail,
   recordIdentityEvent,
+  signInNameTaken,
 } from '../../repos/identity.ts';
 import {
   acceptProjectInvitation,
@@ -617,10 +618,73 @@ export async function acceptInvitation(input: {
           'invitation will work the moment it exists, and does not need re-sending.',
       };
     }
-    const displayName =
+    /*
+     * The name the acceptor chose, unless somebody already answers to it.
+     *
+     * §26 says *"the acceptor chooses neither who they are nor what they
+     * get"*, and that was true of the two things it names — the address and
+     * the role are read from the row, so an acceptance carrying `role: OWNER`
+     * changes nothing. The display name was not one of them, because when that
+     * was written a display name was a **label**.
+     *
+     * Migration 062 made a member address-less and 078 made the typed name the
+     * thing the door resolves, so it is a sign-in credential now and nothing
+     * came back here. An acceptor typing an existing member's name would have
+     * created the collision §46 exists to prevent — from the one path in this
+     * application where the person choosing the name is not the administrator,
+     * and locking out the member they collided with as well as themselves.
+     *
+     * The fallback is the **invitation's own address**, which is theirs by
+     * construction and unique by index, rather than a refusal: an invited
+     * person holding a link they cannot spend is an escalation with no
+     * answering transition, and an awkward name is a great deal cheaper than
+     * not getting in. An administrator can correct it afterwards with the
+     * rename §46 adds — which is the transition that makes this fallback
+     * honest rather than a shrug.
+     *
+     * A chosen name that is taken by *this* invitation's own account cannot
+     * happen here: this branch is only reached when no account exists for the
+     * address yet.
+     */
+    const chosen =
       typeof input.displayName === 'string' && input.displayName.trim().length > 0
         ? input.displayName.trim().slice(0, 120)
         : invitation.invitedEmail;
+    const nameTaken = await signInNameTaken(chosen);
+    const displayName = nameTaken ? invitation.invitedEmail : chosen;
+    if (nameTaken && (await signInNameTaken(displayName))) {
+      /*
+       * Both the chosen name and the address itself resolve to somebody who
+       * can already sign in — which needs another account's *display name* to
+       * be this exact address, since `users.email` is unique. Vanishingly
+       * rare, and the one case where letting the acceptance through would
+       * create the locked door rather than avoid it.
+       *
+       * Refused with the remedy named rather than the reason, in the shape
+       * every other refusal on this path uses. The invitation is deliberately
+       * **not** spent, for the same reason a missing account authority does
+       * not spend it: the link has to keep working once an administrator has
+       * corrected the name.
+       */
+      await recordIdentityEvent({
+        actorType: 'ANONYMOUS',
+        action: 'ACCEPT_PROJECT_INVITATION',
+        targetType: 'PROJECT_INVITATION',
+        targetId: invitation.id,
+        projectId: project.id,
+        result: 'DENIED',
+        reason: 'NAME_UNAVAILABLE',
+        ...(input.requestId ? { requestId: input.requestId } : {}),
+        metadata: { invitationId: invitation.id, category: 'SIGN_IN_NAME_TAKEN' },
+      });
+      return {
+        ok: false,
+        reason:
+          'That name is already how somebody signs in to this Brain. Ask a Brain ' +
+          'administrator to sort the names out — this invitation will work afterwards, ' +
+          'and does not need re-sending.',
+      };
+    }
     /*
      * Two requests holding one link, for an address with no account, both reach
      * here — and `users.email` is unique, so the second `INSERT` fails.

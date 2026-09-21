@@ -55,7 +55,19 @@ import {
   setProgramState,
 } from '../../repos/manufacturing.ts';
 import { recordEvent } from '../../repos/events.ts';
+import { readDirective } from './directive.ts';
 import type { ManufacturingProgram, RussellGoal } from '../../domain/types.ts';
+
+/**
+ * The directive a programme runs under unless a caller names another.
+ *
+ * A constant path and never a hash: the sha-256 is computed by `readDirective`
+ * from the bytes it actually opened, because a hash a caller supplied is a
+ * claim about a file nobody checked and is indistinguishable afterwards from
+ * one Brain computed. §20's rule that a scope is built from server-controlled
+ * facts, arriving at a provenance column.
+ */
+export const DEFAULT_DIRECTIVE_PATH = 'blueprints/MANUFACTURING-EMPIRE-KERNEL.md';
 
 /**
  * The grant's name, and the identity the unique index is written against.
@@ -100,6 +112,8 @@ export async function startProgramme(input: {
   ownerUserId: string;
   actorUserId: string;
   objective: string;
+  /** Repository-relative, under `blueprints/`. Defaults to the committed one. */
+  directivePath?: string;
 }): Promise<ProgrammeOutcome> {
   const objective = input.objective.replace(/\s+/g, ' ').trim();
   if (objective.length < 24) {
@@ -114,6 +128,30 @@ export async function startProgramme(input: {
 
   const project = await getProject(input.projectId);
   if (!project) return { ok: false, reason: 'No project with that id.' };
+
+  /*
+   * The directive is read and parsed *before* anything is written, and a
+   * programme that cannot carry one does not start.
+   *
+   * Refusing here is what makes the column mean something. A programme that
+   * started with an unreadable directive would record a path, record no hash,
+   * and open questions carrying the objective alone — which is the exact state
+   * `directive.ts` exists to make impossible, and it would have looked
+   * perfectly healthy. The failure is a person's to fix (a file that is not in
+   * the image, a path that is wrong) and it is reported in those words.
+   */
+  const directivePath = (input.directivePath ?? DEFAULT_DIRECTIVE_PATH).trim();
+  const directive = await readDirective(directivePath);
+  if (!directive.ok) {
+    return {
+      ok: false,
+      reason:
+        `A manufacturing programme runs under a directive, and this one could not be read: ` +
+        `${directive.reason} Recording a path and a hash proves the file has not changed and ` +
+        'says nothing about whether one word of it reached a worker, so a programme that ' +
+        'cannot carry its directive does not start.',
+    };
+  }
 
   /*
    * A programme needs somewhere to file what it finds, and a project created
@@ -139,6 +177,8 @@ export async function startProgramme(input: {
     objective,
     ownerUserId: input.ownerUserId,
     createdByUserId: input.actorUserId,
+    blueprintPath: directive.directive.path,
+    blueprintSha256: directive.directive.sha256,
   });
 
   await ensureProgrammeAuthority(input.projectId);
@@ -156,6 +196,8 @@ export async function startProgramme(input: {
           'and what producing each one takes and teaches. Nothing here permits spending, ' +
           'contact, purchase, commitment, publication — or building anything.',
         objective: program.objective,
+        directivePath: program.blueprintPath,
+        directiveSha256: program.blueprintSha256,
         authorizedByUserId: input.actorUserId,
       },
     });

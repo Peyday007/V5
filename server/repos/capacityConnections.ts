@@ -36,6 +36,7 @@ function map(row: CapacityConnectionRow): CapacityConnection {
     triggerRef: row.trigger_ref,
     accountId: row.account_id,
     routineId: row.routine_id,
+    workerId: row.worker_id ?? null,
     state: row.state as CapacityConnectionState,
     failureReason: row.failure_reason,
     probeBinId: row.probe_bin_id,
@@ -155,6 +156,48 @@ export async function setRegistration(input: {
         SET account_id = ?, routine_id = ?, state = ?, failure_reason = NULL, updated_at = ?
       WHERE id = ? AND routine_id IS NULL`,
     [input.accountId, input.routineId, input.state, nowIso(), input.connectionId],
+  );
+  return result.changes === 1;
+}
+
+/**
+ * Record that an already-registered surface is this person's.
+ *
+ * The same guard `setRegistration` uses — `routine_id IS NULL` — so two calls
+ * produce one adoption and the loser reads the winner's row rather than
+ * overwriting it. It writes the Routine's **own** name, secret and trigger
+ * reference over the derived ones, because those are what an administrator
+ * actually set and a screen pointing at a variable nothing reads is worse than
+ * no screen.
+ *
+ * It does not touch `state`: promoting a connection is `reconcile`'s, from the
+ * four-row chain, and a write here that set HEALTHY would be a claim made from
+ * somebody's say-so.
+ */
+export async function setAdoptedSurface(input: {
+  connectionId: string;
+  accountId: string;
+  routineId: string;
+  workerId: string;
+  routineName: string;
+  secretName: string;
+  triggerRef: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE capacity_connections
+        SET account_id = ?, routine_id = ?, worker_id = ?, routine_name = ?,
+            secret_name = ?, trigger_ref = ?, failure_reason = NULL, updated_at = ?
+      WHERE id = ? AND routine_id IS NULL`,
+    [
+      input.accountId,
+      input.routineId,
+      input.workerId,
+      input.routineName,
+      input.secretName,
+      input.triggerRef,
+      nowIso(),
+      input.connectionId,
+    ],
   );
   return result.changes === 1;
 }

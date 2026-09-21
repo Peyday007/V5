@@ -1285,6 +1285,35 @@ async function unblockStage(
         report.blocker = { kind: campaign.blockerKind, detail: ready.reason };
         return report;
       }
+      /*
+       * Back to the stage the work is actually in, which is not always the one
+       * this resumed into.
+       *
+       * This blocker is raised from two places. `planningStage` raises it when
+       * no free slot holds ARCHITECT, and the campaign then has **no units at
+       * all**; execution raises it when there is nothing to run a planned unit
+       * on. Resuming both into `EXECUTING` was right for the second and wrong
+       * for the first: a campaign with nothing planned walks EXECUTING ->
+       * INTEGRATING -> REVIEWING with an empty diff and stops at
+       * `UNIT_EXHAUSTED_ATTEMPTS: Nothing was integrated, so there is no change
+       * to review`.
+       *
+       * Every word of that is true and the diagnosis is wrong: nothing was
+       * integrated because nothing was ever **planned**, and an operator who
+       * reads it goes looking at attempts on units that do not exist. §27
+       * records what that costs — *a warning that cries wolf is worse than no
+       * warning*, because it teaches a reader to stop believing the one place
+       * that says a campaign is genuinely stuck.
+       *
+       * Derived from the rows rather than from remembering which stage blocked:
+       * a campaign with no units belongs in PLANNING whatever took it out, and
+       * a stored "which stage was I in" would be the second copy of a fact the
+       * units already carry.
+       */
+      const planned = await listUnits(campaign.id);
+      if (planned.length === 0) {
+        return await advance(report, campaign, 'PLANNING', 'a surface became available, and nothing is planned yet');
+      }
       return await advance(report, campaign, 'EXECUTING', 'a surface became available');
     }
     case 'NO_ELIGIBLE_REVIEWER': {

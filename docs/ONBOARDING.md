@@ -73,6 +73,29 @@ It travels in the URL **fragment** (`/enrol#…`), which is never sent to a serv
 and never written to an access log. That is what makes it safe to put in a
 message and is why the address bar is cleared as soon as the page reads it.
 
+#### The name is how they sign in, so it has to be theirs alone
+
+A member holds no email address — that is deliberate, and it means the name you
+type here is the *only* thing they can put in the sign-in box. So Brain refuses
+a name somebody already signs in with, and says so, rather than making a second
+slot: two live accounts answering to one name lock **both** of those people out,
+with the sign-in screen giving the same answer it gives a wrong PIN.
+
+Give people something that tells them apart — a surname, or an initial. Two
+names differing only in capitals count as one, because a person typing their own
+name cannot be expected to reproduce yours.
+
+If you ever see **Cannot sign in — two accounts share this name** on the People
+list, that is this condition on a Brain old enough to predate the refusal. The
+control beside it — **Give them their own name** — is the fix. It changes what
+that person types to sign in and nothing else: they keep their PIN, their access
+and everything on their account. Tell them the new name afterwards; nothing
+else has to be reissued.
+
+A retired account does not hold its name hostage. Disabling somebody frees the
+name for the next person, because a row nobody can sign into cannot be the
+account somebody is claiming to be.
+
 ### What the person does
 
 Open the link. They see the name it was made for and nothing else — no email, no
@@ -93,6 +116,23 @@ every credential they hold first** — a replacement handed out beside a
 credential that still works is a second door, not a recovery, and if the device
 was lost because somebody else has it, the whole point is that it stops working
 now rather than when the replacement is used. The revoked rows keep their reason.
+
+### If somebody never opened their link
+
+A different fact, and a different button. On **People & capacity** that member
+reads *No link yet* or *Link sent*, and **Send them a link** issues another
+one — the same slot, the same account, a new token, and the stale link
+withdrawn so there is only ever one live way in.
+
+It is not recovery and does not say so, because there is nothing to retire:
+telling somebody who has never signed in that their credentials have been taken
+out of service is alarming and untrue. For the same reason it is **refused** for
+anybody who already has a way in — a PIN, a password or a registered device.
+Those people want a recovery link, and the refusal says so.
+
+Do not invite them again to solve this. That makes a **second account** under
+one name, and since the name is how a member signs in, two rows answering to it
+lock both people out. Brain refuses the second invitation for that reason.
 
 Every enrollment, revocation, recovery and administration step is written to
 `identity_events`, which is append-only and records the enrollment's **id**,
@@ -335,7 +375,46 @@ against the surface that is in the middle of a packet.
 
 ---
 
-## 3. What to check
+## 3. Is this account actually set up?
+
+```
+npm run admin -- people foundation
+```
+
+and, in the browser, **People & capacity**, where the same reading appears
+under each person beside the controls that answer it.
+
+It is one line per account per dimension, and there are six: **identity**,
+**sign-in**, **Claude connection**, **worker attribution**, **capacity** and
+**recovery**. Each is `PASS`, `BLOCKED` or `NOT_APPLICABLE`, and every blocked
+one carries the single next action and who performs it — *them*, *you*, the
+*deployment* administrator, or Brain by itself.
+
+Three things about how to read it.
+
+**`NOT_APPLICABLE` is not a pass.** A member who has not begun a Claude
+connection has no worker to attribute and no capacity to measure. That is a
+different fact from those being fine, and it neither makes the account pass nor
+blocks it.
+
+**`SIGN_IN` is judged by the screen that is served, not by the schema.** An
+account holding only a passkey reads `BLOCKED` even though it holds a real
+credential, because the sign-in screen asks for a PIN and offers no way to
+present a device. The remedy is a recovery link, which ends in setting one.
+
+**Two accounts sharing a display name is an identity failure that presents as a
+credential one.** The PIN lookup resolves a typed name only when exactly one
+row matches, so neither of them can sign in by name, and the refusal — as it
+must — tells them nothing about why.
+
+Below the accounts it names any **surface running under an identity no account
+owns**: a worker registered by hand before the connection journey existed has
+no connection row, so nothing can attribute its sessions to a person. It is
+reported and never acted on. Adopting one or retiring its Routine is your
+decision, because a projection that redistributed live surfaces would lose
+running work.
+
+## 4. What else to check
 
 ```
 fleet show

@@ -82,6 +82,7 @@ import {
   verifyPassword,
 } from '../services/identity/secrets.ts';
 import { currentContext, currentPrincipal } from '../services/identity/context.ts';
+import { personName } from '../domain/personName.ts';
 import { activeDatabaseConfig } from '../db/database.ts';
 import { HttpError, badRequest, bodyOf, handler, requiredString } from './helpers.ts';
 
@@ -159,8 +160,17 @@ function publicUser(user: {
 }): Record<string, unknown> {
   return {
     id: user.id,
+    /*
+     * The address stays, and it is not the identity.
+     *
+     * It is how this account signs in through the break-glass door and how a
+     * person is contacted, so removing it would take a real fact off a screen
+     * that has a reason to show it. What changed is that it is no longer what
+     * the product *calls* anybody: `displayName` below is the name, and it is
+     * never an address, whatever the row happens to hold.
+     */
     email: user.email,
-    displayName: user.displayName,
+    displayName: personName(user),
     isBrainAdmin: user.isBrainAdmin,
     mustChangePassword: user.mustChangePassword,
     /*
@@ -530,29 +540,79 @@ authRouter.post('/auth/pin', (req: Request, res: Response) => {
         return;
       }
 
-      const found = await getPinCredentialByIdentity(identity);
+      const lookup = await getPinCredentialByIdentity(identity);
+      const found = lookup.outcome === 'FOUND' ? lookup : null;
 
-      // The cooldown, read from rows. Checked before the verification so a
-      // locked-out attacker cannot keep spending the server's scrypt budget.
+      /*
+       * An identity two live accounts answer to.
+       *
+       * The caller is told nothing that a wrong PIN would not tell them, and
+       * the same scrypt verification below runs against the unmatchable
+       * verifier, so it costs the same and reveals the same. What is different
+       * is the **audit row**: this is a condition only an administrator can
+       * correct, and a category that could not name it would leave the one
+       * reader who can fix it with nothing to read. `peopleReading` names it
+       * too, on the surface where the rename lives.
+       */
+      if (lookup.outcome === 'AMBIGUOUS') {
+        await pinMatches(pin, UNMATCHABLE_PIN_VERIFIER);
+        await audit(req, {
+          action: 'PIN_SIGN_IN',
+          result: 'DENIED',
+          reason: 'INVALID_CREDENTIALS',
+          metadata: { category: 'AMBIGUOUS_IDENTITY', candidates: String(lookup.candidates) },
+        });
+        res.status(401).json({ error: PIN_REFUSED });
+        return;
+      }
+
+      /*
+       * The cooldown, read from rows — and answered in exactly the same words
+       * as every other refusal.
+       *
+       * This used to answer `429` with a `retryAt`, and the reasoning beside
+       * it was careful: that is a fact about *this caller's own recent
+       * attempts*, it names no identity, and the test asserted the address
+       * does not appear in the body. All of that was true, and it checked the
+       * wrong thing. **The branch is reachable only when the identity
+       * resolves**, so its mere existence says the account is real — and the
+       * sign-in names in this Brain are people's first names. Three wrong
+       * guesses separated a member from an invention, which is precisely the
+       * enumeration `UNMATCHABLE_PIN_VERIFIER` and the single refusal sentence
+       * exist to prevent. The constant's own doc says *one sentence for every
+       * way of failing*, and this was a second one.
+       *
+       * The verification is spent anyway, which reverses the note that used to
+       * be here about not spending the scrypt budget on a locked-out caller.
+       * That protects nothing: an unknown identity already costs the same
+       * ~60ms against the unmatchable verifier, so an attacker who wants to
+       * burn CPU simply varies the name — while the saving made a locked-out
+       * account answer *faster* than an unknown one, which is the same oracle
+       * arriving as timing rather than as a status code.
+       *
+       * The distinction is kept where §32 says a distinction belongs: the
+       * audit row, which an administrator reads and a caller never sees.
+       */
+      let coolingOff = false;
       if (found) {
         const throttle = await readPinThrottle(found.user.id);
-        if (throttle.lockedUntil !== null && throttle.lockedUntil > new Date().toISOString()) {
-          await audit(req, {
-            action: 'PIN_SIGN_IN',
-            result: 'DENIED',
-            actorId: found.user.id,
-            reason: 'INVALID_CREDENTIALS',
-            metadata: { category: 'COOLDOWN' },
-          });
-          res.status(429).json({
-            error: 'Too many attempts. Wait a moment and try again.',
-            retryAt: throttle.lockedUntil,
-          });
-          return;
-        }
+        coolingOff =
+          throttle.lockedUntil !== null && throttle.lockedUntil > new Date().toISOString();
       }
 
       const matches = await pinMatches(pin, found?.verifier ?? UNMATCHABLE_PIN_VERIFIER);
+
+      if (coolingOff && found) {
+        await audit(req, {
+          action: 'PIN_SIGN_IN',
+          result: 'DENIED',
+          actorId: found.user.id,
+          reason: 'INVALID_CREDENTIALS',
+          metadata: { category: 'COOLDOWN' },
+        });
+        res.status(401).json({ error: PIN_REFUSED });
+        return;
+      }
 
       if (!found || !found.verifier || !matches || found.user.disabled) {
         if (found) await recordPinFailure(found.user.id, cooldownAfter);

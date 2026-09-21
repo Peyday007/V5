@@ -4,7 +4,8 @@
  * Every route here resolves through `requireProject`, which is
  * `decideProjectAccess` against the authenticated principal, so absent and
  * forbidden are the same 404 **with the same body** — invariant 23 at a new
- * door.
+ * door. Nothing here composes a second 404 sentence of its own; the one that
+ * tried is the first thing below, and why it stopped is written there.
  *
  * Every handler additionally calls `requirePerson`. A worker is already refused
  * at every write by level, because `services/identity/policy.ts` puts all four
@@ -31,7 +32,6 @@ import {
   badRequest,
   bodyOf,
   handler,
-  notFound,
   optionalString,
   pathId,
   requirePerson,
@@ -39,13 +39,21 @@ import {
   requiredString,
   unprocessable,
 } from './helpers.ts';
-import { MACHINE_CATEGORY_KINDS, type MachineCategoryKind } from '../domain/types.ts';
+import {
+  MACHINE_CATEGORY_KINDS,
+  PROGRAMME_DECISION_TOPICS,
+  type MachineCategoryKind,
+  type ProgrammeDecisionTopic,
+} from '../domain/types.ts';
 import { moveProgramme, startProgramme } from '../services/manufacturing/program.ts';
 import {
   declareHeld,
   ledger,
+  reopenDecision,
+  resolveDecision,
   retireCategoryDecision,
   seedCategory,
+  setAsideAcquisition,
   withdrawHeld,
 } from '../services/manufacturing/declare.ts';
 import { programmeView } from '../services/manufacturing/view.ts';
@@ -62,16 +70,42 @@ export const manufacturingRouter = Router();
  * sentence.
  * ------------------------------------------------------------------------ */
 
+/**
+ * There is exactly **one** 404 at this door, and it is `requireProject`'s.
+ *
+ * It used to be two. A project the caller may not have answered
+ * `No project with that id.`, and a project they *may* have with no programme
+ * on it answered `This project has no manufacturing programme.` — same status,
+ * different body, which is invariant 23 broken by the half nobody looks at:
+ * *"including the body of the refusal, not only its status"*. The hosted gate
+ * compares the two bodies rather than the two statuses, and reported it on
+ * every deploy.
+ *
+ * The tempting repair is to make the second refusal say the first one's
+ * sentence. That is worse, and worth writing down rather than discovering
+ * again: a member opening their own project would be told it does not exist,
+ * and the screen behind that 404 is the one offering to **start** a
+ * programme — so a project somebody may not touch would render a Start button
+ * that can only ever be refused (§35: a control that cannot succeed should not
+ * be offered).
+ *
+ * So the third body is removed rather than disguised. *A project you may read
+ * has no programme* is not a refusal at all — it is an ordinary answer to
+ * somebody entitled to it — and it answers 200 with `programme: null`. What is
+ * left is one refusal, thrown by the resolver every other route shares, so the
+ * two cannot drift apart again: there is no second sentence here to keep in
+ * step with `authorizeProject`'s.
+ *
+ * The envelope is deliberate rather than a bare `null` body. `{ programme:
+ * null }` says *there is none*; a bare `null` is indistinguishable from a body
+ * that failed to parse.
+ */
 manufacturingRouter.get(
   '/projects/:projectId/manufacturing',
   handler(async (req) => {
     requirePerson();
     const project = await requireProject(pathId(req, 'projectId'));
-    const view = await programmeView(project.id);
-    if (!view) {
-      throw notFound('This project has no manufacturing programme.');
-    }
-    return view;
+    return { programme: await programmeView(project.id) };
   }),
 );
 
@@ -244,5 +278,103 @@ manufacturingRouter.patch(
     });
     if ('error' in outcome) throw unprocessable(outcome.error);
     return { capability: outcome };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * Acquisition candidates
+ *
+ * One verb, and that is the whole surface: a person may set one aside.
+ *
+ * There is deliberately no route that approaches a firm, requests information
+ * from one, values one, proposes terms, records an offer or marks one as being
+ * pursued — and that is a property of there being no such route and no column
+ * to write into rather than a rule somebody is following. The directive asks
+ * Brain to *identify* acquisition opportunities; every effect that follows
+ * from one is a commercial action a person authorizes separately (§30), and
+ * nothing in this kernel reaches one.
+ * ------------------------------------------------------------------------ */
+
+manufacturingRouter.patch(
+  '/projects/:projectId/manufacturing/acquisitions/:candidateId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const outcome = await setAsideAcquisition({
+      projectId: project.id,
+      candidateId: pathId(req, 'candidateId'),
+      reason: requiredString(body['reason'], 'reason'),
+      actorRef: principal.id,
+    });
+    if ('error' in outcome) throw unprocessable(outcome.error);
+    return { candidate: outcome };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The questions this kernel cannot answer
+ *
+ * A person answers one in their own words, or unanswers one they had. Both are
+ * guarded single-shot transitions in the repository, so two requests produce
+ * one decision.
+ *
+ * `topic` is matched against a closed set rather than read as free text, for
+ * `PREFERENCES`' reason: a topic somebody could invent by posting is one
+ * nobody reviewed the criteria for, and the criteria are what make a decision
+ * answerable at all.
+ * ------------------------------------------------------------------------ */
+
+function topicOf(raw: string): ProgrammeDecisionTopic {
+  if (!(PROGRAMME_DECISION_TOPICS as readonly string[]).includes(raw)) {
+    throw badRequest(`"topic" must be one of: ${PROGRAMME_DECISION_TOPICS.join(', ')}.`);
+  }
+  return raw as ProgrammeDecisionTopic;
+}
+
+manufacturingRouter.post(
+  '/projects/:projectId/manufacturing/decisions/:topic',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    /*
+     * Read as optional here and required by the service, for the reason the
+     * capability note is.
+     *
+     * `requiredString` would refuse an empty answer with *"resolution" is
+     * required* — true, and useless about why. `resolveDecision` says what an
+     * answer is: the words you would say, because an empty one reads
+     * afterwards as a decision taken with nothing behind it. Nothing is
+     * weakened; the service refuses either way.
+     */
+    const outcome = await resolveDecision({
+      projectId: project.id,
+      topic: topicOf(pathId(req, 'topic')),
+      resolution: optionalString(body['resolution'], 'resolution') ?? '',
+      actorRef: principal.id,
+    });
+    if ('error' in outcome) throw unprocessable(outcome.error);
+    return { decision: outcome };
+  }),
+);
+
+manufacturingRouter.patch(
+  '/projects/:projectId/manufacturing/decisions/:topic',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const outcome = await reopenDecision({
+      projectId: project.id,
+      topic: topicOf(pathId(req, 'topic')),
+      reason: requiredString(body['reason'], 'reason'),
+      actorRef: principal.id,
+    });
+    if ('error' in outcome) throw unprocessable(outcome.error);
+    return { decision: outcome };
   }),
 );

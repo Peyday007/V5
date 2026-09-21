@@ -70,7 +70,12 @@ import {
   startProgramme,
 } from '../server/services/manufacturing/program.ts';
 import { ladderSnapshot } from '../server/services/manufacturing/ladder.ts';
-import { readLadder, bridgesTo, ENTRY_VERDICTS } from '../server/services/manufacturing/readiness.ts';
+import {
+  readLadder,
+  bridgesTo,
+  ENTRY_CONDITIONS,
+  ENTRY_VERDICTS,
+} from '../server/services/manufacturing/readiness.ts';
 import { allocate, MAX_OPEN_PROGRAMME_ROUNDS } from '../server/services/manufacturing/allocate.ts';
 import { planFrom, runManufacturingKernel } from '../server/services/manufacturing/kernel.ts';
 import {
@@ -123,6 +128,20 @@ interface DeclaredClaim {
   subject: string;
   observedOn?: string;
   accepted?: boolean;
+  /** The second closed value, where the finding's kind has one. */
+  qualifier?: string;
+  /** What kind of figure an amount is. Only a capital requirement has one. */
+  basis?: string;
+  /**
+   * The published range in minor units, or absent on both.
+   *
+   * Absent is a case worth exercising rather than an omission: a capital
+   * requirement nobody publishes a figure for is a *finding*, and the reading
+   * above it has to withhold a total rather than summing past it.
+   */
+  amountLowMinor?: number;
+  amountHighMinor?: number;
+  currency?: string;
 }
 
 /**
@@ -205,6 +224,11 @@ async function finishedRound(input: {
       capabilityFinding: one.finding,
       capabilitySubject: one.subject,
       capabilityObservedOn: one.observedOn ?? null,
+      capabilityQualifier: one.qualifier ?? null,
+      capabilityBasis: one.basis ?? null,
+      capabilityAmountLowMinor: one.amountLowMinor ?? null,
+      capabilityAmountHighMinor: one.amountHighMinor ?? null,
+      capabilityCurrency: one.currency ?? null,
       retrievedAt: '2026-09-12',
       confidence: 0.8,
       validationState: 'SOURCED' as const,
@@ -319,6 +343,53 @@ async function drivenToEnterable(name: string): Promise<string> {
   });
   await runManufacturingKernel(projectId);
   return categoryId;
+}
+
+/**
+ * File what entering a category costs, through the real absorption path.
+ *
+ * `includeUnpriced` is what makes this useful twice: it files a second
+ * requirement that is real and carries no published figure, which is the case
+ * `readCapital` exists to refuse a total for. It is submitted through the same
+ * `insertClaims` → `decideClaim` → `absorb` path as every other finding, so
+ * what is under test is the rule rather than a fixture.
+ */
+async function pricedEntry(
+  categoryId: string,
+  options: { includeUnpriced?: boolean } = {},
+): Promise<void> {
+  await runManufacturingKernel(projectId);
+  const capital = await candidateFor('CAPITAL', categoryId);
+  expect(capital, 'the allocator asked what entering costs').toBeTruthy();
+
+  const claims: DeclaredClaim[] = [
+    {
+      claim: 'A machine-tool supplier lists a pump assembly line at $480,000.',
+      finding: 'CAPITAL_REQUIREMENT',
+      subject: 'TOOLING_AND_EQUIPMENT',
+      qualifier: 'SMALLEST_CREDIBLE_ENTRY',
+      basis: 'PUBLISHED_PRICE_OR_SCHEDULE',
+      observedOn: '2026-05-01',
+      amountLowMinor: 48_000_000,
+      amountHighMinor: 48_000_000,
+      currency: 'USD',
+    },
+  ];
+  if (options.includeUnpriced) {
+    claims.push({
+      claim:
+        'The regulator requires type approval for machines of this class and publishes no fee ' +
+        'for it.',
+      finding: 'CAPITAL_REQUIREMENT',
+      subject: 'CERTIFICATION_AND_APPROVAL',
+      qualifier: 'SMALLEST_CREDIBLE_ENTRY',
+      basis: 'REGULATORY_FEE_SCHEDULE',
+      observedOn: '2026-05-01',
+    });
+  }
+
+  await finishedRound({ candidateId: capital!, claims });
+  await runManufacturingKernel(projectId);
 }
 
 // ---------------------------------------------------------------------------
@@ -496,14 +567,16 @@ describe('demand pulls manufacturing, and an unknown is never a favourable assum
     const [reading] = readLadder(snapshot!);
 
     expect(reading!.verdict).toBe('UNEXAMINED');
-    expect(reading!.conditions.map((one) => one.answer)).toEqual([
-      'UNKNOWN',
-      'UNKNOWN',
-      'UNKNOWN',
-      'UNKNOWN',
-    ]);
+    // All five, including the entry cost: nobody has asked what it costs
+    // either, and an unasked question may never read as a satisfied one.
+    expect(reading!.conditions.map((one) => one.condition)).toEqual([...ENTRY_CONDITIONS]);
+    expect(reading!.conditions.map((one) => one.answer)).toEqual(
+      ENTRY_CONDITIONS.map(() => 'UNKNOWN'),
+    );
     const held = reading!.conditions.find((one) => one.condition === 'CAPABILITIES_HELD');
     expect(held!.because).toContain('An empty list of requirements is not a list that is satisfied');
+    const cost = reading!.conditions.find((one) => one.condition === 'ENTRY_COST_ESTABLISHED');
+    expect(cost!.because).toContain('Nothing has asked what entering this category costs');
   });
 
   it('never reads ENTER for a category with every capability held and no buyers', async () => {
@@ -576,7 +649,7 @@ describe('demand pulls manufacturing, and an unknown is never a favourable assum
     expect(route.answer).toBe('NOT_MET');
   });
 
-  it('reaches ENTER only when all four conditions are met', async () => {
+  it('reaches ENTER only when all five conditions are met', async () => {
     const categoryId = await drivenToEnterable('Commercial pressure washers');
 
     let snapshot = await ladderSnapshot(projectId);
@@ -592,10 +665,72 @@ describe('demand pulls manufacturing, and an unknown is never a favourable assum
       actorRef: userId,
     });
 
+    /*
+     * Everything the ladder can settle is settled, and the verdict is still
+     * not ENTER.
+     *
+     * This is the correction the fifth condition exists for. Before it, a
+     * category reached ENTER with nothing anywhere saying what entering would
+     * cost — a verdict about an easier question than the directive's own ENTRY
+     * dimension asks, whose first item is required capital. Its own verdict
+     * rather than BUILD_CAPABILITY_FIRST, because the remedy is one question
+     * rather than a capability measured in years.
+     */
+    snapshot = await ladderSnapshot(projectId);
+    reading = readLadder(snapshot!).find((one) => one.categoryId === categoryId);
+    expect(reading!.verdict).toBe('COST_UNKNOWN');
+    expect(reading!.because).toContain('cheapest remaining gap');
+
+    await pricedEntry(categoryId);
+
     snapshot = await ladderSnapshot(projectId);
     reading = readLadder(snapshot!).find((one) => one.categoryId === categoryId);
     expect(reading!.verdict).toBe('ENTER');
     expect(reading!.conditions.every((one) => one.answer === 'MET')).toBe(true);
+    expect(reading!.capital.state).toBe('ESTABLISHED');
+  });
+
+  /**
+   * A figure missing for one requirement withholds the total, and the verdict
+   * with it.
+   *
+   * The direction is the whole point. A sum that quietly stepped over an
+   * unpriced requirement is *smaller* than anything published says, so it
+   * makes a category look cheaper to enter than it is — and too low at the
+   * number that would start a factory is the shape of error nobody checks,
+   * because it reads as a bargain. §30 records `conservativeContribution`
+   * making exactly this mistake one section along: an unknown exposure read as
+   * zero, so a piece nobody had costed ranked above one somebody had.
+   */
+  it('withholds the total, and ENTER, while any established requirement is unpriced', async () => {
+    const categoryId = await drivenToEnterable('Commercial pressure washers');
+    await declareHeld({
+      projectId,
+      name: 'small engine integration',
+      note: 'Two engine engineers and a running prototype.',
+      actorRef: userId,
+    });
+    await pricedEntry(categoryId, { includeUnpriced: true });
+
+    const reading = readLadder((await ladderSnapshot(projectId))!).find(
+      (one) => one.categoryId === categoryId,
+    )!;
+
+    expect(reading.capital.state).toBe('PARTIAL');
+    expect(reading.capital.unpricedRequirements).toEqual(['CERTIFICATION_AND_APPROVAL']);
+    // Two requirements were filed and one carries a figure. The total is
+    // withheld rather than reported as the one figure that happens to exist.
+    const scenario = reading.capital.scenarios.find(
+      (one) => one.scenario === 'SMALLEST_CREDIBLE_ENTRY',
+    )!;
+    expect(scenario.totals).toBeNull();
+    expect(scenario.priced).toHaveLength(1);
+    expect(scenario.unpriced).toHaveLength(1);
+
+    const cost = reading.conditions.find((one) => one.condition === 'ENTRY_COST_ESTABLISHED')!;
+    expect(cost.answer).toBe('UNKNOWN');
+    expect(cost.because).toContain('Part of an answer is not an answer here');
+    expect(reading.verdict).toBe('COST_UNKNOWN');
   });
 
   /**
@@ -604,6 +739,7 @@ describe('demand pulls manufacturing, and an unknown is never a favourable assum
    */
   it('moves the verdict back when a holding is withdrawn, with no recompute', async () => {
     const categoryId = await drivenToEnterable('Commercial pressure washers');
+    await pricedEntry(categoryId);
     const held = await declareHeld({
       projectId,
       name: 'small engine integration',
