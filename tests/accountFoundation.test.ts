@@ -68,6 +68,7 @@ import {
   submitTrigger,
 } from '../server/services/capacity/connection.ts';
 import { contributedCapacity } from '../server/services/capacity/contribution.ts';
+import { ensureConnection } from '../server/repos/capacityConnections.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import type { Project, User } from '../server/domain/types.ts';
 
@@ -150,17 +151,55 @@ describe('the standard covers every account against every dimension', () => {
     expect(reading.accounts.map((one) => one.displayName)).not.toContain('Hosted verification');
   });
 
-  it('never reports NOT_APPLICABLE as a pass, and never lets it block', async () => {
+  it('reads a missing connection row and an untouched one as one state', async () => {
+    /*
+     * The defect the first live matrix showed, pinned.
+     *
+     * `ensureConnection` runs on the member's own read path, so a row exists
+     * exactly when somebody has once loaded a page — which says nothing about
+     * whether their connection has begun. Two accounts in materially the same
+     * state read BLOCKED and NOT_APPLICABLE, separated only by that.
+     */
+    const never = await credentialless('Caleb');
+    await setUserPin(never.id, await hashPin('271828'));
+    const touched = await credentialless('Airyn');
+    await setUserPin(touched.id, await hashPin('314159'));
+    // Exactly what loading the page does, and nothing else.
+    await ensureConnection({
+      userId: touched.id,
+      ...namesFor(touched),
+    });
+
+    const never2 = await accountNamed('Caleb');
+    const touched2 = await accountNamed('Airyn');
+    for (const dimension of ['CLAUDE_CONNECTION', 'WORKER_ATTRIBUTION', 'CAPACITY'] as const) {
+      const a = findingFor(never2, dimension);
+      const b = findingFor(touched2, dimension);
+      expect(a.verdict, `${dimension} verdict differs`).toBe(b.verdict);
+      /*
+       * The sentence, not only the verdict.
+       *
+       * Asserting the verdict alone passes against the defect: both branches
+       * already answered BLOCKED and differed in *what they said* — one naming
+       * a stored state a person has never heard of, the other naming the step
+       * that is actually outstanding. A reader is given the sentence, so the
+       * sentence is what has to match.
+       */
+      expect(a.because, `${dimension} explains itself differently`).toBe(b.because);
+      expect(a.nextAction, `${dimension} names a different remedy`).toBe(b.nextAction);
+      expect(a.owner).toBe(b.owner);
+    }
+  });
+
+  it('never lets an account with no capacity read as complete', async () => {
     const vince = await credentialless('Vince');
     await setUserPin(vince.id, await hashPin('271828'));
-
+    // Identity, sign-in and recovery all pass; the connection has not begun.
     const account = await accountNamed('Vince');
-    // No connection has been started, so two dimensions genuinely do not apply.
-    expect(findingFor(account, 'CLAUDE_CONNECTION').verdict).toBe('NOT_APPLICABLE');
-    expect(findingFor(account, 'WORKER_ATTRIBUTION').verdict).toBe('NOT_APPLICABLE');
-    expect(findingFor(account, 'CAPACITY').verdict).toBe('NOT_APPLICABLE');
-    // And they neither make the account pass nor fail it.
-    expect(account.verdict).toBe('PASS');
+    expect(findingFor(account, 'IDENTITY').verdict).toBe('PASS');
+    expect(findingFor(account, 'SIGN_IN').verdict).toBe('PASS');
+    expect(findingFor(account, 'RECOVERY').verdict).toBe('PASS');
+    expect(account.verdict, 'an account contributing nothing read as complete').toBe('BLOCKED');
   });
 
   it('gives every BLOCKED finding exactly one next action and an owner for it', async () => {

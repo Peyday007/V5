@@ -80,7 +80,28 @@ import { contributedCapacity } from '../capacity/contribution.ts';
 import { recoveryRetiresEverything } from './recoveryContract.ts';
 import { withoutDomain } from './people.ts';
 
-/** PASS, BLOCKED, or genuinely not a question for this account yet. */
+/**
+ * PASS, BLOCKED, or a question that genuinely does not apply to this account.
+ *
+ * **Nothing returns `NOT_APPLICABLE` today, and that is a finding rather than
+ * an oversight.** It did: a member with no `capacity_connections` row read
+ * `NOT_APPLICABLE` on the three connection dimensions while a member with a
+ * row that nothing had happened to read `BLOCKED` — two accounts in one state,
+ * separated only by whether somebody had once loaded a page, because
+ * `ensureConnection` runs on the read path. A verdict that depends on an
+ * artifact of reading is not a verdict.
+ *
+ * Resolving it upward rather than downward is what the goal requires: a Claude
+ * connection **applies** to every intended participating account, so not having
+ * begun one is outstanding work. Calling it inapplicable would let an account
+ * contributing no capacity at all read as complete, which is the one thing this
+ * standard exists to prevent.
+ *
+ * The value stays in the vocabulary because a dimension that truly does not
+ * apply to an account is a real possibility — an account declared not to
+ * contribute capacity, say — and there is no such declaration in this Brain
+ * today. Returning it requires a fact, not a missing row.
+ */
 export type FoundationVerdict = 'PASS' | 'BLOCKED' | 'NOT_APPLICABLE';
 
 /** The six things an account has to have for the product to work for them. */
@@ -198,12 +219,6 @@ function blocked(
   return { dimension, verdict: 'BLOCKED', because, nextAction, owner };
 }
 
-function notApplicable(
-  dimension: FoundationDimension,
-  because: string,
-): FoundationFinding {
-  return { dimension, verdict: 'NOT_APPLICABLE', because, nextAction: null, owner: 'NOBODY' };
-}
 
 /**
  * Every intended human account, against every dimension.
@@ -396,11 +411,41 @@ async function findingsFor(
 
   /* ---------------------------------------------------- claude connection */
 
-  if (!connection) {
+  /*
+   * No row and a row nothing has happened to are **one state**, and reading
+   * them differently was this module's own defect.
+   *
+   * `ensureConnection` runs on the member's read path, so a row exists exactly
+   * when somebody has once loaded a page — which is not a fact about whether
+   * their connection has begun. The first live matrix showed two members in
+   * materially identical states reading `BLOCKED` and `NOT_APPLICABLE`, and the
+   * only thing separating them was that one of them had opened their own
+   * screen. A verdict that depends on an artifact of the read path is the
+   * defect this file exists to catch, arriving in the file itself.
+   *
+   * It resolves as `BLOCKED` rather than `NOT_APPLICABLE` because a Claude
+   * connection **applies** to every intended participating account. Not having
+   * started one is outstanding work, not an inapplicable question, and calling
+   * it inapplicable would let an account with no capacity at all read as
+   * complete.
+   */
+  const started =
+    connection !== null &&
+    connection.state !== 'NOT_STARTED' &&
+    connection.state !== 'INVITATION_REQUESTED';
+
+  if (!started) {
     findings.push(
-      notApplicable(
+      blocked(
         'CLAUDE_CONNECTION',
-        'No connection has been started, so there is no lifecycle to be wrong about.',
+        connection?.state === 'INVITATION_REQUESTED'
+          ? 'This member has asked for a connector link and has not been issued one.'
+          : 'No Claude connection has been started, so this account contributes no capacity.',
+        connection?.state === 'INVITATION_REQUESTED'
+          ? 'Issue the Claude connector link from the member list on People & capacity.'
+          : 'Issue the Claude connector link from the member list on People & capacity; the ' +
+            'member then completes the connection on their own page.',
+        'BRAIN_ADMINISTRATOR',
       ),
     );
   } else if (connection.state === 'HEALTHY') {
@@ -436,15 +481,6 @@ async function findingsFor(
         'DEPLOYMENT_ADMINISTRATOR',
       ),
     );
-  } else if (connection.state === 'INVITATION_REQUESTED') {
-    findings.push(
-      blocked(
-        'CLAUDE_CONNECTION',
-        'This member has asked for a connector link and has not been issued one.',
-        'Issue the Claude connector link from the member list on People & capacity.',
-        'BRAIN_ADMINISTRATOR',
-      ),
-    );
   } else {
     findings.push(
       blocked(
@@ -458,9 +494,15 @@ async function findingsFor(
 
   /* --------------------------------------------------- worker attribution */
 
-  if (!connection) {
+  if (!started) {
     findings.push(
-      notApplicable('WORKER_ATTRIBUTION', 'No connection, so no worker identity to attribute.'),
+      blocked(
+        'WORKER_ATTRIBUTION',
+        'No connection has begun, so no worker identity exists for this member and nothing ' +
+          'they ran could be attributed to them.',
+        'Issue the Claude connector link, which is what mints the identity.',
+        'BRAIN_ADMINISTRATOR',
+      ),
     );
   } else if (!worker) {
     findings.push(
@@ -512,9 +554,15 @@ async function findingsFor(
 
   /* ------------------------------------------------------------- capacity */
 
-  if (!connection) {
+  if (!started) {
     findings.push(
-      notApplicable('CAPACITY', 'No connection, so there is no capacity to be usable or not.'),
+      blocked(
+        'CAPACITY',
+        'No surface is registered for this member, so the dispatcher has nothing of theirs ' +
+          'to fire.',
+        'Complete the connection; the connection page names the one step outstanding.',
+        'BRAIN_ADMINISTRATOR',
+      ),
     );
   } else if (surface?.usable) {
     findings.push(pass('CAPACITY', 'The dispatcher would fire this surface.'));
