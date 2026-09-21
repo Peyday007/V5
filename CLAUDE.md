@@ -9135,6 +9135,33 @@ the condition was invisible.
   reading is a repair for a condition nobody can see. Neither session could
   have shipped the whole of it alone.
 
+- **Two sessions then wrote the rename, and each carried the guard the other
+  lacked.** §44's reading named *"Rename all but one of them"* with nothing to
+  do it; within the week there were two — this route, and `people rename` on a
+  terminal — plus two byte-equivalent repository functions to write the column.
+  The route refused a collision and allowed an address; the command refused an
+  address and allowed a collision. **Either gap alone makes the other surface
+  pointless**: an administrator who cannot create a collision in a browser and
+  can create one on a terminal has not been stopped from creating one, and the
+  People page would then report two people unable to sign in with no record of
+  what did it.
+
+  One writer — `renameUser`, which landed first — and both callers ask both
+  questions. The checks are deliberately **not** in the repository function,
+  which was the obvious move: a function that refused would have to decide what
+  to do about it, and the two surfaces answer that differently — a browser gets
+  a 422 it can render, a terminal a sentence and a non-zero exit. Keeping both
+  surfaces is §26's own split rather than duplication: the decision belongs
+  where an administrator can *see* `NAME_IS_AMBIGUOUS`, and the terminal is the
+  recovery for when the bundle will not load.
+
+  The guard reads the repository rather than driving either surface, for
+  `operatorConsoleRemoved`'s reason: what must not exist is a way round, and a
+  passing request cannot show you one. Each of its three assertions was run
+  against its own defect — the terminal guard removed, the route's address
+  check removed, and a second writer re-added — and fails naming exactly what
+  is missing.
+
 - **The escalation needed an answering transition, and there was none.** There
   was no rename anywhere in this repository — not a route, not a command, not a
   repository function — so a collision creatable by an ordinary invitation

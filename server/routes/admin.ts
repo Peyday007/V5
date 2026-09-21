@@ -54,7 +54,7 @@ import {
   setUserDisabled,
   setUserPassword,
   setWorkerStatus,
-  setUserDisplayName,
+  renameUser,
   signInNameTaken,} from '../repos/identity.ts';
 import {
   createInvitation,
@@ -65,6 +65,7 @@ import { listMembershipsForPrincipal } from '../repos/identity.ts';
 import { generateInvitationToken, WeakPasswordError } from '../services/identity/secrets.ts';
 import { currentContext, currentPrincipal } from '../services/identity/context.ts';
 import { recordEvent } from '../repos/events.ts';
+import { looksLikeAddress } from '../domain/personName.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
 import {
   badRequest,
@@ -296,7 +297,10 @@ adminRouter.post(
  * It refuses a name somebody else already signs in with, through the same
  * `signInNameTaken` an invitation is refused by, because a rename that could
  * create the collision would be a second door into the condition this exists
- * to close.
+ * to close. And it refuses an address as a name, through the same
+ * `looksLikeAddress` §44's terminal rename already refuses one by — two
+ * surfaces onto one column have to ask the same questions of it, or the
+ * quieter one becomes the way round the louder one.
  */
 adminRouter.post(
   '/users/:userId/display-name',
@@ -307,6 +311,12 @@ adminRouter.post(
 
     const user = await getUser(userId);
     if (!user) throw notFound(`No user with id "${userId}".`);
+    if (looksLikeAddress(displayName)) {
+      throw unprocessable(
+        'That is an address rather than a name. A person is called something; the address is ' +
+          'how they are reached.',
+      );
+    }
     if (await signInNameTaken(displayName, { exceptUserId: userId })) {
       throw unprocessable(
         'Somebody already signs in with that name. Pick one that tells them apart, because ' +
@@ -314,7 +324,7 @@ adminRouter.post(
       );
     }
 
-    const updated = await setUserDisplayName(userId, displayName);
+    const updated = await renameUser(userId, displayName);
     await audit(req, {
       action: 'RENAME_USER',
       targetType: 'USER',

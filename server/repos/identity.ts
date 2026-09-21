@@ -415,27 +415,6 @@ export async function signInNameTaken(
   return signInNameIsTaken(proposed, await listUsers(), options);
 }
 
-/**
- * Correct a person's name.
- *
- * The answering transition for an ambiguous identity, and it had to exist for
- * the reading that names one to be a remedy rather than a diagnosis: there was
- * no rename anywhere in this repository, so a collision — creatable by an
- * ordinary invitation — could not be corrected through any surface at all.
- *
- * It changes a label and nothing else. No role, no membership, no credential,
- * no session: the account keeps everything it owned, which is the whole
- * difference between renaming somebody and replacing them.
- */
-export async function setUserDisplayName(id: string, displayName: string): Promise<User | null> {
-  const trimmed = displayName.trim();
-  await getDb().run('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?', [
-    trimmed,
-    nowIso(),
-    id,
-  ]);
-  return await getUser(id);
-}
 export interface PinThrottleState {
   failures: number;
   lockedUntil: string | null;
@@ -560,6 +539,21 @@ export async function setUserDisabled(id: string, disabled: boolean): Promise<Us
  * A rename is a fact about presentation, and a function that could quietly
  * change any of the others while doing it would be a rename nobody could trust
  * to be one.
+ *
+ * It is also the **answering transition for an ambiguous sign-in identity**
+ * (§46), which is why two sessions wrote it in the same week and why there is
+ * one of it rather than two. A reading that names a collision is a diagnosis
+ * rather than a remedy until something can correct one, and before this there
+ * was no rename anywhere in this repository — so a collision creatable by an
+ * ordinary invitation could not be corrected through any surface at all.
+ *
+ * **It does not decide whether the new name is allowed.** Both callers ask
+ * that first, and they ask the same two questions — `signInNameTaken`, because
+ * a name is a credential's other half, and `looksLikeAddress`, because an
+ * address is not a name. Putting the checks here instead was the obvious move
+ * and is wrong: a repository function that refused would have to decide what
+ * to do about it, and the two surfaces answer that differently — a browser
+ * gets a 422 it can render, a terminal gets a sentence and a non-zero exit.
  */
 export async function renameUser(id: string, displayName: string): Promise<User | null> {
   const at = nowIso();

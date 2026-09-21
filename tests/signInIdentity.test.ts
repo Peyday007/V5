@@ -45,6 +45,7 @@
  * a change.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { pickPort } from './helpers/ports.ts';
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
@@ -318,6 +319,55 @@ describe('one name, one account', () => {
     expect(attempt.status).toBeGreaterThanOrEqual(400);
     expect((await pinSignIn('Ordinary Member', '282828')).status).toBe(200);
   }, 120_000);
+});
+
+describe('two surfaces onto one column, asking the same questions', () => {
+  /*
+   * There are two renames — this branch's route, and §44's `people rename` on
+   * a terminal — and they were written by two sessions in the same week, each
+   * carrying a guard the other lacked. The route refused a collision and
+   * allowed an address; the command refused an address and allowed a
+   * collision.
+   *
+   * Either gap alone makes the other surface pointless: an administrator who
+   * cannot create a collision in a browser and can create one on a terminal
+   * has not been stopped from creating one. So this reads the repository
+   * rather than driving either surface — what must be true is that **both
+   * callers ask both questions**, and a behavioural test of one says nothing
+   * about the other.
+   *
+   * It is `operatorConsoleRemoved`'s shape, for `operatorConsoleRemoved`'s
+   * reason: what must not exist is a way round, and a way round is not
+   * something a passing request can show you.
+   */
+  const read = (path: string): string =>
+    readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+
+  it('asks both questions at the browser surface', () => {
+    const route = read('server/routes/admin.ts');
+    const handler = route.slice(route.indexOf("'/users/:userId/display-name'"));
+    expect(handler).toContain('signInNameTaken');
+    expect(handler).toContain('looksLikeAddress');
+  });
+
+  it('asks both questions at the terminal surface', () => {
+    const script = read('scripts/admin.ts');
+    const command = script.slice(script.indexOf("case 'people rename'"));
+    const body = command.slice(0, command.indexOf('break;'));
+    expect(body).toContain('signInNameTaken');
+    expect(body).toContain('refuseAddressAsName');
+  });
+
+  it('writes the column through one function, so there is one thing to guard', () => {
+    /*
+     * Two repository functions did this — `renameUser` and
+     * `setUserDisplayName`, byte-equivalent — which is how the two surfaces
+     * came to diverge in the first place. One remains.
+     */
+    const repo = read('server/repos/identity.ts');
+    const writers = repo.match(/UPDATE users SET display_name = \?/g) ?? [];
+    expect(writers.length, 'more than one function writes display_name').toBe(1);
+  });
 });
 
 describe('a slot nobody has filled', () => {
