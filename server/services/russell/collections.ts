@@ -40,6 +40,7 @@ import { listCandidates } from '../../repos/russellCandidates.ts';
 import { getProject } from '../../repos/projects.ts';
 import { groupOf } from '../../repos/russellMissions.ts';
 import type {
+  ConversationPurpose,
   RussellCollection,
   RussellConversation,
   RussellMission,
@@ -124,8 +125,22 @@ export interface Starter {
 export function collectionNameFor(input: {
   projectName: string | null;
   visibility: 'PRIVATE' | 'SHARED';
+  /**
+   * What the thread is for.
+   *
+   * Read ahead of the project name, and that ordering is the correction. A
+   * thread's `project_id` used to be the only thing this looked at, so a
+   * client that passed the first project in a list filed every general
+   * conversation in this Brain under a customer's name. The purpose is what a
+   * person or the router actually decided; the project name is which one.
+   *
+   * Optional so a caller that has not been updated still behaves exactly as
+   * before — the rule only ever *removes* a project filing, never adds one.
+   */
+  purpose?: ConversationPurpose;
 }): { name: string; kind: 'PROJECT' | 'CATEGORY' | 'PERSONAL' } {
-  if (input.projectName) return { name: input.projectName, kind: 'PROJECT' };
+  const general = input.purpose !== undefined && input.purpose !== 'PROJECT';
+  if (input.projectName && !general) return { name: input.projectName, kind: 'PROJECT' };
   if (input.visibility === 'PRIVATE') return { name: PERSONAL, kind: 'PERSONAL' };
   return { name: UNFILED, kind: 'CATEGORY' };
 }
@@ -200,6 +215,7 @@ export async function organize(ownerUserId: string): Promise<void> {
     const target = collectionNameFor({
       projectName: project?.name ?? null,
       visibility: thread.visibility,
+      purpose: thread.purpose,
     });
     let collection = names.get(target.name);
     if (!collection) {

@@ -349,30 +349,41 @@ describe('the decisions that are a person’s, from the screen to the row', () =
     field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   }
 
-  it('starts a programme only when a person confirms, and writes the objective', async () => {
+  it('starts a programme from the screen, and stores the objective a person typed', async () => {
     await mountFresh();
     await waitFor(() => expect(screen.getByText('No manufacturing programme')).toBeTruthy());
 
     // Nothing exists yet, and reading the screen created nothing.
     expect(await getProgram(projectId)).toBeNull();
 
-    const box = screen.getByPlaceholderText(/Your own sentence/);
+    /*
+     * The card arrives prefilled and the objective is behind a disclosure,
+     * which is §24's shape: a decision is a proposal to approve rather than a
+     * form to fill in. So the objective has to be revealed before it can be
+     * replaced, and this drives it exactly as a person would.
+     *
+     * This test used to drive a second start card this branch had added, with
+     * its own confirmation step. Production had already shipped one, and the
+     * duplicate was removed rather than kept: two controls doing one thing is
+     * the two-readers defect at a screen. What is asserted here is what the
+     * live control does — a press starts it — rather than a confirmation that
+     * no longer exists, because asserting a control that is not there is a
+     * vacuous guard that reads as coverage.
+     */
     await act(async () => {
-      type(box, OBJECTIVE);
-    });
-
-    // One press arms the confirmation and writes nothing.
-    await act(async () => {
-      screen.getByText('Start a programme').dispatchEvent(
+      screen.getByText('Change the objective').dispatchEvent(
         new dom.window.MouseEvent('click', { bubbles: true }),
       );
     });
-    expect(await getProgram(projectId)).toBeNull();
-    expect(screen.getByText(/Start the programme, and authorize read-only research/)).toBeTruthy();
 
-    // The second press is the decision.
+    const box = dom.window.document.getElementById('machines-objective');
+    expect(box).toBeTruthy();
     await act(async () => {
-      screen.getByText('Yes, start it').dispatchEvent(
+      type(box!, OBJECTIVE);
+    });
+
+    await act(async () => {
+      screen.getByText('Start the programme').dispatchEvent(
         new dom.window.MouseEvent('click', { bubbles: true }),
       );
     });

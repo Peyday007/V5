@@ -92,6 +92,7 @@ import {
 } from '../../repos/fleet.ts';
 import {
   createWorker,
+  getWorker,
   getWorkerByName,
   grantMembership,
   listMembershipsForPrincipal,
@@ -864,6 +865,40 @@ export interface SettledConnection {
   authorizationExpired: boolean;
 }
 
+/**
+ * Which worker this connection *is* — the recorded binding first, the derived
+ * name only as a fallback.
+ *
+ * A name is not a binding, and for a long time this resolved one by composing
+ * the member's display name with a slice of their user id. That finds a worker
+ * Brain minted through this journey and finds **nothing** for a surface
+ * registered on a terminal before the journey existed — which in production is
+ * the four Routines doing most of the research. So the owner's page read no
+ * worker, no tokens and `NOT_STARTED`, and told them their Claude account was
+ * not connected while `Brain Research A` was firing for the three hundred and
+ * fiftieth time.
+ *
+ * `capacity_connections.worker_id` is the binding: written when Brain mints the
+ * worker, and when a person adopts an existing surface. The name lookup stays
+ * for rows written before that column, so nothing that worked before stops
+ * working, and where both answer the row wins.
+ *
+ * It is **one** function because all three callers are the same question asked
+ * for different reasons, and the third is the one with teeth: `revoke` resolves
+ * a worker to revoke its tokens, so a name-only lookup there would leave an
+ * adopted surface's credentials live after a member had taken their connection
+ * back. A rule applied by one of three readers is worse than none.
+ */
+async function workerFor(
+  connection: CapacityConnection | null,
+  workerName: string,
+): Promise<Awaited<ReturnType<typeof getWorkerByName>>> {
+  return (
+    (connection?.workerId ? await getWorker(connection.workerId) : null) ??
+    (await getWorkerByName(workerName))
+  );
+}
+
 export async function settleConnection(
   user: Pick<User, 'id' | 'displayName'>,
   known?: CapacityConnection,
@@ -872,7 +907,7 @@ export async function settleConnection(
   let connection = known ?? (await connectionForUser(user.id));
   if (!connection) throw new Error('No connection for this member.');
 
-  const worker = await getWorkerByName(names.workerName);
+  const worker = await workerFor(connection, names.workerName);
   const tokens = worker ? await listTokensForWorker(worker.id) : [];
   const authorization = authorizationFrom(tokens);
   const connectorAuthenticated = authorization.live && authorization.everUsed;
@@ -1515,7 +1550,7 @@ export async function submitTrigger(input: {
         declaredPlanPower: 'unknown',
       }));
 
-    const worker = await getWorkerByName(names.workerName);
+    const worker = await workerFor(connection, names.workerName);
     if (!worker) {
       return {
         ok: false,
@@ -1768,7 +1803,7 @@ export async function revokeOwnConnection(input: {
     return { ok: true, view: await connectionView({ user: input.user, origin: input.origin }) };
   }
 
-  const worker = await getWorkerByName(names.workerName);
+  const worker = await workerFor(connection, names.workerName);
   if (worker) {
     await revokeTokensForWorker(worker.id);
     await revokeInvitationsForWorker(worker.id);

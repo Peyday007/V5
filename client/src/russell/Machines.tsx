@@ -312,7 +312,7 @@ export function MachinesView({ projectId }: { projectId: string | null }): JSX.E
     return <p className="rs-empty">Reading the programme…</p>;
   }
   if (query.error?.status === 404) {
-    return <StartProgramme projectId={projectId} reload={query.reload} />;
+    return <StartProgramme projectId={projectId} onStarted={query.reload} />;
   }
   if (query.error) {
     return <p className="rs-empty">{query.error.message}</p>;
@@ -333,6 +333,120 @@ export function MachinesView({ projectId }: { projectId: string | null }): JSX.E
       <Ledger view={view} />
       <History view={view} />
     </div>
+  );
+}
+
+/**
+ * The objective a programme starts with, unless somebody changes it.
+ *
+ * `startProgramme` refuses anything under twenty-four characters with a
+ * sentence explaining that *"Build machines" is not an objective*, and it is
+ * right to: the objective is what every compiled question is judged against.
+ * What was wrong is that the screen asked for one and offered no way to give
+ * it, so the refusal was unreachable and so was the programme.
+ *
+ * So it arrives filled in — §24's rule that a decision a person makes is a
+ * proposal to approve rather than a form to fill in — and *Change the
+ * objective* reveals the field, which starts hidden. Nothing about the server's
+ * check moved; what changed is that there is now something to check.
+ */
+const SUGGESTED_OBJECTIVE =
+  'Establish, from published sources, which classes of machine this company could produce, ' +
+  'who is buying them, how product reaches those buyers, and what producing each one requires — ' +
+  'starting from what it can already do.';
+
+/**
+ * The empty state, with the action it was missing.
+ *
+ * It used to be a card with a paragraph and nothing to press: *No manufacturing
+ * programme*, an accurate explanation of what starting one would authorize, and
+ * no way to start one. §24's sentence at a new surface — a state that says a
+ * person must decide, which that person cannot act on, is stuck rather than
+ * waiting — and here the remedy did not exist anywhere in the product: the
+ * route was real, the service was real, and nothing in any browser called
+ * either.
+ *
+ * Idempotent by the server: `startProgramme` answers `created: false` for a
+ * project that already has one, so a double press, a retry after a lost
+ * response and two tabs all produce one programme. The screen reloads the
+ * programme either way rather than reporting which it was, because *it exists
+ * now* is the fact and *this press is the one that made it* is not.
+ */
+function StartProgramme({
+  projectId,
+  onStarted,
+}: {
+  projectId: string;
+  onStarted(): void;
+}): JSX.Element {
+  const [objective, setObjective] = useState(SUGGESTED_OBJECTIVE);
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const start = useCallback(() => {
+    if (busy) return;
+    setBusy(true);
+    setProblem(null);
+    void api(`/api/projects/${projectId}/manufacturing`, {
+      method: 'POST',
+      body: JSON.stringify({ objective }),
+    }).then(
+      () => {
+        setBusy(false);
+        onStarted();
+      },
+      (error: unknown) => {
+        // The button comes back rather than spinning. A control that never
+        // recovers from one failed press is worse than one that did nothing.
+        setBusy(false);
+        setProblem(error instanceof Error ? error.message : String(error));
+      },
+    );
+  }, [busy, objective, projectId, onStarted]);
+
+  return (
+    <section className="rs-card rs-machines rs-machines-start">
+      <h2>No manufacturing programme</h2>
+      <p className="rs-hint">
+        This project has none. Starting one authorizes Brain to research, from published sources,
+        which classes of machine exist, who is buying them, how product reaches them, and what
+        producing each one takes.
+      </p>
+      <p className="rs-hint">
+        It authorizes nothing else. No spending, no contact with anybody, no purchase, no tooling,
+        and nothing about actually building anything — every one of those is a separate decision
+        with its own grant, and none of them is on this page.
+      </p>
+      <p className="rs-item-meta">{objective}</p>
+      {editing ? (
+        <div className="rs-machines-declare">
+          <label className="rs-field-label" htmlFor="machines-objective">
+            What this programme is trying to establish
+          </label>
+          <textarea
+            id="machines-objective"
+            rows={4}
+            value={objective}
+            onChange={(event) => setObjective(event.target.value)}
+          />
+        </div>
+      ) : null}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      <div className="rs-cash-actions">
+        <button type="button" className="rs-primary" disabled={busy} onClick={start}>
+          {busy ? 'Starting…' : 'Start the programme'}
+        </button>
+        <button
+          type="button"
+          className="rs-button-quiet"
+          disabled={busy}
+          onClick={() => setEditing((was) => !was)}
+        >
+          {editing ? 'Keep this objective' : 'Change the objective'}
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1239,114 +1353,6 @@ function Evidence({ reading }: { reading: CategoryReading }): JSX.Element | null
   );
 }
 
-
-/**
- * Starting a programme, which is also what authorizes its research.
- *
- * ---------------------------------------------------------------------------
- * A person presses this, and there is no other way it happens
- * ---------------------------------------------------------------------------
- *
- * There is no tick, no derivation and no worker path that starts a programme.
- * The route behind this is `requirePerson` plus project `ADMIN`, so a machine
- * is refused by level *and* by principal type, and no membership configuration
- * turns one into a person.
- *
- * What it authorizes is said in full before it is pressed rather than in a
- * paragraph somewhere else, because pressing Start **is** the authorization
- * (§33): a person who has decided to run a programme has decided Brain may read
- * published sources about it, and asking them to then fill in a research grant
- * is asking twice for one decision. What it does *not* authorize is said in the
- * same breath, because a person reading "this authorizes research" is entitled
- * to know where that stops.
- *
- * The objective is the person's own sentence and nothing pre-fills it. The
- * server refuses a short one with its own reasoning — "build machines" is a
- * slogan and not an objective — and that sentence is what a person reads,
- * rather than a length check composed here.
- */
-function StartProgramme({
-  projectId,
-  reload,
-}: {
-  projectId: string;
-  reload: () => void;
-}): JSX.Element {
-  const [objective, setObjective] = useState('');
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  const start = useCallback(async () => {
-    setBusy(true);
-    setProblem(null);
-    try {
-      await api(`/api/projects/${projectId}/manufacturing`, {
-        method: 'POST',
-        body: JSON.stringify({ objective }),
-      });
-      setConfirming(false);
-      reload();
-    } catch (error) {
-      setProblem(describe(error));
-      setConfirming(false);
-    } finally {
-      setBusy(false);
-    }
-  }, [objective, projectId, reload]);
-
-  return (
-    <section className="rs-card rs-machines-start">
-      <h2>No manufacturing programme</h2>
-      <p className="rs-hint">
-        This project has none. Starting one authorizes Brain to research, from published
-        sources, which classes of machine exist, who is buying them, how product reaches
-        them, what producing each one takes and teaches, what entering one costs, and which
-        firms hold something a category requires.
-      </p>
-      <p className="rs-hint">
-        It authorizes nothing else. No spending, no paid data, no contact with any person or
-        organisation, no advertising, no publishing — and nothing at all about building,
-        buying, tooling, certifying or entering anything. Those are decisions with a factory
-        on the end of them, and there is no route to one through this programme.
-      </p>
-      <label>
-        What this company is trying to be able to build, and what it is starting from
-        <textarea
-          value={objective}
-          rows={3}
-          placeholder="Your own sentence. Every question this programme asks carries it."
-          onChange={(event) => {
-            setObjective(event.target.value);
-            setConfirming(false);
-          }}
-        />
-      </label>
-      {confirming ? (
-        <div className="rs-machines-confirm">
-          <p>
-            Start the programme, and authorize read-only research under the objective above?
-          </p>
-          <button type="button" disabled={busy} onClick={start}>
-            Yes, start it
-          </button>
-          <button type="button" disabled={busy} onClick={() => setConfirming(false)}>
-            Not yet
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          disabled={busy || objective.trim().length === 0}
-          onClick={() => setConfirming(true)}
-        >
-          Start a programme
-        </button>
-      )}
-      {problem ? <p className="rs-machines-warn">{problem}</p> : null}
-    </section>
-  );
-}
 
 /**
  * Pausing, resuming and archiving — the second decision that is a person's.

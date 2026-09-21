@@ -5768,6 +5768,7 @@ export interface RussellConversationRow {
   owner_user_id: string;
   project_id: string | null;
   title: string;
+  purpose: string;
   visibility: string;
   attachment_confidence: number | null;
   attachment_source: string;
@@ -5779,6 +5780,20 @@ export interface RussellConversationRow {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * What a conversation is for.
+ *
+ * `GENERAL` is the default and the overwhelmingly common case: somebody
+ * thinking out loud with Russell. `PROJECT` is a thread that belongs to a
+ * project — attached by a person or by the router, or one that produced work
+ * against it. The other two exist so that a thread deliberately opened as
+ * operations or as technical work can say so; nothing derives either of them,
+ * because deriving a category from a thread's words is the guess this whole
+ * field replaces.
+ */
+export const CONVERSATION_PURPOSES = ['GENERAL', 'PROJECT', 'OPERATIONAL', 'TECHNICAL'] as const;
+export type ConversationPurpose = (typeof CONVERSATION_PURPOSES)[number];
 
 export interface RussellConversationContextRow {
   id: string;
@@ -6020,6 +6035,15 @@ export interface RussellConversation {
   ownerUserId: string;
   projectId: string | null;
   title: string;
+  /**
+   * What this thread is for, stated rather than inferred from a default.
+   *
+   * `projectId` says *which* project a thread is about; this says whether it
+   * is about one at all. They were one field, and the consequence was that a
+   * client passing the first project in a list made every general conversation
+   * in this Brain a Deal Dispatch conversation — see migration 084.
+   */
+  purpose: ConversationPurpose;
   visibility: RussellVisibility;
   attachmentConfidence: number | null;
   attachmentSource: AttachmentSource;
@@ -6730,12 +6754,26 @@ export type CashOpportunityState = (typeof CASH_OPPORTUNITY_STATES)[number];
  * Never stored. A row is not a decision: a stored label is stale the moment the
  * dependency it was waiting on settles, and two readers deriving it separately
  * is how one screen comes to disagree with another.
+ *
+ * The first four are **work**: something a person could act on, or something
+ * genuinely held up. The last three are not, and separating them is the whole
+ * correction recorded in §44 — a published price list is neither a thing to do
+ * nor a thing being waited for, and calling it either put thirty-one facts
+ * about other people's markets in front of somebody as their current work.
+ *
+ *   * `EVIDENCE_ONLY` — Brain found this and cannot yet say how we would be
+ *     paid from it. It belongs with the evidence, not in a queue.
+ *   * `BEING_QUALIFIED` — the capture thesis exists and Brain is establishing
+ *     the rest. Brain's own work, and nobody is waiting on a person.
+ *   * `ARCHIVED` — stopped or passed on, and kept.
  */
 export const CASH_DISPOSITIONS = [
   'EXECUTE_NOW',
   'RUN_IN_PARALLEL',
   'WAIT_FOR_DEPENDENCY',
   'TEST_A_DECISIVE_UNKNOWN',
+  'BEING_QUALIFIED',
+  'EVIDENCE_ONLY',
   'ARCHIVED',
 ] as const;
 export type CashDisposition = (typeof CASH_DISPOSITIONS)[number];
@@ -6997,10 +7035,25 @@ export interface CashAuthority {
  * Where a piece of the portfolio is in its bounded commercial validation.
  *
  * `null` is "not started", which is the state every opening is born in.
+ *
+ * `NEEDS_PERSON` is the fifth, and it exists because of a measured production
+ * deadlock. A deep dive's mission can reach `NEEDS_HUMAN` — the packet stopped
+ * at a decision only a person can make — and `settleValidations` had a branch
+ * for `DONE`, for `FAILED` and for `CANCELLED` and none for that. So the
+ * opening stayed `RUNNING` for ever while nothing was running, and because
+ * `RUNNING` counts against `MAX_VALIDATIONS_IN_FLIGHT`, **both** of the two
+ * slots in this Brain were held by parked missions: the other thirty-eight
+ * openings could never be qualified and no new deep dive could ever start.
+ *
+ * It is not a failure and it is not terminal. The mission has its own answering
+ * transition — the Needs You card §24 built — and this says, truthfully, that
+ * the deep dive is waiting on a person rather than on a provider. It holds no
+ * provider capacity, because no provider is working on it.
  */
 export const OPPORTUNITY_VALIDATION_STATES = [
   'PENDING',
   'RUNNING',
+  'NEEDS_PERSON',
   'COMPLETE',
   'BLOCKED',
 ] as const;
@@ -7643,6 +7696,7 @@ export interface CapacityConnectionRow {
   trigger_ref: string | null;
   account_id: string | null;
   routine_id: string | null;
+  worker_id: string | null;
   state: string;
   failure_reason: string | null;
   probe_bin_id: string | null;
@@ -7668,6 +7722,16 @@ export interface CapacityConnection {
   triggerRef: string | null;
   accountId: string | null;
   routineId: string | null;
+  /**
+   * The worker this connection's Claude account authenticates as.
+   *
+   * Written when Brain mints the worker, and by `adoptSurface` when a person
+   * says an already-registered surface is theirs. Null means *we have not been
+   * told*, and the screen falls back to resolving a worker by the name it
+   * would have minted — which is what made the owner of this Brain read as
+   * disconnected while their surfaces fired 350 times. See migration 085.
+   */
+  workerId: string | null;
   state: CapacityConnectionState;
   failureReason: string | null;
   probeBinId: string | null;
