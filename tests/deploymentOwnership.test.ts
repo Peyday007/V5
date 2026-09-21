@@ -40,11 +40,18 @@ const CANONICAL = read('.github/CANONICAL_BRANCH').trim();
 describe('one branch owns production', () => {
   it('names the canonical branch in exactly one place', () => {
     expect(CANONICAL).toBe('production');
-    // The workflow reads the file. A second copy of the name is a second thing
-    // to forget to change.
+    // The guard reads the file, and the workflow calls the guard. A second
+    // copy of the name is a second thing to forget to change, and that is
+    // asserted of both files rather than of whichever one holds the rule this
+    // week.
     const deploy = read('.github/workflows/deploy.yml');
-    expect(deploy).toContain('.github/CANONICAL_BRANCH');
-    expect(deploy).not.toMatch(/ref_name\s*}}"\s*!=\s*"production"/);
+    const guard = read('.github/workflows/canonical-guard.sh');
+    expect(guard).toContain('.github/CANONICAL_BRANCH');
+    expect(deploy).toContain('canonical-guard.sh');
+    expect(deploy).not.toContain('CANONICAL_BRANCH)');
+    for (const file of [deploy, guard]) {
+      expect(file).not.toMatch(/!=\s*"production"/);
+    }
   });
 
   it('refuses a non-canonical ref before anything else in the deploy runs', () => {
@@ -56,55 +63,89 @@ describe('one branch owns production', () => {
     expect(deploy).toMatch(/needs: verify/);
     // And it refuses an outdated checkout of the right branch too, which is the
     // same failure wearing the correct name.
-    expect(deploy).toContain('HEAD..origin/$canonical');
+    const guard = read('.github/workflows/canonical-guard.sh');
+    expect(guard).toContain('git ls-remote origin "refs/heads/$canonical"');
+    expect(guard).toMatch(/if \[ "\$tip" != "\$sha" \]/);
   });
 
-  it('asks again in the statement that makes the change, and refuses a rollback', () => {
+  /**
+   * An answer taken before a ten-minute test gate is an answer about ten
+   * minutes ago.
+   *
+   * Measured: a run dispatched at 04:27 passed the guard legitimately —
+   * `production` genuinely was its SHA at 05:13:37 — and released that tree at
+   * about 05:30, six minutes after a fast-forward had moved the branch two
+   * commits on. Nothing was wrong with the ref and nothing was re-run; the
+   * checkout became stale *while the job was in flight*, which is §28's
+   * rollback reached by timing rather than by a stale dispatch.
+   *
+   * So it is asked again immediately before the release, and this asserts
+   * three separate things rather than the presence of a string: that there are
+   * two askings, that the second is the last step before `flyctl deploy`, and
+   * that both call **one** file — because two copies of this rule would drift
+   * in the direction nobody sees, the early one failing loudly on every wrong
+   * branch and the late one firing only in a race.
+   */
+  it('asks again immediately before the release, from the same one file', () => {
+    const deploy = read('.github/workflows/deploy.yml');
+    // Invocations, not mentions: the comments above each step name the file too.
+    const asks = [...deploy.matchAll(/^\s+\.github\/workflows\/canonical-guard\.sh/gm)];
+    expect(asks.length).toBe(2);
+
+    // The second asking is the step directly before the one that ships.
+    const before = deploy.slice(0, deploy.indexOf('      - name: Deploy\n'));
+    const lastGuard = before.lastIndexOf('canonical-guard.sh');
+    expect(lastGuard).toBeGreaterThan(-1);
+    // Nothing between that guard and the deploy step but the guard's own step.
+    expect(before.slice(lastGuard)).not.toMatch(/^ {6}- name: /m);
+
+    // And no second copy of the rule anywhere in the workflow.
+    expect(deploy).not.toContain('ls-remote');
+    expect(deploy).not.toContain('CANONICAL_BRANCH < ');
+  });
+
+  it('refuses a commit older than the one already released', () => {
     /*
-     * The `canonical` job's freshness check runs before the typecheck, the
-     * whole suite and the build, so between it passing and `flyctl deploy`
-     * there are many minutes in which the branch can move and another run can
-     * release a newer image.
+     * Being level with the branch and being newer than what is running are two
+     * questions, and the step beside this one answers only the first.
      *
-     * Run 283, 2026-09-21: the guard passed on `c94bef0`, two pull requests
-     * merged while its tests ran, and it released `c94bef0` at 01:02:31 —
-     * taking both merged changes off the live Brain. The repository was right
-     * and the deployment was old, which is the exact shape §28 was already
-     * written from.
+     * Run 283, 2026-09-21: the early guard passed on `c94bef0`, two pull
+     * requests merged while its tests ran, and it released `c94bef0` at
+     * 01:02:31 — taking both merged changes off the live Brain. The
+     * re-asked freshness guard closes that particular window. It does not
+     * close a dispatch that was never the tip, or a marker-less rollback, and
+     * neither does a branch comparison: only comparing against what was
+     * actually released can.
      *
-     * So the two halves are pinned separately. The re-check must live in the
-     * job that deploys, ordered before the release; and the release marker
-     * must be the thing a rollback is refused against, because being level
-     * with a branch says this tree is current and says nothing about whether
-     * it is older than what is already running.
+     * So `deployed/production` is written after a release succeeds and read
+     * before the next one, and this pins all three halves of that being true.
      */
     const deploy = read('.github/workflows/deploy.yml');
 
-    const reask = deploy.indexOf('Refuse to overwrite a newer production revision');
+    const reask = deploy.indexOf('- name: Refuse to overwrite a newer production revision');
     const release = deploy.indexOf('- name: Deploy\n        id: release');
+    const marker = deploy.indexOf('- name: Record what was released');
     expect(reask).toBeGreaterThan(-1);
     expect(release).toBeGreaterThan(-1);
-    // Before the release, and inside the job that performs it rather than in
-    // the guard job, which is where the window was.
+    expect(marker).toBeGreaterThan(-1);
+
+    // Asked before the release, inside the job that performs it — which is
+    // where the window was — and answered by ancestry rather than by a branch.
     expect(reask).toBeLessThan(release);
     expect(reask).toBeGreaterThan(deploy.indexOf('name: Deploy to Fly'));
-
-    // It asks both questions.
-    expect(deploy.slice(reask, release)).toContain('HEAD..origin/$canonical');
     expect(deploy.slice(reask, release)).toContain('merge-base --is-ancestor');
+    expect(deploy.slice(reask, release)).toContain('deployed/production');
 
     // The marker moves only after a release succeeded, or it would refuse the
-    // re-deploy that fixes a failed one.
-    const marker = deploy.indexOf('- name: Record what was released');
+    // very re-deploy that fixes a failed one.
     expect(marker).toBeGreaterThan(release);
-    expect(deploy.slice(marker)).toContain("if: success()");
-    expect(deploy.slice(marker)).toContain('deployed/production');
+    expect(deploy.slice(marker)).toContain('if: success()');
 
     // Comparing commits needs a history to compare them in. A shallow checkout
     // answers "unrelated histories" to every ancestry question, which is
     // neither a refusal nor a pass.
     const deployJob = deploy.slice(deploy.indexOf('name: Deploy to Fly'));
-    expect(deployJob.slice(0, deployJob.indexOf('- name: Deploy'))).toContain('fetch-depth: 0');
+    expect(deployJob.slice(0, deployJob.indexOf('- name: Deploy\n'))).toContain('fetch-depth: 0');
 
     // And a deliberate rollback stays possible, as a decision somebody makes
     // by name. A guard with no way past it gets deleted the first time it is
@@ -203,6 +244,117 @@ describe('one branch owns production', () => {
     expect(claude).toMatch(/canonical/i);
     // The rule is an invariant, not only prose.
     expect(claude).toMatch(/^36\. /m);
+  });
+});
+
+/**
+ * Nothing may be able to cancel a queued deploy.
+ *
+ * Sixteen workflows shared one concurrency group, `deploy-brain`, and the group
+ * was doing two jobs at once while GitHub implements only one of them: exactly
+ * one **pending** run per group, and the newest pending evicts the one that was
+ * waiting. Measured in both directions — four consecutive `Cash report`
+ * dispatches cancelled before any of them started, and a queued `Deploy`
+ * cancelled two seconds after an unrelated `Admin` dispatch with `jobs: 0`,
+ * nothing red anywhere except a conclusion nobody was watching.
+ *
+ * A silently cancelled deployment is the worse half: it leaves the branch and
+ * the released image disagreeing while every surface looks healthy.
+ *
+ * A group cannot express priority, so the two jobs are done by two mechanisms —
+ * the deploy alone in its own group, and a bounded wait for anything that opens
+ * an ssh session. These assert both, and assert them of *every* workflow rather
+ * than of the ones that existed when this was written: the eviction is a
+ * property of the group, so a new file joining it is how the defect comes back.
+ */
+describe('an operator command cannot cancel a deployment', () => {
+  const workflows = (): string[] =>
+    tracked().filter((f) => /^\.github\/workflows\/.+\.ya?ml$/.test(f));
+
+  const groupOf = (file: string): string | null =>
+    /^concurrency:\n(?:.*\n)*?\s*group:\s*(\S+)/m.exec(read(file))?.[1] ?? null;
+
+  it('gives the deploy a concurrency group no other workflow is in', () => {
+    const deployGroup = groupOf('.github/workflows/deploy.yml');
+    expect(deployGroup).toBeTruthy();
+    const sharers = workflows().filter(
+      (f) => f !== '.github/workflows/deploy.yml' && groupOf(f) === deployGroup,
+    );
+    expect(sharers).toEqual([]);
+  });
+
+  it('gives no two workflows the same group, so none can evict another', () => {
+    const seen = new Map<string, string[]>();
+    for (const file of workflows()) {
+      const group = groupOf(file);
+      if (!group) continue;
+      seen.set(group, [...(seen.get(group) ?? []), file]);
+    }
+    const shared = [...seen.entries()].filter(([, files]) => files.length > 1);
+    expect(shared).toEqual([]);
+  });
+
+  /**
+   * And the half of the old group that was worth keeping.
+   *
+   * A command must not run against a machine that is being replaced. That was
+   * a side effect of sharing the group and is now an explicit, bounded wait, so
+   * it has to be asserted of every workflow that opens a session — including
+   * ones added later, which is why this reads the tree rather than a list.
+   *
+   * Two exemptions, both declared. `deploy.yml` *is* the release, so waiting
+   * for one would be waiting for itself; `dispatch-diagnose.yml` exists **to
+   * be readable during a deploy**, which its own header argues at length. Named
+   * here rather than pattern-matched, so a third exemption is a visible edit to
+   * this file.
+   */
+  it('waits for an in-flight release before any workflow opens an ssh session', () => {
+    const EXEMPT = new Set([
+      '.github/workflows/deploy.yml',
+      '.github/workflows/dispatch-diagnose.yml',
+    ]);
+    const missing = workflows()
+      .filter((f) => !EXEMPT.has(f))
+      .filter((f) => /flyctl\s+ssh\s+console/.test(read(f)))
+      .filter((f) => !read(f).includes('uses: ./.github/actions/await-release'));
+    expect(missing).toEqual([]);
+  });
+
+  /**
+   * The wait is bounded and fails open, deliberately.
+   *
+   * A deploy that hangs must not make the Brain unadministrable, and an
+   * unreadable Actions API must not disable every operator command at once.
+   * Both are warnings rather than refusals — this step can only ever improve on
+   * what the shared group gave, and the command's own ssh session fails loudly
+   * if a restart interrupts it.
+   */
+  it('bounds that wait rather than blocking for ever', () => {
+    const action = read('.github/actions/await-release/action.yml');
+    expect(action).toContain('timeout-seconds');
+    expect(action).toMatch(/::warning::.*longer than/);
+    expect(action).toMatch(/::warning::.*Actions API/);
+    // It reads the deploy workflow's runs, and nothing else.
+    expect(action).toContain('actions/workflows/deploy.yml/runs');
+    // It cannot change anything it is waiting for.
+    expect(action).not.toMatch(/^\s*flyctl\b/m);
+    expect(action).not.toContain('--method POST');
+  });
+
+  /**
+   * And a campaign cannot edit either half of this.
+   *
+   * `.github/workflows/**` was already forbidden as a directory, for §28's
+   * reason that a *second* workflow is how the guard gets bypassed. A composite
+   * action a workflow `uses:` is the same bypass one directory along, and the
+   * canonical-branch guard is a script inside the workflows directory precisely
+   * so that it needs no second entry.
+   */
+  it('puts both halves where the factory cannot own them', () => {
+    const envelope = read('server/services/factory/repositoryEnvelope.ts');
+    expect(envelope).toContain("'.github/workflows/**'");
+    expect(envelope).toContain("'.github/actions/**'");
+    expect(tracked()).toContain('.github/workflows/canonical-guard.sh');
   });
 });
 

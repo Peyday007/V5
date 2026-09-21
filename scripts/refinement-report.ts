@@ -60,6 +60,9 @@ import {
   MAX_VALIDATIONS_IN_FLIGHT,
   MAX_VALIDATION_ROUNDS,
   VALIDATION_STALL_MS,
+  describeDiveRefusal,
+  sprintCanRefine,
+  whyNotDiving,
 } from '../server/services/cash/validation.ts';
 import type { WorkItem } from '../server/domain/types.ts';
 
@@ -133,6 +136,87 @@ async function report(projectId: string, projectName: string): Promise<boolean> 
   if (holding >= MAX_VALIDATIONS_IN_FLIGHT) {
     console.log(
       `  NOTE        every slot is taken, so no opening that has never been qualified can start.`,
+    );
+  }
+
+  /*
+   * Why nothing is being refined, causally, rather than as a count.
+   *
+   * `passes 0/0` is a true statement about a packet and no statement at all
+   * about whether the lifecycle is stuck, waiting on a person, or working
+   * exactly as designed. This block answers the question in two halves that
+   * must not be collapsed: whether the **sprint** can start anything at all,
+   * and, per opening, what refused *that* one.
+   *
+   * Both come from `services/cash/validation.ts` — the same functions
+   * `startValidations` itself applies, in the same order — so what is printed
+   * here is the refusal that actually happened rather than a second opinion
+   * about it. A report with its own copy of an eligibility rule is the *two
+   * readers of one fact* defect, and it is always the copy nobody exercises
+   * that drifts.
+   */
+  const sprint = await sprintCanRefine(projectId);
+  const sprintLine =
+    sprint.kind === 'NO_SPRINT'
+      ? 'there is no sprint on this project'
+      : sprint.kind === 'WOUND_DOWN'
+        ? `the sprint is not taking new work: ${sprint.reason}`
+        : sprint.kind === 'NO_RESEARCH_AUTHORITY'
+          ? 'no live research grant covers this project, so nothing could be compiled'
+          : sprint.kind === 'SLOTS_TAKEN'
+            ? `no free slot: ${sprint.inFlight} of ${sprint.cap} are held by live dives`
+            : `${sprint.free} of ${sprint.cap} slot(s) free`;
+  console.log('');
+  console.log('WHY REFINEMENT IS OR IS NOT MOVING');
+  console.log(`  sprint      ${sprintLine}`);
+
+  const refusals = new Map<string, { count: number; line: string; examples: string[] }>();
+  for (const one of opportunities) {
+    const refusal = await whyNotDiving(one);
+    const entry = refusals.get(refusal.kind) ?? {
+      count: 0,
+      line: describeDiveRefusal(refusal),
+      examples: [],
+    };
+    entry.count += 1;
+    if (entry.examples.length < 3) entry.examples.push(one.id);
+    refusals.set(refusal.kind, entry);
+  }
+  for (const [kind, entry] of [...refusals.entries()].sort((a, b) => b[1].count - a[1].count)) {
+    console.log(
+      `  ${kind.padEnd(28)} ${String(entry.count).padStart(3)}  ${entry.line}` +
+        `  [${entry.examples.join(' ')}]`,
+    );
+  }
+
+  /*
+   * And the sentence that joins the two halves.
+   *
+   * Eligible openings with no free slot is a **capacity** answer; no eligible
+   * opening at all is a **decision** answer, and saying which requires both
+   * numbers. A lifecycle that cannot proceed *only* because every path reaches
+   * a person is a real and legitimate end state, and it is a different fact
+   * from one that cannot proceed because nobody authorized anything.
+   */
+  const eligible = refusals.get('ELIGIBLE')?.count ?? 0;
+  const awaiting = refusals.get('AWAITING_PERSON')?.count ?? 0;
+  if (sprint.kind !== 'READY') {
+    console.log(`  VERDICT     nothing can start: ${sprintLine}.`);
+  } else if (eligible > 0) {
+    console.log(
+      `  VERDICT     ${eligible} opening(s) are eligible and ${sprint.free} slot(s) are free — ` +
+        `the next tick starts one.`,
+    );
+  } else if (awaiting > 0) {
+    console.log(
+      `  VERDICT     no opening is eligible, and ${awaiting} of them are parked on a decision ` +
+        `only a person can make. That is the lifecycle waiting rather than stuck: answering ` +
+        `a Needs you card resumes the mission already there.`,
+    );
+  } else {
+    console.log(
+      `  VERDICT     no opening is eligible and none is waiting on a person. Every refusal ` +
+        `above is a property of the opening itself.`,
     );
   }
 

@@ -4,7 +4,8 @@
  * Every route here resolves through `requireProject`, which is
  * `decideProjectAccess` against the authenticated principal, so absent and
  * forbidden are the same 404 **with the same body** — invariant 23 at a new
- * door.
+ * door. Nothing here composes a second 404 sentence of its own; the one that
+ * tried is the first thing below, and why it stopped is written there.
  *
  * Every handler additionally calls `requirePerson`. A worker is already refused
  * at every write by level, because `services/identity/policy.ts` puts all four
@@ -31,7 +32,6 @@ import {
   badRequest,
   bodyOf,
   handler,
-  notFound,
   optionalString,
   pathId,
   requirePerson,
@@ -70,16 +70,42 @@ export const manufacturingRouter = Router();
  * sentence.
  * ------------------------------------------------------------------------ */
 
+/**
+ * There is exactly **one** 404 at this door, and it is `requireProject`'s.
+ *
+ * It used to be two. A project the caller may not have answered
+ * `No project with that id.`, and a project they *may* have with no programme
+ * on it answered `This project has no manufacturing programme.` — same status,
+ * different body, which is invariant 23 broken by the half nobody looks at:
+ * *"including the body of the refusal, not only its status"*. The hosted gate
+ * compares the two bodies rather than the two statuses, and reported it on
+ * every deploy.
+ *
+ * The tempting repair is to make the second refusal say the first one's
+ * sentence. That is worse, and worth writing down rather than discovering
+ * again: a member opening their own project would be told it does not exist,
+ * and the screen behind that 404 is the one offering to **start** a
+ * programme — so a project somebody may not touch would render a Start button
+ * that can only ever be refused (§35: a control that cannot succeed should not
+ * be offered).
+ *
+ * So the third body is removed rather than disguised. *A project you may read
+ * has no programme* is not a refusal at all — it is an ordinary answer to
+ * somebody entitled to it — and it answers 200 with `programme: null`. What is
+ * left is one refusal, thrown by the resolver every other route shares, so the
+ * two cannot drift apart again: there is no second sentence here to keep in
+ * step with `authorizeProject`'s.
+ *
+ * The envelope is deliberate rather than a bare `null` body. `{ programme:
+ * null }` says *there is none*; a bare `null` is indistinguishable from a body
+ * that failed to parse.
+ */
 manufacturingRouter.get(
   '/projects/:projectId/manufacturing',
   handler(async (req) => {
     requirePerson();
     const project = await requireProject(pathId(req, 'projectId'));
-    const view = await programmeView(project.id);
-    if (!view) {
-      throw notFound('This project has no manufacturing programme.');
-    }
-    return view;
+    return { programme: await programmeView(project.id) };
   }),
 );
 

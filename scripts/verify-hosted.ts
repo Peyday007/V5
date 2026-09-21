@@ -1122,16 +1122,32 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
  * A release gate that started one would leave a real programme, a real research
  * grant and a real set of questions behind in the Brain it was verifying —
  * every deploy, for ever. What is worth proving here is the **boundary**, and
- * the boundary is provable from refusals: a project with no programme answers
- * the same 404 a project you may not see answers, a machine is refused by
- * principal type at the reads as well as the writes, and the two person-only
- * writes are refused to a member who is not an administrator of that project.
+ * the boundary is provable from refusals: a project you may not see answers
+ * byte-for-byte what a project that does not exist answers, a machine is
+ * refused by principal type at the reads as well as the writes, and the two
+ * person-only writes are refused to it.
  *
  * So nothing below is a POST that succeeds. The one thing it reads that *is* a
  * fact about the release is which routes exist at all — a 404 from
  * `requireProject` and a 404 from Express having no such route are the same
- * status, so the check that separates them is the one that would notice the
- * router being dropped from the build.
+ * status, so the 200 from a project the member really may read is the reading
+ * that would notice the router being dropped from the build.
+ *
+ * ---------------------------------------------------------------------------
+ * What the comparison compares, and why it moved
+ * ---------------------------------------------------------------------------
+ *
+ * It used to hold *a project with no programme* against *a project you may not
+ * see*, and those differed: `This project has no manufacturing programme.`
+ * against `No project with that id.` — an oracle in the body, reported on every
+ * deploy, and correctly so. The route's repair was to stop composing the first
+ * sentence at all: a project you may read has no programme is an ordinary
+ * answer rather than a refusal, so it is a 200 with `programme: null`.
+ *
+ * Which leaves the pair this gate should have been comparing all along, and it
+ * is strictly the stronger one: a project that is real and not yours, against
+ * an id that is not a project at all. Those two must be indistinguishable, and
+ * nothing about the first pair ever established that.
  */
 async function manufacturingBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
   console.log('\nThe manufacturing kernel, as a member and as a machine');
@@ -1143,23 +1159,43 @@ async function manufacturingBoundary(fixtures: Fixtures, cookie: string): Promis
   /*
    * A project the member genuinely may read, with no programme on it.
    *
-   * The answer is 404 — *this project has no manufacturing programme* — and it
-   * is byte-identical to the answer a project they may not see gives, which is
-   * invariant 23 at this door. Compared rather than asserted, because a status
-   * that matches while the body differs is still an oracle.
+   * 200 with `programme: null`. That is the reading that says the router is
+   * mounted at all — every other answer at this door is a 404, and Express
+   * gives a 404 to a path it has never heard of.
    */
   const mine = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, { cookie });
-  expectStatus('a project with no programme answers not-found', mine.status, 404);
+  expectStatus('a project the member may read answers the programme read', mine.status, 200);
+  record(
+    'and says there is no programme rather than refusing',
+    mine.json !== null &&
+      typeof mine.json === 'object' &&
+      'programme' in (mine.json as Record<string, unknown>) &&
+      (mine.json as { programme: unknown }).programme === null,
+    JSON.stringify(mine.json)?.slice(0, 120) ?? 'no body',
+  );
 
+  /*
+   * And the pair that has to be indistinguishable: a real project this member
+   * may not see, against an id that is not a project at all.
+   *
+   * Compared rather than asserted, because a status that matches while the
+   * body differs is still an oracle — ask for an id you guessed and the
+   * wording tells you whether it is real.
+   */
+  const invented = await call(`/api/projects/prj_${'0'.repeat(32)}/manufacturing`, { cookie });
+  expectStatus('an id that is not a project answers not-found', invented.status, 404);
   if (fixtures.holdout) {
     const theirs = await call(`/api/projects/${fixtures.holdout.id}/manufacturing`, { cookie });
     expectStatus('and so does a project this member may not see', theirs.status, 404);
+    const same =
+      theirs.status === invented.status &&
+      JSON.stringify(theirs.json) === JSON.stringify(invented.json);
     record(
-      'the two refusals are the same body, not just the same status',
-      JSON.stringify(mine.json) === JSON.stringify(theirs.json),
-      JSON.stringify(mine.json) === JSON.stringify(theirs.json)
+      'forbidden and non-existent are the same body, not just the same status',
+      same,
+      same
         ? 'byte-identical'
-        : `absent=${JSON.stringify(mine.json)} forbidden=${JSON.stringify(theirs.json)}`,
+        : `forbidden=${JSON.stringify(theirs.json)} absent=${JSON.stringify(invented.json)}`,
     );
   }
 
@@ -1221,7 +1257,11 @@ async function manufacturingBoundary(fixtures: Fixtures, cookie: string): Promis
 
   // Nothing was created by any of the above, read back from the Brain itself.
   const after = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, { cookie });
-  expectStatus('and still no programme exists on that project', after.status, 404);
+  record(
+    'and still no programme exists on that project',
+    after.status === 200 && (after.json as { programme?: unknown } | null)?.programme === null,
+    `status=${after.status} ${JSON.stringify(after.json)?.slice(0, 80) ?? ''}`,
+  );
 }
 
 async function workerAuthentication(fixtures: Fixtures): Promise<void> {

@@ -53,8 +53,33 @@ on:
 # Two deploys of one app at once is a race whose loser is whichever image
 # finishes second. The second run waits rather than being cancelled: a deploy
 # that has already started changing a machine should be allowed to finish.
+#
+# ---------------------------------------------------------------------------
+# This group holds the deploy and nothing else, and that is the whole point
+# ---------------------------------------------------------------------------
+#
+# It used to be `deploy-brain`, shared by sixteen workflows — every operator
+# command and every read-only report in the repository. The reason was sound:
+# a command must not run against a machine that is being replaced. What the
+# group actually implements is something else, and the difference is what did
+# the damage: GitHub keeps exactly **one pending run per group**, and the
+# newest pending evicts the one that was waiting.
+#
+# So an unrelated dispatch cancelled a queued deploy. Measured: a queued
+# `Deploy` cancelled two seconds after an `Admin` dispatch, `jobs: 0`, never
+# started, nothing red anywhere except a conclusion nobody was watching — and
+# a silently cancelled deployment leaves the branch and the released image
+# disagreeing while every surface looks healthy. It went the other way too:
+# four consecutive `Cash report` dispatches cancelled before any of them ran.
+#
+# A group cannot express priority, so it is not asked to. `Deploy` holds a
+# group nothing else is in, so no dispatch of anything can evict it. Every
+# console workflow holds a group of its own, so no command evicts a different
+# command. And keeping a command off a machine mid-release — the job this
+# group was really doing — is `.github/actions/await-release`, which those
+# workflows run before they open an ssh session.
 concurrency:
-  group: deploy-brain
+  group: brain-release
   cancel-in-progress: false
 
 jobs:
@@ -83,35 +108,22 @@ jobs:
   # be edited by the branch being deployed. This job is the fast, legible half;
   # that setting is the enforcing half, and `docs/DEPLOYMENT.md` says how to set
   # it. Neither is a substitute for the other.
+  #
+  # And read the *timing* honestly too, which is the half that was missing: an
+  # answer taken here is an answer about 04:27, and the image is released at
+  # 05:30. The same question is asked again in the `deploy` job immediately
+  # before `flyctl deploy`, from the same file, because that is the instant it
+  # has to be true. See `.github/workflows/canonical-guard.sh`.
   canonical:
     name: Refuse a branch that is not canonical
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: This ref must be the canonical branch
         run: |
-          set -euo pipefail
-          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
-          echo "canonical branch: $canonical"
-          echo "this ref:         ${{ github.ref_name }}"
-
-          if [ "${{ github.ref_name }}" != "$canonical" ]; then
-            echo "::error::Production deploys only from '$canonical'. This is '${{ github.ref_name }}'. Merge into $canonical and deploy that — a feature branch deploying directly is how an older tree overwrites a newer one."
-            exit 1
-          fi
-
-          # And it must not be behind its own remote. A re-run of an older
-          # dispatch is the same failure wearing the right branch name.
-          git fetch origin "$canonical" --quiet
-          behind=$(git rev-list --count "HEAD..origin/$canonical")
-          if [ "$behind" != "0" ]; then
-            echo "::error::This checkout is $behind commit(s) behind origin/$canonical, so deploying it would roll production back. Re-dispatch against the current tip."
-            exit 1
-          fi
-          echo "on $canonical, and level with origin. Proceeding."
+          .github/workflows/canonical-guard.sh \
+            "${{ github.ref_name }}" "${{ github.sha }}" "before the test gate"
 
   verify:
     needs: canonical
@@ -227,31 +239,14 @@ jobs:
       # because the code does not compile must fail here, once, rather than be
       # compiled again somewhere else to fail identically.
       # -------------------------------------------------------------------
-      # The guard, re-asked in the statement that makes the change
+      # And the question being level with the branch does not answer
       # -------------------------------------------------------------------
       #
-      # The `canonical` job already refuses a checkout behind its own remote.
-      # It refuses it **at the start of the run**, and the deploy happens after
-      # a full typecheck, test suite and build — so between the two there is a
-      # window of many minutes in which the canonical branch can move and
-      # another run can release a newer image. This run would then release an
-      # older one on top of it.
-      #
-      # That is not hypothetical. 2026-09-21, run 283: the guard passed on
-      # `c94bef0`, two pull requests merged while its tests ran, and it released
-      # `c94bef0` to Fly at 01:02:31 — rolling production back and taking two
-      # merged changes off the live Brain until a later deploy restored them.
-      # §28 records the same damage twice before, from a different cause.
-      #
-      # So the check is asked again here, seconds before the release, which is
-      # this repository's own recurring rule: **the guard has to be in the
-      # statement that makes the change.** A `SELECT` earlier and an `UPDATE`
-      # later is a window, at whatever altitude it is written.
-      #
-      # And a second, stronger question is asked beside it. Being level with
-      # the branch says this tree is current; it does not say this tree is not
-      # *older than what is already running*, which is the thing that actually
-      # hurts. `deployed/production` is a lightweight tag this workflow moves
+      # The step below says this tree is the tip *now*. It does not say this
+      # tree is not **older than what is already running**, which is the thing
+      # that actually hurts: run 283, 2026-09-21, released `c94bef0` at
+      # 01:02:31 and took two merged pull requests off the live Brain.
+      # `deployed/production` is a lightweight tag this workflow moves
       # after a release succeeds, so it is Brain's own record of what was last
       # released rather than an inference from a branch. A commit that is a
       # strict ancestor of it is a rollback, and a rollback is refused unless
@@ -266,14 +261,6 @@ jobs:
           ALLOW_ROLLBACK: ${{ github.event.inputs.allow_rollback }}
         run: |
           set -euo pipefail
-          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
-
-          git fetch origin "$canonical" --quiet
-          behind=$(git rev-list --count "HEAD..origin/$canonical")
-          if [ "$behind" != "0" ]; then
-            echo "::error::origin/$canonical moved $behind commit(s) ahead while this run was testing, so releasing this tree would roll production back. Re-dispatch against the current tip."
-            exit 1
-          fi
 
           # The release marker. Absent on the first deploy after this landed,
           # which is an absence rather than a pass: it is reported and the
@@ -286,7 +273,7 @@ jobs:
 
           if [ -z "$released" ]; then
             echo "No deployed/production marker yet, so there is nothing to compare against."
-            echo "level with origin/$canonical. Proceeding."
+            echo "The freshness check below is what stands. Proceeding."
             exit 0
           fi
 
@@ -308,6 +295,23 @@ jobs:
           fi
 
           echo "ahead of what is released. Proceeding."
+
+      # The guard again, here rather than only at the top.
+      #
+      # Everything above this line — the test gate, the install, the
+      # pre-flight — takes long enough that the branch can move underneath it,
+      # and a run that was legitimately the tip when it started is a rollback
+      # if it is not the tip when it ships. Refusing here costs a re-dispatch;
+      # not refusing costs production going backwards, which this repository
+      # has already paid for twice.
+      #
+      # It is the same script the `canonical` job runs. Two copies of this rule
+      # would drift in the direction nobody sees: the early one fails loudly on
+      # every wrong branch, and this one fires only in a race.
+      - name: The ref must still be the canonical tip, now
+        run: |
+          .github/workflows/canonical-guard.sh \
+            "${{ github.ref_name }}" "${{ github.sha }}" "immediately before flyctl deploy"
 
       - name: Deploy
         id: release
@@ -461,10 +465,17 @@ jobs:
       #
       # **And it is bounded, because nothing else bounds it.** `flyctl ssh
       # console` keeps a session open with no clock of its own, the step had
-      # none, and the job's is GitHub's six-hour default — while every operator
-      # workflow in this repository shares the `deploy-brain` concurrency
-      # group, so a probe that never returns is not a slow deploy but every
-      # reading, tick and fleet command queued behind it.
+      # none, and the job's is GitHub's six-hour default.
+      #
+      # When that was written every operator workflow shared this run's
+      # concurrency group, so a probe that never returned was not a slow deploy
+      # but every reading, tick and fleet command queued behind it. The group
+      # was split since — each console workflow holds its own — and the cost is
+      # smaller rather than gone: they wait for an in-flight release through
+      # `.github/actions/await-release`, which is bounded at twenty-five
+      # minutes and then warns and proceeds. So an indefinite probe costs every
+      # operator command a twenty-five-minute wait instead of a queue with no
+      # end, which is still a reason to bound it here.
       #
       # Forty-five minutes is set from the one number that was measured rather
       # than from an incident: run 274's post-restart probe ran **22 minutes**

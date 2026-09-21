@@ -81,13 +81,23 @@ let userId = '';
 let server: Server | null = null;
 const realFetch = globalThis.fetch;
 
+/**
+ * Whether the person driving these requests administers the whole Brain.
+ *
+ * True for every test here but the refusal ones, because a Brain administrator
+ * reaches every project by design — which means nothing is ever forbidden to
+ * them, and a suite that only ever runs as one cannot see a refusal at all.
+ * Reset in `beforeEach`, so a block that lowers it cannot leak into the next.
+ */
+let brainAdmin = true;
+
 function principal(): Principal {
   return {
     type: 'HUMAN',
     id: userId,
     handle: 'owner@example.test',
     displayName: 'The owner',
-    isBrainAdmin: true,
+    isBrainAdmin: brainAdmin,
     mustChangePassword: false,
     credentialId: 'ses_browser',
     authMethod: 'SESSION_COOKIE',
@@ -110,6 +120,7 @@ function principal(): Principal {
 }
 
 beforeEach(async () => {
+  brainAdmin = true;
   const fixture = await freshProject();
   projectId = fixture.project.id;
   const user = await createUser({
@@ -472,5 +483,77 @@ describe('the decisions that are a person’s, from the screen to the row', () =
     // established — the one that exists demands a sentence saying how it came
     // to be true, and appears only against a decision the service raised.
     expect(screen.queryByText(/Record as held/)).toBeNull();
+  }, 60000);
+});
+
+/**
+ * One 404 at this door, and it is the project's.
+ *
+ * The route used to compose a second refusal of its own — *this project has no
+ * manufacturing programme* — which is the same status as `requireProject`'s and
+ * a different body, so the pair was an oracle in exactly the half invariant 23
+ * names: *"including the body of the refusal, not only its status"*. The hosted
+ * gate compared the two bodies and reported it on every deploy; nothing in the
+ * suite could see it, because every test here reads a project it may read.
+ *
+ * These drive the real route over a real socket against a real database, and
+ * assert the property from both sides of the boundary: what a member is
+ * entitled to know about their own project, and what two refusals must not let
+ * anybody tell apart.
+ */
+describe('one 404 at the manufacturing door, and it is the project’s', () => {
+  it('answers a readable project with no programme rather than refusing it', async () => {
+    const answer = await fetch(`/api/projects/${projectId}/manufacturing`);
+    expect(answer.status).toBe(200);
+    expect(await answer.json()).toEqual({ programme: null });
+  }, 60000);
+
+  it('offers to start one from that answer, rather than from a 404', async () => {
+    await act(async () => {
+      render(createElement(MachinesView, { projectId }));
+    });
+    await waitFor(() => expect(screen.getByText('No manufacturing programme')).toBeTruthy());
+  }, 60000);
+
+  /**
+   * The pair that has to be indistinguishable.
+   *
+   * A real project this person is not a member of, against an id that is not a
+   * project at all. Compared whole rather than by status, because the status
+   * matched the entire time the oracle existed.
+   */
+  it('gives a project that is not yours the body an invented id gets', async () => {
+    const other = await freshProject();
+    // Not a Brain administrator, or nothing would be forbidden: that role
+    // reaches every project by design (§34), which is exactly why the defect
+    // this asserts was invisible to every other test in this file.
+    brainAdmin = false;
+
+    const forbidden = await fetch(`/api/projects/${other.project.id}/manufacturing`);
+    const invented = await fetch(`/api/projects/prj_${'0'.repeat(32)}/manufacturing`);
+
+    expect(forbidden.status).toBe(404);
+    expect(invented.status).toBe(404);
+    expect(await forbidden.text()).toBe(await invented.text());
+  }, 60000);
+
+  /**
+   * And the screen behind the refusal does not offer to start a programme on
+   * somebody else's project.
+   *
+   * That is what the old shape produced: the client branched on `status ===
+   * 404`, so *no programme yet* and *not your project* rendered the identical
+   * Start card, and pressing it could only ever be refused. §35: a control that
+   * cannot succeed should not be offered.
+   */
+  it('shows the server’s refusal rather than a Start button, for a project that is not yours', async () => {
+    const other = await freshProject();
+    brainAdmin = false;
+    await act(async () => {
+      render(createElement(MachinesView, { projectId: other.project.id }));
+    });
+    await waitFor(() => expect(screen.getByText(/No project with that id/)).toBeTruthy());
+    expect(screen.queryByText('No manufacturing programme')).toBeNull();
+    expect(screen.queryByText(/Start the programme/)).toBeNull();
   }, 60000);
 });

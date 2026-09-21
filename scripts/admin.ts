@@ -25,6 +25,11 @@
  * signed in. A terminal that could mint one would be the console again, with
  * fewer witnesses.
  *
+ *   npm run admin -- people list
+ *   npm run admin -- people foundation
+ *   npm run admin -- people rename <user|email> "A Name" --admin someone@example.com
+ *   npm run admin -- capacity show
+ *   npm run admin -- capacity adopt <user|email> <trig_…> --admin someone@example.com
  *   npm run admin -- workers list
  *   npm run admin -- workers create <name> [display name] --admin someone@example.com
  *   npm run admin -- routing show
@@ -242,6 +247,8 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@example.com]
 
+  people    list | foundation | rename <user|email> "<name>"
+  capacity  show | adopt <user|email> <trig_…>
   workers   list | disable <name> | enable <name> | archive <name>
   routing   show | check <worker> <bin>
             set <worker> --families A,B [--repositories o/r,...]
