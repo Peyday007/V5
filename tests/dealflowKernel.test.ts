@@ -473,13 +473,14 @@ describe('a report read beside a running app', () => {
  * is the case an operator command exists for, since the app that needs driving
  * is the one already running.
  *
- * **What is deliberately not asserted here is every other operator wrapper.**
- * Fourteen of the seventeen scripts under `scripts/` and twenty of the
- * twenty-two workflows that open an ssh console carry no pool setting at all,
- * which is the same condition waiting in each of them. Widening this guard
- * would refuse those files rather than fix them, and each one belongs to the
- * workstream that owns it. It is reported rather than changed, the way §45
- * reports the identical tallying defect one kernel along.
+ * **An earlier version of this ended by declining to widen it.** Fourteen of
+ * the seventeen scripts under `scripts/` carried no pool setting at all, and
+ * the argument was that widening the guard would refuse those files rather
+ * than fix them, and that each belongs to the workstream that owns it. The
+ * first half is true of widening the guard *alone*; the second is the "it is
+ * somebody else's" that this repository has been burned by often enough to
+ * have a sentence for. So the files were fixed and the guard widened with
+ * them, in the describe below.
  */
 describe('the manufacturing operator surface is readable beside a running app', () => {
   it('takes one pooler client from the script, so a terminal and every door inherit it', () => {
@@ -492,6 +493,61 @@ describe('the manufacturing operator surface is readable beside a running app', 
     // The setting has to reach the command rather than merely appear in the
     // file: a comment naming the variable would satisfy a bare substring.
     expect(body).toMatch(/-C "env BRAIN_DATABASE_POOL_SIZE=1 \$remote"/);
+  });
+});
+
+/**
+ * And the same rule over **every** operator wrapper, rather than over the ones
+ * whose filename happens to end in `-report.sh`.
+ *
+ * A rule one of seventeen readers obeys is not a rule, and the shape of the
+ * failure is settled: the reading dies with `EMAXCONNSESSION` at whichever
+ * statement happened to be running, which is to say exactly when somebody
+ * wants it. Measured twice — `cash-report.sh` on the dealflow kernel's only
+ * production reading, and `manufacturing show` through two doors within one
+ * minute against one image.
+ *
+ * One client is safe for all of them because every script here is
+ * **sequential**: none of `admin`, `fleet`, `step10`, `capability`, `design`,
+ * `closeout-verify`, `chain-watch`, `authorize-gap-policy`,
+ * `verify-research-capability` or `manufacturing` fans out over the database,
+ * and a statement inside a transaction goes to that transaction's own pinned
+ * client rather than back to the pool (§34). The default form leaves a caller
+ * that genuinely needs more able to say so.
+ *
+ * **`verify-hosted.sh` is the one exception and it is a declared one.** That
+ * harness really does fan out — §27 records 383 callers queued behind it — and
+ * `verify-hosted.ts` sets its own ceiling of 2 in-process with the reasoning
+ * written beside it. A wrapper default would win over that line and silence a
+ * deliberate decision, so it is named here rather than pattern-matched, and a
+ * second exception is a visible edit to this file.
+ */
+describe('every operator wrapper is readable beside a running app', () => {
+  const EXEMPT = new Set(['verify-hosted.sh']);
+  const wrappers = readdirSync('scripts')
+    .filter((name) => name.endsWith('.sh'))
+    .sort();
+
+  it('has wrappers to check at all, so an empty glob cannot pass silently', () => {
+    expect(wrappers.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it('gives every one of them a pooler ceiling, bar the one that declares its own', () => {
+    const missing = wrappers
+      .filter((name) => !EXEMPT.has(name))
+      .filter((name) => !/BRAIN_DATABASE_POOL_SIZE/.test(readFileSync(`scripts/${name}`, 'utf8')));
+    expect(missing).toEqual([]);
+  });
+
+  it('leaves the harness that fans out to set its own, in its own file', () => {
+    // Asserted as an absence *and* as a presence: the exemption is only honest
+    // while the thing it exempts really does declare a ceiling somewhere.
+    expect(readFileSync('scripts/verify-hosted.sh', 'utf8')).not.toContain(
+      'BRAIN_DATABASE_POOL_SIZE',
+    );
+    expect(readFileSync('scripts/verify-hosted.ts', 'utf8')).toContain(
+      "process.env['BRAIN_DATABASE_POOL_SIZE'] = '2'",
+    );
   });
 });
 

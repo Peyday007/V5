@@ -7220,12 +7220,35 @@ when the brief's whole optimization rule is that it is not.**
   copy of the script predates it, which is the case an operator command exists
   for. The guard was run against both lines removed to watch it fail first.
 
-  **The wider condition is reported rather than changed.** Fourteen of the
-  seventeen wrappers under `scripts/` and twenty of the twenty-two workflows
-  that open an ssh console carry no pool setting at all, so the same reading is
-  unavailable at each of them whenever production is busy. Widening the guard
-  would refuse those files rather than fix them, and each belongs to the
-  workstream that owns it.
+  **That paragraph ended by reporting the wider condition rather than changing
+  it, and the correction is recorded rather than quietly applied.** Fourteen of
+  the seventeen wrappers under `scripts/` carried no pool setting at all, so
+  the same reading was unavailable at each of them whenever production was
+  busy — and the reasons given were that widening the guard would refuse those
+  files rather than fix them, and that each belongs to the workstream that owns
+  it. The first is true of widening the guard **alone**; the second is *it is
+  somebody else's*, which is the deferral this file has had to correct more
+  than once. So the files were fixed and the guard widened with them: every
+  wrapper carries `export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"`,
+  and the rule is asserted over `scripts/*.sh` rather than over the ones whose
+  filename happens to end in `-report.sh`.
+
+  **One client is safe for all of them because every one is sequential.** None
+  of `admin`, `fleet`, `step10`, `capability`, `design`, `closeout-verify`,
+  `chain-watch`, `authorize-gap-policy` or `verify-research-capability` fans
+  out over the database — checked rather than assumed — and a statement inside
+  a transaction goes to that transaction's own pinned client rather than back
+  to the pool (§34). The default form leaves a caller that genuinely needs more
+  able to say so.
+
+  **`verify-hosted.sh` is the one exception and it is declared.** That harness
+  really does fan out — §27 measures 383 callers queued behind it — and
+  `verify-hosted.ts` sets its own ceiling of 2 in-process with its reasoning
+  beside it. A wrapper default would win over that line and silence a
+  deliberate decision, so it is exempted **by name** in the guard rather than
+  by a pattern, and the guard asserts both halves: that the wrapper carries
+  nothing, and that the file it defers to really does declare a ceiling. A
+  second exception is a visible edit.
 
 `npm run manufacturing` remains the terminal door, calling exactly what the
 routes call, for the operations a browser is not needed for.
@@ -9221,6 +9244,24 @@ The guard's second asking is on the same run's log, in its own words:
 `asked: immediately before flyctl deploy` / `on production, and still its tip.
 Proceeding.` — from a depth-1 checkout, which is what `git ls-remote` rather
 than a commit count is for.
+
+**And two deploys later it refused one, which is the whole reason it exists.**
+Deploy 307 was dispatched on `1dda87a`, passed the first asking, spent sixteen
+minutes in the test gate, and reached the second:
+
+    this commit:      1dda87a…
+    asked:            immediately before flyctl deploy
+    origin/production: 6ba5c9a…
+    ::error::origin/production is now 6ba5c9a…, and this run is deploying
+    1dda87a…. Deploying it would put production back to a tree the branch has
+    moved past. Re-dispatch against the current tip.
+
+Another session had fast-forwarded `production` by two commits while the tests
+were running. Under the single asking this run would have released `1dda87a`
+and rolled production back by two commits — the damage §28 is written from,
+reached by *timing* rather than by a stale dispatch, and with nothing
+anywhere to say it had happened. Nothing was released, the image serving stayed
+the one deploy 305 had proved, and the remedy was the one the message names.
 
 ### One 404 at the manufacturing door.
 
