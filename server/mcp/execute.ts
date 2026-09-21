@@ -12,6 +12,7 @@ import { ToolError, type ToolErrorCategory } from './errors.ts';
 import { TerminalEffectFailure } from '../services/effects/engine.ts';
 import { assertResultWithinBounds, takeRateSlot } from './limits.ts';
 import { findTool, type ToolContext } from './tools.ts';
+import { failureDetail } from '../services/effects/failureDetail.ts';
 
 export interface CallInput {
   toolName: string;
@@ -85,15 +86,22 @@ function errorResult(error: ToolError): CallToolBody {
   };
 }
 
-/**
+/*
  * The unexpected case.
  *
  * A thrown Error that is not a `ToolError` is a bug, and its message may carry
  * a connection string, a file path or a SQL fragment. None of that reaches the
- * caller: it gets a fixed sentence, and the audit row records only that the
- * category was internal. The real error is left to the process log, which is
- * Brain's to read.
+ * caller: it gets a fixed sentence, plus the request id that resolves it to
+ * Brain's own record of the failure.
+ *
+ * This used to end "the real error is left to the process log, which is Brain's
+ * to read" — which was true and turned out to be worth very little. A host's
+ * log buffer is measured in minutes, and by the time anybody reads a worker's
+ * report of an opaque failure it is gone. The durable account is the
+ * `effect_attempts` row and the audit row, and both now carry the provider's
+ * own words alongside the message.
  */
+
 /**
  * An effect that refused for a policy reason, translated into a tool result.
  *
@@ -134,10 +142,31 @@ export function toolResultFor(error: TerminalEffectFailure): CallToolBody | null
   );
 }
 
-function internalResult(): CallToolBody {
+/**
+ * The one sentence an internal failure is allowed to say — plus where to look.
+ *
+ * What it says stays deliberately opaque: an internal error is not the
+ * caller's to read, and naming the cause here would make this endpoint an
+ * oracle for Brain's internals. What it lacks was the problem. Ten production
+ * packets reported *"That call could not be completed"* on every attempt, and
+ * nothing in that sentence led anywhere: the durable account is an
+ * `effect_attempts` row, the log line beside it ages out within the hour, and
+ * a worker reporting the sentence verbatim gave whoever read it no way to join
+ * the two.
+ *
+ * So the request id travels with it. It is Brain's own identifier, already on
+ * the audit row this failure writes and on the operation the effect reserved,
+ * so it discloses nothing and resolves the failure to its record in one
+ * lookup. The message is unchanged ahead of it, because it is what every
+ * existing reader matches on.
+ */
+function internalResult(requestId: string): CallToolBody {
+  const message = `That call could not be completed. Reference ${requestId}.`;
   return {
-    content: [{ type: 'text', text: 'That call could not be completed.' }],
-    structuredContent: { error: { category: 'UNAVAILABLE', message: 'That call could not be completed.' } },
+    content: [{ type: 'text', text: message }],
+    structuredContent: {
+      error: { category: 'UNAVAILABLE', message, requestId },
+    },
     isError: true,
   };
 }
@@ -253,14 +282,17 @@ export async function callTool(input: CallInput): Promise<CallOutput> {
       return { result: errorResult(error) };
     }
     // eslint-disable-next-line no-console
-    console.error('[mcp] tool call failed', input.toolName, error);
+    console.error('[mcp] tool call failed', input.toolName, input.requestId, error);
     await audit({
       call: input,
       projectId: null,
       result: 'FAILED',
-      metadata: { category: 'INTERNAL' },
+      // The provider's own words where it carried any, bounded and with
+      // anything credential-shaped removed — the same treatment the effect
+      // attempt row gets, so the two records of one failure agree.
+      metadata: { category: 'INTERNAL', detail: failureDetail(error) },
     });
-    return { result: internalResult() };
+    return { result: internalResult(input.requestId) };
   } finally {
     slot.release();
   }
