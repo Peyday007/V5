@@ -61,6 +61,28 @@ export interface MoneyRange {
   highMinor: number;
 }
 
+/**
+ * An entry that carries a published figure, as a **type**.
+ *
+ * The filter and the narrowing are one step, so nothing downstream needs a
+ * `?? 0` to satisfy the compiler. That matters more here than it usually
+ * would: this module's whole thesis is that a missing figure is never read as
+ * zero, and an unreachable `?? 0` sitting in the arithmetic is indistinguishable
+ * to a reader from a reachable one. Making it impossible to write is worth more
+ * than a comment saying it never happens.
+ */
+type PricedEntry = CategoryCapitalEntry & {
+  amountLowMinor: number;
+  amountHighMinor: number;
+  currency: string;
+};
+
+function priced(entry: CategoryCapitalEntry): entry is PricedEntry {
+  return (
+    entry.amountLowMinor !== null && entry.amountHighMinor !== null && entry.currency !== null
+  );
+}
+
 export interface ScenarioReading {
   scenario: CapitalScenario;
   /**
@@ -99,7 +121,7 @@ export interface CapitalReading {
    * because nobody knows what it costs. A blank may never be the reason
    * something ranks better.
    */
-  cheapestFullyPriced: ScenarioReading | null;
+  cheapestFullyPriced: (ScenarioReading & { totals: MoneyRange[] }) | null;
   /** Requirements with no figure anywhere, across every scenario. */
   unpricedRequirements: MachineCapitalRequirement[];
   because: string;
@@ -130,7 +152,10 @@ export function readCapital(entries: readonly CategoryCapitalEntry[]): CapitalRe
     scenarios.push(readScenario(scenario, mine));
   }
 
-  const fullyPriced = scenarios.filter((one) => one.totals !== null && one.unpriced.length === 0);
+  const fullyPriced = scenarios.filter(
+    (one): one is ScenarioReading & { totals: MoneyRange[] } =>
+      one.totals !== null && one.unpriced.length === 0,
+  );
   /*
    * The cheapest is the first fully-priced one in the vocabulary's own order.
    *
@@ -211,7 +236,7 @@ function readScenario(
     ]);
   }
 
-  const priced = entries.filter((one) => one.amountLowMinor !== null);
+  const withFigures = entries.filter(priced);
   const unpricedRequirements = [...byRequirement.entries()]
     .filter(([, rows]) => rows.every((one) => one.amountLowMinor === null))
     .map(([requirement]) => requirement)
@@ -225,7 +250,7 @@ function readScenario(
     return {
       scenario,
       totals: null,
-      priced,
+      priced: withFigures,
       unpriced,
       because:
         `${unpricedRequirements.length} of ${total} established requirement` +
@@ -248,20 +273,18 @@ function readScenario(
      * worse the better the research is, which is the shape §30 records nobody
      * noticing.
      */
-    const withFigures = rows.filter((one) => one.amountLowMinor !== null);
     const byRowCurrency = new Map<string, MoneyRange>();
-    for (const row of withFigures) {
-      // Every priced entry carries a currency: the validator refuses an amount
-      // without one, and the schema refuses the pair being half-null.
-      const currency = row.currency ?? '';
-      const low = row.amountLowMinor ?? 0;
-      const high = row.amountHighMinor ?? 0;
-      const span = byRowCurrency.get(currency);
+    for (const row of rows.filter(priced)) {
+      const span = byRowCurrency.get(row.currency);
       if (span) {
-        span.lowMinor = Math.min(span.lowMinor, low);
-        span.highMinor = Math.max(span.highMinor, high);
+        span.lowMinor = Math.min(span.lowMinor, row.amountLowMinor);
+        span.highMinor = Math.max(span.highMinor, row.amountHighMinor);
       } else {
-        byRowCurrency.set(currency, { currency, lowMinor: low, highMinor: high });
+        byRowCurrency.set(row.currency, {
+          currency: row.currency,
+          lowMinor: row.amountLowMinor,
+          highMinor: row.amountHighMinor,
+        });
       }
     }
     for (const span of byRowCurrency.values()) {
@@ -279,7 +302,7 @@ function readScenario(
   return {
     scenario,
     totals,
-    priced,
+    priced: withFigures,
     unpriced,
     because:
       `All ${byRequirement.size} established requirement` +
@@ -296,7 +319,7 @@ function readScenario(
 function explain(input: {
   state: CapitalReading['state'];
   scenarios: readonly ScenarioReading[];
-  cheapestFullyPriced: ScenarioReading | null;
+  cheapestFullyPriced: (ScenarioReading & { totals: MoneyRange[] }) | null;
   unpricedRequirements: readonly MachineCapitalRequirement[];
 }): string {
   const asked = input.scenarios.length;
@@ -305,7 +328,7 @@ function explain(input: {
     return (
       `Every established requirement carries a published figure. The smallest shape of entry ` +
       `anything has been established for is ${label(cheapest.scenario)}, at ` +
-      `${(cheapest.totals ?? []).map(describeRange).join(' plus ')}.`
+      `${cheapest.totals.map(describeRange).join(' plus ')}.`
     );
   }
   const missing = input.unpricedRequirements.map(label).join(', ');

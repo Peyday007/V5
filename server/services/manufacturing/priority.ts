@@ -126,14 +126,36 @@ export interface PriorityEntry {
  */
 export function rankCategories(readings: readonly CategoryReading[]): PriorityEntry[] {
   const live = readings.filter((one) => one.verdict !== 'RETIRED');
-  const scored = live.map((reading) => ({ reading, factors: factorsFor(reading) }));
+  const scored = live.map((reading) => {
+    const factors = factorsFor(reading);
+    return { reading, factors, byFactor: new Map(factors.map((one) => [one.factor, one])) };
+  });
 
   scored.sort((a, b) => {
-    for (let index = 0; index < FACTORS.length; index += 1) {
-      const left = a.factors[index];
-      const right = b.factors[index];
-      if (!left || !right) continue;
-      if (left.value !== right.value) return left.value - right.value;
+    /*
+     * Looked up by name and compared by sign, and both halves are deliberate.
+     *
+     * **By name**, because indexing by position is correct only while every
+     * entry's factor array is the same length in the same order. It is —
+     * `factorsFor` builds one shape — and a positional read would `continue`
+     * silently past a mismatch rather than failing, which is §27's
+     * two-collections-that-must-be-total defect at a sort. A factor that is
+     * missing here is a real inconsistency and is treated as one.
+     *
+     * **By sign**, because subtracting is only safe while the values are
+     * small. `CAPABILITY_GAP` uses `MAX_SAFE_INTEGER` for *not established*,
+     * and `MAX_SAFE_INTEGER - (-5)` is past the exactly-representable range —
+     * the sign survives today, and relying on that is a footgun for whoever
+     * adds the next factor.
+     */
+    for (const factor of FACTORS) {
+      const left = a.byFactor.get(factor);
+      const right = b.byFactor.get(factor);
+      if (!left || !right) {
+        throw new Error(`a category was ranked without a ${factor} reading`);
+      }
+      if (left.value === right.value) continue;
+      return left.value < right.value ? -1 : 1;
     }
     /*
      * Everything Brain can measure says these are the same.
@@ -163,13 +185,22 @@ export function rankCategories(readings: readonly CategoryReading[]): PriorityEn
   });
 }
 
+/**
+ * The single factor that put one entry below the one above it.
+ *
+ * By name for the sort's reason, and it must walk `FACTORS` in the declared
+ * order rather than the arrays' own: the *first* difference is what separates
+ * them, and the declared order is what "first" means.
+ */
 function firstDifference(
   above: readonly FactorReading[],
   here: readonly FactorReading[],
 ): PriorityEntry['separatedBy'] {
-  for (let index = 0; index < FACTORS.length; index += 1) {
-    const left = above[index];
-    const right = here[index];
+  const aboveByFactor = new Map(above.map((one) => [one.factor, one]));
+  const hereByFactor = new Map(here.map((one) => [one.factor, one]));
+  for (const factor of FACTORS) {
+    const left = aboveByFactor.get(factor);
+    const right = hereByFactor.get(factor);
     if (!left || !right || left.value === right.value) continue;
     return { factor: right.factor, because: right.because };
   }
