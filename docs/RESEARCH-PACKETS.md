@@ -324,7 +324,10 @@ read.
 
 Ten new tools, taking the permanent surface to twenty-four — twenty-five once
 `brain_research_method` was added to carry the standing method to a worker that
-cannot read this repository. Each is a thin
+cannot read this repository, and twenty-six once `brain_propose_plan_revision`
+became the one door a worker's *judgement about the plan* comes through (see
+[`RESEARCH-INTELLIGENCE.md`](RESEARCH-INTELLIGENCE.md)). Everything else a worker
+submits is evidence, and Brain decides what it means. Each is a thin
 wrapper over a service that already existed, and each names a scope that already
 existed.
 
@@ -340,6 +343,7 @@ existed.
 | `brain_submit_synthesis` | `research:write` |
 | `brain_get_audit_brief` | `research:read` |
 | `brain_submit_audit` | `research:write` |
+| `brain_propose_plan_revision` | `research:propose` |
 
 After Step 9 every scope in `WORKER_SCOPES` gates something that exists.
 

@@ -107,6 +107,8 @@ import {
   assessProjectSyntheses,
   recoverFailedSynthesis,
 } from '../server/services/research/synthesisRecovery.ts';
+import { workerIdentity } from '../server/services/identity/authenticate.ts';
+import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -190,16 +192,43 @@ async function projectFrom(ref: string) {
   return project;
 }
 
+/**
+ * The one place this script turns what somebody typed into a worker row.
+ *
+ * It resolves through `services/identity/workerRef.ts`, which accepts the two
+ * identifiers `workers list` actually prints — the label and the id — as well
+ * as the `workers.name` handle that used to be the only one. The defect it
+ * closes is small and was expensive: an operator read `worker-05  wkr_…` off
+ * the listing, typed either into `access grant`, and was told **No such
+ * worker** by a refusal that then offered a third spelling the listing had
+ * never shown them.
+ *
+ * So the refusal lists candidates the way the listing does, and for the same
+ * reason the resolver exists at all: a listing and the command that consumes
+ * it must not disagree about what a thing is called.
+ */
 async function workerFrom(ref: string) {
-  const worker = await getWorkerByName(ref);
-  if (!worker) {
-    console.error(`No worker ${ref}. This Brain holds:`);
-    for (const candidate of await listWorkers({ includeArchived: true })) {
-      console.error(`  ${candidate.name}  ${candidate.status}`);
+  const resolved = await resolveWorkerRef(ref);
+  if (resolved.kind === 'FOUND') return resolved.worker;
+
+  if (resolved.kind === 'AMBIGUOUS') {
+    console.error(`"${ref}" names more than one worker:`);
+    for (const candidate of resolved.matches) {
+      console.error(`  ${workerIdentity(candidate).padEnd(12)} ${candidate.id}  ${candidate.name}`);
     }
-    fail('No such worker.');
+    // Refused rather than chosen between: picking either would be a confident
+    // answer to the wrong question, with every row reading healthy.
+    fail('Ambiguous worker reference. Use the id.');
   }
-  return worker;
+
+  console.error(`No worker ${ref}. This Brain holds:`);
+  for (const candidate of await listWorkers({ includeArchived: true })) {
+    console.error(
+      `  ${workerIdentity(candidate).padEnd(12)} ${candidate.id}  ${candidate.status.padEnd(10)} ` +
+        `${candidate.name}`,
+    );
+  }
+  fail('No such worker.');
 }
 
 /** The checkout this command is running from — how it finds the render set. */
@@ -243,7 +272,7 @@ async function main(): Promise<void> {
         // a dispatch row, a ledger entry — names a worker by id, and a listing you
         // cannot join to those is a listing you have to guess against.
         console.log(
-          `  ${worker.name.padEnd(28)} ${worker.id}  ${worker.status.padEnd(10)} ` +
+          `  ${workerIdentity(worker).padEnd(12)} ${worker.id}  ${worker.status.padEnd(10)} ` +
             `${memberships.length} project(s)`,
         );
       }
@@ -270,7 +299,7 @@ async function main(): Promise<void> {
         const worker = byId.get(row.workerId);
         const families = row.families.length > 0 ? row.families.join(',') : '(none — serves nothing)';
         console.log(
-          `  ${(worker?.name ?? row.workerId).padEnd(28)} ${row.workerId}  families=[${families}] ` +
+          `  ${(worker ? workerIdentity(worker) : row.workerId).padEnd(12)} ${row.workerId}  families=[${families}] ` +
             `repositories=[${row.repositories.join(',')}] ` +
             `capabilities=[${row.capabilities.join(',')}]`,
         );
@@ -285,7 +314,9 @@ async function main(): Promise<void> {
       const implicit = [...byId.values()].filter((w) => !explicit.has(w.id) && w.status === 'ACTIVE');
       if (implicit.length > 0) {
         console.log('  derived (no explicit row — scopes imply the family, never repository work):');
-        for (const worker of implicit) console.log(`      ${worker.name.padEnd(28)} ${worker.id}`);
+        for (const worker of implicit) {
+          console.log(`      ${workerIdentity(worker).padEnd(12)} ${worker.id}`);
+        }
       }
       break;
     }
@@ -306,8 +337,8 @@ async function main(): Promise<void> {
       const principal = {
         type: 'WORKER',
         id: worker.id,
-        handle: worker.name,
-        displayName: worker.name,
+        handle: workerIdentity(worker),
+        displayName: workerIdentity(worker),
         isBrainAdmin: false,
         mustChangePassword: false,
         credentialId: null,
@@ -322,7 +353,7 @@ async function main(): Promise<void> {
       const decision = decideBinRouting({ bin, principal, routing });
       console.log(`  bin        ${bin.id}  ${bin.kind}  ${bin.state}  class=${bin.workloadClass ?? '—'}`);
       console.log(`  family     ${familyOf(bin)}  repository=${repositoryIdOf(bin) ?? '—'}`);
-      console.log(`  worker     ${worker.name}  ${routing.explicit ? 'explicit' : 'derived'} ` +
+      console.log(`  worker     ${workerIdentity(worker)}  ${routing.explicit ? 'explicit' : 'derived'} ` +
         `families=[${routing.families.join(',')}] repositories=[${routing.repositories.join(',')}]`);
       console.log(`  decision   ${decision.ok ? 'WOULD BE HANDED IT' : decision.refusal}`);
       // A refusal names itself; an admission has nothing to explain beyond the
@@ -376,7 +407,7 @@ async function main(): Promise<void> {
         },
       });
       console.log(
-        `  ${worker.name} now serves [${families.join(',') || '(nothing)'}]` +
+        `  ${workerIdentity(worker)} now serves [${families.join(',') || '(nothing)'}]` +
           `${repositories.length > 0 ? ` for [${repositories.join(',')}]` : ''}.`,
       );
       break;
@@ -409,7 +440,7 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
         metadata: { before: before ? before.families : null, after: [], reason },
       });
-      console.log(`  ${worker.name} is retired from active dispatch: it may be handed nothing.`);
+      console.log(`  ${workerIdentity(worker)} is retired from active dispatch: it may be handed nothing.`);
       break;
     }
     case 'routing clear': {
@@ -426,8 +457,8 @@ async function main(): Promise<void> {
       });
       console.log(
         removed
-          ? `  ${worker.name} is back to the derived default: what its scopes imply, and no repository work.`
-          : `  ${worker.name} had no explicit routing scope.`,
+          ? `  ${workerIdentity(worker)} is back to the derived default: what its scopes imply, and no repository work.`
+          : `  ${workerIdentity(worker)} had no explicit routing scope.`,
       );
       break;
     }
@@ -445,7 +476,7 @@ async function main(): Promise<void> {
         targetId: worker.id,
         result: 'SUCCESS',
       });
-      console.log(`  ${worker.name} is now ${status}.`);
+      console.log(`  ${workerIdentity(worker)} is now ${status}.`);
       break;
     }
     case 'workers archive': {
@@ -460,7 +491,7 @@ async function main(): Promise<void> {
         targetId: worker.id,
         result: 'SUCCESS',
       });
-      console.log(`  ${worker.name} is archived. Its rows and its audit history stay.`);
+      console.log(`  ${workerIdentity(worker)} is archived. Its rows and its audit history stay.`);
       break;
     }
     /*
@@ -481,10 +512,17 @@ async function main(): Promise<void> {
         const state = user.disabledAt ? 'DISABLED' : user.isBrainAdmin ? 'ADMIN' : 'MEMBER';
         const passkeys = await countLivePasskeys(user.id);
         // What the page derives `READY` from, printed the same way it derives
-        // it: a device, or a password, or neither. A timestamp is evidence a
-        // password exists and says nothing about it.
+        // it, and in the same order: the PIN the sign-in screen asks for, the
+        // password `/recovery` takes, then a device, which reaches neither. A
+        // timestamp is evidence a credential exists and says nothing about it.
         const signIn =
-          passkeys > 0 ? 'device' : user.passwordUpdatedAt !== null ? 'password' : 'none';
+          user.pinUpdatedAt !== null
+            ? 'pin'
+            : user.passwordUpdatedAt !== null
+              ? 'password'
+              : passkeys > 0
+                ? 'device'
+                : 'none';
         console.log(
           `  ${user.id}  ${user.kind.padEnd(7)} ${state.padEnd(8)} ` +
             `passkeys=${passkeys} signs-in=${signIn.padEnd(8)} ${user.displayName}` +
@@ -494,7 +532,10 @@ async function main(): Promise<void> {
       console.log('');
       console.log('  kind=PERSON is somebody; kind=SYSTEM is machinery proving itself.');
       console.log('  Only PERSON rows, not disabled, reach the People & capacity page.');
-      console.log('  signs-in=none is a slot nobody has filled; device and password both count.');
+      console.log('  signs-in=none is a slot nobody has filled.');
+      console.log('  signs-in=pin and signs-in=password are ways in; the screen asks for a PIN.');
+      console.log('  signs-in=device holds a passkey the sign-in screen no longer offers:');
+      console.log('  that person needs a new link, which People has a control for.');
       break;
     }
     case 'projects list': {
@@ -565,9 +606,10 @@ async function main(): Promise<void> {
         targetId: worker.id,
         projectId: null,
         result: 'SUCCESS',
-        metadata: { name: worker.name },
+        // The label is the identity; the handle is what was typed, kept as history.
+        metadata: { name: workerIdentity(worker), legacyName: worker.name },
       });
-      console.log(`  ${worker.id}  ${worker.name}  ${worker.displayName}`);
+      console.log(`  ${worker.id}  ${workerIdentity(worker)}  (legacy handle ${worker.name})`);
       console.log('  It is a member of no project and holds no credential yet.');
       break;
     }
@@ -863,7 +905,7 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
         metadata: { scopes: [...CONNECTOR_SCOPES].join(','), kind: 'RESEARCH' },
       });
-      console.log(`  ${worker.name} researches for ${project.name}.`);
+      console.log(`  ${workerIdentity(worker)} researches for ${project.name}.`);
       break;
     }
     case 'access revoke': {
@@ -880,7 +922,7 @@ async function main(): Promise<void> {
         projectId: project.id,
         result: 'SUCCESS',
       });
-      console.log(changed ? `  ${worker.name} no longer reaches ${project.name}.` : '  Nothing to revoke.');
+      console.log(changed ? `  ${workerIdentity(worker)} no longer reaches ${project.name}.` : '  Nothing to revoke.');
       break;
     }
     case 'queue list': {

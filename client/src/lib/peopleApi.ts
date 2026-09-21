@@ -19,7 +19,18 @@ import type {
   ConnectionView,
   TroubleshootingEntry,
 } from '../../../server/services/capacity/connection.ts';
-import type { MemberState } from '../../../server/services/identity/people.ts';
+/*
+ * Both of these are imported rather than restated, and one of them was not.
+ *
+ * `SignsInWith` was a second copy of the server's union, written out here as a
+ * literal — so when the server gained `PIN` the client went on compiling
+ * against three values, and every screen reading it was type-checked against
+ * an enum that had drifted. `MemberState` gaining a value was a compile error
+ * in the same commit, because it is imported; that difference is the whole
+ * argument. A duplicated enum is two readers of one fact, and the copy nobody
+ * looks at is the one that stops being true.
+ */
+import type { MemberState, SignsInWith } from '../../../server/services/identity/people.ts';
 
 export type {
   CapacityReading,
@@ -32,10 +43,8 @@ export type {
   ConnectionView,
   TroubleshootingEntry,
   MemberState,
+  SignsInWith,
 };
-
-/** A live passkey, the bootstrap password account, or neither. */
-export type SignsInWith = 'DEVICE' | 'PASSWORD' | 'NONE';
 
 export interface PersonRow {
   userId: string;

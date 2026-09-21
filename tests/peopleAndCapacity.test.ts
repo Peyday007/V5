@@ -19,7 +19,15 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createUser, createWorker, getWorkerByName, grantMembership } from '../server/repos/identity.ts';
+import {
+  createCredentiallessUser,
+  createUser,
+  createWorker,
+  getWorkerByName,
+  grantMembership,
+  setUserPin,
+} from '../server/repos/identity.ts';
+import { hashPin } from '../server/services/identity/pin.ts';
 import {
   claimRoutineFireSlot,
   createAccount,
@@ -57,6 +65,16 @@ async function person(displayName: string, email: string): Promise<User> {
     displayName,
     password: 'a-password-that-is-long-enough',
     isBrainAdmin: false,
+  });
+}
+
+/** The shape an enrolled member actually has: no address and no password. */
+async function credentialless(displayName: string): Promise<User> {
+  return createCredentiallessUser({
+    email: null,
+    displayName,
+    createdByType: 'HUMAN',
+    createdById: owner.id,
   });
 }
 
@@ -184,13 +202,58 @@ describe('a person is declared, never recognised by their name', () => {
     expect(reading.joined).toBe(1);
   });
 
-  it('calls a device a device, so a recovery knows what it is recovering', async () => {
-    const airyn = await person('Airyn', 'airyn@example.invalid');
+  /**
+   * The same defect one credential along, and in the expensive direction.
+   *
+   * The ordinary human credential is a PIN now, and this reading enumerated
+   * the ones it knew about — so a member who had just enrolled with a PIN read
+   * `NOT_INVITED`, *a slot nobody has filled*. A reading that mis-describes an
+   * account because a credential was added and not added here is the whole
+   * reason `SignsInWith` is exhaustive.
+   */
+  it('counts a PIN account as joined, and names the credential the screen asks for', async () => {
+    const member = await credentialless('Nadia');
+    await setUserPin(member.id, await hashPin('418205'), { keepSessionId: null });
+    const reading = await peopleReading(null);
+    const row = reading.people.find((one) => one.displayName === 'Nadia');
+    expect(row?.state).toBe('READY');
+    expect(row?.signsInWith).toBe('PIN');
+    // Never the digits, on the row or anywhere near it.
+    expect(JSON.stringify(reading)).not.toMatch(/418205/);
+  });
+
+  /**
+   * And the same reading, wrong in the direction that costs the most.
+   *
+   * Airyn and Caleb hold a passkey and nothing else, and the sign-in screen no
+   * longer offers a device — so they cannot get in. Reported as `READY` that
+   * is an administrator being told a locked-out person needs nothing, which is
+   * worse than under-counting: nobody goes looking. `NOT_INVITED` would have
+   * been wrong too, because they finished.
+   */
+  it('does not call somebody joined when the screen offers nothing they hold', async () => {
+    const airyn = await credentialless('Airyn');
     await enrolPasskey(airyn.id);
     const reading = await peopleReading(null);
     const row = reading.people.find((one) => one.displayName === 'Airyn');
-    expect(row?.state).toBe('READY');
+    expect(row?.state).toBe('NEEDS_A_NEW_LINK');
     expect(row?.signsInWith).toBe('DEVICE');
+    expect(reading.joined).toBe(1); // the owner's password account, and not Airyn
+  });
+
+  /**
+   * A PIN is what the product offers, so it is what the row says.
+   *
+   * The owner ends up holding a password *and* a PIN — the password reaches
+   * `/recovery` and nothing else — and an account holding several credentials
+   * has to be described by the one somebody would actually use.
+   */
+  it('names the PIN ahead of the password the recovery door still takes', async () => {
+    await setUserPin(owner.id, await hashPin('730164'), { keepSessionId: null });
+    const reading = await peopleReading(owner.id);
+    const row = reading.people.find((one) => one.displayName === 'Owner');
+    expect(row?.state).toBe('READY');
+    expect(row?.signsInWith).toBe('PIN');
   });
 
   /**

@@ -69,6 +69,24 @@ const MEMBER_STATE_LABEL: Record<PersonRow['state'], string> = {
   READY: 'Joined',
   INVITED: 'Link sent',
   NOT_INVITED: 'No link yet',
+  // The remedy, rather than the condition. Somebody reading this row has to
+  // know what to press, and the control that does it is the next column.
+  NEEDS_A_NEW_LINK: 'Needs a new link',
+};
+
+/**
+ * Which credential, in the words a person would use for it.
+ *
+ * `Joined` over a PIN and `Joined` over a password are the same word about two
+ * different facts, and only one of them is the ordinary way in. A device is
+ * named because the row is real and *not* because it is a route — the sign-in
+ * screen does not offer one.
+ */
+const SIGNS_IN_LABEL: Record<PersonRow['signsInWith'], string | null> = {
+  PIN: null,
+  PASSWORD: 'password',
+  DEVICE: 'device only',
+  NONE: null,
 };
 
 
@@ -142,8 +160,8 @@ function Invite({ onChanged }: { onChanged(): void }): JSX.Element {
         {busy ? 'Making a link…' : 'Make a private link'}
       </button>
       <p className="rs-hint">
-        They register a device when they open it. No email address is asked for and no password is
-        ever created.
+        They choose a six-digit PIN when they open it. No email address is asked for and no
+        password is ever created.
       </p>
       {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
       {issued ? (
@@ -248,6 +266,71 @@ function ConnectorLink({ person }: { person: PersonRow }): JSX.Element {
   );
 }
 
+/**
+ * A fresh link for somebody who cannot get in.
+ *
+ * `NEEDS_A_NEW_LINK` is an escalation, so it needs an answering transition, and
+ * it had one everywhere except where a person could reach it: `issueRecovery`
+ * was a route, `CashApi.recoverMember` was a client function, and **nothing
+ * called either**. That is this repository's own recurring sentence — a
+ * mechanism nothing calls is not a mechanism — and it is the same correction
+ * `ConnectorLink` directly above was written for.
+ *
+ * Recovery retires before it issues. Whatever the person was holding stops
+ * working now rather than when the replacement is used, and every session that
+ * credential opened ends with it: if the reason they cannot get in is that
+ * somebody else has their device, waiting would be the whole defect.
+ *
+ * The link is shown once, and it ends in a PIN.
+ */
+function Recover({ person, onChanged }: { person: PersonRow; onChanged(): void }): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [issued, setIssued] = useState<IssuedEnrollment | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="rs-button-quiet"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setProblem(null);
+          CashApi.recoverMember(person.userId, 'The sign-in screen no longer offers a device.').then(
+            (answer) => {
+              setIssued(answer.enrollment);
+              setBusy(false);
+              onChanged();
+            },
+            (error: unknown) => {
+              setProblem(describe(error));
+              setBusy(false);
+            },
+          );
+        }}
+      >
+        {busy ? 'Making a link…' : 'New sign-in link'}
+      </button>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      {issued ? (
+        <div className="rs-ready-link">
+          <p className="rs-item-title">A link for {issued.displayName}</p>
+          <CopyBox
+            label="Send this to them privately"
+            value={`${window.location.origin}/enrol#${issued.token}`}
+          />
+          <p className="rs-hint">
+            Shown once. It works once, stops working on{' '}
+            {new Date(issued.expiresAt).toLocaleString()}, and they choose a six-digit PIN when
+            they open it. Anything they were holding before has stopped working.
+          </p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function People({
   page,
   onChanged,
@@ -275,19 +358,16 @@ function People({
             </span>
             <span className="rs-ready-state" data-state={one.state}>
               {MEMBER_STATE_LABEL[one.state]}
-              {/*
-                * How, not only whether.
-                *
-                * `Joined` over a password account and `Joined` over a device
-                * are the same word about two different facts, and the second
-                * is the one a lost-device recovery applies to.
-                */}
-              {one.signsInWith === 'PASSWORD' ? (
-                <span className="rs-hint"> &middot; password</span>
+              {/* How, not only whether. */}
+              {SIGNS_IN_LABEL[one.signsInWith] ? (
+                <span className="rs-hint"> &middot; {SIGNS_IN_LABEL[one.signsInWith]}</span>
               ) : null}
             </span>
             {page.you.isBrainAdmin && one.state === 'READY' ? (
               <ConnectorLink person={one} />
+            ) : null}
+            {page.you.isBrainAdmin && one.state === 'NEEDS_A_NEW_LINK' ? (
+              <Recover person={one} onChanged={onChanged} />
             ) : null}
           </li>
         ))}
