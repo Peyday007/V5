@@ -7148,6 +7148,29 @@ when the brief's whole optimization rule is that it is not.**
   hidden button is not authorization, and the route refuses a worker by
   principal type as well as by level.
 
+  **Two sessions built the start control, and the other one's is what ships.
+  The correction is recorded rather than quietly applied.** Both found the same
+  gap — a page that said a person must decide with nothing to press — and both
+  filled it, so the merge left two `StartProgramme` components for one control.
+  Theirs is kept, and on grounds rather than on which landed first: it **arrives
+  prefilled**, which is §24's rule that a decision is a proposal to approve
+  rather than a form to fill in, and mine started empty — so mine broke the rule
+  this same paragraph is written from, one screen along from where §24 records
+  it.
+
+  What mine had and theirs does not is a **confirmation step on starting**, and
+  dropping it is the sentence directly above applied to itself: archiving
+  confirms because it withdraws a grant, and starting a read-only programme that
+  is idempotent by the server is the reversible kind. Asking twice for a
+  reversible decision is how a confirmation stops meaning anything at the one
+  that is not. `Lifecycle` keeps its confirmation on archive.
+
+  `machinesBrowserToDatabase` drove the deleted card and failed the instant it
+  went, which is the guard working rather than an inconvenience. Its
+  confirmation assertion is **removed rather than adapted**: asserting a control
+  that no longer exists is a vacuous guard, and §41 already records what one
+  costs — it reads as coverage.
+
 `npm run manufacturing` remains the terminal door, calling exactly what the
 routes call, for the operations a browser is not needed for.
 
