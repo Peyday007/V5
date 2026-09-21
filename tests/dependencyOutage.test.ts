@@ -48,7 +48,9 @@ import {
   claimWork,
   completeWork,
   enqueueWork,
+  failWork,
   getWorkItem,
+  regrantWorkAttempts,
   releaseWork,
   type OwnershipProof,
 } from '../server/repos/workQueue.ts';
@@ -473,5 +475,101 @@ describe('CASE D/F — what the queue may and may not conclude', () => {
     const again = await claimAudit(fourth);
     expect(again).toHaveLength(1);
     expect((await getWorkItem(itemId))!.attemptCount).toBe(2);
+  });
+});
+
+/* ========================================================================= */
+
+describe('the ceiling binds, so it needs a way past it', () => {
+  async function spend(maxAttempts: number): Promise<{ id: string; workerId: string; scopes: { projectId: string; scopes: 'queue:claim'[] }[] }> {
+    const item = await enqueueWork({
+      projectId,
+      workType: 'SYNTHETIC_ECHO',
+      payload: {},
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      requiredScopes: ['queue:claim'],
+      maxAttempts,
+    });
+    const worker = await createWorker({ name: `w-${tag()}`, createdByType: 'SYSTEM', createdById: 't' });
+    const scopes = [{ projectId, scopes: ['queue:claim' as const] }];
+    for (let n = 0; n < maxAttempts; n += 1) {
+      const claimed = await claimWork({ workerId: worker.id, scopes });
+      expect(claimed).toHaveLength(1);
+      await expireLease(item.id);
+    }
+    expect(await claimWork({ workerId: worker.id, scopes })).toHaveLength(0);
+    return { id: item.id, workerId: worker.id, scopes };
+  }
+
+  it('makes an exhausted item claimable again, without resetting what it spent', async () => {
+    /*
+     * An escalation with no answering transition is stuck rather than waiting.
+     * Before the ceiling bound at the claim there was no escalation to answer —
+     * the item simply cycled — so this is the transition that has to arrive
+     * with the guard rather than after it. `regrantBinAttempts` is the same
+     * function one object up and every restriction here is its.
+     */
+    const spent = await spend(2);
+    const raised = await regrantWorkAttempts({
+      workItemId: spent.id,
+      maxAttempts: 5,
+      reason: 'a dependency failed, not the work',
+      actorType: 'SYSTEM',
+    });
+    expect(raised.raised).toBe(true);
+    // The history stays. §5: the spent attempts are how a reader sees this.
+    expect(raised.item!.attemptCount).toBe(2);
+    expect(raised.item!.maxAttempts).toBe(5);
+
+    const again = await claimWork({ workerId: spent.workerId, scopes: spent.scopes });
+    expect(again).toHaveLength(1);
+    expect(again[0]!.attemptNumber).toBe(3);
+  });
+
+  it('only ever raises, so it cannot be used to strand an item', async () => {
+    const spent = await spend(2);
+    const lowered = await regrantWorkAttempts({
+      workItemId: spent.id,
+      maxAttempts: 1,
+      reason: 'should change nothing',
+      actorType: 'SYSTEM',
+    });
+    expect(lowered.raised).toBe(false);
+    expect(lowered.item!.maxAttempts).toBe(2);
+  });
+
+  it('refuses a terminal item, so a finished one cannot be reopened by a number', async () => {
+    const item = await enqueueWork({
+      projectId,
+      workType: 'SYNTHETIC_ECHO',
+      payload: {},
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      requiredScopes: ['queue:claim'],
+      maxAttempts: 2,
+    });
+    const worker = await createWorker({ name: `w-${tag()}`, createdByType: 'SYSTEM', createdById: 't' });
+    const claimed = await claimWork({
+      workerId: worker.id,
+      scopes: [{ projectId, scopes: ['queue:claim'] }],
+    });
+    expect(claimed).toHaveLength(1);
+    const failed = await failWork(proofOf(claimed[0]!, worker.id), {
+      category: 'INVALID_INPUT',
+      detail: 'this input will never work',
+      retryable: false,
+    });
+    expect(failed.ok).toBe(true);
+    expect((await getWorkItem(item.id))!.state).toBe('FAILED');
+
+    const raised = await regrantWorkAttempts({
+      workItemId: item.id,
+      maxAttempts: 9,
+      reason: 'should change nothing',
+      actorType: 'SYSTEM',
+    });
+    expect(raised.raised).toBe(false);
+    expect((await getWorkItem(item.id))!.state).toBe('FAILED');
   });
 });

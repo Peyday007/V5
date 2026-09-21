@@ -55,6 +55,7 @@ import {
   regrantBinAttempts,
   sweepExpiredBinLeases,
 } from '../server/repos/bins.ts';
+import { getWorkItem, regrantWorkAttempts } from '../server/repos/workQueue.ts';
 import { reconcileBins, reopenParkedBin } from '../server/services/bins/service.ts';
 import { evaluateContract, readSurfaceProbe } from '../server/services/bins/contracts.ts';
 import {
@@ -1875,6 +1876,77 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === 'regrant-work') {
+    /*
+     * The same thing one object down, and it exists because the ceiling now
+     * binds where it did not.
+     *
+     * `failWork` has always honoured `max_attempts`, so an item a worker
+     * *reports* failed retires correctly. An item whose lease merely expires —
+     * which is what an infrastructure failure looks like from the queue — was
+     * re-offered for ever, charged another attempt each time, and nothing read
+     * the number again. Production held `wki_207ff7c14abf46c19fd8` at 4 of 2
+     * and `wki_7b51a43e958f42f7b5ba` at 5 of 2, both on leases that lapsed
+     * days earlier. `claimWork` carries the clause now, in the candidate read
+     * and in the swap.
+     *
+     * Which means an item can genuinely stop, and an escalation with no
+     * answering transition is stuck rather than waiting. This is it, with
+     * `regrant`'s restrictions verbatim: the ceiling rises, the count and its
+     * history stay, a terminal item is refused, and the reason comes from a
+     * closed set because a free-text one here would be a caller writing its
+     * own audit trail.
+     */
+    const id = arg(0);
+    const to = Number(arg(1) ?? '0');
+    if (!id || !Number.isInteger(to) || to < 1 || to > 100) {
+      console.log('STEP10 REFUSED: pass a work item id and a new ceiling between 1 and 100.');
+      process.exitCode = 1;
+      return;
+    }
+    const REASONS: Record<string, string> = {
+      'dependency-outage':
+        'Attempts spent on a dependency failing rather than on the work failing — a submission ' +
+        'the server committed was reported to the worker as a timeout, so the worker could not ' +
+        'complete its own item and the lease lapsed. The effect is recorded; what was lost was ' +
+        'the reply. Not spent on the item failing.',
+      'budget-too-small':
+        'Attempts spent on ordinary progress rather than on failure — the budget was sized ' +
+        'below what this item legitimately needs. Not spent on the item failing.',
+      'platform-defect':
+        'Attempts spent on a Brain-side defect that left the worker unable to do the work it ' +
+        'was handed, and which has since been corrected. Not spent on the item failing.',
+    };
+    const code = arg(2) ?? 'dependency-outage';
+    const reason = REASONS[code];
+    if (!reason) {
+      console.log(
+        `STEP10 REFUSED: unknown reason code "${code}". One of: ${Object.keys(REASONS).join(', ')}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const before = await getWorkItem(id);
+    if (!before) {
+      console.log('STEP10 REFUSED: no such work item.');
+      process.exitCode = 1;
+      return;
+    }
+    const outcome = await regrantWorkAttempts({
+      workItemId: id,
+      maxAttempts: to,
+      reason,
+      actorType: 'SYSTEM',
+      actorId: 'step10 regrant-work',
+    });
+    console.log(
+      `STEP10: OK regrant-work ${id} raised=${outcome.raised} ` +
+        `attempts=${outcome.item?.attemptCount ?? '\u2014'}/${outcome.item?.maxAttempts ?? '\u2014'} ` +
+        `was=${before.attemptCount}/${before.maxAttempts} state=${outcome.item?.state ?? '\u2014'}`,
+    );
+    return;
+  }
+
   if (command === 'probe') {
     /*
      * Ask a fired worker what its execution surface can actually reach.
@@ -2499,9 +2571,10 @@ async function main(): Promise<void> {
     );
     const total = rows.reduce((sum, row) => sum + Number(row.n), 0);
     if (total === 0) {
-      console.log('No dispatcher tick has ever failed on this Brain.');
+      console.log('STEP10: OK tick-failures none — no dispatcher tick has ever failed on this Brain.');
       return;
     }
+    console.log(`STEP10: OK tick-failures total=${total} distinct=${rows.length}`);
     console.log(`DISPATCH_TICK_FAILED: ${total} in ${rows.length} distinct message(s), newest first.`);
     console.log('');
     for (const row of rows) {

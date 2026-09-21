@@ -55,6 +55,7 @@
  * is work that is safe to perform more than once.
  */
 import { getDb } from '../db/database.ts';
+import { recordEvent } from './events.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, toJson } from './util.ts';
 import type {
@@ -924,6 +925,72 @@ export async function releaseWork(
 export type CancelResult =
   | { ok: true; item: WorkItem }
   | { ok: false; reason: 'NOT_FOUND' | 'ALREADY_TERMINAL' };
+
+/**
+ * Give one work item more attempts, because a fault outside the work spent
+ * the ones it had.
+ *
+ * `regrantBinAttempts` is this function one object up, and its argument is
+ * inherited verbatim: the budget exists to stop Brain bouncing workers off
+ * work that is not moving, and it was never meant to measure how *long* a
+ * piece of work legitimately is. What is new is that the ceiling now binds at
+ * the claim as well as at `failWork`, so an item that used to be re-offered
+ * for ever now stops — correctly, and with no way past it. An escalation with
+ * no answering transition is stuck rather than waiting, for the umpteenth
+ * time in this repository, so here is the transition.
+ *
+ * Every restriction is load-bearing and every one of them is `regrantBinAttempts`'s:
+ *
+ *   - It **raises the ceiling and never resets the count**. §5: the spent
+ *     attempts stay in the history, where a reader can see how this happened.
+ *   - It **only ever raises**, so it cannot be used to strand an item.
+ *   - It **refuses a terminal item**, so a finished, failed or cancelled one
+ *     cannot be quietly reopened by widening a number.
+ *   - It **records why**, on the project's own append-only history. An
+ *     operator action with no audit row is invariant 3.
+ *
+ * It is not a retry and it performs no effect: an item whose lease is live
+ * stays exactly where it is, and one that is `QUEUED` becomes claimable again
+ * the next time somebody asks, through the ordinary path and with the ordinary
+ * admission checks.
+ */
+export async function regrantWorkAttempts(input: {
+  workItemId: string;
+  maxAttempts: number;
+  reason: string;
+  actorType: ActorType;
+  actorId?: string | null;
+}): Promise<{ item: WorkItem | null; raised: boolean }> {
+  const db = getDb();
+  const now = queueNow();
+  const result = await db.run(
+    `UPDATE work_items SET max_attempts = ?, updated_at = ?
+      WHERE id = ? AND max_attempts < ?
+        AND state IN ('QUEUED', 'LEASED')`,
+    [input.maxAttempts, now, input.workItemId, input.maxAttempts],
+  );
+  const item = await getWorkItem(input.workItemId);
+  if (result.changes === 1 && item) {
+    await recordEvent({
+      projectId: item.projectId,
+      entityType: 'RUN',
+      entityId: item.id,
+      eventType: 'WORK_ATTEMPTS_REGRANTED',
+      payload: {
+        // The actor travels in the payload because `project_events` records
+        // one, and an operator action with no author answers nothing later.
+        actorType: input.actorType,
+        actorId: input.actorId ?? null,
+        workItemId: item.id,
+        workType: item.workType,
+        attemptCount: item.attemptCount,
+        maxAttempts: item.maxAttempts,
+        reason: input.reason,
+      },
+    });
+  }
+  return { item, raised: result.changes === 1 };
+}
 
 /**
  * Cancellation wins, deterministically.

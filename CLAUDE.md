@@ -645,6 +645,14 @@ never a process-local lock.
   which is what lets `concludeUnworkablePackets` see it and turn the stop into
   a decision.
 
+  **A ceiling that binds needs a way past it**, and before this there was no
+  escalation to answer because the item simply cycled. `regrantWorkAttempts` is
+  `regrantBinAttempts` one object down, with every restriction verbatim: it
+  raises and never resets, it only ever raises, it refuses a terminal item, and
+  it records why on the project's own append-only history.
+  `step10 regrant-work` is the surface, and its reason comes from a closed set
+  because a free-text one there would be a caller writing its own audit trail.
+
   `releaseWork`'s docstring said the opposite of `releaseWork`, and is
   corrected in place rather than deleted: it claimed a release does not refund
   the attempt, while the body — and the body's own comment, recording what that
