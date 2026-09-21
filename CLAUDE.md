@@ -617,6 +617,18 @@ never a process-local lock.
   ordinary answers. Reporting a connector as down because one reply was slow is
   the one mistake that section exists to prevent.
 
+  **And the commonest reason a worker finds the connector unreachable is not a
+  fault at all.** Measured from outside the runner while deploy 305 was
+  restarting the machine on 2026-09-21: `GET /healthz` answered **503 after
+  35.7s**, again **503 after 35.7s**, then **200 after 28.8s** — about two
+  minutes in which every MCP call fails, on an endpoint that is a fixed string
+  with no database behind it. Every deploy does this, and a fired worker that
+  arrives in that window sees exactly what the notification described. A third
+  shape was observed the same day and is the same category: the connector proxy
+  answering `-32600 Anthropic Proxy: Invalid content from server`, which
+  succeeded on the next call. None of the three is a reason to stop; all three
+  are answered by asking again.
+
 - **A role that has already been argued is not work, and the redelivery was
   charged for it.** `reconcileArguedAuditRoles` retires exactly that item on
   the tick, and it cannot win the race: the item becomes claimable the instant
