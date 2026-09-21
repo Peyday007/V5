@@ -29,7 +29,14 @@ import {
   markCredentialUsed,
   touchSession,
 } from '../../repos/identity.ts';
-import { constantTimeEquals, digestSecret, parseOAuthToken, parseWorkerCredential } from './secrets.ts';
+import {
+  constantTimeEquals,
+  digestSecret,
+  parseBridgeCredential,
+  parseOAuthToken,
+  parseWorkerCredential,
+} from './secrets.ts';
+import { markBridgeCredentialUsed, resolveBridgeCredential } from '../../repos/bridge.ts';
 import { findLiveToken, touchToken } from '../../repos/oauth.ts';
 
 /** The cookie a signed-in person carries. */
@@ -188,6 +195,10 @@ export async function authenticateRequest(req: Request): Promise<AuthOutcome> {
     // `brnt_` is a token this Brain minted after a human approved a connection.
     // Both resolve to the same WORKER principal.
     if (parseOAuthToken(bearer)) return await authenticateOAuth(bearer);
+    // `brnc_` is the third marker and the only one that resolves to a person.
+    // It is told apart here rather than by trying each in turn, so a worker
+    // credential can never fall through into the person branch or the reverse.
+    if (parseBridgeCredential(bearer)) return await authenticateBridge(bearer);
     return await authenticateWorker(bearer, req);
   }
 
@@ -221,6 +232,60 @@ async function authenticateHuman(secret: string, req: Request): Promise<AuthOutc
       mustChangePassword: user.mustChangePassword,
       credentialId: session.id,
       authMethod: 'SESSION_COOKIE',
+      memberships: await membershipsFor('HUMAN', user.id),
+      requestId: '',
+    },
+  };
+}
+
+/**
+ * A conversation bridge credential.
+ *
+ * **The principal is the person who holds it**, which makes this the one bearer
+ * in this Brain that is not a worker — and the reason that is safe rather than
+ * a hole is that it can be nothing else. There is no column on
+ * `bridge_credentials` naming a worker, so no configuration of it produces a
+ * `WORKER` principal, exactly as §22 arranged the converse for `oauth_tokens`.
+ *
+ * Everything that makes a person's session safe is here too, and read live
+ * rather than baked into the credential: the account is re-read on every
+ * request, a disabled one is refused mid-sentence, and memberships come from
+ * current rows so revoking a project lands on the next call.
+ *
+ * What it deliberately does **not** carry is `isBrainAdmin`. A bridge
+ * credential is a key somebody pasted into a chat client, and a chat client
+ * holding Brain administration would be one prompt away from administering
+ * this Brain. Everything an administrator may do stays behind the cookie, so
+ * losing this credential loses a person's own conversations and nothing else.
+ */
+async function authenticateBridge(presented: string): Promise<AuthOutcome> {
+  const parsed = parseBridgeCredential(presented);
+  if (!parsed) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+
+  // Unknown prefix, wrong secret, revoked and expired are one answer, decided
+  // inside the repository so no caller can build a different refusal out of
+  // them. The differences between them are what somebody probing wants.
+  const credential = await resolveBridgeCredential(parsed.prefix, parsed.secret);
+  if (!credential) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+
+  const user = await getUser(credential.userId);
+  if (!user) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+  if (user.disabled) return { ok: false, reason: 'PRINCIPAL_DISABLED' };
+
+  void markBridgeCredentialUsed(credential.id);
+
+  return {
+    ok: true,
+    principal: {
+      type: 'HUMAN',
+      id: user.id,
+      handle: user.email,
+      displayName: user.displayName,
+      // Deliberately false however the account is configured. See above.
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId: credential.id,
+      authMethod: 'BRIDGE_BEARER',
       memberships: await membershipsFor('HUMAN', user.id),
       requestId: '',
     },
