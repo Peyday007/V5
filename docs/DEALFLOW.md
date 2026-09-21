@@ -167,6 +167,15 @@ Three reasons a total is withheld, all named rather than silent:
 - `MIXED_BASIS` — reconciling a per-container rate with a per-unit price needs
   a load plan Brain does not have, and assuming one would be inventing it
 
+**A published zero is a figure.** A duty-free tariff line is one of the facts
+that actually makes one of these deals work, and it is published as `0` rather
+than as a silence — so the missing-line test asks whether the amount is `null`
+rather than whether it is truthy. The first version asked the second, and
+withheld the whole landed cost over a zero duty while every line was
+established, naming the duty as the thing nobody had looked up. That is the
+unknown taken as an assumption in the *unfavourable* direction, which is rarer,
+no less wrong, and reads as caution.
+
 ### Which end of the lane a figure belongs to
 
 A worker declares one market per claim, and for a cost line the market that
