@@ -214,6 +214,152 @@ describe('a launch interrupted between its steps is finished, not restarted', ()
     expect(await countBins()).toBe(2);
   });
 
+  it('builds no further bin once the packet itself has finished', async () => {
+    /*
+     * The loop production was actually in, and the one the suite could not see.
+     *
+     * Every other case here drives `repairLaunches`, whose SQL already refuses a
+     * mission whose orchestration has finished. The ordinary tick does not go
+     * through that SQL: it calls `launch()` directly for a queued candidate,
+     * `launch()` replays the live mission on its own idempotency key, and
+     * `completeLaunch` then asked one question — can this bin deliver — and
+     * never the other one, which is whether there is anything left to deliver.
+     *
+     * So a packet that had finished perfectly well, with its report filed and
+     * audited and its bin correctly `COMPLETE`, earned a brand-new bin on every
+     * tick. Each one went `READY`, earned a dispatch intent, and cost a real
+     * subscription activation to be told it was drained. Nothing anywhere went
+     * red: the bins completed, the Routine runs read `SUCCEEDED`, and the work
+     * queued behind them simply never got a worker.
+     *
+     * The assertion is therefore a *count*, taken across two replays, because
+     * the defect's whole signature is that each individual step looks correct.
+     */
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const firstBin = mission.binId!;
+    const orchestrationId = mission.orchestrationId!;
+
+    // The packet finished and its bin was satisfied — the ordinary happy ending.
+    await updateOrchestration(orchestrationId, { status: 'COMPLETE_WITH_GAPS' });
+    await getDb().run(`UPDATE bins SET state = 'COMPLETE' WHERE id = ?`, [firstBin]);
+
+    // What the tick does next, twice, while the mission is still live.
+    const replayed = await launch({ ...spec(), candidateId: candidate.id });
+    expect(replayed.ok).toBe(true);
+    expect(replayed.mission!.id).toBe(mission.id);
+    await launch({ ...spec(), candidateId: candidate.id });
+
+    expect(await countBins()).toBe(1);
+    expect((await getMission(mission.id))!.binId).toBe(firstBin);
+    // Nothing is destroyed to achieve it: the finished bin keeps its row.
+    expect((await getBin(firstBin))?.state).toBe('COMPLETE');
+  });
+
+  it('builds no further bin while the packet is waiting for a person', async () => {
+    /*
+     * The same defect one status along, and the repository had already decided
+     * it: the case below this one asserts `repairLaunches` leaves a spent bin
+     * alone over a `NEEDS_HUMAN` packet, because a new bin there sends a worker
+     * to be told the same thing again. The direct path did it anyway, so the
+     * two readers of one rule disagreed.
+     */
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const firstBin = mission.binId!;
+    const orchestrationId = mission.orchestrationId!;
+
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await updateOrchestration(orchestrationId, { status: 'NEEDS_HUMAN' });
+    await getDb().run(`UPDATE bins SET state = 'COMPLETE' WHERE id = ?`, [firstBin]);
+
+    await launch({ ...spec(), candidateId: candidate.id });
+
+    expect(await countBins()).toBe(1);
+    expect((await getMission(mission.id))!.binId).toBe(firstBin);
+  });
+
+  it('builds no further bin for a working packet with nothing claimable in it', async () => {
+    /*
+     * A bin is how a packet's *work* reaches a worker. One over a packet that
+     * has none is the drained bin this whole guard is about, so a working
+     * status alone is not enough — and when something does queue an item,
+     * `repairLaunches` and the next replay both build the bin then.
+     */
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const firstBin = mission.binId!;
+    const orchestrationId = mission.orchestrationId!;
+
+    await updateOrchestration(orchestrationId, { status: 'AUDITING' });
+    await getDb().run(
+      `UPDATE work_items SET state = 'SUCCEEDED' WHERE orchestration_id = ?`,
+      [orchestrationId],
+    );
+    await getDb().run(`UPDATE bins SET state = 'COMPLETE' WHERE id = ?`, [firstBin]);
+
+    await launch({ ...spec(), candidateId: candidate.id });
+    expect(await countBins()).toBe(1);
+
+    // And it is a wait rather than a refusal: the moment there is something to
+    // hand out, the same replay builds the bin.
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await launch({ ...spec(), candidateId: candidate.id });
+    expect(await countBins()).toBe(2);
+  });
+
+  it('still gives a live packet a new bin when its own is spent', async () => {
+    /*
+     * The other side of the narrowing, asserted here rather than only through
+     * `repairLaunches`, because a guard that refused everything would pass the
+     * test above and strand every reopened round.
+     */
+    await authorized();
+    const candidate = await idea();
+    const launched = await launch({ ...spec(), candidateId: candidate.id });
+    const mission = launched.mission!;
+    const firstBin = mission.binId!;
+    const orchestrationId = mission.orchestrationId!;
+
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_AUDIT',
+      payload: { role: 'JUDGE' },
+      createdByType: 'SYSTEM',
+      requiredScopes: ['queue:claim'],
+      orchestrationId,
+    });
+    await updateOrchestration(orchestrationId, { status: 'AUDITING' });
+    await getDb().run(`UPDATE bins SET state = 'COMPLETE' WHERE id = ?`, [firstBin]);
+
+    await launch({ ...spec(), candidateId: candidate.id });
+
+    const after = (await getMission(mission.id))!;
+    expect(after.binId).not.toBe(firstBin);
+    expect((await getBin(after.binId!))?.state).toBe('READY');
+    expect(await countBins()).toBe(2);
+  });
+
   it('leaves a spent bin alone when the packet is waiting for a person', async () => {
     /*
      * The narrowing that keeps the repair from doing harm.
