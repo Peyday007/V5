@@ -2781,6 +2781,31 @@ remote.
   spending that budget to shorten a queue trades a legible timeout for
   `EMAXCONNSESSION` on whichever statement happened to be running.
 
+- **`ceiling 2` is the harness's own pool, and I read it as the deployment's.
+  The correction is recorded rather than quietly applied.** A prior report of
+  mine named `BRAIN_DATABASE_POOL_SIZE=2` as a production misconfiguration and
+  proposed raising it, on the strength of deploy 266's
+  `2/2 connection(s) in use, 0 idle, 380 caller(s) waiting, ceiling 2`. That
+  reading is real and it is `verify-hosted.ts` describing the pool it sets for
+  itself, three thousand lines into its own file, with a comment saying why.
+  **Nothing about it was ever a fact about the running Brain**, and a pool
+  raised on it would have been raised against a number that was never the
+  application's.
+
+  Measured instead, on 2026-09-21: `flyctl secrets list` names twenty-three
+  deployment secrets and `BRAIN_DATABASE_POOL_SIZE` is **not one of them**, so
+  `readPoolSize()` answers its default of ten; `flyctl status` shows **one**
+  machine. So the app holds ten of the pooler's fifteen, an operator script
+  beside it holds two, and three are left — which is the arithmetic the bullet
+  above already states, arrived at from the other end. **Ten is both the
+  intended default and the highest defensible value**, and the honest action on
+  an instruction to correct it is to report that there is nothing to correct.
+
+  The reading that would have been the right one was available the whole time
+  and is cheap: a secret's *name* says whether a default is in force, and it is
+  not a secret's value. `logs.yml` takes it now, guarded by whole command forms
+  so that `secrets list` is a read and `secrets set` is refused by name.
+
 - **What a run proved is separate from what it failed at, and `d973175` is the
   worked example.** That deploy failed both hosted verifications at the 300s
   wall above. `Deploy` nonetheless succeeded and the image was released; the
