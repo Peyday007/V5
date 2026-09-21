@@ -626,3 +626,84 @@ describe('nothing in this kernel builds, buys, tools or enters anything', () => 
     expect(program).toMatch(/const RESEARCH_WORK = 'RESEARCH'/);
   }, 60000);
 });
+
+
+/**
+ * The live proof runs on the released image, and nothing in this suite runs
+ * it — so this asserts it is still there.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the repository is read rather than the behaviour driven
+ * ---------------------------------------------------------------------------
+ *
+ * Everything above drives real services against a real database, which is the
+ * right instrument for the rules themselves. It cannot answer whether the
+ * **deployed** Brain still refuses a machine at this door, and an
+ * administrator's screenshot does not settle it either — the administrator was
+ * never refused.
+ *
+ * `scripts/verify-hosted.ts` is the one caller that runs against the released
+ * image with a real member session and a real worker credential, so the live
+ * proof belongs there. Nothing in the suite executes that script, which is
+ * exactly how §33's `geography_basis` defect reached production with the whole
+ * suite green — so the guard reads it.
+ *
+ * ---------------------------------------------------------------------------
+ * And it must create nothing
+ * ---------------------------------------------------------------------------
+ *
+ * A release gate that started a programme would leave a real programme, a real
+ * research grant and a real set of questions behind in the Brain it was
+ * verifying, every deploy, for ever. The boundary is provable from refusals
+ * alone, so the check is written that way — and this asserts that too, because
+ * "it creates nothing" is a property somebody could remove while every
+ * assertion in it stayed green.
+ */
+describe('the live proof is in the gate that runs on the deployed image', () => {
+  const script = SOURCE('scripts/verify-hosted.ts');
+
+  it('checks the manufacturing boundary, and is actually called', () => {
+    expect(script).toContain('async function manufacturingBoundary(');
+    // Declared and never called is the failure mode this repository keeps
+    // meeting, and it is the one a reader of the function cannot see.
+    expect(script).toContain('await manufacturingBoundary(fixtures, cookie);');
+  });
+
+  it('proves absent and forbidden are the same body, not just the same status', () => {
+    expect(script).toContain('the two refusals are the same body, not just the same status');
+  });
+
+  it('proves a machine is refused at the read and at both person-only writes', () => {
+    expect(script).toContain('a worker is refused the manufacturing read by principal type');
+    expect(script).toContain('a worker cannot start a manufacturing programme');
+    expect(script).toContain('a worker cannot record a capability as held');
+  });
+
+  /**
+   * It starts nothing, and that is asserted rather than trusted.
+   *
+   * The only two POSTs it makes are the ones it expects to be **refused**, and
+   * it reads the programme back afterwards to prove nothing was created. A
+   * check that started one to test the happy path would be leaving a programme
+   * behind on every deploy.
+   */
+  it('creates no programme, and reads back to prove it', () => {
+    const body = script.slice(
+      script.indexOf('async function manufacturingBoundary('),
+      script.indexOf('async function workerAuthentication('),
+    );
+    expect(body.length).toBeGreaterThan(500);
+
+    // Every POST it makes is made as a machine, which cannot succeed.
+    const posts = [...body.matchAll(/method: 'POST'/g)];
+    expect(posts.length).toBe(2);
+    expect([...body.matchAll(/bearer: fixtures\.credential/g)].length).toBeGreaterThanOrEqual(3);
+    // And no cookie-authenticated mutation at all, which is the only kind that
+    // could have succeeded.
+    expect(body).not.toMatch(/method: 'POST',\s*\n\s*cookie:/);
+    expect(body).not.toMatch(/method: 'PATCH',\s*\n\s*cookie:/);
+
+    // It reads back afterwards rather than assuming.
+    expect(body).toContain('and still no programme exists on that project');
+  });
+});

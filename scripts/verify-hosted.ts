@@ -1112,6 +1112,118 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
   );
 }
 
+/**
+ * The manufacturing kernel's door, on the released image, creating nothing.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this check does not start a programme
+ * ---------------------------------------------------------------------------
+ *
+ * A release gate that started one would leave a real programme, a real research
+ * grant and a real set of questions behind in the Brain it was verifying —
+ * every deploy, for ever. What is worth proving here is the **boundary**, and
+ * the boundary is provable from refusals: a project with no programme answers
+ * the same 404 a project you may not see answers, a machine is refused by
+ * principal type at the reads as well as the writes, and the two person-only
+ * writes are refused to a member who is not an administrator of that project.
+ *
+ * So nothing below is a POST that succeeds. The one thing it reads that *is* a
+ * fact about the release is which routes exist at all — a 404 from
+ * `requireProject` and a 404 from Express having no such route are the same
+ * status, so the check that separates them is the one that would notice the
+ * router being dropped from the build.
+ */
+async function manufacturingBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nThe manufacturing kernel, as a member and as a machine');
+  if (!cookie) {
+    record('manufacturing boundary', false, 'skipped: there was no session to test with');
+    return;
+  }
+
+  /*
+   * A project the member genuinely may read, with no programme on it.
+   *
+   * The answer is 404 — *this project has no manufacturing programme* — and it
+   * is byte-identical to the answer a project they may not see gives, which is
+   * invariant 23 at this door. Compared rather than asserted, because a status
+   * that matches while the body differs is still an oracle.
+   */
+  const mine = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, { cookie });
+  expectStatus('a project with no programme answers not-found', mine.status, 404);
+
+  if (fixtures.holdout) {
+    const theirs = await call(`/api/projects/${fixtures.holdout.id}/manufacturing`, { cookie });
+    expectStatus('and so does a project this member may not see', theirs.status, 404);
+    record(
+      'the two refusals are the same body, not just the same status',
+      JSON.stringify(mine.json) === JSON.stringify(theirs.json),
+      JSON.stringify(mine.json) === JSON.stringify(theirs.json)
+        ? 'byte-identical'
+        : `absent=${JSON.stringify(mine.json)} forbidden=${JSON.stringify(theirs.json)}`,
+    );
+  }
+
+  /*
+   * A machine is refused at the **read**, which is wider than the policy
+   * module's own refusal and is the half `requirePerson` adds.
+   *
+   * The credential used here is the one that authenticates and holds the scope
+   * for this project, so a refusal means *a machine may not do this* rather
+   * than *this credential is dead* — which the check above it has already
+   * established by getting a 200 out of it elsewhere.
+   */
+  const machineReads = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, {
+    bearer: fixtures.credential,
+  });
+  record(
+    'a worker is refused the manufacturing read by principal type',
+    machineReads.status === 404 || machineReads.status === 403,
+    `status=${machineReads.status}`,
+  );
+
+  /*
+   * And the two person-only writes are refused to it as well.
+   *
+   * Neither of these creates anything on success, because neither succeeds:
+   * starting a programme and recording a held capability are both ADMIN plus
+   * `requirePerson`, and a worker is refused by level *and* by type. A 200
+   * from either would mean a machine had just started a programme in the Brain
+   * this gate is verifying, which is exactly the failure worth catching here.
+   */
+  const machineStarts = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, {
+    method: 'POST',
+    bearer: fixtures.credential,
+    body: {
+      objective:
+        'A release gate proving a machine cannot start a programme. If this ever succeeds, ' +
+        'the boundary is gone and this row is the evidence.',
+    },
+  });
+  record(
+    'a worker cannot start a manufacturing programme',
+    machineStarts.status !== 200 && machineStarts.status !== 201,
+    `status=${machineStarts.status}`,
+  );
+
+  const machineHolds = await call(
+    `/api/projects/${fixtures.scope.id}/manufacturing/capabilities`,
+    {
+      method: 'POST',
+      bearer: fixtures.credential,
+      body: { name: 'release gate', note: 'a machine must not be able to record this' },
+    },
+  );
+  record(
+    'a worker cannot record a capability as held',
+    machineHolds.status !== 200 && machineHolds.status !== 201,
+    `status=${machineHolds.status}`,
+  );
+
+  // Nothing was created by any of the above, read back from the Brain itself.
+  const after = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, { cookie });
+  expectStatus('and still no programme exists on that project', after.status, 404);
+}
+
 async function workerAuthentication(fixtures: Fixtures): Promise<void> {
   console.log('\nWorker credentials');
 
@@ -3948,6 +4060,9 @@ async function main(): Promise<void> {
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await sharedCashBoundary(fixtures, cookie);
+    // Before revocation, like the checks below it: the worker refusals mean
+    // "a machine may not do this" only while the credential still works.
+    await manufacturingBoundary(fixtures, cookie);
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
     await effectChecks(fixtures, fixtures.adminCookie, cookie);
