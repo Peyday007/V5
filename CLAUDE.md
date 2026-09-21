@@ -7600,7 +7600,7 @@ needed* line, which is also used as a background and is therefore an accent
 decision the owner owns — is reported and not repaired, and the cycle closed
 `NEEDS_PERSON` saying so.
 
-## 42. A person is set up or they are not, and nothing could answer that.
+## 43. A person is set up or they are not, and nothing could answer that.
 
 Every fact needed to answer *is this account set up* was already derivable and
 no single place held them together. `people.ts` says whether somebody can sign
