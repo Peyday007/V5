@@ -102,9 +102,15 @@ Three things, and any one of them missing authorizes nothing:
 3. push access **where the worker runs** — Brain holds no repository credential
    and must never mint one.
 
-`V5` is deliberately absent: a campaign that could rewrite the machinery
-executing it is the one whose failure mode is not contained by declining a pull
-request.
+`V5` **was** deliberately absent, on the reasoning that a campaign which could
+rewrite the machinery executing it is the one whose failure mode is not
+contained by declining a pull request. The owner has since named Brain as an
+intended target, so the envelope grants `brain` and the containment is the
+grant's `forbiddenPaths`: a campaign there may not own the envelope, the
+project scope, `services/identity/**`, `services/bins/routing.ts`, either
+approval envelope, any workflow, `CANONICAL_BRANCH`, `fly.toml` or the
+`Dockerfile`. The correction is recorded rather than edited out; see
+`docs/FACTORY.md`, *Brain itself, as a target*.
 
 **Step 2 is one action on the Build surface, not four commands.** The routing
 row is one of four rows an operator used to compose by hand — an identity, a

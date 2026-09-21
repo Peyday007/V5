@@ -1,5 +1,7 @@
 {
   "objective": "Close the two gaps the work register leaves a person to fill by hand. First: when a campaign a workstream points at opens a pull request, nothing records that pull request against the workstream — a person has to notice it and link it, so the register says PR_READY only when somebody remembered, and says IN_PROGRESS about work that is actually waiting on a review. Second: the register cannot say `MERGED`, `DEPLOYED` or `VERIFIED_LIVE` about anything without a person typing an attestation, because Brain holds no forge credential and refuses to read a URL as a merge — which is right, and leaves the whole right-hand half of the owner's question 'what actually shipped?' answerable only by hand.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
   "expectedOutcome": "A workstream pointing at a campaign that has opened a pull request shows that pull request among its readings without anybody linking it, attested by the campaign rather than by a person. And a workstream whose pull request has merged reads MERGED, from evidence Brain recorded when it saw the merge rather than from a sentence somebody typed — with the same refusal as today for anything nobody has attested to.",
   "nonGoals": [
     "Giving Brain a forge credential, or having it poll GitHub. The attestation must come from something that already observes the repository on Brain's behalf, and Brain holding no repository credential is a property §27 states and this must not change.",
@@ -41,7 +43,10 @@
     "tests/workRegister.test.ts",
     "tests/factoryWriteback.test.ts"
   ],
-  "verificationCommands": ["npm run typecheck", "npm test"],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
   "environment": "LOCAL",
   "riskClass": "LOW",
   "rollbackRequirement": "Discard the branch. Nothing outside server/services/register, server/services/factory/writeback.ts, server/repos/register.ts and the two named suites is touched, and the register holds no state column to migrate back."

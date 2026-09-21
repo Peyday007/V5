@@ -2165,6 +2165,24 @@ winning.
   true maximum overlap of real session intervals; the sum of declared concurrency
   is a projection and is never reported as throughput. A ceiling nobody has
   observed reads UNKNOWN and stays UNKNOWN.
+
+  **And on the hosted plane nobody had observed one, over sessions Brain
+  watched from beginning to end.** Every writer of `factory_sessions` is on the
+  local plane, because each one *starts* a process it can time; the hosted
+  plane starts nothing, so it opened no sessions and every hosted campaign
+  reported `UNKNOWN` and `0`. That is not the rule above working — it is a
+  column nothing reads, at the one table the question is asked of, while the
+  dispatch row, the arrival, the lease and the terminal event were all sitting
+  in `bin_events`. `services/factory/sessions.ts` reads them back: the interval
+  is Brain's own assignment and terminal events, the worker is the one Brain
+  leased the bin to, the account comes from the `bin_dispatch` row Brain wrote
+  when it chose the surface, and nothing a worker said about itself
+  contributes. It is derived on the tick rather than hooked to a completion, so
+  it reaches the episodes already stranded, and it is idempotent by `(bin_id,
+  lease_generation)` rather than by a flag. **It under-counts rather than
+  over-counts**: an assignment with no close event — a lease that simply
+  expired — is left out instead of being given an invented end, so the overlap
+  reported is a floor.
 - **No paid model API can be activated by accident.** The local executor removes
   every API-key variable from the child's environment, so the guarantee is the
   spawn rather than a promise in a comment. A worker authenticates the way the
@@ -2233,9 +2251,16 @@ remote.
   §24's reason — nobody supplies the limits their own work is judged against. It
   is not a security boundary and cannot grant or revoke access; it stops a
   campaign being created against a repository nobody authorized, which is when
-  the decision is cheap. **`V5` is deliberately absent:** a campaign that could
-  rewrite the machinery executing it is the one whose failure mode is not
-  contained by declining a pull request.
+  the decision is cheap. **`V5` *was* deliberately absent**, on the reasoning
+  that a campaign which could rewrite the machinery executing it is the one
+  whose failure mode is not contained by declining a pull request — and that
+  absence was the agent's own default rather than an operator decision, which
+  the envelope's own comment said at the time. The owner has since named Brain
+  as an intended target, so the grant exists and the containment is
+  `forbiddenPaths`: see *Brain is an authorized target now* further down this
+  section, which is the operative sentence. The line is left here rather than
+  edited out because the reasoning still holds and the correction is the
+  record.
 - **Review independence is derived from lineage and enforced twice.** The review
   bin is refused at assignment to any session that implemented part of the
   campaign — before the lease, so the refusal costs no attempt — and the verdict
@@ -8831,6 +8856,7 @@ server/
       repair.ts         a finding becomes work, exactly once
       assemble.ts       the reviewable artifact, and the publishing it refuses
       metrics.ts        throughput from the ledger, with an evidence class
+      sessions.ts       what the hosted plane ran, read back from Brain's own rows
       prompts.ts        every assignment, compiled from rows
       loop.ts           the tick, and every stage's answering transition
       executors/        how a worker is actually run; adding one is a row

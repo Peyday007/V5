@@ -6,10 +6,19 @@ missing**. Every claim below resolves to a row, a test, a commit or a timestamp,
 and the one thing that is not proven here says so in the last section — because
 it cannot be proven from inside Brain at all.
 
-The proving ground is `Peyday007/brain-worker-bootstrap`, the one entry in
-`services/factory/repositoryEnvelope.ts`. `V5` remains deliberately absent
-(§27): a campaign that could rewrite the machinery executing it is the one whose
-failure mode is not contained by declining a pull request.
+The proving ground is `Peyday007/brain-worker-bootstrap`, which was the only
+entry in `services/factory/repositoryEnvelope.ts` on the day this ran.
+
+> **Correction, 2026-09-21.** The sentence that stood here said `V5` remained
+> deliberately absent (§27), because a campaign that could rewrite the
+> machinery executing it is the one whose failure mode is not contained by
+> declining a pull request. That was true of the envelope when this was
+> written and is not true now: the owner named Brain as an intended target,
+> the envelope grants `brain`, and what bounds a campaign there is the grant's
+> `forbiddenPaths` — it may not own what authorizes it, what bounds it, or
+> what deploys it — rather than the repository's absence from the list.
+> Nothing else in this record changes. The run it describes happened against
+> `brain-worker-bootstrap` and is still exactly what it says it is.
 
 ---
 
@@ -242,11 +251,18 @@ disagreed, and an intent deferred on a word the filter had never heard of waited
 out a wall no operator write could shorten. It takes the kinds as a required
 argument now and holds no list at all.
 
-**What still refuses permanently, still does.** `decideRepository` refuses V5 in
-four spellings and every unauthorized remote; onboarding refuses an unknown grant
-without enumerating what it would have allowed; the admission hook refuses a
-worker the other repository's bin ahead of the compare-and-swap, so the bin's
-attempt count is still `0` afterwards. None of those produces a `RoutingRefusal`,
+**What still refuses permanently, still does.** `decideRepository` refuses
+every unauthorized remote, and the retired `oakwood-junk-removal` in four
+spellings — the spelling variants matter because a normalisation the envelope
+did not perform is an authorization somebody typed their way into. *(This
+sentence named `V5` as the refused repository when it was written; see the
+correction at the top. `V5` is now authorized in all four spellings and the
+test that used to assert its refusal asserts its grant, its `production`
+default branch and each load-bearing entry in its `forbiddenPaths`.)*
+Onboarding still refuses an unknown grant without enumerating what it would
+have allowed; the admission hook still refuses a worker the other repository's
+bin ahead of the compare-and-swap, so the bin's attempt count is still `0`
+afterwards. None of those produces a `RoutingRefusal`,
 so none of them is reached by any of the deferral above.
 
 ## An onboarding whose response was lost
