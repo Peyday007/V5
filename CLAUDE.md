@@ -8449,6 +8449,30 @@ one, which is rarer and no less wrong, and which reads as caution. `=== null`
 now, beside a `present` filter that already said `!== null` four lines below
 it — the two readers of one column had disagreed about what a zero means.
 
+**And a ninth was found by reading production rather than by reading code: the
+kernel's only production reading could not be taken while the thing it reads
+was working.** `scripts/cash-report.sh` carried no pool setting at all, so it
+took the adapter's default of ten clients against a Supabase pooler with a
+shared fifteen-client limit. Read beside a deploy's own verification it printed
+the entire sprint — the sprint header, the authorization, ninety-nine ideas,
+forty opportunities, fifty-one industry subjects — and then died on its *last*
+query, `SELECT * FROM deal_observations`, with
+`EMAXCONNSESSION ... pool_size: 15`. §29's sentence at a shell script: a
+reading nobody can take is not a reading, and this one fails exactly when
+somebody most wants it.
+
+`labor-report.sh` already carried the one line and already gave the reason in
+its own comments, which is what makes this a **rule** rather than one fix — a
+rule one of five readers obeys is worse than none, because the next report is
+written by copying whichever one its author happened to open. All five
+`scripts/*-report.sh` now take one connection, and all five print
+`SERVING_REVISION` from the container's own `BRAIN_REVISION`, because a report
+out of a container says nothing about *which* container unless the container
+says so, and the deployment system's label is a claim about what it asked for
+rather than a reading of what is serving. The rule is held by a test that reads
+the repository, for `operatorConsoleRemoved`'s reason: what must be true of
+every file of a kind is not something a behavioural test can see.
+
 **A third thing was corrected and is not a defect, because nothing read it:**
 three comments — the Postgres migration's header, this file's own section
 heading and the test suite's — said *four* compliance layers where
