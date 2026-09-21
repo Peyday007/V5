@@ -304,3 +304,162 @@ describe('the Machines screen, over the real route', () => {
     expect(screen.getAllByText('held').length).toBeGreaterThan(0);
   }, 120000);
 });
+
+
+/**
+ * The three decisions that are a person's, driven from the screen through the
+ * real route to the real row.
+ *
+ * ---------------------------------------------------------------------------
+ * Why these need a seam test and not a component test
+ * ---------------------------------------------------------------------------
+ *
+ * A component suite over a scripted `fetch` passes for a control that posts a
+ * field the route does not take, and a service suite with no screen passes for
+ * a route nothing renders a control for. Both of those are how a control
+ * becomes decorative. Here the button is pressed, the request crosses a real
+ * socket to the real router, and the assertion is on the **row**.
+ *
+ * `cashBrowserToDatabase` records the production instance: a control that
+ * posted a field the route did not read, with every server test passing.
+ */
+describe('the decisions that are a person’s, from the screen to the row', () => {
+  async function mountFresh(): Promise<void> {
+    await act(async () => {
+      render(createElement(MachinesView, { projectId }));
+    });
+  }
+
+  /**
+   * Type into a controlled field the way a person does.
+   *
+   * Assigning `.value` directly is invisible to React: its value tracker sees
+   * no change and the `input` event is dropped, so `onChange` never runs and
+   * the button stays disabled. Going through the prototype setter is what
+   * makes this a keystroke rather than a DOM mutation — and this test exists
+   * precisely to catch a control that does not do what pressing it looks like
+   * it does.
+   */
+  function type(field: Element, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(
+      dom.window.HTMLTextAreaElement.prototype,
+      'value',
+    )?.set;
+    setter?.call(field, value);
+    field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  }
+
+  it('starts a programme only when a person confirms, and writes the objective', async () => {
+    await mountFresh();
+    await waitFor(() => expect(screen.getByText('No manufacturing programme')).toBeTruthy());
+
+    // Nothing exists yet, and reading the screen created nothing.
+    expect(await getProgram(projectId)).toBeNull();
+
+    const box = screen.getByPlaceholderText(/Your own sentence/);
+    await act(async () => {
+      type(box, OBJECTIVE);
+    });
+
+    // One press arms the confirmation and writes nothing.
+    await act(async () => {
+      screen.getByText('Start a programme').dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true }),
+      );
+    });
+    expect(await getProgram(projectId)).toBeNull();
+    expect(screen.getByText(/Start the programme, and authorize read-only research/)).toBeTruthy();
+
+    // The second press is the decision.
+    await act(async () => {
+      screen.getByText('Yes, start it').dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true }),
+      );
+    });
+    await waitFor(async () => expect(await getProgram(projectId)).not.toBeNull());
+
+    const program = (await getProgram(projectId))!;
+    // The person's own sentence, stored as typed.
+    expect(program.objective).toBe(OBJECTIVE);
+    // And the directive the server read for itself, rather than one a request
+    // named: the path is a server constant and the digest is computed from the
+    // bytes it opened.
+    expect(program.blueprintPath).toBe('blueprints/MANUFACTURING-EMPIRE-KERNEL.md');
+    expect(program.blueprintSha256).toMatch(/^[0-9a-f]{64}$/);
+  }, 60000);
+
+  it('pauses without confirming, and archives only with it', async () => {
+    await startProgramme({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: OBJECTIVE,
+    });
+    await mount();
+
+    await act(async () => {
+      screen.getByText('Pause').dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true }),
+      );
+    });
+    await waitFor(async () => expect((await getProgram(projectId))!.state).toBe('PAUSED'));
+
+    // Archiving withdraws an authorization, so it asks first. One press arms it.
+    await act(async () => {
+      screen.getByText('Archive').dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true }),
+      );
+    });
+    expect((await getProgram(projectId))!.state).toBe('PAUSED');
+    expect(screen.getByText(/withdraw its research authority/)).toBeTruthy();
+
+    await act(async () => {
+      screen.getByText('Yes').dispatchEvent(
+        new dom.window.MouseEvent('click', { bubbles: true }),
+      );
+    });
+    await waitFor(async () => expect((await getProgram(projectId))!.state).toBe('ARCHIVED'));
+
+    // Nothing was destroyed by archiving: the objective and the directive are
+    // exactly where they were, and reactivating writes the grant again.
+    const program = (await getProgram(projectId))!;
+    expect(program.objective).toBe(OBJECTIVE);
+    expect(program.blueprintSha256).toMatch(/^[0-9a-f]{64}$/);
+  }, 60000);
+
+  /**
+   * The screen offers no control that answers a Brain-owned question.
+   *
+   * §33 records what a form asking a person to attest to Brain's own work
+   * costs, twice. The only free-text controls here are the three things
+   * research genuinely cannot establish — an objective, a capability holding,
+   * and a decision this kernel cannot make — and none of them is a fact about
+   * the world Brain could look up.
+   */
+  it('offers no control that answers something research could settle', async () => {
+    await startProgramme({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: OBJECTIVE,
+    });
+    await seedCategory({ projectId, name: 'Commercial pressure washers', actorRef: userId });
+    await mount();
+
+    // Nothing invites a person to supply demand, a route, a price or a firm.
+    for (const forbidden of [
+      /who is buying/i,
+      /what does entering cost/i,
+      /add a firm/i,
+      /record a figure/i,
+      /mark this done/i,
+    ]) {
+      expect(screen.queryByPlaceholderText(forbidden), String(forbidden)).toBeNull();
+    }
+
+    // And there is no control that marks a capability held from what research
+    // established — the one that exists demands a sentence saying how it came
+    // to be true, and appears only against a decision the service raised.
+    expect(screen.queryByText(/Record as held/)).toBeNull();
+  }, 60000);
+});

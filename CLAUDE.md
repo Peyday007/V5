@@ -6959,6 +6959,24 @@ when the brief's whole optimization rule is that it is not.**
   nothing in it submitted one through that door. §33's `applyValidationAnswers`
   again: the fact reached one reader and not the other, and both looked fine.
 
+- **The three decisions a person makes are controls on the surface now, and
+  driving them found §29's unmounting defect again.** Starting a programme and
+  moving its lifecycle had a route and no button, so the only way to make
+  either was a terminal — and pressing a control that did exist blanked the
+  whole page: `reload()` sets `loading`, and the loading branch returned before
+  every section, taking the form a person was part-way through down with it.
+  That is the People-surface defect one screen along, and every server test
+  passed either way. A re-read leaves the previous answer up until the new one
+  arrives.
+
+  Starting says what it authorizes **and what it does not** before it is
+  pressed, because pressing Start *is* the authorization. Archiving asks for
+  confirmation and pausing does not: the two are not equally reversible, and
+  archiving withdraws a grant that reactivating has to write again. Neither
+  control decides anything — the transitions are guarded in the service, a
+  hidden button is not authorization, and the route refuses a worker by
+  principal type as well as by level.
+
 `npm run manufacturing` remains the terminal door, calling exactly what the
 routes call, for the operations a browser is not needed for.
 

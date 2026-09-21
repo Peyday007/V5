@@ -289,19 +289,24 @@ export function MachinesView({ projectId }: { projectId: string | null }): JSX.E
   if (!projectId) {
     return <p className="rs-empty">Open a project to see its manufacturing programme.</p>;
   }
-  if (query.loading) return <p className="rs-empty">Reading the programme…</p>;
+  /*
+   * A re-read leaves the previous answer up until the new one arrives.
+   *
+   * `reload()` sets `loading`, and returning the loading paragraph here
+   * unmounted **every section on the page** — including the form a person was
+   * part-way through. §29 records the production instance one surface along:
+   * pressing the button reloaded the list, the reload counted as loading, and
+   * loading unmounted the section, taking the invitation shown once down with
+   * it. Every server test passed.
+   *
+   * So the placeholder is for the *first* read only, and a refresh keeps what
+   * is on screen until it can be replaced.
+   */
+  if (query.loading && !query.data) {
+    return <p className="rs-empty">Reading the programme…</p>;
+  }
   if (query.error?.status === 404) {
-    return (
-      <section className="rs-card rs-cash-machine">
-        <h2>No manufacturing programme</h2>
-        <p className="rs-hint">
-          This project has none. Starting one authorizes Brain to research, from published
-          sources, which classes of machine exist, who is buying them, how product reaches
-          them, and what producing each one takes. It authorizes nothing else — no spending,
-          no contact, no purchase, and nothing about actually building anything.
-        </p>
-      </section>
-    );
+    return <StartProgramme projectId={projectId} reload={query.reload} />;
   }
   if (query.error) {
     return <p className="rs-empty">{query.error.message}</p>;
@@ -312,6 +317,7 @@ export function MachinesView({ projectId }: { projectId: string | null }): JSX.E
   return (
     <div className="rs-stack rs-machines">
       <ProgrammeHeader view={view} />
+      <Lifecycle view={view} projectId={projectId} reload={query.reload} />
       <Decisions view={view} projectId={projectId} reload={query.reload} />
       <OpenQuestions view={view} projectId={projectId} reload={query.reload} />
       <Frontier view={view} />
@@ -1202,5 +1208,229 @@ function Evidence({ reading }: { reading: CategoryReading }): JSX.Element | null
           </div>
         ))}
     </details>
+  );
+}
+
+
+/**
+ * Starting a programme, which is also what authorizes its research.
+ *
+ * ---------------------------------------------------------------------------
+ * A person presses this, and there is no other way it happens
+ * ---------------------------------------------------------------------------
+ *
+ * There is no tick, no derivation and no worker path that starts a programme.
+ * The route behind this is `requirePerson` plus project `ADMIN`, so a machine
+ * is refused by level *and* by principal type, and no membership configuration
+ * turns one into a person.
+ *
+ * What it authorizes is said in full before it is pressed rather than in a
+ * paragraph somewhere else, because pressing Start **is** the authorization
+ * (§33): a person who has decided to run a programme has decided Brain may read
+ * published sources about it, and asking them to then fill in a research grant
+ * is asking twice for one decision. What it does *not* authorize is said in the
+ * same breath, because a person reading "this authorizes research" is entitled
+ * to know where that stops.
+ *
+ * The objective is the person's own sentence and nothing pre-fills it. The
+ * server refuses a short one with its own reasoning — "build machines" is a
+ * slogan and not an objective — and that sentence is what a person reads,
+ * rather than a length check composed here.
+ */
+function StartProgramme({
+  projectId,
+  reload,
+}: {
+  projectId: string;
+  reload: () => void;
+}): JSX.Element {
+  const [objective, setObjective] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const start = useCallback(async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await api(`/api/projects/${projectId}/manufacturing`, {
+        method: 'POST',
+        body: JSON.stringify({ objective }),
+      });
+      setConfirming(false);
+      reload();
+    } catch (error) {
+      setProblem(describe(error));
+      setConfirming(false);
+    } finally {
+      setBusy(false);
+    }
+  }, [objective, projectId, reload]);
+
+  return (
+    <section className="rs-card rs-machines-start">
+      <h2>No manufacturing programme</h2>
+      <p className="rs-hint">
+        This project has none. Starting one authorizes Brain to research, from published
+        sources, which classes of machine exist, who is buying them, how product reaches
+        them, what producing each one takes and teaches, what entering one costs, and which
+        firms hold something a category requires.
+      </p>
+      <p className="rs-hint">
+        It authorizes nothing else. No spending, no paid data, no contact with any person or
+        organisation, no advertising, no publishing — and nothing at all about building,
+        buying, tooling, certifying or entering anything. Those are decisions with a factory
+        on the end of them, and there is no route to one through this programme.
+      </p>
+      <label>
+        What this company is trying to be able to build, and what it is starting from
+        <textarea
+          value={objective}
+          rows={3}
+          placeholder="Your own sentence. Every question this programme asks carries it."
+          onChange={(event) => {
+            setObjective(event.target.value);
+            setConfirming(false);
+          }}
+        />
+      </label>
+      {confirming ? (
+        <div className="rs-machines-confirm">
+          <p>
+            Start the programme, and authorize read-only research under the objective above?
+          </p>
+          <button type="button" disabled={busy} onClick={start}>
+            Yes, start it
+          </button>
+          <button type="button" disabled={busy} onClick={() => setConfirming(false)}>
+            Not yet
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy || objective.trim().length === 0}
+          onClick={() => setConfirming(true)}
+        >
+          Start a programme
+        </button>
+      )}
+      {problem ? <p className="rs-machines-warn">{problem}</p> : null}
+    </section>
+  );
+}
+
+/**
+ * Pausing, resuming and archiving — the second decision that is a person's.
+ *
+ * Each one is offered only from the state it moves out of, so the screen never
+ * shows a control that would be refused. The transitions are guarded in the
+ * service as well, because a hidden button is not authorization (§17) and a
+ * screen that decided this would be the second reader §29 keeps removing.
+ *
+ * Pausing and archiving are **not the same off switch**, and the difference is
+ * said rather than implied. Pausing stops new questions and keeps everything
+ * already running, finishing and being filed — §30's line between winding a
+ * section down and ending an obligation already incurred. Archiving withdraws
+ * the research grant as well.
+ *
+ * Archiving asks for confirmation and pausing does not, because the two are not
+ * equally reversible: resuming a paused programme costs nothing, and archiving
+ * withdraws an authorization that reactivating has to write again.
+ */
+function Lifecycle({
+  view,
+  projectId,
+  reload,
+}: {
+  view: ProgrammeView;
+  projectId: string;
+  reload: () => void;
+}): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const move = useCallback(
+    async (to: string) => {
+      setBusy(true);
+      setProblem(null);
+      try {
+        await api(`/api/projects/${projectId}/manufacturing`, {
+          method: 'PATCH',
+          body: JSON.stringify({ state: to }),
+        });
+        setConfirming(null);
+        reload();
+      } catch (error) {
+        setProblem(describe(error));
+        setConfirming(null);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [projectId, reload],
+  );
+
+  const state = view.program.state;
+  return (
+    <section className="rs-card rs-machines-lifecycle">
+      <h3>The programme itself</h3>
+      {state === 'ACTIVE' ? (
+        <p className="rs-hint">
+          Pausing stops Brain opening new questions. Everything already running still
+          finishes and is filed — the spending happened when it ran, and dropping the results
+          would throw away work already paid for.
+        </p>
+      ) : null}
+      {state === 'PAUSED' ? (
+        <p className="rs-hint">
+          No new questions are being opened. What was already running is still finishing and
+          being filed, and the research grant is still live.
+        </p>
+      ) : null}
+      {state === 'ARCHIVED' ? (
+        <p className="rs-hint">
+          The research authority was withdrawn. Nothing was deleted: every category,
+          capability, round and finding is exactly where it was, and reactivating writes the
+          grant again.
+        </p>
+      ) : null}
+
+      {confirming ? (
+        <div className="rs-machines-confirm">
+          <p>
+            {confirming === 'ARCHIVED'
+              ? 'Archive the programme and withdraw its research authority? Nothing is deleted, and reactivating writes the grant again.'
+              : `Move the programme to ${confirming.toLowerCase()}?`}
+          </p>
+          <button type="button" disabled={busy} onClick={() => move(confirming)}>
+            Yes
+          </button>
+          <button type="button" disabled={busy} onClick={() => setConfirming(null)}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="rs-machines-lifecycle-controls">
+          {state !== 'ACTIVE' ? (
+            <button type="button" disabled={busy} onClick={() => move('ACTIVE')}>
+              {state === 'PAUSED' ? 'Resume' : 'Reactivate'}
+            </button>
+          ) : null}
+          {state === 'ACTIVE' ? (
+            <button type="button" disabled={busy} onClick={() => move('PAUSED')}>
+              Pause
+            </button>
+          ) : null}
+          {state !== 'ARCHIVED' ? (
+            <button type="button" disabled={busy} onClick={() => setConfirming('ARCHIVED')}>
+              Archive
+            </button>
+          ) : null}
+        </div>
+      )}
+      {problem ? <p className="rs-machines-warn">{problem}</p> : null}
+    </section>
   );
 }

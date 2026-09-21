@@ -3321,3 +3321,34 @@ details.rs-card > section.rs-card {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.rs-machines-start label,
+.rs-machines-start textarea {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rs-machines-start > button,
+.rs-machines-lifecycle-controls,
+.rs-machines-confirm {
+  margin-top: 0.75rem;
+}
+
+/* The controls wrap rather than widening the card, and stay reachable at every
+ * width: §29 records a stylesheet taking a control off the page while every
+ * branch stayed reachable in React and no test of either half could see it. */
+.rs-machines-lifecycle-controls,
+.rs-machines-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.rs-machines-confirm p {
+  margin: 0;
+  flex-basis: 100%;
+}
