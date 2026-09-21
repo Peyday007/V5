@@ -6156,6 +6156,12 @@ server/
     capacity/
       connection.ts     connecting a Claude account, and the one step Brain cannot do
       contribution.ts   whose connection is usable capacity, and why not when it is not
+      observe.ts        the lifecycle, read from the ledger; overlap computed, never counted
+      envelope.ts       fifteen answers, each with a bound and what kind of fact it is
+      diagnose.ts       which stage is the constraint, with the case against it
+      experiments.ts    what is worth running next, and when a running one must stop
+      kernel.ts         the loop, and the two effects it is allowed to have
+      report.ts         the snapshot, and the report that separates Brain's work from yours
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
       shared.ts         what crosses between projects, and what may never
@@ -6164,13 +6170,6 @@ server/
       capacity.ts       what the dispatcher would fire, counted once and labelled honestly
       probe.ts          the one bounded self-test that turns configured into proven
       lab.ts            the eight test modes, and the five this version refuses to run
-    capacity/
-      observe.ts        the lifecycle, read from the ledger; overlap computed, never counted
-      envelope.ts       fifteen answers, each with a bound and what kind of fact it is
-      diagnose.ts       which stage is the constraint, with the case against it
-      experiments.ts    what is worth running next, and when a running one must stop
-      kernel.ts         the loop, and the two effects it is allowed to have
-      report.ts         the snapshot, and the report that separates Brain's work from yours
     cash/
       access.ts         where the shared frontier ends and a private job begins
       shared.ts         what every member may read, built from the columns it names
