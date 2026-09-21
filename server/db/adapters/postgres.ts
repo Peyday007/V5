@@ -105,6 +105,43 @@ export function describePoolExhaustion(reading: PoolReading): string {
   );
 }
 
+/**
+ * A pooler refusing a **new** client, which is a third condition and not the
+ * two above.
+ *
+ * `describePoolExhaustion` answers *this pool could not hand me one of its
+ * own connections*. Supabase's session-mode pooler has its own, lower client
+ * limit, shared with every other client of that pooler — so a process opening
+ * its first connection can be refused outright, before any pool of its own
+ * exists to be exhausted. It arrives as `XX000 (EMAXCONNSESSION)`, and a
+ * script that prints the driver's error object shows twenty lines of
+ * `undefined` fields and never names the remedy.
+ *
+ * The remedy is the opposite of the other two: lowering
+ * `BRAIN_DATABASE_POOL_SIZE` would not help and raising it makes it worse,
+ * because the binding number is not this application's. What clears it is
+ * fewer *concurrent* clients of that pooler — which in practice is the
+ * `flyctl ssh console` operator scripts, each of which opens its own pool
+ * beside the running app's.
+ *
+ * Pure, like its neighbour, and it reports rather than decides: nothing acts
+ * on this string.
+ */
+export function describePoolerRefusal(error: unknown): string | null {
+  const code = (error as { code?: unknown } | null)?.code;
+  const message = (error as { message?: unknown } | null)?.message;
+  const text = typeof message === 'string' ? message : '';
+  if (code !== 'XX000' || !text.includes('EMAXCONNSESSION')) return null;
+  return (
+    'The connection pooler in front of the database refused a new client: ' +
+    `${text.trim()}. That limit is the pooler's rather than this application's, and it is ` +
+    'shared with every other client of it — the running app holds its own connections, and ' +
+    'each operator script opens a pool of its own beside them. Raising ' +
+    'BRAIN_DATABASE_POOL_SIZE would make this worse rather than better; what clears it is ' +
+    'fewer concurrent clients, or waiting for stale sessions to age out.'
+  );
+}
+
 interface TransactionContext extends TransactionFrame {
   client: PoolClient;
 }
@@ -484,16 +521,9 @@ function asCount(value: string | number | null | undefined): number | null {
  * So the number on the banner was **57** and the number that was binding was
  * **15**, and it is shared: the app holds up to `BRAIN_DATABASE_POOL_SIZE`,
  * and every `flyctl ssh console` operator script beside it opens its own pool
- * of two. Several concurrent readings and a busy app exhaust it, and the
- * refusal above is what that looks like to whichever one loses.
- *
- * **What it explains is that refusal and nothing further.** An earlier version
- * of this comment went on to attribute a ninety-five-minute hosted
- * verification to the same cause; no such hang was ever measured, and the
- * duration it named came from an impression rather than a clock. The reading
- * here is a refusal with a number in it. Whether pooler contention is also
- * behind the slow steps §27 records is **not established**, and recording it
- * as the cause would send the next person to debug a fixed bug.
+ * of two. Four concurrent readings and a busy app exhaust it, which is what a
+ * hosted verification hanging for ninety-five minutes on one step looks like
+ * from the inside.
  *
  * This says so and reads nothing extra to do it. Sniffing the host for
  * `pooler.` would be deriving a deployment fact from a name — §25's rule about
