@@ -113,6 +113,28 @@ describe('the login journey on a phone', () => {
     expect(fixed, 'the card states a fixed pixel width').toBeNull();
   });
 
+  it('names the credential it actually asks for, on the screen a locked-out person lands on', () => {
+    /*
+     * The heading on a *recovery* link said **Set up a new device** while the
+     * only controls under it were two boxes of digits. It was true when a
+     * recovery ended in a passkey; the paragraph beside it moved when that
+     * changed and the heading did not — so the first sentence a locked-out
+     * person read told them to do the thing that had locked them out.
+     *
+     * Asserted as a word rather than a render, for `operatorConsoleRemoved`'s
+     * reason: the claim is about what must *not* be there, and rendering one
+     * branch of one screen cannot say that. Comments are stripped first, so
+     * the paragraph above explaining the mistake is not the mistake.
+     */
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'client/src/components/Enrol.tsx'),
+      'utf8',
+    );
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(code).not.toMatch(/Set up a new device/);
+    expect(code).toMatch(/Choose a new PIN/);
+  });
+
   it('asks for a digit keypad rather than a full keyboard, on both screens', () => {
     for (const file of ['client/src/components/SignIn.tsx', 'client/src/components/Enrol.tsx']) {
       const source = fs.readFileSync(path.join(process.cwd(), file), 'utf8');

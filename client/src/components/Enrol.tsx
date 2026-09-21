@@ -116,7 +116,19 @@ export function Enrol({ onEnrolled }: { onEnrolled: () => void }): JSX.Element {
 
   return (
     <main className="rs-enrol">
-      <h1>{recovery ? 'Set up a new device' : 'Welcome to Brain'}</h1>
+      {/*
+        * The heading said **Set up a new device** and the only controls under
+        * it are two boxes of digits.
+        *
+        * It was right when a recovery link ended in a passkey, and the
+        * paragraph beside it moved when that changed — *whatever you were
+        * signing in with* is credential-neutral and still true — while the
+        * heading did not. It is the sentence a person reads first, on the one
+        * screen somebody locked out is sent to, telling them to do the thing
+        * that locked them out. §29's rule about a status contradicting the
+        * control beside it, at four words.
+        */}
+      <h1>{recovery ? 'Choose a new PIN' : 'Welcome to Brain'}</h1>
       <p className="rs-enrol-name">
         This link is for <strong>{preview.displayName}</strong>.
       </p>
