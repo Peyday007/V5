@@ -37,6 +37,7 @@ import { getFaculty, moveDimension, type Faculty } from '../../repos/faculties.t
 import { getDb } from '../../db/database.ts';
 import { listComponents } from '../selfmodel/scan.ts';
 import { getPacket, listGaps, type PacketGap, type RealizationPacket } from './packet.ts';
+import { lowers } from './realized.ts';
 import { BUILDABLE } from './compile.ts';
 import type {
   EvaluationState,
@@ -260,14 +261,49 @@ export async function readProof(packetId: string): Promise<ProofReading> {
       withheld.push({ dimension: 'IMPLEMENTATION', needs: `LIVE needs: ${live.detail}` });
     }
   }
+  /*
+   * It may raise this dimension and it may never lower it, which is the rule
+   * `realized.ts` already applies and this did not.
+   *
+   * The two read the same column and answer different questions.
+   * `implementationFrom` counts **buildable** gaps closed — how much of what
+   * this packet set out to build has been built. `realized.ts` counts every
+   * requirement served, closed or waived — how much of the faculty exists.
+   * Both are right about their own question, and for a long time whichever
+   * ran last decided what the registry said.
+   *
+   * Production made it visible on the first packet that had both. Research
+   * Intelligence has sixteen requirements, fifteen served by live code and one
+   * late-found gap classified `MUST_BE_BUILT`. `realized` read `PARTIAL` —
+   * *15 of 16 served* — and the durable tick applied it. `prove` read `ABSENT`
+   * — *0 of 1 buildable gap closed* — and `--apply` would have put a faculty
+   * §40 actually built back to having no implementation at all.
+   *
+   * Lowering is the half that is wrong, and it is wrong the same way in every
+   * case: this reading is built from a **narrower** set of gaps, so a state it
+   * cannot see is not a state it may contradict. A new build gap opening does
+   * not unbuild what is already there. So the ladder is the shared one, the
+   * withholding is reported rather than silent, and raising is untouched —
+   * `CONNECTED` and `LIVE` still move on this module's own evidence.
+   */
   if (target !== faculty.implementationState) {
-    moves.push({
-      dimension: 'IMPLEMENTATION',
-      from: faculty.implementationState,
-      to: target,
-      reason: detail,
-      evidenceRef: packet.campaignId ?? packet.scanId,
-    });
+    if (lowers('IMPLEMENTATION', faculty.implementationState, target)) {
+      withheld.push({
+        dimension: 'IMPLEMENTATION',
+        needs:
+          `this reading is ${target} and the faculty is recorded as ` +
+          `${faculty.implementationState}. It counts only the gaps this packet set out to ` +
+          'build, so it may raise that state and never lower one a broader reading established.',
+      });
+    } else {
+      moves.push({
+        dimension: 'IMPLEMENTATION',
+        from: faculty.implementationState,
+        to: target,
+        reason: detail,
+        evidenceRef: packet.campaignId ?? packet.scanId,
+      });
+    }
   }
 
   const evaluation = evaluationFrom(faculty, gaps);
