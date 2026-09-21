@@ -39,6 +39,10 @@ on:
         description: 'Optional project id (prj_...), for cash and refinement'
         required: false
         default: ''
+      ref:
+        description: 'A row id, for the reads that take one: rcn_… for candidate, orc_… for packet'
+        required: false
+        default: ''
 
 concurrency:
   group: closeout-report
@@ -60,6 +64,7 @@ jobs:
           set -eu
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           project="${{ inputs.project }}"
+          ref="${{ inputs.ref }}"
 
           # The allowlist is the control. The input's description is a label,
           # and a label is not a guard: a command composed from free text would
@@ -81,6 +86,32 @@ jobs:
             product)
               cmd="sh /app/scripts/closeout-verify.sh"
               marker='^CLOSEOUT-VERIFY: OK'
+              ;;
+            candidate)
+              # Read-only: `step10 candidate` prints an idea, the missions it
+              # produced and the packet each one points at. It belongs here
+              # rather than on `step10.yml` for this file's own reason — that
+              # workflow shares the deploy group, and a read starved by every
+              # deploy in a busy repository is a read nobody can take.
+              [ -n "$ref" ] || { echo "::error::candidate needs a ref (rcn_...)."; exit 1; }
+              case "$ref" in
+                rcn_*) ;;
+                *) echo "::error::A candidate ref is an rcn_ id."; exit 1 ;;
+              esac
+              cmd="sh /app/scripts/step10.sh candidate $ref"
+              marker='^STEP10: OK'
+              ;;
+            packet)
+              # Read-only: the packet's fragments, passes, claims and work
+              # items, which is where a production reading resolves to the
+              # worker that produced it.
+              [ -n "$ref" ] || { echo "::error::packet needs a ref (orc_...)."; exit 1; }
+              case "$ref" in
+                orc_*) ;;
+                *) echo "::error::A packet ref is an orc_ id."; exit 1 ;;
+              esac
+              cmd="sh /app/scripts/packet-report.sh $ref"
+              marker='^PACKET-REPORT'
               ;;
             refinement)
               cmd="sh /app/scripts/refinement-report.sh"
