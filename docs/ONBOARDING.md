@@ -335,7 +335,46 @@ against the surface that is in the middle of a packet.
 
 ---
 
-## 3. What to check
+## 3. Is this account actually set up?
+
+```
+npm run admin -- people foundation
+```
+
+and, in the browser, **People & capacity**, where the same reading appears
+under each person beside the controls that answer it.
+
+It is one line per account per dimension, and there are six: **identity**,
+**sign-in**, **Claude connection**, **worker attribution**, **capacity** and
+**recovery**. Each is `PASS`, `BLOCKED` or `NOT_APPLICABLE`, and every blocked
+one carries the single next action and who performs it — *them*, *you*, the
+*deployment* administrator, or Brain by itself.
+
+Three things about how to read it.
+
+**`NOT_APPLICABLE` is not a pass.** A member who has not begun a Claude
+connection has no worker to attribute and no capacity to measure. That is a
+different fact from those being fine, and it neither makes the account pass nor
+blocks it.
+
+**`SIGN_IN` is judged by the screen that is served, not by the schema.** An
+account holding only a passkey reads `BLOCKED` even though it holds a real
+credential, because the sign-in screen asks for a PIN and offers no way to
+present a device. The remedy is a recovery link, which ends in setting one.
+
+**Two accounts sharing a display name is an identity failure that presents as a
+credential one.** The PIN lookup resolves a typed name only when exactly one
+row matches, so neither of them can sign in by name, and the refusal — as it
+must — tells them nothing about why.
+
+Below the accounts it names any **surface running under an identity no account
+owns**: a worker registered by hand before the connection journey existed has
+no connection row, so nothing can attribute its sessions to a person. It is
+reported and never acted on. Adopting one or retiring its Routine is your
+decision, because a projection that redistributed live surfaces would lose
+running work.
+
+## 4. What else to check
 
 ```
 fleet show

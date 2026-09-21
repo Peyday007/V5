@@ -7231,6 +7231,95 @@ between the research engine passing its tests and a real job having actually
 run, which §38 had to say about itself on the day it landed.
 
 
+## 42. A person is set up or they are not, and nothing could answer that.
+
+Every fact needed to answer *is this account set up* was already derivable and
+no single place held them together. `people.ts` says whether somebody can sign
+in, `connection.ts` says where their Claude connection is, `contribution.ts`
+says whether that connection is capacity a dispatcher would fire,
+`ownership.ts` says whose a worker is, `attribution.ts` says whether a
+surface's sessions can be attributed at all. Five correct readings, five
+screens, and no answer to the only question they are collectively for.
+
+The shape that hides in that gap is an account which reads *mostly fine*
+everywhere and contributes nothing: sign-in works, the connection says
+CONFIGURED, the worker is bound to somebody else's Routine, and the capacity is
+zero. Nothing was wrong with any individual reading. **What was missing was the
+join**, and `services/identity/foundation.ts` is it — six dimensions per
+account, each `PASS`, `BLOCKED` or `NOT_APPLICABLE`, each with one next action
+and who performs it.
+
+- **It composes and never re-derives.** Every verdict is read from the module
+  that owns that question. A second copy of *is this capacity usable* living in
+  the matrix would be the two-readers-disagreeing defect this file records at a
+  column, a status line, a review card and a routing table — and the copy
+  nobody reads is always the one that drifts.
+- **`NOT_APPLICABLE` is a real answer and is never rounded to `PASS`.** A
+  member who has not started a connection has no worker to attribute and no
+  capacity to measure. Saying so is a different fact from saying those are
+  fine, and different again from saying they are broken — invariant 39 at a
+  matrix.
+- **It is a projection and decides nothing.** Nothing in it fires, binds,
+  repoints, issues, revokes or writes. Deriving it rather than storing it is
+  also what lets it reach the accounts that are *already* stranded.
+- **Two requirements in it look like bookkeeping and are not.** `IDENTITY`
+  includes display-name uniqueness, because `getPinCredentialByIdentity`
+  resolves a typed name with `LIMIT 2` and returns nothing when two rows match:
+  two people sharing a name do not get a warning, they get a sign-in that
+  cannot succeed and a refusal that correctly tells them nothing. And `SIGN_IN`
+  asks what the *served screen* takes rather than what the schema holds — a
+  passkey is a credential and the screen does not offer one, so an account
+  holding only a device cannot get in.
+
+**A recovery retired the lock nobody was using and left the door open.**
+`issueRecovery` revoked every passkey and every session, exactly as §32
+requires, and migration 078 then made a **PIN** the ordinary human credential
+without anything coming back to that function. So the one command an
+administrator has for *my phone is in somebody else's hands* retired the device
+that could no longer sign in anyway, ended the sessions, and left the six
+digits that actually open the door working — indefinitely, because an
+unredeemed link replaces nothing. Every row read as healthy: the passkeys were
+revoked, the sessions ended, the audit row written, the link delivered.
+
+The failure was **forgetting**, not mis-implementing, so the fix is a list
+rather than three more lines. `services/identity/recoveryContract.ts` declares
+the credential classes a recovery must retire; `issueRecovery` retires them;
+the foundation reports whether an account's holdings are covered; and a test
+performs a real recovery and asserts nothing the account held still works. A
+fourth credential added to this Brain fails all three until it is genuinely
+retired. A password is deliberately **not** on the list, and that is a decision
+rather than an omission: it is what `/recovery` itself takes, so retiring it
+during a recovery would remove the route the recovery is performed through.
+
+**And an administrator was reading a different lifecycle from the member.**
+`reconcile` had exactly one caller — the member's own page — while
+`/people/connections` and `contributedCapacity` both read
+`capacity_connections.state` straight out of the row. So a Routine repointed to
+somebody else read `MISBOUND` to the member and `CONFIGURED` to the only person
+who can repoint it, until the member happened to open their page; and the
+dispatcher's own reading of who may be fired was taken from the same stale
+column. **The fourth time this repository has needed the sentence about a rule
+applied by one of two readers, and the first time the reader that was wrong was
+the one holding the remedy.** `settleConnection` is the shared reconciliation
+and all three now read it. It is safe for a second caller for the reason the
+first was: every move inside it is a guarded compare-and-swap naming the state
+it comes from, so two readers settling at the same instant produce one move and
+one ordinary loser. It deliberately does **not** call `ensureConnection` —
+minting a row is the member's own page establishing the names they are about to
+paste into Claude, and an administrator glancing at a list must not create
+connections for people who have never opened it.
+
+**Capacity nobody's foundation covers is named rather than counted.** A worker
+registered by hand before the connection journey existed has no
+`capacity_connections` row, so `ownership.ts` leaves `owner_user_id` null —
+correctly, since only a connection is evidence — and no account's foundation
+covers the surface it is bound to. The reading lists those surfaces and
+**never acts on one**: adopting a hand-made identity or retiring its Routine is
+an operator's decision, and a projection that took it would be exactly the
+blind redistribution that loses running work. An empty list is the healthy
+answer and is not the same fact as nobody having looked, which is why it is a
+list rather than a flag.
+
 ## Repository map
 
 ```
@@ -7305,6 +7394,8 @@ server/
     identity/
         secrets.ts        scrypt for passwords, sha-256 for generated credentials
       people.ts         who has actually joined, from a declared kind rather than a name
+      foundation.ts     every account against every dimension, with one next action each
+      recoveryContract.ts  the credential classes a recovery must retire, in one list
       webauthn.ts       a registration and an assertion, verified against Node crypto
       enrollment.ts     a member slot, its one link, and the recovery that retires first
       passkeyAuth.ts    the relying party, the challenge, and one refusal for everything
@@ -7611,6 +7702,7 @@ tests/                  Vitest suites
   signInSurface.test.tsx     the screen an unauthenticated person is actually served
   sharedCashAccess.test.ts   a member reads the frontier; nobody reads somebody's job
   peopleAndCapacity.test.ts  a declared person, a counted Routine, a resumable setup
+  accountFoundation.test.ts  four account shapes, six dimensions, and a recovery that retires
   claudeConnectionLifecycle.test.ts  asking, checking, misbinding, lapsing, revoking, reconnecting
   claudeConnectionParity.test.ts     three real accounts, one screen, compared field by field
   peopleSection.test.tsx     the two screens the defects were actually visible on

@@ -824,6 +824,78 @@ function headlineFor(
 /* ------------------------------------------------------------------------ */
 
 /**
+ * Where this connection actually is, settled against the rows behind it.
+ *
+ * This is the reconciliation `connectionView` has always done, lifted out so
+ * that it is not something only the member's own page performs.
+ *
+ * **The defect it corrects is two readers of one fact.** `reconcile` had
+ * exactly one caller — the member's read path — while the administrator's
+ * `/people/connections` list and `contributedCapacity` both read
+ * `capacity_connections.state` straight out of the row. So a connection whose
+ * Routine had been repointed read `MISBOUND` on the member's screen and
+ * `CONFIGURED` on the administrator's list, until the member happened to open
+ * their page. The administrator is the person who repoints a surface, and the
+ * dispatcher's own capacity reading was using the same stale column — which is
+ * the fourth time this repository has had to write that a rule applied by one
+ * of two readers is worse than none, and the first time the reader that was
+ * wrong was the one holding the remedy.
+ *
+ * It is safe for a second caller for the reason the first one was safe: every
+ * move inside `reconcile` is a guarded compare-and-swap naming the state it
+ * comes from, so two readers settling the same connection at the same instant
+ * produce one move and one ordinary loser. It writes nothing else, and it
+ * cannot move a proven surface backwards.
+ *
+ * It deliberately does **not** call `ensureConnection`. Creating a row is the
+ * member's own read path establishing the names they are about to paste into
+ * Claude; an administrator glancing at a list must not mint connections for
+ * people who have never opened the page.
+ */
+export interface SettledConnection {
+  connection: CapacityConnection;
+  worker: Awaited<ReturnType<typeof getWorkerByName>>;
+  /** The worker's OAuth rows, so a caller need not read them a second time. */
+  tokens: Awaited<ReturnType<typeof listTokensForWorker>>;
+  authorization: ReturnType<typeof authorizationFrom>;
+  /** A live connector of theirs has authenticated as this worker. */
+  connectorAuthenticated: boolean;
+  /** It authenticated once and holds nothing live now. Two facts, two fields. */
+  authorizationExpired: boolean;
+}
+
+export async function settleConnection(
+  user: Pick<User, 'id' | 'displayName'>,
+  known?: CapacityConnection,
+): Promise<SettledConnection> {
+  const names = namesFor(user);
+  let connection = known ?? (await connectionForUser(user.id));
+  if (!connection) throw new Error('No connection for this member.');
+
+  const worker = await getWorkerByName(names.workerName);
+  const tokens = worker ? await listTokensForWorker(worker.id) : [];
+  const authorization = authorizationFrom(tokens);
+  const connectorAuthenticated = authorization.live && authorization.everUsed;
+  const authorizationExpired = authorization.everUsed && !authorization.live;
+
+  if (
+    (connection.state === 'NOT_STARTED' || connection.state === 'INVITATION_REQUESTED') &&
+    connectorAuthenticated
+  ) {
+    await moveConnection({
+      connectionId: connection.id,
+      from: connection.state,
+      to: 'CONNECTOR_AUTHORIZED',
+    });
+    connection = (await connectionForUser(user.id)) ?? connection;
+  }
+
+  connection = await reconcile(connection, worker?.id ?? null, connectorAuthenticated);
+
+  return { connection, worker, tokens, authorization, connectorAuthenticated, authorizationExpired };
+}
+
+/**
  * One member's connection as it stands, creating the row if they have none.
  *
  * Creating is safe on a read because it is the *assignment of three names* and
@@ -856,25 +928,9 @@ export async function connectionView(input: {
    * an authorized connector for ever. A revoke that the screen above it
    * disagrees with is §29's defect at the one place it would matter most.
    */
-  const worker = await getWorkerByName(names.workerName);
-  const tokens = worker ? await listTokensForWorker(worker.id) : [];
-  const authorization = authorizationFrom(tokens);
-  const connectorAuthenticated = authorization.live && authorization.everUsed;
-  const authorizationExpired = authorization.everUsed && !authorization.live;
-
-  if (
-    (connection.state === 'NOT_STARTED' || connection.state === 'INVITATION_REQUESTED') &&
-    connectorAuthenticated
-  ) {
-    await moveConnection({
-      connectionId: connection.id,
-      from: connection.state,
-      to: 'CONNECTOR_AUTHORIZED',
-    });
-    connection = (await connectionForUser(input.user.id)) ?? connection;
-  }
-
-  connection = await reconcile(connection, worker?.id ?? null, connectorAuthenticated);
+  const settled = await settleConnection(input.user, connection);
+  const { worker, tokens, authorization, connectorAuthenticated, authorizationExpired } = settled;
+  connection = settled.connection;
 
   const routine = connection.routineId ? await getRoutine(connection.routineId) : null;
   const account = routine ? await getAccount(routine.accountId) : null;

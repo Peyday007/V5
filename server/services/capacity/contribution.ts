@@ -66,7 +66,7 @@ import { getAccount, getRoutine } from '../../repos/fleet.ts';
 import { getUser, getWorkerByName, getWorkerRouting } from '../../repos/identity.ts';
 import { listTokensForWorker } from '../../repos/oauth.ts';
 import { resolveToken } from '../dispatch/fire.ts';
-import { namesFor } from './connection.ts';
+import { namesFor, settleConnection } from './connection.ts';
 
 export interface ContributedSurface {
   userId: string;
@@ -103,7 +103,7 @@ export async function contributedCapacity(): Promise<ContributedCapacity> {
   const connections = await listConnections();
   const surfaces: ContributedSurface[] = [];
 
-  for (const connection of connections) {
+  for (let connection of connections) {
     const user = await getUser(connection.userId);
     // A connection whose person has been disabled or removed is not this
     // Brain's capacity, and a row that reported one would be counting an
@@ -111,7 +111,17 @@ export async function contributedCapacity(): Promise<ContributedCapacity> {
     if (!user || user.kind !== 'PERSON' || user.disabledAt !== null) continue;
 
     const names = namesFor(user);
-    const worker = await getWorkerByName(names.workerName);
+    /*
+     * Settled first, so this reads the same lifecycle the member's own page
+     * reads rather than whatever was last written to the column.
+     *
+     * Without it a connection whose Routine had been repointed went on being
+     * counted as capacity until its member next opened their page — the
+     * dispatcher's own reading of who can be fired, taken from a stale row.
+     */
+    const settled = await settleConnection(user, connection);
+    connection = settled.connection;
+    const worker = settled.worker;
     const routine = connection.routineId ? await getRoutine(connection.routineId) : null;
     const account = routine ? await getAccount(routine.accountId) : null;
     const routing = worker ? await getWorkerRouting(worker.id) : null;
