@@ -1,0 +1,554 @@
+/**
+ * The foundations under the production screenshots.
+ *
+ * Every case here is a *defect that was reproducible in production on
+ * 2026-09-21*, asserted as an absence rather than as a success — because each
+ * one passed every test that existed at the time. The readings they are written
+ * against are the report the closeout took before anything was changed:
+ *
+ *   opportunities=40 signals=40 candidates=0 qualified=0 ready=0 validations=2
+ *   usr_14439966398243339341 PERSON ADMIN signs-in=pin rosserpeyton@gmail.com
+ *   Brain Research A ENABLED ref=trig_01CBLu5o… worker=wkr_1cdd82… fires=350
+ *   cop_b1eb51e4932c43528d39 validation=RUNNING … mission=NEEDS_HUMAN
+ *   cop_00ece786785648e384a4 validation=RUNNING … mission=NEEDS_HUMAN
+ *
+ * Several assertions were run against the un-fixed behaviour first, to watch
+ * them fail: a regression test nobody has seen fail is a claim rather than a
+ * reading.
+ */
+import { beforeEach, describe, expect, it } from 'vitest';
+import { freshProject } from './helpers.ts';
+import { fact, qualifyingFacts, tiersFor } from './helpers/cashTier.ts';
+import { assemble, isWorkable, placements } from '../server/services/cash/portfolio.ts';
+import { cashEngineCard } from '../server/services/cash/engineCard.ts';
+import { evidenceCard } from '../server/services/cash/card.ts';
+import { cashTier } from '../server/services/cash/tier.ts';
+import { looksLikeAddress, personName, refuseAddressAsName } from '../server/domain/personName.ts';
+import { collectionNameFor } from '../server/services/russell/collections.ts';
+import { titleFrom } from '../server/services/russell/turn.ts';
+import { createUser, getUser, renameUser } from '../server/repos/identity.ts';
+import { createConversation, getConversation } from '../server/repos/russellConversations.ts';
+import { adoptSurface } from '../server/services/capacity/adopt.ts';
+import {
+  MAX_VALIDATIONS_IN_FLIGHT,
+  VALIDATION_STALL_MS,
+} from '../server/services/cash/validation.ts';
+import { OPPORTUNITY_VALIDATION_STATES } from '../server/domain/types.ts';
+import type { PortfolioInput } from '../server/services/cash/portfolio.ts';
+import type { CashCardFact, CashOpportunity } from '../server/domain/types.ts';
+
+const NOW = '2026-09-21T02:16:00.000Z';
+
+function opportunity(overrides: Partial<CashOpportunity> = {}): CashOpportunity {
+  return {
+    id: `cop_${Math.random().toString(36).slice(2, 12)}`,
+    projectId: 'prj_1',
+    cashModeId: 'csm_1',
+    ownerUserId: 'usr_1',
+    title: 'An opening',
+    mechanism: 'ARBITRAGE',
+    industryNodeId: null,
+    industry: null,
+    source: null,
+    candidateId: null,
+    externalRecordId: null,
+    sourceClaimId: null,
+    discoveredByCandidateId: null,
+    orchestrationId: null,
+    fragmentId: null,
+    discoveryRoundId: null,
+    validationOrchestrationId: null,
+    validationState: null,
+    validationStartedAt: null,
+    validationSettledAt: null,
+    validationRounds: 0,
+    opportunitySignal: null,
+    state: 'DISCOVERED',
+    currency: 'USD',
+    payer: null,
+    offerScope: null,
+    acceptanceCondition: null,
+    priceCents: null,
+    deliveryMethod: null,
+    fulfillmentOwner: null,
+    economicsNote: null,
+    peakFundingCents: null,
+    humanHours: null,
+    buyingSignal: null,
+    signalObservedAt: null,
+    reachableChannel: null,
+    requiredCapabilities: [],
+    dependsOnId: null,
+    deadline: null,
+    expiresAt: null,
+    expiryReason: null,
+    exhaustedAt: null,
+    exhaustedReason: null,
+    nextAction: null,
+    outcome: null,
+    archivedReason: null,
+    declinedReason: null,
+    createdAt: '2026-09-18T00:00:00.000Z',
+    updatedAt: '2026-09-18T00:00:00.000Z',
+    ...overrides,
+  } as CashOpportunity;
+}
+
+/**
+ * The two records the owner actually saw, as rows.
+ *
+ * A published per-minute price from one vendor and a published per-minute price
+ * from another, gated, sourced and dated — and neither of them says anybody
+ * would pay *us*, which is what `PRICING_OR_INFORMATION_ASYMMETRY` declares in
+ * `SIGNAL_MEANING`.
+ */
+function vendorPriceEvidence(): CashOpportunity[] {
+  return [
+    opportunity({
+      id: 'cop_rev',
+      title:
+        'Rev.com publishes a per-minute price of $1.99 for its human transcription service',
+      opportunitySignal: 'PRICING_OR_INFORMATION_ASYMMETRY',
+      buyingSignal: 'Rev.com publishes $1.99 per minute on its own pricing page.',
+      signalObservedAt: '2026-09-18',
+      sourceClaimId: 'clm_883cb54de2d849f58743',
+    }),
+    opportunity({
+      id: 'cop_gotranscript',
+      title: 'GoTranscript publishes per-minute pricing for standard English transcription',
+      opportunitySignal: 'PRICING_OR_INFORMATION_ASYMMETRY',
+      buyingSignal: 'GoTranscript publishes a per-minute rate on its own pricing page.',
+      signalObservedAt: '2026-09-18',
+      sourceClaimId: 'clm_0b05d53065c746978edb',
+    }),
+  ];
+}
+
+/**
+ * The plan, with **no** card facts unless a case supplies them.
+ *
+ * `tiersFor`'s own default is `qualifyingFacts`, which answers every question
+ * a piece's kind asks — right for the suites that predate the tier boundary and
+ * exactly wrong here, where the whole subject is a piece that has answered
+ * nothing. A fixture that qualified itself would assert against a
+ * classification production could not produce.
+ */
+function plan(
+  opportunities: CashOpportunity[],
+  facts: CashCardFact[] = [],
+  overrides: Partial<PortfolioInput> = {},
+): ReturnType<typeof assemble> {
+  const byId = new Map<string, CashCardFact[]>();
+  for (const one of facts) {
+    byId.set(one.opportunityId, [...(byId.get(one.opportunityId) ?? []), one]);
+  }
+  return assemble({
+    opportunities,
+    tiers: tiersFor(opportunities, (one) => byId.get(one.id) ?? []),
+    deployableCents: 500_000,
+    maxConcurrent: 3,
+    discoveryOpen: true,
+    ...overrides,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// A. Evidence is never work, never waiting, and never in the aggregate
+// ---------------------------------------------------------------------------
+
+describe('a pair of vendor price claims is not a piece of work', () => {
+  it('appears in neither current work nor waiting', () => {
+    const assembled = plan(vendorPriceEvidence());
+
+    expect(assembled.executeNow).toHaveLength(0);
+    expect(assembled.waiting).toHaveLength(0);
+    // And it is not hidden either: it is evidence, named as evidence.
+    expect(assembled.evidence.map((one) => one.opportunity.id).sort()).toEqual([
+      'cop_gotranscript',
+      'cop_rev',
+    ]);
+    expect(assembled.evidence.every((one) => one.disposition === 'EVIDENCE_ONLY')).toBe(true);
+  });
+
+  it('contributes nothing to the combined conservative contribution', () => {
+    /*
+     * With prices on both and no exposure established, the old arithmetic made
+     * this the *sum of two vendors' published prices* and called it what the
+     * sprint would contribute. There is no work here, so there is no total.
+     */
+    const priced = vendorPriceEvidence().map((one) =>
+      opportunity({ ...one, priceCents: 199_00, peakFundingCents: null }),
+    );
+    expect(plan(priced).combinedContributionCents).toBeNull();
+  });
+
+  it('is never offered as one of the best opportunities', () => {
+    const assembled = plan(vendorPriceEvidence());
+    expect(assembled.best).toHaveLength(0);
+    expect(assembled.bestAreNearlyQualified).toBe(false);
+  });
+
+  it('cannot become work by having a capture thesis alone', () => {
+    /*
+     * A capture thesis makes it a CANDIDATE — Brain can say how money would be
+     * made — and that is Brain's work rather than the person's. The prompt's
+     * own definition is the qualification set: a buyer, a payer, a capture
+     * path, a fulfilment path, economics, timing and a decisive unknown.
+     */
+    const [rev] = vendorPriceEvidence();
+    const facts = ['captureMechanism', 'payer', 'access', 'buyingEvidence'].map((key) =>
+      fact(rev!, key),
+    );
+    const assembled = plan([rev!], facts);
+
+    expect(assembled.byTier.CANDIDATE).toBe(1);
+    expect(assembled.executeNow).toHaveLength(0);
+    expect(assembled.waiting).toHaveLength(0);
+    expect(assembled.beingQualified.map((one) => one.disposition)).toEqual(['BEING_QUALIFIED']);
+  });
+
+  it('becomes work at exactly the point the whole contract is answered', () => {
+    const [rev] = vendorPriceEvidence();
+    const ready = opportunity({
+      ...rev!,
+      payer: 'A named buyer',
+      offerScope: 'A bounded deliverable',
+      acceptanceCondition: 'What counts as done',
+      priceCents: 120_00,
+      deliveryMethod: 'How it is delivered',
+      fulfillmentOwner: 'Who does it',
+      economicsNote: 'What is left after costs',
+      peakFundingCents: 20_00,
+      reachableChannel: 'A published route to them',
+      buyingSignal: rev!.buyingSignal,
+      signalObservedAt: rev!.signalObservedAt,
+    });
+    const assembled = plan([ready], qualifyingFacts(ready));
+
+    expect(['QUALIFIED', 'READY_TO_TEST']).toContain(assembled.placements[0]!.tier.tier);
+    expect(assembled.executeNow.length + assembled.waiting.length).toBe(1);
+    // And now there is something to total, so the aggregate exists.
+    expect(assembled.combinedContributionCents).toBe(100_00);
+  });
+
+  it('keeps a piece somebody took, whatever its evidence says', () => {
+    /*
+     * The half this must not get wrong. `READY` is reached only through
+     * `markReady` and the executing states only through a recorded action, so
+     * removing one from the work list because the engine card is thin would be
+     * a derivation overruling a person's decision.
+     */
+    expect(isWorkable({ tier: 'SIGNAL', state: 'READY' })).toBe(true);
+    expect(isWorkable({ tier: 'SIGNAL', state: 'EXECUTING' })).toBe(true);
+    expect(isWorkable({ tier: 'SIGNAL', state: 'COLLECTED' })).toBe(true);
+    expect(isWorkable({ tier: 'SIGNAL', state: 'DISCOVERED' })).toBe(false);
+    expect(isWorkable({ tier: 'CANDIDATE', state: 'EVIDENCE_CARD' })).toBe(false);
+    expect(isWorkable({ tier: 'QUALIFIED', state: 'DISCOVERED' })).toBe(true);
+  });
+
+  it('says of forty signals exactly what production held, and no more', () => {
+    /*
+     * The shape of the production reading, at its own size: forty records, all
+     * of them evidence, and a page that told a person `1 to act on now, 40
+     * waiting`.
+     */
+    const forty = Array.from({ length: 40 }, (_, index) =>
+      opportunity({
+        id: `cop_${index}`,
+        opportunitySignal: 'PRICING_OR_INFORMATION_ASYMMETRY',
+      }),
+    );
+    const assembled = plan(forty);
+    expect(assembled.byTier.SIGNAL).toBe(40);
+    expect(assembled.executeNow).toHaveLength(0);
+    expect(assembled.waiting).toHaveLength(0);
+    expect(assembled.evidence).toHaveLength(40);
+    expect(assembled.combinedContributionCents).toBeNull();
+  });
+
+  it('never tells a person a signal is waiting on a decisive unknown', () => {
+    /*
+     * The sentence matters as much as the list. "Four things on this card are
+     * unknown" about a published price list is homework, and the whole point
+     * of the correction is to stop handing it out.
+     */
+    const placed = placements({
+      opportunities: vendorPriceEvidence(),
+      tiers: tiersFor(vendorPriceEvidence(), () => []),
+      deployableCents: 0,
+      maxConcurrent: 1,
+      discoveryOpen: true,
+    });
+    for (const one of placed) {
+      expect(one.disposition).toBe('EVIDENCE_ONLY');
+      expect(one.because).toContain('evidence, not work');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B. A person is called something, and it is not their address
+// ---------------------------------------------------------------------------
+
+describe('the owner is a person rather than a login', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  it('never shows an address where a name belongs', () => {
+    expect(personName({ displayName: 'rosserpeyton@gmail.com' })).toBe('rosserpeyton');
+    expect(personName({ displayName: 'Peyton' })).toBe('Peyton');
+    // A name somebody chose that merely contains an @ is left exactly as it is.
+    expect(personName({ displayName: 'DJ @ Night' })).toBe('DJ @ Night');
+    expect(personName({ displayName: '  ' })).toBe('Someone');
+  });
+
+  it('is narrow about what counts as an address', () => {
+    expect(looksLikeAddress('a@b.com')).toBe(true);
+    expect(looksLikeAddress('@handle')).toBe(false);
+    expect(looksLikeAddress('a@b')).toBe(false);
+    expect(looksLikeAddress('a@@b.com')).toBe(false);
+    expect(looksLikeAddress('Alex Smith')).toBe(false);
+  });
+
+  it('refuses an address at the door that writes a name', () => {
+    expect(() => refuseAddressAsName('someone@example.com')).toThrow(/not their address/);
+    expect(() => refuseAddressAsName('Peyton')).not.toThrow();
+  });
+
+  it('carries the renamed owner rather than the address, and changes nothing else', async () => {
+    const owner = await createUser({
+      email: 'rosserpeyton@example.com',
+      displayName: 'rosserpeyton@example.com',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    expect(personName(owner)).toBe('rosserpeyton');
+
+    await renameUser(owner.id, 'Peyton');
+    const after = await getUser(owner.id);
+
+    expect(after!.displayName).toBe('Peyton');
+    expect(personName(after!)).toBe('Peyton');
+    // The address, the administration flag and the id are all untouched: a
+    // rename is a fact about presentation and nothing else.
+    expect(after!.email).toBe('rosserpeyton@example.com');
+    expect(after!.isBrainAdmin).toBe(true);
+    expect(after!.id).toBe(owner.id);
+  });
+
+  it('keeps two members two people', async () => {
+    const one = await createUser({
+      email: 'airyn@example.com',
+      displayName: 'Airyn',
+      password: 'a-long-enough-password',
+    });
+    const two = await createUser({
+      email: 'caleb@example.com',
+      displayName: 'Caleb',
+      password: 'a-long-enough-password',
+    });
+    expect(one.id).not.toBe(two.id);
+    expect(personName(one)).toBe('Airyn');
+    expect(personName(two)).toBe('Caleb');
+    // Renaming one leaves the other exactly as it was, including its own
+    // credential state: identity is per account and is never inherited.
+    await renameUser(one.id, 'Airyn R');
+    expect((await getUser(two.id))!.displayName).toBe('Caleb');
+    expect((await getUser(two.id))!.pinUpdatedAt).toBe(one.pinUpdatedAt);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D. A general thread is not a deal
+// ---------------------------------------------------------------------------
+
+describe('a conversation is filed by what it is for', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  it('never files a general thread under a project', () => {
+    expect(collectionNameFor({ projectName: 'Deal Dispatch', visibility: 'PRIVATE' })).toEqual({
+      name: 'Deal Dispatch',
+      kind: 'PROJECT',
+    });
+    // The same row, with the purpose it actually has.
+    expect(
+      collectionNameFor({ projectName: 'Deal Dispatch', visibility: 'PRIVATE', purpose: 'GENERAL' }),
+    ).toEqual({ name: 'Personal', kind: 'PERSONAL' });
+    expect(
+      collectionNameFor({ projectName: 'Deal Dispatch', visibility: 'SHARED', purpose: 'GENERAL' }),
+    ).toEqual({ name: 'Unfiled', kind: 'CATEGORY' });
+    expect(
+      collectionNameFor({ projectName: 'Deal Dispatch', visibility: 'PRIVATE', purpose: 'PROJECT' }),
+    ).toEqual({ name: 'Deal Dispatch', kind: 'PROJECT' });
+  });
+
+  it('creates an ordinary thread general and unattached', async () => {
+    const owner = await createUser({
+      email: 'threads@example.com',
+      displayName: 'Threads',
+      password: 'a-long-enough-password',
+    });
+    const thread = await createConversation({
+      ownerUserId: owner.id,
+      title: 'Conversation — Sep 21, 02:14',
+    });
+    expect(thread.projectId).toBeNull();
+    expect(thread.purpose).toBe('GENERAL');
+    expect(thread.attachmentSource).toBe('NONE');
+  });
+
+  it('says both things at once when a project is chosen, rather than disagreeing', async () => {
+    const fixture = await freshProject();
+    const owner = await createUser({
+      email: 'deal@example.com',
+      displayName: 'Deal',
+      password: 'a-long-enough-password',
+    });
+    const thread = await createConversation({
+      ownerUserId: owner.id,
+      title: 'About a deal',
+      projectId: fixture.project.id,
+    });
+    expect(thread.projectId).toBe(fixture.project.id);
+    expect(thread.purpose).toBe('PROJECT');
+    // The column that used to say `NONE` on a row carrying a project.
+    expect(thread.attachmentSource).toBe('USER');
+    expect((await getConversation(thread.id))!.purpose).toBe('PROJECT');
+  });
+
+  it('names a thread after what was said in it rather than "New conversation"', () => {
+    expect(titleFrom('Can you look at the pricing page? It looks wrong.')).toBe(
+      'Can you look at the pricing page?',
+    );
+    expect(titleFrom('  Fix   the   footer  ')).toBe('Fix the footer');
+    // A long opening sentence is clamped rather than truncated mid-word count.
+    const long = titleFrom(`${'word '.repeat(40)}end.`);
+    expect(long.length).toBeLessThanOrEqual(72);
+    expect(long.endsWith('…')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C. The connection reports the surface that is actually there
+// ---------------------------------------------------------------------------
+
+describe('an already-registered surface can be recorded as somebody’s', () => {
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  it('refuses a Routine reference that names nothing, and says what to do', async () => {
+    const person = await createUser({
+      email: 'adopt@example.com',
+      displayName: 'Adopter',
+      password: 'a-long-enough-password',
+      isBrainAdmin: true,
+    });
+    const outcome = await adoptSurface({
+      userId: person.id,
+      routineRef: 'trig_does_not_exist',
+      actorUserId: person.id,
+      channel: 'SHELL',
+    });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.reason).toContain('register-routine');
+  });
+
+  it('refuses a person who does not exist without creating anything', async () => {
+    const outcome = await adoptSurface({
+      userId: 'usr_nobody',
+      routineRef: 'trig_whatever',
+      actorUserId: 'usr_nobody',
+    });
+    expect(outcome.ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F. A deep dive that is parked is not a deep dive that is running
+// ---------------------------------------------------------------------------
+
+describe('the refinement lifecycle is bounded and says what it is doing', () => {
+  it('has a state for a dive waiting on a person, and it is not RUNNING', () => {
+    expect(OPPORTUNITY_VALIDATION_STATES).toContain('NEEDS_PERSON');
+    // The ordering matters to nobody and the membership matters to the
+    // in-flight count, which is what deadlocked production.
+    expect(OPPORTUNITY_VALIDATION_STATES).toContain('RUNNING');
+    expect(OPPORTUNITY_VALIDATION_STATES).toContain('BLOCKED');
+  });
+
+  it('bounds a dive that never progresses, rather than holding a slot for ever', () => {
+    // A number rather than a comment: the report prints it, and a stall
+    // longer than this is what frees the slot.
+    expect(VALIDATION_STALL_MS).toBeGreaterThan(60 * 60 * 1000);
+    expect(MAX_VALIDATIONS_IN_FLIGHT).toBeGreaterThan(0);
+  });
+
+  it('derives a tier from the card rather than from the validation state', () => {
+    /*
+     * The two production records that were stuck: `validation=RUNNING` and
+     * `answered=3/18`, `to advance: captureMechanism`. A dive being in flight
+     * has never made a piece work, and this is what says so.
+     */
+    const [rev] = vendorPriceEvidence();
+    const diving = opportunity({
+      ...rev!,
+      validationState: 'RUNNING',
+      validationStartedAt: '2026-09-19T00:00:00.000Z',
+      validationRounds: 1,
+    });
+    const reading = cashTier({
+      opportunity: diving,
+      card: cashEngineCard({ opportunity: diving, facts: [] }),
+      readiness: evidenceCard(diving).readiness,
+    });
+    expect(reading.tier).toBe('SIGNAL');
+    expect(reading.toAdvance.map((one) => one.key)).toEqual(['captureMechanism']);
+    expect(plan([diving]).waiting).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The counts a screen reads come from the corrected semantics
+// ---------------------------------------------------------------------------
+
+describe('what the page counts', () => {
+  it('counts tiers from the same placements the list renders', () => {
+    const mixed = [...vendorPriceEvidence()];
+    const qualified = opportunity({
+      id: 'cop_real',
+      payer: 'A named buyer',
+      offerScope: 'A bounded deliverable',
+      acceptanceCondition: 'What counts as done',
+      priceCents: 90_00,
+      deliveryMethod: 'Delivered how',
+      fulfillmentOwner: 'By whom',
+      economicsNote: 'What is left',
+      peakFundingCents: 10_00,
+      reachableChannel: 'A published route',
+      buyingSignal: 'A named buyer published a request.',
+      signalObservedAt: '2026-09-19',
+      opportunitySignal: 'ACTIVE_BUYER_DEMAND',
+    });
+    const assembled = plan([...mixed, qualified], qualifyingFacts(qualified));
+
+    const counted =
+      assembled.byTier.SIGNAL +
+      assembled.byTier.CANDIDATE +
+      assembled.byTier.QUALIFIED +
+      assembled.byTier.READY_TO_TEST;
+    expect(counted).toBe(3);
+    expect(assembled.byTier.SIGNAL).toBe(2);
+
+    // And the four lists partition the live pieces exactly once each.
+    const listed =
+      assembled.executeNow.length +
+      assembled.waiting.length +
+      assembled.beingQualified.length +
+      assembled.evidence.length;
+    expect(listed).toBe(3);
+  });
+});

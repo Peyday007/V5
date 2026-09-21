@@ -969,8 +969,17 @@ function Authority({
     );
   }
 
-  /** Whether there is anything to spend on yet, which decides how loud this is. */
-  const hasWork = view.myCurrentWork.placements.length > 0;
+  /**
+   * Whether there is anything to spend on yet, which decides how loud this is.
+   *
+   * Work, not records. It counted every placement, so forty pieces of market
+   * evidence opened the spending-limit disclosure and made a grant look
+   * overdue — while nothing in the portfolio was qualified and a grant would
+   * have authorized spending on nothing. §29's rule that a status must agree
+   * with what a person can see, at the control that spends money.
+   */
+  const hasWork =
+    view.myCurrentWork.executeNow.length + view.myCurrentWork.waiting.length > 0;
 
   /*
    * Typed in ordinary money, sent in cents.
