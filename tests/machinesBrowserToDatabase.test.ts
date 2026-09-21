@@ -31,6 +31,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { freshProject } from './helpers.ts';
 import { createUser, grantMembership } from '../server/repos/identity.ts';
+import { createProject } from '../server/repos/projects.ts';
 import { startProgramme } from '../server/services/manufacturing/program.ts';
 import { seedCategory } from '../server/services/manufacturing/declare.ts';
 import { programmeView } from '../server/services/manufacturing/view.ts';
@@ -472,5 +473,50 @@ describe('the decisions that are a person’s, from the screen to the row', () =
     // established — the one that exists demands a sentence saying how it came
     // to be true, and appears only against a decision the service raised.
     expect(screen.queryByText(/Record as held/)).toBeNull();
+  }, 60000);
+});
+
+/**
+ * Invariant 23 at this door, compared rather than asserted.
+ *
+ * Three conditions meet at the manufacturing read: a project that does not
+ * exist, one this caller may not have, and one they may read that simply has
+ * no programme. The module header claimed all three were one 404 with one
+ * body; two of them were and the third said `This project has no manufacturing
+ * programme.` while the others said `No project with that id.`
+ *
+ * The production hosted verification is what found it — `HOSTED-VERIFICATION:
+ * FAIL 216/217`, one line, the same one on both sides of a restart — and it
+ * found it by comparing the two bodies rather than the two statuses, which is
+ * the only way this is visible at all.
+ *
+ * Asserted here as equality between the three, not against a literal: a test
+ * that pinned the sentence would pass the day somebody made all three say
+ * something else equally wrong, and what the invariant asks for is that a
+ * caller cannot tell them apart.
+ */
+describe('every refusal at the manufacturing door is one body', () => {
+  it('answers absent, forbidden and no-programme identically', async () => {
+    const readable = await fetch(`/api/projects/${projectId}/manufacturing`);
+    expect(readable.status, 'a project this member may read, with no programme').toBe(404);
+
+    const holdout = await createProject({ name: `Holdout ${Math.random().toString(36).slice(2, 8)}` });
+    const forbidden = await fetch(`/api/projects/${holdout.id}/manufacturing`);
+    expect(forbidden.status, 'a project this member is not a member of').toBe(404);
+
+    const invented = await fetch('/api/projects/prj_0000000000000000000/manufacturing');
+    expect(invented.status, 'a project that does not exist').toBe(404);
+
+    const bodies = await Promise.all([readable.text(), forbidden.text(), invented.text()]);
+    expect(bodies[1], 'forbidden must read exactly as no-programme does').toBe(bodies[0]);
+    expect(bodies[2], 'absent must read exactly as no-programme does').toBe(bodies[0]);
+
+    /*
+     * And the sentence they share is the true one. `No project with that id.`
+     * would be uniform and would be a lie told to a member of a project that
+     * plainly exists; uniformity bought with a false sentence is not what the
+     * invariant asks for.
+     */
+    expect(bodies[0]).toContain('no manufacturing programme');
   }, 60000);
 });
