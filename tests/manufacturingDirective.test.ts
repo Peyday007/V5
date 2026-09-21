@@ -559,3 +559,54 @@ describe('every brief this module renders passes the envelope screen', () => {
     }
   });
 });
+
+
+/**
+ * An open round says how far it has actually got.
+ *
+ * `manufacturing_rounds.state` says a question was asked and not settled. It
+ * says nothing about whether a mission launched, whether a worker holds a
+ * lease right now, or whether the whole thing stopped days ago — and a round
+ * open for three days and one being worked this minute are the same row.
+ *
+ * §24's `pending.ts` records the cost of leaving that unread: a state written
+ * before anything happened stays reassuring however long the wait and whatever
+ * goes wrong. The case that matters is the one that must never read as
+ * patience.
+ */
+describe('an open round reports what is actually happening to it', () => {
+  it('separates a round nothing has launched from one a worker is on', async () => {
+    await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: OBJECTIVE });
+    await runManufacturingKernel(projectId);
+
+    const view = await programmeView(projectId);
+    expect(view!.open.length).toBeGreaterThan(0);
+    // Every open round has a reading, and none of them is missing.
+    expect(view!.progress.map((one) => one.roundId).sort()).toEqual(
+      view!.open.map((one) => one.id).sort(),
+    );
+
+    const opening = view!.progress[0]!;
+    // Nothing has launched yet, and it says exactly that rather than "running".
+    expect(opening.progress).toBe('NOT_LAUNCHED');
+    expect(opening.because).toContain('no mission has launched for it yet');
+    expect(opening.items).toEqual({ total: 0, leased: 0, queued: 0, finished: 0 });
+  }, 60000);
+
+  it('reports a settled round not at all, because it is not open', async () => {
+    await startProgramme({ projectId, ownerUserId: userId, actorUserId: userId, objective: OBJECTIVE });
+    await runManufacturingKernel(projectId);
+    const program = await getProgram(projectId);
+    const opened = (await listManufacturingRounds(program!.id))[0]!;
+    await closeManufacturingRound({ id: opened.id, to: 'HARVESTED', found: 0 });
+
+    const view = await programmeView(projectId);
+    expect(view!.open).toEqual([]);
+    expect(view!.progress).toEqual([]);
+    // And the settled round is still on the history, barren and not hidden: a
+    // market Brain looked at and found nothing in is a reading of that market.
+    const settled = view!.history.find((one) => one.id === opened.id)!;
+    expect(settled.barren).toBe(true);
+    expect(settled.found).toBe(0);
+  }, 60000);
+});

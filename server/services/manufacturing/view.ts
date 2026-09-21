@@ -20,6 +20,7 @@ import { programmeAuthority } from './program.ts';
 import { rankCategories, type PriorityEntry } from './priority.ts';
 import { readDecisions, type DecisionReading } from './decisions.ts';
 import { readDirective, type Directive, type ScaleBand } from './directive.ts';
+import { readProgress, type RoundReadingProgress } from './progress.ts';
 import type {
   AcquisitionCandidate,
   Capability,
@@ -146,6 +147,18 @@ export interface ProgrammeView {
 
   /** What is running now. */
   open: ManufacturingRound[];
+
+  /**
+   * How far each open round has actually got, derived on the read path.
+   *
+   * `OPEN` is a fact about a round and says nothing about whether anybody is
+   * working: a round open for three days and one a worker is holding this
+   * minute are the same row. §24's `pending.ts` records what a state that
+   * cannot become wrong costs — it stays reassuring however long the wait and
+   * whatever goes wrong — and the case that matters here is the one that must
+   * never read as patience: a round nothing is going to answer.
+   */
+  progress: RoundReadingProgress[];
 
   /**
    * The capability ledger, held first.
@@ -321,6 +334,7 @@ export async function programmeView(projectId: string): Promise<ProgrammeView | 
       declined: plan.declined,
     },
     open: snapshot.rounds.filter((one) => one.state === 'OPEN'),
+    progress: await readProgress(projectId, snapshot.rounds),
     capabilities: capabilityReadings(snapshot),
     history: historyOf(snapshot),
     refusals: await recentRefusals(projectId),

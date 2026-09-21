@@ -3472,3 +3472,25 @@ details.rs-card > section.rs-card {
   margin: 0;
   flex-basis: 100%;
 }
+
+/* How far an open round has got. `STALLED` and `NEEDS_A_PERSON` are the two a
+ * reader has to be able to find, so they are the two that are not dimmed —
+ * §24's rule that a pending state which cannot become wrong is not an
+ * explanation, arriving at a colour. */
+.rs-machines-progress {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.rs-machines-progress-WORKING {
+  color: var(--moss);
+  opacity: 1;
+}
+
+.rs-machines-progress-STALLED,
+.rs-machines-progress-NEEDS_A_PERSON,
+.rs-machines-progress-UNKNOWN {
+  opacity: 1;
+  font-weight: 600;
+}

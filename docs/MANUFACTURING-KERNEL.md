@@ -575,6 +575,32 @@ somebody paused would throw away work already paid for.
 
 ---
 
+## An open round says how far it has got
+
+`manufacturing_rounds.state` being `OPEN` says a question was asked and not
+settled. It says **nothing** about whether a mission was ever launched, whether
+a worker holds a lease on its work right now, or whether the whole thing
+stopped days ago on a decision nobody is being asked for. A round open for three
+days and one being worked this minute are the same row.
+
+`services/manufacturing/progress.ts` derives the difference on the read path,
+and every value names a different remedy: `NOT_LAUNCHED` waits for a tick,
+`QUEUED` for a worker, `WORKING` for nothing, `NEEDS_A_PERSON` for somebody,
+`AWAITING_ABSORPTION` for the next pass, and **`STALLED` for nothing at all** —
+a mission that failed or was cancelled while its round stayed open is a question
+nobody is answering and nothing is going to re-ask. That is the one a reader has
+to be able to find, and without this it read exactly like a round opened a
+minute ago.
+
+§24's `pending.ts` is the precedent and the reason: a state written before
+anything happened *stays reassuring however long the turn waits and whatever
+goes wrong with it*. `UNKNOWN` is a real value rather than a fallback, for §30's
+reason — *we could not tell* must never read the same as *we checked*. It names
+no worker, no Routine and no session: which machine is holding something is
+operator detail.
+
+---
+
 ## Where the doors are
 
 **Routes**, at `/api/projects/:id/manufacturing`, behind `requirePerson` and

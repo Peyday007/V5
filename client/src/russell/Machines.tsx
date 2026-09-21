@@ -206,6 +206,12 @@ interface ProgrammeView {
     declined: { subject: string; why: string }[];
   };
   open: { id: string; purpose: string; round: number }[];
+  progress: {
+    roundId: string;
+    progress: string;
+    because: string;
+    items: { total: number; leased: number; queued: number; finished: number };
+  }[];
   capabilities: CapabilityReading[];
   history: RoundReading[];
   refusals: { at: string; claimId: string; why: string }[];
@@ -571,11 +577,33 @@ function NowResearching({ view }: { view: ProgrammeView }): JSX.Element {
         <p className="rs-hint">No question is running.</p>
       ) : (
         <ul className="rs-machines-open">
-          {view.open.map((one) => (
-            <li key={one.id}>
-              <span className="rs-machines-purpose">{one.purpose}</span> round {one.round}
-            </li>
-          ))}
+          {view.open.map((one) => {
+            /*
+             * The round's *actual* progress, beside it.
+             *
+             * "Running" is what the row says; whether a worker is holding it,
+             * whether it is queued, and whether it stopped on something nobody
+             * is being asked about are three different facts with three
+             * different remedies. The sentence is the server's.
+             */
+            const state = view.progress.find((entry) => entry.roundId === one.id);
+            return (
+              <li key={one.id}>
+                <span className="rs-machines-purpose">{one.purpose}</span> round {one.round}
+                {state ? (
+                  <>
+                    {' '}
+                    <span
+                      className={`rs-machines-progress rs-machines-progress-${state.progress}`}
+                    >
+                      {words(state.progress)}
+                    </span>
+                    <p className="rs-hint">{state.because}</p>
+                  </>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
       {view.plan.asks.length > 0 ? (
