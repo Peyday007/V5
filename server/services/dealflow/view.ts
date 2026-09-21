@@ -40,14 +40,14 @@
  */
 import { getCashMode } from '../../repos/cashMode.ts';
 import { dealflowSnapshot, type DealflowSnapshot } from './graph.ts';
-import { envelopeFor, type EnvelopeVerdict } from './compliance.ts';
+import { envelopeFor, type EnvelopeVerdict, type LayerReading } from './compliance.ts';
 import { landedEconomics } from './economics.ts';
 import { commercialPath, describeCapital, structureOptions, type CapitalClass } from './structures.ts';
 import { lessonsFrom, lessonsFor, type Lesson } from './lessons.ts';
 import { planFrom, readAll } from './kernel.ts';
 import { MAX_OPEN_DEAL_ROUNDS } from './allocate.ts';
 import { DERIVED_LADDER } from './maturity.ts';
-import type { DealRoundPurpose, DealStage } from '../../domain/types.ts';
+import type { ComplianceLayer, DealRoundPurpose, DealStage } from '../../domain/types.ts';
 
 export interface CategoryView {
   equipmentClass: string;
@@ -67,8 +67,21 @@ export interface MarketView {
   destination: string;
   buyers: number;
   deals: number;
-  /** One per class researched into this market. */
-  envelopes: { equipmentClass: string; verdict: EnvelopeVerdict; unestablished: number }[];
+  /**
+   * One per class researched into this market.
+   *
+   * `layers` is every one of the five with its own reading, rather than a
+   * count of the unresearched ones. The count says how many are missing; only
+   * the list says *which*, and the whole point of the five not collapsing is
+   * that they have different remedies — an import barrier is answered
+   * somewhere different from a buyer's own acceptance standard.
+   */
+  envelopes: {
+    equipmentClass: string;
+    verdict: EnvelopeVerdict;
+    unestablished: number;
+    layers: { layer: ComplianceLayer; reading: LayerReading }[];
+  }[];
 }
 
 export interface PartyView {
@@ -130,6 +143,16 @@ export interface DealCandidateView {
 }
 
 export interface QuestionView {
+  /**
+   * The round's own id.
+   *
+   * Reported because a question somebody can read about and cannot look up is
+   * a sentence rather than a reading: every other line of this surface names
+   * the row it came from, and this one did not.
+   */
+  id: string;
+  /** The Russell candidate this round *is*, so the mission resolves from it. */
+  candidateId: string;
   purpose: DealRoundPurpose;
   subject: string;
   round: number;
@@ -370,6 +393,8 @@ function toQuestion(
       ? `${round.equipmentClass} into ${round.destination}`
       : (round.equipmentClass ?? party?.name ?? 'the starting map');
   return {
+    id: round.id,
+    candidateId: round.candidateId,
     purpose: round.purpose,
     subject,
     round: round.round,
@@ -408,6 +433,7 @@ function marketsFrom(snapshot: DealflowSnapshot): MarketView[] {
         equipmentClass: view.equipmentClass,
         verdict: envelope.verdict,
         unestablished: envelope.unestablished.length,
+        layers: envelope.layers.map((one) => ({ layer: one.layer, reading: one.reading })),
       });
       byMarket.set(key, existing);
     }

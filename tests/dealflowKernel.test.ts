@@ -375,6 +375,60 @@ describe('the seed is an example, not the taxonomy', () => {
  * `operatorConsoleRemoved`'s reason: what must be true of every file of a kind
  * is not something a behavioural test can see.
  */
+/**
+ * Every line of the operator surface resolves to a row.
+ *
+ * The production reading printed a live question and a market's verdict and
+ * neither could be looked up: a question with no round id is a sentence, and
+ * "five unresearched" says how many are missing without saying *which* — which
+ * is the one thing the five layers not collapsing exists to tell you, since
+ * they have different remedies.
+ */
+describe('the operator surface names the rows it is reading', () => {
+  it('gives every live question its round id and the idea it is', async () => {
+    await activated();
+    await runDealflowKernel(projectId);
+    const candidate = await candidateFor('SEED_EQUIPMENT');
+    expect(candidate).not.toBe(null);
+
+    const view = await dealflowView(projectId);
+    expect(view.live.length).toBeGreaterThan(0);
+    for (const question of view.live) {
+      expect(question.id).toMatch(/^drd_/);
+      expect(question.candidateId).toBe(candidate);
+    }
+  });
+
+  it('names all five layers with their own readings, not a count of the missing ones', async () => {
+    await activated();
+    await runDealflowKernel(projectId);
+    await finishedRound({
+      candidateId: (await candidateFor('SEED_EQUIPMENT'))!,
+      claims: [
+        {
+          claim: 'A mine in Zambia published a need for fuel tank trailers.',
+          finding: 'BUYER_NEED',
+          subject: 'A Zambian mining operator',
+          equipment: 'fuel tank trailers',
+          jurisdiction: 'Zambia',
+        },
+      ],
+    });
+    await runDealflowKernel(projectId);
+
+    const view = await dealflowView(projectId);
+    const market = view.markets.find((one) => one.destination === 'Zambia');
+    expect(market).toBeDefined();
+    const envelope = market!.envelopes[0]!;
+    // Every one of the five, each with its own reading — and the unresearched
+    // ones say NOT_ESTABLISHED rather than being absent, because an absence of
+    // rows reading as a clearance is what this whole envelope exists to refuse.
+    expect(envelope.layers.map((one) => one.layer)).toEqual([...COMPLIANCE_LAYERS]);
+    expect(envelope.layers.every((one) => one.reading === 'NOT_ESTABLISHED')).toBe(true);
+    expect(envelope.unestablished).toBe(COMPLIANCE_LAYERS.length);
+  });
+});
+
 describe('a report read beside a running app', () => {
   const reports = readdirSync('scripts')
     .filter((name) => name.endsWith('-report.sh'))
