@@ -85,6 +85,7 @@ import {
   remoteBranchFor,
   roundBaseFor,
   verifyDelivery,
+  binsThisPassMayJudge,
   verifyIntegrationReport,
   verifyUnitReport,
 } from './remote.ts';
@@ -1134,7 +1135,15 @@ async function runRemoteTick(
 
   const fresh = (await getCampaign(campaign.id)) ?? campaign;
   const units = await listUnits(fresh.id);
-  const liveBins = await campaignBins(fresh.id);
+  /*
+   * The bins as *this pass* may judge them, rather than the newest read of the
+   * table. A bin that completed after the ingest loop above had its chance is
+   * reported as that loop saw it, because its report has not been turned into
+   * rows yet and a stage decision taken against it would offer work that the
+   * completed bin has in fact already done. See `binsThisPassMayJudge`, which
+   * carries the production sequence this cost.
+   */
+  const liveBins = binsThisPassMayJudge(bins, await campaignBins(fresh.id));
 
   /*
    * 1b. Say so when a stage is ready and nobody may be handed it.

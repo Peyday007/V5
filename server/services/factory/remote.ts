@@ -1459,13 +1459,74 @@ export async function campaignBins(campaignId: string): Promise<Bin[]> {
   return bins;
 }
 
+/**
+ * The bins this pass may decide a stage from, which is not simply the newest
+ * read of the table.
+ *
+ * `runRemoteTick` reads the bins twice: once at the top, so every COMPLETE one
+ * is offered to its ingest, and again afterwards, to decide what the campaign
+ * now needs. Between those two reads a worker can complete a bin — and then the
+ * stage decision is taken against a *newer* world than the ingest was, which is
+ * the one direction that is unsafe. **"This bin is no longer live" becomes true
+ * while "this bin's report has been read" is still false**, so the stage is
+ * offered again for the work the completed bin had in fact just done.
+ *
+ * Production, 2026-09-22, `fcp_189ea30c7ded4e7b9280`, twice in one campaign.
+ * `bin_43915e4f93ca4e3db111` integrated `repair-late-link-never-attested` and
+ * went COMPLETE at 12:28:33.813Z; `bin_0b6cdc2502d54b75b8c1` — titled
+ * *Integrate 1 unit(s)* — was READY at **12:28:35.895Z**, 2.08 seconds later,
+ * for the only unit still IMPLEMENTED, which was the one that bin had just
+ * carried. It was assigned 3.8s after that to the same Cowork session, which
+ * spent **1291 seconds** re-merging a branch that was already merged. Brain
+ * then refused its report twice — *"The report claims to have merged
+ * \"repair-late-link-never-attested\", which is not one of the units this bin
+ * was given"* — because `evaluateFactoryIntegration` re-derives that set from
+ * the units that are IMPLEMENTED *now*, and by 12:48 the unit really was
+ * INTEGRATED. The review stage did the same thing forty minutes earlier in the
+ * same campaign: `bin_c19cb071e0054316b540` ended 12:50:37.416Z and
+ * `bin_5fb255777c7d4997878a` was taken 6.4 seconds later by the same session.
+ *
+ * Every guard held and nothing false was recorded. What it cost was activations
+ * of a fixed subscription allowance, spent looking like progress — §24's
+ * sentence at a stage rather than at a launcher: **a loop that looks like
+ * progress is worse than a stop.**
+ *
+ * The completion's own compensating advance cannot save it, and that is why
+ * this is the seam rather than `advanceFactoryAfter`. `finishBin` ticks the
+ * campaign after recording completion; that tick takes the same
+ * compare-and-swap, so with a pass already in flight it declines and, by its
+ * own comment, leaves the work to "the loop twenty seconds later". The pass
+ * already in flight is the one between its two reads.
+ *
+ * So a bin a stage was still waiting on when this pass offered bins to the
+ * ingest is reported as this pass saw it then — the row it actually read, never
+ * a state composed here. Scoped to `isLiveBin` rather than to *not COMPLETE*,
+ * so this can never carry a `NEEDS_HUMAN` or `FAILED` row forward and invent a
+ * blocker for a bin somebody has already answered. It is **bounded by construction**: on the next pass that bin
+ * *is* COMPLETE at the top, so it is offered to the ingest and nothing is
+ * carried forward, which is what stops it becoming a stage that is never handed
+ * out again.
+ */
+export function binsThisPassMayJudge(offeredToIngest: Bin[], now: Bin[]): Bin[] {
+  const wasLive = new Map(offeredToIngest.filter(isLiveBin).map((bin) => [bin.id, bin]));
+  return now.map((bin) => (bin.state === 'COMPLETE' ? (wasLive.get(bin.id) ?? bin) : bin));
+}
+
+/**
+ * Whether a stage is still waiting on this bin, rather than finished with it.
+ *
+ * One predicate with two readers, for `DISPATCHABLE_SQL`'s reason: the sentence
+ * *a bin a stage is waiting on* had been written out twice within thirty lines,
+ * and the second reader is the one that decides whether a stage may be handed
+ * out again. A copy is how the two come to disagree about a state added later.
+ */
+function isLiveBin(bin: Bin): boolean {
+  return bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'DRAFT';
+}
+
 /** Whether this campaign already has a live bin for a stage, so a tick adds no second one. */
 export function liveBinOfKind(bins: Bin[], kind: string): Bin | null {
-  return (
-    bins.find(
-      (bin) => bin.kind === kind && (bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'DRAFT'),
-    ) ?? null
-  );
+  return bins.find((bin) => bin.kind === kind && isLiveBin(bin)) ?? null;
 }
 
 /** The repository a campaign works in, or null when its remote is not one we read. */

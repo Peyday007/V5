@@ -2668,6 +2668,65 @@ remote.
   left the blocker behind; they carry `cleared` now, like the surface-cooloff
   patch beside them that had it right all along.
 
+- **A stage was handed out twice for work that was already done, and every guard
+  downstream held — which is why it took a separate investigation to see.**
+  `runRemoteTick` reads the bins twice: at the top, so every `COMPLETE` one is
+  offered to its ingest, and again afterwards, to decide what the campaign now
+  needs. A worker completing a bin *between* those reads falls through the gap.
+  **"This bin is no longer live" becomes true in the second read while "this
+  bin's report has been read" is still false**, so the stage is offered again for
+  the work the completed bin had just done.
+
+  Production, `fcp_189ea30c7ded4e7b9280`, twice in one campaign.
+  `bin_43915e4f93ca4e3db111` integrated `repair-late-link-never-attested` and
+  reached `COMPLETE` at 12:28:33.813Z; `bin_0b6cdc2502d54b75b8c1` — *Integrate 1
+  unit(s)* — was `READY` at **12:28:35.895Z**, 2.08 seconds later, and assigned
+  3.8 seconds after that to the same Cowork session, which spent **1291 seconds**
+  re-merging an already merged branch. Which unit it was made for is settled by
+  elimination: two were integrated the previous day at 13:19:53, and the fourth
+  was not implemented until 13:18:49 that same afternoon — fifty minutes *after*
+  this bin was made — so the only unit `IMPLEMENTED` at 12:28:35 was the one the
+  previous bin had just carried. Brain then refused that bin's report
+  twice — *"The report claims to have merged `repair-late-link-never-attested`,
+  which is not one of the units this bin was given"* — because
+  `evaluateFactoryIntegration` re-derives the set from what is `IMPLEMENTED`
+  **now**, and by then it genuinely was integrated. The review stage did the same
+  thing in the same campaign: `bin_c19cb071e0054316b540` ended 12:50:37.416Z and
+  `bin_5fb255777c7d4997878a` was `READY` 4.7 seconds later.
+
+  **The completion's own compensating advance cannot close it**, which is why the
+  fix is at this seam rather than in `advanceFactoryAfter`. That advance ticks the
+  campaign after recording completion, takes the same compare-and-swap, and with a
+  pass already in flight declines — leaving the work, by its own comment, to "the
+  loop twenty seconds later". The pass already in flight is the one between its two
+  reads.
+
+  It is **not** an idempotency failure — the branch moved once and the unit was
+  integrated once — not duplicate stage creation, and not stale campaign state.
+  Every column was accurate and every guard did its job, and that is exactly what
+  made it invisible. **The cost is stated precisely rather than rounded up**: both
+  extra bins were taken by the session that had just finished the previous one —
+  the same Cowork activation, not a second fire — so what it spent was 1291
+  seconds of one activation and 28 of another, out of a fixed subscription
+  allowance, looking like progress the whole time. §24's sentence at a stage
+  rather than at a launcher.
+
+  `binsThisPassMayJudge` sits beside `liveBinOfKind` because it answers the same
+  question: a bin that was not `COMPLETE` when this pass offered bins to the ingest
+  is reported as this pass saw it then — the row it actually read, never a state
+  composed for it. **Bounded by construction**: on the next pass that bin *is*
+  `COMPLETE` at the top, so it is offered to the ingest and nothing is carried
+  forward, which is what stops it becoming a stage that is never handed out again.
+
+  **One reading is reported and not repaired, because nothing could separate it
+  from the rows.** Two conditions leave a completed integration bin unread at the
+  moment a stage is decided: the one above, and an ingest that ran and returned
+  `false` silently — `ingestIntegrateBin` has two such paths, a forge verdict that
+  does not confirm and an acceptance that moves no unit, and **neither records a
+  row**. They are therefore indistinguishable in the ledger. The tick lock makes
+  the first ordinary, so it is the one fixed; the second stands as an open reading,
+  because a remedy for a condition that was never established is worse than none.
+
 - **A prohibition in a prompt is not a control, and Brain cannot make one.** Every
   units bin forbids pushing to or moving the campaign's integration branch, names
   it, and says integrating is a separate bin — and a unit worker pushed its commit

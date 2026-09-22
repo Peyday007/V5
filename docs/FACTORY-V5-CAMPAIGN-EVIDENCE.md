@@ -6,12 +6,17 @@ stages, an integration, two independently-reviewed verdicts, two repairs and a
 delivery, on the hosted plane, with nobody watching. Every claim below resolves
 to a row, a commit, a timestamp or a workflow run.
 
-**Three Brain defects were found by running it, and all three are fixed.** Two
+**Four Brain defects were found by running it, and all four are fixed.** Two
 of them stopped the campaign dead and are the more useful half of this document,
 because in each case every state column read healthy, a fleet with idle capacity
 sat beside it, and nothing anywhere said what was wrong. The third said the
 opposite of what the rows underneath it said, for twenty-three minutes, while a
-worker was doing the work it claimed nobody could be given.
+worker was doing the work it claimed nobody could be given. The fourth stopped
+nothing at all and is the one worth reading last: it handed a stage out twice
+for work that was already done, every guard downstream held, nothing false was
+recorded, and what it cost was 1291 seconds of one Cowork activation and 28 of
+another, spent looking like progress. It was left open when the campaign closed, because all
+that had then been established was that something had happened twice.
 
 ---
 
@@ -80,7 +85,7 @@ the absence of a root *is* the statement that execution is remote.
 > credential and refuses to read a URL as a merge — which is right, and leaves
 > the whole right-hand half of the owner's question "what actually shipped?"
 > answerable only by hand.
-## The three defects, and how each was found
+## The first three defects, and how each was found
 
 None of them was found by reading. Each was found by running the factory
 against a real repository and then reading the rows it left.
@@ -261,6 +266,101 @@ fails the first lease assertion and removing the heartbeat floor the last;
 neutering `stageIsLive` fails with production's exact symptom,
 `expected 'BLOCKED' to be 'INTEGRATING'`, while the assertion that a genuinely
 parked stage keeps its sentence still passes.
+
+---
+
+## The fourth defect: a stage handed out for work that was already done
+
+This one was left open when the campaign closed, because all that had been
+established was that something happened twice. It was investigated afterwards
+from the persisted rows, and it is a real defect that occurred **twice in this
+one campaign** — once at the integrate stage and once at review.
+
+**The sequence, from rows rather than from reasoning.**
+
+| at | what |
+|---|---|
+| `12:28:33.813Z` | `bin_43915e4f93ca4e3db111` reaches `COMPLETE`, having integrated `repair-late-link-never-attested` at `95b87eaa12dd` |
+| `12:28:35.895Z` | `bin_0b6cdc2502d54b75b8c1` is `READY` — **2.08s later** — titled *Integrate 1 unit(s)* |
+| `12:28:39.654Z` | it is assigned to `claude-code-session_01K5mFLBjJ3an6bQ1n9uPpLq`, the same Cowork session that had just finished the first |
+| `12:29:23.494Z` | `bin_c19cb071e0054316b540` (REVIEW 2) is taken, on `95b87eaa12dd` — which the review stage reaches only when **every** unit is `INTEGRATED` |
+| `12:48:11.332Z` | `BIN_COMPLETION_REFUSED` — *"The report claims to have merged `repair-late-link-never-attested`, which is not one of the units this bin was given"* |
+| `12:48:56.297Z` | refused again, identically |
+| `12:50:04.292Z` | the worker resubmits; the bin records the result `CORRECTED` |
+| `12:50:10.235Z` | the bin completes. **No unit moved** — the ingest finds nothing `IMPLEMENTED` and records nothing — so it integrated nothing, in **1291 seconds** |
+
+**Which unit the second bin was made for is settled by elimination**, not by
+guessing. Its title says one unit was `IMPLEMENTED` at `12:28:35.895Z`.
+`pr-merge-observation` and `writeback-pr-link` had been `INTEGRATED` the
+previous day at 13:19:53; `repair-merge-observer-has-no-caller` was not
+implemented until 13:18:49 **that same afternoon** — fifty minutes *after* the
+bin in question was made — so at 12:28:35 it had no branch at all. The
+one remaining unit is the one `bin_43915e4f93ca4e3db111` had carried 2.08
+seconds earlier. The worker's own report names it, and Brain's refusal of that
+report — `evaluateFactoryIntegration` re-derives the unit set from what is
+`IMPLEMENTED` *now* — is what proves it had genuinely become `INTEGRATED` in
+between.
+
+**And the review stage did the same thing.** `bin_c19cb071e0054316b540` ended
+`12:50:37.416Z`; `bin_5fb255777c7d4997878a` was `READY` at `12:50:42.133Z` —
+**4.7s later** — assigned 1.7s after that to the same session, and completed in
+28 seconds having produced no third review. Same signature, different stage.
+
+**The cause.** `runRemoteTick` reads the bins twice: once at the top, so every
+`COMPLETE` one is offered to its ingest, and again afterwards, to decide what
+the campaign now needs. A worker completing a bin between those two reads falls
+through the gap — *"this bin is no longer live"* becomes true in the second read
+while *"this bin's report has been read"* is still false — so the stage is
+offered again for work the completed bin had just done.
+
+The completion's own compensating advance cannot close it, and that is why the
+fix is at this seam rather than in `advanceFactoryAfter`. `finishBin` ticks the
+campaign after recording completion; that tick takes the same campaign
+compare-and-swap, so with a pass already in flight it declines and, by its own
+comment, leaves the work to "the loop twenty seconds later". The pass already in
+flight is the one between its two reads.
+
+**What it is not.** Not an idempotency failure: the branch moved once, the unit
+was integrated once, and no effect was performed twice. Not duplicate stage
+creation: the stage guard was correct about what it had read. Not stale campaign
+state: every column was accurate. It is a read-ordering defect inside one pass,
+and **every guard downstream held** — which is exactly why it was invisible.
+
+**What it cost, stated precisely.** Both extra bins were taken by the session
+that had just finished the previous one — the same Cowork activation rather than
+a second fire, which is what the shared ULID suffix in
+`cse_01K5mFLBjJ3an6bQ1n9uPpLq` and `claude-code-session_01K5mFLBjJ3an6bQ1n9uPpLq`
+says. So it spent 1291 seconds of one activation and 28 of another, out of a
+fixed subscription allowance, looking like progress throughout.
+
+**The fix** is `binsThisPassMayJudge` in `services/factory/remote.ts`, beside
+`liveBinOfKind` because it answers the same question: a bin that was not
+`COMPLETE` when this pass offered bins to the ingest is reported as this pass
+saw it then — the row it actually read, never a state composed for it. It is
+bounded by construction: on the next pass that bin *is* `COMPLETE` at the top,
+so it is offered to the ingest and nothing is carried forward, which is what
+stops it becoming a stage that is never handed out again.
+
+**The regression reproduces the production precondition rather than assuming
+it.** `tests/factoryExecutionPlane.test.ts` holds the campaign tick as another
+dispatcher, completes a real integration bin so that `advanceFactoryAfter`
+genuinely declines, and then asserts against real repository reads that the
+report is unread, the unit is still `IMPLEMENTED`, the ledger is empty, and the
+newest read of the table alone reports the stage free — the defect, named. Run
+against a neutered rule it fails with `expected undefined to be
+'bin_…'`. A second test pins the bound in the other direction, so the fix
+cannot become a stage that is never offered again.
+
+**One thing is reported and not claimed.** Two readings could leave a completed
+integration bin unread at the moment the stage is decided: the one above, and an
+ingest that ran and returned `false` silently — `ingestIntegrateBin` has two
+such paths, a forge verdict that does not confirm and an acceptance that moves
+no unit, and neither records a row. They are **indistinguishable from the
+persisted evidence**, because neither writes anything. The fix addresses the
+first, which is the one the tick lock makes ordinary. The second is recorded
+here as an open reading rather than repaired, for the reason this file already
+gives once: a remedy for a condition that was never established is worse than
+none.
 
 ---
 
@@ -471,8 +571,10 @@ reopened bin, and `cse_01K5mFLBjJ3an6bQ1n9uPpLq` is the session that then ran th
   subscription already in place.
 - Brain held no credential for the repository at any point. There is no
   `BRAIN_FORGE_TOKEN` among the deployment's secrets.
-- **Three Brain defects were found by running this and all three are fixed**, each
-  with a regression run against its own defect before it was trusted.
+- **Four Brain defects were found by running this and all four are fixed**, each
+  with a regression run against its own defect before it was trusted. Three
+  stopped the campaign; the fourth cost it two activations and stopped nothing,
+  and was established from the rows only after the campaign had closed.
 
 **Not proven, and not rounded up:**
 
@@ -484,14 +586,11 @@ reopened bin, and `cse_01K5mFLBjJ3an6bQ1n9uPpLq` is the session that then ran th
   gap behaving as designed rather than a fault: a session Brain did not fire from
   a `bin_dispatch` row it wrote has no resolvable account, and *we could not tell*
   is recorded as such rather than as *we checked*.
-- **One integration stage ran twice.** `bin_0b6cdc2502d54b75b8c1` was created and
-  worked for 1291s immediately after `bin_43915e4f93ca4e3db111` completed the same
-  integration, and the units were already `INTEGRATED` by the time it finished.
-  The likeliest reading is a race between a worker's completion committing and
-  the check-in-triggered tick reading the bin's state, which would cost one extra
-  activation and self-correct — **but that is a reading and not a cause, and the
-  bin events were not examined.** It is recorded here rather than fixed, because
-  a remedy for a condition that was never established is worse than none.
+- **One integration stage ran twice — since investigated, established and
+  fixed. See *The fourth defect* below.** This bullet used to guess at a race
+  between a worker's completion committing and a check-in-triggered tick. The
+  bin events were then examined and that guess was wrong in its particulars,
+  which is why it was never acted on while it was only a reading.
 - **One restart boot took eleven and a half minutes and the next took two, and
   neither is explained.** Measured on the deploy that carried the lease floor: the
   machine restarted at 11:44:20, `Machine started in 2.603s`, and the Brain's

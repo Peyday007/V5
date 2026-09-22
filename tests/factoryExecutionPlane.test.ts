@@ -2945,3 +2945,291 @@ describe('a stage blocker comes off when the stage can be handed out again', () 
     expect(unit?.headSha).toBe(HEAD);
   });
 });
+
+/* ========================================================================= */
+
+describe('a bin that completed after the ingest had its chance still holds its stage', () => {
+  /*
+   * The defect this pins cost two Cowork activations on one production campaign,
+   * and every row it left behind read as healthy.
+   *
+   * `runRemoteTick` reads the bins twice — once at the top, so every COMPLETE one
+   * is offered to its ingest, and again afterwards, to decide what the campaign
+   * now needs. A worker completing a bin *between* those reads makes the stage
+   * decision fall through a gap: "this bin is no longer live" is true in the
+   * second read while "this bin's report has been read" is still false, so the
+   * stage is handed out again for work the completed bin had in fact just done.
+   *
+   * Production, 2026-09-22, `fcp_189ea30c7ded4e7b9280`.
+   * `bin_43915e4f93ca4e3db111` integrated `repair-late-link-never-attested` and
+   * reached COMPLETE at 12:28:33.813Z. `bin_0b6cdc2502d54b75b8c1`, titled
+   * *Integrate 1 unit(s)*, was READY at 12:28:35.895Z — 2.08 seconds later — and
+   * assigned 3.8 seconds after that to the same Cowork session, which spent 1291
+   * seconds re-merging an already merged branch. Brain then refused its report
+   * twice, correctly: *"The report claims to have merged
+   * \"repair-late-link-never-attested\", which is not one of the units this bin
+   * was given."* The review stage did the same thing in the same campaign twenty
+   * minutes later — `bin_c19cb071e0054316b540` ended 12:50:37.416Z and
+   * `bin_5fb255777c7d4997878a` was taken 6.4 seconds after it.
+   *
+   * The completion's own compensating advance cannot close it, which is why the
+   * fix is at this seam and not in `advanceFactoryAfter`: that advance takes the
+   * same campaign compare-and-swap, so with a pass already in flight it declines
+   * and leaves the work to the loop. **This test reproduces that precondition
+   * rather than assuming it** — the tick is genuinely held by somebody else while
+   * the bin completes, so the report is genuinely unread afterwards.
+   */
+  let campaignId = '';
+  let implementer = '';
+  let integrator = '';
+  let integrationBranch = '';
+  const unitHead = '4'.repeat(40);
+  const integrationHead = '5'.repeat(40);
+
+  beforeEach(async () => {
+    implementer = (await createWorker({ name: 'impl-w', createdByType: 'SYSTEM', createdById: 't' })).id;
+    integrator = (await createWorker({ name: 'int-w', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `pass-consistent-${Math.random()}`,
+      objective: 'Keep the published site free of repository-only files.',
+      expectedOutcome: 'The suite fails when they appear.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    integrationBranch = campaign.integrationBranch;
+    await ensureUnit({
+      campaignId,
+      unitKey: 'only-unit',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the published tree',
+      objective: 'Assert the build publishes the site only.',
+      acceptance: ['the suite fails when a repository-only file is published'],
+      ownedPaths: ['test/only.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    await registerFactoryWorker(implementer);
+    await registerFactoryWorker(integrator);
+
+    // One implemented unit, by the path a worker takes.
+    const { promoteReadyUnits } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+    const unit = (await getUnitByKey(campaignId, 'only-unit'))!;
+    const held = (
+      await claimUnits({ campaignId, workerId: implementer, unitIds: [unit.id], leaseMs: 60_000 })
+    )[0]!;
+    await markImplemented(
+      { unitId: unit.id, workerId: implementer, leaseId: held.leaseId, leaseGeneration: held.leaseGeneration },
+      {
+        branch: `factory/${campaignId}/only-unit/a1`,
+        headSha: unitHead,
+        baseSha: BASE,
+        worktreePath: null,
+        workerSummary: 'implemented',
+        terminalResult: { outcome: 'IMPLEMENTED', commands: [], filesForgeReported: [], filesWorkerReported: [] },
+      },
+    );
+  });
+
+  /** The forge agrees with an integration that really did carry the unit. */
+  function forgeConfirmsTheIntegration(): void {
+    stubForge({
+      branches: { [integrationBranch]: integrationHead },
+      compares: {
+        [`${unitHead}...${integrationHead}`]: { files: ['test/only.test.js'], status: 'ahead' },
+        [`${BASE}...${integrationHead}`]: { files: ['test/only.test.js'], status: 'ahead' },
+      },
+    });
+  }
+
+  it('does not offer the stage again for work whose report this pass has not read', async () => {
+    forgeConfirmsTheIntegration();
+    const created = await tickRemoteCampaign(campaignId);
+    expect(created.created.some((entry) => entry.startsWith('integrate:'))).toBe(true);
+
+    const assigned = await assignNextBin({ workerId: integrator, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_INTEGRATE');
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'integrate',
+      value: JSON.stringify({
+        outcome: 'IMPLEMENTED',
+        integrationBranch,
+        headSha: integrationHead,
+        merged: [{ unitKey: 'only-unit', branch: `factory/${campaignId}/only-unit/a1`, headSha: unitHead }],
+        conflicts: [],
+        commands: [{ command: 'npm test', exitCode: 0 }],
+        summary: 'merged and verified',
+      }),
+      contentHash: 'h-integrate',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+
+    const { campaignBins, liveBinOfKind, binsThisPassMayJudge } = await import(
+      '../server/services/factory/remote.ts'
+    );
+    const { claimCampaignTick, releaseCampaignTick } = await import('../server/repos/factory.ts');
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+
+    // What a pass reads at the top, before it offers anything to the ingest.
+    const offeredToIngest = await campaignBins(campaignId);
+    expect(liveBinOfKind(offeredToIngest, 'FACTORY_INTEGRATE')?.id).toBe(assigned!.bin.id);
+
+    /*
+     * The completion lands with the campaign's tick genuinely held by somebody
+     * else, which is the production precondition: `advanceFactoryAfter` takes the
+     * same compare-and-swap, declines, and leaves the report unread.
+     */
+    const otherPass = await claimCampaignTick(campaignId, 'another-dispatcher');
+    expect(otherPass.ok).toBe(true);
+    expect(
+      await finishBin(
+        {
+          binId: assigned!.bin.id,
+          leaseId: assigned!.leaseId,
+          leaseGeneration: assigned!.leaseGeneration,
+          workerId: integrator,
+        },
+        { state: 'COMPLETE', reason: 'integrated' },
+      ),
+    ).toBe('OK');
+
+    // The world the second read sees: the bin is COMPLETE and nothing has read it.
+    const now = await campaignBins(campaignId);
+    expect((await getBin(assigned!.bin.id))?.state).toBe('COMPLETE');
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
+    expect(
+      (await listFactoryEvents(campaignId, { kinds: ['INTEGRATION_MERGED', 'INTEGRATION_REJECTED'] }))
+        .length,
+    ).toBe(0);
+
+    // The defect, named rather than implied: on the newest read alone the stage
+    // looks free, which is what handed production a second integrator.
+    expect(liveBinOfKind(now, 'FACTORY_INTEGRATE')).toBeNull();
+
+    // And the rule: this pass may not judge the stage free, because its ingest
+    // never had the chance to read that bin.
+    expect(liveBinOfKind(binsThisPassMayJudge(offeredToIngest, now), 'FACTORY_INTEGRATE')?.id).toBe(
+      assigned!.bin.id,
+    );
+
+    // The next pass reads it COMPLETE at the top, ingests it, and the campaign
+    // moves on — with exactly one integration bin ever made.
+    await releaseCampaignTick(campaignId, 'another-dispatcher', otherPass.ok ? otherPass.generation : 0);
+    forgeConfirmsTheIntegration();
+    const ingested = await tickRemoteCampaign(campaignId);
+    expect(ingested.ingested.some((entry) => entry.startsWith('integrate:'))).toBe(true);
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('INTEGRATED');
+    const integrateBins = (await campaignBins(campaignId)).filter(
+      (bin) => bin.kind === 'FACTORY_INTEGRATE',
+    );
+    expect(integrateBins).toHaveLength(1);
+  });
+
+  it('never carries a bin somebody has already answered forward as a blocker', async () => {
+    /*
+     * The narrow edge the predicate is scoped for. A bin that was `NEEDS_HUMAN`
+     * when this pass began, was answered, and completed before the second read
+     * must not be reported back as `NEEDS_HUMAN` — `stalledStage` would read that
+     * as a stage waiting for a person and block a campaign whose bin had in fact
+     * just been answered. Only a bin a stage was genuinely *waiting on* is
+     * carried, which is what `isLiveBin` says and what `liveBinOfKind` already
+     * meant by live.
+     */
+    const { binsThisPassMayJudge } = await import('../server/services/factory/remote.ts');
+    const parked = {
+      id: 'bin_parked',
+      kind: 'FACTORY_INTEGRATE',
+      state: 'NEEDS_HUMAN',
+    } as unknown as Awaited<ReturnType<typeof getBin>> & object;
+    const completed = { ...parked, state: 'COMPLETE' };
+    const judged = binsThisPassMayJudge([parked as never], [completed as never]);
+    expect(judged[0]?.state).toBe('COMPLETE');
+  });
+
+  it('carries nothing forward once the ingest has had its chance at that bin', async () => {
+    /*
+     * The other half, and the one that stops the fix becoming a stage that is
+     * never handed out again. A bin already COMPLETE when the pass began was
+     * offered to the ingest, so it is reported exactly as the table has it — and
+     * a stage with nothing live is free to be handed out.
+     */
+    const { campaignBins, liveBinOfKind, binsThisPassMayJudge } = await import(
+      '../server/services/factory/remote.ts'
+    );
+    forgeConfirmsTheIntegration();
+    await tickRemoteCampaign(campaignId);
+    const assigned = await assignNextBin({ workerId: integrator, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_INTEGRATE');
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'integrate',
+      value: JSON.stringify({
+        outcome: 'BLOCKED',
+        integrationBranch,
+        merged: [],
+        conflicts: [],
+        commands: [],
+        summary: 'the remote refused this surface',
+        blockedReason: 'no credential for the remote',
+      }),
+      contentHash: 'h-blocked',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(
+      await finishBin(
+        {
+          binId: assigned!.bin.id,
+          leaseId: assigned!.leaseId,
+          leaseGeneration: assigned!.leaseGeneration,
+          workerId: integrator,
+        },
+        { state: 'COMPLETE', reason: 'blocked' },
+      ),
+    ).toBe('OK');
+
+    // Both reads of a settled world agree, so nothing is substituted and the
+    // stage is judged exactly as the table has it.
+    const offeredToIngest = await campaignBins(campaignId);
+    const now = await campaignBins(campaignId);
+    expect(offeredToIngest.find((bin) => bin.id === assigned!.bin.id)?.state).toBe('COMPLETE');
+    expect(liveBinOfKind(binsThisPassMayJudge(offeredToIngest, now), 'FACTORY_INTEGRATE')).toBeNull();
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
+  });
+});
