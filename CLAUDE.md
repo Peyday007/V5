@@ -2913,9 +2913,33 @@ remote.
   **The race regression asserted the opposite of its own name until it was run
   against its defect.** `setAvailability` re-reads the worker, so a *sequential*
   second call sees the new state and is a legitimate second move — the test
-  passed with the guard deleted. It runs both calls concurrently now, so both
-  read before either writes, and asserts exactly one winner, one refusal, and
-  one ledger row.
+  passed with the guard deleted. It ran both calls concurrently after that, and
+  asserted exactly one winner, one refusal, and one ledger row.
+
+  **And that second version was a flake, which the second backend is what
+  found — the sixth time, and the first where what was wrong was the test
+  rather than the code.** Its own comment stated the precondition — *both calls
+  read QUARANTINED before either writes* — and nothing anywhere made it true.
+  On SQLite writers are serialized and the two awaits interleaved so that both
+  reads did land first; on Postgres the round trips are slower, the second read
+  landed *after* the first write, and the second call became a legitimate move
+  from the new state. Two fulfilled, and a red gate:
+  `expected [ { status: 'fulfilled' }, … ] to have a length of 1 but got 2`.
+  **A test that hopes for a race is a flake**, which §41 records as worse than
+  no guard because it reads as coverage, and reproducing the gate's exact
+  failure against a real local cluster is what established that **no production
+  behaviour was wrong** — the compare-and-swap does what it says.
+
+  So the race is forced rather than hoped for, one frame down: two concurrent
+  `setWorkerAvailability` calls carrying the **same** `from` by construction,
+  so whichever statement lands second matches nothing whatever the backend's
+  timing does. Deleting the `WHERE availability = ?` makes it fail with
+  `expected [ true, true ] to have a length of 1`, on both backends. What the
+  concurrent service-level version was reaching for is asserted deliberately
+  beside it — a second *sequential* decision is a second legitimate move, and
+  the ledger says two things happened — and `setAvailability`'s throw is this
+  `false` one frame up, reachable only as a genuine race, which is why it is
+  pinned where it can be forced rather than where it cannot.
 
   **And the class was closed rather than only the instances.** The release
   defect was a *type* losing a server field, not a screen declining to render

@@ -53,6 +53,7 @@ import {
   recordWorkerFailure,
   recordWorkerRateLimit,
   registerWorker,
+  setWorkerAvailability,
   workerLoad,
 } from '../server/repos/factoryFleet.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -1355,48 +1356,70 @@ describe('the registry', () => {
     expect((await slotFor(worker.id))?.freeSlots).toBe(0);
   });
 
-  it('refuses a decision taken against a state that has since moved', async () => {
+  /*
+   * The guard, pinned where it actually is.
+   *
+   * This was written as two concurrent `setAvailability` calls, with a comment
+   * asserting that both would read QUARANTINED before either wrote — and
+   * nothing that made that true. On SQLite writers are serialized and the two
+   * awaits interleaved so that both reads did land first, so it passed. On
+   * Postgres the round trips are slower and the second read landed *after* the
+   * first write, which makes the second call a legitimate move from the new
+   * state rather than a losing claim: two fulfilled, and a gate failure. **A
+   * test that hopes for a race is a flake**, which is the shape §41 records as
+   * worse than no guard, and it was mine rather than the code's — no
+   * production behaviour was wrong.
+   *
+   * So the race is forced rather than hoped for, one frame down. Both claimants
+   * carry the *same* `from` by construction, so whichever statement lands
+   * second matches nothing whatever the backend's timing does. That is the
+   * compare-and-swap, and `setAvailability`'s throw is this `false` one frame
+   * up — reachable only as a genuine race, which is why it is asserted here and
+   * not above it.
+   */
+  it('refuses a claim against a state that has since moved', async () => {
     const worker = await quarantined('raced');
 
-    /*
-     * The race, reproduced rather than asserted around. Both calls read
-     * QUARANTINED before either writes — which is the only way this guard can
-     * fire, because `setAvailability` reads the row itself, so a *sequential*
-     * second call would simply see the new state and be a legitimate second
-     * move. A test that ran them in order would have asserted the opposite of
-     * its own name and passed with the guard deleted.
-     */
-    const [one, two] = await Promise.allSettled([
-      setAvailability({
-        name: 'raced',
-        to: 'AVAILABLE',
-        reason: 'SURFACE_REPAIRED',
-        actorRef: 'usr_one',
-      }),
-      setAvailability({
-        name: 'raced',
-        to: 'PAUSED',
-        reason: 'WITHDRAWN_BY_OPERATOR',
-        actorRef: 'usr_two',
-      }),
+    const [one, two] = await Promise.all([
+      setWorkerAvailability(worker.id, 'QUARANTINED', 'AVAILABLE'),
+      setWorkerAvailability(worker.id, 'QUARANTINED', 'PAUSED'),
     ]);
 
-    const settled = [one, two];
-    const won = settled.filter((result) => result.status === 'fulfilled');
-    const lost = settled.filter((result) => result.status === 'rejected');
     // Exactly one, whichever it was. A losing claim is an ordinary outcome.
-    expect(won).toHaveLength(1);
-    expect(lost).toHaveLength(1);
-    expect(String((lost[0] as PromiseRejectedResult).reason)).toMatch(
-      /was QUARANTINED when this was read and is not any more/,
-    );
-
-    // And the row holds one of the two decisions rather than a blend of them.
+    expect([one, two].filter(Boolean)).toHaveLength(1);
     const after = (await getWorker(worker.id))?.availability;
     expect(['AVAILABLE', 'PAUSED']).toContain(after);
-    // One ledger row, not two: the loser wrote nothing.
+  });
+
+  it('re-reads the row rather than trusting the state a caller last saw', async () => {
+    /*
+     * The property that made the concurrent version of the test above wrong,
+     * asserted deliberately: a second *sequential* decision is a second
+     * legitimate move, because the service reads the row itself. An operator
+     * restoring a worker and then pausing it has done two things, and the
+     * ledger says two things happened.
+     */
+    const worker = await quarantined('reread');
+
+    const first = await setAvailability({
+      name: 'reread',
+      to: 'AVAILABLE',
+      reason: 'SURFACE_REPAIRED',
+      actorRef: 'usr_one',
+    });
+    expect(first.moved).toBe(true);
+
+    const second = await setAvailability({
+      name: 'reread',
+      to: 'PAUSED',
+      reason: 'WITHDRAWN_BY_OPERATOR',
+      actorRef: 'usr_two',
+    });
+    expect(second.moved).toBe(true);
+    expect((await getWorker(worker.id))?.availability).toBe('PAUSED');
+
     const events = await listFactoryEvents(null, { kinds: ['WORKER_STATE_CHANGED'], limit: 20 });
-    expect(events.filter((event) => event.workerId === worker.id)).toHaveLength(1);
+    expect(events.filter((event) => event.workerId === worker.id)).toHaveLength(2);
   });
 
   it('says nothing was written rather than reporting a move that did not happen', async () => {

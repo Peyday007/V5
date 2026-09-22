@@ -1104,7 +1104,12 @@ about who typed the command. Reaching the shell is what authenticated it.
 
 Availability has exactly two writers and there must never be a third: this
 transition, and the quarantine inside `recordWorkerFailure`, which is a health
-signal Brain derives from what actually happened. `patchWorker` used to be able
+signal Brain derives from what actually happened. The compare-and-swap that
+makes two operators produce one move is pinned by two concurrent claims
+carrying the **same** state to move from — forced rather than hoped for, because
+a version that raced the service instead passed on SQLite and failed on
+Postgres, where the second read lands after the first write and the second call
+is a legitimate second move rather than a losing claim. `patchWorker` used to be able
 to write the same column with a bare `UPDATE` and had no caller anywhere, so
 the guard above was a guard for exactly as long as nobody found the other door.
 It no longer carries the field. The rest of it — concurrency, capabilities,
