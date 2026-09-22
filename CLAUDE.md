@@ -1554,6 +1554,32 @@ rules.
   a person must fix, and a bin visibly out of attempts is worth more than one
   silently waiting.
 
+  **It said `READY` where it meant claimable, and the correction is recorded
+  rather than quietly applied.** §19's rule is that an expired lease is
+  claimable work, and the constant above `DISPATCHABLE_SQL` exists because that
+  sentence had already been written as `state = 'READY'` four times; this read
+  was the fifth, and the reason the constant did not stop it is that it sits in
+  a query which aliases `bins`, so a bare string beginning `state =` could not
+  be dropped into one. The predicate is a function of the alias now and
+  `DISPATCHABLE_SQL` is composed from it, which is the only arrangement where a
+  sixth reader gets the sentence for free.
+
+  What the narrower version cost is the *worse* half of this condition rather
+  than the one above. A session that never arrives leaves the bin `READY`; a
+  session that arrives, takes the lease and then **ends mid-stage** leaves it
+  `LEASED` for ever after — and that is the ordinary way a Cowork activation
+  finishes. `bin_43915e4f93ca4e3db111` is the row: fired 14:32:41Z, assigned
+  twenty seconds later, thirty-seven heartbeats, then silence; the lease lapsed
+  at 15:07:18Z and the dispatcher refired at 15:07:45Z, correctly, at a session
+  that never checked in. Nineteen hours later it was `LEASED gen 1 attempts
+  1/2` — an attempt still unspent, eligible surfaces idle beside it, and a
+  factory campaign one integration short of its pull request. Widening it
+  changes nothing downstream: the reopened intent is `PENDING`, the pre-fire
+  re-read asks `isDispatchable` again before spending a fire, and what the
+  arriving worker does with an expired lease is the ordinary takeover — the
+  generation advances, the attempt is charged because the last one genuinely
+  did not finish, and a late completion from the dead session matches nothing.
+
 - **A mission going terminal does not finish the packet it owned, and a park
   nobody will be asked about keeps its work claimable.** Seven production
   packets sat at `NEEDS_HUMAN` under a terminal mission, one of them holding a

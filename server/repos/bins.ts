@@ -1364,10 +1364,30 @@ export interface AssignedBin {
  * scarce. One predicate, four callers, no copies.
  *
  * One `?`, bound to now.
+ *
+ * **There was a fifth reader, and it wrote `state = 'READY'` too.** The
+ * paragraph above predicted it and the constant did not prevent it, because
+ * `reopenNoShowDispatches` sits in a query that aliases `bins` and a bare
+ * string starting `state =` cannot be dropped into one. So the rule is a
+ * function of the alias now rather than a constant plus a copy, and
+ * `DISPATCHABLE_SQL` is composed from it — which is the only arrangement in
+ * which a sixth reader gets the same sentence for free.
+ *
+ * What that fifth reader cost is in `reopenNoShowDispatches`' own comment:
+ * `bin_43915e4f93ca4e3db111`, a factory integration whose worker's session
+ * ended mid-stage, fired again correctly when the lease lapsed, never answered,
+ * and then sat LEASED for nineteen hours with nothing in the Brain that could
+ * ever fire for it again.
  */
-export const DISPATCHABLE_SQL =
-  "((state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))" +
-  ' AND attempt_count < max_attempts)';
+export function claimableStateSql(prefix: string): string {
+  return (
+    `(${prefix}state = 'READY'` +
+    ` OR (${prefix}state = 'LEASED' AND ${prefix}lease_expires_at <= ?))`
+  );
+}
+
+/** That question plus the attempt budget, for a query with no join. */
+export const DISPATCHABLE_SQL = `(${claimableStateSql('')} AND attempt_count < max_attempts)`;
 
 /**
  * The dispatcher's extra question, on top of `DISPATCHABLE_SQL`.
@@ -2351,13 +2371,42 @@ export async function ensureDispatchIntent(bin: Bin): Promise<boolean> {
  * one audit role short of a verdict.
  *
  * The remedy is the shape everything else here uses: derive it from rows. A
- * `SENT` intent is a no-show when its bin is **still READY at the very
+ * `SENT` intent is a no-show when its bin is **still claimable at the very
  * generation that intent was created for** — a worker that arrived would have
  * taken a lease and advanced it, so same generation means nothing has been
  * handed out since — and when the fire is older than the in-flight window, so
  * this can never race an activation Brain still believes is running. The window
  * is passed in rather than read here, because `inFlightByRoutine` owns it and
  * two places holding the same number is how they come to disagree.
+ *
+ * **Claimable, not READY, and the correction is recorded rather than quietly
+ * applied.** This asked `b.state = 'READY'`, which is the narrower sentence
+ * the constant above `DISPATCHABLE_SQL` was written to stop being written a
+ * fifth time — and is not the set a worker could be given, because §19's rule
+ * is that an expired lease is claimable work. So the very condition this
+ * function exists for has a second shape, and it is the one that costs more:
+ * a worker that *arrives*, takes the lease, works, and then has its session
+ * end mid-stage leaves the bin `LEASED` rather than `READY`. The lease lapses,
+ * the dispatcher correctly fires again — and if *that* session never arrives,
+ * this read could not see it, so the intent stayed `SENT` at a generation
+ * nothing would ever advance.
+ *
+ * `bin_43915e4f93ca4e3db111` is the row, and it is a worse instance than the
+ * one above because everything about it worked. Fired 14:32:41Z, assigned
+ * 14:33:01Z, thirty-seven heartbeats, then nothing; lease expired 15:07:18Z;
+ * refired 15:07:45Z at a session that never checked in. Nineteen hours later:
+ * `LEASED`, `gen 1`, `attempts 1/2` — an attempt still unspent, a healthy
+ * fleet beside it, and a factory campaign one integration short of its pull
+ * request with nothing in the Brain that could fire for it again.
+ *
+ * Widening it changes nothing about what happens next. The reopened intent
+ * goes back to `PENDING`, and the dispatcher's pre-fire re-read asks
+ * `isDispatchable` again before spending anything — so a bin somebody took in
+ * the meantime is refused there, as it always was. What the arriving worker
+ * does with an expired lease is `assignNextBin`'s ordinary takeover: the
+ * generation advances, the attempt is charged because the previous one
+ * genuinely did not finish, and a late completion from the dead session
+ * matches nothing.
  *
  * Bounded by the intent's own `max_attempts`, which was always there and had
  * nothing that could reach it. At the ceiling the row becomes `ABANDONED` —
@@ -2399,11 +2448,11 @@ export async function reopenNoShowDispatches(
       WHERE d.state = 'SENT'
         AND d.sent_at IS NOT NULL
         AND d.sent_at <= ?
-        AND b.state = 'READY'
+        AND ${claimableStateSql('b.')}
         AND b.lease_generation = d.lease_generation
       ORDER BY d.sent_at, d.rowid
       LIMIT ?`,
-    [before, Math.max(1, limit)] as never[],
+    [before, now, Math.max(1, limit)] as never[],
   );
 
   const out: { dispatchId: string; binId: string; outcome: 'REOPENED' | 'ABANDONED' }[] = [];
