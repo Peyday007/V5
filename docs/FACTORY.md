@@ -1058,6 +1058,27 @@ Brain cannot do and must not gate. A browser can only pin through the forge, so
 a field there would have been stored and never read. `submitObjective` refuses
 that combination by name instead, before it spends a forge request on it.
 
+### Reading what is being let out
+
+The release card describes the decision. The **artifact** it is a decision
+about is `npm run factory pull-request --campaign <id>`, which prints the
+rendered title and body.
+
+It exists because that body had a route and no caller. On the hosted plane the
+reviewable request is already open on the forge and a person reads it there; on
+the local plane `assemble.ts` renders the body, stores it as a `PR_BODY`
+artifact and **stops**, because opening a request against a remote host is a
+separately authorized step somebody performs outside the factory. The person who
+performs it had nowhere to read what they were opening.
+
+It renders through `pullRequestFor` — the same function the route calls — rather
+than reading back the stored artifact, which is a snapshot taken at assembly.
+Two readers each with their own idea of the body is not hypothetical here: it is
+what `assemble.ts` and `GET /factory/campaigns/:id/pull-request` used to be, and
+they described the same campaign differently until both were pointed at one
+renderer. It publishes nothing, and the guard that says so reads the command's
+own source rather than trusting the sentence.
+
 ### The surface a person uses
 
 `/build` in the Russell shell. A person says what should become true, picks one

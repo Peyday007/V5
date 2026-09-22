@@ -2814,6 +2814,35 @@ remote.
   mid-key, because a truncated JSON object reads as corruption rather than as a
   limit.
 
+  **And the deliverable itself was the third door with nothing behind it, which
+  a sweep of the routes is what found.** `pullRequestFor` renders the title and
+  body a reviewer reads, it was reachable at
+  `GET /factory/campaigns/:id/pull-request`, and no function in
+  `client/src/lib/factoryApi.ts` and no command called it. On the hosted plane
+  that survives, because the request already exists on the forge and a person
+  reads it there. On the **local** plane it is the campaign's whole deliverable:
+  `assemble.ts` renders the body, stores it and stops — opening the request is
+  a separately authorized step somebody performs outside the factory — so the
+  one person who has to act on it had nowhere to read what they were about to
+  open. `npm run factory pull-request` is the surface, and it renders through
+  `pullRequestFor` rather than reading back the stored `PR_BODY`, because that
+  artifact is a snapshot taken at assembly and a second reader with its own idea
+  of the body is precisely how the stored document and the live route once came
+  to describe one campaign differently. One derivation, three readers.
+
+  **Three closes in one session is the shape rather than three accidents**, and
+  naming it is worth more than any of them: throughput, the release decision and
+  now the artifact were each a complete, tested, guarded server capability whose
+  only caller was an HTTP route nothing requested. **A route is not an operator
+  surface** — it is the thing a surface calls — and the repository has no test
+  that could have told the difference, because every one of them called the
+  service directly. The guards that close each are source reads for
+  `operatorConsoleRemoved`'s reason, and writing this one found the version of
+  that defect *inside the guard*: deleting the command left three negative
+  assertions passing over an empty slice. §41 already records what a vacuous
+  guard costs — it reads as coverage — so the slice is taken once and a missing
+  command fails all four rather than satisfying three.
+
   **Writing the regressions established something the reading had not: three of
   the four are ordinary and the fourth is only reachable as a race.** The parser
   refuses an `IMPLEMENTED` report that merged nothing, and `verdict.ok` means

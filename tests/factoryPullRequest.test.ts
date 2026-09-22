@@ -171,3 +171,78 @@ describe('the pull request', () => {
     expect(source).not.toMatch(/\bfetch\(|child_process|\bgit\b|push/);
   });
 });
+
+/*
+ * A renderer with no way in.
+ *
+ * `pullRequestFor` was reachable at `GET /factory/campaigns/:id/pull-request`
+ * and by nothing else — no function in `client/src/lib/factoryApi.ts`, no
+ * command on the factory door. On the hosted plane that is survivable, because
+ * the request already exists on the forge and a person reads it there. On the
+ * local plane it is the campaign's *whole deliverable*: `assemble.ts` renders
+ * the body, stores it, and stops, because opening the request is a separately
+ * authorized step somebody performs outside the factory — and that somebody had
+ * nowhere to read what they were about to open.
+ *
+ * It reads the repository rather than calling anything, for
+ * `operatorConsoleRemoved`'s reason: what has to exist is a *way in*, and a
+ * passing service call cannot show you one. Every assertion here was run against
+ * the command deleted, to watch it fail.
+ */
+describe('the way in', () => {
+  const door = () => fs.readFileSync('scripts/factory.ts', 'utf8');
+
+  /*
+   * The command's own text, or a failure saying it is not there.
+   *
+   * Three of the four assertions below are negative — this must not read the
+   * artifact, this must not publish — and a negative assertion over an empty
+   * string passes for the wrong reason. Deleting the command made two of them
+   * green, which is §41's vacuous guard exactly: it reads as coverage. So the
+   * slice is taken here, once, and a missing command fails every one of them
+   * rather than satisfying three.
+   */
+  const printer = (): string => {
+    const source = door();
+    const from = source.indexOf("case 'pull-request': {");
+    const to = source.indexOf("case 'release': {");
+    if (from === -1 || to === -1 || to <= from) {
+      throw new Error('`scripts/factory.ts` has no `pull-request` command to read.');
+    }
+    return source.slice(from, to);
+  };
+
+  it('is a command on the factory door, and is advertised as one', () => {
+    expect(printer()).toMatch(/pullRequestFor\(campaignId\)/);
+    // A command nobody is told about is one nobody uses.
+    const source = door();
+    expect(source.slice(source.lastIndexOf('commands:'))).toMatch(/pull-request/);
+  });
+
+  it('renders from rows rather than reading back the stored snapshot', () => {
+    /*
+     * One derivation, three readers. `assemble.ts` records a `PR_BODY` artifact
+     * at the moment it assembles, and this module's own header records what it
+     * cost the last time two readers each had their own idea of the body: the
+     * stored document and the live route made different claims about one
+     * campaign and nothing reconciled them. A door that read the artifact would
+     * be the third.
+     */
+    expect(printer()).not.toMatch(/PR_BODY|listArtifacts|readArtifact/);
+  });
+
+  it('says a campaign has no artifact rather than printing a blank one', () => {
+    // `pullRequestFor` answers null for a campaign whose rows do not resolve
+    // into a view. Printing that as an empty document would read as a campaign
+    // whose artifact is empty, which is a different and reassuring claim.
+    expect(printer()).toMatch(/no reviewable artifact/);
+  });
+
+  it('publishes nothing', () => {
+    // The module's own guarantee, at the surface that reads it. The factory may
+    // open a reviewable request and may never merge or publish one, and a door
+    // that grew an outbound call would be that boundary depending on nobody
+    // having called it.
+    expect(printer()).not.toMatch(/fetch\(|octokit|forge\.|createPullRequest/);
+  });
+});

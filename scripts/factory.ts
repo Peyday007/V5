@@ -44,6 +44,7 @@ import { installPlan, validatePlan } from '../server/services/factory/planner.ts
 import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/factory/loop.ts';
 import { campaignMetrics, FACTORY_EVENT_KINDS } from '../server/services/factory/metrics.ts';
 import { throughputReport } from '../server/services/factory/throughput.ts';
+import { pullRequestFor } from '../server/services/factory/pullRequest.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
 import { campaignSpecFor } from '../server/services/factory/remote.ts';
 import {
@@ -668,6 +669,44 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * The reviewable artifact, in the words a person will read.
+     *
+     * `assemble.ts` "produces the branch, the patch and the body and stops", and
+     * on the local plane that body *is* the deliverable: opening the request
+     * against a remote host is a separately authorized step somebody performs
+     * outside the factory, so the body has to be readable by the person who will
+     * perform it. It was reachable at `GET /factory/campaigns/:id/pull-request`
+     * and by nothing else — no client function, no command — which is the same
+     * shape as `throughput` two cases up and the release decision one screen
+     * along: a complete door with nothing that calls it, which this file has now
+     * had to close three times.
+     *
+     * It renders through `pullRequestFor`, which is the function the route calls,
+     * rather than reading the stored `PR_BODY` artifact. That is deliberate and
+     * it is the same argument `assemble.ts` makes about itself: the artifact is a
+     * snapshot taken when the campaign was assembled, and a second reader with
+     * its own idea of the body is how the stored document and the live route came
+     * to disagree about one campaign in the first place. One derivation, three
+     * readers.
+     *
+     * It publishes nothing. There is no outbound call on this path at all.
+     */
+    case 'pull-request': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const rendered = await pullRequestFor(campaignId);
+      if (!rendered) {
+        // Not an empty body. A campaign whose rows do not resolve into a view has
+        // nothing to render, and printing a blank document would read as one.
+        process.stdout.write(
+          `no reviewable artifact: ${campaignId} did not resolve into a campaign view\n`,
+        );
+        break;
+      }
+      process.stdout.write(`${rendered.title}\n\n${rendered.body}\n`);
+      break;
+    }
+
     case 'release': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const decision = (flagString(flags, 'decision') ?? 'APPROVED') as 'APPROVED' | 'REFUSED';
@@ -932,7 +971,8 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, events, throughput, answer-bin,\n' +
+          '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
+          '  answer-bin,\n' +
           '  reauthorize, retire, release\n',
       );
   }
