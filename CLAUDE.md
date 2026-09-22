@@ -2598,6 +2598,76 @@ remote.
   what a worker says about itself. The reported value is still preferred, because
   an arrival Brain did not fire has no such row, and with neither the floor still
   fails closed. The schema now says what the field does.
+- **A bin's lease was the worker's to choose, and the work is the contract's to
+  demand.** `brain_check_in` takes `lease_ms`, `brain_bin_heartbeat` takes it
+  again, and `heartbeatBin` wrote `lease_expires_at = now +
+  clampBinLeaseMs(leaseMs)` — an **assignment** rather than an extension, floored
+  at thirty seconds. So a worker could shorten its own lease below the work it was
+  about to block on, and nothing related that number to what the bin's own
+  contract demands. `FACTORY_INTEGRATION_V1` is satisfied by merging the unit
+  branches and running this repository's own commands on the merged tree, and a
+  worker inside `npm test` cannot heartbeat while it runs.
+
+  Measured from `factory_sessions` on `fcp_189ea30c7ded4e7b9280`: architect 695s,
+  an implementer 1803s, the integrator 1051s, the reviewer 1011s — against a
+  `DEFAULT_BIN_LEASE_MS` of fifteen minutes. The 1051s integration survived
+  because every heartbeat happened to land. The next one did not.
+  `bin_43915e4f93ca4e3db111` was taken over at 07:56:35, renewed four times, and
+  retired `NEEDS_HUMAN` at 08:09:41 — **earlier than takeover plus fifteen
+  minutes**, which is reachable only if a renewal set a shorter expiry than the
+  takeover's own. The worker was still working; its next heartbeat is on the bin's
+  own events at 08:13:01 as `BIN_STALE_WRITE, heartbeat after lease loss`.
+  Thirteen minutes of a real integration discarded, and the bin's last attempt
+  with it.
+
+  **A floor rather than a beat**, which this file already paid two production
+  deploys to learn one object along: a beat does not rescue a long step, because
+  the lease ends after the beat was *issued* rather than after it landed.
+  `domain/binLease.ts` is that conclusion at the bin — an hour for the three
+  factory contracts whose work checks this repository out and runs its commands,
+  and the unchanged default for every other contract, because an hour-long lease
+  on a bin whose worker reads rows and submits an answer strands it for an hour
+  when that worker dies and buys nothing. A `Record` over the whole union, so a
+  contract added later is a compile error until somebody says what its work costs.
+
+  It is a **floor**: a worker asking for more still gets more, and can no longer
+  ask for less than the work Brain is about to demand of it — the guard on the one
+  value in this exchange the claimant had been supplying. Applied in both places a
+  lease is written, because the heartbeat is where it actually failed. **Proven in
+  production three times over**: the reopened bin's integrator ran **1356s**, the
+  second repair's implementer **1622s**, and the integration after it **1291s**,
+  each longer than the default that killed their predecessor at thirteen minutes.
+
+- **A blocker that named a bin already answered, for twenty-three minutes.**
+  `noteSurfaceBlocker` states the rule in its own doc comment: a blocker is a
+  derived annotation beside a *truthful* state, and the answering transition is
+  free, because the condition stops being true and the next tick takes the
+  sentence away. `blockStage` sits ten lines below it and does the opposite — it
+  moves `state` to `BLOCKED`, and nothing anywhere moved it back. Every path that
+  merely waits for a worker returned without writing a word, so whatever the last
+  block wrote stood for as long as the stage ran.
+
+  The integrate bin was answered at 12:05:06 — `regrant raised=true attempts 2/2
+  -> 2/6`, `reopened bin_43915e4f93ca4e3db111 NEEDS_HUMAN -> READY, generation 2
+  -> 3` — and a worker was assigned it fifty-two seconds later. At **12:28:17**,
+  with that worker twenty-two minutes into a real integration, `factory status`
+  read `BLOCKED — integration cannot be handed out again` over a blocker saying
+  the bin *"is waiting for a person. It has its own answer; until it is given one
+  this stage is not handed out again"*. It had been given one, twenty-three
+  minutes earlier. **A status that contradicts the rows underneath it is worse
+  than no status**: it sends a reader to answer something already answered, and it
+  teaches them to stop believing the one line that says a campaign is genuinely
+  stuck — the cries-wolf sentence this section already records, at a state column.
+
+  `stageIsLive` is the missing half. It writes only over a `BLOCKED` campaign, so
+  the ordinary path is a no-op and it can never overwrite a state another branch
+  established, and each of the six sites that waits says what is true of its own
+  stage — which is the arrangement `noteSurfaceBlocker` argues for, since clearing
+  centrally would need the guess about which state to restore that its comment
+  explicitly refuses to make. Two of the six already patched a state and simply
+  left the blocker behind; they carry `cleared` now, like the surface-cooloff
+  patch beside them that had it right all along.
+
 - **A prohibition in a prompt is not a control, and Brain cannot make one.** Every
   units bin forbids pushing to or moving the campaign's integration branch, names
   it, and says integrating is a separate bin — and a unit worker pushed its commit

@@ -2,17 +2,16 @@
 
 What this records: the Software Factory was pointed at `Peyday007/V5` — the
 repository it runs in — and took an approved objective through a plan, two unit
-stages, an integration, an independently-reviewed verdict and a repair, on the
-hosted plane, with nobody watching. Every claim below resolves to a row, a
-commit, a timestamp or a workflow run.
+stages, an integration, two independently-reviewed verdicts, two repairs and a
+delivery, on the hosted plane, with nobody watching. Every claim below resolves
+to a row, a commit, a timestamp or a workflow run.
 
-**It has not reached a pull request, and the reason is a defect in Brain rather
-than in the work.** That is the more useful half of this document, so it is
-written out in full: everything about the campaign was correct, every state
-column read healthy, a fleet with idle capacity sat beside it, and the one bin
-that was waiting could not be sent for by any path — not the dispatcher, and
-not an operator either. The last section says plainly what is proven and what
-is not.
+**Three Brain defects were found by running it, and all three are fixed.** Two
+of them stopped the campaign dead and are the more useful half of this document,
+because in each case every state column read healthy, a fleet with idle capacity
+sat beside it, and nothing anywhere said what was wrong. The third said the
+opposite of what the rows underneath it said, for twenty-three minutes, while a
+worker was doing the work it claimed nobody could be given.
 
 ---
 
@@ -81,80 +80,16 @@ the absence of a root *is* the statement that execution is remote.
 > credential and refuses to read a URL as a merge — which is right, and leaves
 > the whole right-hand half of the owner's question "what actually shipped?"
 > answerable only by hand.
+## The three defects, and how each was found
 
-## The stages, as bins
+None of them was found by reading. Each was found by running the factory
+against a real repository and then reading the rows it left.
 
-Every one of these is a bin Brain made, a fire Brain sent, a session that
-arrived, and a result Brain validated against the forge rather than against
-what the worker said about itself.
+### 1. A bin nobody could be sent for, because `READY` was the wrong word
 
-| bin | stage | state | fired at sessions |
-|---|---|---|---|
-| `bin_78cf47b5592b4ad5b405` | PLAN | COMPLETE gen 2 | `cse_01BSoDbYL7iYzRFx5nDRwzfU` |
-| `bin_e3273471cf304e00af8d` | UNITS | COMPLETE gen 2 | `cse_01NGWBApXFErWGm5JGbLSaGy` |
-| `bin_f62f17cecd694c138d49` | UNITS | COMPLETE gen 2 | `cse_01NuQfHMAKz2hUdSuGLKoAQi` |
-| `bin_14d8b43d566f4565acb3` | INTEGRATE | COMPLETE gen 2 | — (taken by a session already present) |
-| `bin_0d76003bac5b415cbd0a` | REVIEW | COMPLETE gen 3 | `cse_01FqMW8SXAd3fuG4RnW7vJ7j`, `cse_01VgrsAYk7u8uX6U2S5RRXXD` |
-| `bin_2466314735054b9fa3bf` | UNITS (repair) | COMPLETE gen 3 | `cse_01V9GFMb5rcmQ6yp5qKXPWb9`, `cse_01Ave4RfVzuNqGdcAK1rU99s` |
-| `bin_43915e4f93ca4e3db111` | INTEGRATE (repair) | see below | `cse_014Pf7msAWoGphbTKVGAExXs`, `cse_01AfxfG1J7ZxEmmsqoTnqjvG` |
-
-Branches on the forge, each one a `git ls-remote` reading rather than a report:
-
-```
-4b63f5c430ffc862c9a1caa08638c982c5582a06  factory/campaign/fcp_189ea30c7ded4e7b9280
-99d6933e01c3b9e05a6b19e2d1739b727eb5522d  factory/fcp_189ea30c7ded4e7b9280/pr-merge-observation/a1
-d79c1c1972c0ce4a1fdeed8f7c0f266fce353411  factory/fcp_189ea30c7ded4e7b9280/writeback-pr-link/a1
-95b87eaa12dd6340e593c465794f32a9fcbf6247  factory/fcp_189ea30c7ded4e7b9280/repair-late-link-never-attested/a1
-```
-
-## Review independence, refused in production rather than asserted
-
-The review bin recorded this, and it is the whole of what the floor is for:
-
-```
-bin_0d76003bac5b415cbd0a  FACTORY_REVIEW
-  refused  session_01NGWBApXFErWGm5JGbLSaGy x1 until 2026-09-21T13:21:56.045Z:
-    Session session_01NGWBApXFErWGm5JGbLSaGy implemented part of this campaign,
-    so its verdict on the same work is not an independent review. Nothing is
-    recorded.
-```
-
-`cse_01NGWBApXFErWGm5JGbLSaGy` is the session Brain fired at
-`bin_e3273471cf304e00af8d`, the units bin — the same suffix, which is what says
-the session the worker reported and the session Brain's own `bin_dispatch` row
-names are one session rather than two that agree. It came back for the review
-and was refused **before the lease**, so it cost the bin no attempt, no lease
-and no generation (§23). The review was then taken by
-`cse_01VgrsAYk7u8uX6U2S5RRXXD`, which had implemented nothing.
-
-## Where it got to, and the defect that stopped it
-
-Read from production, `factory status --campaign fcp_189ea30c7ded4e7b9280`:
-
-```
-campaign fcp_189ea30c7ded4e7b9280 INTEGRATING — 1 unit(s) to bring together on 4b63f5c430ff
-base 58c6deccf11f -> 4b63f5c430ff on factory/campaign/fcp_189ea30c7ded4e7b9280
-units: 2/3 integrated, 0 ready, 0 leased, 0 failed
-sessions 6, max observed concurrency 1 (MEASURED)
-reviews 1, findings 1 (0 open, 0 repaired)
-lane target 3 — initial
-paid-API executions recorded: 0
-  IMPLEMENTED  repair-late-link-never-attested (attempt 1/3)
-        branch factory/…/repair-late-link-never-attested/a1 @ 95b87eaa12dd
-  INTEGRATED   writeback-pr-link (attempt 1/3)
-  INTEGRATED   pr-merge-observation (attempt 1/3)
-```
-
-Two of those lines are the thing this campaign was run to establish.
-`max observed concurrency 1 (MEASURED)` is the reading that used to be
-`0 (UNKNOWN)` on every hosted campaign, because every writer of
-`factory_sessions` was on the local plane; it is derived from Brain's own
-`bin_events` and `bin_dispatch` rows. And `paid-API executions recorded: 0`
-held from the first stage to the last.
-
-The campaign then stopped, and every row around it read healthy.
-
-### `bin_43915e4f93ca4e3db111`
+`bin_43915e4f93ca4e3db111` sat `LEASED gen 1 attempts 1/2` for nineteen hours
+with an attempt still in hand, a healthy fleet beside it and nothing anywhere
+saying so:
 
 ```
 BIN bin_43915e4f93ca4e3db111  LEASED  gen 1
@@ -183,69 +118,282 @@ dispatcher refired twenty-seven seconds later, exactly as it should. The
 session it fired never checked in.
 
 From that point the bin was unreachable, and by a route the intent table makes
-unavoidable:
-
-- `bin_dispatch` is `UNIQUE (bin_id, lease_generation)` and
-  `ensureDispatchIntent` is `ON CONFLICT DO NOTHING`, so there is no second
-  intent to be had at generation 1;
-- `claimDispatchIntent` sees only `PENDING` and `SENDING`, so the `SENT` row is
-  never claimed again;
-- the generation advances only when a worker **takes a lease**, and nobody was
-  coming to take one.
+unavoidable: `bin_dispatch` is `UNIQUE (bin_id, lease_generation)` with
+`ensureDispatchIntent` as `ON CONFLICT DO NOTHING`, so there is no second intent
+to be had at generation 1; `claimDispatchIntent` sees only `PENDING` and
+`SENDING`, so the `SENT` row is never claimed again; and the generation advances
+only when a worker **takes a lease**, which nobody was coming to do.
 
 `reopenNoShowDispatches` exists for exactly this and could not see it, because
 it asked `b.state = 'READY'`. This bin is `LEASED`.
 
-### Why `READY` was the wrong word
-
 §19's rule is that **an expired lease is claimable work**, and
 `services/dispatch/loop.ts` says so directly above its own call to
-`listDispatchableBins` — *"which is not the same set as READY. A bin whose
-worker died is claimable the moment its lease runs out."* `DISPATCHABLE_SQL`
-has always agreed: `state = 'READY' OR (state = 'LEASED' AND lease_expires_at
-<= ?)`.
+`listDispatchableBins`. `DISPATCHABLE_SQL` has always agreed. The constant that
+holds that sentence exists because it had already been written as
+`state = 'READY'` four times and its own comment predicted a fifth; this was the
+fifth, and the reason the constant did not prevent it is mechanical — the read
+sits in a query that aliases `bins`, so a bare string beginning `state =` cannot
+be dropped into one, and the author wrote the narrower sentence by hand.
 
-The constant that holds that sentence exists because it had already been
-written as `state = 'READY'` four times, and its own comment predicted a fifth.
-This was the fifth. The reason the constant did not prevent it is mechanical:
-this read sits in a query that aliases `bins`, so a bare string beginning
-`state =` cannot be dropped into one, and the author wrote the narrower
-sentence by hand.
+The narrower sentence missed the **worse** half. A session that never arrives
+leaves the bin `READY`, which is the rarer case the function was written for. A
+session that *arrives*, takes the lease and then ends mid-stage leaves the bin
+`LEASED` for ever after, which is the ordinary shape of a Cowork activation.
 
-And the narrower sentence missed the **worse** half of the condition. A
-session that never arrives leaves the bin `READY` — that is the case the
-function was written for, and it is the rarer one. A session that *arrives*,
-takes the lease and then ends mid-stage leaves the bin `LEASED` for ever after,
-which is the ordinary shape of a Cowork activation.
+`claimableStateSql(prefix)` is the predicate as a function of the alias now, and
+`DISPATCHABLE_SQL` is composed from it — the only arrangement in which a sixth
+reader gets the sentence for free.
 
-The predicate is a function of the alias now and `DISPATCHABLE_SQL` is composed
-from it, which is the only arrangement in which a sixth reader gets the
-sentence for free.
+**Proven in production**, on the deploy that carried it: the generation-1 intent
+went `attempt 1/5 → 3/5 → 4/5` with new sessions and `NO_SHOW` recorded, which
+the old code could not do because the bin is `LEASED`. Then a real worker took
+it — `07:56:35 BIN_TAKEOVER worker wkr_f8e118e87fd141689adc session
+claude-code-session_01YLagxcreyvx7zdLx1oz6hG` — eighteen seconds after the fire.
 
-Nothing downstream changes. The reopened intent goes back to `PENDING`; the
-dispatcher's pre-fire re-read asks `isDispatchable` again before spending a
-fire, so a bin somebody took in the meantime is refused there exactly as
-before; and what the arriving worker does with an expired lease is
-`assignNextBin`'s ordinary takeover — the generation advances, the attempt is
-charged because the previous one genuinely did not finish, and a late
-completion from the dead session matches nothing. The `max_attempts` ceiling
-and the abandon-rather-than-skip branch are untouched.
+### 2. The lease was the worker's to choose, and the work is the contract's to demand
 
-Both new guards were run against their own defect before they were trusted.
-Restoring `state = 'READY'` fails the reopen; reopening *any* `LEASED` bin —
-dropping the `lease_expires_at` comparison — fails the one that says a live
-lease is left alone.
+That takeover then died, and the reason is a second defect one object along.
+`brain_check_in` takes `lease_ms`, `brain_bin_heartbeat` takes it again, and
+`heartbeatBin` wrote `lease_expires_at = now + clampBinLeaseMs(leaseMs)` — an
+**assignment** rather than an extension, floored at thirty seconds. So a worker
+could shorten its own lease below the work it was about to block on, and nothing
+related that number to what the bin's own contract demands.
 
-### There was no operator transition either
+Measured from `factory_sessions` on this campaign, against a
+`DEFAULT_BIN_LEASE_MS` of fifteen minutes:
 
-Worth recording, because it is what makes this §24's own sentence rather than a
-tuning defect. On the deployed code there is nothing an operator can do to this
-bin. `factory answer-bin` answers a bin parked at `NEEDS_HUMAN`; this one is
-`LEASED`. `regrantBinAttempts` raises an attempt ceiling, and the ceiling was
-not what was stopping it — the bin still had an attempt in hand. `step10
-cancel-bin` is scoped to the acceptance project and refuses a bin from anywhere
-else. **A state that says waiting which nobody can resolve is not waiting; it
-is stuck**, and this one had no answering transition at all.
+| role | bin | duration |
+|---|---|---|
+| architect | `bin_78cf47b5592b4ad5b405` | 695s |
+| implementer | `bin_e3273471cf304e00af8d` | 1803s |
+| integrator | `bin_14d8b43d566f4565acb3` | 1051s |
+| reviewer | `bin_0d76003bac5b415cbd0a` | 1011s |
+
+The 1051s integration survived because every heartbeat happened to land. The
+next one did not: `bin_43915e4f93ca4e3db111` was taken over at 07:56:35, renewed
+four times, and retired `NEEDS_HUMAN` at 08:09:41 — **earlier than takeover plus
+fifteen minutes**, which is reachable only if a renewal set a shorter expiry than
+the takeover's own. The worker was still working; its next heartbeat is on the
+bin's own events at 08:13:01 as `BIN_STALE_WRITE, heartbeat after lease loss`.
+Thirteen minutes of a real integration discarded, and the bin's last attempt
+with it.
+
+**A floor rather than a beat.** CLAUDE.md §27 already paid two production
+deploys to learn that one object along: a beat does not rescue a long step,
+because the lease ends after the beat was *issued* rather than after it landed.
+`server/domain/binLease.ts` is that conclusion at the bin — an hour for the
+three factory contracts whose work checks the repository out and runs its
+commands, and the unchanged default for every other contract, because an
+hour-long lease on a bin whose worker reads rows and submits an answer strands
+it for an hour when that worker dies and buys nothing. It is a `Record` over the
+whole `CompletionContract` union, so a contract added later is a compile error
+until somebody says what its work costs.
+
+It is a **floor**: a worker asking for more still gets more, and can no longer
+ask for less than the work Brain is about to demand of it. That is the guard on
+the one value in this exchange the claimant had been supplying, which is the
+property every compare-and-swap in this codebase rests on.
+
+**Proven in production, and the number is the proof.** The reopened bin's next
+integrator ran:
+
+```
+SESSION INTEGRATOR  FINISHED  cse_01K5mFLBjJ3an6bQ1n9uPpLq
+      worker wkr_f8e118e87fd141689adc  account Brain Research A
+      bin bin_43915e4f93ca4e3db111 gen 4
+      2026-09-22T12:05:58.072Z -> 2026-09-22T12:28:33.813Z  1356s
+      FACTORY_INTEGRATION_V1 v1 evaluated true.
+```
+
+**1356 seconds — twenty-two minutes and thirty-six seconds** — against the
+fifteen-minute default that killed its predecessor at thirteen. It was assigned
+fifty-two seconds after the bin was reopened.
+
+### 3. A blocker that named a bin already answered, for twenty-three minutes
+
+`noteSurfaceBlocker` states the rule in its own doc comment: a blocker is a
+derived annotation beside a *truthful* state, and the answering transition is
+free, because the condition stops being true and the next tick takes the
+sentence away. `blockStage` sits ten lines below it and does the opposite — it
+moves `state` to `BLOCKED`, and nothing anywhere moved it back. Every path that
+merely waits for a worker returned without writing a word, so whatever the last
+block wrote stood for as long as the stage ran.
+
+The integrate bin was answered at 12:05:06:
+
+```
+regrant raised=true attempts 2/2 -> 2/6
+reopened bin_43915e4f93ca4e3db111 NEEDS_HUMAN -> READY, generation 2 -> 3,
+attempts 2/6 unchanged
+```
+
+A worker was assigned it fifty-two seconds later. At **12:28:17**, with that
+worker twenty-two minutes into a real integration, `factory status` read:
+
+```
+campaign fcp_189ea30c7ded4e7b9280 BLOCKED — integration cannot be handed out again
+BLOCKER UNIT_EXHAUSTED_ATTEMPTS: Bin bin_43915e4f93ca4e3db111 (FACTORY_INTEGRATE)
+is waiting for a person. It has its own answer; until it is given one this stage
+is not handed out again, because a second bin beside it would duplicate the work
+rather than unblock it.
+```
+
+It had been given one, twenty-three minutes earlier. **A status that contradicts
+the rows underneath it is worse than no status**: it sends a reader to answer
+something already answered, and it teaches them to stop believing the one line
+that says a campaign is genuinely stuck. §27 already records the same sentence
+about a warning that cries wolf.
+
+`stageIsLive` is the missing half. It writes only over a `BLOCKED` campaign, so
+the ordinary path is a no-op and it can never overwrite a state another branch
+established. Each of the six sites that waits knows what is true of its own
+stage and says it, which is the arrangement `noteSurfaceBlocker` argues for —
+clearing centrally would need the guess about which state to restore that its
+comment explicitly refuses to make. Two of the six already patched a state and
+simply left the blocker behind; they carry `cleared` now, like the
+surface-cooloff patch beside them that had it right all along.
+
+**Each fix was run against its own defect before it was trusted.** Restoring
+`state = 'READY'` fails the reopen assertion; reopening *any* `LEASED` bin fails
+the one that says a live lease is left alone; removing the assignment floor
+fails the first lease assertion and removing the heartbeat floor the last;
+neutering `stageIsLive` fails with production's exact symptom,
+`expected 'BLOCKED' to be 'INTEGRATING'`, while the assertion that a genuinely
+parked stage keeps its sentence still passes.
+
+---
+
+## The stages, as bins
+
+Every one of these is a bin Brain made, a fire Brain sent, a session that
+arrived, and a result Brain validated against the forge rather than against what
+the worker said about itself.
+
+| bin | stage | contract | session | duration |
+|---|---|---|---|---|
+| `bin_78cf47b5592b4ad5b405` | PLAN | `FACTORY_PLAN_V1` | `cse_01BSoDbYL7iYzRFx5nDRwzfU` | 695s |
+| `bin_e3273471cf304e00af8d` | UNITS | `FACTORY_UNITS_V1` | `cse_01NGWBApXFErWGm5JGbLSaGy` | 1803s |
+| `bin_f62f17cecd694c138d49` | UNITS | `FACTORY_UNITS_V1` | `cse_01NuQfHMAKz2hUdSuGLKoAQi` | 68s |
+| `bin_14d8b43d566f4565acb3` | INTEGRATE | `FACTORY_INTEGRATION_V1` | `session_01NGWBApXFErWGm5JGbLSaGy` | 1051s |
+| `bin_0d76003bac5b415cbd0a` | REVIEW 1 | `FACTORY_UNITS_V1` | `cse_01VgrsAYk7u8uX6U2S5RRXXD` | 1011s |
+| `bin_2466314735054b9fa3bf` | UNITS (repair 1) | `FACTORY_UNITS_V1` | `cse_01Ave4RfVzuNqGdcAK1rU99s` | 63s |
+| `bin_43915e4f93ca4e3db111` | INTEGRATE (repair 1) | `FACTORY_INTEGRATION_V1` | `cse_01K5mFLBjJ3an6bQ1n9uPpLq` | **1356s** |
+| `bin_0b6cdc2502d54b75b8c1` | INTEGRATE | `FACTORY_INTEGRATION_V1` | `claude-code-session_01K5mFLBjJ3an6bQ1n9uPpLq` | 1291s |
+| `bin_c19cb071e0054316b540` | REVIEW 2 | `FACTORY_UNITS_V1` | `cse_01Dj1TRGKdG6v2PFafw1tZKZ` | 1274s |
+| `bin_5fb255777c7d4997878a` | REVIEW | `FACTORY_UNITS_V1` | `claude-code-session_01Dj1TRGKdG6v2PFafw1tZKZ` | 28s |
+| `bin_5208b5b4a2fc42caa97c` | UNITS (repair 2) | `FACTORY_UNITS_V1` | `cse_01KvTCWXUSEPWdXkaT3k9nvR` | **1622s** |
+| `bin_fb9239718e6440c79952` | INTEGRATE (repair 2) | `FACTORY_INTEGRATION_V1` | `cse_01RR9ZXXNuHeVrMSbogxxGa9` | 1153s |
+| `bin_08da85a3ee5b4ca0bf31` | DELIVER | `FACTORY_DELIVERY_V1` | `cse_01M3nS1wYuVGfkmabUnqX522` | 98s |
+
+**Three of those durations are the lease floor earning its keep** — 1356s, 1622s
+and 1291s, each longer than the fifteen-minute default that killed the attempt
+before the fix.
+
+Branches on the forge, each one a `git ls-remote` reading rather than a report:
+
+```
+6f92e7968fa5b92711148c88292b11416db74014  factory/campaign/fcp_189ea30c7ded4e7b9280
+99d6933e01c3b9e05a6b19e2d1739b727eb5522d  factory/…/pr-merge-observation/a1
+d79c1c1972c0ce4a1fdeed8f7c0f266fce353411  factory/…/writeback-pr-link/a1
+95b87eaa12dd6340e593c465794f32a9fcbf6247  factory/…/repair-late-link-never-attested/a1
+1b555f41e45d5cc9b1a43cea6424a793f2820b9a  factory/…/repair-merge-observer-has-no-caller/a1
+```
+
+## Review independence, refused once and earned twice
+
+**Round 1 refused a session by name, before the lease.** The review bin recorded
+it, and it is the whole of what the floor is for:
+
+```
+bin_0d76003bac5b415cbd0a  FACTORY_REVIEW
+  refused  session_01NGWBApXFErWGm5JGbLSaGy x1 until 2026-09-21T13:21:56.045Z:
+    Session session_01NGWBApXFErWGm5JGbLSaGy implemented part of this campaign,
+    so its verdict on the same work is not an independent review. Nothing is
+    recorded.
+```
+
+`cse_01NGWBApXFErWGm5JGbLSaGy` is the session Brain fired at
+`bin_e3273471cf304e00af8d`, the units bin — the same suffix, which is what says
+the session the worker reported and the session Brain's own `bin_dispatch` row
+names are one session rather than two that agree. It came back for the review and
+was turned away **before the lease**, so it cost the bin no attempt, no lease and
+no generation (§23).
+
+**The two verdicts, as recorded:**
+
+```
+REVIEW round 1 CAMPAIGN CHANGES_REQUIRED on 4b63f5c430ff — independence WORKER_SEPARATED
+      session claude-code-session_01VgrsAYk7u8uX6U2S5RRXXD  2026-09-21T14:10:09.473Z
+
+REVIEW round 2 CAMPAIGN PASS        on 95b87eaa12dd — independence SESSION_SEPARATED
+      session claude-code-session_01Dj1TRGKdG6v2PFafw1tZKZ  2026-09-22T12:51:13.495Z
+```
+
+Both tiers are the ones the lineage supports and neither is rounded up (§27).
+
+## What the reviews actually found
+
+Both rounds found a real defect, and the second one found this codebase's own
+most-recorded failure mode in code the factory had just written:
+
+```
+FINDING BLOCKER  REPAIRED  late-link-never-attested (correctness)
+  A workstream linked to a campaign after that campaign's outcome event has
+  already been recorded never receives the PULL_REQUEST/EVIDENCE attestation
+  through any automatic (production tick loop) path, contradicting A01 and the
+  module's own stated guarantee.
+  resolved: Repaired by repair-late-link-never-attested at 95b87eaa12dd… and
+  verified on the merged tree.
+
+FINDING MAJOR    REPAIRED  merge-observer-has-no-caller (reachability)
+  observeCampaignPullRequestMerge (server/services/register/
+  pullRequestMergeObservation.ts) is fully implemented and tested but is invoked
+  from nowhere else in the repository -- no route, periodic tick, or script calls
+  it -- so it is dead code in production and the register cannot yet
+  automatically move a PULL_REQUEST link from PR_READY to MERGED.
+  resolved: Repaired by repair-merge-observer-has-no-caller at 6f92e7968fa5… and
+  verified on the merged tree.
+```
+
+**A finding is `REPAIRED` because its unit reached `INTEGRATED`** — the diff was
+inside the unit's declared ownership and the contract's commands passed on the
+merged tree — and never because a worker said so. §27 records the defect where
+`reconcileRepairs` had one caller and a delivered pull request still listed a
+repaired finding under *remaining limitations*; this request's body reads
+**"Remaining limitations: None recorded."**, which is that fix working on the
+hosted plane.
+
+## Where it ended
+
+```
+factory campaigns
+  fcp_189ea30c7ded4e7b9280 REMOTE COMPLETE #31 — Close the two gaps the work
+                            register leaves a person to fill by hand.
+      reviewed and confirmed by the forge
+```
+
+```
+factory status --campaign fcp_189ea30c7ded4e7b9280
+  base 58c6deccf11f -> 6f92e7968fa5 on factory/campaign/fcp_189ea30c7ded4e7b9280
+  units: 4/4 integrated, 0 ready, 0 leased, 0 failed
+  reviews 2, findings 2 (0 open, 2 repaired)
+  paid-API executions recorded: 0
+    INTEGRATED  repair-late-link-never-attested      @ 95b87eaa12dd
+    INTEGRATED  writeback-pr-link                    @ 4b63f5c430ff
+    INTEGRATED  pr-merge-observation                 @ 4b63f5c430ff
+    INTEGRATED  repair-merge-observer-has-no-caller  @ 6f92e7968fa5
+```
+
+**Pull request #31** — `factory/campaign/fcp_189ea30c7ded4e7b9280` @ `6f92e796`
+into `production` @ `5a9b6f85`, opened by the delivery bin at 2026-09-22
+13:48:50Z, body composed from rows: five acceptance conditions each MET with the
+reason, four units with their integrated commits, the round 2 verdict and its
+independence tier, both repairs named, and no remaining limitations.
+
+**Merged** at `74c9e5753d791f0f13ececf8c4c9187b4f3815ea`. The factory opened it
+and a person merged it — §27's boundary, which `assemble.ts` keeps by producing
+the branch, the patch and the body and then stopping.
 
 ## What is proven here, and what is not
 
@@ -254,46 +402,72 @@ is stuck**, and this one had no answering transition at all.
 - A campaign against `Peyday007/V5` was submitted through the forge, approved by
   a person, and executed entirely on the hosted plane with `execution_mode`
   derived rather than chosen.
-- Five stages ran as bins Brain made, fired, and validated: a plan, two unit
-  stages, an integration, and a review. Every unit result was confirmed against
-  the repository's own account of itself — the branch at the commit reported —
-  rather than against the worker's file list.
-- The review produced a finding, the finding became a repair unit in the same
-  campaign, and that unit was implemented and pushed
-  (`…/repair-late-link-never-attested/a1 @ 95b87eaa12dd`).
+- **Every stage ran to its terminal outcome**: a plan, two unit stages, three
+  integrations, two independent reviews, two repairs, and a delivery. Thirteen
+  bins, thirteen fires, thirteen sessions. Every unit result was confirmed
+  against the repository's own account of itself — the branch at the commit
+  reported — rather than against the worker's file list.
 - **Review independence was refused in production**, by recorded lineage, before
-  the lease: the session that implemented a unit came back for the review bin
-  and was turned away by name, at no cost to the bin.
-- **`max observed concurrency 1 (MEASURED)`** on a hosted campaign, from
-  `factory_sessions` rows derived out of `bin_events` and `bin_dispatch`. This
-  reading was `0 (UNKNOWN)` on every hosted campaign before the sweep existed,
-  because every writer of that table was on the local plane.
-- **`paid-API executions recorded: 0`**, start to finish. The workers
-  authenticated the way the session that launched them does, against the
+  the lease, at no cost to the bin; and the two verdicts were recorded at the
+  tiers their lineage supports.
+- **Both reviews found real defects and both were repaired and verified**, the
+  second one being dead code the factory itself had written.
+- **A pull request was opened by the factory and merged by a person**, with a
+  body every line of which resolves to a row.
+- **`paid-API executions recorded: 0`**, from the first stage to the last. The
+  workers authenticated the way the session that launched them does, against the
   subscription already in place.
 - Brain held no credential for the repository at any point. There is no
   `BRAIN_FORGE_TOKEN` among the deployment's secrets.
+- **Three Brain defects were found by running this and all three are fixed**, each
+  with a regression run against its own defect before it was trusted.
 
 **Not proven, and not rounded up:**
 
-- **The campaign has not reached a pull request.** It is `INTEGRATING` with one
-  unit implemented and not yet brought together, stopped on the defect above.
-  Nothing in this document should be read as saying the factory delivered.
-- **The fix for that defect is not deployed.** It is committed on
-  `claude/software-factory-progress-ir4qqz` with the full suite green on both
-  backends, and until it is on `production` the campaign cannot move: there is
-  no operator transition that reaches this bin. Once it is deployed, the
-  dispatcher's own tick reopens the intent and fires — nobody has to do
-  anything.
-- Concurrency of **1** is what overlapped, not a ceiling. §27's rule holds: a
-  ceiling nobody has observed reads `UNKNOWN`, and one session at a time is what
-  this campaign actually ran.
+- **Concurrency of 2 is what overlapped, not a ceiling.** §27's rule holds: a
+  ceiling nobody has observed reads `UNKNOWN`. Two sessions overlapped once — an
+  integration and a review between 12:29 and 12:50 — and the rest of the campaign
+  ran one at a time.
+- **Two sessions are recorded with `account UNKNOWN`.** That is §24's attribution
+  gap behaving as designed rather than a fault: a session Brain did not fire from
+  a `bin_dispatch` row it wrote has no resolvable account, and *we could not tell*
+  is recorded as such rather than as *we checked*.
+- **One integration stage ran twice.** `bin_0b6cdc2502d54b75b8c1` was created and
+  worked for 1291s immediately after `bin_43915e4f93ca4e3db111` completed the same
+  integration, and the units were already `INTEGRATED` by the time it finished.
+  The likeliest reading is a race between a worker's completion committing and
+  the check-in-triggered tick reading the bin's state, which would cost one extra
+  activation and self-correct — **but that is a reading and not a cause, and the
+  bin events were not examined.** It is recorded here rather than fixed, because
+  a remedy for a condition that was never established is worse than none.
+- **Why the restart boot takes eleven and a half minutes is not established.**
+  Measured this run: the machine restarted at 11:44:20, `Machine started in
+  2.603s`, and the Brain's banner printed at 11:56:00 with no error anywhere. The
+  boot before it printed within seconds. The later one reported `29 backend(s)
+  connected now` against the earlier one's `9`. That is a correlation and a
+  reading; no mechanism is claimed.
+- **The Brain goes intermittently unresponsive under the hosted verification.**
+  Health-check transitions during the pre-restart verification: failed 11:27:32,
+  passing 11:28:02, failed 11:29:37, passing 11:30:07, failed 11:35:14, passing
+  11:35:44, failed 11:36:49, passing 11:37:19 — each recovering in about thirty
+  seconds, and the same pattern began again during the post-restart run.
+- **An earlier reading of mine proposed that a transient Supabase 429 at boot
+  left the app permanently serving the migration error, and it is withdrawn.**
+  One log line from a previous deploy showed a 429; nothing establishes that it
+  persisted, and this deploy's outage — which looked identical from outside —
+  was a slow boot with no error at all.
 
 ## The gates
 
-| gate | result | commit |
+| gate | result | tree |
 |---|---|---|
-| `npm run typecheck` | clean | `6c9fcdb` |
-| `npm test` (SQLite) | 208 files, 4414 tests passed, 1 skipped | `e23dd4a` |
-| `Postgres suite` (CI) | success | `e23dd4a` |
+| `npm run typecheck` | clean | `390b4932` (the blocker fix) |
+| `npm test` (SQLite) | 208 files, 4420 passed, 44 skipped | `390b4932` |
+| Postgres suite (CI run 320) | success | `390b4932` |
+| `npm run typecheck` | clean | production + repair unit 1 |
+| `npm test` (SQLite) | 208 files, 4431 passed, 44 skipped | production + repair unit 1 |
+| `npm run typecheck` | clean | `55823c67` = fix + campaign head |
+| `npm test` (SQLite) | 208 files, **4434 passed**, 44 skipped | `55823c67` |
 
+The last two are the tree merging produces, run before the merge rather than
+after it.
