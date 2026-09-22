@@ -101,9 +101,14 @@ async function whyNoMap(projectId: string): Promise<string[]> {
   }
 
   out.push(
-    'A person may name the work directly instead: POST /api/projects/<id>/labor/workflows, ' +
-      'at ADMIN. SEED is the one origin Brain may never write for itself, because what work ' +
-      'this operation performs is a statement about the world rather than a reading of rows.',
+    // The screen first, because that is where a person actually does this now.
+    // The route is kept beside it for a reader who is already on a terminal —
+    // both are the same decision at the same level, and naming only the one
+    // this file happens to be would send somebody the long way round.
+    'A person may name the work directly instead: on /labor in the Russell shell, or ' +
+      'POST /api/projects/<id>/labor/workflows, at ADMIN either way. SEED is the one origin ' +
+      'Brain may never write for itself, because what work this operation performs is a ' +
+      'statement about the world rather than a reading of rows.',
   );
   return out;
 }

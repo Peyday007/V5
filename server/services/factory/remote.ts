@@ -1547,6 +1547,16 @@ function isLiveBin(bin: Bin): boolean {
  * dispatch on the strength of a factory audit, which is exactly the broadening
  * this campaign is not for. What is closed is the factory's own five
  * entrances, which are the ones it owns.
+ *
+ * **It throws, and the throw is contained.** `createBin` already throws
+ * `ManifestTooLarge` for the other way a manifest cannot be dispatched, so this
+ * is the established shape rather than a new one; and `tickAllRemoteCampaigns`
+ * catches per campaign, records *the tick threw: …* on that campaign's report
+ * and ticks every other one, while the tick lock is released in a `finally`.
+ * So the worst case is one campaign stalling loudly, every pass, having spent
+ * no fire, no attempt and no activation — which is what a campaign that cannot
+ * compose a valid manifest should do, and is strictly cheaper than the previous
+ * behaviour of creating the bin, firing a worker and refusing it at completion.
  */
 async function createFactoryBin(input: CreateBinInput): Promise<Bin> {
   const problems = manifestProblems(input.completionContract, input.manifest);
