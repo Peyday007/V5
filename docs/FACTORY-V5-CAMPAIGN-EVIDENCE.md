@@ -395,6 +395,58 @@ independence tier, both repairs named, and no remaining limitations.
 and a person merged it — §27's boundary, which `assemble.ts` keeps by producing
 the branch, the patch and the body and then stopping.
 
+## Nothing is left stranded
+
+`factory bins --campaign fcp_189ea30c7ded4e7b9280`, read from production after
+the merge and the deploy. **Thirteen bins, all `COMPLETE`**, none leased, none
+parked, none out of attempts:
+
+```
+bin_08da85a3ee5b4ca0bf31 FACTORY_DELIVER   COMPLETE gen 2 attempts 1/2
+bin_fb9239718e6440c79952 FACTORY_INTEGRATE COMPLETE gen 2 attempts 1/2
+bin_5208b5b4a2fc42caa97c FACTORY_UNITS     COMPLETE gen 2 attempts 1/2
+bin_5fb255777c7d4997878a FACTORY_REVIEW    COMPLETE gen 2 attempts 1/2
+bin_c19cb071e0054316b540 FACTORY_REVIEW    COMPLETE gen 2 attempts 1/2
+bin_0b6cdc2502d54b75b8c1 FACTORY_INTEGRATE COMPLETE gen 2 attempts 1/2
+bin_43915e4f93ca4e3db111 FACTORY_INTEGRATE COMPLETE gen 5 attempts 3/6
+bin_2466314735054b9fa3bf FACTORY_UNITS     COMPLETE gen 3 attempts 2/2
+bin_0d76003bac5b415cbd0a FACTORY_REVIEW    COMPLETE gen 3 attempts 2/2
+bin_14d8b43d566f4565acb3 FACTORY_INTEGRATE COMPLETE gen 2 attempts 1/2
+bin_f62f17cecd694c138d49 FACTORY_UNITS     COMPLETE gen 2 attempts 1/2
+bin_e3273471cf304e00af8d FACTORY_UNITS     COMPLETE gen 2 attempts 1/2
+bin_78cf47b5592b4ad5b405 FACTORY_PLAN      COMPLETE gen 2 attempts 1/2
+```
+
+**And the bin this whole document is about carries the first fix's proof on its
+own row**, which is better evidence than any assertion about the code:
+
+```
+bin_43915e4f93ca4e3db111 FACTORY_INTEGRATE COMPLETE gen 5 attempts 3/6
+    dispatch gen 0 SENT attempt 1/5 session=cse_014Pf7msAWoGphbTKVGAExXs
+    dispatch gen 1 SENT attempt 4/5 session=cse_01YLagxcreyvx7zdLx1oz6hG
+      NO_SHOW: Fired, and no worker ever claimed the bin before the in-flight
+      window closed.
+    dispatch gen 3 SENT attempt 1/5 session=cse_01K5mFLBjJ3an6bQ1n9uPpLq
+```
+
+The generation-1 intent reached **attempt 4 of 5** with `NO_SHOW` recorded. That
+intent was reopened three times *while the bin was `LEASED`*, which is precisely
+what `reopenNoShowDispatches` could not do while it asked `b.state = 'READY'` —
+it had exactly one `SENT` row and no way to get a second. Generation 3 is the
+reopened bin, and `cse_01K5mFLBjJ3an6bQ1n9uPpLq` is the session that then ran the
+1356-second integration. `attempts 3/6` is the regrant, raised and never reset.
+
+## Where production ended up
+
+| | |
+|---|---|
+| `production` | `f5686abf68857f80ea217ca0b898f6b46369803f` |
+| `deployed/production` | `f5686abf68857f80ea217ca0b898f6b46369803f` |
+| campaign | `fcp_189ea30c7ded4e7b9280` **COMPLETE** — *reviewed and confirmed by the forge* |
+| pull request | **#31 merged** at `74c9e5753d791f0f13ececf8c4c9187b4f3815ea` |
+| bins | 13, all `COMPLETE` |
+| `/healthz` | 200 |
+
 ## What is proven here, and what is not
 
 **Proven, from production rows:**
@@ -440,12 +492,16 @@ the branch, the patch and the body and then stopping.
   activation and self-correct — **but that is a reading and not a cause, and the
   bin events were not examined.** It is recorded here rather than fixed, because
   a remedy for a condition that was never established is worse than none.
-- **Why the restart boot takes eleven and a half minutes is not established.**
-  Measured this run: the machine restarted at 11:44:20, `Machine started in
-  2.603s`, and the Brain's banner printed at 11:56:00 with no error anywhere. The
-  boot before it printed within seconds. The later one reported `29 backend(s)
-  connected now` against the earlier one's `9`. That is a correlation and a
-  reading; no mechanism is claimed.
+- **One restart boot took eleven and a half minutes and the next took two, and
+  neither is explained.** Measured on the deploy that carried the lease floor: the
+  machine restarted at 11:44:20, `Machine started in 2.603s`, and the Brain's
+  banner printed at 11:56:00 with no error anywhere — while the boot immediately
+  before it printed within seconds. The slow one reported `29 backend(s) connected
+  now` against the fast one's `9`. **The very next deploy then came back in 2m21s**
+  (restart 15:24:14, answering 15:26:35), which is what stops this being *"the
+  restart boot is slow"*: it is one long boot among short ones, and the correlation
+  with the backend count is two points. No mechanism is claimed and none should be
+  read in.
 - **The Brain goes intermittently unresponsive under the hosted verification.**
   Health-check transitions during the pre-restart verification: failed 11:27:32,
   passing 11:28:02, failed 11:29:37, passing 11:30:07, failed 11:35:14, passing
