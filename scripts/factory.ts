@@ -1045,9 +1045,34 @@ async function main(): Promise<void> {
           '  answer-bin,\n' +
           '  reauthorize, retire, release\n',
       );
+      // An unknown command is the caller getting it wrong, and it used to be
+      // reported as success — see the verdict line below.
+      process.exitCode = 1;
   }
 
   await closeDatabase();
+
+  /**
+   * The verdict, printed rather than left to an exit code.
+   *
+   * `deploy.yml` gives the reason in its own words — *"the verdict comes from a
+   * line the script printed, not from an exit code that had to survive an SSH
+   * session, a shell and a CLI"* — and `step10.sh` has answered `STEP10: OK`
+   * for the same reason since it was written. This door had neither: `factory.yml`
+   * pipes into `tee`, the pipeline's status is `tee`'s, and nothing anywhere
+   * asserted a thing about the output. Measured on 2026-09-22 against the
+   * deployed image: `factory pull-request` on a build with no such command
+   * printed the usage list and the workflow run went **green**.
+   *
+   * A failure that renders as a pass is the one §47 records as worse than a
+   * gate that did not run, because a green tick is read as evidence. So the
+   * line is printed only where nothing set a failing code — `fail()` has
+   * already exited, and a refusal that set one prints `FACTORY REFUSED` instead
+   * — and `factory.yml` greps for it.
+   */
+  if (!process.exitCode) {
+    process.stdout.write('FACTORY: OK\n');
+  }
 }
 
 await main();

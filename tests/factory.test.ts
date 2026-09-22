@@ -1500,3 +1500,102 @@ describe('cycles', () => {
     expect(await listFindings(campaign.id)).toEqual([]);
   });
 });
+
+/**
+ * Availability has two writers, and a third would make both of them decorative.
+ *
+ * `setWorkerAvailability` is a compare-and-swap that resets the failure streak
+ * and records why; `recordWorkerFailure` writes the quarantine Brain derives
+ * from what actually happened. `patchWorker` used to be able to write the same
+ * column with a bare `UPDATE`, and had no caller anywhere in the repository —
+ * so the guarded transition was a guard for exactly as long as nobody found the
+ * other door. A worker restored through it would have kept its streak at three
+ * and re-quarantined on its very next failure, with nothing on the ledger
+ * saying anybody had done anything.
+ *
+ * This reads the repository rather than exercising a call, for
+ * `operatorConsoleRemoved`'s reason: what must not exist is not something a
+ * passing request can show you.
+ */
+describe('one guarded writer for a worker’s availability', () => {
+  const repo = () => fs.readFileSync('server/repos/factoryFleet.ts', 'utf8');
+
+  it('is written in exactly the two places that are allowed to write it', () => {
+    // Comments first. The paragraph above `WorkerPatch` quotes the very
+    // statement this refuses, so a reader that took the file whole would count
+    // the explanation as a third writer — which is what it did, and is the
+    // third time a guard in this repository has read prose as code.
+    const code = repo()
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+    const writes = code
+      .split('\n')
+      .map((line, index) => ({ line: line.trim(), at: index + 1 }))
+      .filter((one) => /availability\s*=\s*(\?|'[A-Z_]+')/.test(one.line))
+      // The compare-and-swap's own `WHERE … availability = ?` is a read of the
+      // state it is moving from, which is the thing that makes it a guard.
+      .filter((one) => !one.line.startsWith('WHERE'));
+    expect(writes).toHaveLength(2);
+  });
+
+  it('cannot be reached through the configuration patch', () => {
+    const source = repo();
+    const from = source.indexOf('export interface WorkerPatch {');
+    const to = source.indexOf('}', from);
+    if (from === -1 || to === -1) {
+      throw new Error('`server/repos/factoryFleet.ts` has no `WorkerPatch` to read.');
+    }
+    expect(source.slice(from, to)).not.toMatch(/availability/);
+    // And the function body cannot write what the type cannot carry.
+    const body = source.slice(source.indexOf('export async function patchWorker'));
+    expect(body.slice(0, body.indexOf('\n}'))).not.toMatch(/availability/);
+  });
+});
+
+/**
+ * A failed operator command must not render as a green run.
+ *
+ * `factory.yml` ended at a `tee`, and a pipeline's status is its last stage's,
+ * so the step passed whatever the Brain answered. Measured against the deployed
+ * image on 2026-09-22: `factory pull-request`, on a build with no such command,
+ * printed the list of commands that do exist and the run went green. §47
+ * records that shape as worse than a gate that did not run at all, because a
+ * green tick is read as evidence.
+ *
+ * The remedy is the one `deploy.yml` and `step10.yml` already use — a verdict
+ * the script printed, rather than an exit code that had to survive an SSH
+ * session, a shell and a CLI — so this holds the two ends of it together.
+ */
+describe('the factory door reports what actually happened', () => {
+  const workflow = () => fs.readFileSync('.github/workflows/factory.yml', 'utf8');
+  const door = () => fs.readFileSync('scripts/factory.ts', 'utf8');
+
+  const verdictStep = (): string => {
+    const source = workflow();
+    const from = source.indexOf('flyctl ssh console');
+    if (from === -1) {
+      throw new Error('`.github/workflows/factory.yml` no longer runs the factory door.');
+    }
+    return source.slice(from);
+  };
+
+  it('asserts the verdict rather than ending at the pipe', () => {
+    const step = verdictStep();
+    expect(step).toMatch(/grep -q '\^FACTORY: OK'/);
+    // Every other way out is a failure with a reason on it.
+    expect(step).toMatch(/::error::/);
+    expect(step).toMatch(/exit 1/);
+  });
+
+  it('prints the verdict only where nothing failed', () => {
+    const source = door();
+    const from = source.indexOf('if (!process.exitCode)');
+    if (from === -1) {
+      throw new Error('`scripts/factory.ts` prints no verdict a workflow could read.');
+    }
+    expect(source.slice(from, from + 200)).toMatch(/FACTORY: OK/);
+    // An unknown command is the caller getting it wrong, and used to be silent.
+    const usage = source.lastIndexOf('commands: fleet');
+    expect(source.slice(usage)).toMatch(/process\.exitCode = 1/);
+  });
+});

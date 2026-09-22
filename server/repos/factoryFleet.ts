@@ -179,8 +179,25 @@ export async function listWorkers(): Promise<FactoryWorker[]> {
   return rows.map(mapWorker);
 }
 
+/**
+ * Configuration a worker's registration may be corrected in.
+ *
+ * `availability` is deliberately **not** one of them, and that is the whole of
+ * why this interface has a comment. It used to be, and `patchWorker` had no
+ * caller anywhere in the repository — so the guarded transition beside it was a
+ * guard for exactly as long as nobody found the other door. A bare
+ * `UPDATE … SET availability = ?` skips the compare-and-swap that makes two
+ * operators produce one move, skips the streak reset without which a restored
+ * worker re-quarantines on its very next failure, and writes no
+ * `WORKER_STATE_CHANGED` row, so the change answers nothing later.
+ *
+ * Availability has two writers and there must never be a third:
+ * `setWorkerAvailability`, which is an operator's decision, and the quarantine
+ * inside `recordWorkerFailure`, which is a health signal Brain derives from
+ * what actually happened. `tests/factory.test.ts` reads this file and fails on
+ * any other one.
+ */
 export interface WorkerPatch {
-  availability?: FactoryWorkerAvailability;
   maxConcurrency?: number;
   capabilities?: FactoryCapability[];
   repositories?: string[];
@@ -192,10 +209,6 @@ export interface WorkerPatch {
 export async function patchWorker(id: string, patch: WorkerPatch): Promise<void> {
   const sets: string[] = [];
   const values: SqlParam[] = [];
-  if (patch.availability !== undefined) {
-    sets.push('availability = ?');
-    values.push(patch.availability);
-  }
   if (patch.maxConcurrency !== undefined) {
     sets.push('max_concurrency = ?');
     values.push(patch.maxConcurrency);

@@ -1102,6 +1102,37 @@ will answer.
 so it says an enabled administrator exists who may authorize this and nothing
 about who typed the command. Reaching the shell is what authenticated it.
 
+Availability has exactly two writers and there must never be a third: this
+transition, and the quarantine inside `recordWorkerFailure`, which is a health
+signal Brain derives from what actually happened. `patchWorker` used to be able
+to write the same column with a bare `UPDATE` and had no caller anywhere, so
+the guard above was a guard for exactly as long as nobody found the other door.
+It no longer carries the field. The rest of it — concurrency, capabilities,
+repositories, model — is ordinary configuration and is untouched: what had to
+go was the second writer of a guarded column, not the function around it.
+
+### What a green run means
+
+Every command above is dispatched through `.github/workflows/factory.yml`, and
+until 2026-09-22 a green run there meant nothing at all. The step ended at
+`| tee factory.txt`; a pipeline's status is its last stage's; nothing asserted
+a word about the output. A command that did not exist, a refusal, a database
+that would not answer and a completed read were four identical green ticks.
+
+It was measured rather than reasoned about. `factory pull-request` was
+dispatched at an image that had no such command: it printed the list of the
+commands that do exist, and the run succeeded.
+
+The verdict is now a line the script printed — `FACTORY: OK` — which is the
+same answer `deploy.yml` and `step10.yml` already give, for the reason
+`deploy.yml` states beside its own: an exit code has to survive an SSH session,
+a shell and a CLI, and a printed line does not. It appears only where nothing
+set a failing code, so `fail()`, a `FACTORY REFUSED` refusal and an unknown
+command each leave it absent, and the workflow fails naming which of the three
+happened. *Nothing came back*, *the factory refused this* and *that is not a
+command* send an operator to three different places, so they are three
+messages.
+
 ### Reading what is being let out
 
 The release card describes the decision. The **artifact** it is a decision

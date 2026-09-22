@@ -150,4 +150,30 @@ jobs:
           if [ -n "$FACTORY_EXTRA" ];    then args="$args $FACTORY_EXTRA"; fi
 
           echo "factory $args"
+          set +e
           flyctl ssh console --app "$app" -C "sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
+          set -e
+
+          # The verdict comes from a line the script printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI — the
+          # same reasoning `deploy.yml` states beside its hosted verification
+          # and `step10.yml` applies with `STEP10: OK`.
+          #
+          # This step used to end at the `tee` above, and a pipeline's status is
+          # the last stage's, so every run was green whatever happened. Measured
+          # against the deployed image: `factory pull-request` on a build with
+          # no such command printed the usage list and the run succeeded. A
+          # failure rendered as a pass is worse than one that is merely loud.
+          if grep -q '^FACTORY: OK' factory.txt; then
+            exit 0
+          fi
+          if grep -q '^FACTORY REFUSED' factory.txt; then
+            echo "::error::The factory refused this command. The refusal is above."
+            exit 1
+          fi
+          if [ ! -s factory.txt ]; then
+            echo "::error::Nothing came back. If the output above says the SSH connection failed, the Fly token cannot open a console on this app."
+            exit 1
+          fi
+          echo "::error::The command did not complete. Its output is above; an unknown command prints the list of the ones that exist."
+          exit 1

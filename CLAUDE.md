@@ -2895,6 +2895,21 @@ remote.
   the first time. A record nothing can read is not a ledger entry, at a third
   column.
 
+  **And the guard was a guard for exactly as long as nobody found the other
+  door.** `patchWorker` could write `availability` with a bare `UPDATE` and had
+  no caller anywhere in the repository — which is what made it easy to leave
+  standing beside the guarded transition rather than narrow. A worker restored
+  through it would have skipped the compare-and-swap that makes two operators
+  produce one move, kept its failure streak at three and re-quarantined on its
+  very next failure, and written no `WORKER_STATE_CHANGED` row, so the change
+  would answer nothing later. §17's own sentence, at a column: **a guard on one
+  entrance is not a guard.** `WorkerPatch` no longer carries the field, so
+  availability has the two writers it is supposed to have — an operator's
+  decision, and the quarantine Brain derives from what actually happened — and
+  a test reads the file and fails on any third. The rest of `patchWorker` is
+  ordinary configuration and is left alone: what had to go was the second
+  writer of a guarded column, not the function around it.
+
   **The race regression asserted the opposite of its own name until it was run
   against its defect.** `setAvailability` re-reads the worker, so a *sequential*
   second call sees the new state and is a legitimate second move — the test
@@ -2913,6 +2928,31 @@ remote.
   field fails a test instead of shipping. It matches declared properties only,
   which its second exercise proves: a comment naming a field satisfies it as
   little as a missing one does.
+
+  **And the door that carried all of them reported a failure as a pass.**
+  `factory.yml`'s step ended at `... | tee factory.txt`, a pipeline's status is
+  its last stage's, and nothing anywhere asserted a word about the output — so
+  every dispatch of a factory command went green whatever the Brain answered.
+  Measured rather than reasoned about: on 2026-09-22 `factory pull-request` was
+  dispatched at the deployed image, which had no such command; it printed
+  *"commands: fleet, register, submit, …"* — the list of the ones that do
+  exist — and the run succeeded. §47 records this exact shape one file along and
+  calls it worse than a gate that did not run, because a green tick is read as
+  evidence, and the deliberate before-reading that proved the new commands were
+  absent is the same reading that proved the door could not say so.
+
+  The remedy is the repository's own and was two files away the whole time.
+  `deploy.yml` states it in its own words — *"the verdict comes from a line the
+  script printed, not from an exit code that had to survive an SSH session, a
+  shell and a CLI"* — and `step10.yml` has grepped for `STEP10: OK` since it was
+  written. `scripts/factory.ts` prints `FACTORY: OK`, and only where nothing set
+  a failing code: `fail()` has already exited, a refusal prints `FACTORY
+  REFUSED` instead, and an unknown command — which used to be the silent case —
+  now sets one. The workflow greps for it and every other way out is an
+  `::error::` naming which of the three happened, because *nothing came back*,
+  *the factory refused this* and *that is not a command* send an operator to
+  three different places. Both ends are held together by one test, run against
+  each half's own defect before either was trusted.
 
   **Repeating itself is the shape rather than a run of accidents**, and naming
   it is worth more than any one of them: throughput, the release decision and
