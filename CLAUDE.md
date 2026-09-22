@@ -2718,14 +2718,57 @@ remote.
   `COMPLETE` at the top, so it is offered to the ingest and nothing is carried
   forward, which is what stops it becoming a stage that is never handed out again.
 
-  **One reading is reported and not repaired, because nothing could separate it
-  from the rows.** Two conditions leave a completed integration bin unread at the
-  moment a stage is decided: the one above, and an ingest that ran and returned
-  `false` silently — `ingestIntegrateBin` has two such paths, a forge verdict that
-  does not confirm and an acceptance that moves no unit, and **neither records a
-  row**. They are therefore indistinguishable in the ledger. The tick lock makes
-  the first ordinary, so it is the one fixed; the second stands as an open reading,
-  because a remedy for a condition that was never established is worse than none.
+  **I reported the other half as an open reading rather than repairing it, and
+  the correction is recorded rather than quietly applied.** Two conditions leave
+  a completed integration bin unread at the moment a stage is decided: the one
+  above, and an ingest that ran and returned `false` silently. My argument for
+  leaving the second was that *a remedy for a condition that was never
+  established is worse than none* — which is a rule about **changing behaviour**
+  on a guess, and this was never that. The condition is not a hypothesis: a
+  completed bin whose report was not turned into rows is a fact the ingest
+  already knew, said in a tick note that lives as long as the process, and wrote
+  down nowhere. **A failure that is indistinguishable in the ledger is not an
+  open reading; it is the reason the next one will be, too.**
+
+  There are four such paths, not two, which is what reading them all for the
+  record rather than for the two I had named turned up: a repository this Brain
+  cannot address, a report it cannot read, a forge that will not confirm, and an
+  acceptance that moves no unit. `INGEST_REFUSALS` is the closed set and
+  `INGEST_REFUSAL_NOTES` is a `Record` over it, so a fifth condition at this
+  seam is a compile error until somebody says what it means.
+
+  **Three properties are what make it a record rather than a verdict.** Every
+  caller still returns `false`, so the bin stays un-ingested and the next tick
+  tries again — which is right for the transient half and is what the stage's own
+  ceiling bounds for the standing half. The kind is read by neither query that
+  would change behaviour: `integrationAlreadyIngested` would turn one forge
+  outage into a report nothing ever reads again, and `surfaceBlockedIntegrations`
+  would retire a stage for a condition that was never about the work — §23 at a
+  new row, where a refusal is not misconduct. And it is written **at most once
+  per (bin, reason)**, because the comment on `integrationAlreadyIngested`
+  already records what the alternative cost one row along: a completed bin is
+  re-read on every tick, so a row per pass is a fresh refusal every twenty
+  seconds for the life of the campaign.
+
+  What that bound costs is stated rather than hidden: a second refusal of the
+  same reason for the same bin, with different problems, is not recorded. The row
+  carries the first — the one that says when this started — and the tick report
+  carries the current text every pass. Fingerprinting the problems instead was
+  the alternative and is worse, because a forge reason carrying anything that
+  varies between calls would write a row every twenty seconds, which is the
+  defect the bound exists to prevent arriving through its own key.
+
+  **Writing the regressions established something the reading had not: three of
+  the four are ordinary and the fourth is only reachable as a race.** The parser
+  refuses an `IMPLEMENTED` report that merged nothing, and `verdict.ok` means
+  every merge it named cleared the forge — so `carried` is never empty where
+  `NO_UNIT_MOVED` fires, and `markIntegrated`'s guard is the same `IMPLEMENTED`
+  this pass filtered on moments earlier. The only way every write matches nothing
+  is that something moved the units in between. So the test injects exactly that,
+  at the one instant it can happen: the stub forge moves the unit while answering
+  the compare call that sits between the filter and the write. Reproducing the
+  precondition rather than asserting around it, the same way the stage-race
+  regression above holds the campaign tick as another dispatcher.
 
 - **A prohibition in a prompt is not a control, and Brain cannot make one.** Every
   units bin forbids pushing to or moving the campaign's integration branch, names
@@ -7214,11 +7257,24 @@ when the brief's whole optimization rule is that it is not.**
   before it was trusted to pass — a regression test nobody has seen fail is a
   claim rather than a reading.
 
-  **The same shape is latent one kernel along and is deliberately not fixed
-  here.** §38's `absorb` tallies the same way for its BOOTSTRAP, MAP and
-  CAPITAL rounds; only its SCAN branch reads openings from rows. It is reported
-  rather than changed, because widening this into somebody else's kernel is a
-  decision for whoever owns that one.
+  **I recorded the same shape as latent one kernel along and left it to whoever
+  owned that kernel. It had already been fixed, and the correction is recorded
+  rather than edited away.** The sentence said §38's `absorb` tallied `found` for
+  its BOOTSTRAP, MAP and CAPITAL rounds and read rows only on its SCAN branch.
+  `0f025130` had derived the other three the day before: `found` there is
+  `countFiledFromOrchestration(orchestrationId)` — the nodes, constraints and
+  capital structures whose `source_claim_id` resolves to that orchestration —
+  plus, on SCAN only, the openings. Every purpose is derived, and the comment
+  above it makes the same argument this one does, in the same words.
+
+  Two things are worth keeping out of it. **A deferral is a claim about the
+  code and has to be checked like one**: *it is somebody else's* was doing the
+  work of *it is still true*, and nobody re-read the function before writing the
+  sentence down. And **a canonical file is one document rather than a set of
+  territories**. §39 owning this kernel is a reason to be careful about changing
+  §38's code; it is not a reason to leave §38's behaviour described falsely,
+  because the next reader takes what this file says about a module over what the
+  module says about itself — which is the whole reason the file is worth having.
 
   **Buyers with no published route is its own verdict**, because the brief
   names distribution as its own step and the two remedies differ: *nobody is

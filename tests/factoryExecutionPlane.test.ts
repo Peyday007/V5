@@ -3233,3 +3233,310 @@ describe('a bin that completed after the ingest had its chance still holds its s
     expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
   });
 });
+
+/* ========================================================================= */
+
+describe('a completed integration bin that could not be ingested says so in the ledger', () => {
+  /*
+   * Four things go wrong at this seam and, before this, each of them was one
+   * silent `return false`. The bin stayed COMPLETE, the units stayed
+   * IMPLEMENTED, the stage was offered again, and the ledger recorded nothing —
+   * so a reader watching a campaign make integration bins that never landed had
+   * no first step, and could not tell a forge that would not answer from a report
+   * nobody could read.
+   *
+   * §27 reported exactly this as an open reading rather than repairing it, on the
+   * grounds that two of the paths were indistinguishable in the rows. They are
+   * distinguishable now, and these are the regressions for it.
+   *
+   * What the tests are careful about is the half that is *not* the row: the retry
+   * must survive. A record that stopped the ingest being attempted again would
+   * turn one forge outage into a completed report nothing ever reads, and a
+   * record the stage ceiling counted would retire a stage for a condition that
+   * was never about the work.
+   */
+  let campaignId = '';
+  let implementer = '';
+  let integrator = '';
+  let integrationBranch = '';
+  let changeRequestId = '';
+  const unitHead = '7'.repeat(40);
+  const integrationHead = '8'.repeat(40);
+
+  beforeEach(async () => {
+    implementer = (await createWorker({ name: 'impl-r', createdByType: 'SYSTEM', createdById: 't' })).id;
+    integrator = (await createWorker({ name: 'int-r', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `ingest-refusal-${Math.random()}`,
+      objective: 'Something whose integration will be read and refused.',
+      expectedOutcome: 'A reader can tell which of four things went wrong.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    changeRequestId = changeRequest.id;
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    integrationBranch = campaign.integrationBranch;
+    await ensureUnit({
+      campaignId,
+      unitKey: 'only-unit',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the published tree',
+      objective: 'Assert the build publishes the site only.',
+      acceptance: ['the suite fails when a repository-only file is published'],
+      ownedPaths: ['test/only.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    await registerFactoryWorker(implementer);
+    await registerFactoryWorker(integrator);
+
+    const { promoteReadyUnits } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+    const unit = (await getUnitByKey(campaignId, 'only-unit'))!;
+    const held = (
+      await claimUnits({ campaignId, workerId: implementer, unitIds: [unit.id], leaseMs: 60_000 })
+    )[0]!;
+    await markImplemented(
+      { unitId: unit.id, workerId: implementer, leaseId: held.leaseId, leaseGeneration: held.leaseGeneration },
+      {
+        branch: `factory/${campaignId}/only-unit/a1`,
+        headSha: unitHead,
+        baseSha: BASE,
+        worktreePath: null,
+        workerSummary: 'implemented',
+        terminalResult: { outcome: 'IMPLEMENTED', commands: [], filesForgeReported: [], filesWorkerReported: [] },
+      },
+    );
+  });
+
+  /** A forge that agrees the integration carried the unit. */
+  function forgeConfirms(files: string[] = ['test/only.test.js']): void {
+    stubForge({
+      branches: { [integrationBranch]: integrationHead },
+      compares: {
+        [`${unitHead}...${integrationHead}`]: { files, status: 'ahead' },
+        [`${BASE}...${integrationHead}`]: { files, status: 'ahead' },
+      },
+    });
+  }
+
+  /** The integration report a worker would submit for a real merge. */
+  function goodReport(): string {
+    return JSON.stringify({
+      outcome: 'IMPLEMENTED',
+      integrationBranch,
+      headSha: integrationHead,
+      merged: [{ unitKey: 'only-unit', branch: `factory/${campaignId}/only-unit/a1`, headSha: unitHead }],
+      conflicts: [],
+      commands: [{ command: 'npm test', exitCode: 0 }],
+      summary: 'merged and verified',
+    });
+  }
+
+  /**
+   * Make the integrate bin, hand it to the integrator, submit `value`, complete
+   * it — the whole path a worker takes, so the bin under test is a real one.
+   */
+  async function completedIntegrationBin(value: string): Promise<string> {
+    forgeConfirms();
+    await tickRemoteCampaign(campaignId);
+    const assigned = await assignNextBin({ workerId: integrator, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_INTEGRATE');
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'integrate',
+      value,
+      contentHash: `h-${value.length}`,
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(
+      await finishBin(
+        {
+          binId: assigned!.bin.id,
+          leaseId: assigned!.leaseId,
+          leaseGeneration: assigned!.leaseGeneration,
+          workerId: integrator,
+        },
+        { state: 'COMPLETE', reason: 'submitted' },
+      ),
+    ).toBe('OK');
+    return assigned!.bin.id;
+  }
+
+  async function refusals(): Promise<{ binId?: unknown; reason?: unknown; [key: string]: unknown }[]> {
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    const events = await listFactoryEvents(campaignId, { kinds: ['INTEGRATION_NOT_INGESTED'] });
+    return events.map((event) => (event.detail ?? {}) as Record<string, unknown>);
+  }
+
+  it('records a forge that would not confirm, once, without stopping the retry', async () => {
+    const binId = await completedIntegrationBin(goodReport());
+
+    // The forge answers nothing at all: the branch is 404 and no compare exists.
+    stubForge({});
+    const first = await tickRemoteCampaign(campaignId);
+    expect(first.ingested.some((entry) => entry.startsWith('integrate:'))).toBe(false);
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
+
+    const [recorded, ...rest] = await refusals();
+    expect(rest).toHaveLength(0);
+    expect(recorded?.['reason']).toBe('FORGE_DID_NOT_CONFIRM');
+    expect(recorded?.['binId']).toBe(binId);
+    // The evidence, not just the category: what the forge actually said, which
+    // unit was waiting, and the commit the report named.
+    expect(String((recorded?.['problems'] as string[])[0])).toContain(integrationBranch);
+    expect(recorded?.['units']).toEqual(['only-unit']);
+    expect(recorded?.['reportedHeadSha']).toBe(integrationHead);
+    expect(String(recorded?.['means'])).toContain('did not confirm');
+
+    /*
+     * The bound. A completed bin is re-read on every tick, so a row per pass would
+     * be a fresh refusal every twenty seconds for the life of the campaign — the
+     * exact cost `integrationAlreadyIngested` was written to stop one row along.
+     */
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    await tickRemoteCampaign(campaignId);
+    expect(await refusals()).toHaveLength(1);
+
+    /*
+     * And the half that makes it a record rather than a verdict: the retry
+     * survives. A row read by `integrationAlreadyIngested` would have turned this
+     * outage into a report nothing ever reads again.
+     */
+    forgeConfirms();
+    const recovered = await tickRemoteCampaign(campaignId);
+    expect(recovered.ingested.some((entry) => entry === `integrate:${binId}`)).toBe(true);
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('INTEGRATED');
+    expect(await refusals()).toHaveLength(1);
+  });
+
+  it('does not count a refusal the ingest never judged towards the stage ceiling', async () => {
+    await completedIntegrationBin(goodReport());
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+
+    /*
+     * `surfaceBlockedIntegrations` counts `INTEGRATION_REJECTED` rows carrying
+     * `surface: true`, and that count is what blocks the stage at its ceiling.
+     * These four refusals mean the ingest never got as far as judging the work, so
+     * recording one there would retire a stage for a forge outage — §23's sentence
+     * at a new row: a refusal is not misconduct.
+     */
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    expect(
+      await listFactoryEvents(campaignId, {
+        kinds: ['INTEGRATION_REJECTED', 'INTEGRATION_MERGED'],
+      }),
+    ).toHaveLength(0);
+    expect((await getCampaign(campaignId))?.state).not.toBe('BLOCKED');
+  });
+
+  it('records an unreadable report as its own reason, carrying what could not be read', async () => {
+    const binId = await completedIntegrationBin('this is not an integration report');
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+
+    const [recorded] = await refusals();
+    expect(recorded?.['reason']).toBe('REPORT_UNUSABLE');
+    expect(recorded?.['binId']).toBe(binId);
+    expect((recorded?.['errors'] as unknown[]).length).toBeGreaterThan(0);
+    expect(String(recorded?.['means'])).toContain('Nothing was judged');
+    expect((await getUnitByKey(campaignId, 'only-unit'))?.state).toBe('IMPLEMENTED');
+  });
+
+  it('records a confirmed integration whose units something else had already moved', async () => {
+    /*
+     * The one route to this branch, and it is a race rather than a bad report.
+     *
+     * `verdict.ok` means every merge the report named cleared the forge, and the
+     * parser refuses an `IMPLEMENTED` report that merged nothing — so `carried`
+     * is never empty here. `markIntegrated` is guarded on the unit still being
+     * `IMPLEMENTED` and this pass filtered on exactly that moments earlier, so
+     * the only way every write matches nothing is that something moved the units
+     * in between.
+     *
+     * So the test injects that, at the one instant it can happen: the forge call
+     * inside `verifyIntegrationReport` sits between the filter and the write, and
+     * the stub moves the unit while answering it. Reproducing the precondition
+     * rather than asserting around it — the same discipline as the stage-race
+     * regression above, which holds the campaign tick as another dispatcher.
+     */
+    const binId = await completedIntegrationBin(goodReport());
+    const { getDb } = await import('../server/db/database.ts');
+    forgeConfirms();
+    const answering = globalThis.fetch;
+    globalThis.fetch = (async (input: unknown, init?: unknown): Promise<Response> => {
+      if (String(input).includes(`/compare/${BASE}...`)) {
+        await getDb().run(
+          `UPDATE factory_work_units SET state = 'INTEGRATED' WHERE campaign_id = ? AND unit_key = ?`,
+          [campaignId, 'only-unit'],
+        );
+      }
+      return await (answering as (a: unknown, b?: unknown) => Promise<Response>)(input, init);
+    }) as typeof globalThis.fetch;
+    await tickRemoteCampaign(campaignId);
+
+    const [recorded] = await refusals();
+    expect(recorded?.['reason']).toBe('NO_UNIT_MOVED');
+    expect(recorded?.['binId']).toBe(binId);
+    // The fact that makes the row worth having: the forge agreed these units
+    // were carried, and not one of them moved.
+    expect(recorded?.['carried']).toEqual(['only-unit']);
+    expect(recorded?.['units']).toEqual(['only-unit']);
+    expect(String(recorded?.['means'])).toContain('something moved them');
+    // And nothing was recorded as merged, because nothing this pass did merged it.
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    expect(await listFactoryEvents(campaignId, { kinds: ['INTEGRATION_MERGED'] })).toHaveLength(0);
+  });
+
+  it('records a repository this Brain cannot address', async () => {
+    const binId = await completedIntegrationBin(goodReport());
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run('UPDATE factory_change_requests SET repository = ? WHERE id = ?', [
+      'not a remote',
+      changeRequestId,
+    ]);
+    await tickRemoteCampaign(campaignId);
+
+    const [recorded] = await refusals();
+    expect(recorded?.['reason']).toBe('REPOSITORY_UNREADABLE');
+    expect(recorded?.['binId']).toBe(binId);
+    expect(recorded?.['repository']).toBe('not a remote');
+    expect(String(recorded?.['means'])).toContain('has to correct');
+  });
+});

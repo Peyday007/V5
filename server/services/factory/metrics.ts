@@ -47,6 +47,21 @@ export const FACTORY_EVENT_KINDS = {
   verificationRan: 'VERIFICATION_RAN',
   integrationMerged: 'INTEGRATION_MERGED',
   integrationRejected: 'INTEGRATION_REJECTED',
+  /**
+   * A completed integration bin was read and its report could not be turned into
+   * rows, and which of the four reasons it was.
+   *
+   * Its own kind rather than an `INTEGRATION_REJECTED` with another discriminator,
+   * because that row means something a reader relies on: *the integration was
+   * judged and it did not land*, and `surfaceBlockedIntegrations` counts it
+   * towards the stage ceiling. These four are the opposite — the ingest never got
+   * as far as judging anything — so counting them there would retire a stage for a
+   * forge outage, and `integrationAlreadyIngested` reading them would turn that
+   * outage into a report nothing ever reads again.
+   *
+   * Written at most once per bin per reason. See `noteIngestRefused`.
+   */
+  integrationNotIngested: 'INTEGRATION_NOT_INGESTED',
   integrationConflict: 'INTEGRATION_CONFLICT',
   reviewCompleted: 'REVIEW_COMPLETED',
   findingRecorded: 'FINDING_RECORDED',

@@ -482,6 +482,116 @@ async function alreadyActedOn(
  * conflict, or a command that failed on the merged tree — because the thing that
  * needs to change is the work, not the merge.
  */
+/**
+ * Why a completed integration bin's report could not be turned into rows.
+ *
+ * A closed set, because the discriminator is the whole of it: four different
+ * things go wrong at this seam, they have four different remedies, and before
+ * this each of them was one silent `return false` — so the ledger said the same
+ * thing about all four, which is nothing. A campaign whose repository this Brain
+ * cannot parse needs a person; a worker that completed without a usable report
+ * needs the bin re-run; a forge that would not confirm needs either a push or a
+ * look at what the integrator actually did; and an acceptance that confirmed and
+ * moved nothing is either a report that merged nothing or units something else
+ * had already moved. A reader who cannot tell those apart has no first step.
+ *
+ * A `Record` over this union is what keeps the set honest: `INGEST_REFUSAL_NOTES`
+ * below must answer every member, so a fifth condition added at this seam is a
+ * compile error until somebody says what it means.
+ */
+export const INGEST_REFUSALS = {
+  /** `factory_change_requests.repository` is not a remote this Brain can read. */
+  repositoryUnreadable: 'REPOSITORY_UNREADABLE',
+  /** The bin reached COMPLETE and its result is not a readable integration report. */
+  reportUnusable: 'REPORT_UNUSABLE',
+  /** The forge did not confirm the branch, the containment or the declared paths. */
+  forgeDidNotConfirm: 'FORGE_DID_NOT_CONFIRM',
+  /** The forge confirmed it and no unit changed state, so nothing was recorded. */
+  noUnitMoved: 'NO_UNIT_MOVED',
+} as const;
+
+export type IngestRefusal = (typeof INGEST_REFUSALS)[keyof typeof INGEST_REFUSALS];
+
+/** What each refusal means to somebody reading the ledger, in one sentence. */
+export const INGEST_REFUSAL_NOTES: Record<IngestRefusal, string> = {
+  REPOSITORY_UNREADABLE:
+    "This campaign's repository is not one Brain can address, so nothing here could have been " +
+    'read. A person has to correct the change request.',
+  REPORT_UNUSABLE:
+    'The bin completed and what it submitted is not an integration report Brain can read. ' +
+    'Nothing was judged; the stage is offered again.',
+  FORGE_DID_NOT_CONFIRM:
+    'The repository did not confirm what the report claimed. Nothing was recorded and the stage ' +
+    'is offered again, so a transient answer resolves itself and a standing one needs a look.',
+  NO_UNIT_MOVED:
+    'The forge confirmed the integration and not one unit changed state, so something moved them ' +
+    'between this pass reading them as implemented and writing. `carried` names which.',
+};
+
+/**
+ * Record, once, that a completed integration bin was read and refused.
+ *
+ * Three properties, and every one of them is load-bearing.
+ *
+ * **It changes nothing about what the ingest does.** Every caller still returns
+ * `false`, so the bin stays un-ingested, the stage is not advanced, and the next
+ * tick tries again — which is the right behaviour for the transient half of
+ * these, since a forge that did not answer will answer later, and is what the
+ * stage's own ceiling bounds for the standing half. A row that made the ingest
+ * *succeed* would advance a stage over work that never landed.
+ *
+ * **It is deliberately its own kind, read by neither of the two queries that
+ * would change behaviour.** `integrationAlreadyIngested` would stop the retry, so
+ * one forge outage would turn a completed report into one nothing ever reads
+ * again; `surfaceBlockedIntegrations` counts towards the stage ceiling, so a
+ * forge outage would retire a stage for a condition that was never about the
+ * work. §23's sentence at a new row: a refusal is not misconduct.
+ *
+ * **It is written at most once per (bin, reason), and the bound is the closed set
+ * above.** The comment on `integrationAlreadyIngested` records what the
+ * alternative already cost once: a completed bin is re-read on *every* tick, so a
+ * row per pass is a fresh refusal every twenty seconds for as long as the
+ * campaign lives, and a ledger that grows like that is one nobody reads. By the
+ * reason rather than by the bin, because a bin can genuinely hit two of these in
+ * turn — a forge that recovers and then finds the units already moved — and both
+ * are facts worth having.
+ *
+ * What that costs is stated rather than hidden. A *second* refusal of the same
+ * reason for the same bin, with different problems, is not recorded: the row
+ * carries the first, which is the one that says when this started, and the tick
+ * report carries the current text on every pass. Fingerprinting the problems
+ * instead was the alternative and is worse — a forge reason carrying anything
+ * that varies between calls would write a row every twenty seconds, which is the
+ * defect this bound exists to prevent, arriving through its own key.
+ */
+async function noteIngestRefused(
+  campaign: FactoryCampaign,
+  bin: Bin,
+  reason: IngestRefusal,
+  detail: Record<string, unknown>,
+): Promise<void> {
+  const events = await listFactoryEvents(campaign.id, {
+    kinds: [FACTORY_EVENT_KINDS.integrationNotIngested],
+    limit: 200,
+  });
+  const already = events.some((event) => {
+    const seen = (event.detail ?? {}) as { binId?: unknown; reason?: unknown };
+    return seen.binId === bin.id && seen.reason === reason;
+  });
+  if (already) return;
+  const who = await binIdentity(bin);
+  await recordFactoryEvent({
+    campaignId: campaign.id,
+    sessionId: who.sessionId,
+    workerId: who.workerId,
+    kind: FACTORY_EVENT_KINDS.integrationNotIngested,
+    evidenceClass: 'MEASURED',
+    // Spread first, so nothing a caller passes can overwrite the two fields the
+    // idempotency above is keyed on.
+    detail: { ...detail, reason, binId: bin.id, means: INGEST_REFUSAL_NOTES[reason] },
+  });
+}
+
 async function ingestIntegrateBin(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,
@@ -491,11 +601,17 @@ async function ingestIntegrateBin(
   const repository = parseRemote(changeRequest.repository);
   if (!repository) {
     report.notes.push(`"${changeRequest.repository}" is not a repository this Brain can read.`);
+    await noteIngestRefused(campaign, bin, INGEST_REFUSALS.repositoryUnreadable, {
+      repository: changeRequest.repository,
+    });
     return false;
   }
   const parsed = await readIntegrationReport(bin.id);
   if (!parsed.ok) {
     report.notes.push(`The integration bin ${bin.id} completed without a usable report.`);
+    await noteIngestRefused(campaign, bin, INGEST_REFUSALS.reportUnusable, {
+      errors: parsed.errors.slice(0, 10).map((error) => error.slice(0, 500)),
+    });
     return false;
   }
   const who = await binIdentity(bin);
@@ -603,6 +719,14 @@ async function ingestIntegrateBin(
   );
   if (!verdict.ok) {
     report.notes.push(`the integration was not confirmed by the forge: ${verdict.problems.join(' ')}`);
+    await noteIngestRefused(campaign, bin, INGEST_REFUSALS.forgeDidNotConfirm, {
+      problems: verdict.problems.slice(0, 10).map((problem) => problem.slice(0, 500)),
+      integrationBranch: parsed.value.integrationBranch,
+      reportedHeadSha: parsed.value.headSha,
+      baseSha: base,
+      units: implemented.map((unit) => unit.unitKey),
+      carried: verdict.carried,
+    });
     return false;
   }
 
@@ -618,6 +742,24 @@ async function ingestIntegrateBin(
   });
   if (accepted.integrated.length === 0) {
     report.notes.push('the integration was confirmed but no unit moved; nothing recorded.');
+    await noteIngestRefused(campaign, bin, INGEST_REFUSALS.noUnitMoved, {
+      reportedHeadSha: parsed.value.headSha,
+      /*
+       * Which units the forge agreed were carried, which is what makes this row
+       * worth having rather than a bare "nothing happened".
+       *
+       * It is never empty when this fires, and that is provable rather than
+       * assumed: the parser refuses an `IMPLEMENTED` report that merged nothing,
+       * and `verdict.ok` means every merge it *did* name cleared the forge — so
+       * `carried` holds all of them. `markIntegrated` is guarded on the unit
+       * still being `IMPLEMENTED`, and this pass filtered on exactly that a few
+       * lines above, so reaching here means something moved these units in
+       * between. That is the one fact this row exists to carry, and without it
+       * the condition is invisible.
+       */
+      carried: verdict.carried,
+      units: implemented.map((unit) => unit.unitKey),
+    });
     return false;
   }
 

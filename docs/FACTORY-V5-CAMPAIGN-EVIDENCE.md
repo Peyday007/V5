@@ -351,16 +351,40 @@ against a neutered rule it fails with `expected undefined to be
 'bin_…'`. A second test pins the bound in the other direction, so the fix
 cannot become a stage that is never offered again.
 
-**One thing is reported and not claimed.** Two readings could leave a completed
-integration bin unread at the moment the stage is decided: the one above, and an
-ingest that ran and returned `false` silently — `ingestIntegrateBin` has two
-such paths, a forge verdict that does not confirm and an acceptance that moves
-no unit, and neither records a row. They are **indistinguishable from the
-persisted evidence**, because neither writes anything. The fix addresses the
-first, which is the one the tick lock makes ordinary. The second is recorded
-here as an open reading rather than repaired, for the reason this file already
-gives once: a remedy for a condition that was never established is worse than
-none.
+**The other half was reported here as an open reading and has since been
+repaired; the deferral is left standing above its correction rather than edited
+out.** Two readings leave a completed integration bin unread at the moment the
+stage is decided: the one above, and an ingest that ran and returned `false`
+silently. The argument for leaving the second was *a remedy for a condition that
+was never established is worse than none* — a rule about changing behaviour on a
+guess, which this was not. Nothing about the condition was a hypothesis: the
+ingest already knew it, said so in a tick note that lives as long as the process,
+and wrote it down nowhere.
+
+Reading all of them for the record rather than the two that had been named found
+**four**, not two: a repository this Brain cannot address, a report it cannot
+read, a forge that will not confirm, and an acceptance that moves no unit.
+`INGEST_REFUSALS` is the closed set and `INGEST_REFUSAL_NOTES` is a `Record` over
+it, so a fifth is a compile error until somebody says what it means. Each writes
+one `INTEGRATION_NOT_INGESTED` row per `(bin, reason)` carrying the evidence —
+the forge's own problems, the errors that made a report unreadable, the units
+that did not move — and **every caller still returns `false`**, so the bin stays
+un-ingested and the next tick tries again. The kind is read by neither
+`integrationAlreadyIngested`, which would turn one forge outage into a report
+nothing ever reads again, nor `surfaceBlockedIntegrations`, which would retire a
+stage for a condition that was never about the work.
+
+Writing the regressions established something the reading had not: three are
+ordinary and the fourth is reachable **only as a race**. The parser refuses an
+`IMPLEMENTED` report that merged nothing and `verdict.ok` means every merge it
+named cleared the forge, so `carried` is never empty where `NO_UNIT_MOVED`
+fires — and `markIntegrated` is guarded on the same `IMPLEMENTED` the pass
+filtered on moments earlier. So the test injects the race at the one instant it
+can happen, moving the unit while the forge answers the compare call that sits
+between the filter and the write. Each regression was run against its own defect
+first: removing the record fails with `expected undefined to be
+'FORGE_DID_NOT_CONFIRM'`, and removing the once-per-reason bound fails with
+`expected [ … ] to have a length of 1 but got 3`.
 
 ---
 
