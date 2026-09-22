@@ -2879,6 +2879,18 @@ remote.
   read before either writes, and asserts exactly one winner, one refusal, and
   one ledger row.
 
+  **And the class was closed rather than only the instances.** The release
+  defect was a *type* losing a server field, not a screen declining to render
+  one — `decisionWaiting` had been on the response since the release route
+  existed and `CampaignDetail` did not declare it, so nothing at either end
+  could see it. Two more were in that state when this was written, `activeWork`
+  and `metrics`, informational rather than a control and therefore costing a
+  reader rather than a decision. `tests/factoryHttp.test.ts` holds the
+  interface's own source against the route's response keys now, so the next
+  field fails a test instead of shipping. It matches declared properties only,
+  which its second exercise proves: a comment naming a field satisfies it as
+  little as a missing one does.
+
   **Three closes in one session is the shape rather than three accidents**, and
   naming it is worth more than any of them: throughput, the release decision and
   now the artifact were each a complete, tested, guarded server capability whose

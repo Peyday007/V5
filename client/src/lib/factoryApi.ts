@@ -21,7 +21,11 @@ import type {
   FactoryReview,
   FactoryWorkUnit,
 } from '../../../server/domain/factory.ts';
-import type { CampaignBriefing } from '../../../server/services/factory/projections.ts';
+import type {
+  ActiveWorkItem,
+  CampaignBriefing,
+} from '../../../server/services/factory/projections.ts';
+import type { CampaignMetrics } from '../../../server/services/factory/metrics.ts';
 import type { RepositoryGrant } from '../../../server/services/factory/repositoryEnvelope.ts';
 import type {
   OnboardResult,
@@ -29,7 +33,9 @@ import type {
 } from '../../../server/services/factory/onboard.ts';
 
 export type {
+  ActiveWorkItem,
   CampaignBriefing,
+  CampaignMetrics,
   FactoryCampaign,
   FactoryChangeRequest,
   FactoryFinding,
@@ -89,6 +95,20 @@ export interface CampaignDetail {
    */
   decisionWaiting: FactoryRelease | null;
   campaign: FactoryCampaign;
+  /**
+   * The two fields the route has always sent and this type used to drop.
+   *
+   * `decisionWaiting` was the third, and dropping *it* is what left the
+   * factory's second person-only decision with a blocker on the screen and no
+   * way to answer it. These two are informational rather than a control, so
+   * losing them cost a reader rather than a decision — but the defect is the
+   * same one and it is the type, not the screen: a screen chooses what to
+   * render, and a type that silently loses a server field makes the choice
+   * invisible. `tests/factoryHttp.test.ts` holds this interface against the
+   * route's own response keys now, so the next field cannot go the same way.
+   */
+  activeWork: ActiveWorkItem[];
+  metrics: CampaignMetrics;
   units: FactoryWorkUnit[];
   review: FactoryReview | null;
   openFindings: FactoryFinding[];

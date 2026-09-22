@@ -331,6 +331,50 @@ describe('the campaign view', () => {
     expect(view.text).not.toContain(workerBearer);
   });
 
+  /*
+   * The type the client reads this with, held against what the route sends.
+   *
+   * `decisionWaiting` was on the response from the day the release route
+   * existed, and `CampaignDetail` did not declare it — so the factory's second
+   * person-only decision had a blocker rendered on the screen and nothing
+   * beside it to answer with, and every test passed, because a field a type
+   * omits is invisible from both ends. `activeWork` and `metrics` were in the
+   * same state when this was written.
+   *
+   * A screen may choose not to render something. A type that silently loses a
+   * field makes that choice invisible and turns the next one into the same
+   * defect. This reads the interface's own source, for `operatorConsoleRemoved`'s
+   * reason: what has to hold is a property of the repository, and a passing
+   * request cannot show you a field nobody declared.
+   *
+   * Run against `decisionWaiting` deleted from the interface, it fails naming
+   * it.
+   */
+  it('sends nothing the client type has quietly dropped', async () => {
+    const view = await call<Record<string, unknown>>(
+      'GET',
+      `/api/factory/campaigns/${campaignId}`,
+      { cookie: adminCookie },
+    );
+    expect(view.status).toBe(200);
+
+    const source = fs.readFileSync('client/src/lib/factoryApi.ts', 'utf8');
+    const from = source.indexOf('export interface CampaignDetail {');
+    expect(from).toBeGreaterThan(-1);
+    const body = source.slice(from, source.indexOf('\n}', from));
+    // Declared property names only: a word at the start of a line, before a
+    // colon. Comments mention field names too, and a guard satisfied by a
+    // sentence about a field is satisfied by nothing.
+    const declared = new Set(
+      [...body.matchAll(/^\s{2}(\w+)(\??):/gm)].map((match) => match[1]),
+    );
+
+    const sent = Object.keys(view.body);
+    expect(sent.length).toBeGreaterThan(5);
+    const dropped = sent.filter((key) => !declared.has(key));
+    expect(dropped).toEqual([]);
+  });
+
   it('reports the fleet without anything a credential could be recovered from', async () => {
     const fleet = await call<{
       ready: boolean;
