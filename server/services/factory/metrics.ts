@@ -74,6 +74,16 @@ export const FACTORY_EVENT_KINDS = {
    * Written at most once per bin per reason. See `noteIngestRefused`.
    */
   integrationNotIngested: 'INTEGRATION_NOT_INGESTED',
+  /**
+   * The same, one stage along: a completed *delivery* bin whose report could not
+   * become a pull-request pointer, and which of the reasons it was.
+   *
+   * Its own kind rather than a field on the one above, because the questions are
+   * asked separately — *why did this not integrate* and *why does this campaign
+   * have no pull request* have different remedies, and a reader narrowing by kind
+   * should not have to know to narrow again.
+   */
+  deliveryNotIngested: 'DELIVERY_NOT_INGESTED',
   integrationConflict: 'INTEGRATION_CONFLICT',
   reviewCompleted: 'REVIEW_COMPLETED',
   findingRecorded: 'FINDING_RECORDED',

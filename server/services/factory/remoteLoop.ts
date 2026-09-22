@@ -508,6 +508,15 @@ export const INGEST_REFUSALS = {
   forgeDidNotConfirm: 'FORGE_DID_NOT_CONFIRM',
   /** The forge confirmed it and no unit changed state, so nothing was recorded. */
   noUnitMoved: 'NO_UNIT_MOVED',
+  /**
+   * The worker reported a blocker rather than a result.
+   *
+   * Not a refusal by Brain, and named separately for exactly that reason: *the
+   * worker could not do it* and *the forge would not confirm what it said* send
+   * a reader to two different places, and a ledger that called them one thing
+   * would send them to the wrong one half the time.
+   */
+  workerReportedBlocked: 'WORKER_REPORTED_BLOCKED',
 } as const;
 
 export type IngestRefusal = (typeof INGEST_REFUSALS)[keyof typeof INGEST_REFUSALS];
@@ -526,6 +535,9 @@ export const INGEST_REFUSAL_NOTES: Record<IngestRefusal, string> = {
   NO_UNIT_MOVED:
     'The forge confirmed the integration and not one unit changed state, so something moved them ' +
     'between this pass reading them as implemented and writing. `carried` names which.',
+  WORKER_REPORTED_BLOCKED:
+    'The bin completed and the worker reported a blocker rather than a result. The reason is its ' +
+    'own, in `blockedReason`; nothing was recorded here and the stage is offered again.',
 };
 
 /**
@@ -564,16 +576,28 @@ export const INGEST_REFUSAL_NOTES: Record<IngestRefusal, string> = {
  * that varies between calls would write a row every twenty seconds, which is the
  * defect this bound exists to prevent, arriving through its own key.
  */
+/**
+ * Which stage could not turn a completed bin into rows.
+ *
+ * Its own kind per stage rather than one kind with a field, because the two are
+ * asked about separately: *why did this campaign not integrate* and *why does it
+ * have no pull request* are different questions with different remedies, and a
+ * reader narrowing by kind should not have to know to filter again.
+ */
+const NOT_INGESTED_KIND: Record<'INTEGRATE' | 'DELIVER', string> = {
+  INTEGRATE: FACTORY_EVENT_KINDS.integrationNotIngested,
+  DELIVER: FACTORY_EVENT_KINDS.deliveryNotIngested,
+};
+
 async function noteIngestRefused(
   campaign: FactoryCampaign,
   bin: Bin,
+  stage: 'INTEGRATE' | 'DELIVER',
   reason: IngestRefusal,
   detail: Record<string, unknown>,
 ): Promise<void> {
-  const events = await listFactoryEvents(campaign.id, {
-    kinds: [FACTORY_EVENT_KINDS.integrationNotIngested],
-    limit: 200,
-  });
+  const kind = NOT_INGESTED_KIND[stage];
+  const events = await listFactoryEvents(campaign.id, { kinds: [kind], limit: 200 });
   const already = events.some((event) => {
     const seen = (event.detail ?? {}) as { binId?: unknown; reason?: unknown };
     return seen.binId === bin.id && seen.reason === reason;
@@ -584,7 +608,7 @@ async function noteIngestRefused(
     campaignId: campaign.id,
     sessionId: who.sessionId,
     workerId: who.workerId,
-    kind: FACTORY_EVENT_KINDS.integrationNotIngested,
+    kind,
     evidenceClass: 'MEASURED',
     // Spread first, so nothing a caller passes can overwrite the two fields the
     // idempotency above is keyed on.
@@ -601,7 +625,7 @@ async function ingestIntegrateBin(
   const repository = parseRemote(changeRequest.repository);
   if (!repository) {
     report.notes.push(`"${changeRequest.repository}" is not a repository this Brain can read.`);
-    await noteIngestRefused(campaign, bin, INGEST_REFUSALS.repositoryUnreadable, {
+    await noteIngestRefused(campaign, bin, 'INTEGRATE', INGEST_REFUSALS.repositoryUnreadable, {
       repository: changeRequest.repository,
     });
     return false;
@@ -609,7 +633,7 @@ async function ingestIntegrateBin(
   const parsed = await readIntegrationReport(bin.id);
   if (!parsed.ok) {
     report.notes.push(`The integration bin ${bin.id} completed without a usable report.`);
-    await noteIngestRefused(campaign, bin, INGEST_REFUSALS.reportUnusable, {
+    await noteIngestRefused(campaign, bin, 'INTEGRATE', INGEST_REFUSALS.reportUnusable, {
       errors: parsed.errors.slice(0, 10).map((error) => error.slice(0, 500)),
     });
     return false;
@@ -719,7 +743,7 @@ async function ingestIntegrateBin(
   );
   if (!verdict.ok) {
     report.notes.push(`the integration was not confirmed by the forge: ${verdict.problems.join(' ')}`);
-    await noteIngestRefused(campaign, bin, INGEST_REFUSALS.forgeDidNotConfirm, {
+    await noteIngestRefused(campaign, bin, 'INTEGRATE', INGEST_REFUSALS.forgeDidNotConfirm, {
       problems: verdict.problems.slice(0, 10).map((problem) => problem.slice(0, 500)),
       integrationBranch: parsed.value.integrationBranch,
       reportedHeadSha: parsed.value.headSha,
@@ -742,7 +766,7 @@ async function ingestIntegrateBin(
   });
   if (accepted.integrated.length === 0) {
     report.notes.push('the integration was confirmed but no unit moved; nothing recorded.');
-    await noteIngestRefused(campaign, bin, INGEST_REFUSALS.noUnitMoved, {
+    await noteIngestRefused(campaign, bin, 'INTEGRATE', INGEST_REFUSALS.noUnitMoved, {
       reportedHeadSha: parsed.value.headSha,
       /*
        * Which units the forge agreed were carried, which is what makes this row
@@ -865,15 +889,42 @@ async function ingestDeliverBin(
   bin: Bin,
   report: RemoteTickReport,
 ): Promise<boolean> {
+  /*
+   * The same four refusals the integrate ingest has, at the stage whose output
+   * is the artifact a person acts on — and the first of them had no record of
+   * any kind. The other three were `report.notes`, which lives exactly as long
+   * as the process: a campaign with no pull request and no ledger row saying
+   * why is the condition §27 already paid to learn once, one stage along.
+   *
+   * Every caller still returns `false`, so the bin stays un-ingested and the
+   * next tick tries again. Nothing reads `DELIVERY_NOT_INGESTED` to decide
+   * anything, for the reason its sibling is not read either: a forge outage
+   * must not become a delivery nothing ever re-reads.
+   */
   const repository = parseRemote(changeRequest.repository);
-  if (!repository) return false;
+  if (!repository) {
+    report.notes.push(
+      `The delivery bin ${bin.id} cannot be read: ${changeRequest.repository} is not a remote ` +
+        'this Brain can address.',
+    );
+    await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.repositoryUnreadable, {
+      repository: changeRequest.repository,
+    });
+    return false;
+  }
   const parsed = await readDeliveryReport(bin.id);
   if (!parsed.ok) {
     report.notes.push(`The delivery bin ${bin.id} completed without a usable report.`);
+    await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.reportUnusable, {
+      problems: parsed.errors,
+    });
     return false;
   }
   if (parsed.value.outcome === 'BLOCKED') {
     report.notes.push(`the pull request was not delivered: ${parsed.value.blockedReason}`);
+    await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.workerReportedBlocked, {
+      blockedReason: parsed.value.blockedReason,
+    });
     return false;
   }
   const head = campaign.integrationSha ?? campaign.baseSha;
@@ -884,6 +935,11 @@ async function ingestDeliverBin(
   );
   if (!verdict.ok) {
     report.notes.push(`the pull request was not confirmed: ${verdict.problems.join(' ')}`);
+    await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.forgeDidNotConfirm, {
+      problems: verdict.problems,
+      headSha: head,
+      pullRequest: pullRequestNumber(campaign),
+    });
     return false;
   }
   if (pullRequestNumber(campaign) === verdict.number && campaign.prUrl === verdict.url) {

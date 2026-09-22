@@ -457,6 +457,18 @@ was never about the work; and it is written **once per reason**, because a
 completed bin is re-read on every tick and a row per pass is a fresh refusal
 every twenty seconds for the life of the campaign.
 
+**The delivery ingest has the same four, and one more.** It had the same defect
+too — `parseRemote` returning null and returning `false` in silence, and three
+more recorded only in the tick report, which lives as long as the process. That
+is the stage whose output is the artifact a person acts on, so what it left was
+a campaign with no pull request and nothing saying why. `DELIVERY_NOT_INGESTED`
+is its own kind, because *why did this not integrate* and *why does this have no
+pull request* are asked separately and have different remedies, and a reader
+narrowing by kind should not have to narrow again. `WORKER_REPORTED_BLOCKED` is
+the fifth reason: a worker that could not push is not a forge that would not
+confirm, and a ledger calling them one thing sends a reader to the wrong place
+half the time. `factory status` prints both kinds.
+
 5. **`FACTORY_DELIVER`** — open or update exactly one pull request, using a
    title and body Brain composed from rows. The worker performs it because the
    credential that may write to the repository lives where the worker runs; it

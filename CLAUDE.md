@@ -2830,6 +2830,29 @@ remote.
   of the body is precisely how the stored document and the live route once came
   to describe one campaign differently. One derivation, three readers.
 
+  **And the same four were at the delivery stage, which is where they cost
+  most — one of them with no record at all.** `ingestDeliverBin` had exactly the
+  shape its integrate sibling had before the repair: `parseRemote` returning
+  null and returning `false` in silence, and three more whose only trace was
+  `report.notes`, which lives as long as the process. That is the stage whose
+  output is the artifact a person acts on, so what it left behind was a campaign
+  with no pull request and nothing anywhere saying why — the condition this
+  section had already paid to learn once, one stage along, three weeks after
+  writing down that *a failure indistinguishable in the ledger is the reason the
+  next one will be too*.
+
+  `DELIVERY_NOT_INGESTED` is its own kind rather than a field on the integrate
+  one, because the two are asked about separately: *why did this not integrate*
+  and *why does this campaign have no pull request* have different remedies, and
+  a reader who narrows by kind should not have to know to narrow again.
+  `WORKER_REPORTED_BLOCKED` is the fifth reason and is named apart from
+  `FORGE_DID_NOT_CONFIRM` for the same reason at a smaller scale — *the worker
+  could not do it* and *the forge would not confirm what it said* send a reader
+  to two different places, and a ledger calling them one thing sends them to the
+  wrong one half the time. Every caller still returns `false`, nothing reads the
+  kind to decide anything, and `factory status` prints it, because a ledger
+  nothing prints is the defect the row was written to close.
+
   **And the registry's own quarantine was one-way, which is the same defect
   wearing a state column rather than a missing caller.** `recordWorkerFailure`
   writes `QUARANTINED` at three consecutive failures and `capacity()` then

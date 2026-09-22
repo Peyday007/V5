@@ -605,6 +605,11 @@ async function main(): Promise<void> {
         kinds: [
           FACTORY_EVENT_KINDS.integrationNotIngested,
           FACTORY_EVENT_KINDS.integrationRejected,
+          // The delivery stage's own, because *why does this campaign have no
+          // pull request* is exactly the question this command answers, and a
+          // reader who has to know the kind exists in order to ask for it is
+          // reading a ledger with no reader again.
+          FACTORY_EVENT_KINDS.deliveryNotIngested,
         ],
       });
       for (const event of refusals) {

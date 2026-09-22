@@ -3675,3 +3675,281 @@ describe('a factory bin is checked against its own contract before it exists', (
     expect((await listBins({ projectId: fixture.project.id })).length).toBe(before + 1);
   });
 });
+
+describe('a completed delivery bin that could not be ingested says so in the ledger', () => {
+  /*
+   * The same four refusals one stage along, at the stage whose output is the
+   * artifact a person acts on — and the first of them had no record of any kind.
+   *
+   * `ingestDeliverBin` had exactly the shape `ingestIntegrateBin` had before it
+   * was repaired: an unreadable repository returning `false` in silence, and
+   * three more whose only trace was `report.notes`, which lives as long as the
+   * process. A campaign with no pull request and no ledger row saying why is the
+   * condition §27 already paid to learn once. These are the regressions for it,
+   * and each was run against its own defect first.
+   *
+   * What they are careful about is the same half: every caller still returns
+   * `false`, so the bin stays un-ingested and the next tick tries again — a
+   * record that stopped the retry would turn one forge outage into a delivery
+   * nothing ever re-reads.
+   */
+  let campaignId = '';
+  let implementer = '';
+  let integrator = '';
+  let deliverer = '';
+  let integrationBranch = '';
+  const unitHead = 'a'.repeat(40);
+  const integrationHead = 'b'.repeat(40);
+
+  beforeEach(async () => {
+    implementer = (await createWorker({ name: 'impl-d', createdByType: 'SYSTEM', createdById: 't' })).id;
+    integrator = (await createWorker({ name: 'int-d', createdByType: 'SYSTEM', createdById: 't' })).id;
+    deliverer = (await createWorker({ name: 'del-d', createdByType: 'SYSTEM', createdById: 't' })).id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `deliver-refusal-${Math.random()}`,
+      objective: 'Something whose delivery will be read and refused.',
+      expectedOutcome: 'A reader can tell which of four things went wrong.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'the suite asserts it', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+    integrationBranch = campaign.integrationBranch;
+    await ensureUnit({
+      campaignId,
+      unitKey: 'only-unit',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the published tree',
+      objective: 'Assert the build publishes the site only.',
+      acceptance: ['the suite fails when a repository-only file is published'],
+      ownedPaths: ['test/only.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    await registerFactoryWorker(implementer);
+    await registerFactoryWorker(integrator);
+    await registerFactoryWorker(deliverer);
+
+    const { promoteReadyUnits, markIntegrated } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+    const unit = (await getUnitByKey(campaignId, 'only-unit'))!;
+    const held = (
+      await claimUnits({ campaignId, workerId: implementer, unitIds: [unit.id], leaseMs: 60_000 })
+    )[0]!;
+    await markImplemented(
+      { unitId: unit.id, workerId: implementer, leaseId: held.leaseId, leaseGeneration: held.leaseGeneration },
+      {
+        branch: `factory/${campaignId}/only-unit/a1`,
+        headSha: unitHead,
+        baseSha: BASE,
+        worktreePath: null,
+        workerSummary: 'implemented',
+        terminalResult: { outcome: 'IMPLEMENTED', commands: [], filesForgeReported: [], filesWorkerReported: [] },
+      },
+    );
+    await markIntegrated(unit.id, integrationHead);
+
+    /*
+     * The delivery stage's own precondition, written rather than walked: a
+     * passing campaign review with nothing gating, over an integrated commit.
+     * Walking the review stage as well would be testing the review stage.
+     */
+    const { patchCampaign } = await import('../server/repos/factory.ts');
+    await patchCampaign(campaignId, { state: 'ASSEMBLING', integrationSha: integrationHead });
+    const { recordReview } = await import('../server/repos/factoryFleet.ts');
+    await recordReview({
+      campaignId,
+      round: 1,
+      scope: 'CAMPAIGN',
+      reviewerSessionId: 'cse_reviewer_d',
+      reviewedSha: integrationHead,
+      verdict: 'PASS',
+      independence: 'SESSION_SEPARATED',
+      summary: 'nothing gating',
+      findings: [],
+    });
+  });
+
+  /** The forge agrees the integration branch is at the reviewed commit. */
+  function forgeConfirms(): void {
+    stubForge({
+      branches: { [integrationBranch]: integrationHead },
+      compares: {
+        [`${BASE}...${integrationHead}`]: { files: ['test/only.test.js'], status: 'ahead' },
+      },
+    });
+  }
+
+  async function refusals(): Promise<Record<string, unknown>[]> {
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    const events = await listFactoryEvents(campaignId, { kinds: ['DELIVERY_NOT_INGESTED'] });
+    return events.map((event) => (event.detail ?? {}) as Record<string, unknown>);
+  }
+
+  /** Make the deliver bin, take it, submit `value`, complete it. */
+  async function completedDeliveryBin(value: string): Promise<string> {
+    forgeConfirms();
+    await tickRemoteCampaign(campaignId);
+    const assigned = await assignNextBin({ workerId: deliverer, projectIds: [fixture.project.id] });
+    expect(assigned?.bin.kind).toBe('FACTORY_DELIVER');
+    await putBinUnitResult({
+      binId: assigned!.bin.id,
+      unitKey: 'deliver',
+      value,
+      contentHash: `h-${value.length}`,
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    expect(
+      await finishBin(
+        {
+          binId: assigned!.bin.id,
+          leaseId: assigned!.leaseId,
+          leaseGeneration: assigned!.leaseGeneration,
+          workerId: deliverer,
+        },
+        { state: 'COMPLETE', reason: 'submitted' },
+      ),
+    ).toBe('OK');
+    return assigned!.bin.id;
+  }
+
+  it('records a report it cannot read, once, without stopping the retry', async () => {
+    const binId = await completedDeliveryBin('this is not a delivery report');
+
+    const first = await tickRemoteCampaign(campaignId);
+    expect(first.ingested.some((entry) => entry.startsWith('deliver:'))).toBe(false);
+
+    const [recorded, ...rest] = await refusals();
+    expect(rest).toHaveLength(0);
+    expect(recorded?.['reason']).toBe('REPORT_UNUSABLE');
+    expect(recorded?.['binId']).toBe(binId);
+    // The evidence rather than only the category.
+    expect(recorded?.['problems']).toBeDefined();
+
+    // Read again on the next tick and not written twice: a completed bin is
+    // re-read every pass, so a row per pass is a fresh refusal every twenty
+    // seconds for the life of the campaign.
+    await tickRemoteCampaign(campaignId);
+    expect(await refusals()).toHaveLength(1);
+  });
+
+  it('records a worker that reported a blocker, separately from a forge that would not confirm', async () => {
+    await completedDeliveryBin(
+      JSON.stringify({
+        outcome: 'BLOCKED',
+        pullRequest: null,
+        headSha: integrationHead,
+        action: 'OPENED',
+        summary: 'could not push',
+        blockedReason: 'the surface refused a push to this repository',
+      }),
+    );
+
+    await tickRemoteCampaign(campaignId);
+    const [recorded] = await refusals();
+    /*
+     * Not a refusal by Brain, and named apart for exactly that reason: *the
+     * worker could not do it* and *the forge would not confirm what it said*
+     * send a reader to two different places.
+     */
+    expect(recorded?.['reason']).toBe('WORKER_REPORTED_BLOCKED');
+    expect(String(recorded?.['blockedReason'])).toContain('refused a push');
+  });
+
+  it('records a forge that would not confirm the request', async () => {
+    await completedDeliveryBin(
+      JSON.stringify({
+        outcome: 'IMPLEMENTED',
+        pullRequest: 4242,
+        headSha: integrationHead,
+        action: 'OPENED',
+        summary: 'opened it',
+        blockedReason: null,
+      }),
+    );
+
+    // The branch resolves; the pull request does not exist.
+    stubForge({ branches: { [integrationBranch]: integrationHead }, pulls: [] });
+    await tickRemoteCampaign(campaignId);
+
+    const [recorded] = await refusals();
+    expect(recorded?.['reason']).toBe('FORGE_DID_NOT_CONFIRM');
+    expect(recorded?.['problems']).toBeDefined();
+    expect(recorded?.['headSha']).toBe(integrationHead);
+  });
+
+  it('records a repository this Brain cannot address, which had no record at all', async () => {
+    await completedDeliveryBin(
+      JSON.stringify({
+        outcome: 'IMPLEMENTED',
+        pullRequest: 7,
+        headSha: integrationHead,
+        action: 'OPENED',
+        summary: 'opened it',
+        blockedReason: null,
+      }),
+    );
+
+    /*
+     * Written straight to the row, because the repository is immutable by
+     * design — `amendContract` refuses it, and rightly. The production
+     * condition this reproduces is not somebody editing it: it is a stored
+     * remote that stopped being one Brain can parse, which is exactly why the
+     * ingest asks rather than assuming.
+     */
+    const { getDb } = await import('../server/db/database.ts');
+    const campaign = (await getCampaign(campaignId))!;
+    await getDb().run(`UPDATE factory_change_requests SET repository = ? WHERE id = ?`, [
+      'not-a-remote',
+      campaign.changeRequestId,
+    ]);
+
+    await tickRemoteCampaign(campaignId);
+    const [recorded] = await refusals();
+    expect(recorded?.['reason']).toBe('REPOSITORY_UNREADABLE');
+    expect(recorded?.['repository']).toBe('not-a-remote');
+    // The sentence a reader gets, rather than only the code.
+    expect(String(recorded?.['means'])).toContain('not one Brain can address');
+  });
+
+  it('is read by the operator surface that answers why a campaign has no pull request', async () => {
+    const fs = await import('node:fs');
+    const source = fs.readFileSync('scripts/factory.ts', 'utf8');
+    const status = source.slice(source.indexOf("case 'status': {"), source.indexOf("case 'events': {"));
+    // A ledger nothing prints is the defect this row was written to close.
+    expect(status).toMatch(/deliveryNotIngested/);
+  });
+});

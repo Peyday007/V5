@@ -39,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'submit | approve | status | events | throughput | campaigns | bins | remote-tick | amend | plan | release'
+        description: 'submit | approve | status | events | throughput | pull-request | campaigns | bins | remote-tick | amend | plan | release | set-state'
         required: true
         default: status
       file:
@@ -52,6 +52,10 @@ on:
         default: ''
       campaign:
         description: '--campaign (an fcp_… id)'
+        required: false
+        default: ''
+      admin:
+        description: '--admin <email>: the administrator a decision is recorded against.'
         required: false
         default: ''
       extra:
@@ -93,6 +97,7 @@ jobs:
           FACTORY_COMMAND: ${{ inputs.command }}
           FACTORY_FILE: ${{ inputs.file }}
           FACTORY_CR: ${{ inputs.change_request }}
+          FACTORY_ADMIN: ${{ inputs.admin }}
           FACTORY_CAMPAIGN: ${{ inputs.campaign }}
           FACTORY_EXTRA: ${{ inputs.extra }}
         run: |
@@ -118,6 +123,18 @@ jobs:
               exit 1
               ;;
           esac
+          # An address additionally needs @ and +, which is why it is its own
+          # input rather than something to paste into `extra`. `admin.yml`,
+          # `packets.yml` and `routing.yml` each draw the same line for the same
+          # reason: widening the general class to fit an address would widen it
+          # for every other flag too.
+          case "$FACTORY_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*)
+              echo "::error::Refusing the administrator address: that is not an address."
+              exit 1
+              ;;
+          esac
           case "$FACTORY_EXTRA" in
             *[!A-Za-z0-9_.:/,\ -]*)
               echo "::error::Refusing the extra flags: the same class, plus spaces, slashes and commas."
@@ -129,6 +146,7 @@ jobs:
           if [ -n "$FACTORY_FILE" ];     then args="$args --file $FACTORY_FILE"; fi
           if [ -n "$FACTORY_CR" ];       then args="$args --change-request $FACTORY_CR"; fi
           if [ -n "$FACTORY_CAMPAIGN" ]; then args="$args --campaign $FACTORY_CAMPAIGN"; fi
+          if [ -n "$FACTORY_ADMIN" ];    then args="$args --admin $FACTORY_ADMIN"; fi
           if [ -n "$FACTORY_EXTRA" ];    then args="$args $FACTORY_EXTRA"; fi
 
           echo "factory $args"
