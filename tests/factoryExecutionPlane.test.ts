@@ -2740,3 +2740,208 @@ describe('a unit value too large is refused, never truncated', () => {
     expect(plan.length).toBeLessThan(MAX_UNIT_VALUE_CHARS);
   });
 });
+
+/* ========================================================================= */
+
+/**
+ * A blocker is taken off when the stage it named can be handed out again.
+ *
+ * ---------------------------------------------------------------------------
+ * The defect this exists for
+ * ---------------------------------------------------------------------------
+ *
+ * `noteSurfaceBlocker` states the rule in its own doc comment: a blocker is a
+ * derived annotation beside a *truthful* state, and the answering transition is
+ * free, because the condition stops being true and the next tick takes the
+ * sentence away. `blockStage` is the half that did not obey it — it moves `state`
+ * to BLOCKED, and nothing anywhere moved it back. The paths that merely wait for
+ * a worker returned without writing a word, so whatever the last block wrote
+ * stood for as long as the stage ran.
+ *
+ * Production, 2026-09-22, on `fcp_189ea30c7ded4e7b9280`. The integrate bin was
+ * answered at 12:05:06 —
+ *
+ *     regrant raised=true attempts 2/2 -> 2/6
+ *     reopened bin_43915e4f93ca4e3db111 NEEDS_HUMAN -> READY, generation 2 -> 3
+ *
+ * — and a worker was integrating on it twenty-three minutes later, at which point
+ * `factory status` read:
+ *
+ *     campaign fcp_189ea30c7ded4e7b9280 BLOCKED — integration cannot be handed
+ *     out again
+ *     BLOCKER UNIT_EXHAUSTED_ATTEMPTS: Bin bin_43915e4f93ca4e3db111 is waiting
+ *     for a person. It has its own answer; until it is given one this stage is
+ *     not handed out again...
+ *
+ * It had been given one. **A status that contradicts the rows underneath it is
+ * worse than no status**: it sends a reader to answer something that was answered
+ * twenty-three minutes ago, and it teaches them to stop believing the one line
+ * that says a campaign is genuinely stuck. §27 already records the same sentence
+ * about a warning that cries wolf.
+ *
+ * Both halves are asserted, because a fix that cleared the blocker whenever a bin
+ * existed would take the sentence off a stage that really is parked.
+ */
+describe('a stage blocker comes off when the stage can be handed out again', () => {
+  let campaignId = '';
+  let workerId = '';
+
+  beforeEach(async () => {
+    workerId = (await createWorker({ name: 'unstick', createdByType: 'SYSTEM', createdById: 't' }))
+      .id;
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'unstick',
+      objective: 'Guard the quote form against silent breakage.',
+      expectedOutcome: 'npm test fails when the form contract breaks.',
+      nonGoals: [],
+      acceptanceConditions: [
+        {
+          id: 'A01',
+          statement: 'the suite asserts the form',
+          verification: 'npm test',
+          mandatory: true,
+        },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    campaignId = campaign.id;
+  });
+
+  /** One implemented unit, so the integration stage is the live one. */
+  async function anImplementedUnit(): Promise<void> {
+    const unit = await ensureUnit({
+      campaignId,
+      unitKey: 'form-contract',
+      kind: 'TEST',
+      role: 'IMPLEMENTER',
+      title: 'Assert the form contract',
+      objective: 'Assert the quote form posts over https to an absolute endpoint.',
+      acceptance: ['the suite fails when the endpoint is relative'],
+      ownedPaths: ['test/form.test.js'],
+      requiredContext: [],
+      verification: ['npm test'],
+      expectedArtifact: 'a test file',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+    });
+    const { promoteReadyUnits } = await import('../server/repos/factory.ts');
+    await promoteReadyUnits(campaignId);
+    const [held] = await claimUnits({
+      campaignId,
+      workerId,
+      unitIds: [unit.unit.id],
+      leaseMs: 60_000,
+    });
+    await markImplemented(
+      {
+        unitId: unit.unit.id,
+        workerId,
+        leaseId: held!.leaseId,
+        leaseGeneration: held!.leaseGeneration,
+      },
+      {
+        branch: 'factory/x/form-contract/a1',
+        headSha: HEAD,
+        baseSha: BASE,
+        worktreePath: null,
+        workerSummary: 'pushed',
+        terminalResult: { outcome: 'IMPLEMENTED' },
+      },
+    );
+  }
+
+  /** The integrate bin this campaign's tick made, parked the way production's was. */
+  async function theParkedIntegrateBin(): Promise<string> {
+    stubForge({});
+    await anImplementedUnit();
+    await tickRemoteCampaign(campaignId);
+    const [bin] = (await listBins({ projectId: fixture.project.id })).filter(
+      (candidate) => candidate.kind === 'FACTORY_INTEGRATE',
+    );
+    expect(bin).toBeTruthy();
+    const { terminateUnleasedBin } = await import('../server/repos/bins.ts');
+    expect(
+      await terminateUnleasedBin(
+        bin!.id,
+        bin!.leaseGeneration,
+        'NEEDS_HUMAN',
+        'The bin used all its attempts without satisfying FACTORY_INTEGRATION_V1.',
+      ),
+    ).toBe(true);
+    const blocked = await tickRemoteCampaign(campaignId);
+    expect(blocked.state).toBe('BLOCKED');
+    const campaign = await getCampaign(campaignId);
+    expect(campaign?.state).toBe('BLOCKED');
+    expect(campaign?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
+    return bin!.id;
+  }
+
+  it('leaves the blocker on while the bin really is waiting for a person', async () => {
+    await theParkedIntegrateBin();
+    // A second tick changes nothing: nobody has answered it.
+    await tickRemoteCampaign(campaignId);
+    const campaign = await getCampaign(campaignId);
+    expect(campaign?.state).toBe('BLOCKED');
+    expect(campaign?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
+    expect(campaign?.blockerDetail ?? '').toContain('waiting for a person');
+  });
+
+  it('takes it off once the bin has been answered and can be handed out again', async () => {
+    const binId = await theParkedIntegrateBin();
+
+    // Exactly what `factory answer-bin` does in production.
+    const { reopenParkedBin } = await import('../server/services/bins/service.ts');
+    const reopened = await reopenParkedBin({
+      binId,
+      operator: 'operator:test',
+      reason: 'Attempts spent on a Brain-side defect that left the bin nothing it could satisfy.',
+    });
+    expect(reopened.ok).toBe(true);
+
+    const report = await tickRemoteCampaign(campaignId);
+    const campaign = await getCampaign(campaignId);
+
+    // The bin is claimable and an integrator may be handed it, so the campaign is
+    // integrating rather than blocked, and no sentence anywhere says a person is
+    // owed a decision.
+    expect(campaign?.state).toBe('INTEGRATING');
+    expect(campaign?.blockerKind).toBeNull();
+    expect(campaign?.blockerDetail).toBeNull();
+    expect(report.state).toBe('INTEGRATING');
+    expect(report.stage ?? '').not.toContain('cannot be handed out again');
+
+    // And nothing was destroyed to get there: the bin keeps its attempts and the
+    // unit keeps its commit.
+    const bin = await getBin(binId);
+    expect(bin?.state).toBe('READY');
+    const [unit] = await listUnits(campaignId);
+    expect(unit?.state).toBe('IMPLEMENTED');
+    expect(unit?.headSha).toBe(HEAD);
+  });
+});

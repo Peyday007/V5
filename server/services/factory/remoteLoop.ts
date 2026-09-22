@@ -30,7 +30,12 @@
  * then dies before doing the work it claimed; rows cannot.
  */
 import type { Bin } from '../../domain/types.ts';
-import type { FactoryBlockerKind, FactoryCampaign, FactoryChangeRequest } from '../../domain/factory.ts';
+import type {
+  FactoryBlockerKind,
+  FactoryCampaign,
+  FactoryCampaignState,
+  FactoryChangeRequest,
+} from '../../domain/factory.ts';
 import {
   advanceUnitAttempt,
   claimCampaignTick,
@@ -989,6 +994,50 @@ async function noteSurfaceBlocker(
   }
 }
 
+/**
+ * Say what is true of a stage that has a live bin, and take a stale blocker off.
+ *
+ * `noteSurfaceBlocker` states the rule directly above this one — a blocker is a
+ * derived annotation beside a truthful state, and the answering transition is free
+ * because the condition stops being true and the next tick takes the sentence
+ * away. `blockStage` is the half that did not obey it: it moves `state` to
+ * BLOCKED, and nothing anywhere moved it back. The paths below that wait for a
+ * worker return without writing a word, so whatever the last block wrote stood
+ * while the stage ran.
+ *
+ * Production, 2026-09-22. `bin_43915e4f93ca4e3db111` was answered at 12:05:06 —
+ * `NEEDS_HUMAN -> READY, generation 2 -> 3` — and a worker was integrating on it
+ * twenty-three minutes later, when `factory status` read
+ * `BLOCKED — integration cannot be handed out again` over a blocker saying the bin
+ * *"is waiting for a person. It has its own answer; until it is given one this
+ * stage is not handed out again"*. It had been given one. **A status that
+ * contradicts the rows underneath it is worse than no status**: it sends a reader
+ * to answer something already answered, and it teaches them to stop believing the
+ * one line that says a campaign is genuinely stuck.
+ *
+ * It writes only over a BLOCKED campaign, so the ordinary path is a no-op and this
+ * can never overwrite a state some other branch established. The surface-cooloff
+ * patch further down already carries `cleared` for this exact reason; what was
+ * missing is the rule applied to the paths that merely wait.
+ */
+async function stageIsLive(
+  campaign: FactoryCampaign,
+  state: FactoryCampaignState,
+  stageDetail: string,
+  report: RemoteTickReport,
+): Promise<void> {
+  if (campaign.state !== 'BLOCKED') return;
+  await patchCampaign(campaign.id, {
+    state,
+    stageDetail,
+    blockerKind: null,
+    blockerDetail: null,
+  });
+  report.state = state;
+  report.stage = stageDetail;
+  report.notes.push(`the blocked stage has a live bin again: ${stageDetail}`);
+}
+
 async function blockStage(
   campaign: FactoryCampaign,
   stage: string,
@@ -1101,6 +1150,7 @@ async function runRemoteTick(
   if (units.length === 0) {
     if (liveBinOfKind(liveBins, 'FACTORY_PLAN')) {
       report.notes.push('waiting for a worker to take the plan');
+      await stageIsLive(fresh, 'PLANNING', 'waiting for a worker to take the plan', report);
       return report;
     }
     const stall = stalledStage(liveBins, 'FACTORY_PLAN');
@@ -1132,6 +1182,7 @@ async function runRemoteTick(
   if (ready.length > 0) {
     if (liveBinOfKind(liveBins, 'FACTORY_UNITS')) {
       report.notes.push(`waiting for a worker on ${ready.length} ready unit(s)`);
+      await stageIsLive(fresh, 'EXECUTING', `${ready.length} unit(s) with the fleet`, report);
       return report;
     }
     const stall = stalledStage(liveBins, 'FACTORY_UNITS');
@@ -1165,6 +1216,12 @@ async function runRemoteTick(
   if (implemented.length > 0) {
     if (liveBinOfKind(liveBins, 'FACTORY_INTEGRATE')) {
       report.notes.push(`waiting for an integrator on ${implemented.length} unit(s)`);
+      await stageIsLive(
+        fresh,
+        'INTEGRATING',
+        `${implemented.length} unit(s) with an integrator`,
+        report,
+      );
       return report;
     }
     const stall = stalledStage(liveBins, 'FACTORY_INTEGRATE');
@@ -1252,7 +1309,11 @@ async function runRemoteTick(
 
   if (outstanding.length > 0) {
     report.notes.push(`${outstanding.length} unit(s) still in flight`);
-    await patchCampaign(fresh.id, { state: 'EXECUTING', stageDetail: 'units in flight' });
+    await patchCampaign(fresh.id, {
+      state: 'EXECUTING',
+      stageDetail: 'units in flight',
+      ...cleared,
+    });
     return report;
   }
 
@@ -1315,6 +1376,7 @@ async function runRemoteTick(
       report.notes.push('the current commit already passed review');
     } else if (liveBinOfKind(liveBins, 'FACTORY_REVIEW')) {
       report.notes.push('waiting for a reviewer');
+      await stageIsLive(fresh, 'REVIEWING', 'waiting for a reviewer', report);
       return report;
     } else if (stalledStage(liveBins, 'FACTORY_REVIEW')) {
       const stall = stalledStage(liveBins, 'FACTORY_REVIEW');
@@ -1425,6 +1487,7 @@ async function runRemoteTick(
       await patchCampaign(fresh.id, {
         state: 'ASSEMBLING',
         stageDetail: 'waiting for the pull request',
+        ...cleared,
       });
       return report;
     }
