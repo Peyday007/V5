@@ -49,6 +49,14 @@ import { CAMPAIGN_TICK_LEASE_MS, mapCampaign } from '../../repos/factory.ts';
 import { failOperation, getOperation } from '../../repos/idempotency.ts';
 import type { FactoryCampaign, FactoryCampaignRow, FactoryCampaignState } from '../../domain/factory.ts';
 import {
+  attestCampaignPullRequest,
+  campaignNeedsPullRequestAttestation,
+} from '../register/campaignPullRequestLink.ts';
+import {
+  campaignNeedsMergeObservation,
+  observeCampaignPullRequestMerge,
+} from '../register/pullRequestMergeObservation.ts';
+import {
   OperationConflict,
   OperationInProgress,
   runIdempotent,
@@ -209,6 +217,40 @@ export async function recordCampaignOutcome(
     return { recorded: false, event: null, reason: 'campaign has not finished' };
   }
 
+  /*
+   * Runs on every call for a terminal, finished campaign — including a call
+   * that finds the outcome event already recorded below — rather than only
+   * on the call that happens to win the outcome-event reservation. Its own
+   * write is idempotent (see campaignPullRequestLink.ts), so repeating it is
+   * free and a workstream linked to this campaign after its first outcome
+   * write still gets the attestation on a later tick — provided something
+   * calls this function again for that campaign, which is exactly what
+   * `listCampaignsPendingOutcome`'s second condition, below, exists to do:
+   * without it, a terminal campaign whose outcome already landed drops out of
+   * every periodic tick's selection for ever, and a workstream linked to it
+   * afterward would never be offered a call to reach.
+   */
+  await attestCampaignPullRequest(campaign);
+
+  /*
+   * The forge is asked again only when there is something outstanding to
+   * ask it about — a live workstream still carrying the `merged: false`
+   * attestation the call above may have just written. This is the call
+   * `pullRequestMergeObservation.ts` documented and nothing invoked: without
+   * it, `observeCampaignPullRequestMerge` was reachable from nowhere in the
+   * running system, so a merged pull request could never move the register
+   * past `PR_READY` on its own. It is guarded by `campaignNeedsMergeObservation`
+   * rather than called unconditionally for the same reason `recordEvent`
+   * below is guarded rather than retried freely: a campaign with nothing
+   * outstanding must cost this function nothing on the next tick, and
+   * `listCampaignsPendingOutcome`'s third condition is what keeps a genuinely
+   * unresolved one candidate until this call finally has something to
+   * correct.
+   */
+  if (await campaignNeedsMergeObservation(campaign)) {
+    await observeCampaignPullRequestMerge(campaign.id);
+  }
+
   const already = await findRecordedOutcome(campaign.id);
   if (already) {
     return { recorded: false, event: already, reason: 'already recorded' };
@@ -308,29 +350,96 @@ export async function recordCampaignOutcome(
 }
 
 /**
- * Terminal campaigns whose Brain outcome has not landed yet.
+ * Terminal campaigns the tick still has writeback work to do for.
  *
- * `recordCampaignOutcome`'s idempotency guard is what makes calling it a
- * second time safe; the defect this closes is that nothing was ever calling
- * it a second time. A crash between `patchCampaign(state: 'COMPLETE', ...)`
- * and this module's own insert — or a caught error from the insert itself —
- * leaves a campaign that is COMPLETE or CANCELLED, has a `finishedAt`, and
- * carries no `FACTORY_CAMPAIGN_COMPLETED` row. `listLiveCampaigns` will never
- * surface that campaign again, because by every other measure it is finished;
- * this is the query that looks specifically for the one thing still missing,
- * so a later tick can find it without re-reading every terminal campaign's
- * event history one at a time.
+ * Three reasons a finished campaign lands here, and all three are answered
+ * by the same call this list feeds into: `recordCampaignOutcome` runs
+ * `attestCampaignPullRequest` unconditionally on every invocation, before it
+ * ever asks whether its own project-history row already exists, and then
+ * `observeCampaignPullRequestMerge` whenever there is still something
+ * unresolved to ask the forge about.
+ *
+ *   1. **The outcome event itself has not landed.** `recordCampaignOutcome`'s
+ *      idempotency guard is what makes calling it a second time safe; the
+ *      defect this half closes is that nothing was ever calling it a second
+ *      time. A crash between `patchCampaign(state: 'COMPLETE', ...)` and this
+ *      module's own insert — or a caught error from the insert itself —
+ *      leaves a campaign that is COMPLETE or CANCELLED, has a `finishedAt`,
+ *      and carries no `FACTORY_CAMPAIGN_COMPLETED` row. `listLiveCampaigns`
+ *      will never surface that campaign again, because by every other measure
+ *      it is finished.
+ *
+ *   2. **A workstream was linked after the outcome already landed.** The
+ *      outcome event existing was never evidence that every workstream
+ *      pursuing this campaign has its `PULL_REQUEST` attestation — a person
+ *      files a workstream by *noticing* finished work, and noticing happens
+ *      after the fact at least as often as before it. Without this half, a
+ *      campaign that reached `COMPLETE` before anyone linked a workstream to
+ *      it dropped out of both `listLiveCampaigns` (terminal) and this query's
+ *      original `e.id IS NULL` condition (its outcome already recorded) at
+ *      once, so nothing would ever call `recordCampaignOutcome` for it again
+ *      and the newly linked workstream's attestation would never be written.
+ *
+ *   3. **A linked workstream's pull request has not been confirmed merged
+ *      yet.** `attestCampaignPullRequest` only ever writes `merged: false` —
+ *      it has no way to know otherwise — so an attested campaign is not the
+ *      same fact as a settled one, and the register's ceiling for it stays
+ *      `PR_READY` until something reads the forge again. Without this half,
+ *      a campaign whose only linked workstream was already attested dropped
+ *      out of candidacy the moment `attestCampaignPullRequest` first ran,
+ *      and `observeCampaignPullRequestMerge` — reachable from nowhere else —
+ *      would never be asked to check it.
+ *
+ * The `EXISTS` clause below is a cheap, generous first pass shared by reasons
+ * 2 and 3: it is scoped to a campaign that still has *some* live workstream
+ * pointing at it, so a campaign nobody has ever filed a workstream against
+ * never enters candidacy on this account, but it does not itself know whether
+ * that workstream's attestation is written or confirmed — a live `CAMPAIGN`
+ * link never goes away once every workstream pointing through it is settled,
+ * so a query that stopped at `EXISTS` would keep re-offering the campaign for
+ * ever. `campaignNeedsPullRequestAttestation` and `campaignNeedsMergeObservation`
+ * are the precise second pass that answers what the SQL cannot: applied only
+ * to a row that matched purely on account of reason 2 or 3 (a row already
+ * covered by reason 1 belongs here regardless, because its project-history
+ * write is still outstanding whatever its workstreams say), and together they
+ * are what let a campaign finally stop being a candidate once every
+ * currently-linked workstream is both attested and, where the forge has ever
+ * confirmed it, settled.
  */
 export async function listCampaignsPendingOutcome(): Promise<FactoryCampaign[]> {
-  const rows = await getDb().all<FactoryCampaignRow>(
-    `SELECT c.* FROM factory_campaigns c
+  const rows = await getDb().all<FactoryCampaignRow & { outcome_event_id: string | null }>(
+    `SELECT c.*, e.id AS outcome_event_id FROM factory_campaigns c
       LEFT JOIN project_events e
         ON e.entity_type = ? AND e.entity_id = c.id AND e.event_type = ?
       WHERE c.state IN ('COMPLETE', 'CANCELLED')
         AND c.finished_at IS NOT NULL
-        AND e.id IS NULL
+        AND (
+          e.id IS NULL
+          OR (
+            c.pr_url IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM workstream_links wl
+               WHERE wl.kind = 'CAMPAIGN' AND wl.ref = c.id AND wl.superseded_at IS NULL
+            )
+          )
+        )
       ORDER BY c.finished_at`,
     [ENTITY_TYPE, FACTORY_CAMPAIGN_OUTCOME],
   );
-  return rows.map(mapCampaign);
+
+  const pending: FactoryCampaign[] = [];
+  for (const row of rows) {
+    const campaign = mapCampaign(row);
+    if (row.outcome_event_id === null) {
+      pending.push(campaign);
+      continue;
+    }
+    if (
+      (await campaignNeedsPullRequestAttestation(campaign)) ||
+      (await campaignNeedsMergeObservation(campaign))
+    ) {
+      pending.push(campaign);
+    }
+  }
+  return pending;
 }
