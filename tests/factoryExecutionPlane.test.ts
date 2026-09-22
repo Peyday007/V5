@@ -3524,6 +3524,39 @@ describe('a completed integration bin that could not be ingested says so in the 
     expect(await listFactoryEvents(campaignId, { kinds: ['INTEGRATION_MERGED'] })).toHaveLength(0);
   });
 
+  it('is readable from the surface an operator asks "why is this not moving" on', async () => {
+    /*
+     * The half that makes a record a record.
+     *
+     * Every refusal above writes a row, and `factory_events` had **no reader on
+     * any operator surface at all**: `campaignMetrics` aggregates it and
+     * `surfaceBlockedIntegrations` counts one slice of it, and neither prints a
+     * row. So giving each silent path a durable record would have closed the
+     * defect one layer and reopened it the next — the row exists and nobody can
+     * see it, which is the same sentence this whole repair is written from.
+     *
+     * Asserted by reading the door rather than by running it: what has to be
+     * true is that `status` looks at these rows and that `events` exists to
+     * print the rest, and a passing service call cannot show you either.
+     */
+    const binId = await completedIntegrationBin(goodReport());
+    stubForge({});
+    await tickRemoteCampaign(campaignId);
+    const [recorded] = await refusals();
+    expect(recorded?.['binId']).toBe(binId);
+
+    const fs = await import('node:fs');
+    const source = fs.readFileSync('scripts/factory.ts', 'utf8');
+    const status = source.slice(source.indexOf("case 'status': {"), source.indexOf("case 'events': {"));
+    expect(status, 'the status command must read the refusals').toMatch(
+      /listFactoryEvents\([\s\S]*integrationNotIngested/,
+    );
+    // And the whole ledger has a door of its own, advertised where an operator
+    // picks a command.
+    expect(source).toMatch(/case 'events': \{/);
+    expect(source.slice(source.lastIndexOf('commands:'))).toMatch(/events/);
+  });
+
   it('records a repository this Brain cannot address', async () => {
     const binId = await completedIntegrationBin(goodReport());
     const { getDb } = await import('../server/db/database.ts');

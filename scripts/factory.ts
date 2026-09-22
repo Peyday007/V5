@@ -31,6 +31,7 @@ import {
 import {
   answerRelease,
   getRelease,
+  listFactoryEvents,
   listFindings,
   listReviews,
   listSessions,
@@ -41,7 +42,7 @@ import { capacity, probeFleet, readiness, register } from '../server/services/fa
 import { INITIAL_LANE_TARGET } from '../server/services/factory/scheduler.ts';
 import { installPlan, validatePlan } from '../server/services/factory/planner.ts';
 import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/factory/loop.ts';
-import { campaignMetrics } from '../server/services/factory/metrics.ts';
+import { campaignMetrics, FACTORY_EVENT_KINDS } from '../server/services/factory/metrics.ts';
 import { throughputReport } from '../server/services/factory/throughput.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
 import { campaignSpecFor } from '../server/services/factory/remote.ts';
@@ -528,6 +529,38 @@ async function main(): Promise<void> {
             `${finding.resolution ? `        resolved: ${finding.resolution.slice(0, 300)}\n` : ''}`,
         );
       }
+      /*
+       * The refusals, which are the answer to *why is this campaign not
+       * moving* and had no reader anywhere.
+       *
+       * `factory_events` is written by every stage and, until this, was read
+       * by `campaignMetrics` for aggregates and by `surfaceBlockedIntegrations`
+       * for a ceiling — and by no operator surface at all. So a completed
+       * integration bin whose report Brain refused recorded a row saying
+       * exactly which of four things went wrong, and nobody could see it. A
+       * record nothing can read is the defect the record was written to close,
+       * one layer along.
+       *
+       * These two kinds here rather than the whole ledger, because this command
+       * answers *what is the state of this campaign* — `factory events` prints
+       * the rest.
+       */
+      const refusals = await listFactoryEvents(campaignId, {
+        kinds: [
+          FACTORY_EVENT_KINDS.integrationNotIngested,
+          FACTORY_EVENT_KINDS.integrationRejected,
+        ],
+      });
+      for (const event of refusals) {
+        const detail = (event.detail ?? {}) as Record<string, unknown>;
+        process.stdout.write(
+          `  REFUSED ${event.kind.padEnd(26)} ${event.at}\n` +
+            `        ${String(detail['reason'] ?? detail['means'] ?? '').slice(0, 300)}\n` +
+            `${detail['binId'] ? `        bin ${String(detail['binId'])}\n` : ''}` +
+            `${detail['problems'] ? `        ${JSON.stringify(detail['problems']).slice(0, 400)}\n` : ''}` +
+            `${detail['errors'] ? `        ${JSON.stringify(detail['errors']).slice(0, 400)}\n` : ''}`,
+        );
+      }
       for (const session of sessions) {
         process.stdout.write(
           `  SESSION ${session.role.padEnd(11)} ${session.state.padEnd(9)} ` +
@@ -557,6 +590,39 @@ async function main(): Promise<void> {
      * them would read as a campaign with no queue time rather than as a campaign
      * nobody measured one for, and `value: null` is never rendered as `0`.
      */
+    /*
+     * The campaign's own ledger, in the order it was written.
+     *
+     * `factory_events` is where every claim this factory makes about what
+     * happened resolves to — and it had no reader on any operator surface:
+     * `campaignMetrics` aggregates it and `surfaceBlockedIntegrations` counts
+     * one slice of it, and neither prints a row. So a stage that refused a
+     * report, a base that drifted, a unit that failed and a bin that was
+     * created were all recorded and none of them could be looked at.
+     *
+     * Everything, oldest first, because a ledger read out of order is a story
+     * rather than a record. `--kind` narrows it; nothing is hidden by default.
+     */
+    case 'events': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const kind = flagString(flags, 'kind');
+      const events = await listFactoryEvents(campaignId, kind ? { kinds: [kind] } : {});
+      process.stdout.write(`campaign ${campaignId} — ${events.length} event(s)\n`);
+      for (const event of events) {
+        const detail = JSON.stringify(event.detail ?? {});
+        process.stdout.write(
+          `  ${event.at}  ${event.kind.padEnd(26)} ${event.evidenceClass.padEnd(8)}` +
+            `${event.unitId ? ` unit ${event.unitId}` : ''}` +
+            `${event.workerId ? ` worker ${event.workerId}` : ''}\n` +
+            // Bounded rather than truncated silently: a detail that was cut
+            // says so, because a JSON object that ends mid-key reads as
+            // corruption rather than as a limit.
+            `        ${detail.length > 600 ? `${detail.slice(0, 600)}… (${detail.length} chars)` : detail}\n`,
+        );
+      }
+      break;
+    }
+
     case 'throughput': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const report = await throughputReport(campaignId);
@@ -866,8 +932,8 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, throughput, answer-bin, reauthorize,\n' +
-          '  retire, release\n',
+          '  remote-tick, campaigns, bins, status, events, throughput, answer-bin,\n' +
+          '  reauthorize, retire, release\n',
       );
   }
 

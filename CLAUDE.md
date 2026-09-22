@@ -2801,6 +2801,19 @@ remote.
   varies between calls would write a row every twenty seconds, which is the
   defect the bound exists to prevent arriving through its own key.
 
+  **And a record nothing can read is the same defect one layer along, which
+  re-reading the diff is what found.** `factory_events` is where every claim
+  this factory makes resolves to, and it had **no reader on any operator
+  surface at all** — `campaignMetrics` aggregates it, `surfaceBlockedIntegrations`
+  counts one slice of it, and neither prints a row, so a stage that refused a
+  report, a base that drifted and a unit that failed were all recorded and none
+  of them could be looked at. `factory status` prints the refusals, which are
+  the answer to *why is this campaign not moving*, and `factory events` prints
+  the ledger oldest-first with `--kind` to narrow it and nothing hidden by
+  default. A detail too long to print says how long it was rather than ending
+  mid-key, because a truncated JSON object reads as corruption rather than as a
+  limit.
+
   **Writing the regressions established something the reading had not: three of
   the four are ordinary and the fourth is only reachable as a race.** The parser
   refuses an `IMPLEMENTED` report that merged nothing, and `verdict.ok` means
