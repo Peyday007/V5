@@ -423,12 +423,40 @@ set by a tick that then dies, rows cannot.
    is refused at assignment to any session that implemented part of this campaign
    (before the lease, so the refusal costs no attempt), and the verdict is checked
    again before it is stored, because a lease can expire and be retaken. The
-   session identity used for that decision is the *credential the request
-   authenticated with*, never the `session_ref` a worker sends — that field is
-   telemetry and its own tool says so, and a decision taken on it would be a
-   worker declaring itself independent. The tier recorded is the one the lineage
-   supports: `SESSION_SEPARATED` at the floor, `WORKER_SEPARATED` when the fleet
-   supplies it, never rounded up. Unknown lineage is a refusal.
+   session identity used for that decision is the one the worker **reported**,
+   validated against the presenting worker's own rows — and this file said the
+   opposite, so the correction is recorded rather than edited away. It used to
+   say *the credential the request authenticated with, never the `session_ref` a
+   worker sends*. The reasoning was right about a value a claimant supplies and
+   wrong about this one: the MCP credential is issued per **connector**, so
+   every session an account fires presents the same one, and comparing
+   credentials would make every reviewer identical to every implementer and
+   refuse every review for ever. §23 settled the same question the same way.
+   What keeps it honest is that the field is no longer the only source — when a
+   worker omits it, Brain falls back to the session recorded on the dispatch row
+   it sent itself, which is stronger than anything a worker reports, and with
+   neither the floor still fails closed. The account and worker identity still
+   come from Brain's own dispatch row and never from what a worker says about
+   itself. The tier recorded is the one the lineage supports:
+   `SESSION_SEPARATED` at the floor, `WORKER_SEPARATED` when the fleet supplies
+   it, never rounded up. Unknown lineage is a refusal.
+**A completed bin whose report cannot be turned into rows says which of four
+things went wrong.** The integrate ingest has four ways to refuse — a repository
+this Brain cannot address, a report it cannot read, a forge that will not
+confirm what the report claimed, and an acceptance that confirmed it and moved
+no unit — and each used to be a bare `return false` that recorded nothing, so a
+reader watching a campaign make integration bins that never landed had no first
+step and could not tell any of them apart. Each writes one
+`INTEGRATION_NOT_INGESTED` row per `(bin, reason)` carrying the evidence, and
+three properties keep it a record rather than a verdict: every caller still
+returns `false`, so the bin stays un-ingested and the next tick tries again;
+the kind is read by neither `integrationAlreadyIngested` — which would turn one
+forge outage into a report nothing ever reads again — nor
+`surfaceBlockedIntegrations`, which would retire a stage for a condition that
+was never about the work; and it is written **once per reason**, because a
+completed bin is re-read on every tick and a row per pass is a fresh refusal
+every twenty seconds for the life of the campaign.
+
 5. **`FACTORY_DELIVER`** — open or update exactly one pull request, using a
    title and body Brain composed from rows. The worker performs it because the
    credential that may write to the repository lives where the worker runs; it
@@ -849,14 +877,24 @@ and the chance to try the surface that could have done it. The refusal is
 available one, because its remedy is authorizing and onboarding *that*
 repository.
 
-**The envelope holds one entry and it is a checkout rather than a target.**
-`brain-worker-bootstrap` is what an unattended Routine attaches for its connector
-permissions; there is no authorized target repository, so the factory has a
-proving ground and nowhere to do real work until a person names one. The
-isolation above is therefore proved against a **fixture** repository the envelope
-refuses — which is what it always should have used, since a routing boundary is a
-`worker_routing` row and a manifest and needs no grant at all. A test's
-convenience is never a reason to widen a production authorization, and
+**This paragraph used to say the envelope held one entry and no target at all,
+and that it therefore had "nowhere to do real work until a person names one".
+That was true when it was written and is corrected here rather than edited
+away** — leaving it would have had this file contradict itself, since *Brain
+itself, as a target* below has recorded the grant since the owner made it.
+
+The envelope holds **two**. `brain-worker-bootstrap` is the checkout an
+unattended Routine attaches for its connector permissions, and is not a target.
+`brain` — `Peyday007/V5`, this repository — is a target, granted by the owner
+and bounded by `forbiddenPaths` rather than by absence; the section below is the
+operative account of it. Real work has been done against it: campaign
+`fcp_189ea30c7ded4e7b9280` ran thirteen bins on the hosted plane and produced
+pull request #31, which a person merged.
+
+The isolation above is still proved against a **fixture** repository the
+envelope refuses — which is what it always should have used, since a routing
+boundary is a `worker_routing` row and a manifest and needs no grant at all. A
+test's convenience is never a reason to widen a production authorization, and
 `oakwood-junk-removal` being re-added for exactly that reason is recorded in
 §27.
 
