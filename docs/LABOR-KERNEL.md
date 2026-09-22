@@ -323,10 +323,24 @@ It forms **no view about what a role is worth**. `advantage` reports whether
 Brain is established to be both faster and cheaper, from recorded answers, and
 there is no blended figure and no ranking of people.
 
-**There is no client surface**, and that is a scope statement rather than an
-omission. §38's kernel shipped the same way — a route and an operator report —
-and §29's product surface has its own acceptance. The reading is
-`GET /api/projects/:id/labor` for any project member, and:
+**There is a client surface now.** This file said there was not, offered as a
+scope statement rather than an omission on the precedent that §38's kernel
+shipped the same way. The precedent is real and the conclusion was wrong: a
+complete server door with nothing in any browser that calls it is a mechanism
+nothing calls, and it had every symptom of one — nobody could name a workflow,
+nobody could record who produces a task, and §13's six readings were reachable
+only by a person with a terminal.
+
+`/labor` renders all six. Every sentence on it is the server's; an unmeasured
+figure reads *not measured* rather than `0`; the undecided are counted apart
+from both sides; the closed sets a form offers come down with the view, so the
+set offered and the set the route validates against are one object; and a
+control somebody may not use is disabled carrying the server's reason rather
+than removed. There is deliberately **no control that answers a necessity
+question** — those are Brain's to research.
+
+The reading is also still `GET /api/projects/:id/labor` for any project member,
+and:
 
 ```
 npm run report:labor -- --project <id>

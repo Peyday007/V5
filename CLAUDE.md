@@ -8098,10 +8098,86 @@ says nothing about *which* container unless the container says which commit it
 was built from, and a deployment system's label is a claim about what it was
 asked to ship rather than a reading of what is serving.
 
-**There is no client surface**, which is a scope statement rather than an
-omission: §38's kernel shipped the same way, and §29's product surface has its
-own acceptance. The reading is `GET /api/projects/:id/labor` for any project
-member and `npm run report:labor` on a terminal.
+**There is a client surface now, and the sentence that said there was not is
+corrected here rather than edited away.** *No client surface* was offered as a
+scope statement rather than an omission, on the precedent that §38's kernel
+shipped the same way. That precedent is real and the conclusion was still
+wrong: a complete server door covered on both backends, with nothing in any
+browser that calls it, is this file's most-recorded defect wearing a scope
+sentence — **a mechanism nothing calls is not a mechanism**, and it had every
+symptom of one. Nobody could name a workflow, nobody could record who produces
+a task, and the six readings §13 asks Brain to surface were reachable only by a
+person with a terminal.
+
+`client/src/russell/Labor.tsx` at `/labor` renders every one of them, and the
+three properties that matter are the ones a screen is most likely to break.
+
+- **Every sentence is the server's.** The summary, each blocker's statement and
+  remedy, each figure's note, the reason a control is disabled — all composed in
+  `services/labor/view.ts` and `services/labor/access.ts` and rendered verbatim,
+  so a person reading the screen and an operator reading `npm run report:labor`
+  are reading one answer.
+- **An unknown is never rendered as a number.** Four of §11's figures are
+  `UNKNOWN` and will stay so; they read *not measured* beside the note saying
+  what would measure it — never `0`, never a dash a reader could take for zero,
+  and never omitted, because an absent row reads as *nothing to say about this*.
+  A zero there is exactly the figure somebody would quote in a decision about
+  whether to keep employing a person, which is why the regression asserts the
+  words rather than the styling: an italic zero is still a zero.
+- **The undecided are never folded into either side**, on the screen as in the
+  reading. A workflow with two Brain tasks and eight nobody has looked at is not
+  eighty per cent automated, and there is no percentage anywhere on the table.
+
+**The closed sets travel down with the view rather than being duplicated in the
+browser** — §24's manifest lesson, applied to a form. The route refuses a layer
+outside `PRODUCTION_LAYERS` and a reason outside `HUMAN_NECESSITY_REASONS` by
+name, so the set the form offers and the set the validator enforces are one
+object; and `humanLayers` comes down too, because the form has to know which
+layers demand a necessity reason and deriving that from a layer's *name* in the
+browser is the guess this kernel exists to stop.
+
+**What a control may be offered for is the server's answer.**
+`laborCapabilities` is `cashCapabilities`' shape for its reason: the browser
+holds one role flag and every decision here is project `ADMIN`, so a client
+deriving it would hide the controls from the project administrator entitled to
+press them *and* offer them where the level was the real question. A control
+somebody may not use is **disabled carrying the server's reason** rather than
+removed (§35), so both readers see the same page. It is a convenience and never
+the control — `requirePerson`, `requireProject` and the policy module re-decide
+at the moment anything happens, and the regression posts as an ordinary member
+and reads the 404 back.
+
+**There is deliberately no control that answers a necessity question.** Those
+are Brain's to research, and §33 records at length what a card asking a person
+to attest to Brain's own work cost — whatever was typed recorded as a fact that
+outranks anything Brain later establishes. A test reads this screen's own source
+and fails on any request outside the three routes the kernel actually has.
+
+**Walking the journey found the defect reading it had not**, which is the fifth
+time this file has had to write that. `RecordProducer` was rendered only on the
+human-roles list — so a task **nobody had decided**, the one `capacityNeeds`
+exists to name, had nowhere in the product to be decided at all. §24's sentence
+at a new surface, and invisible to every assertion that arranged its own
+starting state. `tests/laborSurface.test.tsx` walks it once from an empty map
+through naming a workflow, naming a task, recording that a person produces it
+and then recording that Brain does, checking the **rows** after each rather than
+what the screen said.
+
+**And writing that test found a defect in six other harnesses.** Each built its
+request context as ``path: `/api${req.path}` `` from a middleware registered
+with no mount path — where `req.path` is already the whole path — so the context
+carried `/api/api/…`, matched no pattern in `services/identity/policy.ts`, and
+fell silently to the default `READ`. **Every write in those suites was
+authorized at the wrong level**, and a level-based refusal asserted in one would
+have been vacuous, which §41 already records as worse than no guard because it
+reads as coverage. Measured rather than reasoned: the member-level refusal in
+the labor suite answered `200` with the doubled prefix and `404` without it.
+All six are corrected, and all six still pass — so no route had come to depend
+on the weaker level, and what was found was a latent gap rather than a realised
+one. Saying which of those two it was is the point.
+
+The reading is also still `GET /api/projects/:id/labor` for any project member
+and `npm run report:labor` on a terminal, unchanged.
 
 **What is true today, said plainly.** The schema, the vocabulary, the one
 validator both doors call, the necessity test, the allocator, the absorption,

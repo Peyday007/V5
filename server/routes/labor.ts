@@ -39,6 +39,7 @@ import { getTask } from '../repos/labor.ts';
 import { declareTask, declareWorkflow, retire } from '../services/labor/declare.ts';
 import { assignByPerson } from '../services/labor/assign.ts';
 import { laborView } from '../services/labor/view.ts';
+import { laborCapabilities, laborVocabulary } from '../services/labor/access.ts';
 import { isHumanNecessityReason, isProductionLayer, layerIsHuman } from '../domain/labor.ts';
 import { HUMAN_NECESSITY_REASONS, PRODUCTION_LAYERS } from '../domain/types.ts';
 
@@ -58,7 +59,20 @@ laborRouter.get(
   handler(async (req) => {
     requirePerson();
     const project = await requireProject(pathId(req, 'projectId'));
-    return laborView(project.id);
+    /*
+     * The reading, plus what a control over it may be offered for.
+     *
+     * Composed here rather than inside `laborView`, because `laborView` is also
+     * what `npm run report:labor` calls on a terminal, where there is no
+     * principal to decide against — and a reading that needed one would make the
+     * operator door depend on a browser's question. `routes/cash.ts` composes
+     * `cashCapabilities` at the route for the same reason.
+     */
+    return {
+      ...(await laborView(project.id)),
+      capabilities: laborCapabilities(project.id),
+      vocabulary: laborVocabulary(),
+    };
   }),
 );
 

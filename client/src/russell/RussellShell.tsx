@@ -37,6 +37,7 @@ import { Search } from './Search.tsx';
 import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
+import { LaborView } from './Labor.tsx';
 import {
   FleetView,
   ProjectView,
@@ -87,6 +88,18 @@ const SECTIONS = [
    * research, software and everything else.
    */
   { name: 'MACHINES' as const, label: 'Machines', primary: false },
+  /*
+   * Labor is secondary for the same reason as its two neighbours, arrived at
+   * from a third direction.
+   *
+   * Who produces the work is a question about how a project operates rather
+   * than a destination somebody steers from, and a person reads it when a role
+   * is being examined rather than hourly. Promoting it would rebuild the thumb
+   * bar around one reading in a Brain that does research, software and
+   * everything else — which is the argument Cash and Machines both already make
+   * here.
+   */
+  { name: 'LABOR' as const, label: 'Labor', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -549,6 +562,7 @@ export function RussellShell({
         ) : null}
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
+        {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (

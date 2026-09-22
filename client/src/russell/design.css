@@ -3661,3 +3661,212 @@ details.rs-card > section.rs-card {
   gap: var(--gap-2);
   margin-top: var(--gap-3);
 }
+
+/* ------------------------------------------------------------------ labor --
+ * Who does the work, and why.
+ *
+ * The load-bearing piece of layout here is the figures list. §11 asks for four
+ * measurements Brain cannot take, and they are reported rather than omitted —
+ * so *not measured* has to read as a third state beside a number rather than as
+ * a smaller number. It is set in the same type as a value and dimmed, never
+ * coloured as a failure: an unknown is a task, not a refusal, which is
+ * invariant 39 at a colour and the same decision the machines screen already
+ * makes for `not established`.
+ *
+ * Nothing here is coloured as an affirmative either. A palette that made "to
+ * Brain" look like progress and "back to a person" look like failure would be
+ * editorialising a derivation whose whole value is that it reports both.
+ * ------------------------------------------------------------------------ */
+.rs-labor {
+  container-type: inline-size;
+}
+
+.rs-labor-summary {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.rs-labor-counts {
+  list-style: none;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+}
+
+.rs-labor-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.rs-labor-list > li {
+  min-width: 0;
+}
+
+.rs-labor-list > li + li {
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-labor-list header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+/* A path can be one long unbroken token — a workflow and a task name joined —
+ * and there is no space inside a word to break at. The same rule the foundation
+ * strip needed after the 900px capture. */
+.rs-labor-list header strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.rs-labor-layer,
+.rs-labor-direction,
+.rs-labor-purpose,
+.rs-labor-need-kind,
+.rs-labor-distance,
+.rs-labor-count {
+  font-size: 0.85em;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.rs-labor-output {
+  margin: 0.2rem 0 0.35rem;
+}
+
+.rs-labor-reason {
+  margin: 0 0 0.25rem;
+}
+
+.rs-labor-blockers {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0 0 0 0.9rem;
+  border-left: 2px solid var(--rule-soft);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-labor-blocker-what {
+  margin: 0;
+  font-weight: 600;
+}
+
+/*
+ * A role nothing has checked is the one worth looking at, which is why the
+ * server sorts it first. It is *marked* rather than coloured as wrong: somebody
+ * is entitled to say "we do it this way for now" and have that be true, and §7
+ * asks Brain to keep re-examining it rather than to object to it.
+ */
+.rs-labor-backing-ASSERTED {
+  border-left: 3px solid var(--rule-soft);
+  padding-left: 0.75rem;
+}
+
+.rs-labor-figures {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rs-labor-figure {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.rs-labor-figure-label {
+  font-weight: 600;
+}
+
+.rs-labor-figure-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-labor-denominator {
+  opacity: 0.75;
+  font-variant-numeric: normal;
+}
+
+/* Not measured, set in the same type as a number so it cannot be skimmed past,
+ * and dimmed rather than coloured, because it is a task and not a refusal. */
+.rs-labor-UNKNOWN .rs-labor-figure-value {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.rs-labor-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rs-labor-table th,
+.rs-labor-table td {
+  text-align: left;
+  padding: 0.35rem 0.75rem 0.35rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+}
+
+.rs-labor-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-labor-automated {
+  display: block;
+  font-size: 0.85em;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  color: var(--moss-ink);
+}
+
+.rs-labor-form {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-labor-form label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rs-labor-form input,
+.rs-labor-form select,
+.rs-labor-form textarea {
+  width: 100%;
+  font: inherit;
+}
+
+.rs-labor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.rs-labor-problem {
+  color: var(--ochre-ink);
+}
+
+/* A control somebody may not use is disabled carrying the server's reason
+ * rather than removed, and the reason is rendered rather than hidden in a
+ * `title` — an explanation only a mouse can reach is no explanation on a
+ * phone, which is where this screen is read after a role is questioned. */
+.rs-labor-locked {
+  margin-top: 0.5rem;
+  font-style: italic;
+}

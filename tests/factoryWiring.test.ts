@@ -297,7 +297,16 @@ describe('the briefing, throughput and pull-request routes actually answer, not 
         principal: adminPrincipal(),
         requestId: newRequestId(),
         method: req.method,
-        path: `/api${req.path}`,
+        /*
+       * The path the policy module matches on, which is the one the request
+       * already carries. `req.path` in a middleware registered with no mount
+       * path is the whole path, so prefixing `/api` again yields `/api/api/…`,
+       * which matches no pattern in `services/identity/policy.ts` and falls
+       * silently to the default `READ` — every write in this harness would then
+       * be authorized at the wrong level, and a refusal asserted against one
+       * would be vacuous.
+       */
+      path: req.path,
         remoteAddr: null,
         userAgent: null,
       });

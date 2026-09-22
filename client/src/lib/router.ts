@@ -26,6 +26,15 @@ export type Route =
   | { name: 'SITES' }
   | { name: 'CASH' }
   | { name: 'MACHINES' }
+  /**
+   * Who does the work here.
+   *
+   * Its own address rather than a panel inside Cash, for `PEOPLE`'s reason one
+   * question along: the labor map is true of a project's whole way of working
+   * and outlives any sprint, so hanging it off a section meant to be wound down
+   * in a month or two would take it down with one.
+   */
+  | { name: 'LABOR' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -88,6 +97,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'CASH' };
     case 'machines':
       return { name: 'MACHINES' };
+    case 'labor':
+      return { name: 'LABOR' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -131,6 +142,8 @@ export function pathFor(route: Route): string {
       return '/cash';
     case 'MACHINES':
       return '/machines';
+    case 'LABOR':
+      return '/labor';
     case 'SEARCH':
       return '/search';
     case 'INVITE':
