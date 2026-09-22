@@ -53,6 +53,10 @@ import {
   campaignNeedsPullRequestAttestation,
 } from '../register/campaignPullRequestLink.ts';
 import {
+  campaignNeedsMergeObservation,
+  observeCampaignPullRequestMerge,
+} from '../register/pullRequestMergeObservation.ts';
+import {
   OperationConflict,
   OperationInProgress,
   runIdempotent,
@@ -228,6 +232,25 @@ export async function recordCampaignOutcome(
    */
   await attestCampaignPullRequest(campaign);
 
+  /*
+   * The forge is asked again only when there is something outstanding to
+   * ask it about — a live workstream still carrying the `merged: false`
+   * attestation the call above may have just written. This is the call
+   * `pullRequestMergeObservation.ts` documented and nothing invoked: without
+   * it, `observeCampaignPullRequestMerge` was reachable from nowhere in the
+   * running system, so a merged pull request could never move the register
+   * past `PR_READY` on its own. It is guarded by `campaignNeedsMergeObservation`
+   * rather than called unconditionally for the same reason `recordEvent`
+   * below is guarded rather than retried freely: a campaign with nothing
+   * outstanding must cost this function nothing on the next tick, and
+   * `listCampaignsPendingOutcome`'s third condition is what keeps a genuinely
+   * unresolved one candidate until this call finally has something to
+   * correct.
+   */
+  if (await campaignNeedsMergeObservation(campaign)) {
+    await observeCampaignPullRequestMerge(campaign.id);
+  }
+
   const already = await findRecordedOutcome(campaign.id);
   if (already) {
     return { recorded: false, event: already, reason: 'already recorded' };
@@ -329,10 +352,12 @@ export async function recordCampaignOutcome(
 /**
  * Terminal campaigns the tick still has writeback work to do for.
  *
- * Two reasons a finished campaign lands here, and both are answered by the
- * same call this list feeds into: `recordCampaignOutcome` runs
+ * Three reasons a finished campaign lands here, and all three are answered
+ * by the same call this list feeds into: `recordCampaignOutcome` runs
  * `attestCampaignPullRequest` unconditionally on every invocation, before it
- * ever asks whether its own project-history row already exists.
+ * ever asks whether its own project-history row already exists, and then
+ * `observeCampaignPullRequestMerge` whenever there is still something
+ * unresolved to ask the forge about.
  *
  *   1. **The outcome event itself has not landed.** `recordCampaignOutcome`'s
  *      idempotency guard is what makes calling it a second time safe; the
@@ -354,20 +379,32 @@ export async function recordCampaignOutcome(
  *      original `e.id IS NULL` condition (its outcome already recorded) at
  *      once, so nothing would ever call `recordCampaignOutcome` for it again
  *      and the newly linked workstream's attestation would never be written.
- *      The `EXISTS` clause below is a cheap, generous first pass: it is
- *      scoped to a campaign that still has *some* live workstream pointing at
- *      it, so a campaign nobody has ever filed a workstream against never
- *      enters candidacy on this account, but it does not itself know whether
- *      that workstream's attestation is already written — a live `CAMPAIGN`
- *      link never goes away once every workstream pointing through it is
- *      attested, so a query that stopped at `EXISTS` would keep re-offering
- *      the campaign for ever. `campaignNeedsPullRequestAttestation` is the
- *      second, precise pass that answers the question the SQL cannot: it is
- *      applied only to a row that matched purely on account of reason 2 (a
- *      row already covered by reason 1 belongs here regardless, because its
- *      project-history write is still outstanding whatever its workstreams
- *      say), and it is what lets a campaign finally stop being a candidate
- *      once every currently-linked workstream is attested.
+ *
+ *   3. **A linked workstream's pull request has not been confirmed merged
+ *      yet.** `attestCampaignPullRequest` only ever writes `merged: false` —
+ *      it has no way to know otherwise — so an attested campaign is not the
+ *      same fact as a settled one, and the register's ceiling for it stays
+ *      `PR_READY` until something reads the forge again. Without this half,
+ *      a campaign whose only linked workstream was already attested dropped
+ *      out of candidacy the moment `attestCampaignPullRequest` first ran,
+ *      and `observeCampaignPullRequestMerge` — reachable from nowhere else —
+ *      would never be asked to check it.
+ *
+ * The `EXISTS` clause below is a cheap, generous first pass shared by reasons
+ * 2 and 3: it is scoped to a campaign that still has *some* live workstream
+ * pointing at it, so a campaign nobody has ever filed a workstream against
+ * never enters candidacy on this account, but it does not itself know whether
+ * that workstream's attestation is written or confirmed — a live `CAMPAIGN`
+ * link never goes away once every workstream pointing through it is settled,
+ * so a query that stopped at `EXISTS` would keep re-offering the campaign for
+ * ever. `campaignNeedsPullRequestAttestation` and `campaignNeedsMergeObservation`
+ * are the precise second pass that answers what the SQL cannot: applied only
+ * to a row that matched purely on account of reason 2 or 3 (a row already
+ * covered by reason 1 belongs here regardless, because its project-history
+ * write is still outstanding whatever its workstreams say), and together they
+ * are what let a campaign finally stop being a candidate once every
+ * currently-linked workstream is both attested and, where the forge has ever
+ * confirmed it, settled.
  */
 export async function listCampaignsPendingOutcome(): Promise<FactoryCampaign[]> {
   const rows = await getDb().all<FactoryCampaignRow & { outcome_event_id: string | null }>(
@@ -397,7 +434,10 @@ export async function listCampaignsPendingOutcome(): Promise<FactoryCampaign[]> 
       pending.push(campaign);
       continue;
     }
-    if (await campaignNeedsPullRequestAttestation(campaign)) {
+    if (
+      (await campaignNeedsPullRequestAttestation(campaign)) ||
+      (await campaignNeedsMergeObservation(campaign))
+    ) {
       pending.push(campaign);
     }
   }
