@@ -38,7 +38,15 @@ import {
   listWorkers,
 } from '../server/repos/factoryFleet.ts';
 import { amendContract, approveObjective, submitObjective } from '../server/services/factory/contract.ts';
-import { capacity, probeFleet, readiness, register } from '../server/services/factory/registry.ts';
+import {
+  capacity,
+  probeFleet,
+  readiness,
+  register,
+  setAvailability,
+  WORKER_STATE_REASONS,
+  type WorkerStateReason,
+} from '../server/services/factory/registry.ts';
 import { INITIAL_LANE_TARGET } from '../server/services/factory/scheduler.ts';
 import { installPlan, validatePlan } from '../server/services/factory/planner.ts';
 import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/factory/loop.ts';
@@ -127,6 +135,53 @@ async function main(): Promise<void> {
         maxConcurrency: Number(flagString(flags, 'concurrency') ?? '1'),
       });
       process.stdout.write(`${worker.name} ${worker.id} ${worker.capabilities.join('/')}\n`);
+      break;
+    }
+
+    /*
+     * The answering transition for a quarantined worker.
+     *
+     * `recordWorkerFailure` quarantines at three consecutive failures and
+     * `capacity()` then gives that worker no free slots at all. Nothing wrote
+     * `AVAILABLE` back — `registerWorker` is `ON CONFLICT DO NOTHING`, so
+     * re-registering under the same name changed nothing, and the one function
+     * that could had no caller anywhere — so three ordinary failures retired a
+     * local-plane worker permanently, repairable only by hand-written SQL, which
+     * invariant 1 forbids. §23 has the same transition one object along for the
+     * dispatch fleet; this is it for the factory's own registry.
+     *
+     * A terminal because §26's line is that reaching the shell is the
+     * authentication, and `--admin` is the attribution: resolved against the
+     * database rather than trusted, because an audit row with no author answers
+     * nothing later.
+     */
+    case 'set-state': {
+      const name = flagString(flags, 'worker') ?? fail('--worker is required');
+      const to = (flagString(flags, 'to') ?? fail('--to is required')) as
+        | 'AVAILABLE'
+        | 'PAUSED'
+        | 'QUARANTINED';
+      const reasons = Object.values(WORKER_STATE_REASONS);
+      const reason = flagString(flags, 'reason') as WorkerStateReason | undefined;
+      if (!reason || !reasons.includes(reason)) {
+        fail(`--reason is required, and is one of: ${reasons.join(', ')}`);
+      }
+
+      /*
+       * Whose authority this carries, resolved rather than accepted. It is
+       * attribution and not authentication — §23's column pair — so it says an
+       * enabled administrator exists who may authorize this, and nothing about
+       * who typed the command.
+       */
+      const admin = flagString(flags, 'admin');
+      const users = await listUsers();
+      const actor = admin
+        ? users.find((one) => one.email === admin && one.isBrainAdmin && !one.disabled)
+        : users.find((one) => one.isBrainAdmin && !one.disabled);
+      if (!actor) fail(admin ? `no enabled administrator with that address` : 'no enabled administrator exists');
+
+      const outcome = await setAvailability({ name, to, reason, actorRef: actor.id });
+      process.stdout.write(`${outcome.note}\n`);
       break;
     }
 
@@ -605,10 +660,19 @@ async function main(): Promise<void> {
      * rather than a record. `--kind` narrows it; nothing is hidden by default.
      */
     case 'events': {
-      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      /*
+       * Optional, because not every claim belongs to a campaign. Registering a
+       * worker and moving its availability are facts about the fleet, written
+       * with no campaign — and while this required one, they were recorded and
+       * unreadable. `--kind` still narrows either way.
+       */
+      const campaignId = flagString(flags, 'campaign') ?? null;
       const kind = flagString(flags, 'kind');
       const events = await listFactoryEvents(campaignId, kind ? { kinds: [kind] } : {});
-      process.stdout.write(`campaign ${campaignId} — ${events.length} event(s)\n`);
+      process.stdout.write(
+        `${campaignId ? `campaign ${campaignId}` : 'every campaign and the fleet'} — ` +
+          `${events.length} event(s)\n`,
+      );
       for (const event of events) {
         const detail = JSON.stringify(event.detail ?? {});
         process.stdout.write(
@@ -972,6 +1036,7 @@ async function main(): Promise<void> {
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
           '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
+          '  set-state,\n' +
           '  answer-bin,\n' +
           '  reauthorize, retire, release\n',
       );

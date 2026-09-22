@@ -50,6 +50,7 @@ import {
   getWorker,
   listFactoryEvents,
   recordFactoryEvent,
+  recordWorkerFailure,
   recordWorkerRateLimit,
   registerWorker,
   workerLoad,
@@ -62,7 +63,7 @@ import { gatingFindings, queueRepairs, reconcileRepairs } from '../server/servic
 import { decideIndependence, parseReview } from '../server/services/factory/review.ts';
 import { maxOverlap, computeMetrics } from '../server/services/factory/metrics.ts';
 import { decide, tuneLaneTarget, chooseWorker } from '../server/services/factory/scheduler.ts';
-import { capacity } from '../server/services/factory/registry.ts';
+import { capacity, setAvailability } from '../server/services/factory/registry.ts';
 import { parseWorkerReport } from '../server/services/factory/prompts.ts';
 import { run, gitOrThrow, ensureWorktree, commitAll } from '../server/services/factory/git.ts';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';
@@ -1255,6 +1256,195 @@ describe('the registry', () => {
     expect(worker.credentialRef).toBe('BRAIN_FACTORY_SECRET');
     expect(worker.credentialDigest).toHaveLength(64);
     expect(JSON.stringify(worker)).not.toContain('super-secret-value');
+  });
+
+  /*
+   * The quarantine used to be one-way.
+   *
+   * `recordWorkerFailure` writes QUARANTINED at three consecutive failures and
+   * `capacity()` then computes `healthy = availability === 'AVAILABLE' && !limited`,
+   * so the worker has no free slots at all. Nothing wrote AVAILABLE back:
+   * `registerWorker` is ON CONFLICT DO NOTHING, `recordWorkerSuccess` leaves
+   * availability alone and cannot run anyway because a worker with no slots is
+   * never handed work to succeed at, and `patchWorker` — the one function that
+   * could — had no caller in the repository. Three ordinary failures retired a
+   * local-plane worker until somebody ran SQL, which invariant 1 forbids.
+   *
+   * Each of these was run against its own defect first: the streak reset
+   * removed, the `from` guard removed, and `rate_limited_until` cleared along
+   * with the availability.
+   */
+  async function quarantined(name: string) {
+    const { worker } = await registerWorker({
+      name,
+      kind: 'LOCAL_CLI',
+      accountRef: 'a1',
+      model: 'sonnet',
+      capabilities: ['IMPLEMENT'],
+      repositories: ['*'],
+      maxConcurrency: 2,
+    });
+    await recordWorkerFailure(worker.id);
+    await recordWorkerFailure(worker.id);
+    await recordWorkerFailure(worker.id);
+    return worker;
+  }
+
+  const slotFor = async (id: string) =>
+    (await capacity()).slots.find((slot) => slot.workerId === id);
+
+  it('has an answering transition out of a quarantine, and it actually restores capacity', async () => {
+    const worker = await quarantined('three-strikes');
+    expect((await getWorker(worker.id))?.availability).toBe('QUARANTINED');
+    expect((await slotFor(worker.id))?.freeSlots).toBe(0);
+
+    const outcome = await setAvailability({
+      name: 'three-strikes',
+      to: 'AVAILABLE',
+      reason: 'SURFACE_REPAIRED',
+      actorRef: 'usr_operator',
+    });
+
+    expect(outcome.moved).toBe(true);
+    expect((await getWorker(worker.id))?.availability).toBe('AVAILABLE');
+    // The half that makes it a transition rather than a state column that
+    // changed: the worker is capacity again.
+    expect((await slotFor(worker.id))?.freeSlots).toBe(2);
+  });
+
+  it('resets the failure streak, so the next failure is not the third one again', async () => {
+    const worker = await quarantined('cosmetic-restore');
+    await setAvailability({
+      name: 'cosmetic-restore',
+      to: 'AVAILABLE',
+      reason: 'DEFECT_FIXED',
+      actorRef: 'usr_operator',
+    });
+
+    /*
+     * `recordWorkerFailure` increments and then tests `>= 3`. Restored with the
+     * streak still at three, one more failure re-quarantines immediately — so
+     * the transition would exist, report success, and change nothing that lasts.
+     */
+    expect(await recordWorkerFailure(worker.id)).toBe(1);
+    expect((await getWorker(worker.id))?.availability).toBe('AVAILABLE');
+    expect(await recordWorkerFailure(worker.id)).toBe(2);
+    expect((await getWorker(worker.id))?.availability).toBe('AVAILABLE');
+    // And it still quarantines on the third, because the ceiling was not raised.
+    expect(await recordWorkerFailure(worker.id)).toBe(3);
+    expect((await getWorker(worker.id))?.availability).toBe('QUARANTINED');
+  });
+
+  it('never overrules the provider about when it will answer', async () => {
+    const worker = await quarantined('still-deferred');
+    const until = await recordWorkerRateLimit(worker.id, 60_000);
+
+    await setAvailability({
+      name: 'still-deferred',
+      to: 'AVAILABLE',
+      reason: 'SURFACE_REPAIRED',
+      actorRef: 'usr_operator',
+    });
+
+    // §23: a refusal is not misconduct, and it is the provider's ceiling with
+    // the provider's own clock. An operator deciding a worker is available must
+    // not thereby decide the provider will answer.
+    const row = await getWorker(worker.id);
+    expect(row?.availability).toBe('AVAILABLE');
+    expect(row?.rateLimitedUntil).toBe(until);
+    expect((await slotFor(worker.id))?.freeSlots).toBe(0);
+  });
+
+  it('refuses a decision taken against a state that has since moved', async () => {
+    const worker = await quarantined('raced');
+
+    /*
+     * The race, reproduced rather than asserted around. Both calls read
+     * QUARANTINED before either writes — which is the only way this guard can
+     * fire, because `setAvailability` reads the row itself, so a *sequential*
+     * second call would simply see the new state and be a legitimate second
+     * move. A test that ran them in order would have asserted the opposite of
+     * its own name and passed with the guard deleted.
+     */
+    const [one, two] = await Promise.allSettled([
+      setAvailability({
+        name: 'raced',
+        to: 'AVAILABLE',
+        reason: 'SURFACE_REPAIRED',
+        actorRef: 'usr_one',
+      }),
+      setAvailability({
+        name: 'raced',
+        to: 'PAUSED',
+        reason: 'WITHDRAWN_BY_OPERATOR',
+        actorRef: 'usr_two',
+      }),
+    ]);
+
+    const settled = [one, two];
+    const won = settled.filter((result) => result.status === 'fulfilled');
+    const lost = settled.filter((result) => result.status === 'rejected');
+    // Exactly one, whichever it was. A losing claim is an ordinary outcome.
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(1);
+    expect(String((lost[0] as PromiseRejectedResult).reason)).toMatch(
+      /was QUARANTINED when this was read and is not any more/,
+    );
+
+    // And the row holds one of the two decisions rather than a blend of them.
+    const after = (await getWorker(worker.id))?.availability;
+    expect(['AVAILABLE', 'PAUSED']).toContain(after);
+    // One ledger row, not two: the loser wrote nothing.
+    const events = await listFactoryEvents(null, { kinds: ['WORKER_STATE_CHANGED'], limit: 20 });
+    expect(events.filter((event) => event.workerId === worker.id)).toHaveLength(1);
+  });
+
+  it('says nothing was written rather than reporting a move that did not happen', async () => {
+    await quarantined('already-there');
+    const outcome = await setAvailability({
+      name: 'already-there',
+      to: 'QUARANTINED',
+      reason: 'HELD_BY_OPERATOR',
+      actorRef: 'usr_operator',
+    });
+    expect(outcome.moved).toBe(false);
+    expect(outcome.note).toMatch(/already QUARANTINED/);
+  });
+
+  it('records what moved, why, and whose authority it carried', async () => {
+    const worker = await quarantined('audited');
+    await setAvailability({
+      name: 'audited',
+      to: 'AVAILABLE',
+      reason: 'DEFECT_FIXED',
+      actorRef: 'usr_operator',
+    });
+
+    const events = await listFactoryEvents(null, { kinds: ['WORKER_STATE_CHANGED'], limit: 20 });
+    const row = events.find((event) => event.workerId === worker.id);
+    expect(row).toBeDefined();
+    expect(row?.detail).toMatchObject({
+      from: 'QUARANTINED',
+      to: 'AVAILABLE',
+      reason: 'DEFECT_FIXED',
+      actorRef: 'usr_operator',
+      streakReset: true,
+    });
+  });
+
+  it('refuses a reason outside the closed set, at the door', async () => {
+    await quarantined('free-text');
+    const source = fs.readFileSync('scripts/factory.ts', 'utf8');
+    const command = source.slice(
+      source.indexOf("case 'set-state': {"),
+      source.indexOf("case 'submit': {"),
+    );
+    // A caller that can write its own audit trail writes whatever it wanted.
+    expect(command).toMatch(/WORKER_STATE_REASONS/);
+    expect(command).toMatch(/--reason is required, and is one of/);
+    // And the command is advertised, because one nobody is told about is one
+    // nobody uses.
+    expect(source.slice(source.lastIndexOf('commands:'))).toMatch(/set-state/);
   });
 });
 

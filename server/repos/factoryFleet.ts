@@ -228,6 +228,74 @@ export async function patchWorker(id: string, patch: WorkerPatch): Promise<void>
 }
 
 /**
+ * Move a worker's availability, guarded on the state the operator named.
+ *
+ * ---------------------------------------------------------------------------
+ * The quarantine was one-way
+ * ---------------------------------------------------------------------------
+ *
+ * `recordWorkerFailure` writes `QUARANTINED` at three consecutive failures, and
+ * `capacity()` then computes `healthy = availability === 'AVAILABLE' && !limited`
+ * and gives that worker `freeSlots: 0`. Nothing anywhere wrote `AVAILABLE` back:
+ * `registerWorker` is `ON CONFLICT (name) DO NOTHING`, so re-registering under
+ * the same name changes nothing; `recordWorkerSuccess` resets the streak and
+ * deliberately leaves availability alone, and could not run anyway, because a
+ * worker with no slots is never given work to succeed at; and `patchWorker` —
+ * the one function that *could* — had no caller in the repository at all.
+ * `PAUSED` was never written by anything, so it was a state the code read and
+ * nothing could reach.
+ *
+ * Three ordinary failures on a local-plane worker therefore retired it
+ * permanently, repairable only by hand-written SQL, which invariant 1 forbids
+ * outright. §24's sentence at the factory registry, for the seventh time: a
+ * state that says waiting which nobody can resolve is not waiting, it is stuck.
+ * §23 has the answering transition one object along and it is the same shape —
+ * `fleet set-state`, once the operational condition is fixed.
+ *
+ * ---------------------------------------------------------------------------
+ * Three properties, and each of them is load-bearing
+ * ---------------------------------------------------------------------------
+ *
+ * **It is guarded on the state the operator named**, which is
+ * `repointRoutineWorker`'s shape rather than a blind write: two operators acting
+ * on one worker produce one move and an ordinary loser, and an operator acting
+ * on a reading that has since changed is refused rather than clobbering
+ * whatever happened in between.
+ *
+ * **Leaving `QUARANTINED` resets the failure streak, and nothing else does.**
+ * `recordWorkerFailure` increments and then tests `>= 3`, so a worker restored
+ * with its streak still at three re-quarantines on its very next failure — the
+ * transition would exist, would report success, and would change nothing that
+ * lasts. That is §27's `FACTORY_STAGE_REAUTHORIZED` reasoning exactly: the
+ * count is taken from a person saying the operational condition is fixed, so a
+ * condition that was not actually fixed simply quarantines again, three
+ * failures later, rather than immediately.
+ *
+ * **It never touches `rate_limited_until`.** That is a provider's own ceiling
+ * with its own clock, and §23's rule is that a refusal is not misconduct — an
+ * operator deciding a worker is available must not thereby overrule the
+ * provider about when it will answer.
+ */
+export async function setWorkerAvailability(
+  id: string,
+  from: FactoryWorkerAvailability,
+  to: FactoryWorkerAvailability,
+): Promise<boolean> {
+  const at = factoryNow();
+  // Only on the way *out* of quarantine, and in the same statement, so there is
+  // no window in which a worker is available with a streak that re-quarantines
+  // it on the next failure.
+  const streak = from === 'QUARANTINED' && to !== 'QUARANTINED' ? ', consecutive_failures = 0' : '';
+  const result = await getDb().run(
+    `UPDATE factory_workers
+        SET availability = ?, updated_at = ?${streak}
+      WHERE id = ? AND availability = ?`,
+    [to, at, id, from],
+  );
+  return (result.changes ?? 0) > 0;
+}
+
+/**
  * Provider backpressure: defer this worker and leave its failure streak alone.
  *
  * §23's sentence, which this file is the second place to need: a refusal is not
@@ -894,19 +962,37 @@ export async function recordFactoryEvent(input: FactoryEventInput): Promise<Fact
   return mapEvent(row);
 }
 
+/**
+ * The ledger, in the order it was written.
+ *
+ * `campaignId` is nullable, and `null` means *not scoped to a campaign* rather
+ * than *no campaign*. Not every claim this factory makes belongs to one:
+ * registering a worker and moving its availability are facts about the fleet,
+ * so they are written with `campaign_id` NULL — and while the predicate was an
+ * unconditional `campaign_id = ?`, no argument could ever return them. A row
+ * that no reader can reach is not a ledger entry, which is the sentence this
+ * file has now needed at a column, at a refusal and here.
+ *
+ * `WORKER_REGISTERED` had been in that state since it was first written.
+ */
 export async function listFactoryEvents(
-  campaignId: string,
+  campaignId: string | null,
   options: { kinds?: string[]; limit?: number } = {},
 ): Promise<FactoryEvent[]> {
-  const params: SqlParam[] = [campaignId];
-  let clause = '';
+  const params: SqlParam[] = [];
+  const where: string[] = [];
+  if (campaignId !== null) {
+    where.push('campaign_id = ?');
+    params.push(campaignId);
+  }
   if (options.kinds && options.kinds.length > 0) {
-    clause = ` AND kind IN (${options.kinds.map(() => '?').join(', ')})`;
+    where.push(`kind IN (${options.kinds.map(() => '?').join(', ')})`);
     params.push(...options.kinds);
   }
+  const clause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   const limit = Math.max(1, Math.min(5000, options.limit ?? 2000));
   const rows = await getDb().all<FactoryEventRow>(
-    `SELECT * FROM factory_events WHERE campaign_id = ?${clause}
+    `SELECT * FROM factory_events ${clause}
       ORDER BY at, rowid LIMIT ${limit}`,
     params,
   );

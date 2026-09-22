@@ -32,6 +32,18 @@ import { listUnits } from '../../repos/factory.ts';
 /** The event vocabulary. One constant, so a reader of the ledger is not guessing. */
 export const FACTORY_EVENT_KINDS = {
   campaignState: 'CAMPAIGN_STATE',
+  /**
+   * A person moved a worker's availability, and why.
+   *
+   * The quarantine at three consecutive failures is written by the factory and
+   * was, until recently, permanent: nothing in the repository wrote `AVAILABLE`
+   * back, so a local-plane worker that failed three times was retired until
+   * somebody ran SQL. The transition that answers it resets the failure streak,
+   * which is a real change to how the next failure is judged — so it is recorded
+   * with the states it moved between, the reason from a closed set, and whose
+   * authority it carried.
+   */
+  workerStateChanged: 'WORKER_STATE_CHANGED',
   unitPlanned: 'UNIT_PLANNED',
   unitReady: 'UNIT_READY',
   unitClaimed: 'UNIT_CLAIMED',

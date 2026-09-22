@@ -2830,6 +2830,55 @@ remote.
   of the body is precisely how the stored document and the live route once came
   to describe one campaign differently. One derivation, three readers.
 
+  **And the registry's own quarantine was one-way, which is the same defect
+  wearing a state column rather than a missing caller.** `recordWorkerFailure`
+  writes `QUARANTINED` at three consecutive failures and `capacity()` then
+  computes `healthy = availability === 'AVAILABLE' && !limited`, so that worker
+  has no free slots ever again. Nothing wrote `AVAILABLE` back: `registerWorker`
+  is `ON CONFLICT (name) DO NOTHING`, so re-registering under the same name
+  changes nothing; `recordWorkerSuccess` leaves availability alone and could not
+  run anyway, because a worker with no slots is never handed work to succeed at;
+  and `patchWorker`, the one function that could, had no caller in the
+  repository at all. `PAUSED` was never written by anything, so it was a state
+  the code read and nothing could reach. Three ordinary failures on a
+  local-plane worker therefore retired it permanently, repairable only by
+  hand-written SQL — **invariant 1**, and §24's sentence for the seventh time.
+  Measured on a real local Brain: `registered 1, free slots 0, quarantined 1` /
+  `ready: false — NO_HEALTHY_EXECUTION_SURFACE`.
+
+  `npm run factory set-state` is the transition, and §23 already had it one
+  object along for the dispatch fleet. Three things in it are load-bearing.
+  It is **guarded on the state that was read**, which is `repointRoutineWorker`'s
+  shape: two operators racing produce one move and one ordinary loser, refused
+  rather than applied to whatever the row says now. Leaving `QUARANTINED`
+  **resets the failure streak**, and that is not tidiness —
+  `recordWorkerFailure` increments and then tests `>= 3`, so a worker restored
+  with its streak still at three re-quarantines on its very next failure, and
+  the transition would exist, report success and change nothing that lasts. It
+  is §27's `FACTORY_STAGE_REAUTHORIZED` reasoning exactly: the count is taken
+  from a person saying the condition is fixed, so a condition that was not
+  actually fixed quarantines again three failures later rather than immediately.
+  And it **never touches `rate_limited_until`**, because that is a provider's
+  ceiling with a provider's clock, and §23's rule is that a refusal is not
+  misconduct — an operator deciding a worker is available must not thereby
+  decide the provider will answer.
+
+  **Writing it found a second ledger nothing could read.**
+  `listFactoryEvents` filtered on an unconditional `campaign_id = ?`, and a fact
+  about the *fleet* rather than a campaign is written with no campaign — so
+  `WORKER_REGISTERED` had been recorded and unreachable by any argument since it
+  was first written. `null` means *not scoped to a campaign* now, `--campaign`
+  is optional on `events`, and the row a real registration wrote is legible for
+  the first time. A record nothing can read is not a ledger entry, at a third
+  column.
+
+  **The race regression asserted the opposite of its own name until it was run
+  against its defect.** `setAvailability` re-reads the worker, so a *sequential*
+  second call sees the new state and is a legitimate second move — the test
+  passed with the guard deleted. It runs both calls concurrently now, so both
+  read before either writes, and asserts exactly one winner, one refusal, and
+  one ledger row.
+
   **Three closes in one session is the shape rather than three accidents**, and
   naming it is worth more than any of them: throughput, the release decision and
   now the artifact were each a complete, tested, guarded server capability whose

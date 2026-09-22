@@ -1058,6 +1058,38 @@ Brain cannot do and must not gate. A browser can only pin through the forge, so
 a field there would have been stored and never read. `submitObjective` refuses
 that combination by name instead, before it spends a forge request on it.
 
+### Bringing a quarantined worker back
+
+`npm run factory set-state --worker <name> --to AVAILABLE --reason <code> --admin <email>`.
+
+A worker that fails three times in a row is quarantined, and `capacity()` then
+gives it no free slots — which is right. What was wrong is that nothing could
+undo it: registering under the same name is `ON CONFLICT DO NOTHING`, recording
+a success leaves availability alone and cannot happen anyway to a worker with no
+slots, and the one function that wrote availability back had no caller. On a
+one-worker local plane that reads `ready: false —
+NO_HEALTHY_EXECUTION_SURFACE`, permanently, with hand-written SQL as the only
+remedy.
+
+The reason comes from a closed set — `SURFACE_REPAIRED`, `DEFECT_FIXED`,
+`WITHDRAWN_BY_OPERATOR`, `RETURNED_TO_ROTATION`, `HELD_BY_OPERATOR` — because a
+caller that can write its own audit trail writes whatever it wanted, and there
+is deliberately none meaning *it should be fine now*: restoring a worker resets
+the failure streak that quarantined it, and doing that on a hunch is how the
+same three failures recur with the record saying somebody fixed them.
+
+It is guarded on the state that was read, so two operators produce one move and
+one refusal. It resets the streak only on the way out of quarantine, because
+`recordWorkerFailure` increments then tests `>= 3` and a worker restored with a
+streak of three re-quarantines on its next failure. It never clears
+`rate_limited_until`: that is the provider's ceiling on the provider's clock,
+and an operator deciding a worker is available does not decide that the provider
+will answer.
+
+`--admin` is attribution rather than authentication — resolved against `users`,
+so it says an enabled administrator exists who may authorize this and nothing
+about who typed the command. Reaching the shell is what authenticated it.
+
 ### Reading what is being let out
 
 The release card describes the decision. The **artifact** it is a decision
