@@ -483,21 +483,30 @@ async function alreadyActedOn(
  * needs to change is the work, not the merge.
  */
 /**
- * Why a completed integration bin's report could not be turned into rows.
+ * Why a completed bin's report could not be turned into rows.
  *
- * A closed set, because the discriminator is the whole of it: four different
- * things go wrong at this seam, they have four different remedies, and before
- * this each of them was one silent `return false` — so the ledger said the same
- * thing about all four, which is nothing. A campaign whose repository this Brain
- * cannot parse needs a person; a worker that completed without a usable report
- * needs the bin re-run; a forge that would not confirm needs either a push or a
- * look at what the integrator actually did; and an acceptance that confirmed and
- * moved nothing is either a report that merged nothing or units something else
- * had already moved. A reader who cannot tell those apart has no first step.
+ * A closed set, because the discriminator is the whole of it: each member is a
+ * different thing going wrong with a different remedy, and before this each was
+ * one silent `return false` — so the ledger said the same thing about all of
+ * them, which is nothing. A campaign whose repository this Brain cannot parse
+ * needs a person; a worker that completed without a usable report needs the bin
+ * re-run; a forge that would not confirm needs either a push or a look at what
+ * the worker actually did; an acceptance that confirmed and moved nothing is
+ * either a report that merged nothing or units something else had already
+ * moved; and a worker that reported a blocker did not fail at any of those. A
+ * reader who cannot tell them apart has no first step.
+ *
+ * **One set, two seams.** It began as the integrate ingest's and the delivery
+ * ingest turned out to have the same shape, so both draw from it and
+ * `NOT_INGESTED_KIND` decides which kind the row carries. Two unions would
+ * have duplicated the three conditions that are genuinely the same condition,
+ * and the pair that would then drift is the pair nobody re-reads. Not every
+ * member is reachable from both: `NO_UNIT_MOVED` is the integrate ingest's,
+ * and `WORKER_REPORTED_BLOCKED` is delivery's today.
  *
  * A `Record` over this union is what keeps the set honest: `INGEST_REFUSAL_NOTES`
- * below must answer every member, so a fifth condition added at this seam is a
- * compile error until somebody says what it means.
+ * below must answer every member, so another condition added at either seam is
+ * a compile error until somebody says what it means.
  */
 export const INGEST_REFUSALS = {
   /** `factory_change_requests.repository` is not a remote this Brain can read. */

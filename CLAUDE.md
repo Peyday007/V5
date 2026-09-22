@@ -2777,7 +2777,7 @@ remote.
   record rather than for the two I had named turned up: a repository this Brain
   cannot address, a report it cannot read, a forge that will not confirm, and an
   acceptance that moves no unit. `INGEST_REFUSALS` is the closed set and
-  `INGEST_REFUSAL_NOTES` is a `Record` over it, so a fifth condition at this
+  `INGEST_REFUSAL_NOTES` is a `Record` over it, so another condition at this
   seam is a compile error until somebody says what it means.
 
   **Three properties are what make it a record rather than a verdict.** Every
