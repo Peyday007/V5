@@ -68,6 +68,8 @@ function grant(over: Partial<RepositoryOnboarding> = {}): RepositoryOnboarding {
     routedFamilies: [],
     routedRepositories: [],
     surfaces: [],
+    accountsServing: 0,
+    provenSurfaces: 0,
     contributedSurfaces: [],
     connectorPath: '/mcp/factory',
     boundary: null,
@@ -217,7 +219,14 @@ describe('the Build card says what is connected and what is missing', () => {
               scopesCorrect: true,
               routedFamilies: ['FACTORY'],
               routedRepositories: ['Peyday007/brain-worker-bootstrap'],
-              surfaces: ['V1 factory'],
+              surfaces: [
+                { routineName: 'V1 factory', accountName: 'primary', proven: true },
+                // A second Routine on the **same** subscription. Two surfaces,
+                // one account's allowance, and the card must not add them up.
+                { routineName: 'V1 factory spare', accountName: 'primary', proven: false },
+              ],
+              accountsServing: 1,
+              provenSurfaces: 1,
               readiness: 'READY',
               remaining: [],
               waiting: 0,
@@ -230,7 +239,34 @@ describe('the Build card says what is connected and what is missing', () => {
     await waitFor(() => expect(card()).toBeTruthy());
     expect(within(card()).getByText('Ready to execute')).toBeTruthy();
     expect(within(card()).queryByRole('button')).toBeNull();
-    expect(within(card()).getByText(/V1 factory/)).toBeTruthy();
+
+    /*
+     * Two surfaces on one subscription, and what the card says about them.
+     *
+     * The sentence used to be "running on V1 factory, V1 factory spare", which
+     * a reader counts as two Claude accounts — §23's distinction collapsed on
+     * the screen a person sizes the fleet from. So the number of accounts is
+     * stated as a number, the surface count is stated separately when the two
+     * differ, and neither is presented as the other.
+     */
+    const text = card().textContent ?? '';
+    expect(text).toContain('1 Claude account');
+    expect(text).toContain('across 2 surfaces');
+    expect(text).not.toContain('2 Claude accounts');
+
+    // And registered is not proven. One of these two has completed work Brain
+    // sent it; the card says which, rather than implying both have.
+    expect(text).toContain('1 of 2 have completed work');
+    const surfaces = [...card().querySelectorAll('.rs-repo-surfaces li')].map(
+      (li) => li.textContent ?? '',
+    );
+    expect(surfaces).toHaveLength(2);
+    expect(surfaces[0]).toContain('V1 factory — primary');
+    expect(surfaces[0]).not.toContain('not yet proven');
+    expect(surfaces[1]).toContain('not yet proven');
+    // The runtime defect a compiler cannot catch: an array of objects joined
+    // into a sentence renders as this, and every type in the chain is correct.
+    expect(text).not.toContain('[object Object]');
   });
 });
 
@@ -293,7 +329,9 @@ describe('the boundary is asked, never defaulted', () => {
             {
               ...grant(),
               readiness: 'READY',
-              surfaces: ['V1 factory'],
+              surfaces: [{ routineName: 'V1 factory', accountName: 'primary', proven: true }],
+              accountsServing: 1,
+              provenSurfaces: 1,
               boundary: {
                 scopeKind: 'DIRECTORIES',
                 directories: ['sites/v4'],

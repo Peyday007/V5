@@ -57,7 +57,7 @@ import {
   markDispatchSent,
 } from '../server/repos/bins.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
-import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
+import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { decideBinRouting } from '../server/services/bins/routing.ts';
 import { judgePool, readFactoryPool, verifyFactoryPool } from '../server/services/dispatch/pool.ts';
@@ -999,3 +999,171 @@ async function completeChainFor(surface: Surface): Promise<void> {
     ),
   ).toBe('OK');
 }
+
+/**
+ * A proof is evidence about the moment it was taken.
+ *
+ * `judgeSurface` closed the four-row chain and then wrote `problems.length = 0`,
+ * which is right about the *proof's* own complaints — "nothing has ever arrived
+ * here" is genuinely answered by an arrival — and wrong about every standing
+ * fact recorded beside them. Two of those reach that line: a bound worker that
+ * has been **archived**, and a Factory identity whose routing row also serves
+ * research. Both are faults about the surface *now*, both were discarded by a
+ * chain closed at any point in the past, and `judgePool` only reports problems
+ * for a surface whose verdict is not PROVEN — so the pool answered `ok: true`
+ * over a surface that cannot authenticate at all.
+ *
+ * And nothing bounded the chain's age. `proveSurface` walks every arrival ever
+ * attributed to a Routine and takes the first closed one, so a surface proved
+ * once and dead since certified itself for ever. That is the `CONFIGURED`
+ * masquerading as `HEALTHY` rule §23 and §32 both state, inverted: *verified
+ * once* masquerading as *verified now*.
+ *
+ * The remedy is not a timer. Brain cannot see a connector revoked inside
+ * somebody's Claude account, so an invented expiry would be a policy nobody
+ * measured — and this file already refuses that shape. What it *can* read is
+ * its own later evidence: a fire it made after the proof that produced no
+ * arrival, and a refusal the provider issued after it. A proof contradicted by
+ * what happened next is `STALE`, which is a third answer with its own remedy —
+ * re-probe — rather than a green tick over a surface that has stopped working.
+ */
+describe('a proof is not a certificate', () => {
+  /** One surface with its chain genuinely closed, as the real path writes it. */
+  async function provenSurface() {
+    await completeChainFor(surfaces[0]!);
+    const read = await readFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
+    const first = read.surfaces.find((s) => s.routine.routineRef === surfaces[0]!.routineRef)!;
+    return { read, first };
+  }
+
+  const judgeOne = (
+    read: Awaited<ReturnType<typeof readFactoryPool>>,
+    surface: (typeof read.surfaces)[number],
+  ) =>
+    judgePool({
+      now: new Date().toISOString(),
+      expectedWorker: read.expectedWorker,
+      repository: read.repository,
+      surfaces: [surface],
+    });
+
+  it('closes the chain it is built on, so the rest of this reads a real proof', async () => {
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, first);
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.ok).toBe(true);
+  });
+
+  it('does not let a past proof erase an archived worker', async () => {
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      worker: { ...first.worker!, archived: true },
+    });
+    // An archived identity cannot authenticate, so this is a fault about now
+    // rather than a proof that is merely missing.
+    expect(report.surfaces[0]!.verdict).toBe('FAULT');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('archived');
+    expect(report.ok).toBe(false);
+    // And the pool says so, rather than reporting problems only for surfaces it
+    // had already decided were not proven.
+    expect(report.problems.join(' ')).toContain('archived');
+  });
+
+  it('does not let a past proof erase a Factory identity that also serves research', async () => {
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      routing: { ...first.routing!, families: ['FACTORY', 'RESEARCH'] },
+    });
+    expect(report.surfaces[0]!.verdict).toBe('FAULT');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('research');
+    expect(report.ok).toBe(false);
+  });
+
+  it('calls a proof contradicted by a later unanswered fire stale rather than proven', async () => {
+    const { read, first } = await provenSurface();
+    /*
+     * The production shape, from rows rather than from a counter: Brain fired
+     * this surface after the arrival that proved it, and that fire has aged
+     * past the window in which it still counts as a live activation with
+     * nothing having turned up. The proof is still a true statement about
+     * August; the most recent thing Brain knows is that the surface did not
+     * answer.
+     */
+    const provenAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+    const firedAt = new Date(Date.now() - IN_FLIGHT_WINDOW_MS - 60_000).toISOString();
+    const report = judgeOne(read, {
+      ...first,
+      sessions: first.sessions.map((session) => ({ ...session, observedAt: provenAt })),
+      routine: { ...first.routine, lastFiredAt: firedAt },
+    });
+    expect(report.surfaces[0]!.verdict).toBe('STALE');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('no arrival');
+    expect(report.ok).toBe(false);
+    expect(report.problems.join(' ')).toContain('--probe');
+  });
+
+  it('does not call a fire that is still in flight a contradiction', async () => {
+    /*
+     * The half that stops this being a warning that cries wolf. A surface fired
+     * at thirty seconds ago has an unanswered fire by construction — its worker
+     * is booting — and `consecutive_no_shows` reads 1 on every healthy surface
+     * in that state, which is why this judgment reads the fire's age instead.
+     */
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      sessions: first.sessions.map((session) => ({
+        ...session,
+        observedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+      })),
+      routine: { ...first.routine, lastFiredAt: new Date(Date.now() - 30_000).toISOString() },
+    });
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.ok).toBe(true);
+  });
+
+  it('calls a proof contradicted by a later failed fire stale rather than proven', async () => {
+    const { read, first } = await provenSurface();
+    // Not a rate limit: `consecutive_failures` is left alone by one of those on
+    // purpose, so a non-zero value is a fact about this surface rather than
+    // about how busy the account is.
+    const report = judgeOne(read, {
+      ...first,
+      routine: { ...first.routine, consecutiveFailures: 1 },
+    });
+    expect(report.surfaces[0]!.verdict).toBe('STALE');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('not a rate limit');
+    expect(report.ok).toBe(false);
+  });
+
+  it('leaves a rate-limited surface proven, because a refusal is not misconduct', async () => {
+    const { read, first } = await provenSurface();
+    // What a rate limit actually writes: a retry point and a refusal count, and
+    // deliberately no failure. A busy account is not a broken one.
+    const report = judgeOne(read, {
+      ...first,
+      routine: {
+        ...first.routine,
+        totalRefusals: 4,
+        retryAt: new Date(Date.now() + 60_000).toISOString(),
+      },
+    });
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.surfaces[0]!.cooldownUntil).not.toBeNull();
+  });
+
+  it('keeps an ordinary healthy proof green, so the guard is not a blanket refusal', async () => {
+    const { read, first } = await provenSurface();
+    // Cooling down and carrying work are eligibility facts, never faults: a
+    // surface at its target has been proven and is simply busy.
+    const report = judgeOne(read, {
+      ...first,
+      routineInFlight: 99,
+      routineTarget: 1,
+    });
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.surfaces[0]!.eligible).toBe(false);
+  });
+});

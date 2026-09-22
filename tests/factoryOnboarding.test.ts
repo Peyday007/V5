@@ -349,7 +349,13 @@ describe('readiness is derived, and says what is left', () => {
     const ready = (await repositoryOnboarding(fixture.project.id))[0]!;
     expect(ready.readiness).toBe('READY');
     expect(ready.remaining).toHaveLength(0);
-    expect(ready.surfaces).toContain('Factory surface');
+    expect(ready.surfaces.map((one) => one.routineName)).toContain('Factory surface');
+    // Registered and enabled is what makes it READY. Whether it has ever run
+    // is a separate fact and reads as its own answer rather than being folded
+    // into this one.
+    expect(ready.surfaces[0]!.proven).toBe(false);
+    expect(ready.provenSurfaces).toBe(0);
+    expect(ready.accountsServing).toBe(1);
   });
 });
 
@@ -792,5 +798,130 @@ describe('a duplicate action produces no duplicate execution', () => {
     // The re-arm stamps the intent, so the watermark it compares against is now
     // behind it. Self-limiting by construction rather than by a flag.
     expect(await rearmSurfaceDeferredIntents({ kinds: OPERATOR_RESOLVED_KINDS })).toBe(0);
+  });
+});
+
+/**
+ * How many Claude accounts is "running on Factory Brain A, B and C"?
+ *
+ * The Build card's answer was: as many as there are names in that sentence. It
+ * built `surfaces` from `routine.state === 'ENABLED'` and printed the display
+ * names, so three Routines on **one** subscription read exactly like three
+ * accounts — which is the arithmetic-on-a-fiction §23 draws its whole
+ * account-versus-Routine distinction to prevent, on the one screen a person
+ * actually uses to decide whether the fleet is big enough.
+ *
+ * And a Routine registered a minute ago, that nothing has ever fired, read the
+ * same as one with a completed four-row chain behind it. `capacityReading`
+ * already separates those two — `HEALTHY` from `CONFIGURING`, on
+ * `proveSurface`, one reader — and this card was a second reader of the same
+ * question, answering it more optimistically. A card that reports configuration
+ * as capacity is the CONFIGURED-masquerading-as-VERIFIED failure this
+ * repository refuses at `fleet verify-surface`, `verify-pool` and
+ * `/people` — and did not refuse here.
+ */
+describe('surfaces are counted by account, and proof is not assumed', () => {
+  /** Two Routines on one account, both enabled, neither ever fired. */
+  async function twoOnOneAccount(): Promise<{ workerId: string; accountName: string }> {
+    await onboard();
+    const { createAccount, createRoutine, bindRoutineWorker } = await import(
+      '../server/repos/fleet.ts'
+    );
+    const account = await createAccount({
+      name: 'one-subscription',
+      planLabel: null,
+      declaredPlanPower: null,
+    });
+    const worker = (await getWorkerByName(factoryWorkerName(GRANT().id)))!;
+    for (const label of ['A', 'B']) {
+      const routine = await createRoutine({
+        accountId: account.id,
+        routineRef: `trig_same_${label}`,
+        name: `Factory Brain ${label}`,
+        tokenSecretName: `SECRET_${label}`,
+        tokenDigest: `digest-${label}`,
+        routineVersion: null,
+        baseUrl: null,
+        capabilities: [...FACTORY_ROUTING_CAPABILITIES],
+      });
+      await bindRoutineWorker(routine.id, worker.id);
+    }
+    return { workerId: worker.id, accountName: account.name };
+  }
+
+  it('names the account each surface is on, so two Routines on one are not two accounts', async () => {
+    const { accountName } = await twoOnOneAccount();
+    const repo = (await repositoryOnboarding(fixture.project.id))[0]!;
+
+    expect(repo.readiness).toBe('READY');
+    expect(repo.surfaces.map((one) => one.routineName).sort()).toEqual([
+      'Factory Brain A',
+      'Factory Brain B',
+    ]);
+    for (const surface of repo.surfaces) expect(surface.accountName).toBe(accountName);
+    // The number that must not be conflated with the number of Routines.
+    expect(repo.accountsServing).toBe(1);
+    expect(repo.surfaces).toHaveLength(2);
+  });
+
+  it('calls a registered surface unproven until a fire has actually come back', async () => {
+    const { workerId } = await twoOnOneAccount();
+    const before = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(before.surfaces.every((one) => one.proven === false)).toBe(true);
+    expect(before.provenSurfaces).toBe(0);
+
+    /*
+     * One chain closed through the real path: a dispatch Brain recorded as
+     * SENT to surface A, an arrival that authenticated as the bound worker and
+     * was handed the bin, and the bin completing. `assignNextBin` is what
+     * writes the `worker_sessions` row, from Brain's own dispatch record, so
+     * nothing here asserts an arrival the machinery did not observe.
+     */
+    const { getRoutineByRef } = await import('../server/repos/fleet.ts');
+    const { assignNextBin, finishBin, markDispatchRoutine, markDispatchSent, claimDispatchIntent } =
+      await import('../server/repos/bins.ts');
+    const routineA = (await getRoutineByRef('trig_same_A'))!;
+    const bin = await factoryBin(GRANT().remote);
+    await ensureDispatchIntent(bin);
+    const intent = await claimDispatchIntent();
+    // Written after routing and before firing, exactly as `dispatchTick` does:
+    // it is the row `creditDispatchArrival` resolves the arrival's Routine and
+    // account from, so an arrival Brain cannot attribute records nothing.
+    await markDispatchRoutine(intent!.id, routineA.id);
+    await markDispatchSent(intent!.id, {
+      routineRef: routineA.routineRef,
+      sessionRef: 'cse_proof',
+      routineId: routineA.id,
+      accountId: routineA.accountId,
+    });
+    const assigned = await assignNextBin({
+      workerId,
+      projectIds: [fixture.project.id],
+      credentialId: 'cred_proof',
+      sessionRef: 'cse_proof',
+    });
+    expect(assigned?.bin.id).toBe(bin.id);
+    expect(
+      await finishBin(
+        {
+          binId: bin.id,
+          leaseId: assigned!.leaseId,
+          leaseGeneration: assigned!.leaseGeneration,
+          workerId,
+        },
+        { state: 'COMPLETE', reason: 'the surface answered' },
+      ),
+    ).toBe('OK');
+
+    const after = (await repositoryOnboarding(fixture.project.id))[0]!;
+    const a = after.surfaces.find((one) => one.routineName === 'Factory Brain A')!;
+    const b = after.surfaces.find((one) => one.routineName === 'Factory Brain B')!;
+    expect(a.proven).toBe(true);
+    expect(b.proven).toBe(false);
+    expect(after.provenSurfaces).toBe(1);
+    // Still READY: a surface the dispatcher would fire is eligible whether or
+    // not anything has come back yet, which is `capacity.ts`'s own rule. What
+    // changed is that the card no longer implies the second one has run.
+    expect(after.readiness).toBe('READY');
   });
 });

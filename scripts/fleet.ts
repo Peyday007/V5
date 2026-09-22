@@ -1410,7 +1410,15 @@ async function probeBin(input: {
       );
       console.log(`    fires     ${surface.lastOutcome}`);
       if (surface.chain) {
-        console.log(`    proven    fired ${surface.chain.sentAt ?? 'recorded on the dispatch'}`);
+        /*
+         * The word says which verdict this chain is under. A `STALE` surface
+         * has a genuinely closed chain and printing "proven" over it would put
+         * two answers to one question on one screen — §29's status
+         * contradicting the line above it, which is what teaches a reader to
+         * stop believing the verdict column.
+         */
+        const label = surface.verdict === 'STALE' ? 'was' : 'proven';
+        console.log(`    ${label.padEnd(9)} fired ${surface.chain.sentAt ?? 'recorded on the dispatch'}`);
         console.log(`              arrived ${surface.chain.sessionRef} at ${surface.chain.observedAt}`);
         console.log(`              assigned and completed ${surface.chain.binId}`);
       }
@@ -1433,6 +1441,12 @@ async function probeBin(input: {
           console.log(`  SKIPPED   ${surface.routineName}: reconnect it as ${report.expectedWorkerName} first.`);
           continue;
         }
+        /*
+         * A `STALE` surface is probed exactly like an unproven one, and that is
+         * the whole remedy for the verdict: its chain closed once and Brain's
+         * later evidence disagrees, so the only thing that settles it is a new
+         * fire that either arrives or does not.
+         */
         const routine = await getRoutineByRef(surface.routineRef);
         const worker = routine?.workerId ? await getWorker(routine.workerId) : null;
         const routing = routine?.workerId ? await getWorkerRouting(routine.workerId) : null;

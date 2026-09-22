@@ -78,6 +78,24 @@ export interface SurfaceReading {
   accountId: string;
   accountName: string;
   health: SurfaceHealth;
+  /**
+   * Has a fire to this surface ever arrived and finished a piece of work?
+   *
+   * `proveSurface`'s four-row chain, reported as its own fact rather than only
+   * through `HEALTHY` — which is *eligible **and** proven*, so it collapses two
+   * questions with different remedies into one word. A surface that ran real
+   * work and whose deployment secret has since been removed reads `WAITING`,
+   * correctly, and a reader could not tell it from one that has never run at
+   * all: *we could not tell* reading the same as *we checked*, which this file
+   * refuses everywhere else.
+   *
+   * It is history, and history does not stop having happened, so nothing here
+   * can lower it. It is deliberately at the top level rather than in `detail`:
+   * it names no Routine, no account, no credential and no identifier, and
+   * whether a connection has actually run is exactly what §32 says its owner is
+   * owed.
+   */
+  proven: boolean;
   /** Why it is not HEALTHY, with the remedy in it. Absent when it is. */
   because?: string;
   /** Operator depth only; see `CapacityReading.diagnostics`. */
@@ -258,6 +276,7 @@ export async function capacityReading(
       accountId: owner.id,
       accountName: owner.name,
       health,
+      proven: chain.proven,
       ...(because ? { because } : {}),
       detail: {
         routineRef: routine.routineRef,

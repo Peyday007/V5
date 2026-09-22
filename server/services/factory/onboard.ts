@@ -64,6 +64,7 @@ import {
   setWorkerRouting,
   setWorkerStatus,
 } from '../../repos/identity.ts';
+import { capacityReading } from '../fleet/capacity.ts';
 import { listRoutines } from '../../repos/fleet.ts';
 import { listBins } from '../../repos/bins.ts';
 import { repositoryIdOf } from '../bins/routing.ts';
@@ -131,8 +132,33 @@ export interface RepositoryOnboarding {
   scopesCorrect: boolean;
   routedFamilies: string[];
   routedRepositories: string[];
-  /** Enabled Routines whose worker is this one. Names only; never a secret. */
-  surfaces: string[];
+  /**
+   * Enabled Routines whose worker is this one — one entry each, never a secret.
+   *
+   * Structured rather than a list of names, because a list of names cannot be
+   * counted. "Running on Factory Brain A, B and C" reads as three Claude
+   * accounts, and three Routines on one subscription produce exactly that
+   * sentence — §23's account-versus-Routine distinction collapsed on the one
+   * screen a person uses to decide whether the fleet is big enough. A second
+   * Routine on an account doubles how fast Brain can *start* sessions and
+   * changes nothing about how much that account may *do*.
+   *
+   * `proven` is the four-row chain, read through `capacityReading` rather than
+   * derived here: it is already the single reader of `proveSurface` for
+   * `/people`, and a second one would eventually disagree with it about whether
+   * a surface works. Registered and enabled is not proven — that is the
+   * CONFIGURED-masquerading-as-VERIFIED refusal `fleet verify-surface`,
+   * `verify-pool` and `capacity.ts` all already make, and this card did not.
+   */
+  surfaces: { routineName: string; accountName: string; proven: boolean }[];
+  /**
+   * Distinct Claude accounts behind those surfaces.
+   *
+   * The number a reader is actually after, and never the length of `surfaces`.
+   */
+  accountsServing: number;
+  /** How many of them have a completed fire → arrive → assign → finish chain. */
+  provenSurfaces: number;
   /**
    * Member-contributed Claude connections this repository could actually use.
    *
@@ -258,9 +284,15 @@ export async function repositoryOnboarding(projectId: string): Promise<Repositor
   // Read once for the whole list. It walks every member's connection, and the
   // answer cannot differ between two repositories on one page.
   const contributed = await contributedCapacity();
+  /*
+   * And the fleet's own reading of which surfaces have actually run, once, for
+   * the same reason: it walks every Routine's sessions and bins, and the answer
+   * cannot differ between two repositories on one page.
+   */
+  const capacity = await capacityReading();
   const out: RepositoryOnboarding[] = [];
   for (const grant of listRepositoryGrants()) {
-    out.push(await describeGrant(projectId, grant, routines, contributed));
+    out.push(await describeGrant(projectId, grant, routines, contributed, capacity));
   }
   return out;
 }
@@ -296,6 +328,8 @@ async function describeGrant(
    * repositories — for an answer that cannot differ between them.
    */
   contributed: Awaited<ReturnType<typeof contributedCapacity>>,
+  /** The fleet's own per-surface reading, read once by the caller. */
+  capacity: Awaited<ReturnType<typeof capacityReading>>,
 ): Promise<RepositoryOnboarding> {
   const workerName = factoryWorkerName(grant.id);
   const worker = await getWorkerByName(workerName);
@@ -304,7 +338,7 @@ async function describeGrant(
   let scopesCorrect = false;
   let routedFamilies: string[] = [];
   let routedRepositories: string[] = [];
-  let surfaces: string[] = [];
+  let surfaces: RepositoryOnboarding['surfaces'] = [];
 
   if (worker && !worker.archived) {
     const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
@@ -313,9 +347,21 @@ async function describeGrant(
     const routing = await getWorkerRouting(worker.id);
     routedFamilies = routing?.families ?? [];
     routedRepositories = routing?.repositories ?? [];
+    /*
+     * A surface the fleet has no reading for is reported as unproven rather
+     * than skipped. `capacityReading` leaves out the verification identities
+     * and separates retired Routines, so an absent entry means "the fleet does
+     * not count this as live capacity" — which is not the same fact as a
+     * completed chain, and must never be rounded into one.
+     */
+    const health = new Map(capacity.surfaces.map((one) => [one.routineId, one]));
     surfaces = routines
       .filter((routine) => routine.workerId === worker.id && routine.state === 'ENABLED')
-      .map((routine) => routine.name);
+      .map((routine) => ({
+        routineName: routine.name,
+        accountName: health.get(routine.id)?.accountName ?? '—',
+        proven: health.get(routine.id)?.proven === true,
+      }));
   }
 
   const boundaryRow = await getProjectRepository(projectId, grant.id);
@@ -364,6 +410,8 @@ async function describeGrant(
     routedFamilies,
     routedRepositories,
     surfaces,
+    accountsServing: new Set(surfaces.map((one) => one.accountName)).size,
+    provenSurfaces: surfaces.filter((one) => one.proven).length,
     contributedSurfaces: forThisOne.map((one) => ({
       displayName: one.displayName,
       workerName: one.workerName,
@@ -477,6 +525,7 @@ export async function onboardRepository(input: {
     grant,
     await listRoutines(),
     await contributedCapacity(),
+    await capacityReading(),
   );
 
   const worker =
@@ -570,6 +619,7 @@ export async function onboardRepository(input: {
     grant,
     await listRoutines(),
     await contributedCapacity(),
+    await capacityReading(),
   );
   return {
     ok: true,
