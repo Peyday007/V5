@@ -2344,6 +2344,14 @@ winning.
   to wait for a person, and §26's rule the other way up: a decision a person
   makes about their own project belongs on the surface they already use.
 
+  **And `docs/FACTORY.md` had said the opposite since `0f025130`** — *"the two
+  decisions it does offer are the two the server guards by principal type"* — so
+  the canonical document described a surface the product did not have, while the
+  client module described the gap correctly one file away. Two readers of one
+  fact disagreeing, with the *documentation* on the right side for once, and
+  what closed it is the code catching up rather than the sentence being
+  softened.
+
   The route had been sending `decisionWaiting` the whole time and
   `CampaignDetail` dropped it, which is §35's unchecked fixture one layer along.
   The card shows **what is being let out** — the integration commit, the units
