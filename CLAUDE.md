@@ -2914,10 +2914,14 @@ remote.
   which its second exercise proves: a comment naming a field satisfies it as
   little as a missing one does.
 
-  **Three closes in one session is the shape rather than three accidents**, and
-  naming it is worth more than any of them: throughput, the release decision and
-  now the artifact were each a complete, tested, guarded server capability whose
-  only caller was an HTTP route nothing requested. **A route is not an operator
+  **Repeating itself is the shape rather than a run of accidents**, and naming
+  it is worth more than any one of them: throughput, the release decision and
+  the artifact were each a complete, tested, guarded server capability whose
+  only caller was an HTTP route nothing requested, and the delivery refusals,
+  the fleet-scoped events and the quarantine are the same sentence about a
+  record and about a transition. A count is not written here, because an earlier
+  version of this paragraph carried one and it stopped being true within the
+  hour. **A route is not an operator
   surface** — it is the thing a surface calls — and the repository has no test
   that could have told the difference, because every one of them called the
   service directly. The guards that close each are source reads for
