@@ -2902,7 +2902,7 @@ remote.
   through it would have skipped the compare-and-swap that makes two operators
   produce one move, kept its failure streak at three and re-quarantined on its
   very next failure, and written no `WORKER_STATE_CHANGED` row, so the change
-  would answer nothing later. §17's own sentence, at a column: **a guard on one
+  would answer nothing later. §23's own sentence, at a column: **a guard on one
   entrance is not a guard.** `WorkerPatch` no longer carries the field, so
   availability has the two writers it is supposed to have — an operator's
   decision, and the quarantine Brain derives from what actually happened — and
