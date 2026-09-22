@@ -491,6 +491,53 @@ async function main(): Promise<void> {
             `${unit.branch ? `        branch ${unit.branch}${unit.headSha ? ` @ ${unit.headSha.slice(0, 12)}` : ''}\n` : ''}`,
         );
       }
+
+      /*
+       * The rows behind the three counts above.
+       *
+       * `reviews 1, findings 1 (0 open, 1 repaired)` is a true sentence that
+       * answers none of the questions somebody reads a review for: what the
+       * verdict was, which commit it was a verdict about, and — the one this
+       * repository cares about most — what independence tier the lineage
+       * actually supported. §27 is explicit that the tier is reported at what
+       * the lineage supports and never rounded up, and an operator who cannot
+       * read it has to take the rounding on trust.
+       *
+       * Likewise `sessions 13, max observed concurrency 1 (MEASURED)`: on the
+       * hosted plane those rows are derived from Brain's own dispatch and lease
+       * events rather than from a process this Brain timed, so the bin and
+       * generation each one names are what make the derivation checkable.
+       *
+       * Read-only, and printed after the units so the existing shape of this
+       * output is unchanged for anything already reading it.
+       */
+      for (const review of reviews) {
+        process.stdout.write(
+          `  REVIEW round ${review.round} ${review.scope} ${review.verdict} ` +
+            `on ${review.reviewedSha.slice(0, 12)} — independence ${review.independence}\n` +
+            `        session ${review.reviewerSessionId ?? '—'}  ${review.createdAt}\n` +
+            `        ${review.summary.slice(0, 400)}\n`,
+        );
+      }
+      for (const finding of findings) {
+        process.stdout.write(
+          `  FINDING ${finding.severity.padEnd(8)} ${finding.state.padEnd(9)} ` +
+            `${finding.findingKey} (${finding.category})\n` +
+            `        ${finding.statement.slice(0, 400)}\n` +
+            `${finding.resolution ? `        resolved: ${finding.resolution.slice(0, 300)}\n` : ''}`,
+        );
+      }
+      for (const session of sessions) {
+        process.stdout.write(
+          `  SESSION ${session.role.padEnd(11)} ${session.state.padEnd(9)} ` +
+            `${session.externalSessionId ?? '—'}\n` +
+            `        worker ${session.workerId}  account ${session.accountRef}` +
+            `${session.binId ? `  bin ${session.binId} gen ${session.leaseGeneration}` : ''}\n` +
+            `        ${session.startedAt} -> ${session.endedAt ?? '—'}` +
+            `${session.durationMs === null ? '' : `  ${Math.round(session.durationMs / 1000)}s`}` +
+            `${session.exitReason ? `  ${session.exitReason.slice(0, 120)}` : ''}\n`,
+        );
+      }
       break;
     }
 
