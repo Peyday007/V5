@@ -2947,8 +2947,10 @@ remote.
   shell and a CLI"* — and `step10.yml` has grepped for `STEP10: OK` since it was
   written. `scripts/factory.ts` prints `FACTORY: OK`, and only where nothing set
   a failing code: `fail()` has already exited, a refusal prints `FACTORY
-  REFUSED` instead, and an unknown command — which used to be the silent case —
-  now sets one. The workflow greps for it and every other way out is an
+  REFUSED` instead — including a `RegistryError`, which used to reach the
+  operator as a stack trace and is the one class caught at the entry, because
+  dressing an unexpected error as a refusal would lose the stack that explains
+  it — and an unknown command, which used to be the silent case, now sets one. The workflow greps for it and every other way out is an
   `::error::` naming which of the three happened, because *nothing came back*,
   *the factory refused this* and *that is not a command* send an operator to
   three different places. Both ends are held together by one test, run against

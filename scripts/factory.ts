@@ -43,6 +43,7 @@ import {
   probeFleet,
   readiness,
   register,
+  RegistryError,
   setAvailability,
   WORKER_STATE_REASONS,
   type WorkerStateReason,
@@ -1075,4 +1076,26 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+/**
+ * A refusal reads as a refusal, and anything else reads as a crash.
+ *
+ * `RegistryError` is what the registry raises when it declines — no worker of
+ * that name, a state that is not a state, a compare-and-swap lost to another
+ * operator. Uncaught, every one of those reached the operator as a stack
+ * trace, which is the wrong sentence about a decision the factory made
+ * deliberately, and the workflow could not tell it from a process that died.
+ *
+ * Only that one class is caught, because the distinction is the point: *the
+ * factory refused this* and *the command did not complete* send an operator to
+ * two different places, and dressing an unexpected error as a refusal would
+ * lose the stack that explains it.
+ */
+try {
+  await main();
+} catch (error) {
+  if (error instanceof RegistryError) {
+    process.stderr.write(`FACTORY REFUSED: ${error.message}\n`);
+    process.exit(1);
+  }
+  throw error;
+}

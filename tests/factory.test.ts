@@ -1598,4 +1598,28 @@ describe('the factory door reports what actually happened', () => {
     const usage = source.lastIndexOf('commands: fleet');
     expect(source.slice(usage)).toMatch(/process\.exitCode = 1/);
   });
+
+  it('reads a refusal as a refusal and everything else as a crash', () => {
+    /*
+     * The registry declines by throwing — no worker of that name, a state that
+     * is not a state, a compare-and-swap lost to another operator — and
+     * uncaught, each of those reached the operator as a stack trace. That is
+     * the wrong sentence about a decision the factory made deliberately, and
+     * the workflow above cannot tell it from a process that died.
+     *
+     * Only that one class is caught. Dressing an unexpected error as a refusal
+     * would lose the stack that explains it, and would tell an operator the
+     * factory decided something when nothing decided anything.
+     */
+    const source = door();
+    const from = source.lastIndexOf('try {');
+    if (from === -1) {
+      throw new Error('`scripts/factory.ts` does not catch anything at its entry.');
+    }
+    const entry = source.slice(from);
+    expect(entry).toMatch(/error instanceof RegistryError/);
+    expect(entry).toMatch(/FACTORY REFUSED/);
+    // Anything that is not a refusal keeps its stack.
+    expect(entry).toMatch(/throw error/);
+  });
 });

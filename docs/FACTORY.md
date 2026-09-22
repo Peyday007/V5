@@ -1133,6 +1133,14 @@ happened. *Nothing came back*, *the factory refused this* and *that is not a
 command* send an operator to three different places, so they are three
 messages.
 
+A refusal the registry raises reads as one too. `RegistryError` — no worker of
+that name, a state that is not a state, a compare-and-swap lost to another
+operator — used to reach the operator as a stack trace, which is the wrong
+sentence about a decision the factory made deliberately. It prints `FACTORY
+REFUSED` and exits. Only that one class is caught: dressing an unexpected error
+as a refusal would lose the stack that explains it, and would say the factory
+decided something when nothing decided anything.
+
 ### Reading what is being let out
 
 The release card describes the decision. The **artifact** it is a decision
