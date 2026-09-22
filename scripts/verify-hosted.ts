@@ -1149,6 +1149,131 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
  * an id that is not a project at all. Those two must be indistinguishable, and
  * nothing about the first pair ever established that.
  */
+/**
+ * The labor kernel's door, and the two fields a screen depends on.
+ *
+ * `manufacturingBoundary`'s shape and its reasons, one kernel along, with one
+ * addition that is the point of it: this Brain grew a *product surface* for the
+ * labor map, and the screen is only usable because the read carries
+ * `capabilities` — what a control may be offered for, decided by
+ * `decideProjectAccess` rather than by the browser's one role flag — and
+ * `vocabulary`, the closed sets the route validates against, travelling down so
+ * the form and the validator are one object.
+ *
+ * Asserted here because a component suite proves a screen renders what it was
+ * handed and a service suite proves the service composes it, and neither can
+ * say the deployed Brain serves it. §33 records what that gap costs: a change
+ * that reached every fixture in `tests/` and not the script that runs against
+ * production, so the whole suite passed and the release gate refused its own
+ * packet.
+ */
+async function laborBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nThe labor kernel, as a member and as a machine');
+  if (!cookie) {
+    record('labor boundary', false, 'skipped: there was no session to test with');
+    return;
+  }
+
+  const mine = await call(`/api/projects/${fixtures.scope.id}/labor`, { cookie });
+  expectStatus('a project the member may read answers the labor read', mine.status, 200);
+  const body = (mine.json ?? {}) as Record<string, unknown>;
+
+  // The reading itself: §13's six are composed even on an empty map, and the
+  // summary is the sentence `npm run report:labor` prints.
+  record(
+    'and carries the reading, with its own summary sentence',
+    typeof body['summary'] === 'string' && Array.isArray(body['measurements']),
+    `summary=${String(body['summary']).slice(0, 60)}`,
+  );
+
+  /*
+   * An unknown is never a number. Four of §11's figures cannot be measured, and
+   * the value the server sends for them is `null` — never `0`, which is the
+   * figure somebody would quote in a decision about whether to keep employing
+   * a person.
+   */
+  const figures = (body['measurements'] ?? []) as { value: unknown; evidence: unknown }[];
+  const unknown = figures.filter((one) => one.evidence === 'UNKNOWN');
+  record(
+    'every unmeasured figure carries null rather than zero',
+    unknown.length >= 4 && unknown.every((one) => one.value === null),
+    `${unknown.length} UNKNOWN, values=${JSON.stringify(unknown.map((one) => one.value))}`,
+  );
+
+  /*
+   * The two fields the screen cannot work without, which is what says this
+   * deployment is serving the surface rather than only the kernel underneath
+   * it.
+   */
+  const capabilities = (body['capabilities'] ?? null) as Record<string, unknown> | null;
+  const vocabulary = (body['vocabulary'] ?? null) as Record<string, unknown> | null;
+  record(
+    'the read decides what a control may be offered for',
+    capabilities !== null &&
+      typeof capabilities['mayShapeTheMap'] === 'boolean' &&
+      typeof capabilities['mayRecordWhoProduces'] === 'boolean',
+    JSON.stringify(capabilities)?.slice(0, 120) ?? 'absent',
+  );
+  /*
+   * And says *why not* exactly when there is a why not. Asserted as the
+   * invariant rather than as a value, because whether this member administers
+   * this project is a fact about the fixture rather than about the contract —
+   * §35's rule is that a control somebody may not use is disabled carrying the
+   * server's reason, and a reason present on an allowed control would be as
+   * wrong as one missing from a refused one.
+   */
+  record(
+    'and gives a reason exactly when it withholds one',
+    capabilities !== null &&
+      (capabilities['mayShapeTheMap'] === true
+        ? capabilities['because'] === null
+        : typeof capabilities['because'] === 'string'),
+    `mayShapeTheMap=${String(capabilities?.['mayShapeTheMap'])} because=${String(capabilities?.['because']).slice(0, 60)}`,
+  );
+
+  const layers = (vocabulary?.['productionLayers'] ?? []) as string[];
+  const human = (vocabulary?.['humanLayers'] ?? []) as string[];
+  const reasons = (vocabulary?.['humanReasons'] ?? []) as string[];
+  record(
+    'the closed sets travel down with the reading',
+    layers.length > 0 &&
+      reasons.length > 0 &&
+      human.length > 0 &&
+      human.every((one) => layers.includes(one)) &&
+      human.length < layers.length,
+    `layers=${layers.length} human=${human.length} reasons=${reasons.length}`,
+  );
+
+  // Invariant 23 at this door: forbidden and absent are one body.
+  const invented = await call(`/api/projects/prj_${'0'.repeat(32)}/labor`, { cookie });
+  expectStatus('an id that is not a project answers not-found', invented.status, 404);
+  if (fixtures.holdout) {
+    const theirs = await call(`/api/projects/${fixtures.holdout.id}/labor`, { cookie });
+    expectStatus('and so does a project this member may not see', theirs.status, 404);
+    const same =
+      theirs.status === invented.status &&
+      JSON.stringify(theirs.json) === JSON.stringify(invented.json);
+    record(
+      'forbidden and non-existent are the same body, not just the same status',
+      same,
+      same
+        ? 'byte-identical'
+        : `forbidden=${JSON.stringify(theirs.json)} absent=${JSON.stringify(invented.json)}`,
+    );
+  }
+
+  // A machine is refused at the read, by principal type, which is the half
+  // `requirePerson` adds above the policy module's own level check.
+  const machineReads = await call(`/api/projects/${fixtures.scope.id}/labor`, {
+    bearer: fixtures.credential,
+  });
+  record(
+    'a worker is refused the labor read by principal type',
+    machineReads.status === 404,
+    `status=${machineReads.status}`,
+  );
+}
+
 async function manufacturingBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
   console.log('\nThe manufacturing kernel, as a member and as a machine');
   if (!cookie) {
@@ -4060,6 +4185,7 @@ async function main(): Promise<void> {
     // Before revocation, like the checks below it: the worker refusals mean
     // "a machine may not do this" only while the credential still works.
     await manufacturingBoundary(fixtures, cookie);
+    await laborBoundary(fixtures, cookie);
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
     await effectChecks(fixtures, fixtures.adminCookie, cookie);
