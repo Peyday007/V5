@@ -1191,7 +1191,19 @@ export async function evaluateContract(bin: Bin): Promise<ContractVerdict> {
   return await evaluator(bin);
 }
 
-/** Whether a manifest can be dispatched at all. Checked before a bin goes READY. */
+/**
+ * Whether a manifest can be dispatched at all.
+ *
+ * This used to say it was *checked before a bin goes READY*, and nothing in the
+ * repository called it — a guard described as running that did not run, which
+ * is worse than an absent one because a reader concludes a bin is validated and
+ * stops looking. The factory calls it now, at its own five entrances
+ * (`createFactoryBin`), where refusing costs nothing: no fire, no attempt, no
+ * activation. **Every other kernel's bins still reach `evaluateContract`
+ * unvalidated**, and that is stated rather than quietly fixed — `createBin` is
+ * shared by all of them, and wiring a refusal into it is a decision for whoever
+ * owns those lanes rather than a side effect of a factory audit.
+ */
 export function manifestProblems(
   contract: string,
   manifest: BinManifest,

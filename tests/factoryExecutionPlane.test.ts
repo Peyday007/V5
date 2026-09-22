@@ -3540,3 +3540,105 @@ describe('a completed integration bin that could not be ingested says so in the 
     expect(String(recorded?.['means'])).toContain('has to correct');
   });
 });
+
+/* ========================================================================= */
+
+describe('a factory bin is checked against its own contract before it exists', () => {
+  /*
+   * `manifestProblems` opens by saying it is checked before a bin goes READY,
+   * and had no caller in the repository — a guard described as running that did
+   * not run, which is worse than an absent one because a reader concludes a bin
+   * is validated and stops looking.
+   *
+   * Refusing at creation is cheap and refusing later is not: nothing has been
+   * fired, no attempt charged and no worker activated, where the alternative is
+   * `evaluateContract` discovering at completion that no evaluator was ever
+   * registered for the contract — after a session has spent its time on it.
+   *
+   * The wider condition is left alone deliberately and asserted as left alone:
+   * `createBin` is shared by every kernel in Brain, and wiring a refusal into it
+   * would change research, cash, design and capability dispatch on the strength
+   * of a factory audit.
+   */
+  it('refuses a manifest no evaluator could judge, and writes no row', async () => {
+    const { createBin } = await import('../server/repos/bins.ts');
+    const { manifestProblems } = await import('../server/services/bins/contracts.ts');
+    const { listBins } = await import('../server/repos/bins.ts');
+
+    const manifest = {
+      objective: 'Something with a contract nothing can judge.',
+      units: [],
+      outputs: [],
+      authorized: [],
+      prohibitedActions: [],
+    } as unknown as Parameters<typeof createBin>[0]['manifest'];
+
+    // The rule itself, stated plainly: this manifest cannot be dispatched.
+    expect(manifestProblems('NOT_A_REGISTERED_CONTRACT', manifest).length).toBeGreaterThan(0);
+
+    const before = (await listBins({ projectId: fixture.project.id })).length;
+
+    /*
+     * `createBin` is the shared door and still accepts it — which is the
+     * condition this test reports rather than closes. A bin created this way is
+     * refused at `evaluateContract` instead, with a worker's time already spent.
+     */
+    const throughSharedDoor = await createBin({
+      projectId: fixture.project.id,
+      kind: 'FACTORY_PLAN',
+      title: 'Unjudgeable',
+      objective: 'Something with a contract nothing can judge.',
+      manifest,
+      completionContract: 'NOT_A_REGISTERED_CONTRACT' as never,
+      priority: 5,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      maxAttempts: 1,
+      ready: false,
+    });
+    expect(throughSharedDoor.id).toBeTruthy();
+
+    /*
+     * And the factory's own door does not. Asserted through the real entrance —
+     * `createPlanBin` — rather than by calling the private wrapper, because what
+     * has to be true is that the *five factory entrances* go through it.
+     */
+    const { createPlanBin } = await import('../server/services/factory/remote.ts');
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: `manifest-guard-${Math.random()}`,
+      objective: '',
+      expectedOutcome: 'nothing, because an objective is required',
+      nonGoals: [],
+      acceptanceConditions: [],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+
+    const refused = await createPlanBin(campaign, changeRequest).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refused, 'an empty objective should have been refused at creation').toBeTruthy();
+    expect(String((refused as Error).message)).toMatch(/could not be dispatched/);
+
+    // One row from the shared door, none from the factory's.
+    expect((await listBins({ projectId: fixture.project.id })).length).toBe(before + 1);
+  });
+});

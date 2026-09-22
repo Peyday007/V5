@@ -57,6 +57,9 @@ import type {
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
 import { createBin, getBin, listBinUnitResults } from '../../repos/bins.ts';
+import type { CreateBinInput } from '../../repos/bins.ts';
+import { manifestProblems } from '../bins/contracts.ts';
+import { FactoryError } from './errors.ts';
 import {
   claimUnits,
   factoryNow,
@@ -332,7 +335,7 @@ export async function createPlanBin(
     'write, commit or push anything at all — this bin is a proposal',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_PLAN',
     title: `Plan: ${changeRequest.objective.slice(0, 80)}`,
@@ -427,7 +430,7 @@ export async function createUnitsBin(
     'open, update or comment on a pull request',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_UNITS',
     title: `Implement ${units.length} unit(s): ${changeRequest.objective.slice(0, 60)}`,
@@ -577,7 +580,7 @@ export async function createIntegrateBin(
       'this bin does not implement',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_INTEGRATE',
     title: `Integrate ${mergeable.length} unit(s): ${changeRequest.objective.slice(0, 60)}`,
@@ -661,7 +664,7 @@ export async function createReviewBin(
     'change, commit or push anything — a reviewer that can edit what it reviews is not a reviewer',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_REVIEW',
     title: `Review round ${round}: ${changeRequest.objective.slice(0, 60)}`,
@@ -1299,7 +1302,7 @@ export async function createDeliverBin(
     'change, commit or push anything at all',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_DELIVER',
     title: existing === null
@@ -1522,6 +1525,38 @@ export function binsThisPassMayJudge(offeredToIngest: Bin[], now: Bin[]): Bin[] 
  */
 function isLiveBin(bin: Bin): boolean {
   return bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'DRAFT';
+}
+
+/**
+ * A factory bin, checked against its own contract before it can be handed out.
+ *
+ * `manifestProblems` says in its own doc comment that it is *"checked before a
+ * bin goes READY"* — and it had no caller anywhere in the repository. A guard
+ * described as running that does not run is the shape this file corrects more
+ * than any other, and it is worse than an absent one: a reader concludes a bin
+ * is validated and stops looking.
+ *
+ * Refusing here is cheap and refusing later is not. Nothing has been fired, no
+ * attempt has been charged and no worker has been activated; the alternative is
+ * `evaluateContract` discovering at completion that no evaluator was ever
+ * registered for this contract, after a session has spent its time on it.
+ *
+ * **The wider condition is reported rather than changed.** `createBin` is
+ * shared by every kernel in Brain — research, cash, design, capability,
+ * Russell — and wiring a refusal into it would be changing all of their
+ * dispatch on the strength of a factory audit, which is exactly the broadening
+ * this campaign is not for. What is closed is the factory's own five
+ * entrances, which are the ones it owns.
+ */
+async function createFactoryBin(input: CreateBinInput): Promise<Bin> {
+  const problems = manifestProblems(input.completionContract, input.manifest);
+  if (problems.length > 0) {
+    throw new FactoryError(
+      `This bin could not be dispatched, so it was not created: ${problems.join(' ')}`,
+      { reason: 'MANIFEST_REFUSED', contract: input.completionContract, problems },
+    );
+  }
+  return await createBin(input);
 }
 
 /** Whether this campaign already has a live bin for a stage, so a tick adds no second one. */
