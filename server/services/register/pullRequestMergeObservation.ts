@@ -26,15 +26,22 @@
  * confirmed pull request" and "the forge says that pull request merged" are
  * two different claims with two different evidence.
  *
- * Wiring this to run automatically — a scheduler, a tick, a route — is
- * separate, later work and outside this unit's mutation scope. What this
- * unit delivers is the capability, correctly sourced and tested directly.
+ * A prior round left this uncalled — the capability existed, correctly
+ * sourced and tested, and nothing outside its own test file ever invoked it,
+ * so it could never actually run against a real campaign. `writeback.ts`
+ * calls it now, from `recordCampaignOutcome` — the same production entrance
+ * that already calls `attestCampaignPullRequest` on every tick a campaign is
+ * offered to — and `campaignNeedsMergeObservation` below is the predicate
+ * `listCampaignsPendingOutcome` uses to decide when a campaign should keep
+ * being offered for a merge check, exactly as `campaignNeedsPullRequestAttestation`
+ * already decides when it should keep being offered for its first attestation.
  */
 import { getCampaign, getChangeRequest } from '../../repos/factory.ts';
 import { linkWorkstream, listLinks, supersedeLink, workstreamsForRef } from '../../repos/register.ts';
 import { nowIso } from '../../repos/util.ts';
 import { parseRemote, readPullRequest } from '../factory/forge.ts';
 import { pullRequestNumber } from '../factory/remote.ts';
+import type { FactoryCampaign } from '../../domain/factory.ts';
 
 /**
  * Who this module records itself as, on the corrected link's
@@ -140,4 +147,50 @@ export async function observeCampaignPullRequestMerge(
   }
 
   return { ok: true, merged: true, reason: null, correctedWorkstreamIds };
+}
+
+/**
+ * Would calling `observeCampaignPullRequestMerge` on this campaign right now
+ * still have something to correct?
+ *
+ * True only when the campaign carries a confirmed pull request and at least
+ * one live workstream pursuing it carries a `PULL_REQUEST`/`EVIDENCE` link for
+ * that same URL still recorded `merged: false` — exactly the condition
+ * `attestCampaignPullRequest` leaves behind and the one this observation
+ * exists to resolve. `false` covers the case nothing here should keep
+ * checking for ever: no confirmed pull request, no live workstream at all, or
+ * every live workstream already carries a `merged: true` correction. A
+ * caller offering campaigns to a tick on this predicate therefore keeps
+ * offering one for as long as its pull request is genuinely still open, and
+ * stops the instant every attestation it can see says merged.
+ *
+ * It says nothing about a request the forge itself never confirms merged —
+ * closed without merging, for instance — because that is not a fact this
+ * predicate can read: `merged` stays `false` in the forge's own answer
+ * either way, and this module refuses to guess at intent from a state or a
+ * title. A campaign in that shape keeps being offered, and keeps costing one
+ * read-only forge call per tick, until a person corrects the link by hand or
+ * the workstream that names it is archived. That is a real, known cost of
+ * this design rather than an oversight: the alternative, inferring "this is
+ * never merging" from the forge's own words, is the invented citation §12
+ * refuses at every other door in this module.
+ */
+export async function campaignNeedsMergeObservation(
+  campaign: Pick<FactoryCampaign, 'id' | 'prUrl'>,
+): Promise<boolean> {
+  if (!campaign.prUrl) return false;
+
+  const workstreamIds = await workstreamsForRef('CAMPAIGN', campaign.id);
+  for (const workstreamId of workstreamIds) {
+    const links = await listLinks(workstreamId);
+    const stillOpen = links.some(
+      (link) =>
+        link.kind === 'PULL_REQUEST' &&
+        link.relation === 'EVIDENCE' &&
+        link.ref === campaign.prUrl &&
+        link.detail.merged !== true,
+    );
+    if (stillOpen) return true;
+  }
+  return false;
 }

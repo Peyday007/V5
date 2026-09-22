@@ -266,6 +266,56 @@ async function stream(): Promise<string> {
   return workstream.id;
 }
 
+/**
+ * Gives `repoRoot` a real, parseable remote, so a campaign submitted against
+ * it carries a `changeRequest.repository` the forge module will actually read
+ * from rather than the local fixture path. Without this every campaign in
+ * this file refuses `observeCampaignPullRequestMerge` at the door — which is
+ * exactly right for every test that never touches the merge observer, and
+ * exactly wrong for the handful below that mean to exercise it.
+ */
+async function addRealRemote(): Promise<void> {
+  await run('git', ['remote', 'add', 'origin', 'https://github.com/Peyday007/V5'], { cwd: repoRoot });
+}
+
+/**
+ * Answers `/repos/Peyday007/V5/pulls/:number` with a fixed `merged` value, on
+ * `BRAIN_FORGE_API_BASE` so `readPullRequest` calls this rather than the real
+ * forge. Scoped and restored per test rather than in a file-wide `beforeEach`,
+ * because only the tests exercising `observeCampaignPullRequestMerge` need it.
+ */
+function stubForgePull(number: number, merged: boolean): { restore: () => void } {
+  const realFetch = globalThis.fetch;
+  const realBase = process.env['BRAIN_FORGE_API_BASE'];
+  process.env['BRAIN_FORGE_API_BASE'] = 'https://forge.test';
+  globalThis.fetch = (async (input: unknown): Promise<Response> => {
+    const url = String(input);
+    const json = (body: unknown, status = 200): Response =>
+      new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    const pull = /\/pulls\/(\d+)$/.exec(url);
+    if (pull && Number(pull[1]) === number) {
+      return json({
+        number,
+        state: merged ? 'closed' : 'open',
+        merged,
+        html_url: `https://github.com/Peyday007/V5/pull/${number}`,
+        title: 'a pull request',
+        updated_at: '2026-09-22T00:00:00Z',
+        head: { sha: 'c'.repeat(40), ref: `factory/${number}` },
+        base: { ref: 'main' },
+      });
+    }
+    return json({ message: 'Not Found' }, 404);
+  }) as typeof globalThis.fetch;
+  return {
+    restore: () => {
+      globalThis.fetch = realFetch;
+      if (realBase === undefined) delete process.env['BRAIN_FORGE_API_BASE'];
+      else process.env['BRAIN_FORGE_API_BASE'] = realBase;
+    },
+  };
+}
+
 describe('recordCampaignOutcome attests a finished campaign\'s pull request', () => {
   it('A01: creates exactly one live PULL_REQUEST/EVIDENCE link per workstream, across repeated calls', async () => {
     const campaignId = await completeCampaign({
@@ -419,7 +469,8 @@ describe('recordCampaignOutcome attests a finished campaign\'s pull request', ()
     expect(pending.some((one) => one.id === campaignId)).toBe(false);
   });
 
-  it('does not keep offering a campaign once every linked workstream is already attested', async () => {
+  it('does not keep offering a campaign once every linked workstream is attested and confirmed merged', async () => {
+    await addRealRemote();
     const campaignId = await completeCampaign({
       prUrl: 'https://github.com/Peyday007/V5/pull/4212',
       prRef: '#4212',
@@ -433,10 +484,71 @@ describe('recordCampaignOutcome attests a finished campaign\'s pull request', ()
       recordedBy: 'BRAIN',
     });
 
-    await recordCampaignOutcome(campaignId);
-    // The workstream was linked before the outcome ran, so it is already
-    // attested and this campaign has nothing left to answer for.
+    const stub = stubForgePull(4212, true);
+    try {
+      await recordCampaignOutcome(campaignId);
+    } finally {
+      stub.restore();
+    }
+    // The workstream was linked before the outcome ran, so it was attested in
+    // the same call, and the forge already says merged — both halves of what
+    // this campaign owes the register are settled, so it has nothing left to
+    // answer for.
     const pending = await listCampaignsPendingOutcome();
+    expect(pending.some((one) => one.id === campaignId)).toBe(false);
+
+    const links = (await listAllLiveLinks([workstreamId])).filter((link) => link.kind === 'PULL_REQUEST');
+    expect(links).toHaveLength(1);
+    expect(links[0]?.detail.merged).toBe(true);
+    expect(links[0]?.detail.attestedBy).toBe('pull-request-merge-observation');
+  });
+
+  it('keeps offering a campaign whose attested pull request has not been confirmed merged, and the real tick corrects it the moment the forge says it has', async () => {
+    await addRealRemote();
+    const campaignId = await completeCampaign({
+      prUrl: 'https://github.com/Peyday007/V5/pull/4213',
+      prRef: '#4213',
+    });
+    const workstreamId = await stream();
+    await linkWorkstream({
+      workstreamId,
+      kind: 'CAMPAIGN',
+      ref: campaignId,
+      relation: 'PURSUES',
+      recordedBy: 'BRAIN',
+    });
+
+    // The ordinary automatic path, with the forge still reporting the request
+    // open: attestation is written, the merge check runs and finds nothing to
+    // correct, and — this is the finding a reviewer raised — the campaign
+    // stays a candidate rather than dropping out having never been settled.
+    let stub = stubForgePull(4213, false);
+    try {
+      await tickAllCampaigns();
+    } finally {
+      stub.restore();
+    }
+    let links = (await listAllLiveLinks([workstreamId])).filter((link) => link.kind === 'PULL_REQUEST');
+    expect(links).toHaveLength(1);
+    expect(links[0]?.detail.merged).toBe(false);
+    let pending = await listCampaignsPendingOutcome();
+    expect(pending.some((one) => one.id === campaignId)).toBe(true);
+
+    // Time passes; somebody merges it. The very next tick — through
+    // `tickAllCampaigns`, the real production entrance, not a direct call to
+    // `observeCampaignPullRequestMerge` — is what makes this a repair rather
+    // than a second copy of the capability the previous round already built.
+    stub = stubForgePull(4213, true);
+    try {
+      await tickAllCampaigns();
+    } finally {
+      stub.restore();
+    }
+    links = (await listAllLiveLinks([workstreamId])).filter((link) => link.kind === 'PULL_REQUEST');
+    expect(links).toHaveLength(1);
+    expect(links[0]?.detail.merged).toBe(true);
+    expect(links[0]?.detail.attestedBy).toBe('pull-request-merge-observation');
+    pending = await listCampaignsPendingOutcome();
     expect(pending.some((one) => one.id === campaignId)).toBe(false);
   });
 });
