@@ -2333,6 +2333,41 @@ winning.
   protected branch or deploy a product change to production. `assemble.ts`
   produces the branch, the patch and the body and **stops** — a function that
   quietly published would make that boundary depend on nobody calling it.
+
+  **One of the two had no control on the product surface, and the client module
+  said so about itself.** `factoryApi.ts` opens by naming both decisions and
+  then says, on `approve`, that it is *"the only one this screen offers"*. It
+  was: a campaign that reached `AWAITING_RELEASE` rendered *waiting for a
+  person to approve its release* in `Build.tsx` and nothing beside it to answer
+  with, while the route existed, was guarded and was reachable from a terminal.
+  §24's escalation nobody can resolve, at the one stage whose entire purpose is
+  to wait for a person, and §26's rule the other way up: a decision a person
+  makes about their own project belongs on the surface they already use.
+
+  The route had been sending `decisionWaiting` the whole time and
+  `CampaignDetail` dropped it, which is §35's unchecked fixture one layer along.
+  The card shows **what is being let out** — the integration commit, the units
+  that landed, the review rounds, the last verdict, the independence achieved
+  and the findings still open, every key the release was requested with,
+  unknown ones included — because a card that asks somebody to approve a thing
+  it declines to describe is a confirmation dialog rather than a decision. Both
+  answers, and a reason, since a refusal with no reason answers nothing later.
+  No capability flag, because the approve control beside it has none either and
+  a screen inconsistent with itself is worse than one that lets the server
+  refuse.
+
+  **The other half of that gap had to *not* become a control, and saying which
+  is the point.** `deploymentPolicy` is what makes a release arise, and only
+  the local plane honours it: `assembleStage` is its one writer, and the hosted
+  loop has no release stage at all — correctly, because a hosted campaign's
+  artifact is a pull request and the person's second act is merging it on the
+  forge, which Brain cannot do or gate. A browser can only pin through the
+  forge, so a field on that form would have been recorded on the contract and
+  read by nothing: a control that pretends, which is worse than an absent one.
+  So the form does not offer it and `submitObjective` refuses the combination
+  by name, beside the other checks on a submission's own coherence — it needs
+  no rows and no network, and a refusal that required a forge request would be
+  unreachable exactly where somebody would hit it.
 - **Every escalation has an answering transition.** `BLOCKED` names an
   operational fact from a closed vocabulary and a remedy somebody can apply, and
   a blocked campaign is re-examined on the next tick rather than retired.

@@ -997,6 +997,29 @@ dispatcher, and the executor's `probe` answers the question that actually
 matters: whether any enabled Routine with a present deployment secret could take
 repository work. A Brain with none reports no capacity rather than claiming some.
 
+### Both of a person's decisions, on the surface they already use
+
+Approving the objective and answering the release are the factory's two
+person-only decisions, and until recently the product surface offered one. A
+campaign that reached `AWAITING_RELEASE` printed *the campaign is finished and
+is waiting for a person to approve its release* and gave that person nothing to
+press; the route existed, was guarded, and was reachable only from a terminal.
+
+The card is on the campaign row now. It prints every key the release was
+requested with — the integration commit, the units integrated, the review
+rounds, the last verdict, the independence achieved, the findings still open —
+so the decision is about something described rather than about a word. It
+offers both answers and takes a reason. The server is guarded on `REQUESTED`,
+so a second press re-stamps nobody's decision and answers `answered: false`.
+
+What is deliberately **not** offered is `deploymentPolicy` on the submission
+form. It is what makes a release arise at all, and only the local plane honours
+it: the hosted loop has no release stage, because a hosted campaign's artifact
+is a pull request and letting the work out is merging that request — which
+Brain cannot do and must not gate. A browser can only pin through the forge, so
+a field there would have been stored and never read. `submitObjective` refuses
+that combination by name instead, before it spends a forge request on it.
+
 ### The surface a person uses
 
 `/build` in the Russell shell. A person says what should become true, picks one

@@ -42,6 +42,7 @@ import { INITIAL_LANE_TARGET } from '../server/services/factory/scheduler.ts';
 import { installPlan, validatePlan } from '../server/services/factory/planner.ts';
 import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/factory/loop.ts';
 import { campaignMetrics } from '../server/services/factory/metrics.ts';
+import { throughputReport } from '../server/services/factory/throughput.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
 import { campaignSpecFor } from '../server/services/factory/remote.ts';
 import {
@@ -541,6 +542,66 @@ async function main(): Promise<void> {
       break;
     }
 
+    /*
+     * What the factory actually managed, with an evidence class on every number.
+     *
+     * `throughputReport` was reachable at `GET /factory/campaigns/:id/throughput`
+     * and from nowhere else: no screen called it and this door had no command for
+     * it, so the one capability whose whole point is *not* rounding a ceiling up
+     * could be read only by hand-writing an HTTP request. §26's rule is that a
+     * reading an operator takes belongs on a terminal, and `status` beside this
+     * already carries the campaign's own rows.
+     *
+     * Every figure is printed with its class and its basis, including the ones
+     * that are `UNKNOWN` — which is the half that matters. A report that dropped
+     * them would read as a campaign with no queue time rather than as a campaign
+     * nobody measured one for, and `value: null` is never rendered as `0`.
+     */
+    case 'throughput': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const report = await throughputReport(campaignId);
+      const figure = (label: string, one: { value: number | null; evidence: string; basis: string }): string =>
+        `${label.padEnd(26)} ${(one.value === null ? 'not measured' : String(one.value)).padEnd(14)}` +
+        ` ${one.evidence.padEnd(8)} ${one.basis}\n`;
+      const duration = (label: string, one: { total: { value: number | null; evidence: string; basis: string }; samples: { value: number | null; evidence: string; basis: string }; average: { value: number | null; evidence: string; basis: string } }): string =>
+        figure(`${label} total ms`, one.total) +
+        figure(`${label} samples`, one.samples) +
+        figure(`${label} average ms`, one.average);
+
+      process.stdout.write(
+        `campaign ${report.campaignId}\n` +
+          figure('units per hour', report.unitsPerHour) +
+          duration('session duration', report.sessionDurations) +
+          duration('queue time', report.queueTime) +
+          figure('max observed concurrency', report.maxObservedConcurrency) +
+          figure('concurrency observed', report.concurrency.observed) +
+          // Beside it rather than instead of it: a declared lane target is a
+          // projection and is never reported as throughput.
+          figure('concurrency declared', report.concurrency.declared) +
+          figure('ceiling', report.ceiling) +
+          figure('rate-limited sessions', report.rateLimited.sessions) +
+          figure('rate-limited deferred ms', report.rateLimited.deferredMs),
+      );
+      for (const [heading, entries] of [
+        ['per worker', report.perWorker],
+        ['per role', report.perRole],
+        ['per account', report.perAccountRef],
+      ] as const) {
+        if (entries.length === 0) continue;
+        process.stdout.write(`\n${heading}\n`);
+        for (const entry of entries) {
+          process.stdout.write(
+            `  ${entry.id}${entry.accountRef ? ` (${entry.accountRef})` : ''}\n` +
+              `  ${figure('  sessions', entry.sessions)}` +
+              `  ${figure('  units merged', entry.unitsMerged)}` +
+              `  ${figure('  units per hour', entry.unitsPerHour)}` +
+              `  ${figure('  max concurrency', entry.maxObservedConcurrency)}`,
+          );
+        }
+      }
+      break;
+    }
+
     case 'release': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const decision = (flagString(flags, 'decision') ?? 'APPROVED') as 'APPROVED' | 'REFUSED';
@@ -805,7 +866,8 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, answer-bin, reauthorize, retire, release\n',
+          '  remote-tick, campaigns, bins, status, throughput, answer-bin, reauthorize,\n' +
+          '  retire, release\n',
       );
   }
 

@@ -15,13 +15,14 @@
  * four states of a read — loading, empty, forbidden, error — are four different
  * screens.
  */
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { listState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { FactoryApi } from '../lib/factoryApi.ts';
 import type {
   FactoryCampaign,
   FactoryChangeRequest,
+  FactoryRelease,
   OnboardResult,
   RepositoryOnboarding,
   SubmitResponse,
@@ -681,6 +682,13 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
           {view.blocker.detail ? ` — ${view.blocker.detail}` : null} {view.blocker.remedy}
         </p>
       ) : null}
+      {view?.decisionWaiting ? (
+        <ReleaseDecision
+          campaignId={campaign.id}
+          release={view.decisionWaiting}
+          onAnswered={detail.reload}
+        />
+      ) : null}
       {view && view.openFindings.length > 0 ? (
         <ul className="rs-findings">
           {view.openFindings.map((finding) => (
@@ -703,6 +711,110 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
         </p>
       )}
     </li>
+  );
+}
+
+/**
+ * The second of a person's two decisions, where the campaign is waiting for it.
+ *
+ * A campaign whose deployment policy is not `NONE` reaches `AWAITING_RELEASE`
+ * and parks with the blocker `AWAITING_HUMAN_RELEASE`. Before this, the row
+ * above rendered that sentence and nothing else — a stage whose whole purpose
+ * is to wait for a person, with no way for that person to answer. §24's
+ * escalation nobody can resolve, and §26's rule that a decision a person makes
+ * about their own project belongs on the surface they already use.
+ *
+ * **What is being let out is shown rather than assumed.** The release carries
+ * the evidence it was requested with — the integration commit, how many units
+ * landed, the review rounds, the last verdict, what independence was achieved
+ * and how many findings are still open — and every one of those is printed,
+ * because a decision card that asks somebody to approve a thing it declines to
+ * describe is a confirmation dialog rather than a decision. Unknown keys are
+ * printed too, with their own names, so evidence that grows on the server never
+ * goes quietly missing from the one screen it is for.
+ *
+ * **Both answers, and a reason.** A card that offers one answer is not a
+ * decision (§33), and a refusal with no reason answers nothing later. Nothing
+ * here decides whether the reason is good enough: the server takes it, and a
+ * client-side rule the server does not enforce would be a second reader of one
+ * decision.
+ *
+ * **No capability flag, deliberately, and that is this screen's own
+ * convention.** Approving an objective — the other of the two — is rendered the
+ * same way: the control is offered, and the server refuses it with the same 404
+ * a project that does not exist gives. Adding a flag to one of two matching
+ * decisions would make the screen inconsistent with itself, and a hidden button
+ * is not authorization in either case.
+ */
+function ReleaseDecision({
+  campaignId,
+  release,
+  onAnswered,
+}: {
+  campaignId: string;
+  release: FactoryRelease;
+  onAnswered(): void;
+}): JSX.Element {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const answer = useCallback(
+    (decision: 'APPROVED' | 'REFUSED') => {
+      if (busy) return;
+      setBusy(true);
+      setProblem(null);
+      void FactoryApi.answerRelease(campaignId, decision, reason).then(
+        () => {
+          setBusy(false);
+          onAnswered();
+        },
+        (error: unknown) => {
+          // The buttons come back rather than spinning. A control that never
+          // recovers from one failed press is worse than one that did nothing.
+          setBusy(false);
+          setProblem(error instanceof Error ? error.message : String(error));
+        },
+      );
+    },
+    [busy, campaignId, onAnswered, reason],
+  );
+
+  return (
+    <div className="rs-card rs-build-release">
+      <h5>This campaign is waiting for you to let the work out</h5>
+      <p className="rs-hint">
+        The reviewable artifact is ready. Approving it records that a person allowed this
+        campaign&rsquo;s result out; refusing it records that a person did not, with the reason.
+        Neither merges anything and neither deploys anything.
+      </p>
+      <ul className="rs-build-release-evidence">
+        {Object.entries(release.evidence).map(([key, value]) => (
+          <li key={key}>
+            <span className="rs-field-label">{key.replace(/([a-z])([A-Z])/g, '$1 $2')}</span>{' '}
+            <span>{value === null ? 'not established' : String(value)}</span>
+          </li>
+        ))}
+      </ul>
+      <label>
+        <span className="rs-field-label">Why</span>
+        <textarea rows={2} value={reason} onChange={(event) => setReason(event.target.value)} />
+      </label>
+      <p className="rs-build-actions">
+        <button type="button" disabled={busy} onClick={() => answer('APPROVED')}>
+          {busy ? 'Recording…' : 'Approve the release'}
+        </button>
+        <button
+          type="button"
+          className="rs-button-quiet"
+          disabled={busy}
+          onClick={() => answer('REFUSED')}
+        >
+          Refuse it
+        </button>
+      </p>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </div>
   );
 }
 

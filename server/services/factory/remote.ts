@@ -1529,19 +1529,6 @@ export function liveBinOfKind(bins: Bin[], kind: string): Bin | null {
   return bins.find((bin) => bin.kind === kind && isLiveBin(bin)) ?? null;
 }
 
-/** The repository a campaign works in, or null when its remote is not one we read. */
-export async function repositoryOf(campaign: FactoryCampaign): Promise<ForgeRepository | null> {
-  const changeRequest = await getChangeRequest(campaign.changeRequestId);
-  if (!changeRequest) return null;
-  return parseRemote(changeRequest.repository);
-}
-
-/** Units whose dependencies have landed and which have no live bin yet. */
-export async function readyUnitsFor(campaignId: string): Promise<FactoryWorkUnit[]> {
-  const units = await listUnits(campaignId);
-  return units.filter((unit) => unit.state === 'READY');
-}
-
 /**
  * How a campaign for this contract must be executed, derived rather than chosen.
  *

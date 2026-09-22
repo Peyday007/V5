@@ -56,7 +56,6 @@
  */
 import {
   getProjectRepository,
-  listProjectRepositories,
 } from '../../repos/factory.ts';
 import { decideRepository } from './repositoryEnvelope.ts';
 import { repositoryIdOfRemote } from './onboard.ts';
@@ -254,9 +253,4 @@ export function describeBoundary(row: FactoryProjectRepository): string {
   const directories = directoriesOf(row.pathScope);
   if (directories.length === 1) return `${directories[0]}/`;
   return `${directories.slice(0, -1).join('/, ')}/ and ${directories[directories.length - 1]}/`;
-}
-
-/** Every repository this project has been given, for a picker and for a report. */
-export async function projectRepositories(projectId: string): Promise<FactoryProjectRepository[]> {
-  return listProjectRepositories(projectId);
 }
