@@ -3799,6 +3799,47 @@ remote.
   `rearmSurfaceDeferredIntents` makes one layer down — which is what keeps the
   product usable before every site's repository arrangement has been settled.
 
+- **A bin's lease was the worker's to choose, and the work is the contract's to
+  demand.** `brain_check_in` takes `lease_ms`, `brain_bin_heartbeat` takes it
+  again, and `heartbeatBin` writes `lease_expires_at = now +
+  clampBinLeaseMs(leaseMs)` — an *assignment* rather than an extension, floored
+  at `MIN_BIN_LEASE_MS`, thirty seconds. So a worker could shorten its own lease
+  below the work it was about to block on, and nothing anywhere related the
+  number to what the bin's own contract demands. `FACTORY_INTEGRATION_V1` is
+  satisfied by merging the unit branches and running **this repository's own
+  commands** on the merged tree, and a worker inside `npm test` cannot heartbeat
+  while it runs.
+
+  Measured from `factory_sessions` on `fcp_189ea30c7ded4e7b9280`: the architect
+  695s, an implementer **1803s**, the integrator **1051s**, the reviewer 1011s —
+  against a `DEFAULT_BIN_LEASE_MS` of fifteen minutes. The 1051s integration
+  survived because every heartbeat happened to land. The next one did not.
+  `bin_43915e4f93ca4e3db111` was taken over at 07:56:35, renewed four times, and
+  retired `NEEDS_HUMAN` at 08:09:41 — **earlier than `takeover + 15min`**, which
+  is reachable only if a renewal set a shorter expiry than the takeover's own.
+  The worker was still working: its next heartbeat is on the bin's events at
+  08:13:01 as `BIN_STALE_WRITE — heartbeat after lease loss`. Thirteen minutes
+  of a real integration discarded, and the bin's last attempt with it.
+
+  **A floor rather than a beat, which §27 already paid two deploys to learn one
+  object along.** A beat does not rescue a long step, because the lease ends
+  `DEFAULT_LEASE_MS` after the beat was *issued* rather than after it landed —
+  so the remedy there was a lease taken at claim time that never needs
+  extending, and `RESEARCH_LEASE_MS` is an hour. `domain/binLease.ts` is the
+  same sentence at the bin: an hour for the three factory contracts whose work
+  checks this repository out and runs its commands, `null` — the default,
+  unchanged — for every other contract, because an hour-long lease on a bin
+  whose worker reads rows and submits an answer strands it for an hour when that
+  worker dies and buys nothing. A `Record` over the whole union, so a contract
+  added later is a compile error until somebody says what its work costs.
+
+  It is a **floor**: a worker asking for more still gets more, and can no longer
+  ask for less than the work Brain is about to demand of it. This repository's
+  recurring rule, at the one value in the exchange the claimant had been
+  supplying. Applied in both places a lease is written, because the heartbeat is
+  where it actually failed, and each half was run against its own defect before
+  either was trusted.
+
 A worktree is the one factory path that is deliberately *not* authoritative
 state in either mode: it is execution scratch, the evidence is the commits, the
 rows and the artifacts, and retiring one destroys nothing that mattered. It

@@ -30,6 +30,7 @@ import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import { sameProviderSession } from '../domain/sessionRef.ts';
+import { contractLeaseFloorMs } from '../domain/binLease.ts';
 import type { BinConfinement } from './workQueue.ts';
 import type {
   Bin,
@@ -1466,9 +1467,30 @@ function familyWhereClause(
   return { sql: `AND (${clauses.join(' OR ')})`, params };
 }
 
+/**
+ * The lease this bin is actually handed, which is never shorter than its own
+ * contract's work.
+ *
+ * A worker chooses `lease_ms` and cannot know what the work costs; the contract
+ * can, because it is the thing that says what must be satisfied. So the floor is
+ * applied to whatever arrives, in both places a lease is written — the
+ * assignment and the heartbeat — because the heartbeat is an *assignment* of
+ * `lease_expires_at` rather than an extension, and is therefore how a worker
+ * shortens its own lease under the work it is about to block on. See
+ * `domain/binLease.ts` for the measurement this is set from.
+ *
+ * A worker asking for more still gets more. The clamp to `MAX_BIN_LEASE_MS`
+ * happens either way, so this can never produce a lease the queue would refuse.
+ */
+function leaseForContract(contract: string, requested?: number): number {
+  const asked = clampBinLeaseMs(requested);
+  const floor = contractLeaseFloorMs(contract);
+  if (floor === null) return asked;
+  return clampBinLeaseMs(Math.max(asked, floor));
+}
+
 export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin | null> {
   const db = getDb();
-  const leaseMs = clampBinLeaseMs(input.leaseMs);
   if (input.projectIds.length === 0) return null;
 
   /*
@@ -1659,6 +1681,7 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
 
       const leaseId = newId('bls');
       const at = binNow();
+      const leaseMs = leaseForContract(row.completion_contract, input.leaseMs);
       const expires = plusMs(at, leaseMs);
       const nextGeneration = row.lease_generation + 1;
       const takeover = row.state === 'LEASED';
@@ -1847,7 +1870,27 @@ export async function heartbeatBin(
   leaseMs?: number,
 ): Promise<{ outcome: BinLeaseOutcome; expiresAt: string | null }> {
   const now = binNow();
-  const expires = plusMs(now, clampBinLeaseMs(leaseMs));
+  /*
+   * The contract's floor applies here too, and this is the place it actually
+   * had to.
+   *
+   * This statement *assigns* `lease_expires_at` rather than extending it, so a
+   * worker that heartbeats asking for less than it asked for at check-in
+   * shortens its own lease — and the only clamp underneath was
+   * `MIN_BIN_LEASE_MS`, thirty seconds. That is how
+   * `bin_43915e4f93ca4e3db111` came to be retired at 08:09:41 having been
+   * taken over at 07:56:35 under a fifteen-minute lease: four renewals, and an
+   * expiry earlier than the takeover's own. The worker was still working; its
+   * next heartbeat is on the events as a stale write.
+   *
+   * One read by primary key, which is what it costs to ask the row what its
+   * work is rather than trusting the caller's number for it.
+   */
+  const row = await getDb().get<{ completion_contract: string }>(
+    `SELECT completion_contract FROM bins WHERE id = ?`,
+    [proof.binId],
+  );
+  const expires = plusMs(now, leaseForContract(row?.completion_contract ?? '', leaseMs));
   const result = await getDb().run(
     `UPDATE bins SET heartbeat_at = ?, lease_expires_at = ?, lease_renewals = lease_renewals + 1,
        updated_at = ? WHERE ${ownershipClause()}`,

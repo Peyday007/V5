@@ -168,6 +168,89 @@ beforeEach(async () => {
 
 /* ========================================================================= */
 
+/**
+ * A bin's lease is the work's, not the worker's.
+ *
+ * The worker chooses `lease_ms` at check-in and again on every heartbeat, and
+ * `heartbeatBin` *assigns* `lease_expires_at` rather than extending it — so a
+ * worker could shorten its own lease to thirty seconds and then block for
+ * quarter of an hour inside the very commands its contract demands. Production
+ * did: `bin_43915e4f93ca4e3db111`, taken over 07:56:35, four renewals, retired
+ * `NEEDS_HUMAN` at 08:09:41 with its worker still heartbeating at 08:13:01.
+ *
+ * Both halves are asserted, because the fix is only a fix if it holds at both
+ * places a lease is written.
+ */
+describe("a contract's own work sets the floor under its lease", () => {
+  async function factoryBin(projectId: string): Promise<string> {
+    const bin = await createBin({
+      projectId,
+      kind: 'FACTORY_INTEGRATE',
+      title: 'Bring the unit branches together',
+      objective: "Merge the unit branches and run the contract's own commands on the tree.",
+      manifest: unitsManifest(projectId, 1),
+      completionContract: 'FACTORY_INTEGRATION_V1',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      ready: true,
+    });
+    return bin.id;
+  }
+
+  /** How long a lease actually runs for, from the row rather than the request. */
+  function heldMs(bin: { leasedAt: string | null; leaseExpiresAt: string | null }): number {
+    return Date.parse(bin.leaseExpiresAt ?? '') - Date.parse(bin.leasedAt ?? '');
+  }
+
+  it('refuses to hand out less than the work needs, however little is asked for', async () => {
+    const binId = await factoryBin(projectA);
+    const assigned = await assignNextBin({
+      workerId: workerOne,
+      projectIds: [projectA],
+      leaseMs: 30_000,
+    });
+    expect(assigned?.bin.id).toBe(binId);
+
+    // Thirty seconds was asked for and is the documented minimum; an
+    // integration on this repository was measured at 1051s.
+    const held = heldMs((await getBin(binId))!);
+    expect(held).toBeGreaterThanOrEqual(60 * 60 * 1000);
+  });
+
+  it('lets a worker ask for more than the floor, because a long session is its own business', async () => {
+    const binId = await factoryBin(projectA);
+    await assignNextBin({
+      workerId: workerOne,
+      projectIds: [projectA],
+      leaseMs: 3 * 60 * 60 * 1000,
+    });
+    expect(heldMs((await getBin(binId))!)).toBe(3 * 60 * 60 * 1000);
+  });
+
+  it('leaves every other contract exactly as it was', async () => {
+    const binId = await makeBin(projectA);
+    await assignNextBin({ workerId: workerOne, projectIds: [projectA], leaseMs: 30_000 });
+    // No floor for a contract whose worker reads rows and submits an answer:
+    // an hour-long lease there would strand the bin for an hour when a worker
+    // dies, and buy nothing.
+    expect(heldMs((await getBin(binId))!)).toBe(30_000);
+  });
+
+  it('will not let a heartbeat shorten a lease under the work, which is how it actually failed', async () => {
+    const binId = await factoryBin(projectA);
+    const assigned = (await assignNextBin({ workerId: workerOne, projectIds: [projectA] }))!;
+
+    const beat = await heartbeatBin(proofFrom(assigned, workerOne), 30_000);
+    expect(beat.outcome).toBe('OK');
+
+    const after = (await getBin(binId))!;
+    const remaining = Date.parse(after.leaseExpiresAt ?? '') - Date.parse(after.heartbeatAt ?? '');
+    expect(remaining).toBeGreaterThanOrEqual(60 * 60 * 1000);
+  });
+});
+
+/* ========================================================================= */
+
 describe('assignment is atomic and isolated', () => {
   it('gives one bin to exactly one of two simultaneous workers', async () => {
     const binId = await makeBin(projectA);
