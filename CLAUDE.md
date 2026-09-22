@@ -583,6 +583,119 @@ never a process-local lock.
 - Deleting an operation record must never make a successful effect silently
   repeatable.
 
+- **The caller's own timeout is part of the boundary, and it is shorter than
+  Brain thinks.** A mutation that commits after the client has given up is
+  reported to the worker as a failure it did not have, and the worker then acts
+  on that report. Production, 2026-09-21: a JUDGE submission on
+  `wki_8ec24cf67707419aae39` came back `timed out after 60s`; the server
+  committed the operation at **10:35:06.165Z**, and resending exactly the same
+  arguments answered `ALREADY_RECORDED` with that timestamp. The verdict was in
+  the table. The worker reported *"Cloud Brain MCP connector is down, JUDGE
+  verdict not submitted"* — about a connector that was up throughout and a
+  verdict that had been submitted — and a person got a phone notification
+  saying so. **The mechanism worked perfectly and the story around it was
+  false**, which is this file's most expensive shape of defect.
+
+  Three things follow, and only the first is about speed.
+
+  **The client's bound is not Brain's to choose.** §27 measured the same seam
+  from `verify-hosted.ts` at undici's 300-second default; the Cowork connector
+  gives up at 60. Every number there is a property of whichever client is
+  connected, so the contract cannot rest on the operation being quick — and
+  making it quick on a guess is what §27 explicitly refuses. What the judge
+  branch actually spends its time on is still **not established**, and a reader
+  starting from `recomputeProject` should know that Cash Mode 1 holds one layer
+  and fourteen documents, so the archive scan is seconds rather than minutes
+  there.
+
+  **A retry is the answer, and nothing was telling anybody.** The server's own
+  instruction block has always said a mutation is idempotent by work item; the
+  worker contract — the thing a Routine actually reads — said nothing about
+  what a timeout means. It does now, as its own section: a timeout, a transport
+  error or a reset is a fact about the *reply*, the same call is sent again
+  with the same arguments, and `ALREADY_RECORDED` and `IN_PROGRESS` are both
+  ordinary answers. Reporting a connector as down because one reply was slow is
+  the one mistake that section exists to prevent.
+
+  **And the commonest reason a worker finds the connector unreachable is not a
+  fault at all.** Measured from outside the runner while deploy 305 was
+  restarting the machine on 2026-09-21: `GET /healthz` answered **503 after
+  35.7s**, again **503 after 35.7s**, then **200 after 28.8s**, and **0.44s** a
+  minute later — about two minutes in which every MCP call fails, on an
+  endpoint that is a fixed string with no database behind it. The slow 200 is
+  the tail of a cold start rather than a standing condition, which is why the
+  last reading is recorded beside it. Every deploy does this, and a fired worker that
+  arrives in that window sees exactly what the notification described. A third
+  shape was observed the same day and is the same category: the connector proxy
+  answering `-32600 Anthropic Proxy: Invalid content from server`, which
+  succeeded on the next call. None of the three is a reason to stop; all three
+  are answered by asking again.
+
+- **A role that has already been argued is not work, and the redelivery was
+  charged for it.** `reconcileArguedAuditRoles` retires exactly that item on
+  the tick, and it cannot win the race: the item becomes claimable the instant
+  the lease lapses and the tick arrives afterwards. So the next session
+  re-argues a settled role — minutes of judging whose submission
+  `idempotentEffect` then correctly refuses as a replay — and the reasoning is
+  discarded while **the attempt is not**. `RESEARCH_AUDIT` carries two, so two
+  such redeliveries exhaust an item whose work is already done.
+  `auditEligibility` refuses it now, scoped to the current round and only on a
+  `COMPLETE` pass, ahead of the compare-and-swap where §23's correction already
+  put the rest of this rule: no attempt, no lease, no generation.
+
+- **The attempt ceiling meant nothing on the path that reaches it.**
+  `failWork` has always honoured `max_attempts`, so an item a worker *reports*
+  failed retires correctly. An item whose lease merely **expires** — which is
+  what an infrastructure failure looks like from the queue — was re-offered for
+  ever, charged another attempt each time, and nothing ever read the number
+  again. Production, Cash Mode 1: `wki_207ff7c14abf46c19fd8` at attempt 4 of 2
+  and `wki_7b51a43e958f42f7b5ba` at 5 of 2, both `LEASED` on leases that lapsed
+  days earlier, both still candidates. **A bin cannot reach that state**,
+  because §23 put the same clause in `DISPATCHABLE_SQL`; the work item inside
+  the bin could, because it never got one. That asymmetry is the whole defect,
+  and the clause is now in the candidate read *and* in the swap — the second is
+  where it binds, since two claimants racing for an item's last attempt must
+  not both get one. An exhausted item stops being offered instead of cycling,
+  which is what lets `concludeUnworkablePackets` see it and turn the stop into
+  a decision.
+
+  **A ceiling that binds needs a way past it**, and before this there was no
+  escalation to answer because the item simply cycled. `regrantWorkAttempts` is
+  `regrantBinAttempts` one object down, with every restriction verbatim: it
+  raises and never resets, it only ever raises, it refuses a terminal item, and
+  it records why on the project's own append-only history.
+  `step10 regrant-work` is the surface, and its reason comes from a closed set
+  because a free-text one there would be a caller writing its own audit trail.
+
+  **The same seam was walked at every other stage and is deliberately not
+  widened, which is a reading rather than an omission.** Discovery, the launch,
+  the fragment gate, the packet, the bin, the writeback, the dispatch intent and
+  the arrival each already hold both halves — a durable record, and a
+  reconciliation on the tick that closes it once the owner is gone. What is left
+  is one case: a `RESEARCH_FRAGMENT`, `RESEARCH_VERIFY` or `RESEARCH_SYNTHESIZE`
+  item whose effect committed and whose worker never completed it is re-leased
+  and the work re-done, until the submission replays and the item finishes. It
+  is self-healing and, now, bounded.
+
+  The obvious generalisation is refused for a specific reason.
+  `researchItemRecorded` is the only predicate for *did this item record its
+  effect*, and it answers `true` for several cases that mean **not
+  applicable** — a fragment item with no `fragmentId`, an orchestration that
+  cannot be read — which is the safe direction for its own caller, which asks
+  whether an item may be *replaced*, and the unsafe direction for a caller
+  deciding whether to retire one. Its synthesis answer is `documentId !== null`,
+  which is true of every packet being re-synthesised after a handoff. A
+  retirement built on it would retire work that still has to happen, in order to
+  save an activation. The audit case is exact — one item is one role is one
+  pass — and that is why it is the one that moved.
+
+  `releaseWork`'s docstring said the opposite of `releaseWork`, and is
+  corrected in place rather than deleted: it claimed a release does not refund
+  the attempt, while the body — and the body's own comment, recording what that
+  belief cost the first real packet — refunds it. With the ceiling now binding
+  at the claim, a reader who believed the docstring would conclude that an
+  honest handover costs a packet one of its attempts.
+
 
 ## 21. The protocol is a door, not a second set of rules.
 
@@ -3746,6 +3859,35 @@ of an older dispatch is the same rollback wearing the right branch name.
   branch, do not add a second workflow that runs `flyctl deploy`, and do not
   "temporarily" deploy a branch to test something — that is precisely what
   happened, twice, and the cost was a deleted surface coming back.
+- **The guard was asked before the tests and the release happens after them,
+  and that gap is a fourth way the same damage arrives.** `workflow_dispatch`
+  evaluates the `canonical` job first and `flyctl deploy` runs after a
+  typecheck, a full suite and a build — so a run that was legitimately the tip
+  when it started can ship a tree the branch has moved past. Run 283,
+  2026-09-21: the guard passed on `c94bef0`, two pull requests merged while its
+  tests ran, and it released `c94bef0` at 01:02:31, taking both merged changes
+  off the live Brain until a later deploy restored them. **The guard has to be
+  in the statement that makes the change** — this repository's own recurring
+  sentence, at the altitude of a workflow rather than an `UPDATE`.
+
+  Two sessions reached that independently and the resolution keeps both halves.
+  `canonical-guard.sh` is the freshness question in one file asked twice, which
+  is better than the copy I wrote: it uses `git ls-remote`, so it needs no
+  history and also refuses a branch that was *rewound*, which a commit count
+  silently passes.
+
+  Beside it is the question being level with the branch does not answer:
+  whether this tree is **older than what is already running**.
+  `deployed/production` is a lightweight tag the workflow moves *after* a
+  release succeeds — before it, and a deploy that then failed would refuse the
+  re-deploy that fixes it — so a commit that is a strict ancestor of it is a
+  rollback and is refused. A deliberate rollback stays possible by name, as an
+  input somebody sets, because a guard with no way past it is deleted the first
+  time it stands in front of something correct. It is written in git alone
+  rather than by reading the running revision out of `flyctl`: an unverified
+  CLI shape in the one workflow that ships the product is a way to break every
+  deploy in order to prevent a rare one.
+
 - **A worktree holding the canonical branch is a third way the same damage
   arrives, and one turned up.** A scratch worktree had `production` checked out
   with a *reversal of a whole session* staged in its index: `packets.yml`
@@ -5193,6 +5335,40 @@ and a suite that exercises the stage cannot see that.**
   the production constant, because a test sharing that constant would pass
   whatever it became.
 
+
+- **The repair is proven in production, and the storage key is the proof.** A
+  claim that a filing path works is worth nothing without the path having been
+  walked, and §33 already records me reporting this one fixed on the strength
+  of a release gate that never exercises it. So: `orc_8adf57cff129492ca837`,
+  whose synthesis failed eight times on 2026-09-17 with
+  `The document store refused an upload (HTTP 400)`, was reissued and filed
+  `doc_f61e4c3723bf44b7adec` on 2026-09-21 — 22 183 bytes, read back out of the
+  bucket, extraction READY, seventeen of seventeen cited claim ids present in
+  the stored bytes. The two numbers that settle it sit beside each other on the
+  row: the canonical name is *"Opportunity Research v1 — Where the same
+  deliverable has two published prices"* and the key is the same sentence
+  **without the em dash**. `sanitizeFilename` returns the first and
+  `safeSegment` the second, so the key that Supabase answered to is the one
+  this repair builds and could not have been built by the code it replaced.
+
+- **An operation's failure category is the last thing that happened to it, not
+  what it is about.** Recovering that packet appended an eighth attempt to
+  `idop_51dd36b3313b4d12b048` — a worker submitting against the *original*,
+  now-unowned work item before submitting against its replacement, refused by
+  the ownership fence with *"This worker no longer owns the work item, so the
+  effect was not committed"*. The fence did exactly its job and nothing
+  committed. What moved is the operation's `failure_category`, from
+  `INTERNAL_ERROR` to `NOT_AUTHORIZED`, because `failOperation` overwrites it on
+  every non-terminal failure while the row is `RESERVED`. So an operation whose
+  substance is six HTTP 400s now summarises itself as an authorization problem.
+
+  **Nothing was destroyed and that is the whole difference** between this and
+  §33's packet that overwrote its own diagnosis: every attempt row keeps its
+  own message, and `packet-report` prints all of them, which is what the
+  observability change above exists for. It is recorded here rather than fixed
+  because the right fix is not obvious — the category is genuinely *current*
+  state, and a reader who wants the cause has the attempts — and because a
+  guess at it would be a change to the one table that explains failures.
 
 - **That repair hardened a function the live path does not call, and the
   correction is recorded rather than quietly applied.** `safeSegment` is
@@ -7225,6 +7401,57 @@ when the brief's whole optimization rule is that it is not.**
   that no longer exists is a vacuous guard, and §41 already records what one
   costs — it reads as coverage.
 
+- **The one command on that door that reads could not be taken while the Brain
+  was working, and the two doors disagreed about it within one minute.**
+  `manufacturing.sh` carried no pool setting, so it took the adapter's default
+  of ten clients against a Supabase pooler with a shared limit of fifteen —
+  beside an app already holding up to ten. Measured on 2026-09-21 against one
+  image: `manufacturing show manufacturing-empire` through
+  `closeout-report.yml`, which sets `BRAIN_DATABASE_POOL_SIZE=1` at the call
+  site, printed the whole ladder; the identical command through
+  `manufacturing.yml`, which set nothing, died on
+  `SELECT * FROM manufacturing_rounds` with *(EMAXCONNSESSION) max clients
+  reached in session mode — max clients are limited to pool_size: 15*.
+
+  §45 already states the rule and the reason — *a rule one of five readers
+  obeys is worse than none, because the next report is written by copying
+  whichever one the author opened* — and its guard reads `scripts/*-report.sh`,
+  which this file is not. Both halves are fixed, because they answer different
+  failures: the script carries it for a terminal and for every future door, and
+  the workflow carries it at the call site so the fix reaches an image whose
+  copy of the script predates it, which is the case an operator command exists
+  for. The guard was run against both lines removed to watch it fail first.
+
+  **That paragraph ended by reporting the wider condition rather than changing
+  it, and the correction is recorded rather than quietly applied.** Fourteen of
+  the seventeen wrappers under `scripts/` carried no pool setting at all, so
+  the same reading was unavailable at each of them whenever production was
+  busy — and the reasons given were that widening the guard would refuse those
+  files rather than fix them, and that each belongs to the workstream that owns
+  it. The first is true of widening the guard **alone**; the second is *it is
+  somebody else's*, which is the deferral this file has had to correct more
+  than once. So the files were fixed and the guard widened with them: every
+  wrapper carries `export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"`,
+  and the rule is asserted over `scripts/*.sh` rather than over the ones whose
+  filename happens to end in `-report.sh`.
+
+  **One client is safe for all of them because every one is sequential.** None
+  of `admin`, `fleet`, `step10`, `capability`, `design`, `closeout-verify`,
+  `chain-watch`, `authorize-gap-policy` or `verify-research-capability` fans
+  out over the database — checked rather than assumed — and a statement inside
+  a transaction goes to that transaction's own pinned client rather than back
+  to the pool (§34). The default form leaves a caller that genuinely needs more
+  able to say so.
+
+  **`verify-hosted.sh` is the one exception and it is declared.** That harness
+  really does fan out — §27 measures 383 callers queued behind it — and
+  `verify-hosted.ts` sets its own ceiling of 2 in-process with its reasoning
+  beside it. A wrapper default would win over that line and silence a
+  deliberate decision, so it is exempted **by name** in the guard rather than
+  by a pattern, and the guard asserts both halves: that the wrapper carries
+  nothing, and that the file it defers to really does declare a ceiling. A
+  second exception is a visible edit.
+
 `npm run manufacturing` remains the terminal door, calling exactly what the
 routes call, for the operations a browser is not needed for.
 
@@ -8957,6 +9184,26 @@ elapsed time in the reason rather than as a failure.
 closest to being a decision go first now, counted from their own columns. It is
 a preference and never a ceiling: nothing is refused because of it.
 
+**A third way to hold a slot with nothing working on it, found by reading
+production rather than the code.** The stall backstop above is guarded on
+`mission.state === 'RUNNING'`, and a dive whose candidate was never judged has
+no mission at all — so `PENDING` counted against both slots and **nothing in
+`settleValidations` could ever take one back**. Under ordinary operation the
+Russell tick judges a candidate within minutes and it becomes a mission or
+reaches `PARKED`, which is already answered; this is what happens when that
+stops. §24's *waiting nobody can resolve*, at the one state that is also
+scarce.
+
+The first causal reading of a live sprint is what showed it: two `PENDING`
+dives holding both slots with `candidate=QUEUED mission=— packet=—`, one of
+them an hour and a half old, against four parked dives whose missions had
+appeared in 5, 19, 31 and 44 minutes. Nothing was wrong with either of them
+*yet*, and nothing would ever have been able to say so. Same window and same
+verdict as a stalled mission, for the same reason: `BLOCKED` keeps every row,
+frees the slot, and leaves the second round available. The test asserts both
+sides of the window, because a backstop that fired early would cancel a dive
+whose candidate is simply still being judged.
+
 `scripts/refinement-report.ts` is the instrument, and it exists because *why is
 refinement slow* had no answer that was not a guess. Every figure in it is the
 difference between two recorded timestamps; a stage with no timestamp reads `—`
@@ -8993,6 +9240,29 @@ grown a fourth condition of its own, which is the failure mode having one
 reader exists to prevent. And they prove the distinction from rows: filling
 every slot reads `SLOTS_TAKEN`, parking one frees it, the parked opening reads
 `AWAITING_PERSON`, and nothing re-dives it while it waits.
+
+**And the first production reading answers the question the owner actually
+asked, which turns out not to be the one I expected.** Taken on the serving
+revision, against the live sprint:
+
+    openings    40  NEEDS_PERSON=8 NOT_STARTED=30 PENDING=2
+    in flight   2 of 2 slots  ·  8 parked for a person, holding none
+
+    WHY REFINEMENT IS OR IS NOT MOVING
+      sprint      no free slot: 2 of 2 are held by live dives
+      ELIGIBLE           30  eligible — starts as soon as a slot is free
+      AWAITING_PERSON     8  waiting on a person: its mission stopped at a
+                             decision only they can make
+      IN_FLIGHT           2  a worker is on it (PENDING), holding a slot
+      VERDICT     nothing can start: no free slot: 2 of 2 are held by live dives.
+
+So the lifecycle is **not** stopped at human decisions. Thirty openings have
+nothing at all refusing them, and what they are waiting for is a provider slot.
+The eight parked ones are real and are genuinely a person's, and they are
+holding **no** capacity — which is §33's repair working, observed rather than
+asserted. Reporting `passes 0/0` would have said none of that, and the shape a
+reader would have taken from it — *everything is blocked on the owner* — is the
+opposite of what the rows say.
 
 ### Two things the gates found that reading did not.
 
@@ -9154,6 +9424,47 @@ defect — `admin.yml` put back into the release group, one wait deleted, the
 second canonical asking deleted, the envelope entry deleted — and each fails
 naming exactly what is missing.
 
+**All three halves were then proved from production rather than from the
+tests.** Deploy 305 released this tree; while its post-restart verification was
+running, `Routing show` and `Admin people list` were dispatched **four seconds
+apart** — the same pair that, at 08:20 this morning, ended with one of them
+cancelled before it started.
+
+- **Neither was cancelled.** Both went `in_progress`, both reached
+  `await-release`, and both finished `success`. That is the eviction gone,
+  observed on the two workflows it actually happened to.
+- **Both waited for the live release**, and said so by the second: *"1 Deploy
+  run(s) in flight; waiting 20s (waited 1420s so far)."*
+- **And the bound did what it is for.** At 1500s both printed *"A Deploy run
+  has been in flight for longer than 1500s. Running anyway rather than leaving
+  the Brain unadministrable"*, proceeded, and both read production correctly —
+  `ADMIN: OK` at 12:10:22 and 12:10:36, against a machine that had already
+  restarted and was stable. The fail-open is the designed behaviour and it is
+  the observed behaviour.
+
+The guard's second asking is on the same run's log, in its own words:
+`asked: immediately before flyctl deploy` / `on production, and still its tip.
+Proceeding.` — from a depth-1 checkout, which is what `git ls-remote` rather
+than a commit count is for.
+
+**And two deploys later it refused one, which is the whole reason it exists.**
+Deploy 307 was dispatched on `1dda87a`, passed the first asking, spent sixteen
+minutes in the test gate, and reached the second:
+
+    this commit:      1dda87a…
+    asked:            immediately before flyctl deploy
+    origin/production: 6ba5c9a…
+    ::error::origin/production is now 6ba5c9a…, and this run is deploying
+    1dda87a…. Deploying it would put production back to a tree the branch has
+    moved past. Re-dispatch against the current tip.
+
+Another session had fast-forwarded `production` by two commits while the tests
+were running. Under the single asking this run would have released `1dda87a`
+and rolled production back by two commits — the damage §28 is written from,
+reached by *timing* rather than by a stale dispatch, and with nothing
+anywhere to say it had happened. Nothing was released, the image serving stayed
+the one deploy 305 had proved, and the remedy was the one the message names.
+
 ### One 404 at the manufacturing door.
 
 The third door, and the one a release gate had been reporting on every deploy
@@ -9182,6 +9493,16 @@ against *not yours*; it now holds *a real project that is not yours* against
 indistinguishable and which nothing had ever checked. The readable project's
 200 is what would notice the router vanishing from the build, which is what the
 old 404 could not do.
+
+**Measured either side of the repair, on production.** Deploy 302 ran the old
+shape and reported `HOSTED-VERIFICATION: FAIL 216/217` before the restart and
+`FAIL 235/236` after it — **one** failing check in each, and it was this one,
+printing both bodies. Deploy 305 ran this tree and reported
+`HOSTED-VERIFICATION: PASS 219/219` and `PASS 238/238`, with
+`forbidden and non-existent are the same body, not just the same status —
+byte-identical` and `and says there is no programme rather than refusing —
+{"programme":null}`. `release: success`, `hosted verification: success`,
+`after the restart: success`.
 
 **It was invisible for the ordinary reason: every test in that file ran as a
 Brain administrator**, who reaches every project by design (§34), so nothing

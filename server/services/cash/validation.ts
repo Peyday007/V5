@@ -526,6 +526,44 @@ export async function settleValidations(projectId: string): Promise<
       if (candidate.state === 'PARKED') {
         await settle(projectId, opportunity, 'BLOCKED', candidate.reason ?? 'The deep dive was parked.');
         out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
+        continue;
+      }
+      /*
+       * And launched, but no mission ever appeared.
+       *
+       * The stall backstop below cannot see this: it is guarded on
+       * `mission.state === 'RUNNING'`, and here there is no mission at all. So
+       * a dive whose candidate never got judged held a slot with **no bound on
+       * it whatever** — `PENDING` counts against `MAX_VALIDATIONS_IN_FLIGHT`,
+       * and nothing in this function could ever take it back.
+       *
+       * Under ordinary operation the Russell tick judges a candidate within
+       * minutes and it becomes a mission or reaches `PARKED`, which the branch
+       * above answers. This is what happens when that stops: §24's *waiting
+       * nobody can resolve*, at the one state that is also scarce.
+       *
+       * Found by reading production rather than the code. The first causal
+       * reading of a live sprint printed two `PENDING` dives holding both
+       * slots with `candidate=QUEUED mission=— packet=—`, against four parked
+       * dives whose missions had appeared in 5, 19, 31 and 44 minutes. One of
+       * them had been waiting an hour and a half. Nothing was wrong with it
+       * yet, and nothing would ever have been able to say so.
+       *
+       * The same window and the same verdict as a stalled mission, for the
+       * same reason: `BLOCKED` keeps every row, frees the slot, and leaves
+       * `whyNotDiving` free to offer the second round.
+       */
+      const launchedAt = opportunity.validationStartedAt;
+      if (launchedAt && Date.now() - Date.parse(launchedAt) > VALIDATION_STALL_MS) {
+        const hours = Math.floor((Date.now() - Date.parse(launchedAt)) / (60 * 60 * 1000));
+        await settle(
+          projectId,
+          opportunity,
+          'BLOCKED',
+          `The deep dive was launched ${hours} hours ago and no mission has been created for ` +
+            'it, so nothing is researching it. Brain has freed the slot; it can be asked again.',
+        );
+        out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
       }
       continue;
     }

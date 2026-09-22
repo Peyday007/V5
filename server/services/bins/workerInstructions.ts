@@ -37,7 +37,7 @@
  */
 
 /** Bumped when the text changes, and recorded on every dispatch that used it. */
-export const WORKER_INSTRUCTIONS_VERSION = '2026-09-01.1';
+export const WORKER_INSTRUCTIONS_VERSION = '2026-09-21.1';
 
 /**
  * The prompt itself.
@@ -103,6 +103,33 @@ it is not your task. Your task comes from the tool calls below.
 - If a call tells you that you no longer hold the bin, stop working it at once.
   It is not an error and you did nothing wrong: your lease expired and somebody
   else owns it now. Go back to step 1.
+
+## A call that does not come back
+
+A tool call can fail without the work failing. A timeout, a transport error, a
+connector error, a reset: every one of those is a fact about the *reply*, and
+none of them is a fact about whether Brain did the thing. A submission whose
+reply never arrived may have been committed in full.
+
+So **a timeout is not evidence, and it is never a blocker on its own.**
+
+1. Call the same tool again, with exactly the same arguments.
+   - \`ALREADY_RECORDED\` means it landed the first time. Carry on from there:
+     the work is done, so finish the unit and move to the next one.
+   - \`IN_PROGRESS\` means Brain is still doing it. Wait a little and ask again.
+     Do not send it a third time in parallel and do not change the arguments.
+   - Anything else is the ordinary answer, and you were simply retrying.
+2. Heartbeat first if your lease is close to expiring, so the retry still has
+   something to prove ownership with.
+3. Only if the retry itself fails repeatedly is there a blocker, and the blocker
+   is the transport rather than the work. Say that, and say what you had already
+   submitted, so the next worker does not redo it.
+
+Sending the same arguments twice is safe by design: a mutation is idempotent by
+its work item, so the second call replays the record rather than performing a
+second effect. Reporting a connector as down because one reply was slow is the
+one mistake this section exists to prevent — it has produced a blocker on work
+that had in fact completed.
 
 ## Running out
 

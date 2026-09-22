@@ -87,4 +87,19 @@ jobs:
           echo "Running: $remote"
           # `tee` would otherwise hide a non-zero exit behind its own success.
           set -o pipefail
-          flyctl ssh console --app "$app" -C "$remote" 2>&1 | tee manufacturing.txt
+          # One pooler client, asked for here as well as inside the script.
+          #
+          # `BRAIN_DATABASE_POOL_SIZE` is read from the process environment, so
+          # setting it at the call site reaches an image whose copy of
+          # `manufacturing.sh` predates the line that sets it — which is exactly
+          # the case an operator command is for: the app that needs reading or
+          # driving is the one already running. `closeout-report.yml` gives the
+          # same reason for the same line.
+          #
+          # Measured: `manufacturing show` through that workflow, which sets it,
+          # printed the whole ladder; the identical command through this one,
+          # which did not, died on `SELECT * FROM manufacturing_rounds` with
+          # `(EMAXCONNSESSION) ... limited to pool_size: 15` a minute later on
+          # the same image.
+          flyctl ssh console --app "$app" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 $remote" 2>&1 | tee manufacturing.txt

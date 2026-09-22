@@ -491,6 +491,9 @@ export const EVENT_TYPES = [
   'MANUFACTURING_DECISION_RESOLVED',
   /** And unanswered one, which the directive's own caution is a reason for. */
   'MANUFACTURING_DECISION_REOPENED',
+  // The answering transition for a work item whose attempt ceiling now
+  // binds at the claim as well as at `failWork`.
+  'WORK_ATTEMPTS_REGRANTED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
