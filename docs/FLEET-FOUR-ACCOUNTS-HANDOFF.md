@@ -441,7 +441,7 @@ file its own schema and `DROP SCHEMA … CASCADE` takes one lock per object.
 | Gate | Tree | Result |
 | --- | --- | --- |
 | `npm run typecheck` | `3a63fad4` local, `89b34a9d` in CI | clean, with `tests/**/*.tsx` compiled |
-| `npm test` (SQLite) | **`3d020b42`, the tip** | **4520 passed**, 44 skipped, 210 files passed / 1 skipped, **exit 0** |
+| `npm test` (SQLite) | `3d020b42`, the branch tip *at the time* | **4520 passed**, 44 skipped, 210 files passed / 1 skipped, **exit 0** |
 | `npm test` (PostgreSQL 16.13) | `89b34a9d` in CI, run 342 | **4564 passed**, 211 files passed, **success** |
 | `npm run build` | `3a63fad4` | clean, `index-T4sTcb6M.js` |
 | Cross-lane suites | `3a63fad4` | **189 passed**, exit 0 — `factoryPool`, `factoryOnboarding`, `factoryReleaseSurface`, `buildRepositories`, `peopleAndCapacity`, `peopleSection`, `deploymentOwnership` |
@@ -459,6 +459,12 @@ SHAs above differ by one file, `docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md`, and by
 no code at all — `git diff --name-only 3a63fad4..3d020b42` returns two
 Markdown paths. Every code path in this integration was gated on both
 backends.
+
+**This table describes the branch before it landed, and the SHAs in it are
+history rather than the current tip.** §7.4 is the gate on what production
+actually serves, and it is the one to read for that question. Keeping this
+one is the point: it says what was true of the tree each decision was taken
+on, which a table rewritten to the latest SHA would destroy.
 
 The cross-lane set is the one the lane measured at **188** in a scratch merge
 against the older snapshot; it is 189 here because production's newer commits
