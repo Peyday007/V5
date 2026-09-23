@@ -191,6 +191,10 @@ There must be no workflow where the user has to remember "now go update the data
 47. No possibility discarded for ranking poorly — a rank is a view of the space
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
+48. No person treated as engaged who has not accepted, no result accepted that
+    was not judged against its conditions by something other than the person
+    who did it, and no one's time or money committed without a person's
+    decision on the concrete terms.
 
 ## 8. Model prose never mutates project state.
 
@@ -11386,6 +11390,55 @@ that would have chosen between them exists.**
   along, which is why §32 names its file: **a number is a position two
   workstreams can both reach for; a filename is the thing itself.**
 
+## 50. A decision that a person is needed is not the person doing it.
+
+§41 decides *whether* a task needs a person and why. `server/services/humanwork/`
+(`docs/HUMAN-WORK.md`, migrations `092_human_work.sql` / pg `083_human_work.sql`)
+is everything after that decision, and it was found missing by reading
+production rather than by reading code: on 2026-09-23 `labor-report` answered
+`maps=0` across all thirteen projects, while `people foundation` showed a real
+task only a person can do sitting undone — three members whose Claude accounts
+Brain cannot connect for them.
+
+- **The gate is the existing judgment.** A work order is refused unless the
+  task's live labor allocation names a human layer and one of the six reasons.
+  What the order adds is what the judgment left unsaid: the exact work, why a
+  person, what Brain prepares first, and a non-empty acceptance standard.
+- **Three facts that are easy to collapse are kept apart by the schema.** A
+  candidate row holds no agreement (`TEAM_MEMBER` needs an account,
+  `RESEARCHED` a gated claim with a source, `EXISTING_RELATIONSHIP` a person
+  attesting); `INVITED` is not `ENGAGED`; and `ENGAGED` records *how* it is
+  known — the worker accepting in Brain, or a coordinator attesting with the
+  evidence named. Nobody accepts for a team member.
+- **The engagement decision is a Needs You card, and answering it is not
+  authority.** `resolveEngagementDecision` re-reads whether the answerer
+  administers the project at that moment and puts the card back otherwise —
+  §24's answering transition, and the capability card's placement in
+  `resumeAnsweredRequest` for the same reason. A standing commercial authority
+  covering `ENGAGE_CONTRACTOR` is never bypassed: the approval holds the amount
+  under its ceilings or is not carried out.
+- **Brain holds one channel to a person and says so.** A team member's own Home
+  page. For anybody else Brain composes the message and a person sends it and
+  records the channel; the missing outbound channel is reported as a blocker, not
+  papered over. A member who cannot sign in is a blocker naming People's control.
+- **A result is accepted only when every condition reads MET now**, judged three
+  ways and never by the worker: an account-foundation dimension re-read from rows,
+  a document Brain actually read, or a review of the latest round by somebody else.
+  A `NOT_MET` must name the repair. Brain accepts by itself only a no-charge result
+  whose every condition it reads from rows.
+- **The assignee holds no membership.** `/api/assignments` is one comparison
+  against the principal, and the brief is built field by field — the project is
+  not in it. Absent and not-yours are one body.
+- **Money and time are rows, and obligations outlive the work.** Payments need a
+  reference and cannot exceed what was approved; outstanding is derived and
+  survives acceptance and cancellation; reliability for the next staffing decision
+  is derived from earlier engagements and never stored.
+
+The screen acts on existing work and has no forms yet for opening an order,
+adding a candidate or preparing terms; those are the routes and
+`npm run humanwork -- connect-capacity`, the reviewed recipe for the task that
+exists today.
+
 ## Repository map
 
 ```
@@ -11448,6 +11501,7 @@ server/
     manufacturing.ts  the ladder, the capability ledger, and the one write research cannot reach
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
     labor.ts          workflows, tasks, who produces each, and what has been asked
+    humanWork.ts      orders, candidates, engagements, and the append-only record of delivery
     monetization.ts   the possibility ledger; nothing in it is ever deleted
   services/
     storage.ts          document keys, confinement, and writing through the store
@@ -11619,6 +11673,14 @@ server/
       view.ts           §13's six readings, and the four figures nothing measures
       declare.ts        a person naming a workflow; the one origin Brain may not write
       kernel.ts         the tick, bounded by authority and concurrency and nothing else
+    humanwork/
+      order.ts          a person is necessary, gated on the labor allocation, and for exactly what
+      candidates.ts     who could do it, the evidence for it, and reliability from earlier work
+      engage.ts         terms, the Needs You decision, the ask, and the person's own acceptance
+      deliver.ts        updates, deliverables, conditions judged three ways, acceptance, money
+      view.ts           the stage, who acts next, and the sentence Russell says; the assignee's brief
+      kernel.ts         the tick: deliver in Brain, accept what rows prove, note a missed date
+      recipes.ts        reviewed shapes of work only a person can do
     manufacturing/
       program.ts        starting a programme, and what pressing Start authorizes
       ladder.ts         the classes of machine, and how far Brain has got with each
@@ -11783,6 +11845,7 @@ server/
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
+    humanWork.ts        work done by people: the project's door and the assignee's own
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
@@ -11830,6 +11893,7 @@ scripts/
   refinement-report.ts      where every deep dive spent its time, stage by stage
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
+  humanwork.ts              work done by people: show it, or open the reviewed capacity recipe
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
   puzzle-report.sh          the same, inside the deployed container, on one connection
                             (reached by .github/workflows/puzzle-report.yml, which
@@ -11905,6 +11969,7 @@ tests/                  Vitest suites
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
+  humanWork.test.ts          four principals, one journey, and every boundary between them
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```
