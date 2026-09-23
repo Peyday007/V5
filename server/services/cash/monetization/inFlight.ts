@@ -52,8 +52,18 @@ export type CommissionWorkState =
   | 'SETTLED'
   | 'STOPPED';
 
+/**
+ * One question, as a reader of either surface sees it.
+ *
+ * It deliberately carries **no commission id**. It used to, and nothing read
+ * it: the owner's list joins to the shared one on
+ * `pathId::attribute::round` — which is the unique index, so it identifies a
+ * question exactly — and the shared question carries no id at all, so the
+ * composite is the only join available rather than a choice. A row id belongs
+ * where somebody can look the row up, and that is `npm run cash-report`, which
+ * reads the rows themselves and prints it.
+ */
 export interface InFlightQuestion {
-  commissionId: string;
   /** The possibility it serves, and where that sits right now. */
   pathId: string;
   pathTitle: string;
@@ -134,7 +144,6 @@ async function describe(input: {
   const { commission } = input;
   const reading = commission.state === 'OPEN' ? await liveState(commission) : settledState(commission);
   return {
-    commissionId: commission.id,
     pathId: commission.pathId,
     pathTitle: input.pathTitle,
     rank: input.rank,

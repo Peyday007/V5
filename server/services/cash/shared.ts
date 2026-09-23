@@ -75,7 +75,7 @@ import { authorityFor } from './opportunities.ts';
 import { composeLedger, type Ledger } from './monetization/ledger.ts';
 import { commissionView, type CommissionWorkState } from './monetization/inFlight.ts';
 import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
-import { composeSurface, TOP_SHOWN } from './monetization/surface.ts';
+import { composeSurface, movementSentence, TOP_SHOWN } from './monetization/surface.ts';
 import { explainRanking } from './monetization/rank.ts';
 import { rankableOf } from './monetization/ledger.ts';
 import type {
@@ -218,8 +218,18 @@ export interface SharedMonetizationPath {
   statusNote: string;
   rank: number;
   previousRank: number | null;
+  /**
+   * The raw reason code, kept because it is a fact about the row.
+   *
+   * It is not what a person is shown. `whatChanged` beside it is the sentence,
+   * composed once in `surface.ts` and read here and by the owner's surface —
+   * a token like `ITS_OWN_EVIDENCE_CHANGED` rendered at a reader is what this
+   * pair was added to stop.
+   */
   movementReason: string | null;
   movedAt: string | null;
+  /** Why the position is where it is, in words the server composed. */
+  whatChanged: string;
   /** Which discovery this is a way of monetizing. */
   subjectId: string | null;
   /** The questions still open, by name. The names are facts about progress. */
@@ -366,6 +376,7 @@ async function sharedMonetization(
       previousRank: entry.previousRank,
       movementReason: entry.movementReason,
       movedAt: entry.movedAt,
+      whatChanged: movementSentence(entry),
       subjectId: entry.subject?.id ?? null,
       openQuestions: entry.answers
         .filter((answer) => answer.value === null)

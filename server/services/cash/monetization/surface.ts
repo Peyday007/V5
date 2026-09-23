@@ -217,6 +217,25 @@ function risksFor(entry: LedgerEntry): string[] {
   return out;
 }
 
+/**
+ * What moved this possibility, as a sentence, for every reader of it.
+ *
+ * Exported because there is one fact here and there were two readers composing
+ * it. The client built its own version out of `previousRank`, `rank`, `movedAt`
+ * and — the part that made it a defect rather than a duplication — the raw
+ * `movementReason`, so a person read `ITS_OWN_EVIDENCE_CHANGED` on the page
+ * while `readableReason` sat one field away turning exactly that token into
+ * prose. A comment above that rendering claimed it had closed the *no reader*
+ * half of this audit; what it actually rendered was the enum.
+ *
+ * It carries no figure — a rank, a previous rank and a date are not money — so
+ * the shared projection may carry the same sentence, which is what makes this
+ * one derivation with two readers rather than two that agree today.
+ */
+export function movementSentence(entry: LedgerEntry): string {
+  return changeFor(entry);
+}
+
 function changeFor(entry: LedgerEntry): string {
   if (!entry.movedAt || entry.previousRank === null) {
     return entry.movementReason === 'ENTERED_THE_LEDGER'

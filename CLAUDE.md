@@ -11019,6 +11019,45 @@ that would have chosen between them exists.**
   only reader anybody could write cannot fire, and here one already existed for
   the identical fact on a judgement.
 
+- **Four fields the server composed and nothing read, and one of them was
+  worse than unread — it was rendering the enum while the sentence sat one
+  field away.** The audit was the one the mandate asked for by name: for every
+  field, prove a reachable writer and a *real* reader. `askedAt` was composed
+  by the in-flight projection and carried across the shared boundary as well,
+  so a question opened five minutes ago and one open since yesterday read
+  identically on the one screen whose job is to say whether this loop is
+  moving; `commissionId` was read by nothing outside the tests;
+  `whyItOutranksTheNext` is the **ninth of the nine questions the brief asks
+  of each of the five** and reached no surface at all.
+
+  The fourth is the one worth recording. `changeFor` composes the movement
+  sentence — the direction, both ranks, the date, and `readableReason` turning
+  the stored token into prose — and the client built its *own* sentence out of
+  `previousRank`, `rank` and `movedAt` and then appended the **raw**
+  `movementReason`. So a person read `ITS_OWN_EVIDENCE_CHANGED` on the page,
+  and the shared projection handed a member the same token. The comment above
+  that rendering said it had closed *the no reader half of the audit this
+  section was rewritten from*. **What it rendered was the enum**, and the
+  sentence stayed unread — a fix that was wrong in the small, under a comment
+  claiming the gap was shut, which is the one shape this file cares about more
+  than a plain omission.
+
+  `movementSentence` is the one derivation with two readers now, which is what
+  stops the owner's surface and a member's coming to disagree about one
+  position; it carries no figure, because a rank, a previous rank and a date
+  are not money. `commissionId` is **removed** rather than given an invented
+  reader: the shared question carries no id at all, so the composite
+  `(pathId, attribute, round)` — the unique index — is the only join either
+  surface can perform, and the four tests that matched on a row id now join the
+  way the product does. A row id belongs where somebody can look the row up,
+  so `cash-report` prints it, with the instant the question was opened beside
+  it — §45's rule that every line resolves to a row, at the one reading that
+  will be used as production acceptance for this loop.
+
+  Each of the four regressions was run against its own defect before it was
+  trusted to pass, because a regression nobody has seen fail is a claim rather
+  than a reading.
+
 - **This pair moved three times, and the third move is what says the rule is
   about position rather than about being first.** It was written at `088` /
   pg `079`, moved to `089` / pg `080` when the four-account fleet lane landed

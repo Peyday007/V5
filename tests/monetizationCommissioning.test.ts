@@ -275,6 +275,27 @@ async function finishResearch(input: {
   return { orchestrationId: orchestration.id, claimIds: inserted.map((one) => one.id) };
 }
 
+/**
+ * Whether a question on a surface is the question a tick opened.
+ *
+ * Joined on `(pathId, attribute, round)` deliberately, because that is the
+ * unique index and it is the join the product itself uses: the shared question
+ * carries no id at all, so the owner's list and a member's can only be matched
+ * this way. Matching on a row id here would have been testing a field nothing
+ * outside these tests read — and would have exercised a join the two surfaces
+ * cannot perform.
+ */
+function sameQuestion(
+  shown: { pathId: string; attribute: string; round: number },
+  asked: { pathId: string; attribute: string; round: number },
+): boolean {
+  return (
+    shown.pathId === asked.pathId &&
+    shown.attribute === asked.attribute &&
+    shown.round === asked.round
+  );
+}
+
 /** The ledger as it stands, and the pass that acts on it, in one call. */
 async function tick(): Promise<Awaited<ReturnType<typeof runCommissions>>> {
   const ledger = await composeLedger({ projectId });
@@ -361,7 +382,7 @@ describe('the whole causal chain, from a discovery to a rank that moved', () => 
       ledger: finalLedger,
       capacity: MAX_OPEN_COMMISSIONS,
     });
-    const shown = view.recentlySettled.find((one) => one.commissionId === asked.commissionId)!;
+    const shown = view.recentlySettled.find((one) => sameQuestion(one, asked))!;
     expect(shown.attributeLabel).toBe(ATTRIBUTE[asked.attribute].label);
     expect(shown.state).toBe('SETTLED');
     expect(shown.why).toBe(asked.reason);
@@ -1227,7 +1248,7 @@ describe('the surface says what is happening, in one place', () => {
 
     const ledger = await composeLedger({ projectId });
     const view = await commissionView({ projectId, ledger, capacity: MAX_OPEN_COMMISSIONS });
-    const live = view.open.find((one) => one.commissionId === asked.commissionId)!;
+    const live = view.open.find((one) => sameQuestion(one, asked))!;
     expect(live.pathTitle.length).toBeGreaterThan(0);
     expect(live.attribute).toBe(asked.attribute);
     expect(live.why).toBe(asked.reason);
@@ -1254,7 +1275,7 @@ describe('the surface says what is happening, in one place', () => {
       ledger: midLedger,
       capacity: MAX_OPEN_COMMISSIONS,
     });
-    expect(mid.open.find((one) => one.commissionId === asked.commissionId)!.state).toBe(
+    expect(mid.open.find((one) => sameQuestion(one, asked))!.state).toBe(
       'RESEARCHING',
     );
 
@@ -1265,7 +1286,7 @@ describe('the surface says what is happening, in one place', () => {
       ledger: doneLedger,
       capacity: MAX_OPEN_COMMISSIONS,
     });
-    expect(done.recentlySettled.find((one) => one.commissionId === asked.commissionId)!.state).toBe(
+    expect(done.recentlySettled.find((one) => sameQuestion(one, asked))!.state).toBe(
       'SETTLED',
     );
   });

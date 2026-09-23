@@ -606,7 +606,21 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
         `${trim(path?.path.title ?? one.pathId, 50)}`,
     );
     console.log(`      because: ${trim(one.reason, 100)}`);
-    console.log(`      idea: ${one.candidateId}${one.settledAt ? ` settled ${one.settledAt}` : ''}`);
+    /*
+     * The row, and when it was asked.
+     *
+     * Every line in this report resolves to a row a reader can look up, and
+     * this one did not: it printed the idea it created and never its own id,
+     * nor when it was opened — so a question that had been open for a day and
+     * one opened on this tick were the same line. §45 settles the rule one
+     * kernel along, where a party printed by name with no claim beside it was
+     * the defect the first production reading found.
+     */
+    console.log(
+      `      ${one.id} opened ${one.openedAt}` +
+        `${one.settledAt ? ` settled ${one.settledAt}` : ''}`,
+    );
+    console.log(`      idea: ${one.candidateId}`);
     if (one.outcome) console.log(`      outcome: ${trim(one.outcome, 100)}`);
   }
 

@@ -1418,3 +1418,74 @@ describe('a judgement says who, and through which door', () => {
     expect(rendering.slice(0, 1200)).toContain('one.decidedById');
   });
 });
+
+/*
+ * Four fields the server composed and nothing read.
+ *
+ * The audit that produced these was the one the mandate asked for by name: for
+ * every field, prove a reachable writer and a *real* reader. Each of these had
+ * the writer and not the reader, and one of them was worse than unread — the
+ * client composed its own movement sentence and appended the raw enum, under a
+ * comment claiming it had closed exactly that gap.
+ *
+ * They are asserted against the **source** rather than through a render for
+ * `operatorConsoleRemoved`'s reason: what must be true of a file is not
+ * something a behavioural test can see, and three of the four are a rendering
+ * that either exists or does not.
+ */
+describe('every field the ledger composes reaches a reader', () => {
+  it('renders the movement sentence rather than the raw reason code', async () => {
+    const panel = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    const top = panel.slice(panel.indexOf('rs-cash-path-rank'));
+    const item = top.slice(0, 5000);
+
+    // The sentence, from the one derivation both readers share.
+    expect(item).toContain('detail?.whatChanged ?? path.whatChanged');
+
+    // And never the token. `ITS_OWN_EVIDENCE_CHANGED` on a person's screen is
+    // what this pair exists to stop, so the raw field may not be rendered.
+    expect(item).not.toContain('{path.movementReason}');
+    expect(item).not.toContain('${path.movementReason}');
+
+    // One derivation, two readers: the shared projection composes the same
+    // sentence the owner's surface does, rather than a second one that agrees
+    // today.
+    const shared = await readFile('server/services/cash/shared.ts', 'utf8');
+    expect(shared).toContain('whatChanged: movementSentence(entry)');
+  });
+
+  it('renders why a possibility outranks the one below it', async () => {
+    const panel = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    const top = panel.slice(panel.indexOf('rs-cash-path-rank'));
+    // The ninth of the nine questions the brief asks of each of the five. It
+    // is owner-only, because it quotes the deciding criterion on both sides.
+    expect(top.slice(0, 5000)).toContain('detail.whyItOutranksTheNext');
+  });
+
+  it('says when a question was asked, on the surface and in the report', async () => {
+    const panel = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    const section = panel.slice(panel.indexOf('rs-cash-commissions'));
+    expect(section.slice(0, 3000)).toContain('one.askedAt');
+
+    const report = await readFile('scripts/cash-report.ts', 'utf8');
+    const questions = report.slice(report.indexOf('WHAT BRAIN IS ASKING ABOUT IT'));
+    // The row, so the line resolves to something a reader can look up, and
+    // when it was opened, so a question open for a day is not the same line as
+    // one opened on this tick.
+    expect(questions.slice(0, 1500)).toContain('${one.id} opened ${one.openedAt}');
+  });
+
+  it('carries no commission id on the projection, because nothing could read one', async () => {
+    const projection = await readFile(
+      'server/services/cash/monetization/inFlight.ts',
+      'utf8',
+    );
+    expect(projection).not.toContain('commissionId');
+
+    // The join the product actually performs, which is the unique index: the
+    // shared question carries no id at all, so this is the only one available.
+    const panel = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    const section = panel.slice(panel.indexOf('rs-cash-commissions'));
+    expect(section.slice(0, 3000)).toContain('${one.pathId}::${one.attribute}::${one.round}');
+  });
+});

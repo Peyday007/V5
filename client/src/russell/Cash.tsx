@@ -3104,7 +3104,21 @@ function ResearchInFlight({ page }: { page: CashPage }): JSX.Element | null {
                 {one.pathTitle}
                 {one.round > 1 ? ` (round ${one.round})` : ''}
               </p>
-              <p className="rs-hint">{WORK_STATE_LABEL[one.state] ?? one.state}</p>
+              {/*
+                * The state, and when it was asked.
+                *
+                * `askedAt` was composed by the in-flight projection, carried
+                * across the shared boundary as well, and rendered by neither
+                * surface — so a question opened five minutes ago and one open
+                * since yesterday read identically, on the one screen whose job
+                * is to say whether this loop is moving. §33 records the same
+                * fact one kernel along, where a question holding a slot with
+                * nothing working on it was invisible until somebody measured
+                * the elapsed time by hand.
+                */}
+              <p className="rs-hint">
+                {WORK_STATE_LABEL[one.state] ?? one.state} Asked {one.askedAt}.
+              </p>
               {/*
                 * Why Brain chose this question over the others open.
                 *
@@ -3281,21 +3295,37 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
                     </ul>
                   ) : null}
 
-                  <p className="rs-hint">
-                    {path.previousRank === null
-                      ? 'It has not moved since it entered the ledger.'
-                      : `It moved from ${path.previousRank} to ${path.rank}${
-                          path.movedAt ? ` on ${path.movedAt}` : ''
-                        }.`}
-                    {/*
-                      * Why it moved, which the server has always derived and
-                      * which nothing rendered. The brief asks for the reason a
-                      * position changed by name, and `readableReason` was a
-                      * whole switch no screen displayed — the *no reader*
-                      * half of the audit this section was rewritten from.
-                      */}
-                    {path.movementReason ? ` ${path.movementReason}` : ''}
-                  </p>
+                  {/*
+                    * Why it moved, in the server's own words.
+                    *
+                    * This rendering used to compose its own sentence and then
+                    * append the **raw** `movementReason` — so a person read
+                    * `ITS_OWN_EVIDENCE_CHANGED` on the page while
+                    * `readableReason` sat one field away turning exactly that
+                    * token into prose. The comment that used to be here
+                    * claimed it had closed the *no reader* half of this audit;
+                    * what it rendered was the enum, and `whatChanged` — which
+                    * says the direction as well as the reason — stayed unread.
+                    *
+                    * One derivation now, two readers: `movementSentence` is
+                    * what the owner's `whatChanged` and this shared field are
+                    * both composed from, so the two cannot come to disagree
+                    * about one position.
+                    */}
+                  <p className="rs-hint">{detail?.whatChanged ?? path.whatChanged}</p>
+
+                  {/*
+                    * Why it is above the one directly below it — the ninth of
+                    * the nine questions the brief asks of each of the five,
+                    * derived since this surface was written and rendered by
+                    * nothing. It is not the sentence above it: that one
+                    * compares against the best possibility *not shown*, and
+                    * this compares against the next one down.
+                    *
+                    * Owner only. It quotes the deciding criterion on both
+                    * sides, and two of the criteria read money.
+                    */}
+                  {detail ? <p className="rs-hint">{detail.whyItOutranksTheNext}</p> : null}
 
                   <PathDetail pathId={pathId} />
                   {page.capabilities.mayActOnJob ? (
