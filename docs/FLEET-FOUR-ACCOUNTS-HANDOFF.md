@@ -607,6 +607,28 @@ instance of:
 | `npm run typecheck` (local) | `4d734039`, identical code | exit 0 |
 | `npm test` (SQLite, local) | `4d734039`, identical code | **218 files passed, 1 skipped; 4702 passed, 44 skipped**, 1073.20s, exit 0 |
 
+**And the gate on this lane's own final tree**, which is the one that decides
+whether it lands:
+
+| Gate | SHA | Result |
+| --- | --- | --- |
+| `npm run typecheck` (local) | `fc8585df` | exit 0 |
+| `npm test` (PostgreSQL, `postgres-suite.yml` run **397**) | **`fc8585df`** | **220 files / 4751 tests, all passed**, 2567.08s, `success` |
+| `npm test` (SQLite, local) | `fc8585df` | 220 files, **4706 passed, 44 skipped, 1 failed** — §10.4, a flake that passes alone and in CI |
+
+**The two agree the same way §7.4's pair does.** SQLite runs 4706, skips 44 and
+failed 1; Postgres runs all 4751 and skips none. 4706 + 44 + 1 = 4751, so the
+forty-four the local run skips are exactly the ones needing the second backend
+and neither run is quietly missing a file — which is what §25 says the second
+backend is for.
+
+**The final tip is `9672b229` and differs from the gated `fc8585df` in this
+document and `CLAUDE.md` only** — measured as an empty `git diff` over
+`server/`, `client/`, `scripts/`, `tests/`, `.github/`, `package.json`,
+`package-lock.json`, `Dockerfile`, `fly.toml`, `blueprints/` and `objectives/`
+at the instant of writing, which is the form §0 records that such a claim has
+to take.
+
 **The two suites agree, and the way they agree is the point.** SQLite runs
 4702 and skips 44; Postgres runs 4746 and skips none. 4702 + 44 = 4746, so the
 forty-four the local run skips are exactly the ones that require the second
@@ -1565,7 +1587,7 @@ unfinished rows live somewhere else is a checklist that reads as finished.
 | 3 | Create the integrated tree; do not reimplement; resolve genuine conflicts | `bb6d538d` is the fleet lane merged into the closeout lane with no conflict. No fleet commit was reimplemented — the eight are preserved and `e8a34b00` is still their tip. |
 | 4 | Fix the vacuous `'READER'` fixture; verify it exercises the real denial path | §7.1. Measured against the old fixture before it was trusted: the corrected test fails on the un-fixed code and passes on the fixed. TypeScript coverage was not narrowed and `tests/**/*.tsx` was not removed from `tsconfig.json`. |
 | 5 | Run the cross-lane proof first | §7.3. |
-| 6 | Complete SQLite and Postgres gates on the **same** final SHA; reuse no old green run | §7.4. `postgres-suite.yml` run **384** on `67089909` — 219 files / 4746 tests, success. Local SQLite on the identical code — 218 files / 4702 passed, 44 skipped, exit 0 — and the 44 it skips are exactly the 44 Postgres adds. No green run from either source branch is offered as evidence for the integrated commit. |
+| 6 | Complete SQLite and Postgres gates on the **same** final SHA; reuse no old green run | §7.4, second table. Both gates ran on **`fc8585df`**: `postgres-suite.yml` run **397** — 220 files / 4751 tests, all passed, 2567.08s — and the local SQLite suite at 4706 passed / 44 skipped / 1 failed, the failure being §10.4's flake, which passes alone and in that same CI run. 4706 + 44 + 1 = 4751, so neither run is quietly missing a file. The final tip differs from the gated SHA in two documents, measured rather than asserted. No green run from either source branch is offered as evidence for the integrated commit. |
 | 7 | Review the four-account acceptance claim; do not convert configuration into proof | §5 and §7.5. The three categories are kept apart and the middle one is **unticked**. |
 | 8 | Update the handoff; remove stale predictions once measured | §7.2's prediction is replaced by §8.4's reading. Three stale pointers were corrected — §0, §5 and §8.1 — and each correction is recorded rather than edited away. |
 | 9 | Follow the release path to a terminal verdict, including hosted verification both sides of the restart | **Deploy 327 on `67089909`**: every step green, `PASS 234/234` before the restart and `PASS 253/253` after it — read out of the run's own step logs rather than from memory, which is how the count was found to differ. §8.2, §8.5 and §8.7 are the three runs it took and why two of them did not release. |
