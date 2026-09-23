@@ -11,7 +11,10 @@ The second has not happened, and nothing in this file claims it has.
 accounts, four identity boundaries.
 
 `docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` is the earlier lane's record and still
-stands; its §8 ("advance `production`") is overtaken — production contains it.
+stands. Its §8 is now the record of the release (deploy 323, `901a42db`) and its
+§9 records this lane and qualifies its own §8.4 eligible count by D2 below —
+the deployed `routeBin` cannot subtract a surface whose bound worker is
+disabled, so that count can only overstate until this lands.
 
 ---
 
@@ -99,7 +102,13 @@ backend, and the CI Postgres run has none.
 * Production then advanced again to `901a42d` (the audit round-trip fix:
   `repos/audits.ts`, `repos/extraction.ts`, `services/audit/context.ts`,
   `stateEngine.ts`), touching no fleet file and no migration. It is merged into
-  this branch without conflict; the merged-tree run is below.
+  this branch without conflict. It then advanced to `662d337` (documentation,
+  `scripts/manufacturing.ts`, `tests/laborSurface.test.tsx` — again no fleet
+  file and no migration), merged the same way.
+* **Merged tree, full SQLite:** `fe0ebb0` (with `901a42d`) — 215 files passed /
+  1 skipped, **4600 passed**, 44 skipped, **0 failed**. The +3 over `602f968`
+  are production's own new tests. CI Postgres runs on the merged commits are
+  listed in the handoff message that accompanies the final SHA.
 * **Live, read-only:** `Fleet` run 280, `verify-pool --repository Peyday007/V5`
   against production `533463f` — `FLEET: OK verify-pool peyday007/v5 VERIFIED
   surfaces=1` (§4 carries the output). This change adds no migration, so the
