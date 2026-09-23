@@ -961,7 +961,44 @@ distinguish this release and the proof of what is live has to come from
 somewhere else — `BRAIN_REVISION`, which every `scripts/*-report.sh` prints
 as `SERVING_REVISION`.
 
-### 8.6 The recovery floor is forty minutes, and that is a gap rather than a fact of life
+### 8.6 It is a standing upstream condition, not a one-off, and the record says so
+
+The retry above worked and then the *same* run undid it. `deploy.yml`'s
+restart — the step that exists so persistence means something — took the
+Brain down at 10:42:30, and at **10:51:04** its log reads, word for word,
+what it had read at 09:59:18 and 10:06:03:
+
+```
+Brain could not use the document storage it was configured for.
+The document store could not be checked (HTTP 544).
+{"statusCode":"544","error":"DatabaseTimeout", …}
+[brain] Serving the migration error on http://localhost:8080 — nothing else will work.
+```
+
+`Wait for it to answer after the restart` then failed after thirty attempts,
+and `/healthz` was still `503` half an hour later.
+
+**So the condition is intermittent rather than cleared, and the 10:38:48
+recovery was a window rather than a fix.** Three boots failed on it and one
+succeeded, on one image, inside forty minutes. That also settles what the
+image is: `Prove the live Brain is actually shut` **passed** against this
+exact release at 10:39–10:42, so `662d3373` boots and serves and the
+verification harness agrees. What follows a restart is not about the commit.
+
+**And it is precisely the authenticated call my probe does not make.** The
+unauthenticated storage `400` kept answering in 0.42s throughout, while the
+Brain's own bucket check — which reaches storage's database — timed out. Two
+facts about one service, and only the second is the one that decides whether
+this Brain may boot.
+
+**Nothing here is a reason to weaken the check**, for the third time in this
+section: a Brain that booted past an unreachable store would accept research
+and write it where nobody can find it, which is the outcome §18 exists to
+prevent and is strictly worse than being visibly down. What is owed to the
+operator is the reading and the one action only they can take, which §9 of
+this document does not cover and §8.7 explains the cost of.
+
+### 8.7 The recovery floor is forty minutes, and that is a gap rather than a fact of life
 
 Worth recording because this incident measured it. **There is no supported
 way to restart the deployed Brain short of a full `Deploy`.** `deploy.yml` is
