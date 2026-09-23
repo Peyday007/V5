@@ -263,13 +263,20 @@ ALTER TABLE research_claims ADD COLUMN IF NOT EXISTS puzzle_value TEXT;
 ALTER TABLE research_claims ADD COLUMN IF NOT EXISTS puzzle_amount_cents INTEGER;
 ALTER TABLE research_claims ADD COLUMN IF NOT EXISTS puzzle_currency TEXT;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'research_claims_puzzle_amount_check'
-  ) THEN
-    ALTER TABLE research_claims
-      ADD CONSTRAINT research_claims_puzzle_amount_check
-      CHECK (puzzle_amount_cents IS NULL OR puzzle_amount_cents >= 0);
-  END IF;
-END $$;
+-- §45's backstop, on the backend that is deployed: the SQLite column carries
+-- this inline and a Postgres column with nothing on it is the asymmetry that
+-- section is written from.
+--
+-- Stated plainly rather than inside a `DO $$ … END $$` existence guard, which
+-- is how this was first written and which **fails outright**: `splitStatements`
+-- and `toPostgresSql` both walk a script character by character, neither knows
+-- what a dollar-quoted body is, and the first `;` inside one ends the statement
+-- — `unterminated dollar-quoted string at or near "$$"`, on a chain the whole
+-- SQLite suite had just passed. §25 again, at a construct rather than a column.
+--
+-- The guard bought nothing in any case. A migration is applied exactly once,
+-- in its own transaction, with its checksum recorded, so asking whether the
+-- constraint is already there is asking the runner's own guarantee back.
+ALTER TABLE research_claims
+  ADD CONSTRAINT research_claims_puzzle_amount_check
+  CHECK (puzzle_amount_cents IS NULL OR puzzle_amount_cents >= 0);

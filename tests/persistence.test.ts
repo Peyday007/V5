@@ -225,7 +225,128 @@ describe('translating one dialect into the other', () => {
     expect(statements[0]).toContain("'a;b'");
     expect(statements[1]).toContain('CREATE INDEX');
   });
+
+  /*
+   * What the splitter cannot carry, and the guard that keeps it off the chain.
+   *
+   * A dollar-quoted body is an ordinary Postgres string and neither of this
+   * repository's two scanners knows what one is: `splitStatements` ends the
+   * statement at the first `;` inside it, and `toPostgresSql` would rewrite a
+   * `?` or the word `rowid` in its body for good measure. So a migration
+   * carrying `DO $$ … END $$;` fails outright with `unterminated dollar-quoted
+   * string`, and it fails on the *second* backend — the SQLite suite had run
+   * 4555 tests over the same chain and passed. §25, at a construct rather than
+   * at a column or an identity column.
+   *
+   * Teaching both scanners about it was the other option and is deliberately
+   * not taken here: `toPostgresSql` runs on every statement the application
+   * issues, and widening its hot path for a construct one file wanted is a
+   * change out of all proportion to what it buys. What is refused instead is
+   * putting one on the chain at all — in a gate, by name, with the reason,
+   * rather than in a deploy with a message that sends the next reader looking
+   * at their SQL.
+   */
+  it('breaks a dollar-quoted body into fragments, which is the failure the guard below prevents', () => {
+    const statements = splitStatements(
+      'DO $$ BEGIN ALTER TABLE a ADD CONSTRAINT c CHECK (x >= 0); END IF; END $$;',
+    );
+    // One statement in, more than one out, and the first of them carrying an
+    // opener with no closer: production's own message, reproduced in a line.
+    expect(statements.length).toBeGreaterThan(1);
+    expect(statements[0]).toContain('$$');
+    expect(statements[0]).not.toContain('END $$');
+  });
+
+  it('recognises a dollar-quoted opener, and only a real one', () => {
+    // The positive control first: a guard nobody has seen fire is a claim.
+    expect(dollarQuoteIn('DO $$ BEGIN END $$;')).toBe('$$');
+    expect(dollarQuoteIn('CREATE FUNCTION f() RETURNS int AS $body$ SELECT 1 $body$')).toBe(
+      '$body$',
+    );
+    // And the three ways a `$` appears in this repository's SQL without
+    // opening one. Refusing any of these would make the guard cry wolf, which
+    // §27 records as worse than not having it.
+    expect(dollarQuoteIn("SELECT 'a $tag$ b'")).toBeNull();
+    expect(dollarQuoteIn('-- $$ in a note\nSELECT 1')).toBeNull();
+    expect(dollarQuoteIn('SELECT * FROM t WHERE a = $1 AND b = $2')).toBeNull();
+  });
+
+  it('has no dollar-quoted body anywhere on the Postgres chain', () => {
+    const dir = path.join(import.meta.dirname, '..', 'server', 'db', 'pg-migrations');
+    const files = fs.readdirSync(dir).filter((one) => one.endsWith('.sql'));
+
+    // The walk actually walked. An empty list would pass every assertion
+    // below it and read as coverage.
+    expect(files.length).toBeGreaterThan(50);
+
+    for (const file of files) {
+      const found = dollarQuoteIn(fs.readFileSync(path.join(dir, file), 'utf8'));
+      expect(
+        found,
+        `${file} opens a dollar-quoted body with ${found}. Neither splitStatements nor ` +
+          'toPostgresSql can see one, so the migration will fail on Postgres with ' +
+          '"unterminated dollar-quoted string" while the whole SQLite suite passes. Write the ' +
+          'statement plainly: a migration applies exactly once, in its own transaction, with ' +
+          'its checksum recorded, so a procedural existence guard is asking the runner for a ' +
+          'guarantee it already gives.',
+      ).toBeNull();
+    }
+  });
 });
+
+/**
+ * The dollar-quoted opener in a script, or null.
+ *
+ * Deliberately the same walk `splitStatements` performs — skip a string, skip
+ * either comment form, then look — because what this refuses has to be exactly
+ * what that scanner cannot see. A detector that read the file any other way
+ * would be answering a different question, and §46 records a test in this
+ * repository reading prose as code three times over.
+ */
+function dollarQuoteIn(script: string): string | null {
+  let index = 0;
+  while (index < script.length) {
+    const char = script[index]!;
+
+    if (char === "'" || char === '"') {
+      let end = index + 1;
+      while (end < script.length) {
+        if (script[end] === char) {
+          // A doubled quote is an escape, not the end of the literal.
+          if (script[end + 1] === char) {
+            end += 2;
+            continue;
+          }
+          break;
+        }
+        end += 1;
+      }
+      index = end + 1;
+      continue;
+    }
+    if (char === '-' && script[index + 1] === '-') {
+      const end = script.indexOf('\n', index);
+      index = end === -1 ? script.length : end;
+      continue;
+    }
+    if (char === '/' && script[index + 1] === '*') {
+      const end = script.indexOf('*/', index + 2);
+      index = end === -1 ? script.length : end + 2;
+      continue;
+    }
+    if (char === '$') {
+      let end = index + 1;
+      while (end < script.length && /[A-Za-z0-9_]/.test(script[end]!)) end += 1;
+      // A tag follows identifier rules, so it never starts with a digit —
+      // which is what keeps `$1` a positional parameter rather than an opener.
+      const tag = script.slice(index + 1, end);
+      if (script[end] === '$' && !/^[0-9]/.test(tag)) return script.slice(index, end + 1);
+    }
+
+    index += 1;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Migrations
