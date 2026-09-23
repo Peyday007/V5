@@ -913,11 +913,27 @@ serve.
 **The recovery is a retry, and the evidence for retrying is a credential-free
 probe.** Unauthenticated `GET https://…supabase.co/storage/v1/bucket`
 answered `400 InvalidRequest — headers must have required property
-'authorization'` in **0.23s, 0.46s and 0.49s** at 10:16:2xZ. A storage API
-that replies correctly and immediately is one whose own database connection
-is working, which is precisely what `544 DatabaseTimeout` said had failed. So
-Deploy was re-dispatched on the **same commit** — recovery changes one thing
-at a time, and the thing to change was the attempt rather than the tree.
+'authorization'` in **0.23s, 0.46s and 0.49s** at 10:16:2xZ. So Deploy was
+re-dispatched on the **same commit** — recovery changes one thing at a time,
+and the thing to change was the attempt rather than the tree.
+
+**I claimed more for that probe than it can carry, and the correction
+matters because the next person will reach for the same probe.** I wrote
+that *"a storage API that replies correctly and immediately is one whose own
+database connection is working"*. It is not. A `400` for a missing
+`authorization` header is refused at request validation and need never touch
+a database at all, so the probe establishes that the storage service is up
+and reachable and says **nothing** about the condition `544 DatabaseTimeout`
+actually names. It was the right action for a weaker reason: an upstream that
+had been unreachable was answering again, which makes a retry worth one
+attempt — not evidence that the retry would succeed.
+
+And the weakness showed. The release went through and the Brain came back at
+10:38:48, and then `deploy.yml`'s own restart — the step that exists so
+persistence means something — took it down again at about 10:43 and it had
+not returned fifteen minutes later, with the same unauthenticated probe still
+answering `400` in 0.42s throughout. Whatever is slow is behind an
+authenticated call that probe does not make.
 
 **Nothing here is a reason to lower a bar.** The boot refusal is the control;
 making it tolerate an unreachable store would trade a visible outage for a
