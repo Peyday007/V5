@@ -864,6 +864,49 @@ describe('surfaces are counted by account, and proof is not assumed', () => {
     expect(repo.surfaces).toHaveLength(2);
   });
 
+  it('counts accounts by identity, so two that share a label are still two', async () => {
+    /*
+     * The count was keyed on the display name, which is a label rather than an
+     * identity.
+     *
+     * `fleet_accounts` is `UNIQUE (provider, name)`, so two accounts on one
+     * provider genuinely cannot collide and that is **not** what this defends.
+     * The pair is unique on the *provider* too, and nothing anywhere requires
+     * two Claude subscriptions to be registered under one provider string —
+     * `createAccount` takes it as an argument and defaults it. Two real
+     * subscriptions a person named the same thing would have read as one, and
+     * the count that decides whether a fleet is big enough would have halved
+     * itself on a label.
+     *
+     * Written as an exercise of the reachable case rather than an assertion
+     * about an unreachable one: the first version of this test renamed to a
+     * *different* string and passed against the defect.
+     */
+    const { accountName } = await twoOnOneAccount();
+    const { createAccount, createRoutine, bindRoutineWorker } = await import(
+      '../server/repos/fleet.ts'
+    );
+    const second = await createAccount({ provider: 'anthropic', name: accountName });
+    expect(second.name).toBe(accountName);
+    const worker = (await getWorkerByName(factoryWorkerName(GRANT().id)))!;
+    const routine = await createRoutine({
+      accountId: second.id,
+      routineRef: 'trig_second_account',
+      name: 'Factory Brain C',
+      tokenSecretName: 'SECRET_C',
+      tokenDigest: 'digest-c',
+      routineVersion: null,
+      baseUrl: null,
+      capabilities: [...FACTORY_ROUTING_CAPABILITIES],
+    });
+    await bindRoutineWorker(routine.id, worker.id);
+
+    const repo = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(repo.surfaces).toHaveLength(3);
+    // Two subscriptions, whatever they are called.
+    expect(repo.accountsServing).toBe(2);
+  });
+
   it('calls a registered surface unproven until a fire has actually come back', async () => {
     const { workerId } = await twoOnOneAccount();
     const before = (await repositoryOnboarding(fixture.project.id))[0]!;

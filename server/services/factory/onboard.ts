@@ -339,6 +339,8 @@ async function describeGrant(
   let routedFamilies: string[] = [];
   let routedRepositories: string[] = [];
   let surfaces: RepositoryOnboarding['surfaces'] = [];
+  /** The same list with the account id kept, which only the count needs. */
+  let live: (RepositoryOnboarding['surfaces'][number] & { accountId: string })[] = [];
 
   if (worker && !worker.archived) {
     const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
@@ -355,13 +357,24 @@ async function describeGrant(
      * completed chain, and must never be rounded into one.
      */
     const health = new Map(capacity.surfaces.map((one) => [one.routineId, one]));
-    surfaces = routines
+    live = routines
       .filter((routine) => routine.workerId === worker.id && routine.state === 'ENABLED')
       .map((routine) => ({
         routineName: routine.name,
+        // The id, so the count below is on identity rather than on a label.
+        // Names are unique — `register-account` refuses a duplicate — and a
+        // count keyed on one would still be a count that two renames could
+        // change. A surface the fleet has no reading for keys on its own
+        // Routine name, so it is never silently merged with another.
+        accountId: health.get(routine.id)?.accountId ?? `unattributed:${routine.id}`,
         accountName: health.get(routine.id)?.accountName ?? '—',
         proven: health.get(routine.id)?.proven === true,
       }));
+    surfaces = live.map(({ routineName, accountName, proven }) => ({
+      routineName,
+      accountName,
+      proven,
+    }));
   }
 
   const boundaryRow = await getProjectRepository(projectId, grant.id);
@@ -410,7 +423,7 @@ async function describeGrant(
     routedFamilies,
     routedRepositories,
     surfaces,
-    accountsServing: new Set(surfaces.map((one) => one.accountName)).size,
+    accountsServing: new Set(live.map((one) => one.accountId)).size,
     provenSurfaces: surfaces.filter((one) => one.proven).length,
     contributedSurfaces: forThisOne.map((one) => ({
       displayName: one.displayName,
