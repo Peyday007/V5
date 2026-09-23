@@ -311,20 +311,29 @@ documents deriving one fact is how they come to disagree about it.
 
 ### AWAITING FINAL INTEGRATION AND PRODUCTION DEPLOYMENT
 
-* **Done, and deployed.** Two earlier versions of this bullet were wrong in
-  turn and both corrections are kept rather than edited away: the first said
+* **Done, and deployed.** Three earlier versions of this bullet were wrong in
+  turn and every correction is kept rather than edited away: the first said
   the branch was unmerged and that `origin/production` was `f727b143`; the
-  second said production had advanced to `e37cca06` and stopped there.
-  Production is `901a42db`, it contains this integration, and deploy 323
-  released it. §0 carries the SHAs, §7 the gate evidence and §8 the live reads.
+  second said production had advanced to `e37cca06` and stopped there; the
+  third named `901a42db` and deploy 323, which passed before its restart and
+  failed after it. Production is `08d6a787`, it contains this integration, and
+  the run that passed both sides of a restart is deploy 327 on `67089909` —
+  whose code is byte-identical to production's tip, the two commits since
+  being documentation. §0 carries the SHAs, §7 the gate evidence and §8 the
+  live reads.
 * No four-account Factory pool has been commissioned in production. The three
   research accounts in `docs/FLEET-12-ACTIVATION-EVIDENCE.md` are a different
   worker identity and a different workload family.
 * **A production reading now exists for the half of §2 that an uncommissioned
   pool can establish**, and §8.4 is it: accounts and surfaces as two numbers,
   `PROVEN` as the four-row chain, the pooling caveat printed on a passing run,
-  `unanswered=0` on every surface, and each unhealthy surface printing its
-  recorded reason.
+  and each unhealthy surface printing its recorded reason. **An earlier version
+  of this bullet ended `unanswered=0` on every surface**, which was the first
+  tick's reading and was quietly becoming a claim about the counter rather
+  than about that moment. The 12:13Z read in §8.4 is the one that matters:
+  nine Routines bound to one worker carrying four different counts, which is
+  precisely what the replaced column could not express, and none of them at
+  the quarantine threshold.
 * **It does not exist for the other half, and that is not rounded up.** The
   quarantine has never fired against a real dead surface; `STALE` has never
   been printed about a real revoked connector; no fire has been routed across
