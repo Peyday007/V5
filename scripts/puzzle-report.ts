@@ -237,7 +237,20 @@ function print(projectId: string, name: string, view: Awaited<ReturnType<typeof 
 
   console.log('');
   console.log('QUALITY');
-  reading('validation pass rate', view.quality.passRate, (value) => `${Math.round(value * 100)}%`);
+  /*
+   * The invariant first, as a count, and the rate beside it as UNKNOWN.
+   *
+   * These are two different statements and printing only the first as a
+   * percentage made it read as the second: every stored instance is valid
+   * because nothing else can be written, so it is 100% whatever the generator
+   * is doing.
+   */
+  const stored = view.quality.storedAllValid;
+  console.log(
+    `  every stored puzzle is valid       ${stored.valid} of ${stored.total}` +
+      (stored.total > 0 ? ' (by construction — nothing else can be stored)' : ''),
+  );
+  reading('generator pass rate', view.quality.passRate, (value) => `${Math.round(value * 100)}%`);
   console.log(`  duplicate puzzles held             ${view.quality.duplicatesHeld}`);
   console.log(`  defects reported                   ${view.quality.defectsReported}`);
   console.log(`  customer complaints                ${view.quality.complaints}`);

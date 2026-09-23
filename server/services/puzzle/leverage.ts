@@ -167,8 +167,22 @@ export function readLeverage(input: {
 }
 
 export interface Quality {
-  /** Validated instances against everything a generator produced and kept. */
+  /**
+   * What fraction of what a generator *produced* passed its validator.
+   *
+   * Always UNKNOWN, and that is the honest answer rather than a gap: a refused
+   * puzzle is never written down. `recordPuzzleInstance` refuses a state that
+   * is not VALID, so the table holds the survivors and the refusals live only
+   * in the `BatchReport` of the pass that made them. There is no row to count.
+   */
   passRate: Reading;
+  /**
+   * That every stored instance is valid, which is an invariant rather than a
+   * rate — it can only ever be all of them, because nothing else can be
+   * written. Reported as the count it is, so a reader is not handed a
+   * permanent 100% wearing a measurement's clothes.
+   */
+  storedAllValid: { valid: number; total: number };
   /** Canonical forms held by more than one instance. Should always be zero. */
   duplicatesHeld: number;
   /** Instances a person or a customer found something wrong with. */
@@ -195,22 +209,36 @@ export function readQuality(input: {
    * refused puzzle is not a row that needs keeping, and the rate a reader
    * wants is the one the last batch measured.
    */
-  const passRate: Reading =
-    total === 0
-      ? {
-          value: null,
-          evidence: 'UNKNOWN',
-          note: 'Nothing has been generated yet.',
-        }
-      : {
-          value: valid / total,
-          evidence: 'MEASURED',
-          note:
-            `${valid} of ${total} stored instance(s) are valid. Every stored instance was ` +
-            'validated before it was written, so this is a floor rather than the generator’s ' +
-            'true pass rate — what a generator refused is reported by the batch that ran it, ' +
-            'and a batch whose failures cross a third stops rather than drawing more seeds.',
-        };
+  /*
+   * Reported UNKNOWN rather than as a percentage, and the correction is worth
+   * stating because the code here already described the defect and shipped it
+   * anyway. It computed `valid / total` over *stored* instances — which is
+   * 100% by construction, since `recordPuzzleInstance` refuses anything that
+   * is not VALID — labelled it `MEASURED`, and called it "a floor rather than
+   * the generator's true pass rate".
+   *
+   * It is a **ceiling**, not a floor: the generator's true rate is at most
+   * this and in practice below it, so "floor" claimed the real number was at
+   * least 100% — wrong in the direction that flatters the generator. And a
+   * figure that cannot come out any other way is not a measurement, which is
+   * exactly what `evidence` exists to say (§23) and what §33 had to correct
+   * once already about a default published as a reading.
+   *
+   * What a reader actually wants is not in the rows at all. It is not a gap
+   * to be filled later either: a refused puzzle is deliberately not a row, so
+   * the only place the denominator exists is the batch that ran.
+   */
+  const passRate: Reading = {
+    value: null,
+    evidence: 'UNKNOWN',
+    note:
+      total === 0
+        ? 'Nothing has been generated yet.'
+        : 'Not measurable from rows, by design: a refused puzzle is never stored, so the ' +
+          'table holds only the survivors and there is no denominator in it. What a ' +
+          'generator refused is reported by the batch that ran it, and a batch whose ' +
+          'failures cross a third stops rather than drawing more seeds.',
+  };
 
   const byCanonical = new Map<string, number>();
   for (const one of input.instances) {
@@ -229,6 +257,7 @@ export function readQuality(input: {
 
   return {
     passRate,
+    storedAllValid: { valid, total },
     duplicatesHeld,
     defectsReported: input.observations.filter((one) => one.kind === 'DEFECT_FOUND').length,
     complaints: input.observations.filter((one) => one.kind === 'CUSTOMER_COMPLAINT').length,

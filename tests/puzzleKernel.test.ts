@@ -42,7 +42,7 @@ import { readOne, readEconomics, dollarBookReading } from '../server/services/pu
 import { qualify } from '../server/services/puzzle/products.ts';
 import { readMaturity } from '../server/services/puzzle/maturity.ts';
 import { readLedger, MONETIZATION_ROUTES } from '../server/services/puzzle/ledger.ts';
-import { readLeverage } from '../server/services/puzzle/leverage.ts';
+import { readLeverage, readQuality } from '../server/services/puzzle/leverage.ts';
 import { readLessons } from '../server/services/puzzle/lessons.ts';
 import type {
   PuzzleEconomic,
@@ -954,5 +954,66 @@ describe('a lesson is derived with its sample shown', () => {
     expect(withPeople[0]?.fromPeople).toBe(3);
     /* And the rows travel with the rule, so a reader can check rather than believe. */
     expect(withPeople[0]?.statements).toHaveLength(3);
+  });
+});
+
+/**
+ * A number that cannot come out any other way is not a measurement.
+ *
+ * Found by reading the operator report against a seeded Brain rather than by
+ * reading the code — which had described this defect in its own comment and
+ * shipped it anyway. It divided valid instances by stored instances, which is
+ * 100% by construction because `recordPuzzleInstance` refuses anything that is
+ * not VALID, labelled it MEASURED, and called it "a floor rather than the
+ * generator's true pass rate". It is a *ceiling*: the generator's real rate is
+ * at most that and in practice below it, so "floor" claimed the true number
+ * was at least 100% — wrong in the direction that flatters the generator.
+ */
+describe('the quality reading refuses a tautology dressed as a measurement', () => {
+  const instance = (id: string): PuzzleInstance =>
+    ({
+      id,
+      projectId: 'prj_x',
+      masterId: 'pzm_x',
+      seed: id,
+      contentHash: `content-${id}`,
+      canonicalHash: `canonical-${id}`,
+      validationState: 'VALID',
+      measuredDifficulty: null,
+      checks: [],
+      createdAt: new Date().toISOString(),
+    }) as unknown as PuzzleInstance;
+
+  it('never reports a generator pass rate, because a refused puzzle is not a row', () => {
+    const quality = readQuality({
+      instances: [instance('a'), instance('b'), instance('c')],
+      observations: [],
+    });
+
+    // The half that would have read 100%.
+    expect(quality.passRate.value).toBeNull();
+    expect(quality.passRate.evidence).toBe('UNKNOWN');
+
+    // And it says why it cannot be measured rather than implying nobody has
+    // got round to it — the denominator is deliberately never written down.
+    expect(quality.passRate.note).toMatch(/never stored|no denominator/i);
+
+    // The word that was exactly backwards is gone, in either direction: this
+    // reading makes no claim about where the true rate sits.
+    expect(quality.passRate.note).not.toMatch(/\bfloor\b/i);
+  });
+
+  it('reports what is actually true as the invariant it is, with its count', () => {
+    const quality = readQuality({
+      instances: [instance('a'), instance('b')],
+      observations: [],
+    });
+    expect(quality.storedAllValid).toEqual({ valid: 2, total: 2 });
+  });
+
+  it('says nothing has been generated rather than nothing has been measured', () => {
+    const quality = readQuality({ instances: [], observations: [] });
+    expect(quality.passRate.evidence).toBe('UNKNOWN');
+    expect(quality.storedAllValid).toEqual({ valid: 0, total: 0 });
   });
 });
