@@ -147,6 +147,8 @@ function candidate(
     // it: a candidate that served no project would be refused one dimension
     // before the capacity question these tests are actually about.
     servesProjects: [projectId],
+    // The bound worker can authenticate; these fixtures are about capacity.
+    workerActive: true,
     routine: {
       id: 'rtn_1',
       accountId: 'acct_1',
@@ -1186,8 +1188,12 @@ describe('a burst spends the headroom it measured, once', () => {
     });
     const binId = await readyBin();
     await dispatchTick({ projectIds: [projectId], burst: 1 });
-    const first = await createWorker({ name: 'w1', createdByType: 'SYSTEM', createdById: 'test' });
-    await assignNextBin({ workerId: first.id, projectIds: [projectId] });
+    // The first arrival is the worker this Routine is bound to. An unrelated
+    // identity taking the bin is not this Routine's session and is credited
+    // nothing either — `fleetFourAccountAcceptance` pins that — so it could not
+    // stand in for "the fired session arrived" here.
+    const firstId = (await getRoutineByRef('trig_one'))!.workerId!;
+    await assignNextBin({ workerId: firstId, projectIds: [projectId] });
     expect((await getRoutineByRef('trig_one'))!.consecutiveNoShows).toBe(0);
 
     // The first worker dies. The lease lapses; a second worker takes over at a

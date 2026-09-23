@@ -31,7 +31,8 @@ import {
   separationCapacity,
   separationShortfall,
 } from '../server/services/research/auditAdmission.ts';
-import { createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { createAccount, createRoutine, setAccountState } from '../server/repos/fleet.ts';
+import { createWorker, getWorkerByName, setWorkerStatus } from '../server/repos/identity.ts';
 import { createCandidate } from '../server/repos/russellCandidates.ts';
 import { launchMission } from '../server/repos/russellMissions.ts';
 import { getDb } from '../server/db/database.ts';
@@ -279,6 +280,26 @@ describe('a mission may ask for more, and only that mission waits', () => {
  * a fleet for being small.
  */
 describe('a stronger tier parks one mission and nothing else', () => {
+  /*
+   * The worker is a real row, reused by name. A Routine bound to an id that
+   * resolves to no worker is not a surface anything could authenticate as, so
+   * `separationCapacity` does not count it — and a fixture that relied on it
+   * would be describing a shape `bindRoutineWorker` cannot produce.
+   */
+  async function workerNamed(name: string): Promise<string> {
+    const existing = await getWorkerByName(name);
+    if (existing) return existing.id;
+    return (
+      await createWorker({
+        name,
+        displayName: name,
+        workerType: 'MCP',
+        createdByType: 'SYSTEM',
+        createdById: 'adaptiveSeparation.test',
+      })
+    ).id;
+  }
+
   async function surface(account: string, routine: string, worker: string) {
     const acct = await createAccount({ name: account });
     return createRoutine({
@@ -287,7 +308,7 @@ describe('a stronger tier parks one mission and nothing else', () => {
       name: routine,
       tokenSecretName: `SECRET_${routine}`,
       tokenDigest: `digest_${routine}`,
-      workerId: worker,
+      workerId: await workerNamed(worker),
     });
   }
 
@@ -341,11 +362,41 @@ describe('a stronger tier parks one mission and nothing else', () => {
       name: 'unset',
       tokenSecretName: 'NEVER_SET',
       tokenDigest: null,
-      workerId: 'w1',
+      workerId: await workerNamed('w1'),
     });
     // Registered, enabled, and unable to be fired. Counting it would report
     // capacity that spends a fire to discover it does not exist.
     expect((await separationCapacity()).surfaces).toBe(0);
+  });
+
+  it('does not count an account out of routing, or a worker that cannot authenticate', async () => {
+    /*
+     * Four people, four accounts. One friend's account is taken out of routing
+     * and another friend's worker is disabled: the pool can supply two
+     * accounts, not four, and account separation — which needs three — is
+     * short. Counting the Routine's own state alone reported four.
+     */
+    await surface('owner', 'r1', 'w-owner');
+    const quarantined = await surface('friend-1', 'r2', 'w-friend-1');
+    const disabled = await surface('friend-2', 'r3', 'w-friend-2');
+    await surface('friend-3', 'r4', 'w-friend-3');
+    expect((await separationCapacity()).accounts).toBe(4);
+
+    expect(
+      await setAccountState({
+        accountId: quarantined.accountId,
+        from: 'ENABLED',
+        to: 'QUARANTINED',
+        reason: 'AUTH: 403 routines are not available for this organization',
+      }),
+    ).toBe(true);
+    await setWorkerStatus(disabled.workerId!, 'DISABLED');
+
+    const capacity = await separationCapacity();
+    expect(capacity.accounts).toBe(2);
+    expect(capacity.surfaces).toBe(2);
+    expect(capacity.strongest).toBe('SESSION');
+    expect(separationShortfall('ACCOUNT', capacity)).toContain('INSUFFICIENT_ACCOUNT_SEPARATION');
   });
 
   it('counts workers rather than Routines when one worker holds several', async () => {

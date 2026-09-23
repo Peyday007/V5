@@ -29,7 +29,7 @@ import { getDb } from '../db/database.ts';
 import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
-import { sameProviderSession } from '../domain/sessionRef.ts';
+import { normalizeSessionRef, sameProviderSession } from '../domain/sessionRef.ts';
 import { contractLeaseFloorMs } from '../domain/binLease.ts';
 import type { BinConfinement } from './workQueue.ts';
 import type {
@@ -1751,6 +1751,7 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
         row.lease_generation,
         input.workerId,
         input.credentialId ?? null,
+        input.sessionRef ?? null,
       );
 
       return { bin, leaseId, leaseGeneration: nextGeneration, leaseExpiresAt: expires, takeover };
@@ -1784,14 +1785,62 @@ async function creditDispatchArrival(
   leaseGeneration: number,
   workerId: string,
   credentialId: string | null,
+  sessionRef: string | null,
 ): Promise<void> {
-  const row = await getDb().get<{ routine_id: string | null }>(
-    `SELECT routine_id FROM bin_dispatch
+  const row = await getDb().get<{ routine_id: string | null; session_ref: string | null }>(
+    `SELECT routine_id, session_ref FROM bin_dispatch
       WHERE bin_id = ? AND lease_generation = ? AND state = 'SENT' AND routine_id IS NOT NULL`,
     [binId, leaseGeneration],
   );
   const routineId = row?.routine_id;
   if (!routineId) return;
+
+  /*
+   * Whoever took the bin is not necessarily whom Brain fired for it.
+   *
+   * With one worker identity on every surface that difference was invisible
+   * and harmless. With four people each holding their own connector it is the
+   * ordinary case: a session that finished its own bin asks for another and is
+   * handed the oldest ready one — which Brain has just fired at somebody
+   * else's Routine. Crediting that arrival to the fired Routine cleared a
+   * no-show nobody answered and, worse, wrote the arriving credential into
+   * `worker_sessions` as executing under the *other person's account*, first
+   * observation winning for ever — the lineage every audit tier, every
+   * `executor_account_id` and every surface proof is read from.
+   *
+   * So a worker that is not the one this Routine is bound to is credited only
+   * when it is provably the session Brain fired: the provider session it
+   * reports matches the one on the dispatch row, both written by Brain or by
+   * the provider and neither supplied as a claim about ownership. That keeps
+   * the one case the surface proof exists for — a Routine configured with the
+   * wrong connector, whose fire genuinely ran on this account under another
+   * identity — and it is what `proveSurface` reads to call it a FAULT.
+   * Anything else is left uncredited, which is the fail-closed direction: an
+   * attribution that cannot be established reads as absent, never as a guess.
+   * The assignment itself is untouched and `BIN_ASSIGNED` already records who
+   * took the bin.
+   */
+  const fired = await getRoutine(routineId);
+  const sameFire = sameProviderSession(row.session_ref, sessionRef);
+  if (fired?.workerId && fired.workerId !== workerId && !sameFire) return;
+  /*
+   * The pooled half of the same defect. One Factory worker served by four
+   * accounts is one worker id — but four connectors, so four credentials, and
+   * a sibling account's session taking a bin fired at this Routine is the
+   * ordinary case there too. Where both sides name a provider session and they
+   * differ, this is provably not the fired session, and crediting it would
+   * write the sibling's credential into `worker_sessions` under this account.
+   * Where either side names none, nothing is known and the old behaviour —
+   * credit the surface that was fired — stands.
+   */
+  if (
+    normalizeSessionRef(row.session_ref) !== null &&
+    normalizeSessionRef(sessionRef) !== null &&
+    !sameFire
+  ) {
+    return;
+  }
+
   await recordRoutineCheckIn(routineId);
   // Observed, not declared. Refused rather than re-pointed when the row already
   // names a different identity; the operator's `bind-worker` is for that case
@@ -1812,7 +1861,7 @@ async function creditDispatchArrival(
    * a guess, which is the fail-closed rule `lineageForWorker` already applies.
    */
   if (!credentialId) return;
-  const routine = await getRoutine(routineId);
+  const routine = fired;
   if (!routine?.accountId) return;
   await recordWorkerSession({
     sessionRef: credentialId,

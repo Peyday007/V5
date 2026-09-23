@@ -75,7 +75,7 @@ import { COLUMN } from '../server/services/cash/answers.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import { cashReadiness } from '../server/services/cash/readiness.ts';
 import { createAccount, createRoutine } from '../server/repos/fleet.ts';
-import { createWorker } from '../server/repos/identity.ts';
+import { createWorker, grantMembership } from '../server/repos/identity.ts';
 import type { CashOpportunity, OpportunitySignal } from '../server/domain/types.ts';
 
 let projectId = '';
@@ -774,6 +774,18 @@ describe('what this change was not allowed to touch', () => {
       name: 'a-research-worker',
       createdByType: 'HUMAN',
       createdById: userId,
+    });
+    // A worker the dispatcher could hand work to at all: one holding no project
+    // membership serves no bin, so the router — and therefore this count —
+    // would never fire any of the four.
+    await grantMembership({
+      projectId,
+      principalType: 'WORKER',
+      principalId: worker.id,
+      role: null,
+      scopes: ['project:read', 'queue:claim', 'research:write'],
+      grantedByType: 'HUMAN',
+      grantedById: userId,
     });
     const account = await createAccount({ name: 'Brain Research A', declaredPlanPower: 'Max' });
     for (const name of ['A', '1-B', '1-C', '1-D']) {

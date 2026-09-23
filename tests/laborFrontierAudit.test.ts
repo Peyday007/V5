@@ -29,6 +29,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { createWorker } from '../server/repos/identity.ts';
 import { assessTask } from '../server/services/labor/necessity.ts';
 import { NECESSITY_ANSWERS } from '../server/domain/types.ts';
 import type {
@@ -72,7 +73,15 @@ async function healthyFleet(): Promise<void> {
     name: 'A surface',
     tokenSecretName: 'LABOR_AUDIT_SECRET',
     tokenDigest: 'a'.repeat(64),
-    workerId: `wkr_${Math.random().toString(36).slice(2, 12)}`,
+    // A real worker row: a Routine bound to an id that resolves to no worker is
+    // not a surface anything could authenticate as, and is not counted.
+    workerId: (
+      await createWorker({
+        name: `labor-worker-${Math.random().toString(36).slice(2, 10)}`,
+        createdByType: 'SYSTEM',
+        createdById: 'labor test',
+      })
+    ).id,
   });
 }
 

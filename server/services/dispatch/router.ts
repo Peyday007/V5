@@ -230,6 +230,18 @@ export interface RoutingCandidate {
    * reach.
    */
   servesProjects: string[];
+  /**
+   * Whether the worker this Routine is bound to can authenticate at all.
+   *
+   * A DISABLED worker is refused at every door (`authenticate.ts`), and unlike
+   * an archived one it keeps its memberships — disabling is reversible — so
+   * `servesProjects` alone does not take it out of routing. Without this the
+   * router fired at a surface whose session was certain to be refused, an
+   * activation each time out of a fixed allowance, until three unanswered fires
+   * quarantined it. `false` for a Routine bound to no worker, a disabled or
+   * archived one, or one whose row cannot be read.
+   */
+  workerActive: boolean;
   /** In-flight activations attributed to this Routine and its account. */
   routineInFlight: number;
   accountInFlight: number;
@@ -269,6 +281,31 @@ export type RoutingResult = RoutingDecision | RoutingRejection;
 /** States a surface may be routed to. Draining finishes what it holds only. */
 function routable(state: string): boolean {
   return state === 'ENABLED';
+}
+
+/**
+ * Why this surface could take no work at all right now, or null when it could.
+ *
+ * The bin-independent half of routing, and the one definition of it. The
+ * router asks it first for every candidate; `services/fleet/capacity.ts` asks
+ * it to decide whether a surface counts as eligible capacity. Two copies were
+ * the defect: the capacity reading used "is a routing candidate" — which is
+ * only "its secret is deployed" — so a QUARANTINED surface with an old proof
+ * read HEALTHY, and a disabled account, a disabled worker and an archived one
+ * all read as capacity the router would never fire. A rule applied by one of
+ * two readers is worse than none.
+ *
+ * Rate limits and targets are deliberately not here: they are waits rather
+ * than ineligibility, and the capacity reading reports them as WAITING.
+ */
+export function surfaceIneligibility(candidate: RoutingCandidate): string | null {
+  const { routine, account } = candidate;
+  if (!routable(account.state)) return `account ${account.state}`;
+  if (!routable(routine.state)) return `routine ${routine.state}`;
+  if (routine.workerId === null) return 'bound to no worker';
+  if (!candidate.workerActive) return 'bound worker is disabled or archived';
+  if (candidate.servesProjects.length === 0) return 'bound worker holds no project membership';
+  return null;
 }
 
 /**
@@ -443,6 +480,18 @@ export function routeBin(input: RoutingInput): RoutingResult {
       considered.push({ routineId: routine.id, verdict: `routine ${routine.state}` });
       continue;
     }
+    /*
+     * A Routine whose bound worker cannot authenticate is out of routing for
+     * the same reason a quarantined one is: whatever arrives will be refused.
+     * Asked here, beside the states, so a fleet where that is the only reason
+     * reports ALL_SURFACES_INELIGIBLE rather than a scope an operator does not
+     * need to touch. A Routine bound to no worker is left to the project check
+     * below, which already names it.
+     */
+    if (routine.workerId !== null && !candidate.workerActive) {
+      considered.push({ routineId: routine.id, verdict: 'bound worker is disabled or archived' });
+      continue;
+    }
     sawRoutable = true;
     /*
      * The project first, because it is the outermost question and the one whose
@@ -562,9 +611,10 @@ export function routeBin(input: RoutingInput): RoutingResult {
         ok: false,
         refusal: 'ALL_SURFACES_INELIGIBLE',
         reason:
-          'Every registered Routine or its account is disabled, draining or quarantined, so ' +
-          'none of them was asked whether it could take this work. Fix the surface and put it ' +
-          'back with `fleet set-state`; the recorded reason on each says what took it out.',
+          'Every registered Routine or its account is disabled, draining or quarantined, or is ' +
+          'bound to a worker that is disabled or archived, so none of them was asked whether it ' +
+          'could take this work. Fix the surface and put it back with `fleet set-state` (or ' +
+          're-enable the worker); the recorded reason on each says what took it out.',
         considered,
         retryAt: null,
       };

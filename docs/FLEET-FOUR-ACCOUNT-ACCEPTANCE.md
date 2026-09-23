@@ -1,0 +1,164 @@
+# Four-account fleet — software acceptance, and what only people can finish
+
+**What this is.** The acceptance and defect-closeout pass on the four-account
+fleet software, taken against the production tip `533463f3` (which already
+contains the fleet integration through `ba5c0b2f`). It separates two things
+that must not be read as one: whether the *software* is complete, and whether
+four *real* Claude accounts have been commissioned. The first is settled here.
+The second has not happened, and nothing in this file claims it has.
+
+**The four people.** The owner, friend 1, friend 2, friend 3 — four Claude
+accounts, four identity boundaries.
+
+`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` is the earlier lane's record and still
+stands; its §8 ("advance `production`") is overtaken — production contains it.
+
+---
+
+## 1. What was found, and fixed
+
+The lane proved one worker identity served by several accounts. The four people
+this fleet is for each hold their *own* connector, so their own worker — and
+testing that shape found four defects of the lane's own class: correct
+machinery, a false sentence about it. Each was reproduced first; each
+regression was run against the unfixed code and seen to fail.
+
+| # | Defect | Where | Regression |
+|---|---|---|---|
+| D1 | `capacityReading` counted any routing *candidate* (= secret deployed) as eligible. A **QUARANTINED** surface with an old proof read **HEALTHY**; a disabled account, a disabled worker and an archived one all counted as capacity the router would never fire. | `services/fleet/capacity.ts` | `fleetFourAccountAcceptance` — *a surface out of routing is never counted as capacity* (4 cases) |
+| D2 | A Routine bound to a **DISABLED** worker was routable. Archiving revokes memberships so it was already refused; disabling keeps them, so each fire went to a session certain to be refused at sign-in, until three no-shows quarantined it. | `services/dispatch/router.ts`, `candidates.ts` | *never fires a surface whose bound worker is disabled, and fails over to the others* — six decisions rotate across the three others, never the fourth |
+| D3 | An arrival was credited to whichever Routine the bin was fired at, **whoever arrived**. A friend's session that finished its own bin and took the next one — fired at another person's Routine — was written into `worker_sessions` under the **other person's account**, first observation winning for ever. That is the lineage `executor_account_id` and every audit separation tier is read from. The same happened for a pooled worker's sibling account (per-account connector ⇒ per-account credential). | `repos/bins.ts` `creditDispatchArrival` | *an arrival is credited to the surface that actually sent it* (3 cases) and *a pooled Factory worker is still four accounts* |
+| D4 | Three more readers of "usable" disagreed with the router: the Fleet page (`usability`) never asked about the deployed secret, the bound worker or its project; `verify-pool` let a past proof stand over a **disabled** worker (it named archived only); `separationCapacity` counted a quarantined **account**, and a worker id resolving to no worker, toward account separation. | `services/fleet/view.ts`, `lab.ts`, `dispatch/pool.ts`, `research/auditAdmission.ts` | *three readers of "usable" give one answer*; `factoryPool` *does not let a past proof erase a disabled worker either*; `adaptiveSeparation` *does not count an account out of routing, or a worker that cannot authenticate* |
+
+**The shape of the fix.** `surfaceIneligibility` in `router.ts` is now the one
+bin-independent answer to *could this surface take work at all* — account and
+Routine ENABLED, bound to a worker that can authenticate, that worker holding a
+project. The router asks it first; the capacity reading and the Fleet page ask
+the same function. The arrival rule is fail-closed: a different identity is
+credited only when its reported provider session matches the one Brain fired;
+two named sessions that differ are never credited; unknown stays uncredited.
+Nothing about the assignment itself changed — who may *take* a bin is the
+admission decision it always was, and `BIN_ASSIGNED` still records who did.
+
+**Fixtures corrected, not weakened.** Four fixtures described shapes production
+cannot produce and passed only because of D1/D3/D4: a Routine bound to a worker
+id that is not a worker row (`adaptiveSeparation`, `laborKernel`,
+`laborFrontierAudit`), a worker with no project membership counted as capacity
+(`cashOpportunityStandard`), and a "first arrival" that was a stranger to the
+Routine's bound worker (`fleet`). Each now uses the real shape; no assertion
+was loosened.
+
+**No schema change. No workflow, deployment or policy file touched.**
+
+---
+
+## 2. Software verdict
+
+| Requirement | Verdict |
+|---|---|
+| **1. Account model** — four distinct accounts at once; stable unique identity (`UNIQUE (provider, name)`, unique `routine_ref`, secret name and token digest refused on reuse); Routine/account/worker identity cannot silently cross (`bindRoutineWorker` refuses overwrite, `repoint` is guarded and audited); state persists; disabled / archived / uncommissioned / unhealthy / unavailable represented truthfully | **PROVEN**, with **DEFECT FIXED** D1/D4 for *truthfully represented* |
+| **2. Routing** — only eligible accounts; never busy (targets), disabled, rate-limited, mismatched (family / repository / project / capability) or unavailable; deterministic and explained (`considered[]`, pure over a snapshot); assignment persisted (`bin_dispatch.routine_id`, `DISPATCH_ROUTED`); session attributed to the account that performed it | **PROVEN**, **DEFECT FIXED** D2 (disabled worker) and D3 (attribution) |
+| **3. Capacity** — whole pool; one account's health never the pool's; archived/bound worker cannot widen it; configuration ≠ proven (`CONFIGURING` vs `HEALTHY`, `UNPROVEN` vs `PROVEN`); partial availability stays usable | **DEFECT FIXED** D1/D4, now **PROVEN** — *three readers give one answer* holds the page, the reading and the router to the same single surface out of four |
+| **4. Failover** — busy (target), refused (rate limit ⇒ `retry_at`, not misconduct), no-show (`DISPATCH_NO_SHOW` ⇒ quarantine at 3, forgiven only on the way out), unhealthy (AUTH/NOT_FOUND/PAUSED ⇒ quarantine that surface, burst continues, bin not charged), unavailable, capability mismatch (`NO_CAPABLE_SURFACE` is per-bin, not fleet-wide), multiple eligible (headroom, then least-recently-fired) — without duplicating a job (one intent per bin×generation, fire-slot CAS), losing ownership (lease generation fencing), double-charging (surface refusals do not charge the bin; eligibility before accounting), switching identity mid-session (session = authenticated credential) or stranding work (deferrals re-armed by fleet writes) | **PROVEN** (`factoryPool`, `dispatchAuthQuarantine`, `dispatchDeferral`, `admissionAccounting`, `exhaustedBinLifecycle`, `fleet`) and **DEFECT FIXED** D2 (fail over *away from* a disabled worker) |
+| **5. Isolation / security** — secrets are names + digests and cannot collide silently; account A not mistaken for B (D3); session ownership enforced (fencing, per-credential session, pinned probes answerable only by the fired session); per-account state stays per-account (no-show ledger per Routine); wrong / guessed credentials fail with one refusal; one user's credentials cannot reach another project's work (`claudeConnectionParity`, `projectRouting`, `workerRoutingBoundaries`, `cashFourAccounts`) | **PROVEN**, **DEFECT FIXED** D3 |
+| **6. Operator truth** — `fleet show`, `verify-surface`, `verify-pool`, Fleet page, People / capacity, Build card, lab health | **DEFECT FIXED** D1/D4; the rest **PROVEN** by the lane's own guards |
+| **7. Production-current proof** — the puzzle/kernel merge (`ba5c0b2..533463f`) touched no fleet, dispatch, bin, routing, identity or capacity file; its only migrations are `089` / pg `080` (`puzzle_kernel`), additive, after the fleet's `088` / `079` | **PROVEN** — see §3 |
+| **8. Real accounts** | **HUMAN COMMISSIONING REQUIRED** — §4 |
+
+---
+
+## 3. Evidence
+
+<!-- EVIDENCE -->
+
+---
+
+## 4. Commissioning — the steps only people can take
+
+Nothing below can be done by Brain, by design: a consent screen is where a
+person chooses which worker a connector authorizes; a Cowork Routine and its
+trigger token exist only inside that person's Claude account; and the trigger
+token becomes a deployment secret that no route, tick or command in this
+repository can write (`fire.ts` reads `process.env[secretName]`).
+**No secret is requested here, and none may be pasted into a chat, an issue, a
+repository or a Brain field.**
+
+The runbook is `docs/workers/CONNECTING-THE-FACTORY-WORKER.md`; step numbers
+below are its steps. The pool is **one logical worker, `factory-brain`, on four
+accounts**. Do one account completely before starting the next.
+
+### Once, by the owner
+
+1. **Build → Repositories → Onboard `brain`** (runbook step 1). Creates
+   `factory-brain`, its routing row (`FACTORY`, `peyday007/v5`,
+   `repository,repository-write`) and one invitation link.
+   *Expect:* Build shows the repository as `AWAITING_SURFACE`.
+
+### Per person — owner (N=1), friend 1 (N=2), friend 2 (N=3), friend 3 (N=4)
+
+| Who | Action | Record / state that should appear | Probe that proves it |
+|---|---|---|---|
+| **Owner** | Press **Onboard** again for this person and send them the fresh link (N=1 uses the link from step 1). The rotation revokes unspent invitations only, never a connector already authorized. | A new `worker_invitations` row for `factory-brain` | — |
+| **That person, in their own browser** | Open the link first (step 2), then in *their* Claude account add connector **`Factory Brain`** at `https://northline-brain.fly.dev/mcp/factory` and approve **`Factory · peyday007/v5`** (step 3). | An `oauth_tokens` row for `factory-brain` minted through their consent; the invitation marked spent | — |
+| **That person** | In Cowork, create Routine **`Factory_surface_N`** — repository `Peyday007/V5` on `production`, connectors **`Factory Brain` only**, no schedule, API trigger on, the prompt verbatim (step 4). Hand the `trig_…` id to the owner; hand the bearer token to the owner **out of band**, never in chat. | nothing in Brain yet | — |
+| **Owner (Fly)** | `fly secrets set BRAIN_ROUTINE_TOKEN_FACTORY_N=<token> --app northline-brain` (step 5). One name per person; never shared. | Machine restarts; nothing in flight lost | — |
+| **Owner (Fleet workflow)** | `register-account name=<their account name>`; `register-routine account=… ref=trig_… secret=BRAIN_ROUTINE_TOKEN_FACTORY_N name=Factory_surface_N capabilities=repository,repository-write`; `bind-worker ref=trig_… extra="--worker factory-brain"` (step 6). A reused secret name or token is **refused by name** — that refusal *is* the isolation check. | `fleet_accounts` row (distinct name), `fleet_routines` row with its own `token_digest`, `worker_id = factory-brain` | `fleet show`: surface `ENABLED`, `unanswered=0`, secret present |
+| **Owner** | `verify-surface ref=trig_… extra=--probe`, then `verify-surface ref=trig_…` (step 7). | A pinned `DETERMINISTIC_CHECK` bin; `DISPATCH_SENT` to this Routine; `worker_sessions` row with this person's account; bin `COMPLETE` | **Usable:** `VERIFIED` — fired → arrived as `factory-brain` → assigned → completed. **Isolation:** the arrival's account is *this* person's account and no other Routine's chain names this credential; a `FAULT` "authenticated as a different worker" means the wrong connector was selected in Cowork |
+
+### After all four
+
+`verify-pool repository=Peyday007/V5` (step 8) must read **`accounts 4`,
+`surfaces 4`**, every surface **PROVEN**, and `ok`. Anything less names which
+surface and why.
+
+---
+
+## 5. Final live acceptance — once all four are connected
+
+Run in this order against the deployed image, through the existing workflows.
+Every expectation is a row Brain wrote; none is a worker's say-so. Record each
+output verbatim beside the commit it ran on.
+
+1. **Simultaneous membership and identity isolation.**
+   `fleet verify-pool --repository Peyday007/V5` → `accounts 4`, `surfaces 4`,
+   four `PROVEN`, four distinct `ref=trig_…`, four distinct secret names, one
+   bound worker `factory-brain`, `ok`. Then `fleet show` → four `ENABLED`
+   surfaces under four distinct accounts, `unanswered=0` on each.
+2. **Routing across the pool, and persistence of assignment.** With the fleet
+   target at ≥ 4, submit and approve one campaign on `brain` whose plan has
+   ≥ 4 independent units. Then for each unit bin, `step10 trace <bin>`:
+   `DISPATCH_ROUTED … SELECTED Factory_surface_N on <account>` and
+   `DISPATCH_SENT` naming that Routine. *Pass:* at least three distinct
+   accounts carry work while the units overlap (`factory status` concurrency
+   > 1), and no bin has two `SENT` intents at one generation.
+3. **Ownership and attribution.** For every completed bin, the
+   `worker_sessions` row (`step10 audit-lineage` / `packet-report` for research
+   bins) names the account whose Routine that session was **fired from** — and
+   no credential appears under two accounts. The review stage's recorded
+   independence tier is the one the lineage supports (`ACCOUNT_SEPARATED` only
+   if author and reviewer sessions are on different accounts).
+4. **Fallback — refusal.** One person, in their own Claude account, pauses
+   their Routine (or revokes its API trigger). The next fire at it is refused:
+   `fleet show` → that surface `QUARANTINED` with the provider's words in
+   `state_reason`; the same burst routes the bin to another account;
+   `bin_events` shows no attempt charged for the refusal. Capacity reads 3
+   eligible, not 4 and not "fleet down".
+5. **Fallback — no-show.** With the Routine re-enabled but its connector
+   removed from the Routine's connectors in Cowork (so a fired session cannot
+   reach Brain), three fires go unanswered: `DISPATCH_NO_SHOW` rows name that
+   Routine, it is quarantined at the third, and the others keep draining.
+   Restore the connector, `fleet set-state --kind routine --to ENABLED`, and
+   `verify-surface --probe` returns it to `PROVEN` — the forgiveness boundary
+   means it is not re-quarantined on the old rows.
+6. **Persistence across a restart.** Deploy (or restart) mid-campaign. After
+   it, every leased bin is still owned at the same generation or taken over at
+   generation + 1 with the attempt charged exactly once; no bin is stranded
+   (`packet-report` / `factory status` name no un-deliverable stage).
+7. **Truthful capacity throughout.** At each step above, People → capacity,
+   the Fleet page and `fleet show` agree on the eligible count, and a surface
+   is `HEALTHY` only when it is eligible *and* proven.
+
+**Pass condition:** every step's expectation met, on the deployed commit,
+with the four accounts still `PROVEN` at the end. Until then the honest
+statement is: *the software is complete; the four-account pool is not yet
+commissioned.*
