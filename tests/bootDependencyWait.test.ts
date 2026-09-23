@@ -144,7 +144,16 @@ describe('a boot whose store answers 544 first (Deploy #319)', () => {
   let store: http.Server | null = null;
 
   afterEach(async () => {
-    brain?.kill('SIGKILL');
+    // SIGTERM, and wait for it: tsx forwards SIGTERM to the server it runs,
+    // while a SIGKILL to the wrapper orphans that server on the port — which
+    // is how a second run of this suite once "passed" against the first run's
+    // Brain in 34ms.
+    if (brain && brain.exitCode === null) {
+      const exited = new Promise<void>((resolve) => brain!.once('exit', () => resolve()));
+      brain.kill('SIGTERM');
+      await Promise.race([exited, new Promise((r) => setTimeout(r, 10_000))]);
+      if (brain.exitCode === null) brain.kill('SIGKILL');
+    }
     brain = null;
     await new Promise<void>((resolve) => (store ? store.close(() => resolve()) : resolve()));
     store = null;
@@ -171,6 +180,14 @@ describe('a boot whose store answers 544 first (Deploy #319)', () => {
     });
     await new Promise<void>((resolve) => store!.listen(0, '127.0.0.1', () => resolve()));
     const storePort = (store.address() as { port: number }).port;
+
+    // Nothing may already be answering here, or the loop below would accept
+    // somebody else's Brain as this one.
+    const taken = await fetch(`http://127.0.0.1:${PORT}/healthz`).then(
+      () => true,
+      () => false,
+    );
+    expect(taken, `port ${PORT} is already served`).toBe(false);
 
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-boot-wait-'));
     let log = '';
