@@ -1015,7 +1015,51 @@ offered as though it did. Those four Routines carry `caps=[]`, so they are
 research surfaces, and all nine resolve to one worker identity. §5's middle
 category is unchanged.
 
-#### And the reading that would have narrowed it further could not be taken
+#### Two hours later the other five had crossed too
+
+`fleet show` against deploy 328's image at 14:14Z:
+
+```
+  candidates  16 considered, 4 eligible now
+  Brain Research A     QUARANTINED  worker=wkr_1cdd82…  fires=370  refusals=2  unanswered=3
+  Brain Research 1-B   QUARANTINED  worker=wkr_1cdd82…  fires=98   refusals=0  unanswered=4
+  Brain Research 1-C   QUARANTINED  worker=wkr_1cdd82…  fires=98   refusals=0  unanswered=3
+  Brain Research 1-D   QUARANTINED  worker=wkr_1cdd82…  fires=99   refusals=0  unanswered=4
+  Airyn 2-A / 2-B / 2-C / 2-D   QUARANTINED  worker=wkr_1cdd82…  unanswered=4 each
+  V2                   QUARANTINED  worker=wkr_1cdd82…  unanswered=0
+  Factory surface 1    ENABLED      worker=wkr_f8e118…  caps=[repository,repository-write]
+  Caleb 3-A … 3-D      ENABLED      worker=wkr_1db119…
+```
+
+**Nine of the eighteen registered Routines are out of routing, and every one
+of them is bound to `wkr_1cdd82cfb2a54faf8edd`.** The four still eligible are
+Caleb's, on a different worker; `Factory surface 1` is on a third.
+
+**The staggered crossing is the evidence, and it is stronger than the
+12:15 reading rather than a retraction of it.** At 12:15 four crossed while
+five same-worker siblings stayed enabled with three of them holding work —
+which is what said the count was per surface rather than shared. Two hours
+later those five had accumulated their own unanswered fires and crossed on
+their own schedule. Under `consecutive_no_shows` neither observation is
+reachable: any one arrival would have cleared all nine at 12:15, and the later
+five would never have crossed at all.
+
+**What it establishes about the fleet is a worker rather than a surface**, and
+saying so is the point. Nine surfaces failing independently, each on its own
+count, against one bound worker identity, is a reading that the *identity* has
+stopped answering fires — not nine separate surface faults. The remedy is
+therefore not `fleet set-state` on nine rows: that is §10.5's own rule, that
+re-enabling a surface nobody has fixed puts it back three unanswered fires
+from where it started, at one activation each. **Nothing here was re-enabled**,
+and the diagnosis of *why* that worker stopped answering is an operator's, not
+this lane's.
+
+**And the research queue has nowhere on that worker to run**, which is the
+operational fact worth carrying forward. `4 eligible now` is Caleb's four, and
+a research bin admitted against a different worker identity is a different
+question from the one this lane answered.
+
+#### The reading that would have narrowed it was unreachable, and why
 
 The four surfaces say they *cannot authorize*, and the operator's next
 question is which half is broken: a deployment secret that is absent, or a
@@ -1060,10 +1104,28 @@ space only on `extra`, which is a sequence of flag/value pairs by
 construction. It was run against the un-fixed workflow to watch it fail —
 `expected 'A-Za-z0-9_.:-' to contain ','` — before it was trusted to pass.
 
-**The reading itself is still not taken**, and that is stated rather than
-implied: the fix has to reach the deployed workflow before the list form
-works, and which half of those four surfaces is broken is therefore still
-open. It is one dispatch away rather than a research question.
+**The reading has been taken, and it settles the fix rather than the fleet.**
+Fleet operator run **290**, dispatched against this branch so it ran the
+corrected workflow, against production:
+
+```
+  present  BRAIN_ROUTINE_TOKEN_CALEB_3_D
+  present  BRAIN_ROUTINE_TOKEN_CALEB_3_C
+FLEET: OK check-secret present=2 absent=0
+```
+
+Two names in one `--secret` value, separated by the comma run 288 was refused
+for, parsed into two by `scripts/fleet.ts` and answered per name. **No value of
+any kind is printed** — `present` and `absent` is the whole vocabulary, which
+is the command's own stated contract rather than a property of this run.
+
+**It proves the workflow and not the surfaces.** The two names were chosen
+because they are live and the reading would be legible either way; the four
+quarantined research surfaces still have not been asked, because by the time
+the fix landed the condition had spread and the question had changed — see
+directly below. What is settled is that the list form is now reachable from
+the only surface that can run it against production, which is what a reader
+of the paragraph above needs to know.
 
 #### One configuration observation, reported and not acted on
 
@@ -1508,9 +1570,9 @@ no-show quarantine **has** now fired against four real surfaces — §8.4 — so
 that clause is withdrawn. `STALE` has still never been printed about a real
 revoked connector, and no fire has still been routed across four accounts.
 Those need four real Claude accounts and their deployment secrets, which is
-the one thing in this lane that is not an engineering task. The four surfaces
-that were quarantined are research surfaces on one worker identity and are not
-a Factory pool.
+the one thing in this lane that is not an engineering task. The surfaces that
+quarantined — four by 12:16Z and **nine by 14:14Z** — are research surfaces
+carrying `caps=[]` on one worker identity, and are not a Factory pool.
 
 **The parallel lane's D2 is unlanded.** §9. Its fix is on
 `claude/fleet-four-account-acceptance-uey8cw`, which is still moving and has
@@ -1621,15 +1683,22 @@ by deleting the last bullet's own note that it was added afterwards:
 * **No gate, migration, type check or release guard was weakened to obtain
   green.** Where something failed it was diagnosed; where a test was wrong it
   was measured against the defect it claimed to catch before it was trusted.
-* **The four quarantined `Airyn` surfaces were not re-enabled**, and that is
-  the fifth. `fleet set-state --to ENABLED` is their answering transition and
-  it exists precisely so they can come back — but the transition is for *once
-  the surface is fixed*, which is what their own recorded reason says, and
-  nobody has fixed anything: they are still not checking in while their
-  same-worker siblings are. Re-enabling them would put them back three
-  unanswered fires from where they are, at one activation each, which is the
-  behaviour §23 describes when it says `no_shows_forgiven_at` forgives nothing
-  beyond itself. The fleet reading `4 eligible now` against `target 12` is the
+* **The nine quarantined surfaces were not re-enabled**, and that is the
+  fifth. `fleet set-state --to ENABLED` is their answering transition and it
+  exists precisely so they can come back — but the transition is for *once the
+  surface is fixed*, which is what their own recorded reason says, and nobody
+  has fixed anything. Re-enabling them would put them back three unanswered
+  fires from where they are, at one activation each, which is the behaviour
+  §23 describes when it says `no_shows_forgiven_at` forgives nothing beyond
+  itself. The fleet reading `4 eligible now` against `16 considered` is the
   mechanism protecting a fixed subscription allowance rather than a fault to
   be cleared, and clearing a quarantine to make a number look better is the
   one thing this whole lane exists to stop.
+
+  **An earlier version of this bullet said four and said they were still not
+  checking in "while their same-worker siblings are".** Both halves have since
+  been overtaken: the count is nine, and the siblings are not checking in
+  either — §8.4's 14:14Z reading. The correction is recorded rather than edited
+  away, because the second half was the discriminating observation at 12:15
+  and stopped being true for a reason that makes the repair look better rather
+  than worse.

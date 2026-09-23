@@ -1500,6 +1500,20 @@ of an outage: under `consecutive_no_shows` any one of those arrivals would have
 cleared the counter for all nine, so the four could never have reached the
 threshold. `shouldQuarantine` is no longer a mechanism nothing calls.
 
+**Two hours later the other five had crossed as well, and the staggered
+crossing is stronger evidence than either reading alone.** At 14:14Z `fleet
+show` reports nine of eighteen Routines quarantined and every one of them bound
+to `wkr_1cdd82cfb2a54faf8edd`, with the four still eligible on a different
+worker. Each of the five accumulated its own unanswered fires and crossed on
+its own schedule, which is what a per-surface count produces and what a shared
+counter cannot: the first reading needed the five to *stay enabled* and the
+second needs them to cross *separately*, and only counting per surface gives
+both. **What it establishes is a worker rather than nine surface faults** —
+nine independent counts against one bound identity is a reading that the
+identity stopped answering — so the remedy is not `fleet set-state` on nine
+rows, which would put each back three unanswered fires from where it started at
+one activation each.
+
 What still has no production reading: no four-account Factory pool has been
 commissioned, `STALE` has never been printed about a real revoked connector,
 and no fire has been routed across four accounts. The four surfaces above carry
