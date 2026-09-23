@@ -1631,10 +1631,20 @@ concurrency group nothing else writes to.
 first was a reader reporting the wrong row; the second is a CI policy behaving
 exactly as designed, met by asking it somewhere it is not contended.
 
-### 10.4 One test this lane's gate found, measured to a flake and not repaired
+### 10.4 Two tests this lane's gate found, and what is established about each
 
-`tests/puzzleIntegrationPass.test.ts` — §48's kernel — failed the full local
-SQLite gate on this branch with `expected 2 to be greater than or equal to 20`.
+**Two different tests failed two different full local runs of this tree, and
+each passes alone and in CI.** Neither is in this lane's delta, which over the
+deployed image is `.github/workflows/fleet.yml`, this document and one new
+test — no server code at all, which `git diff --name-only` says rather than a
+reading of the commits. What follows keeps them apart, because collapsing them
+into *the machine is flaky* is the comfortable half-truth this repository
+exists to refuse, and one of the two has a reading worth the next person's
+attention.
+
+#### The first: `tests/puzzleIntegrationPass.test.ts`
+
+§48's kernel, failing with `expected 2 to be greater than or equal to 20`.
 It is recorded because this lane's gate surfaced it, and what it took to
 establish is worth more than the finding.
 
@@ -1673,6 +1683,43 @@ is **not established**. §27 records what a remedy for a condition nobody
 established costs, and §41 that a guard written against a guess reads as
 coverage. What the next person needs is this table and the isolated
 reproduction, not a patch from a lane that does not own the kernel.
+
+#### The second: `tests/pinAuth.test.ts`, and it has a lead
+
+*"holds the lockout across a restart, because it is rows and not memory"*,
+failing `the lockout did not survive the restart: expected 200 to be 401`. The
+file took **52 002ms** in that run and **8 180ms** run alone, where it passes.
+
+**The product path was read before anything else, because a lockout that does
+not survive a restart is a real security property failing** and §46 calls the
+throttle the whole strength of six digits. It is correct: `recordPinFailure`
+writes `pin_failed_count` and `pin_locked_until` as columns on `users`, the
+route checks `coolingOff` **before** the success branch so a correct PIN during
+a cooldown returns 401 without reaching `clearPinThrottle`, and the eight
+failures the preceding test earns put it on the ladder's last rung — **one
+hour**. No restart outlasts that, and nothing but a success or a new PIN clears
+it. So the observed 200 is not the product conceding the property.
+
+**What it is instead is not established, and a mechanism is not invented
+here.** The honest statement is that a `200` requires a request that resolved
+the identity, matched the verifier and found no live cooldown, and this lane
+could not produce a chain from the run's conditions to that. Three candidate
+explanations were considered and each is *refuted or unproven* rather than
+adopted: WAL with `synchronous = NORMAL` is durable across a process kill, so
+losing the failure writes is out; the old server answering after the restart
+would still read the same rows, so it gives 401 rather than 200; and a port
+collision with another suite gives an unknown identity, which is also 401.
+
+**The lead worth leaving is in the harness rather than in either.**
+`stopServer()` is `SIGTERM` and then a **fixed 400ms wait** — it never waits
+for the process to exit — while `startServer()` polls `/healthz` for up to
+sixty seconds and accepts whatever answers. This repository's own conventions
+already name that hazard class for suites that drive a real server, in the
+sentence about `/healthz` being unauthenticated so a collision *does not fail
+loudly*. A 400ms wait on a machine where this file took 52 seconds is the shape
+that rule is written about. **It is reported and not changed**, because this
+lane does not own that suite and because §27 records what a remedy for a
+condition nobody established costs.
 
 ### 10.5 What was deliberately not done
 
