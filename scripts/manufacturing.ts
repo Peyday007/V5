@@ -10,11 +10,19 @@
  * Starting a programme, seeding a category, retiring one and recording that
  * this company holds a capability all exist as **routes** as well, at
  * `/api/projects/:id/manufacturing`, behind `requirePerson` and
- * `decideProjectAccess` at ADMIN — which is where they belong once a surface
- * exists to show them. **There is no client surface for this kernel yet**, so
- * this file is the door that works today, and it is the same operations against
- * the same services rather than a second, weaker path: every write below calls
- * exactly what the route calls.
+ * `decideProjectAccess` at ADMIN — which is where they belong now that a
+ * surface exists to show them. An earlier version of this header said **there
+ * is no client surface for this kernel yet**; that was true when it was written
+ * and is corrected here rather than deleted, because a reader who believed it
+ * would conclude this file is the only door and reach for a terminal to make a
+ * decision the product now offers. `client/src/russell/Machines.tsx` at
+ * `/machines` is that surface, and it is where starting a programme, moving its
+ * lifecycle and recording a held capability belong.
+ *
+ * This file stays, for §26's own reason: it is the recovery for when the client
+ * bundle will not load, and it is the same operations against the same services
+ * rather than a second, weaker path — every write below calls exactly what the
+ * route calls.
  *
  * It follows the rule §23's fleet surface paid for twice: **a command that
  * changes nothing must not print success.** Every mutating command reports

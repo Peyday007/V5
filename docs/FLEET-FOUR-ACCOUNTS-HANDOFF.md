@@ -25,13 +25,14 @@ measurement, and §7 is the integration's own record.
 | Factory closeout | `e37cca06` | reached `production` before this integration and was deployed there by run 316; its lane branch `claude/factory-core-completion-ri3kqj` has since moved on — see §8.1 |
 | Merge | `bb6d538d` | the fleet lane merged into `e37cca06`, no conflict |
 | Fixture repair | `3a63fad4` | the `'READER'` correction §7 records |
-| **Integrated tip** | `integration/fleet-four-accounts` | pushed; this document and the CLAUDE.md §27 record sit on top of `3a63fad4` and change no code |
+| Integrated tip | `ba5c0b2f` | `integration/fleet-four-accounts`, after reconciling against production four times |
+| **Production** | **`901a42db`** | **contains `ba5c0b2f`**, gated on both backends at that SHA, released by deploy 323, live and serving |
 
-**`production` has not been advanced to it.** The fast-forward is valid and
-was verified immediately before it was attempted, and the attempt was refused
-by this session's own permission layer — by `git push` and by the forge's ref
-API alike. §8 says exactly what is left and how to do it. Nothing else in
-this integration is outstanding.
+**`production` has been advanced to it, and the integration is deployed.**
+`ba5c0b2f` is an ancestor of `901a42db` — checked with
+`git merge-base --is-ancestor`, and confirmed file by file and symbol by
+symbol at the tip rather than inferred from the ancestry. §8 is the record of
+the release and the live reads rather than a plan for them.
 
 **An earlier version of this paragraph said `origin/production` was
 `f727b143`.** That was true when the lane measured it and was false by the
@@ -294,18 +295,27 @@ lane, including the fourth verdict.
 
 ### AWAITING FINAL INTEGRATION AND PRODUCTION DEPLOYMENT
 
-* **Done.** An earlier version of this bullet said the branch was unmerged and
-  undeployed and that `origin/production` was `f727b143`. Both were true when
-  written; production has since advanced to `e37cca06` and this lane is merged
-  into it. §0 carries the SHAs and §7 the gate evidence.
+* **Done, and deployed.** Two earlier versions of this bullet were wrong in
+  turn and both corrections are kept rather than edited away: the first said
+  the branch was unmerged and that `origin/production` was `f727b143`; the
+  second said production had advanced to `e37cca06` and stopped there.
+  Production is `901a42db`, it contains this integration, and deploy 323
+  released it. §0 carries the SHAs, §7 the gate evidence and §8 the live reads.
 * No four-account Factory pool has been commissioned in production. The three
   research accounts in `docs/FLEET-12-ACTIVATION-EVIDENCE.md` are a different
   worker identity and a different workload family.
-* Therefore **no production reading exists for anything in §2**. The quarantine
-  has never fired against a real dead surface; `STALE` has never been printed
-  about a real revoked connector. The engine passing its tests says nothing
-  about whether the fleet behaves this way, which is the separation Step 3 drew
-  and which this lane does not get to waive.
+* **A production reading now exists for the half of §2 that an uncommissioned
+  pool can establish**, and §8.4 is it: accounts and surfaces as two numbers,
+  `PROVEN` as the four-row chain, the pooling caveat printed on a passing run,
+  `unanswered=0` on every surface, and each unhealthy surface printing its
+  recorded reason.
+* **It does not exist for the other half, and that is not rounded up.** The
+  quarantine has never fired against a real dead surface; `STALE` has never
+  been printed about a real revoked connector; no fire has been routed across
+  four accounts. Those need the four accounts to exist, which is the category
+  above. The engine passing its tests says nothing about whether the fleet
+  behaves this way, which is the separation Step 3 drew and which this lane
+  does not get to waive.
 
 ---
 
@@ -494,111 +504,263 @@ part of the suite this lane's migration and derived counter actually touch.
 
 <!-- CI-EVIDENCE -->
 
-### 7.4 What is proven where
+### 7.4 The gate on the SHA production actually serves
+
+The table above is the integrated branch. **`production` is now `901a42db`,
+and it contains this integration** — `ba5c0b2f` is an ancestor of it, checked
+with `git merge-base --is-ancestor` rather than asserted, and every file and
+symbol this lane added reads back at that tip: `088_routine_no_show_boundary.sql`
+and `pg-migrations/079_…`, `unansweredFiresByRoutine`, `no_shows_forgiven_at`,
+`PoolVerdict`, `accountsServing`, `role = 'VIEWER'` in
+`tests/factoryReleaseSurface.test.tsx`, and `"tests/**/*.tsx"` in
+`tsconfig.json`.
+
+So the gate that matters is the one on **that** SHA, and it exists:
+
+| Gate | SHA | Result |
+| --- | --- | --- |
+| `npm run typecheck` (CI) | **`901a42db`** | clean |
+| `npm test` (PostgreSQL, `postgres-suite.yml` run 369) | **`901a42db`** | **215 files / 4632 tests, all passed**, 2414s, `success` |
+| `npm run typecheck` + `npm test` + `npm run build` (`deploy.yml` `verify`) | **`901a42db`** | passed — the release job would not have run otherwise |
+| `npm test` (SQLite, local) | `3d020b42`, this branch's tip | 4520 passed, 44 skipped, exit 0 |
+
+Run 369 fired on `production`'s own push trigger, so it is the repository's
+gate answering about the repository's canonical tip on a clean runner — which
+is a stronger reading than a local run on a working tree, and it makes the
+local Postgres attempt on the branch redundant rather than missing. Its last
+step confirms the suite dropped everything it created.
+
+**No green run from either source branch is reused as evidence for the
+integrated commit**, and no gate was weakened, skipped or narrowed to obtain
+any of these.
+
+### 7.5 What is proven where
 
 **Proven in code and tests** — schema on both chains, the router, project and
 worker isolation, the capacity proofs, quarantine and its answering transition,
 the identity and authentication checks, the Build and operator surfaces, the
-migrations, the documentation.
+migrations, the documentation. Gated on both backends on the SHA production
+serves.
 
-**Not yet proven in production, because this session could not advance
-`production`** — that the deployed image serves this machinery and tells the
-truth about an uncommissioned pool. The deploy and the reads that would
-establish it are §8, written out so the next session runs them rather than
-re-derives them.
+**Proven in production** — §8 is the reading rather than the plan now. The
+integrated image is live and serving; the machinery this lane added answers
+from the deployed rows; and it tells the truth about an uncommissioned pool
+on a run that *passes* rather than only on one that fails.
 
 **Not proven, and not claimed** — that four real Claude accounts run as one
 Factory fleet. No such pool has been commissioned. The quarantine has never
 fired against a real dead surface and `STALE` has never been printed about a
 real revoked connector. The engine passing its tests says nothing about
 whether the fleet behaves this way, which is the separation Step 3 drew and
-which this integration does not get to waive.
-
+which this integration does not get to waive. §5's
+**AWAITING HUMAN ACCOUNT / CREDENTIAL AUTHORIZATION** list is unchanged and
+unticked.
 
 ---
 
-## 8. What is left, and exactly how to do it
+## 8. The release, and what it measured
 
-The software side of this integration is finished and gated. What remains is
-**one privileged action this session was refused**, and then the ordinary
-release path behind it.
+This section was a set of instructions for the next session. It is a record
+now. Where a prediction it made turned out wrong, the correction is here
+rather than edited into the prediction.
 
-### 8.1 Advance `production` — refused here, one command for somebody who can
+### 8.1 `production` was advanced by the guarded fast-forward
 
-`integration/fleet-four-accounts` contains `production` at
-`e37cca06` as an ancestor, so this is a fast-forward and nothing is rewritten:
+Two attempts from this session were refused by its own permission layer — the
+`git push` and the forge's `PATCH …/git/refs/heads/production` with
+`force: false` — and no third route was tried, because a third route would
+have been working around the refusal rather than around a tool. The operator
+then authorized it explicitly, and it went the way §28 says:
 
 ```
 git fetch origin production
-git merge-base --is-ancestor origin/production integration/fleet-four-accounts \
-  && git push origin integration/fleet-four-accounts:production
+git merge-base --is-ancestor origin/production integration/fleet-four-accounts   && git push origin integration/fleet-four-accounts:production
 ```
 
-The `merge-base` check first is §28's own rule — a non-fast-forward is refused
-before it is attempted rather than after. Never check `production` out to
-advance it; §28 records a scratch worktree holding it with a whole session's
-reversal staged, one `git commit -am` away from putting a deleted surface back.
+`production` was never checked out to advance it.
 
-**If that check fails, production has moved and this is a merge rather than a
-fast-forward — which is expected, not a problem.** The Factory closeout lane
-is still working: while this was being written it advanced
-`claude/factory-core-completion-ri3kqj` from `e37cca06` to `b4615e62`
-(*One recompute asks the store about each document once*). That commit and
-this branch were trial-merged with `git merge-tree` and report **no
-conflict**; the only file both touch is `CLAUDE.md`, and the two additions are
-in different sections. Whichever lane lands first, the other merges. Re-run
-the trial merge rather than assuming this one still holds — that is the
-mistake this whole document was written to correct once already.
+**Production moved four times while this was being done** — `f727b143` →
+`e37cca06` → `6f489918` → `41f4373f` → `533463f3` → `901a42db` — each move
+requiring a fresh merge and a fresh fast-forward check. The integration was
+re-merged and re-verified each time rather than re-derived, and it survives at
+the final tip, checked file by file and symbol by symbol rather than assumed.
 
-**Both routes were attempted from this session and both were refused by its
-permission layer**: the `git push` above, and `PATCH /repos/.../git/refs/heads/
-production` with `force: false`, which is the strictly safer form because the
-forge itself refuses anything that is not a fast-forward. No third route was
-tried, because a third route would have been working around the refusal rather
-than around a tool.
+### 8.2 The release: three facts, read as three
 
-### 8.2 Then the release, unchanged
+**Deploy run 323, `901a42db`.** `release: success`. `beforeRestart: true`.
+`afterRestart: false`.
 
-1. Dispatch **Deploy** on `production`. Its `canonical` job asks the guard
-   twice — once before the test gate and once immediately before
-   `flyctl deploy` — so a branch that moved underneath the run is refused at
-   the second asking rather than released.
-2. Stay with it to a terminal verdict. Expect
-   `release: success`, `beforeRestart: …`, `afterRestart: …` as three separate
-   facts, and read them as three.
-3. **The post-restart half is the open question.** Deploy 316 failed it on
-   `e37cca06` with `brain_submit_audit` answering nothing within 900s; the
-   cause was found and fixed afterwards, and this deploy carries the fix. If
-   it comes back, that is the repair proved on the run that needed it. If it
-   fails again, it is still neither this integration nor the release — read
-   `release`, `beforeRestart` and `afterRestart` as three facts and say which
-   of the three is which.
-4. Prove the image independently of the gate, which is what §27 says to do when
-   the gate is the thing that is skipped or stuck. The served bundle is the
-   handle, and the before-and-after are already known:
+The post-restart failure is **not** the condition §7.3 predicted, and saying
+so precisely matters more than the prediction being nearly right. It was:
 
-   The served bundle before this deploy was `assets/index-DYLLmYzP.js` with
-   `assets/index-Dzwb3x6t.css` beside it. `npm run build` on the integrated
-   tree names what should replace it; compare the two rather than trusting
-   the workflow's own status. `curl -sS https://northline-brain.fly.dev/ |
-   grep -oE 'assets/index-[A-Za-z0-9_-]+\.(js|css)'`.
+```
+(ECHECKOUTTIMEOUT) unable to check out connection from the pool after
+15000ms in Session mode
+  on SELECT * FROM research_fragments WHERE orchestration_id = $1 …
+```
 
-### 8.3 Then the live reads this lane is owed
+which is CLAUDE.md §27's pooler condition — the Supabase session-mode limit
+of fifteen clients against an application pool that defaults to ten — and not
+the judge pass at all.
 
-Against the deployed image, through the workflows that already exist:
+**Because the judge pass came back, and the number is the point.** §27's table
+records this deploy's predecessor at **12m25s over 415 documents**, and run
+316's post-restart half exceeding the fifteen-minute bound at 431. On the
+released image:
 
-1. `fleet verify-pool --repository Peyday007/V5` — **read `accounts` and
-   `surfaces` as two numbers.** One Routine is not a pool and the command says
-   so on the run that passes, not only on one that fails.
-2. `fleet show` — `unanswered=` per surface. **It must read 0 everywhere on the
-   first tick**, and §7.2 establishes why from rows rather than from hope:
-   production has never written a `DISPATCH_NO_SHOW` event, so every counter
-   starts empty and no surface can be quarantined out of history.
-3. `factory campaigns` and `factory status` across every project.
-4. Confirm no surface reads `PROVEN` or `HEALTHY` on configuration alone —
-   which is the whole point of §2.1, §2.4 and §2.7, and is the one thing a
-   production reading of an *uncommissioned* pool can genuinely establish.
+| half | archive | ADVERSARIAL → verdict |
+| --- | --- | --- |
+| run 316 pre-restart | 415 documents | 12m25s |
+| **run 323, this image** | **434 documents** | **1m42s** — 08:52:40 → 08:54:22 |
 
-**What such a reading cannot establish**, and must not be written up as though
-it did: that four real Claude accounts run as one Factory fleet. That needs the
-four accounts to exist, and §5 lists the four things only a person can do.
+A larger archive and a seventh of the time. That is the repair proved on the
+deploy that carried it, which is exactly the reading §7.3 said this release
+was the first chance to take.
+
+**It is two repairs rather than one, and saying so matters.** `901a42db`
+carries the existence memo *and* the statement-count fix that followed it —
+`withExistenceMemo`, `documentIdsWithAudits` and `tests/auditRoundTrips.test.ts`
+all read back at that SHA. CLAUDE.md §27 records the memo alone reaching 2m56s
+pre-restart at deploy 318 and still dying after the restart, so crediting
+1m42s to the memo would claim a repair had been proved that had not. An
+earlier version of this paragraph did exactly that; the correction is here
+rather than edited into it.
+
+**The image was proved independently of the gate**, which is what §27 says to
+do when the gate is the thing that is stuck. The served bundle is
+`assets/index-T4sTcb6M.js`, byte-for-byte what `npm run build` on the
+integrated tree produces, replacing the pre-deploy `assets/index-DYLLmYzP.js`;
+`index-Dzwb3x6t.css` is unchanged on both, because this integration changes no
+CSS.
+
+### 8.3 An outage this integration did not cause, and the timeline that says so
+
+Production answered 503 for roughly two hours during this window. It is
+recorded here because a reader finding it later would otherwise attach it to
+the deploy that happens to sit in the middle of it.
+
+The Brain boots cleanly on the released image — migrations applied at
+07:19:26, health passing at 07:19:38 — and cannot survive the restart 36
+seconds afterwards while the previous process still holds its Supabase
+connections. **And the database was already timing out statements at
+06:07:32**, twenty minutes before this deploy's own run started at 06:27:39.
+So the condition preceded the release, the release did not introduce it, and
+the fix for it is not in this repository: `BRAIN_DATABASE_POOL_SIZE` is a Fly
+deployment secret, and `logs.yml` refuses `flyctl secrets set` by whole-command
+form. §9 is the one action that leaves.
+
+Production returned at **08:50:33** and has answered `/healthz` in about 0.4s
+on every probe since. `/api/auth/login` with a deliberately wrong credential
+answers `HTTP 401` with the PIN sentence — the app serving and reading
+Postgres — though it took 24.27s to do it, which is the same pooler pressure
+seen from the front door.
+
+**One correction of my own, recorded rather than quietly dropped.** I wrote
+that §28's second canonical guard would refuse deploy 318. It did not and
+could not: it had already passed at 05:29:44 and released at 05:33:18, before
+`production` was advanced. I also reported run 320's pre-restart verification
+as passing; its step 13 reads `failure`. Both are corrected here.
+
+**The guard did fire in anger, on a different run.** Deploy 322 passed the
+first canonical asking on `533463f3`, spent its test gate, and was refused at
+the second because `901a42db` had landed in between. That is §28's run-283
+defect being prevented rather than recorded.
+
+### 8.4 The live reads, against the deployed image
+
+**`fleet verify-pool --repository Peyday007/V5`**
+
+```
+FLEET: OK verify-pool peyday007/v5 VERIFIED surfaces=1
+  accounts 1 · surfaces 1
+  PROVEN  Factory surface 1 (Brain Research A)
+          fired    2026-09-22T13:25:44.296Z
+          arrived  oat_2ff2d3fb33b34072b16f at 13:26:17.177Z
+          assigned and completed bin_fb9239718e6440c79952
+  NOTE  Only one surface is registered for this repository, so nothing here
+        is pooled.
+```
+
+Three things in that are the lane's own repairs, read back from production
+rather than from a test. **`accounts` and `surfaces` are two numbers**, so
+three Routines on one subscription can no longer read as three accounts.
+**`PROVEN` is the four-row chain** — fired, arrived, assigned, completed —
+rather than a configuration block. And **the caveat printed on a run that
+passed**: before §29's repair it was pushed onto `problems`, which `ok` does
+not count, so the one run where a reader could mistake `VERIFIED` for *pooled*
+was the only run that never said otherwise.
+
+**`fleet show`**
+
+```
+accounts 6 · routines 18 · target 12 · in flight 0
+candidates 16 considered, 12 eligible now
+```
+
+with, per surface, **`unanswered=0` everywhere**. §7.2 established that from
+rows before the deploy rather than hoping for it: production has never written
+a `DISPATCH_NO_SHOW` event, `unansweredFiresByRoutine` filters
+`routine_id IS NOT NULL`, so every counter starts empty and the new quarantine
+cannot fire against history. It did not.
+
+Beside it, the surfaces that are *not* healthy say why, which is §29's
+`state_reason` repair: `V2 QUARANTINED` printing *"sessions complete without
+checking in operator hold"*, two surfaces reading `MISSING SECRET`, and the
+retired `V1-oak` pair carrying their retirement reasons. Six accounts —
+`primary`, `friend-2`, `verify-hosted-account-a` and `-b`, and two friend
+accounts holding four Routines each.
+
+**No surface reads `PROVEN` or `HEALTHY` on configuration alone**, which is
+the whole point of §2.1, §2.4 and §2.7 and is the one thing a production
+reading of an *uncommissioned* pool can genuinely establish.
+
+---
+
+## 9. A parallel lane found four defects in this one's code, and one qualifies §8.4
+
+`claude/fleet-four-account-acceptance-uey8cw` is a second session on the same
+subject, taken against production `533463f3` — which already contained this
+integration through `ba5c0b2f`. It tested the shape this lane did not: **four
+people each holding their own connector, and therefore their own worker**,
+where this lane proved one worker identity served by several accounts. It
+found four defects, all of this lane's own class — correct machinery, a false
+sentence about it — and `docs/FLEET-FOUR-ACCOUNT-ACCEPTANCE.md` on that branch
+is its record. That document already reconciles with this one, and correctly:
+it says this handoff still stands and that its §8 is overtaken.
+
+**It is gated and unlanded.** Full SQLite suite 4597 passed on `602f9680`,
+`postgres-suite.yml` run 367 at 215 files / 4641 passed with typecheck clean,
+build clean. There is no open pull request for it, and the branch has moved
+since that run, so **the session that owns it is still working.** Nothing here
+merges it: taking a live lane's work onto `production` out from under it is
+the cross-lane collision §28 is written from, and a gate somebody else has not
+finished asking for is not mine to answer.
+
+**One of its findings bears directly on a number in §8.4, and the number is
+therefore qualified rather than left standing.** Its D2: a Routine bound to a
+**DISABLED** worker is routable on the deployed code. Archiving a worker
+revokes its memberships, so `servesProjects` already takes an archived one out
+— but disabling is reversible and *keeps* them, so the deployed `routeBin`
+checks the account's state, the Routine's state and the served project, and
+has nothing that can see a disabled bound worker.
+
+`fleet show`'s `candidates 16 considered, 12 eligible now` is computed by
+running a real `routeBin` probe per candidate, which is a stronger reading
+than the Fleet page's and is still that `routeBin`. So **12 is what the
+deployed code computes, and the deployed code cannot subtract a surface whose
+bound worker is disabled.** The error, if any, is in the direction of
+overstating. This is recorded rather than re-measured here because the remedy
+is that lane's `surfaceIneligibility` — one bin-independent answer asked by the
+router, the capacity reading and the page alike — and re-deriving it in this
+document would be the second reader of one rule that both lanes exist to stop.
+
+Nothing else in §8.4 is affected. `unanswered=0` is read from `bin_events`,
+`verify-pool`'s `PROVEN` is the four-row chain, the `state_reason` lines are
+the rows' own words, and `accounts 1 · surfaces 1` counts two things that are
+not each other. None of those passes through the eligibility predicate.
+
+**What the two lanes agree on, and it is the thing that matters most:** no
+four-account Factory pool has been commissioned, and neither document claims
+one has.
+
+<!-- FACTORY-READS -->

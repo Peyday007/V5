@@ -3489,6 +3489,7 @@ remote.
   | 277 | 399 documents | **9m44s** |
   | 316 pre-restart | 415 documents | **12m25s** — and it passed, 229/229 |
   | 316 post-restart | 431 documents | **over 15m** — the bound, unanswered |
+  | **323, the repaired image** | **434 documents** | **1m42s** |
 
   **The last two rows were measured after this table was written, and they
   change what it means.** Deploy 316 timed both of its halves against two
@@ -3576,9 +3577,39 @@ remote.
   name and availability only. One `documentIdsWithAudits` and one
   `currentExtractionRunsFor` per layer take them to **191 and 197**, and
   `tests/auditRoundTrips.test.ts` asserts that sixteen more documents add no
-  statements (the old code went 29 → 77 on the context alone). The beat makes the harness
-  survive whichever end of that range it gets; it makes nothing faster, and
-  whatever is actually driving the growth is still unmeasured. **The queue was right and
+  statements (the old code went 29 → 77 on the context alone).
+
+  **Both halves are proved in production together, and the last row of that
+  table is the proof.** Deploy 323 released `901a42db`, which carries the
+  existence memo *and* the statement-count repair — `withExistenceMemo`,
+  `documentIdsWithAudits` and `tests/auditRoundTrips.test.ts` all read back at
+  that SHA — and the JUDGE submission on the released image ran **1m42s over
+  434 documents**, 08:52:40 to 08:54:22, against 316's 12m25s over 415. A
+  larger archive and a seventh of the time, which is the shape a
+  fixed-cost-per-document repair produces and a coincidence does not.
+
+  **An earlier version of this paragraph credited the memo alone, and that was
+  too narrow.** The paragraph above measures the memo on its own at 318: it
+  reached 2m56s pre-restart and still died after the restart. So 1m42s is the
+  reading after both, and attributing it to one would have left the next
+  reader believing a repair had been proved that had not.
+
+  **That run still failed its post-restart half, and it is a different
+  condition — reading it as this one would undo the measurement above.** It
+  answered `(ECHECKOUTTIMEOUT) unable to check out connection from the pool
+  after 15000ms in Session mode` on an ordinary `SELECT` against
+  `research_fragments`, which is the pooler paragraph further down this
+  section rather than the judge pass at all: `release: success`,
+  `beforeRestart: true`, `afterRestart: false`, with the image live and
+  serving throughout and the served bundle checked independently of the gate.
+
+  A sentence here used to end *"whatever is actually driving the growth is
+  still unmeasured"*, and it survived two rewrites that each measured it — the
+  store at 316 and the statement counts at 318. It is corrected rather than
+  deleted, because it dates from before either cause was established and a
+  reader who believed it would start the investigation over. What still holds
+  of it is the honest half: **the beat makes the harness survive whichever end
+  of that range it gets, and it makes nothing faster.** **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so
   that a worker which stopped working cannot hold work for ever, and a worker
   still working says so by beating — which is what every other long-running
@@ -8673,6 +8704,61 @@ one. Saying which of those two it was is the point.
 The reading is also still `GET /api/projects/:id/labor` for any project member
 and `npm run report:labor` on a terminal, unchanged.
 
+**And the surface's own journey test asked a question that had stopped naming
+which element it meant, which refused the whole tree.** Deploy 317 never
+reached `flyctl deploy`: its test gate failed on one assertion in
+`laborSurface`, `Found multiple elements with the text: /human interface/`.
+Recording that a specialist professional produces a task changes two sections
+at once — the role appears on the human-roles list as the reason a person is
+necessary, and the capacity need beside it stops reading *nobody has decided*
+and starts naming that same reason, because `capacityNeeds` carries
+`allocation.necessityReason` the moment a human layer is recorded with nothing
+published about sourcing it. **Both are correct and both are the product**;
+nothing about the screen was wrong.
+
+`waitFor` resolves on its first successful poll, so the unscoped query passed
+only while that poll happened to land in the gap between the two renders, and
+threw the moment a runner was loaded enough for both to be there. **A test that
+hopes for a race is a flake** — §27's sentence, at a screen rather than at a
+compare-and-swap, and here the flake's cost was the whole release rather than
+one red gate. It is scoped to the list it is about. `getAllByText` would also
+have made it pass and is the weaker reading: it is satisfied by the needs
+section alone, which says nothing about the role having reached the map — the
+vacuous guard this section already records, which reads as coverage.
+
+**Two sessions fixed it within forty minutes of each other, and what is worth
+recording is the reconciliation rather than either fix.** Both reached the same
+diagnosis and the same remedy — scope the assertion to the roles section — and
+`41f4373` landed on `production` first, so it is the one that stands and the
+other was dropped rather than merged beside it. §39 records this repository
+taking somebody else's side on the same grounds; two mechanisms for one defect
+is the thing being avoided, and losing an argument is not the cost.
+
+What the dropped version had that this one did not was a settle wait, and it
+earned one thing that is kept: with the settled state forced, the old query
+fails with production's own sentence and a scope pointed at a section that does
+not carry the reason fails with `Unable to find`, so the scope **discriminates**
+rather than merely narrowing. The surviving comment's account of the second
+element was wrong — it named a label the form offered — and it is corrected in
+place with the measurement beside it, because a comment that misnames the other
+match sends the next reader to the wrong section. §33's sentence: the evidence
+was right and the sentence about it was wrong.
+
+**A third session then corrected the same comment from the other end, and both
+corrections stand because they are about different sentences in it.** Theirs is
+that the backing is `ASSERTED` rather than `PERSON` — recording *who produces* a
+task writes an allocation and not a necessity answer — and that no assertion
+there had ever read the backing, which is why the claim could drift. Mine is
+which element the second match is. The claim was re-measured against the merged
+tree rather than carried forward on the strength of deploy 317's dump, because a
+correction re-applied over somebody else's rewrite is a claim about *their*
+code: the two elements are still `STRONG|human interface` in the roles section
+and `P.rs-item-meta|The role exists for human interface.` in the capacity
+needs, so the second one is permanent once the role is recorded rather than a
+form that may still be open. That difference is the whole of why it matters —
+*the form is still open* sends a reader to look at form lifecycle, and the
+answer is a second section.
+
 **What is true today, said plainly.** The schema, the vocabulary, the one
 validator both doors call, the necessity test, the allocator, the absorption,
 the envelope, the profile, the routes and the tick are built and covered on both
@@ -11543,6 +11629,7 @@ client/                 React UI
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
   src/russell/Cash.tsx  one Cash page: one skeleton, and a role decides what is in it
+  src/russell/Machines.tsx  the ladder, what entering costs, and the three decisions that are a person's
   src/russell/cashPage.ts  both payloads, normalized; the capabilities the server sent
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
   src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
@@ -11565,7 +11652,7 @@ scripts/
   design.sh                 the half that reads rows, inside the deployed container
   capability.ts             the kernel's operator surface: register, advance, derive
   factory.ts                the operator's factory surface: register, submit, run
-  manufacturing.ts          the programme's terminal door, until a surface exists
+  manufacturing.ts          the programme's recovery door, when the bundle will not load
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
   refinement-report.ts      where every deep dive spent its time, stage by stage

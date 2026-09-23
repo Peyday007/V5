@@ -356,11 +356,29 @@ describe('the Labor screen, over the real route', () => {
     // And the role is now on the map with what backs it — which is
     // `ASSERTED` rather than `PERSON`: somebody recorded who produces the
     // task, and nothing answered the question of why a person is necessary.
-    // Scoped to the roles section, because the same words are also the label
-    // of the reason the form offered, and whether that form is still open when
-    // the map re-renders is timing: an unscoped query found both on the
-    // deploy's own run and one on every other, which made the assertion a race
-    // rather than a statement about the map.
+    /*
+     * Scoped to the roles section, because two sections legitimately carry the
+     * reason and an unscoped query stopped naming which one it meant.
+     *
+     * The second element is the **capacity need**, not a label the form
+     * offered — this comment said the latter, and the correction is recorded
+     * here rather than quietly applied, because a comment that misnames the
+     * other match sends the next reader to look at form lifecycle when the
+     * answer is a second section. Re-measured on this tree rather than argued:
+     * the two elements carrying the words are `STRONG|human interface` and
+     * `P.rs-item-meta|The role exists for human interface.`, which is what
+     * deploy 317's own failure dump listed too. `capacityNeeds` carries
+     * `allocation.necessityReason` the moment a human layer is recorded with
+     * nothing published about sourcing it, so recording the role writes both
+     * at once and the second one is permanent rather than transient.
+     *
+     * `waitFor` resolves on its first successful poll, so the unscoped query
+     * passed only while that poll landed in the gap between the two renders
+     * and threw the moment a runner was loaded enough for both to be there.
+     * `getAllByText` would also have made it pass and is the weaker reading:
+     * it is satisfied by the needs section alone, which says nothing about
+     * the role having reached the map.
+     */
     await waitFor(() => {
       const roles = document.querySelector('.rs-labor-roles') as HTMLElement | null;
       expect(roles).toBeTruthy();
