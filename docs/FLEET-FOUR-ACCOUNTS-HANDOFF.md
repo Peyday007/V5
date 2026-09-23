@@ -972,6 +972,17 @@ of eight against four quarantines; `in flight 6` accounts for the rest by
 surfaces sitting at their target, and no attempt is made here to apportion it
 exactly.
 
+**And nothing else moved in response, which is the separation holding.**
+`fleet scale-advice`, read immediately afterwards, answers
+`HOLD 12 -> 12 … automatic=false`. Eight of sixteen candidates were
+unavailable and the concurrency target **did not drop**, because a target is
+what somebody bought and a quarantine is a health fact about one surface —
+§23's own distinction between an account's allowance and a Routine's
+availability. A scaler that had lowered the target here would have turned a
+recoverable per-surface fault into a permanently smaller fleet, and nobody
+would have seen it happen. It is worth recording precisely because nothing
+happened.
+
 **What it does not establish is a four-account Factory pool**, and it is not
 offered as though it did. Those four Routines carry `caps=[]`, so they are
 research surfaces, and all nine resolve to one worker identity. §5's middle
