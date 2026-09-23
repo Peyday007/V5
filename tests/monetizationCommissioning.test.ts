@@ -164,7 +164,7 @@ interface PreparedClaim {
 async function finishResearch(input: {
   candidateId: string;
   claims: PreparedClaim[];
-  missionState?: 'DONE' | 'FAILED';
+  missionState?: 'DONE' | 'FAILED' | 'NEEDS_HUMAN';
 }): Promise<{ orchestrationId: string; claimIds: string[] }> {
   const layer = (await listLayers(projectId))[0]!;
   const run = await createRun({
@@ -261,11 +261,15 @@ async function finishResearch(input: {
     from: 'PLANNED',
     to: 'RUNNING',
   });
+  const to = input.missionState ?? 'DONE';
   await transitionMission({
     missionId: mission.id,
     from: 'RUNNING',
-    to: input.missionState ?? 'DONE',
-    terminalReason: 'the research finished',
+    to,
+    // A mission that waits has to say what for, which the repository enforces.
+    ...(to === 'NEEDS_HUMAN'
+      ? { waitingOn: 'a decision only a person can make' }
+      : { terminalReason: 'the research finished' }),
   });
   return { orchestrationId: orchestration.id, claimIds: inserted.map((one) => one.id) };
 }
@@ -670,6 +674,43 @@ describe('adversarial: nothing is ever commissioned twice', () => {
     expect((await listCommissions({ projectId, state: 'OPEN' })).length).toBeLessThanOrEqual(
       MAX_OPEN_COMMISSIONS,
     );
+  });
+
+  it('does not let a question parked for a person hold a slot for ever', async () => {
+    for (let n = 0; n < 4; n += 1) {
+      await discovery('PAID_TASK_OR_CONTRACT', `A published request number ${n}.`);
+    }
+    await enumeratePossibilities(projectId);
+
+    const first = await tick();
+    expect(first.opened.length).toBe(MAX_OPEN_COMMISSIONS);
+    // Nothing more, because every slot is taken.
+    expect((await tick()).opened).toEqual([]);
+
+    /*
+     * Park all three at a decision. A slot is provider capacity, and a question
+     * waiting on a person is using none of it — `MAX_VALIDATIONS_IN_FLIGHT` was
+     * corrected for exactly this, and counting them would stop the loop
+     * permanently while somebody thinks.
+     */
+    for (const one of first.opened) {
+      await finishResearch({
+        candidateId: one.candidateId,
+        claims: [],
+        missionState: 'NEEDS_HUMAN',
+      });
+    }
+
+    const after = await tick();
+    expect(after.opened.length).toBeGreaterThan(0);
+    // And the parked ones are still recorded as open, so nothing asks them
+    // again while they wait.
+    for (const one of first.opened) {
+      const still = (await commissionsFor(one.pathId)).find(
+        (row) => row.id === one.commissionId,
+      )!;
+      expect(still.state).toBe('OPEN');
+    }
   });
 
   it('asks one question per possibility at a time, not three about one', async () => {

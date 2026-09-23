@@ -29,7 +29,7 @@
  */
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { createCandidate } from '../../../repos/russellCandidates.ts';
-import { listMissions } from '../../../repos/russellMissions.ts';
+import { latestMissionForCandidate, listMissions } from '../../../repos/russellMissions.ts';
 import { citableClaims, getClaim } from '../../../repos/research.ts';
 import { mayReplace } from '../../../repos/cashCardFacts.ts';
 import {
@@ -198,13 +198,36 @@ export async function runCommissions(input: {
   }
 
   const commissions = await listCommissions({ projectId: input.projectId });
-  const openNow = commissions.filter((one) => one.state === 'OPEN').length;
+  const open = commissions.filter((one) => one.state === 'OPEN');
+  const openNow = open.length;
+  /*
+   * A question parked for a person is using no provider capacity, so it holds
+   * no slot.
+   *
+   * `MAX_VALIDATIONS_IN_FLIGHT` was corrected for exactly this and the reason
+   * is recorded beside it: counting a parked dive made a Brain with two of them
+   * unable to start a thirty-ninth for ever. **What holds a slot is what a
+   * worker is working on.** Three commissions parked at `NEEDS_HUMAN` would
+   * otherwise stop this loop permanently, which is §24's *waiting nobody can
+   * resolve* — except that here the person genuinely can resolve it, and the
+   * loop would still be stopped while they did.
+   *
+   * It is a slot count only. The question itself is still recorded as OPEN, so
+   * nothing asks it a second time while it waits, and re-asking it is still
+   * bounded by `MAX_COMMISSION_ROUNDS`.
+   */
+  let holding = 0;
+  for (const one of open) {
+    const mission = await latestMissionForCandidate(one.candidateId);
+    if (mission?.state === 'NEEDS_HUMAN') continue;
+    holding += 1;
+  }
   const plan = allocateCommissions({
     entries: input.ledger.entries,
     rankable: input.ledger.entries.map(rankableOf),
     commissions,
     contradicted: await contradictedAnswers(input.projectId),
-    slots: Math.max(0, MAX_OPEN_COMMISSIONS - openNow),
+    slots: Math.max(0, MAX_OPEN_COMMISSIONS - holding),
     now: Date.parse(input.now ?? input.ledger.readAt),
   });
 
