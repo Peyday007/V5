@@ -1454,3 +1454,15 @@ Four things, each because doing them would have been worse than the problem:
 * **No gate, migration, type check or release guard was weakened to obtain
   green.** Where something failed it was diagnosed; where a test was wrong it
   was measured against the defect it claimed to catch before it was trusted.
+* **The four quarantined `Airyn` surfaces were not re-enabled**, and that is
+  the fifth. `fleet set-state --to ENABLED` is their answering transition and
+  it exists precisely so they can come back — but the transition is for *once
+  the surface is fixed*, which is what their own recorded reason says, and
+  nobody has fixed anything: they are still not checking in while their
+  same-worker siblings are. Re-enabling them would put them back three
+  unanswered fires from where they are, at one activation each, which is the
+  behaviour §23 describes when it says `no_shows_forgiven_at` forgives nothing
+  beyond itself. The fleet reading `4 eligible now` against `target 12` is the
+  mechanism protecting a fixed subscription allowance rather than a fault to
+  be cleared, and clearing a quarantine to make a number look better is the
+  one thing this whole lane exists to stop.
