@@ -608,6 +608,13 @@ export interface GoalsSnapshot {
 export async function assembleGoals(options: {
   projectIds: string[] | null;
   includeArchived?: boolean;
+  /**
+   * With `includeArchived`, derive only this archived goal rather than all of
+   * them. An archived goal holds nothing and ranks nowhere, and the hosted
+   * verification archives two more on each side of every deploy, so deriving
+   * every one of them to show one is a cost that grows for ever.
+   */
+  onlyArchivedGoal?: string;
   now?: string;
 }): Promise<GoalsSnapshot> {
   const now = options.now ?? new Date().toISOString();
@@ -632,12 +639,30 @@ export async function assembleGoals(options: {
   // caller may not be able to read.
   const base = new Map<
     string,
-    { goal: Workstream; view: WorkstreamView; lifecycle: GoalLifecycle; reason: string; resolved: Resolved }
+    { goal: Workstream; view: WorkstreamView | null; lifecycle: GoalLifecycle; reason: string; resolved: Resolved }
   >();
   for (const goal of all) {
     const own = linksBy.get(goal.id) ?? [];
-    const view = await viewOf(goal, own);
     const decided = decidedLifecycle(goal);
+    /*
+     * An archived goal nobody asked to see is present — a dependency's
+     * lifecycle and a hold's owner are read from it — and derived no further.
+     * Its linked work costs statements on every tick, and archived goals are
+     * the one kind this table gains without bound (tests/goalTickCost.test.ts).
+     */
+    const shown =
+      options.includeArchived && (options.onlyArchivedGoal === undefined || options.onlyArchivedGoal === goal.id);
+    if (decided?.lifecycle === 'ARCHIVED' && !shown) {
+      base.set(goal.id, {
+        goal,
+        view: null,
+        lifecycle: 'ARCHIVED',
+        reason: decided.reason,
+        resolved: { bins: [], decisions: [], evidence: [], obligations: [] },
+      });
+      continue;
+    }
+    const view = await viewOf(goal, own);
     const complete = completion(view, own);
     const lifecycle: GoalLifecycle = decided?.lifecycle ?? (complete ? 'COMPLETE' : 'ACTIVE');
     const reason =
@@ -689,6 +714,7 @@ export async function assembleGoals(options: {
     binsByGoal.set(goal.id, resolved.bins);
     if (!visible.has(goal.id)) continue;
     if (lifecycle === 'ARCHIVED' && !options.includeArchived) continue;
+    if (!view) continue;
 
     let projectName: string | null = null;
     let authority = { research: 'This goal is Brain-wide; it runs under no project grant.', commercial: null as string | null };
