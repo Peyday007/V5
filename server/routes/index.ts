@@ -29,6 +29,7 @@ import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
 import { registerRouter } from './register.ts';
+import { goalsRouter } from './goals.ts';
 import { bridgeRouter } from './bridge.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
@@ -68,6 +69,7 @@ export function createApiRouter(): Router {
    * `decideProjectAccess` every other door resolves through.
    */
   router.use(registerRouter);
+  router.use(goalsRouter);
 
   /*
    * The conversation entrance. `requirePerson` at every route, so a worker is

@@ -1202,6 +1202,57 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
  * production, so the whole suite passed and the release gate refused its own
  * packet.
  */
+/**
+ * Goals, as an ordinary member and as a machine (§50).
+ *
+ * Read against the production goals, not a fixture: the member may read only
+ * goals in projects it can read, a goal in any other operation answers the same
+ * 404 with the same body as one that does not exist, and a worker credential is
+ * refused by type. The administrator's reading is what supplies a real foreign
+ * goal to compare with — and a Brain holding none says so rather than passing.
+ */
+async function goalsBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nGoals, as a member and as a machine');
+  if (!cookie) {
+    record('goals boundary', false, 'skipped: there was no session to test with');
+    return;
+  }
+  const list = await call('/api/projects', { cookie });
+  const visible = new Set(((list.json as { projects?: { id: string }[] })?.projects ?? []).map((p) => p.id));
+
+  const mine = await call('/api/goals', { cookie });
+  expectStatus('a member may read the goals briefing', mine.status, 200);
+  const goals = ((mine.json as { goals?: { id: string; projectId: string | null }[] })?.goals ?? []);
+  const stray = goals.filter((one) => one.projectId !== null && !visible.has(one.projectId));
+  record(
+    'and reads no goal from a project it may not read',
+    stray.length === 0,
+    `${goals.length} goal(s) readable, ${stray.length} outside the member's projects`,
+  );
+
+  const all = await call('/api/goals', { cookie: fixtures.adminCookie });
+  const foreign = (((all.json as { goals?: { id: string; projectId: string | null }[] })?.goals) ?? []).find(
+    (one) => one.projectId !== null && !visible.has(one.projectId),
+  );
+  if (!foreign) {
+    record('a foreign goal existed to compare with', true, 'no goal sits outside the member\'s projects; skipped');
+  } else {
+    const forbidden = await call(`/api/goals/${foreign.id}`, { cookie });
+    const absent = await call('/api/goals/wst_00000000000000000000', { cookie });
+    expectStatus("another operation's goal is not found", forbidden.status, 404);
+    record(
+      'and its refusal is byte-identical to a goal that does not exist',
+      forbidden.body === absent.body,
+      forbidden.body === absent.body ? 'identical' : 'the bodies differ',
+    );
+    const pause = await call(`/api/goals/${foreign.id}/pause`, { cookie, method: 'POST', body: { reason: 'verification' } });
+    expectStatus('and cannot be paused by the member', pause.status, 404);
+  }
+
+  const machine = await call('/api/goals', { bearer: fixtures.credential });
+  record('a worker credential is refused the goals', machine.status >= 400, `status ${machine.status}`);
+}
+
 async function laborBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
   console.log('\nThe labor kernel, as a member and as a machine');
   if (!cookie) {
@@ -4221,6 +4272,7 @@ async function main(): Promise<void> {
     // "a machine may not do this" only while the credential still works.
     await manufacturingBoundary(fixtures, cookie);
     await laborBoundary(fixtures, cookie);
+    await goalsBoundary(fixtures, cookie);
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
     await effectChecks(fixtures, fixtures.adminCookie, cookie);

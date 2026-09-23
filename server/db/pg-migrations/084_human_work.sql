@@ -1,4 +1,4 @@
--- Getting work done through people. See the SQLite migration 092_human_work.sql
+-- Getting work done through people. See the SQLite migration 093_human_work.sql
 -- for why every column exists; this is the same schema in Postgres.
 CREATE TABLE IF NOT EXISTS human_work_orders (
   seq BIGSERIAL,

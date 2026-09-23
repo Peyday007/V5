@@ -400,7 +400,7 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'PATCH', level: 'ADMIN' },
   // ---------------------------------------------------------------------
-  // Work done through people (§50)
+  // Work done through people (§51)
   // ---------------------------------------------------------------------
   //
   // Opening work for a person, designating a coordinator, recording money,
