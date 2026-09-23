@@ -10650,6 +10650,7 @@ client/                 React UI
   src/russell/          the whole product: conversation, thin views, states
   src/russell/Build.tsx the factory, as a person uses it: one objective, one approval
   src/russell/Cash.tsx  one Cash page: one skeleton, and a role decides what is in it
+  src/russell/Machines.tsx  the ladder, what entering costs, and the three decisions that are a person's
   src/russell/cashPage.ts  both payloads, normalized; the capabilities the server sent
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
   src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
@@ -10672,7 +10673,7 @@ scripts/
   design.sh                 the half that reads rows, inside the deployed container
   capability.ts             the kernel's operator surface: register, advance, derive
   factory.ts                the operator's factory surface: register, submit, run
-  manufacturing.ts          the programme's terminal door, until a surface exists
+  manufacturing.ts          the programme's recovery door, when the bundle will not load
   connect-site.ts           a site's worker and grant, made without a browser
   connect-report.ts         what a connected site has done, read from inside
   refinement-report.ts      where every deep dive spent its time, stage by stage
