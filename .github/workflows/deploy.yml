@@ -408,7 +408,7 @@ jobs:
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
           echo "checking https://$app.fly.dev/healthz"
           for attempt in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
+            code=$(curl -s --max-time 15 -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
             if [ "$code" = "200" ]; then
               echo "healthy after ${attempt} attempt(s)"
               # And the gate is still shut: everything that is not liveness
@@ -612,8 +612,12 @@ jobs:
         if: always() && steps.release.outcome == 'success'
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          # --max-time on every probe: Fly's proxy holds a request while it
+          # looks for a healthy instance, so an unbounded curl turned "30
+          # attempts" into more than ten minutes on Deploy #320. The bound
+          # makes the step's own budget the one it says it is.
           for attempt in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
+            code=$(curl -s --max-time 15 -o /dev/null -w '%{http_code}' "https://$app.fly.dev/healthz" || true)
             if [ "$code" = "200" ]; then
               echo "healthy again after ${attempt} attempt(s)"
               exit 0
