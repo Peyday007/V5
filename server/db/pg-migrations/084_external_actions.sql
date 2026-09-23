@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 092. See that file for what each
+-- The Postgres half of SQLite migration 093. See that file for what each
 -- table refuses to hold. `seq BIGSERIAL` is the identity column `db/dialect.ts`
 -- rewrites `rowid` to.
 

@@ -10322,7 +10322,7 @@ export interface PuzzleObservation {
 }
 
 // ---------------------------------------------------------------------------
-// External actions (§50) — migration 092_external_actions.sql / pg 083.
+// External actions (§50) — migration 093_external_actions.sql / pg 084_external_actions.sql.
 //
 // A connection holds the NAME of a deployment secret and never its value; an
 // action holds what will be done, to whom, and then what the provider said.
