@@ -224,7 +224,22 @@ function completion(view: WorkstreamView, links: WorkstreamLink[]): boolean {
       return link?.relation === 'EVIDENCE' && reading.state !== null && DELIVERED.has(reading.state);
     });
   }
-  return pursued.every((reading) => reading.state !== null && DELIVERED.has(reading.state));
+  // A campaign reads PR_READY for ever — its row has no way to learn about the
+  // merge. What learns is the attested PULL_REQUEST link the factory's
+  // writeback writes from the forge's own answer, so a pursued PR_READY
+  // reading is delivered once such a link says merged.
+  const mergeAttested = attestedMerge(view.readings);
+  return pursued.every(
+    (reading) =>
+      reading.state !== null && (DELIVERED.has(reading.state) || (reading.state === 'PR_READY' && mergeAttested)),
+  );
+}
+
+/** Whether a linked pull request is attested merged (or further). */
+function attestedMerge(readings: LinkReading[]): boolean {
+  return readings.some(
+    (reading) => reading.kind === 'PULL_REQUEST' && reading.attested !== undefined && reading.state !== null && DELIVERED.has(reading.state),
+  );
 }
 
 interface Resolved {
@@ -241,7 +256,11 @@ interface Resolved {
  * `orchestration_id`, a candidate's latest mission, a change request's
  * campaign. Nothing is found by matching a title.
  */
-async function resolveWork(links: WorkstreamLink[], projectId: string | null): Promise<Resolved> {
+async function resolveWork(
+  links: WorkstreamLink[],
+  projectId: string | null,
+  merged: boolean,
+): Promise<Resolved> {
   const campaignIds = new Set<string>();
   const orchestrationIds = new Set<string>();
   const binIds = new Set<string>();
@@ -334,7 +353,7 @@ async function resolveWork(links: WorkstreamLink[], projectId: string | null): P
     // Needs You; a goal is read by everybody on its project.
     if (request && request.visibility === 'SHARED' && !seenRequests.has(request.id)) {
       seenRequests.add(request.id);
-      decisions.push(humanDecision(request, [`mission ${mission.id}: ${mission.objective}`]));
+      decisions.push(humanDecision(request, [`mission ${mission.id}: ${clip(mission.objective)}`]));
     }
   }
 
@@ -357,7 +376,9 @@ async function resolveWork(links: WorkstreamLink[], projectId: string | null): P
         since: campaign.updatedAt,
       });
     }
-    if (campaign.state === 'COMPLETE' && campaign.prUrl) {
+    // Asking a person to merge what the forge already says merged would be a
+    // decision that is not theirs any more — the stale-card defect §33 records.
+    if (campaign.state === 'COMPLETE' && campaign.prUrl && !merged) {
       decisions.push({
         id: `pr:${campaign.id}`,
         kind: 'PULL_REQUEST',
@@ -372,10 +393,12 @@ async function resolveWork(links: WorkstreamLink[], projectId: string | null): P
         afterAnswer: 'Brain attests the merge onto this goal when it observes it, and the goal moves on without a new prompt.',
         since: campaign.finishedAt ?? campaign.updatedAt,
       });
+    }
+    if (campaign.state === 'COMPLETE' && campaign.prUrl) {
       evidence.push({
         kind: 'CAMPAIGN',
         ref: campaign.id,
-        what: `a reviewed pull request at ${campaign.prUrl}`,
+        what: `a reviewed pull request at ${campaign.prUrl}${merged ? ', attested merged' : ''}`,
         evidence: `factory_campaigns.pr_url, integration ${campaign.integrationSha ?? 'unrecorded'}`,
       });
     }
@@ -403,6 +426,11 @@ async function resolveWork(links: WorkstreamLink[], projectId: string | null): P
   return { bins, decisions, evidence, obligations };
 }
 
+function clip(text: string, max = 160): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
+}
+
 function humanDecision(
   request: NonNullable<Awaited<ReturnType<typeof getHumanRequest>>>,
   waitingWork: string[],
@@ -417,7 +445,7 @@ function humanDecision(
     question: request.authorityNeeded,
     proposedAction: recommended
       ? `Brain recommends: ${recommended}. Answer it in Needs You.`
-      : 'Answer it in Needs You.',
+      : 'Brain has no recommendation recorded for this one; each answer and what it causes is below. Answer it in Needs You.',
     choices: request.choices.map((one) => ({ key: one.key, label: one.label, consequence: one.consequence })),
     waitingWork,
     afterAnswer:
@@ -508,7 +536,10 @@ export async function assembleGoals(options: {
   // First pass: what every goal's rows say, over the whole Brain, because a
   // dependency's lifecycle and a priority rank are both facts about goals the
   // caller may not be able to read.
-  const base = new Map<string, { goal: Workstream; view: WorkstreamView; lifecycle: GoalLifecycle; reason: string }>();
+  const base = new Map<
+    string,
+    { goal: Workstream; view: WorkstreamView; lifecycle: GoalLifecycle; reason: string; resolved: Resolved }
+  >();
   for (const goal of all) {
     const own = linksBy.get(goal.id) ?? [];
     const view = await viewOf(goal, own);
@@ -518,15 +549,22 @@ export async function assembleGoals(options: {
     const reason =
       decided?.reason ??
       (complete ? `every piece of work it pursues has delivered (${view.stateEvidence})` : 'being pursued');
-    base.set(goal.id, { goal, view, lifecycle, reason });
+    const resolved = await resolveWork(own, goal.projectId, attestedMerge(view.readings));
+    base.set(goal.id, { goal, view, lifecycle, reason, resolved });
   }
 
   const dependsOn = (id: string) =>
     (linksBy.get(id) ?? []).filter((one) => one.kind === 'WORKSTREAM' && one.relation === 'DEPENDS_ON');
 
   const facts: PriorityFacts[] = [];
-  for (const { goal, lifecycle } of base.values()) {
+  for (const { goal, lifecycle, resolved } of base.values()) {
     if (lifecycle === 'ARCHIVED') continue;
+    // Stopped at a person's decision with nothing else it can run: capacity
+    // given to it would be capacity nothing can use, so it is not workable.
+    const runnable = resolved.bins.some(
+      (bin) => (bin.state === 'READY' || bin.state === 'LEASED') && bin.heldByWorkstreamId === null,
+    );
+    const waitsOnPerson = resolved.decisions.length > 0 && !runnable;
     const unmet = dependsOn(goal.id).some((one) => base.get(one.ref)?.lifecycle !== 'COMPLETE');
     const dependents = [...base.values()].filter(
       (other) =>
@@ -535,7 +573,7 @@ export async function assembleGoals(options: {
     facts.push({
       id: goal.id,
       ownerKey: ownerKeyOf(goal),
-      workable: lifecycle === 'ACTIVE' && !unmet,
+      workable: lifecycle === 'ACTIVE' && !unmet && !waitsOnPerson,
       commitment: goal.commitment,
       dueAt: goal.dueAt,
       purpose: goal.purpose,
@@ -552,9 +590,8 @@ export async function assembleGoals(options: {
 
   const goals: GoalView[] = [];
   const binsByGoal = new Map<string, Bin[]>();
-  for (const { goal, view, lifecycle, reason } of base.values()) {
+  for (const { goal, view, lifecycle, reason, resolved } of base.values()) {
     const own = linksBy.get(goal.id) ?? [];
-    const resolved = await resolveWork(own, goal.projectId);
     binsByGoal.set(goal.id, resolved.bins);
     if (!visible.has(goal.id)) continue;
     if (lifecycle === 'ARCHIVED' && !options.includeArchived) continue;

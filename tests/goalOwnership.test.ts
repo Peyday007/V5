@@ -20,6 +20,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { createUser, createWorker } from '../server/repos/identity.ts';
 import {
@@ -369,5 +370,64 @@ describe('one operation’s goals stay in that operation', () => {
     // The dependency is reported as unreadable, never described.
     expect(view.dependencies[0]).toEqual({ goalId: theirs.goal.id, title: null, lifecycle: null, met: null });
     expect(JSON.stringify(snapshot.goals)).not.toContain('Theirs');
+  });
+});
+
+describe('what production found on its first reading', () => {
+  it('counts a ready pull request as delivered once its merge is attested, and stops asking for the merge', async () => {
+    const goal = await createWorkstream({
+      projectId,
+      title: 'A shipped change',
+      intent: 'The change the pull request carries.',
+      purpose: 'CAPABILITY',
+      createdByUserId: ownerId,
+    });
+    const at = new Date().toISOString();
+    await linkWorkstream({
+      workstreamId: goal.id,
+      kind: 'PULL_REQUEST',
+      ref: 'https://example.test/pull/31',
+      relation: 'PURSUES',
+      detail: { attestedBy: 'factory-campaign', attestedAt: at, merged: false },
+      recordedBy: 'BRAIN',
+    });
+    let view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(view.lifecycle).toBe('ACTIVE');
+
+    await linkWorkstream({
+      workstreamId: goal.id,
+      kind: 'PULL_REQUEST',
+      ref: 'https://example.test/pull/31',
+      relation: 'EVIDENCE',
+      detail: { attestedBy: 'pull-request-merge-observation', attestedAt: at, merged: true },
+      recordedBy: 'BRAIN',
+    });
+    view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(view.lifecycle).toBe('COMPLETE');
+    expect(view.decisions).toEqual([]);
+    expect(view.next.by).toBe('NOBODY');
+  });
+
+  it('gives no capacity to a goal stopped at a person with nothing else it can run', async () => {
+    const running = await goalWithWork({ title: 'Running', purpose: 'LONG_TERM' });
+    const stopped = await goalWithWork({ title: 'Stopped', purpose: 'REVENUE_DIRECT' });
+    await askHuman({
+      projectId,
+      missionId: stopped.mission.id,
+      authorityNeeded: 'Whether to file short.',
+      whyNotRussell: 'A person decides.',
+      choices: [{ key: 'STOP', label: 'Stop', consequence: 'Nothing more is researched.' }],
+      resumeKey: `stopped-${stopped.mission.id}`,
+    });
+    // Its only bin is parked for the person, which is what production held.
+    await getDb().run(`UPDATE bins SET state = 'NEEDS_HUMAN' WHERE id = ?`, [stopped.bin.id]);
+
+    const views = (await assembleGoals({ projectIds: [projectId] })).goals;
+    const runningView = views.find((one) => one.id === running.goal.id)!;
+    const stoppedView = views.find((one) => one.id === stopped.goal.id)!;
+    expect(runningView.priority?.rank).toBe(0);
+    expect(runningView.priority?.aboveNext?.criterion).toBe('WORKABLE');
+    expect(stoppedView.waiting.kind).toBe('PERSON');
+    expect(stoppedView.decisions[0]?.proposedAction).toMatch(/no recommendation recorded/);
   });
 });

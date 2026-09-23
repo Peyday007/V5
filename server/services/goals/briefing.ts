@@ -84,7 +84,7 @@ export function briefFrom(goals: GoalView[], generatedAt: string): GoalBriefing 
   }
 
   return {
-    headline: parts.join(' · ') + '.',
+    headline: live.length === 0 ? parts[0]! : `${parts.join(' · ')}.`,
     delivered,
     active: active.map((goal) => ({
       goalId: goal.id,
