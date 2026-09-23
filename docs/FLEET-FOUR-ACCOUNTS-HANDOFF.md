@@ -26,13 +26,22 @@ measurement, and §7 is the integration's own record.
 | Merge | `bb6d538d` | the fleet lane merged into `e37cca06`, no conflict |
 | Fixture repair | `3a63fad4` | the `'READER'` correction §7 records |
 | Integrated tip | `ba5c0b2f` | `integration/fleet-four-accounts`, after reconciling against production four times |
-| **Deployed image** | **`67089909`** | **contains `ba5c0b2f`**, released and verified both sides of a restart by deploy 327, and live — §8.7 quotes that run's own acceptance artifact |
+| Deployed image, 2026-09-23 12:08Z | `67089909` | contains `ba5c0b2f`, released and verified both sides of a restart by deploy 327 — §8.7 quotes that run's own acceptance artifact |
+| **Deployed image, 2026-09-23 14:13Z** | **`222f8fd7`** | **also contains `ba5c0b2f`**, released by deploy **328**, `beforeRestart: true, afterRestart: true`, every step green |
 
 **`production` has been advanced past it, and the integration is deployed.**
 `ba5c0b2f` is an ancestor of every tip production has had since — checked with
 `git merge-base --is-ancestor` at each one, and confirmed file by file and
 symbol by symbol at the current tip rather than inferred from the ancestry. §8
 is the record of the release and the live reads rather than a plan for them.
+
+**Two rows rather than one, because the first went stale while this was being
+written.** `67089909` was live when §8.7 was measured and `222f8fd7` is live
+now — which is the row behaving exactly as designed rather than failing: a
+deployed image is a fact that changes when somebody deploys, and somebody did.
+A reader wanting what is running today takes the lower row; a reader checking
+§8.7's numbers takes the upper one, because those were measured against that
+image and not against this one.
 
 **This row names the deployed image rather than `production`'s tip, and the
 change is deliberate.** Two earlier versions named a tip — `901a42db` with
@@ -665,15 +674,18 @@ git merge-base --is-ancestor origin/production integration/fleet-four-accounts  
 
 `production` was never checked out to advance it.
 
-**Production moved ten times while this was being done** — `f727b143` →
+**Production moved twelve times while this was being done** — `f727b143` →
 `e37cca06` → `6f489918` → `41f4373f` → `533463f3` → `901a42db` → `e8e066ea` →
-`662d3373` → `96b1bfcd` → `67089909` → `08d6a787` — each move requiring a fresh
-merge and a fresh fast-forward check, and every one of them verified as a real
-ancestor of the current tip rather than transcribed from notes. An earlier
+`662d3373` → `96b1bfcd` → `67089909` → `08d6a787` → `ec93d435` → `222f8fd7` —
+each move requiring a fresh merge and a fresh fast-forward check, and every one
+of them re-verified as a real ancestor of the current tip with
+`git merge-base --is-ancestor` rather than transcribed from notes. An earlier
 version of this sentence said four, over a list that already showed five
-arrows, and a later one said seven; both are corrected rather than edited away,
-because a document about reconciling against a moving target should not be
-wrong about how far it moved. The integration was
+arrows; a later one said seven; a later one ten. All are corrected rather than
+edited away, because a document about reconciling against a moving target
+should not be wrong about how far it moved — and the count kept being wrong for
+the ordinary reason that it was written down while the target was still
+moving. The integration was
 re-merged and re-verified each time rather than re-derived, and it survives at
 the final tip, checked file by file and symbol by symbol rather than assumed.
 
@@ -1476,7 +1488,7 @@ unfinished rows live somewhere else is a checklist that reads as finished.
 
 | # | Asked | Settled by |
 | --- | --- | --- |
-| 1 | Fetch and reconcile current state; do not assume a SHA is still current | Production moved **ten** times during this work. §8.1 lists every tip, and every one was re-verified as a real ancestor of the current one with `git merge-base --is-ancestor` rather than transcribed. |
+| 1 | Fetch and reconcile current state; do not assume a SHA is still current | Production moved **twelve** times during this work. §8.1 lists every tip, and every one was re-verified as a real ancestor of the current one with `git merge-base --is-ancestor` rather than transcribed. |
 | 2 | Read both handoffs and `CLAUDE.md`; treat repository rules as authoritative | §6 is where the two lanes' overlaps were reconciled. §28 decided how production was advanced, §18 decided that a boot refusal during the outage was not to be relaxed, §41 decided that the vacuous fixture had to be measured rather than characterized. |
 | 3 | Create the integrated tree; do not reimplement; resolve genuine conflicts | `bb6d538d` is the fleet lane merged into the closeout lane with no conflict. No fleet commit was reimplemented — the eight are preserved and `e8a34b00` is still their tip. |
 | 4 | Fix the vacuous `'READER'` fixture; verify it exercises the real denial path | §7.1. Measured against the old fixture before it was trusted: the corrected test fails on the un-fixed code and passes on the fixed. TypeScript coverage was not narrowed and `tests/**/*.tsx` was not removed from `tsconfig.json`. |
