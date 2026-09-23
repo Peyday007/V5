@@ -25,6 +25,7 @@ import {
   listAccounts,
   listRoutines,
   policyHistory,
+  unansweredFiresByRoutine,
 } from '../../repos/fleet.ts';
 import { getWorker } from '../../repos/identity.ts';
 import { inFlightByRoutine } from '../dispatch/candidates.ts';
@@ -113,7 +114,14 @@ export interface SurfaceReading {
   /** Present only at technical depth: the raw identifiers. */
   workerId: string | null;
   consecutiveFailures: number;
-  consecutiveNoShows: number;
+  /**
+   * Fires at this surface that nobody answered, since it last answered.
+   *
+   * The derived per-surface count, never `fleet_routines.consecutive_no_shows`
+   * — see `capacity.ts`, which explains why that column reads 0 on a dead
+   * surface in a pool and 1 on a healthy one mid-boot.
+   */
+  unansweredFires: number;
   retryAt: string | null;
 }
 
@@ -235,11 +243,12 @@ export async function fleetView(input: {
   now?: string;
 }): Promise<FleetView> {
   const now = input.now ?? new Date().toISOString();
-  const [accounts, routines, policy, history, perRoutine] = await Promise.all([
+  const [accounts, routines, policy, history, unanswered, perRoutine] = await Promise.all([
     listAccounts(),
     listRoutines(),
     currentPolicy('FLEET', null),
     policyHistory('FLEET', null, 5),
+    unansweredFiresByRoutine(),
     /*
      * The same in-flight reading the router routes on, rather than a second
      * count beside it. Two numbers that must agree about how busy a surface is
@@ -305,7 +314,7 @@ export async function fleetView(input: {
       // which is different from "there is none".
       workerId: input.includeTechnical ? routine.workerId : null,
       consecutiveFailures: routine.consecutiveFailures,
-      consecutiveNoShows: routine.consecutiveNoShows,
+      unansweredFires: unanswered.get(routine.id) ?? 0,
       retryAt: routine.retryAt,
     };
   });

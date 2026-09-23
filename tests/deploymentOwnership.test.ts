@@ -786,3 +786,45 @@ describe('and the log surface reads, and only reads', () => {
     expect(BODY).toContain('pattern must be one of');
   });
 });
+
+/**
+ * Every test file the compiler is supposed to be checking.
+ *
+ * `tsconfig.json` included `client/**\/*.tsx` and `tests/**\/*.ts`, and nothing
+ * for `tests/**\/*.tsx` — so all nine component suites were outside
+ * `npm run typecheck` entirely. That is not a cosmetic gap: two of this
+ * repository's own fixtures carry a paragraph explaining that a fixture the
+ * compiler does not check is a fixture that tests itself, were annotated for
+ * exactly that reason, and were never compiled. One of them had been missing a
+ * required field since it was added, and it passed.
+ *
+ * Asserted against the config rather than against a list of files, because the
+ * failure is a pattern that stops matching rather than a file somebody deleted.
+ */
+describe('the typecheck covers every suite it is supposed to', () => {
+  const tsconfig = (): { include?: string[] } =>
+    JSON.parse(
+      fs
+        .readFileSync(new URL('../tsconfig.json', import.meta.url), 'utf8')
+        // `tsconfig.json` allows comments; `JSON.parse` does not.
+        .replace(/^\s*\/\/.*$/gm, ''),
+    ) as { include?: string[] };
+
+  it('compiles the component tests, not only the service ones', () => {
+    const include = tsconfig().include ?? [];
+    expect(include).toContain('tests/**/*.ts');
+    expect(include).toContain('tests/**/*.tsx');
+  });
+
+  it('is asserted because there are component tests to compile', () => {
+    /*
+     * The other half, and the one that makes the first non-vacuous: a rule
+     * about `.tsx` suites is coverage only while `.tsx` suites exist. §41
+     * records what a guard over an empty collection costs — it reads as
+     * coverage — so the collection is counted.
+     */
+    const here = new URL('./', import.meta.url);
+    const tsx = fs.readdirSync(here).filter((name) => name.endsWith('.test.tsx'));
+    expect(tsx.length).toBeGreaterThan(5);
+  });
+});

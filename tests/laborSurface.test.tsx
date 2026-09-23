@@ -79,7 +79,7 @@ for (const key of [
 }
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react');
+const { cleanup, fireEvent, render, screen, waitFor, within } = await import('@testing-library/react');
 const { act, createElement } = await import('react');
 const { LaborView } = await import('../client/src/russell/Labor.tsx');
 
@@ -356,7 +356,16 @@ describe('the Labor screen, over the real route', () => {
     // And the role is now on the map with what backs it — which is `PERSON`
     // rather than `RESEARCH`, because somebody answered the question and no
     // published source did.
-    await waitFor(() => expect(screen.getByText(/human interface/)).toBeTruthy());
+    // Scoped to the roles section, because the same words are also the label
+    // of the reason the form offered, and whether that form is still open when
+    // the map re-renders is timing: an unscoped query found both on the
+    // deploy's own run and one on every other, which made the assertion a race
+    // rather than a statement about the map.
+    await waitFor(() => {
+      const roles = document.querySelector('.rs-labor-roles') as HTMLElement | null;
+      expect(roles).toBeTruthy();
+      expect(within(roles!).getByText(/human interface/)).toBeTruthy();
+    });
     const withRole = await laborView(projectId);
     expect(withRole.humanDependencies).toHaveLength(1);
     expect(withRole.humanDependencies[0]?.backing).not.toBe('RESEARCH');

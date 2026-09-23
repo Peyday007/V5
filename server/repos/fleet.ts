@@ -92,6 +92,7 @@ function mapRoutine(row: FleetRoutineRow): FleetRoutine {
     fireGeneration: row.fire_generation,
     consecutiveFailures: row.consecutive_failures,
     consecutiveNoShows: row.consecutive_no_shows,
+    noShowsForgivenAt: row.no_shows_forgiven_at ?? null,
     totalFires: row.total_fires,
     totalRefusals: row.total_refusals,
     lastFiredAt: row.last_fired_at,
@@ -323,10 +324,38 @@ export async function setRoutineState(input: {
   to: FleetState;
   reason: string;
 }): Promise<boolean> {
+  const at = nowIso();
+  /*
+   * Leaving QUARANTINED forgives the no-shows before this instant, and that is
+   * not tidiness — it is what makes the transition a transition.
+   *
+   * `unansweredFiresByRoutine` counts from an append-only ledger since the
+   * surface's own last arrival, and re-enabling produces no arrival: an
+   * arrival needs a fire, and Brain does not fire a quarantined surface. So
+   * without this the recovery would return true and the very next tick would
+   * re-quarantine on the identical rows, for ever, with the connector
+   * genuinely repaired — §27's own defect, at a second registry.
+   *
+   * It forgives nothing beyond itself. A condition somebody said was fixed and
+   * was not takes the surface out again three unanswered fires later rather
+   * than immediately, which is the same asymmetry
+   * `FACTORY_STAGE_REAUTHORIZED` already carries.
+   *
+   * Written in the statement that makes the change, so a lost race cannot
+   * forgive anything, and only on the way *out* of QUARANTINED: quarantining
+   * must not erase the evidence it was quarantined on.
+   */
+  const forgiving = input.from === 'QUARANTINED' && input.to !== 'QUARANTINED';
   const result = await getDb().run(
-    `UPDATE fleet_routines SET state = ?, state_reason = ?, updated_at = ?
-      WHERE id = ? AND state = ?`,
-    [input.to, input.reason, nowIso(), input.routineId, input.from],
+    forgiving
+      ? `UPDATE fleet_routines
+            SET state = ?, state_reason = ?, updated_at = ?, no_shows_forgiven_at = ?
+          WHERE id = ? AND state = ?`
+      : `UPDATE fleet_routines SET state = ?, state_reason = ?, updated_at = ?
+          WHERE id = ? AND state = ?`,
+    (forgiving
+      ? [input.to, input.reason, at, at, input.routineId, input.from]
+      : [input.to, input.reason, at, input.routineId, input.from]) as never[],
   );
   return result.changes === 1;
 }
@@ -673,6 +702,83 @@ export async function recordRoutineFire(input: {
       WHERE id = ?`,
     [input.rateLimited ? 1 : 0, input.retryAt ?? null, at, input.routineId],
   );
+}
+
+/**
+ * Fires each surface made that nobody answered, since that surface last
+ * answered.
+ *
+ * The per-surface no-show fact, derived from rows rather than counted in a
+ * column, and the reason it has to be is `recordWorkerArrival`: an arrival
+ * clears `consecutive_no_shows` for **every Routine bound to the same worker**,
+ * which is precisely what a Factory pool is. In a fleet of four Claude accounts
+ * on one identity, one dead surface has its counter reset by its healthy
+ * siblings and is fired at for ever — an activation each time, out of a fixed
+ * subscription allowance, with every row reading healthy. That column's own
+ * documentation says what it is: "fires awaiting an arrival", advanced
+ * optimistically on every successful fire, which is also why its ordinary value
+ * on a working surface whose worker is still booting is 1.
+ *
+ * `DISPATCH_NO_SHOW` is the exact fact instead. `reopenNoShowDispatches` writes
+ * one when a fire it made is `SENT`, has aged past the window in which it still
+ * counts as a live activation, and the bin is still claimable at the very
+ * generation that fire named — so nothing was handed out in between and the
+ * session genuinely never came. It is read from `bin_events` rather than from
+ * `bin_dispatch` because that table is append-only: a reopened intent's
+ * `routine_id` is rewritten when it is re-routed to another surface, so a count
+ * read back from the dispatch row would credit one account's no-show to the
+ * next account that tried.
+ *
+ * **Since that surface's own last arrival**, so a repair ends it. A surface
+ * that answers has every no-show before that instant turned into history, and
+ * history does not take anything out of routing.
+ *
+ * "That surface's own arrival" is `worker_sessions`, and deliberately not
+ * `fleet_routines.last_check_in_at`. The second is written by
+ * `recordWorkerArrival` across every Routine bound to one worker, so falling
+ * back to it would reintroduce the very defect this function exists to fix, one
+ * column along: a healthy sibling's check-in would silently forgive a dead
+ * surface's no-shows. `worker_sessions` is written from Brain's own dispatch
+ * row — one fire, one Routine, one arrival — so it is the only per-surface
+ * arrival evidence there is. With none, every no-show counts, which is correct:
+ * a surface Brain has never been able to attribute an arrival to has never
+ * answered.
+ *
+ * The second boundary is `no_shows_forgiven_at`, written when a person takes a
+ * surface out of QUARANTINED. Without it the answering transition would answer
+ * nothing: re-enabling produces no arrival, an arrival needs a fire, and Brain
+ * does not fire a quarantined surface — so the next tick would re-quarantine on
+ * the identical rows, for ever. The later of the two wins, because either is a
+ * reason the rows before it have stopped bearing on the decision.
+ */
+export async function unansweredFiresByRoutine(): Promise<Map<string, number>> {
+  const rows = await getDb().all<{ routine_id: string; n: number }>(
+    `SELECT e.routine_id AS routine_id, COUNT(*) AS n
+       FROM bin_events e
+      WHERE e.event_type = 'DISPATCH_NO_SHOW'
+        AND e.routine_id IS NOT NULL
+        -- Later than both boundaries, as two scalar subqueries.
+        --
+        -- The first version took MAX over a UNION of the two inside a derived
+        -- table, and the reason given for rewriting it was that Postgres
+        -- refuses a correlated reference into a subquery in FROM without
+        -- LATERAL. **That reason is wrong and the correction is recorded
+        -- rather than quietly applied**: measured on PostgreSQL 16.13, the
+        -- correlated form is accepted. What is true is simply that a
+        -- conjunction says "later than both" directly, in one line each, and
+        -- an aggregate over a union is a longer way to write the same
+        -- predicate.
+        AND e.at > COALESCE(
+              (SELECT MAX(s.observed_at) FROM worker_sessions s
+                WHERE s.routine_id = e.routine_id),
+              '')
+        AND e.at > COALESCE(
+              (SELECT r.no_shows_forgiven_at FROM fleet_routines r
+                WHERE r.id = e.routine_id),
+              '')
+      GROUP BY e.routine_id`,
+  );
+  return new Map(rows.map((row) => [row.routine_id, Number(row.n)]));
 }
 
 /**

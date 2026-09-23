@@ -5121,6 +5121,7 @@ export interface FleetRoutineRow {
   fire_generation: number;
   consecutive_failures: number;
   consecutive_no_shows: number;
+  no_shows_forgiven_at: string | null;
   total_fires: number;
   total_refusals: number;
   last_fired_at: string | null;
@@ -5148,6 +5149,14 @@ export interface FleetRoutine {
   fireGeneration: number;
   consecutiveFailures: number;
   consecutiveNoShows: number;
+  /**
+   * When an operator last said this surface's problem was fixed.
+   *
+   * The boundary the no-show quarantine counts from, beside the surface's own
+   * last arrival — see `unansweredFiresByRoutine`. Written only on the way out
+   * of QUARANTINED, and only ever forward.
+   */
+  noShowsForgivenAt: string | null;
   totalFires: number;
   totalRefusals: number;
   lastFiredAt: string | null;
