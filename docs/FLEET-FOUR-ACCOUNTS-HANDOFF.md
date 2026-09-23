@@ -293,6 +293,15 @@ Nothing in this lane can do any of these, by design:
 step by step, once per account. It is current with the command output as of this
 lane, including the fourth verdict.
 
+**One of the four is already commissioned and proven, and that narrows what is
+owed.** The parallel lane of §9 establishes it from rows rather than from
+memory: the account registered as *Brain Research A* holds the surface
+`verify-pool` reports `PROVEN` on `bin_fb9239718e6440c79952`, fired
+2026-09-22T13:25:44Z. **Whether that is the owner's own Claude account is a
+fact only the owner can state** — if it is, three accounts remain; if it is
+not, four do. The reading is attributed rather than re-derived, because two
+documents deriving one fact is how they come to disagree about it.
+
 ### AWAITING FINAL INTEGRATION AND PRODUCTION DEPLOYMENT
 
 * **Done, and deployed.** Two earlier versions of this bullet were wrong in
@@ -441,7 +450,7 @@ file its own schema and `DROP SCHEMA … CASCADE` takes one lock per object.
 | Gate | Tree | Result |
 | --- | --- | --- |
 | `npm run typecheck` | `3a63fad4` local, `89b34a9d` in CI | clean, with `tests/**/*.tsx` compiled |
-| `npm test` (SQLite) | **`3d020b42`, the tip** | **4520 passed**, 44 skipped, 210 files passed / 1 skipped, **exit 0** |
+| `npm test` (SQLite) | `3d020b42`, the branch tip *at the time* | **4520 passed**, 44 skipped, 210 files passed / 1 skipped, **exit 0** |
 | `npm test` (PostgreSQL 16.13) | `89b34a9d` in CI, run 342 | **4564 passed**, 211 files passed, **success** |
 | `npm run build` | `3a63fad4` | clean, `index-T4sTcb6M.js` |
 | Cross-lane suites | `3a63fad4` | **189 passed**, exit 0 — `factoryPool`, `factoryOnboarding`, `factoryReleaseSurface`, `buildRepositories`, `peopleAndCapacity`, `peopleSection`, `deploymentOwnership` |
@@ -459,6 +468,12 @@ SHAs above differ by one file, `docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md`, and by
 no code at all — `git diff --name-only 3a63fad4..3d020b42` returns two
 Markdown paths. Every code path in this integration was gated on both
 backends.
+
+**This table describes the branch before it landed, and the SHAs in it are
+history rather than the current tip.** §7.4 is the gate on what production
+actually serves, and it is the one to read for that question. Keeping this
+one is the point: it says what was true of the tree each decision was taken
+on, which a table rewritten to the latest SHA would destroy.
 
 The cross-lane set is the one the lane measured at **188** in a scratch merge
 against the older snapshot; it is 189 here because production's newer commits
@@ -579,9 +594,13 @@ git merge-base --is-ancestor origin/production integration/fleet-four-accounts  
 
 `production` was never checked out to advance it.
 
-**Production moved four times while this was being done** — `f727b143` →
-`e37cca06` → `6f489918` → `41f4373f` → `533463f3` → `901a42db` — each move
-requiring a fresh merge and a fresh fast-forward check. The integration was
+**Production moved seven times while this was being done** — `f727b143` →
+`e37cca06` → `6f489918` → `41f4373f` → `533463f3` → `901a42db` → `e8e066ea` →
+`662d3373` — each move requiring a fresh merge and a fresh fast-forward check.
+An earlier version of this sentence said four, over a list that already showed
+five arrows; it is corrected rather than edited away, because a document about
+reconciling against a moving target should not be wrong about how far it
+moved. The integration was
 re-merged and re-verified each time rather than re-derived, and it survives at
 the final tip, checked file by file and symbol by symbol rather than assumed.
 
@@ -590,18 +609,74 @@ the final tip, checked file by file and symbol by symbol rather than assumed.
 **Deploy run 323, `901a42db`.** `release: success`. `beforeRestart: true`.
 `afterRestart: false`.
 
+**The pre-restart half is a complete pass and is the strongest single reading
+this release produced: `HOSTED-VERIFICATION: PASS 229/229`** on the released
+image, including the judge pass, `434 claim(s) across 434 readable
+document(s)`, and the work and campaign deliberately left behind for the pass
+after the restart.
+
 The post-restart failure is **not** the condition §7.3 predicted, and saying
-so precisely matters more than the prediction being nearly right. It was:
+so precisely matters more than the prediction being nearly right. It got a
+long way — 08:57:49 to 09:13:17, the archive read at 434 documents, a worker
+claiming the planning job over MCP, the assignment handed to it, fragments
+proposed against the live archive and a coverage row recorded — and then:
 
 ```
 (ECHECKOUTTIMEOUT) unable to check out connection from the pool after
 15000ms in Session mode
-  on SELECT * FROM research_fragments WHERE orchestration_id = $1 …
+  in: SELECT * FROM research_fragments WHERE orchestration_id = $1 …
 ```
 
-which is CLAUDE.md §27's pooler condition — the Supabase session-mode limit
-of fifteen clients against an application pool that defaults to ten — and not
-the judge pass at all.
+which is a pooler condition and not the judge pass at all.
+
+**An earlier version of this section named `BRAIN_DATABASE_POOL_SIZE` as the
+remedy. That was wrong, and the correction is here rather than edited into
+it.** Two things say so. The message carries **no pool statistics** —
+CLAUDE.md §27 added `describePoolExhaustion` precisely so that Brain's own
+pool prints `N/M in use, X idle, Y waiting, ceiling M`, and this prints none
+of it, while `ECHECKOUTTIMEOUT` and *Session mode* are Supavisor's own
+vocabulary. So the refusal is **upstream of Brain's client pool** rather than
+Brain's pool running out. And §27 has already settled the knob on its own
+terms: the secret is unset, so `readPoolSize()` answers its default of ten,
+ten of the pooler's fifteen is the arithmetic that leaves room for the
+operator script's two, and *"ten is both the intended default and the highest
+defensible value"*. **Raising it would make this worse, not better.**
+
+**My own console reads did not contribute, which I checked rather than
+assumed.** `fleet` runs 282, 283 and 284 executed at 09:14:27, 09:16:21 and
+09:18:48 — all *after* the 09:13:17 failure — and run 281 waited on
+`await-release` and ran at 08:50:5x, before the pre-restart verification that
+then passed 229/229. Run 282 failing to reach the database at 09:14:27 and
+succeeding at 09:16:21 is the same pressure seen from a second place, and it
+dates the condition as transient: present around 09:13 to 09:15, gone by
+09:16.
+
+**So there is no operator action named here for it**, which is the honest
+answer rather than a convenient one. What remains is an open reading: the
+condition is real, it is upstream of anything this repository sets, and
+§27's own investigation is where it belongs.
+
+**What this release did close is the silence around it, in two places, and
+neither changes the condition.** §27 built `describePoolExhaustion` and
+`describePoolerRefusal` so that *"the next occurrence turns into a number
+instead of a seventh anecdote"*, and on this occurrence neither fired: Brain's
+own pool had not timed out, and the marker was `ECHECKOUTTIMEOUT` rather than
+`EMAXCONNSESSION`. **A mechanism that does not reach the condition it exists
+for is not a mechanism**, so `describePoolerRefusal` now names that fourth
+condition apart from the third — one is the pooler refusing a client outright,
+the other is the pooler accepting one and failing upstream, which a database
+that has merely gone slow also produces.
+
+And the two console reads did **not** fail that way, which I first wrote that
+they did. They failed on the boot path, before any statement, with
+`Connection terminated due to connection timeout` wrapped in *"could not
+reach"* — no pooler marker to match, and `hintFor` had no branch for a timeout
+either, so the whole message pointed at the address and the network while the
+host was answering `/healthz` in 0.38s. That branch exists now, it contradicts
+the sentence it attaches to, and it names raising the ceiling as the wrong
+remedy. Both are pure and diagnostic: `hintFor` has exactly one call site and
+it is inside an error's detail string, and nothing anywhere branches on either
+text.
 
 **Because the judge pass came back, and the number is the point.** §27's table
 records this deploy's predecessor at **12m25s over 415 documents**, and run
@@ -644,13 +719,32 @@ The Brain boots cleanly on the released image — migrations applied at
 seconds afterwards while the previous process still holds its Supabase
 connections. **And the database was already timing out statements at
 06:07:32**, twenty minutes before this deploy's own run started at 06:27:39.
-So the condition preceded the release, the release did not introduce it, and
-the fix for it is not in this repository: `BRAIN_DATABASE_POOL_SIZE` is a Fly
-deployment secret, and `logs.yml` refuses `flyctl secrets set` by whole-command
-form. §9 is the one action that leaves.
+So the condition preceded the release and the release did not introduce it.
 
-Production returned at **08:50:33** and has answered `/healthz` in about 0.4s
-on every probe since. `/api/auth/login` with a deliberately wrong credential
+**What the remedy is, is not established, and the obvious one is refused.**
+No workflow in this repository can set `BRAIN_DATABASE_POOL_SIZE` — every
+`flyctl secrets` invocation was read: `logs.yml` refuses `set` and `unset` by
+whole-command form, `step10-activation.yml` sets three hardcoded Routine
+secrets and no others, and `deploy.yml` only unsets the bootstrap pair. But
+per §8.2 raising it is the wrong move anyway, so that is a boundary rather
+than a blocker, and naming it as an action for somebody would be handing over
+a remedy that makes the condition worse.
+
+**The restart window itself reproduced a reading §20 already records, which
+is what makes it a property of the swap rather than of either run.** Measured
+from outside the runner while deploy 324 replaced the machine, 2026-09-23
+around 10:03Z: `GET /healthz` answered **503 after 35.1s**, again after
+**35.6s**, again after **35.4s**. §20 records 503 after **35.7s** twice during
+deploy 305 on 2026-09-21. Two days, two deploys, the same wall — so a worker
+fired into that window sees exactly what that section describes, and asking
+again is the answer.
+
+Production returned at **08:50:33** and answered `/healthz` in about 0.4s on
+every probe for the next ninety minutes — and then went down again at 10:03
+for the reason §8.5 records, which is a different cause with the same
+symptom. The two are kept apart deliberately: this one was a restart landing
+on a database already timing out, and that one was Supabase's storage API
+refusing to answer at all. `/api/auth/login` with a deliberately wrong credential
 answers `HTTP 401` with the PIN sentence — the app serving and reading
 Postgres — though it took 24.27s to do it, which is the same pooler pressure
 seen from the front door.
@@ -762,5 +856,167 @@ not each other. None of those passes through the eligibility predicate.
 **What the two lanes agree on, and it is the thing that matters most:** no
 four-account Factory pool has been commissioned, and neither document claims
 one has.
+
+### 8.5 Deploy 324 did not release, and the reason was upstream
+
+`release: failure`, `hosted verification: skipped`, `after the restart:
+skipped`. The verdict step says it plainly — *"No new image was released"* —
+and that is the first of these runs where the release itself did not happen,
+so it is read differently from the four before it.
+
+**`flyctl deploy` was refused by the health check, twice.** The machine
+reached `started` both times — 09:59:11 and 10:05:51 — smoke checks ran, and
+then five minutes of *Checking health* ended at 10:04:19 and 10:11:04 with
+`Unrecoverable error: timeout reached waiting for health checks to pass`. In
+between, the Depot builder never answered and the workflow fell back to Fly's
+own remote builder, which is the tolerated failure `deploy.yml` already
+handles and is **not** what failed the run.
+
+**The Brain's own log says why, and it is not this commit.** At 09:59:18 and
+again at 10:06:03:
+
+```
+Brain could not use the document storage it was configured for.
+The document store could not be checked (HTTP 544).
+{"statusCode":"544","error":"DatabaseTimeout",
+ "message":"The connection to the database timed out","code":"DatabaseTimeout"}
+[brain] Serving the migration error on http://localhost:8080 — nothing else will work.
+```
+
+That is **§18 working exactly as written**: cloud mode does not fall back, so
+a store that cannot be checked stops the boot with the reason rather than
+letting a server report itself as cloud-backed while the work goes somewhere
+nobody else can see. The migration error is not a 200, so the health check
+fails, so `flyctl deploy` refuses the release. Each link is the design.
+
+It is also a condition CLAUDE.md §27 already records by name — *"the next
+release could not boot because Supabase's own storage API answered `544
+DatabaseTimeout`"* — so this is the second observation of it rather than a new
+shape.
+
+**What this release contained is worth saying, because it bounds the
+suspicion.** `901a42db..662d3373` is four files: `CLAUDE.md`, this handoff,
+`scripts/manufacturing.ts` (a header correction) and `tests/laborSurface.test.tsx`.
+No server code, no client code, no migration. A tree that cannot cause a
+storage-API timeout.
+
+**The outage is real and is stated rather than softened.** The machine was
+updated to the new image at 10:05:40 and that image cannot boot while the
+store is unreachable, so `/healthz` answered `503 after ~35s` on every probe
+from 10:03 to 10:15 — eleven consecutive readings, all within 35.1s–35.7s,
+which is the same wall §20 records twice at 35.7s during deploy 305 two days
+earlier. The verdict's sentence *"the app is still serving the previous
+version"* is the one part of this run that is not accurate here: the machine
+had already been updated, so there was no previous version left on it to
+serve.
+
+**The recovery is a retry, and the evidence for retrying is a credential-free
+probe.** Unauthenticated `GET https://…supabase.co/storage/v1/bucket`
+answered `400 InvalidRequest — headers must have required property
+'authorization'` in **0.23s, 0.46s and 0.49s** at 10:16:2xZ. So Deploy was
+re-dispatched on the **same commit** — recovery changes one thing at a time,
+and the thing to change was the attempt rather than the tree.
+
+**I claimed more for that probe than it can carry, and the correction
+matters because the next person will reach for the same probe.** I wrote
+that *"a storage API that replies correctly and immediately is one whose own
+database connection is working"*. It is not. A `400` for a missing
+`authorization` header is refused at request validation and need never touch
+a database at all, so the probe establishes that the storage service is up
+and reachable and says **nothing** about the condition `544 DatabaseTimeout`
+actually names. It was the right action for a weaker reason: an upstream that
+had been unreachable was answering again, which makes a retry worth one
+attempt — not evidence that the retry would succeed.
+
+And the weakness showed. The release went through and the Brain came back at
+10:38:48, and then `deploy.yml`'s own restart — the step that exists so
+persistence means something — took it down again at about 10:43 and it had
+not returned fifteen minutes later, with the same unauthenticated probe still
+answering `400` in 0.42s throughout. Whatever is slow is behind an
+authenticated call that probe does not make.
+
+**Nothing here is a reason to lower a bar.** The boot refusal is the control;
+making it tolerate an unreachable store would trade a visible outage for a
+Brain that looks healthy and writes where nobody can see. The remedy is to
+retry once the upstream answers, which is what was done.
+
+**The retry worked, and the release it was carrying went with it.** Deploy
+325, same commit, no other change: the gate passed, both canonical askings
+passed, `flyctl deploy` **succeeded**, and `Record what was released` ran.
+Production answered `503` for the last time at 10:38:13 and `200 in 4.61s` at
+**10:38:48** — the cold-start tail §20 describes — then 0.25s, 0.16s, 0.16s.
+
+**The outage is dated from the machine rather than from when I first looked.**
+It began at **09:58:55**, when the machine pulled the first new image and the
+old process went away, and the Brain refused to boot twenty-three seconds
+later; it ended at **10:38:48**. That is **thirty-nine and a half minutes**.
+An earlier version of this paragraph said "about 10:03", which was the first
+probe I happened to take — a reading of my own attention rather than of the
+event, and four minutes short.
+
+The served bundle is `assets/index-T4sTcb6M.js` with `index-Dzwb3x6t.css`,
+**unchanged**, which was the prediction rather than a surprise:
+`901a42db..662d3373` touches no client file, so the bundle hash cannot
+distinguish this release and the proof of what is live has to come from
+somewhere else — `BRAIN_REVISION`, which every `scripts/*-report.sh` prints
+as `SERVING_REVISION`.
+
+### 8.6 It is a standing upstream condition, not a one-off, and the record says so
+
+The retry above worked and then the *same* run undid it. `deploy.yml`'s
+restart — the step that exists so persistence means something — took the
+Brain down at 10:42:30, and at **10:51:04** its log reads, word for word,
+what it had read at 09:59:18 and 10:06:03:
+
+```
+Brain could not use the document storage it was configured for.
+The document store could not be checked (HTTP 544).
+{"statusCode":"544","error":"DatabaseTimeout", …}
+[brain] Serving the migration error on http://localhost:8080 — nothing else will work.
+```
+
+`Wait for it to answer after the restart` then failed after thirty attempts,
+and `/healthz` was still `503` half an hour later.
+
+**So the condition is intermittent rather than cleared, and the 10:38:48
+recovery was a window rather than a fix.** Three boots failed on it and one
+succeeded, on one image, inside forty minutes. That also settles what the
+image is: `Prove the live Brain is actually shut` **passed** against this
+exact release at 10:39–10:42, so `662d3373` boots and serves and the
+verification harness agrees. What follows a restart is not about the commit.
+
+**And it is precisely the authenticated call my probe does not make.** The
+unauthenticated storage `400` kept answering in 0.42s throughout, while the
+Brain's own bucket check — which reaches storage's database — timed out. Two
+facts about one service, and only the second is the one that decides whether
+this Brain may boot.
+
+**Nothing here is a reason to weaken the check**, for the third time in this
+section: a Brain that booted past an unreachable store would accept research
+and write it where nobody can find it, which is the outcome §18 exists to
+prevent and is strictly worse than being visibly down. What is owed to the
+operator is the reading and the one action only they can take, which §9 of
+this document does not cover and §8.7 explains the cost of.
+
+### 8.7 The recovery floor is forty minutes, and that is a gap rather than a fact of life
+
+Worth recording because this incident measured it. **There is no supported
+way to restart the deployed Brain short of a full `Deploy`.** `deploy.yml` is
+the only workflow that restarts anything — every other one is a read behind
+`await-release` — and its restart sits on the far side of a nineteen-minute
+test gate and a build.
+
+So a condition whose actual remedy is a thirty-second process restart, which
+is exactly what this was once Supabase answered again at 10:16, has a
+recovery floor of roughly forty minutes. Twenty-two of those minutes were
+spent re-proving a tree that had already passed the identical gate on the
+identical commit an hour earlier.
+
+**It is recorded rather than built, and the reason is the reason.** Adding a
+remote-exec or a restart path to production, unreviewed, during an incident,
+is precisely how a console accumulates — §26's whole argument, and *"each new
+thing arrives because the page is already there"*. The decision about whether
+this Brain should have a guarded restart operation belongs to the owner, made
+when it is cheap rather than when something is down.
 
 <!-- FACTORY-READS -->

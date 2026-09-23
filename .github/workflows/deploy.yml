@@ -323,7 +323,25 @@ jobs:
                --build-arg BRAIN_REVISION="$GITHUB_SHA" 2>&1 | tee deploy.txt; then
             exit 0
           fi
-          if ! grep -qiE 'depot builder|failed to list workers|authentication handshake failed|error releasing builder' deploy.txt; then
+          # Classify the failure from the failure, not from the progress.
+          #
+          # `flyctl` prints `Waiting for depot builder...` on *every* Depot
+          # build, whether or not Depot then has a problem — so the pattern
+          # `depot builder` matched every deploy that used it, and the honest
+          # branch below ("a reason that is not the builder") was unreachable
+          # for all of them. Deploy 324, 2026-09-23: Depot built fine at
+          # 09:58:54, the deploy was refused by a health check at 10:04:19
+          # because Supabase's storage API was answering 544, and this said
+          # `The Depot builder never answered` and spent a second full build
+          # and a second machine replacement — during an outage — on a builder
+          # that had done nothing wrong.
+          #
+          # Dropped from the haystack rather than removed from the patterns:
+          # a real Depot failure that says `depot builder` in its own error is
+          # still matched, and the only thing that stops matching is a line
+          # that was never evidence of anything.
+          grep -viE 'waiting for depot builder' deploy.txt > deploy.classify.txt || true
+          if ! grep -qiE 'depot builder|failed to list workers|authentication handshake failed|error releasing builder' deploy.classify.txt; then
             echo "::error::The deploy failed for a reason that is not the builder. Read the output above."
             exit 1
           fi
