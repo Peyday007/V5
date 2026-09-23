@@ -84,26 +84,51 @@ repository can write (`fire.ts` reads `process.env[secretName]`).
 repository or a Brain field.**
 
 The runbook is `docs/workers/CONNECTING-THE-FACTORY-WORKER.md`; step numbers
-below are its steps. The pool is **one logical worker, `factory-brain`, on four
-accounts**. Do one account completely before starting the next.
+below are its steps. The pool is **one logical worker on four accounts**. Do one
+account completely before starting the next.
+
+**What production already holds** — read, not assumed: `Fleet` run 280,
+`verify-pool --repository Peyday007/V5` on `533463f`, 2026-09-23 08:25Z:
+
+```
+POOL  peyday007/v5  as worker-10
+  accounts   1
+  surfaces   1
+  PROVEN   Factory surface 1  (Brain Research A)
+    ref       trig_01JN1h6UdhvR3bMpWFvaRbD2
+    eligible  yes      headroom  0/4 in flight
+    fires     18 fired, 0 refused
+    proven    fired 2026-09-22T13:25:44Z, arrived, assigned and completed bin_fb9239718e6440c79952
+  NOTE      Only one surface is registered for this repository, so nothing here is pooled
+FLEET: OK verify-pool peyday007/v5 VERIFIED surfaces=1
+```
+
+`worker-10` is the *label* reports print for the worker named
+**`factory-brain`** (`workerIdentity` is label, else name), so the runbook's
+`bind-worker --worker factory-brain` is right. And **one of the four accounts is
+already commissioned and proven** — the account registered as *Brain Research
+A*. If that is the owner's Claude account, the owner's row below is done and
+only the three friends remain; if it is not, the owner's row is still owed. Which
+person *Brain Research A* belongs to is a fact only the owner can state.
 
 ### Once, by the owner
 
-1. **Build → Repositories → Onboard `brain`** (runbook step 1). Creates
-   `factory-brain`, its routing row (`FACTORY`, `peyday007/v5`,
-   `repository,repository-write`) and one invitation link.
-   *Expect:* Build shows the repository as `AWAITING_SURFACE`.
+1. **Already done in production** — `brain` is onboarded and its worker
+   (`factory-brain`, shown as `worker-10`) has a routing row and a proven surface. Pressing **Build →
+   Repositories → Onboard `brain`** again is how each further person gets a
+   fresh invitation link (runbook step 1); it reuses the same worker and
+   revokes only unspent invitations.
 
 ### Per person — owner (N=1), friend 1 (N=2), friend 2 (N=3), friend 3 (N=4)
 
 | Who | Action | Record / state that should appear | Probe that proves it |
 |---|---|---|---|
-| **Owner** | Press **Onboard** again for this person and send them the fresh link (N=1 uses the link from step 1). The rotation revokes unspent invitations only, never a connector already authorized. | A new `worker_invitations` row for `factory-brain` | — |
-| **That person, in their own browser** | Open the link first (step 2), then in *their* Claude account add connector **`Factory Brain`** at `https://northline-brain.fly.dev/mcp/factory` and approve **`Factory · peyday007/v5`** (step 3). | An `oauth_tokens` row for `factory-brain` minted through their consent; the invitation marked spent | — |
+| **Owner** | Press **Onboard** again for this person and send them the fresh link (skip for any account already PROVEN). The rotation revokes unspent invitations only, never a connector already authorized. | A new `worker_invitations` row for the pool worker | — |
+| **That person, in their own browser** | Open the link first (step 2), then in *their* Claude account add connector **`Factory Brain`** at `https://northline-brain.fly.dev/mcp/factory` and approve **`Factory · peyday007/v5`** (step 3). | An `oauth_tokens` row for the pool worker minted through their consent; the invitation marked spent | — |
 | **That person** | In Cowork, create Routine **`Factory_surface_N`** — repository `Peyday007/V5` on `production`, connectors **`Factory Brain` only**, no schedule, API trigger on, the prompt verbatim (step 4). Hand the `trig_…` id to the owner; hand the bearer token to the owner **out of band**, never in chat. | nothing in Brain yet | — |
 | **Owner (Fly)** | `fly secrets set BRAIN_ROUTINE_TOKEN_FACTORY_N=<token> --app northline-brain` (step 5). One name per person; never shared. | Machine restarts; nothing in flight lost | — |
-| **Owner (Fleet workflow)** | `register-account name=<their account name>`; `register-routine account=… ref=trig_… secret=BRAIN_ROUTINE_TOKEN_FACTORY_N name=Factory_surface_N capabilities=repository,repository-write`; `bind-worker ref=trig_… extra="--worker factory-brain"` (step 6). A reused secret name or token is **refused by name** — that refusal *is* the isolation check. | `fleet_accounts` row (distinct name), `fleet_routines` row with its own `token_digest`, `worker_id = factory-brain` | `fleet show`: surface `ENABLED`, `unanswered=0`, secret present |
-| **Owner** | `verify-surface ref=trig_… extra=--probe`, then `verify-surface ref=trig_…` (step 7). | A pinned `DETERMINISTIC_CHECK` bin; `DISPATCH_SENT` to this Routine; `worker_sessions` row with this person's account; bin `COMPLETE` | **Usable:** `VERIFIED` — fired → arrived as `factory-brain` → assigned → completed. **Isolation:** the arrival's account is *this* person's account and no other Routine's chain names this credential; a `FAULT` "authenticated as a different worker" means the wrong connector was selected in Cowork |
+| **Owner (Fleet workflow)** | `register-account name=<their account name>`; `register-routine account=… ref=trig_… secret=BRAIN_ROUTINE_TOKEN_FACTORY_N name=Factory_surface_N capabilities=repository,repository-write`; `bind-worker ref=trig_… extra="--worker factory-brain"` (step 6). A reused secret name or token is **refused by name** — that refusal *is* the isolation check. | `fleet_accounts` row (distinct name), `fleet_routines` row with its own `token_digest`, `worker_id` = the pool worker | `fleet show`: surface `ENABLED`, `unanswered=0`, secret present |
+| **Owner** | `verify-surface ref=trig_… extra=--probe`, then `verify-surface ref=trig_…` (step 7). | A pinned `DETERMINISTIC_CHECK` bin; `DISPATCH_SENT` to this Routine; `worker_sessions` row with this person's account; bin `COMPLETE` | **Usable:** `VERIFIED` — fired → arrived as the pool worker → assigned → completed. **Isolation:** the arrival's account is *this* person's account and no other Routine's chain names this credential; a `FAULT` "authenticated as a different worker" means the wrong connector was selected in Cowork |
 
 ### After all four
 
@@ -122,7 +147,7 @@ output verbatim beside the commit it ran on.
 1. **Simultaneous membership and identity isolation.**
    `fleet verify-pool --repository Peyday007/V5` → `accounts 4`, `surfaces 4`,
    four `PROVEN`, four distinct `ref=trig_…`, four distinct secret names, one
-   bound worker `factory-brain`, `ok`. Then `fleet show` → four `ENABLED`
+   bound worker (`factory-brain`, printed `worker-10`), `FLEET: OK … VERIFIED surfaces=4`. Then `fleet show` → four `ENABLED`
    surfaces under four distinct accounts, `unanswered=0` on each.
 2. **Routing across the pool, and persistence of assignment.** With the fleet
    target at ≥ 4, submit and approve one campaign on `brain` whose plan has
