@@ -1,7 +1,7 @@
 # The Software Factory as a service, through Russell
 
 What a person does, what Brain does, and what each step is proved by. The
-canonical rules are CLAUDE.md §27 (the factory) and §50 (this path); this file
+canonical rules are CLAUDE.md §27 (the factory) and §51 (this path); this file
 is the journey.
 
 ## The journey

@@ -16,6 +16,7 @@
  * center rather than a dashboard, and both are absent when there is nothing
  * true to put in them.
  */
+import { GoalsHome } from './Goals.tsx';
 import { RussellApi } from '../lib/russellApi.ts';
 import type { CollectionView, HomeView, RankedThread } from '../lib/russellApi.ts';
 import type { Milestone } from '../../../server/services/russell/progress.ts';
@@ -101,6 +102,7 @@ export function RussellHome({
     <div className="rs-column rs-home">
       {connection}
       <Hero view={view} />
+      <GoalsHome />
       <Maturity view={view} />
       <Changes view={view} />
       <WhyThisMatters projectId={projectId} />

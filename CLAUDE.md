@@ -11386,7 +11386,72 @@ that would have chosen between them exists.**
   along, which is why §32 names its file: **a number is a position two
   workstreams can both reach for; a filename is the thing itself.**
 
-## 50. A change asked for in a conversation is answered in that conversation, all the way to production.
+## 50. A goal is owned when a person's decision about it reaches the work.
+
+Brain recorded every part of a goal — the campaign, the mission, the packet,
+the bin, the request, the document — and nothing held the goal. A person who
+came back had to join six surfaces by hand to learn what happened, what was
+happening, what came next and what needed them; a person who said "not now"
+had no way to make it true; and the fleet handed out capacity in whatever order
+bins happened to be created, whoever's they were. `server/services/goals/`,
+`server/repos/goals.ts`, `server/domain/goals.ts` and `docs/GOALS.md` are the
+repair, and the shape is the register's (§43) carried one level up.
+
+- **A goal is a workstream with four things a person said** — what counts as
+  finished, whose it is, by when, and whether it is owed to a customer — **and
+  three decisions a person made**: paused, cancelled, archived. Nothing else is
+  stored. The lifecycle, the waiting condition, the next action and who takes
+  it, the blockers and their ages, the decisions, the evidence, the authority
+  and the obligations are derived on every read, and `workstreams` still has no
+  `state` column.
+- **A decision reaches the work through a hold on the bin, asked in the one
+  predicate every reader composes.** `claimableStateSql` now begins
+  `held_by_workstream_id IS NULL`, so the dispatcher, the assigner, the no-show
+  reopen and the pre-fire re-read all refuse a held bin without a fifth copy of
+  the rule — §24's sentence about the fifth reader of `state = 'READY'`, taken
+  before a sixth could be written. A hold keeps the lease, the attempts, the
+  generation and every event, so a worker already inside finishes, and a resume
+  continues rather than restarts.
+- **Resume is the tick, never a button.** `advanceGoals` runs on the durable
+  Russell tick, derives which bins each goal wants held, releases what no longer
+  should be and holds what should, and writes an event either way. A paused
+  goal resumed, a cancelled one reinstated and a goal whose dependency completed
+  all continue on the next pass with nobody pressing anything — the proof of
+  which is that no route or command added here advances a stage.
+- **A hold never stops work somebody else is pursuing.** A bin shared by two
+  goals is held only when every live goal pursuing it wants it held, and the
+  current holder keeps it so two goals never trade a hold back and forth.
+- **Capacity follows each owner's goals, ranked within an owner and a
+  project.** Lexicographic — workable, commitment, deadline, purpose, unblocks,
+  age — and never a score; the first criterion two goals differ on is the
+  sentence each carries. The rank maps to bin priority 8, 7, 6, then 5, capped
+  below a conversation turn's 9. Per owner *and* project so one private
+  operation's commitments never decide another's capacity and no rank reveals
+  work in a project a reader cannot see. An unknown deadline sorts after a
+  stated one — invariant 39 at an ordering.
+- **Complete is every pursued piece delivered, never a claim.** The register's
+  "furthest reading wins" would call a goal done because one of its missions
+  finished beside a running campaign; completion asks every `PURSUES` link.
+- **Cancelling ends pursuit, not obligation.** A cancelled goal's bins are held
+  and reinstatable, a customer commitment and any cash held against its
+  opportunities are reported as still owed, and nothing is released
+  (invariant 40). Resuming retries no effect: Step 6 still keys every effect by
+  work item, and the count of `UNCERTAIN` effects in the project is reported to
+  the person resuming rather than assumed away (invariant 26).
+- **Needs You holds only a person's decision, prepared.** An open request on a
+  pursued mission, an unapproved change request, a campaign awaiting release, a
+  pull request only a person can merge — each with the proposed action, every
+  answer and what it causes, what waits on it, and what Brain does afterwards.
+  A `PRIVATE` request stays in its owner's own Needs You and never appears on a
+  goal the project can read.
+- **A dependency on a goal you cannot read is reported as unreadable, never
+  described**, and a dependency that would close a cycle is refused, because
+  two goals each waiting on the other would hold each other's work for ever.
+
+`npm run goals` and the `Goals` workflow are the terminal and production doors;
+`file --from <row>` files real recorded work with that row's own words as the
+intent and composes nothing.
+## 51. A change asked for in a conversation is answered in that conversation, all the way to production.
 
 The Software Factory could be reached from Russell (§27) and stopped halfway
 back. A person asked for a change, a card appeared, and from there the journey
@@ -11510,6 +11575,7 @@ server/
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
     register.ts       workstreams, what they point at, and what happened to them
+    goals.ts          a person's decisions about a goal, holds on bins, priority history
     bridge.ts         a person's bearer, a transcript exactly as it arrived, and its receipts
     dealflow.ts       both sides of a transaction, and everything hard between them
     puzzle.ts         the universe, the systems, the puzzles, the products, the trade
@@ -11611,6 +11677,12 @@ server/
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
       shared.ts         what crosses between projects, and what may never
+    goals/
+      model.ts          a goal as Brain can read it: what happened, now, next, needs you
+      priority.ts       each owner's goals in order, and the one fact that decides it
+      tick.ts           holds, releases and allocation, on the durable tick
+      decide.ts         pause, resume, cancel, reinstate, terms, objective — one writer each
+      briefing.ts       the answer across goals, for somebody coming back
     register/
       resolve.ts        what the row behind a link says right now, or that it is gone
       view.ts           the six answers, derived on the read path and stored nowhere

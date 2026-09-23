@@ -41,6 +41,15 @@ function mapWorkstream(row: WorkstreamRow): Workstream {
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    outcome: row.outcome ?? null,
+    ownerUserId: row.owner_user_id ?? null,
+    dueAt: row.due_at ?? null,
+    commitment:
+      row.commitment === 'CUSTOMER' || row.commitment === 'INTERNAL' ? row.commitment : 'NONE',
+    pausedAt: row.paused_at ?? null,
+    pausedReason: row.paused_reason ?? null,
+    cancelledAt: row.cancelled_at ?? null,
+    cancelledReason: row.cancelled_reason ?? null,
   };
 }
 

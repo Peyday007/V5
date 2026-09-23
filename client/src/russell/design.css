@@ -4112,3 +4112,35 @@ details.rs-card > section.rs-card {
   margin-bottom: var(--rs-space-2);
   overflow-wrap: anywhere;
 }
+
+/* Goals (§50). A goal opens in place, so its header is a button that reads as
+   a heading; nothing here sets a width, so it reflows with its container. */
+.rs-goal-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rs-goal-detail {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rs-goal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rs-goal[data-lifecycle='PAUSED'],
+.rs-goal[data-lifecycle='CANCELLED'] {
+  opacity: 0.85;
+}
