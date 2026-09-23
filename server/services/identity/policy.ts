@@ -379,6 +379,19 @@ const OVERRIDES: Override[] = [
   // quietly narrow the space nobody else is looking at, which is exactly what
   // §22 keeps a worker out of.
   // ---------------------------------------------------------------------
+  // External actions (§50)
+  // ---------------------------------------------------------------------
+  //
+  // Connecting, checking, revoking and reconnecting a provider are ADMIN:
+  // choosing which outside system a project may act through is a decision
+  // about the operation, of the same shape as a membership change. Approving
+  // an action and resolving one whose outcome is unknown are ADMIN too — the
+  // approval *is* the authority to reach somebody outside Brain, and it must
+  // not be reachable by anything less. Preparing, cancelling and refreshing
+  // take the default WRITE. No entry names a worker scope, and every handler
+  // calls `requirePerson`, so no machine credential reaches any of them.
+  { pattern: /^\/api\/projects\/[^/]+\/external\/connections/, method: 'POST', level: 'ADMIN' },
+  { pattern: /^\/api\/projects\/[^/]+\/external\/actions\/[^/]+\/(approve|resolve)$/, method: 'POST', level: 'ADMIN' },
   // The labor kernel (§41)
   // ---------------------------------------------------------------------
   //

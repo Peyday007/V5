@@ -65,6 +65,7 @@ import { answerFast, noFastLane } from '../conversation/fastLane.ts';
 import { standingInstructions } from '../conversation/review.ts';
 import type { ChatAdapter } from '../conversation/adapter.ts';
 import { CANDIDATE_PRIORITIES } from '../../domain/types.ts';
+import { prepareAction } from '../external/actions.ts';
 import type {
   BinState,
   Principal,
@@ -435,6 +436,13 @@ async function createTurnBin(input: {
           'a reload". Weighing one, or wondering aloud about one, is CAPTURE_CANDIDATE ' +
           'instead. Nothing is submitted or run by either: this writes it down for the ' +
           'person to authorize, and they choose the repository.',
+        'PREPARE_EXTERNAL_ACTION is for something the person asks to have done outside ' +
+          'Brain: a message to their own phone (NOTIFY_OWNER) or an email to an address they ' +
+          'gave (SEND_EMAIL). It prepares it and sends nothing to anybody else: every email ' +
+          'waits for the person to approve exactly what you wrote, and Brain checks the ' +
+          'connection and the authority itself. Give an "external" object with "kind", ' +
+          '"subject", "body", and for SEND_EMAIL the "destination" address exactly as the ' +
+          'person gave it. Never invent an address.',
         'for REQUEST_SOFTWARE_CHANGE: a "software" object with "title" (short), ' +
           '"objective" (what should become true in the code) and "expectedOutcome" ' +
           '(what a person would see differently afterwards). Do not name a repository, ' +
@@ -1297,6 +1305,50 @@ async function applyValidated(input: {
           // "you already have this waiting" are different answers.
           softwareOutcome: outcome.reason,
         },
+        candidateId: null,
+      };
+    }
+
+    case 'PREPARE_EXTERNAL_ACTION': {
+      if (!proposal.external) break;
+      /*
+       * Prepared against the conversation OWNER's authority, never the
+       * worker's (§24): the effect lands in their project, so they must be
+       * able to write there now. What comes out is a prepared row — every
+       * requirement checked, an email waiting for their approval — or the
+       * refusal naming what is missing, which the person is shown.
+       */
+      if (!conversation.projectId) {
+        return {
+          produced: { externalDeclined: 'This conversation is not about a project, and an external action belongs to one.' },
+          candidateId: null,
+        };
+      }
+      if (!decideProjectAccess(owner, conversation.projectId, 'WRITE').allowed) {
+        return {
+          produced: { externalDeclined: 'The person this conversation belongs to cannot act on its project.' },
+          candidateId: null,
+        };
+      }
+      const prepared = await prepareAction({
+        projectId: conversation.projectId,
+        kind: proposal.external.kind,
+        destination: proposal.external.destination,
+        content: { subject: proposal.external.subject, body: proposal.external.body },
+        conversationId,
+        requestedByType: 'WORKER',
+        requestedBy: `russell-turn:${conversationId}`,
+      });
+      return {
+        produced: prepared.ok
+          ? {
+              externalActionId: prepared.action.id,
+              externalState: prepared.action.state,
+              externalOutcome: prepared.action.approvalRequired
+                ? 'Prepared and waiting for your approval on External actions. Nothing has been sent.'
+                : 'Queued to your own phone; the result will be posted here.',
+            }
+          : { externalDeclined: prepared.reason, externalNeed: prepared.need },
         candidateId: null,
       };
     }

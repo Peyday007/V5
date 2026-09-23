@@ -294,7 +294,7 @@ describe('executing means something happened', () => {
 
 describe('a capability is read rather than assumed', () => {
   it('tells an absent integration apart from a word it has never heard', async () => {
-    const absent = await readCapability('TAKE_A_PAYMENT');
+    const absent = await readCapability('TAKE_A_PAYMENT', projectId);
     expect(absent.state).toBe('MISSING');
     expect(absent.definition).not.toBeNull();
 
@@ -1073,7 +1073,7 @@ describe('a need is answered because something is true', () => {
     // condition having been met. Brain says which.
     expect(settled.verifiedBy).toBe('PERSON_SUBSTITUTE');
     expect(settled.resolution).toContain('done another way');
-    expect((await readCapability('TAKE_A_PAYMENT')).state).toBe('MISSING');
+    expect((await readCapability('TAKE_A_PAYMENT', projectId)).state).toBe('MISSING');
   });
 
   it('raises a fresh occurrence when the blockage comes back', async () => {

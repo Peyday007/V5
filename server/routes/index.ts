@@ -22,6 +22,7 @@ import { russellRouter } from './russell.ts';
 import { factoryRouter } from './factory.ts';
 import { connectRouter } from './connect.ts';
 import { cashRouter } from './cash.ts';
+import { externalRouter } from './external.ts';
 import { laborRouter } from './labor.ts';
 import { manufacturingRouter } from './manufacturing.ts';
 import { invitationsRouter } from './invitations.ts';
@@ -108,6 +109,9 @@ export function createApiRouter(): Router {
   // an opportunity, a commitment or a need directly. Before the projects router
   // so its own `/:projectId/...` routes do not swallow them.
   router.use(cashRouter);
+  // External actions (§50). Project-scoped routes under their own
+  // `/projects/:id/external` prefix, which the projects router does not claim.
+  router.use(externalRouter);
   // The labor kernel (§41). Root-mounted for the same reason and with the same
   // ordering requirement: its routes carry their own `/projects/:id/labor/...`
   // prefix and must sit before the projects router.

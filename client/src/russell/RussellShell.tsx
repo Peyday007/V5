@@ -38,6 +38,7 @@ import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
+import { ActionsView } from './Actions.tsx';
 import {
   FleetView,
   ProjectView,
@@ -100,6 +101,12 @@ const SECTIONS = [
    * here.
    */
   { name: 'LABOR' as const, label: 'Labor', primary: false },
+  /*
+   * Secondary: a person comes here to connect a provider or to approve one
+   * thing, and a waiting approval also reaches them on their phone once a
+   * notification channel is connected.
+   */
+  { name: 'ACTIONS' as const, label: 'External actions', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -563,6 +570,7 @@ export function RussellShell({
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
+        {route.name === 'ACTIONS' ? <ActionsView projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (

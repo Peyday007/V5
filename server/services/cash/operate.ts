@@ -72,9 +72,9 @@ import { composeLedger } from './monetization/ledger.ts';
 import { runCommissions, type CommissionPass } from './monetization/commissionPass.ts';
 import { recordWorkModelReclassification, type Reclassification } from './reclassify.ts';
 import type { ResearchApplication } from './answers.ts';
-import { actionKey, beginExecution, markReady } from './opportunities.ts';
+import { beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
-import { countActions } from '../../repos/cashActions.ts';
+import { prepareAction } from '../external/actions.ts';
 import { getCashMode } from '../../repos/cashMode.ts';
 import type { CashNeed, CashOpportunity } from '../../domain/types.ts';
 
@@ -130,7 +130,7 @@ export async function reconcileCapabilityNeeds(
     for (const capabilityId of opportunity.requiredCapabilities) {
       const key = capabilityKey(opportunity.id, capabilityId);
       wanted.add(key);
-      const reading = await readCapability(capabilityId);
+      const reading = await readCapability(capabilityId, projectId);
       const existing = byKey.get(key);
 
       if (reading.state === 'PRESENT') {
@@ -518,7 +518,7 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
 
 export interface AutonomousStep {
   opportunityId: string;
-  did: 'MARKED_READY' | 'BEGAN_EXECUTION';
+  did: 'MARKED_READY' | 'BEGAN_EXECUTION' | 'PREPARED_CONTACT';
   detail: string;
 }
 
@@ -621,7 +621,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
       continue;
     }
 
-    const reading = await readCapability(CONTACT_CAPABILITY);
+    const reading = await readCapability(CONTACT_CAPABILITY, projectId);
     if (reading.state !== 'PRESENT') {
       out.withheld.push({
         opportunityId: opportunity.id,
@@ -634,47 +634,69 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
     }
 
     /*
-     * And here is where Brain would act.
+     * And here is where Brain acts — by preparing, never by sending.
      *
-     * Unreachable on this Brain and deliberately left standing: every
-     * capability but `RESEARCH_A_QUESTION` reads MISSING because no
-     * integration of that kind exists (§30 says so in code rather than only
-     * in prose), so the branch above is what actually happens today. It is
-     * not dead code — it is the half that runs the moment a messaging
-     * integration is registered, and the alternative to leaving it here is a
-     * Brain that has the authorization and still needs somebody to press a
-     * button. No run of this has contacted anybody, and nothing here says one
-     * has.
+     * This branch used to record `CONTACT_BUYER` as performed by Brain and move
+     * the piece to EXECUTING with no integration behind it, and the only thing
+     * stopping that lie was that the capability always read MISSING. Now that
+     * SEND_A_MESSAGE can read PRESENT (§50), the act is a prepared email that
+     * waits for a person to approve exactly what it says, and the opening
+     * moves to EXECUTING only when the provider has confirmed a send — which
+     * `returnResult` does, with the provider's own identifier as the reference.
+     *
+     * The address must be one the card actually holds. A channel written as
+     * prose ("their procurement portal") is not something Brain can send to,
+     * and guessing an address would be contacting somebody nobody named.
      */
-
-    const began = await beginExecution({
-      opportunityId: opportunity.id,
-      actorRef: BRAIN,
-      firstAction: {
-        action: CONTACT_ACTION,
-        performedBy: 'BRAIN',
-        detail:
-          `Reached ${opportunity.payer ?? 'the payer'} through ${
-            opportunity.reachableChannel ?? 'the recorded channel'
-          } with the offer on this card.`,
-        // Server-built, from the opportunity and how many actions it already
-        // holds. Nothing the caller sent contributes, because nothing here has
-        // a caller.
-        requestKey: actionKey(
-          opportunity.id,
-          CONTACT_ACTION,
-          String((await countActions(opportunity.id)) + 1),
-        ),
-      },
-    });
-    if (began.ok) {
-      out.took.push({
+    const address = (opportunity.reachableChannel ?? '').trim();
+    if (!/^[^\s@<>"',;]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}$/.test(address)) {
+      out.withheld.push({
         opportunityId: opportunity.id,
-        did: 'BEGAN_EXECUTION',
-        detail: began.message ?? 'executing',
+        because:
+          'The channel on the card is not an email address Brain can send to, so nothing was ' +
+          'prepared. A person reaches them, or records the address as the reachable channel.',
       });
+      continue;
+    }
+    const prepared = await prepareAction({
+      projectId,
+      kind: 'SEND_EMAIL',
+      destination: address,
+      opportunityId: opportunity.id,
+      content: {
+        subject: opportunity.title.slice(0, 200),
+        body: [
+          opportunity.payer ? `Hello ${opportunity.payer},` : 'Hello,',
+          '',
+          opportunity.offerScope ?? '',
+          opportunity.acceptanceCondition ? `It is complete when: ${opportunity.acceptanceCondition}` : '',
+          opportunity.priceCents !== null
+            ? `Price: ${(opportunity.priceCents / 100).toFixed(2)} ${opportunity.currency}.`
+            : '',
+          opportunity.paymentTerms ? `Terms: ${opportunity.paymentTerms}` : '',
+        ]
+          .filter((line, index) => index < 2 || line)
+          .join('\n')
+          .slice(0, 10_000),
+      },
+      requestedByType: 'SYSTEM',
+      requestedBy: BRAIN,
+      // One draft per opening: a second tick finds this one rather than
+      // preparing another.
+      requestKey: `contact:${opportunity.id}`,
+    });
+    if (prepared.ok) {
+      if (prepared.created) {
+        out.took.push({
+          opportunityId: opportunity.id,
+          did: 'PREPARED_CONTACT',
+          detail:
+            'An email to the buyer is prepared and waits for a person to approve it. Nothing has ' +
+            'been sent, and the opening moves only when the provider confirms a send.',
+        });
+      }
     } else {
-      out.withheld.push({ opportunityId: opportunity.id, because: began.reason });
+      out.withheld.push({ opportunityId: opportunity.id, because: prepared.reason });
     }
   }
 

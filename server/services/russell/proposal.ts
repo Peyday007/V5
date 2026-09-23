@@ -57,6 +57,17 @@ export const PROPOSAL_ACTIONS = [
    * see `software` below.
    */
   'REQUEST_SOFTWARE_CHANGE',
+  /*
+   * Something done outside Brain — a push message to the owner's own phone,
+   * or an email — asked for in the conversation (§50).
+   *
+   * It prepares and never sends by itself: the whole effect is a row that
+   * every requirement was checked for, and anything reaching somebody other
+   * than the owner waits for a person to approve exactly that. No connection,
+   * credential or grant is named here, because which provider a project may
+   * act through and what it may do there are rows a person wrote.
+   */
+  'PREPARE_EXTERNAL_ACTION',
 ] as const;
 export type ProposalAction = (typeof PROPOSAL_ACTIONS)[number];
 
@@ -96,6 +107,13 @@ export interface ValidatedProposal {
    * choice.
    */
   software: { title: string; objective: string; expectedOutcome: string } | null;
+  /** An external action to prepare. Kinds a turn may propose, and nothing more. */
+  external: {
+    kind: 'NOTIFY_OWNER' | 'SEND_EMAIL';
+    destination: string | null;
+    subject: string;
+    body: string;
+  } | null;
 }
 
 export interface ProposalRefusal {
@@ -129,6 +147,7 @@ const KNOWN_FIELDS = new Set([
   'probe',
   'priority',
   'software',
+  'external',
 ]);
 
 /**
@@ -161,6 +180,8 @@ export const FIELD_LIMITS = {
    */
   softwareObjective: 4_000,
   softwareOutcome: 2_000,
+  externalSubject: 200,
+  externalBody: 5_000,
 } as const;
 
 /**
@@ -222,6 +243,12 @@ export const EXECUTABLE_ACTIONS = [
    * more.
    */
   'REQUEST_SOFTWARE_CHANGE',
+  /*
+   * Executable in the same sense: something happens and the person sees it.
+   * What happens is a prepared row; an email waits for their approval, and a
+   * message to their own phone is sent within the day's bound.
+   */
+  'PREPARE_EXTERNAL_ACTION',
 ] as const satisfies readonly ProposalAction[];
 
 export const REQUIRED_PART: Partial<Record<ProposalAction, string>> = {
@@ -232,6 +259,7 @@ export const REQUIRED_PART: Partial<Record<ProposalAction, string>> = {
   PARK_CANDIDATE: 'priority',
   REJECT_CANDIDATE: 'reason',
   REQUEST_SOFTWARE_CHANGE: 'software',
+  PREPARE_EXTERNAL_ACTION: 'external',
 };
 
 /** The hardest bound a proposed probe may name. The envelope narrows further. */
@@ -423,6 +451,34 @@ export function validateProposal(input: {
     software = { title, objective, expectedOutcome };
   }
 
+  let external: ValidatedProposal['external'] = null;
+  if (body['external'] !== undefined && body['external'] !== null) {
+    const value = body['external'];
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return refuse('MISSING_REQUIRED_PART', 'the proposed external action was not readable');
+    }
+    const record = value as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      if (!['kind', 'destination', 'subject', 'body'].includes(key)) {
+        return refuse('UNKNOWN_FIELD', 'the proposed external action carried a field this version does not accept');
+      }
+    }
+    const kind = record['kind'];
+    if (kind !== 'NOTIFY_OWNER' && kind !== 'SEND_EMAIL') {
+      return refuse('MISSING_REQUIRED_PART', 'an external action from a conversation is NOTIFY_OWNER or SEND_EMAIL');
+    }
+    const subject = text(record['subject'], FIELD_LIMITS.externalSubject);
+    const message = text(record['body'], FIELD_LIMITS.externalBody);
+    const destination = text(record['destination'], 320);
+    if (!subject || !message) {
+      return refuse('MISSING_REQUIRED_PART', 'an external action needs a subject and a body');
+    }
+    if (kind === 'SEND_EMAIL' && !destination) {
+      return refuse('MISSING_REQUIRED_PART', 'an email needs the address the person gave');
+    }
+    external = { kind, destination: kind === 'SEND_EMAIL' ? destination : null, subject, body: message };
+  }
+
   // Actions that cannot be carried out without the part they act on. Checked
   // after the parts are validated, so the refusal names the missing piece
   // rather than the first thing that happened to be wrong.
@@ -438,6 +494,7 @@ export function validateProposal(input: {
     PARK_CANDIDATE: () => priority !== null,
     REJECT_CANDIDATE: () => text(body['reason'], FIELD_LIMITS.reason) !== null,
     REQUEST_SOFTWARE_CHANGE: () => software !== null,
+    PREPARE_EXTERNAL_ACTION: () => external !== null,
   };
   const required = needs[action as ProposalAction];
   if (required && !required()) {
@@ -456,6 +513,7 @@ export function validateProposal(input: {
       probe,
       priority,
       software,
+      external,
     },
   };
 }

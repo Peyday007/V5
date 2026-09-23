@@ -824,7 +824,7 @@ describe('one sprint, from activation to money in and winding down', () => {
     const substituted = (await getNeed(capabilityNeed.id))!;
     expect(substituted.verifiedBy).toBe('PERSON_SUBSTITUTE');
     // The integration is still missing, and Brain says so.
-    expect((await readCapability('TAKE_A_PAYMENT')).state).toBe('MISSING');
+    expect((await readCapability('TAKE_A_PAYMENT', projectId)).state).toBe('MISSING');
 
     /* ------------------------------------------------------------------ *
      * 7. Brain takes the decision it is allowed to take, and stops at the

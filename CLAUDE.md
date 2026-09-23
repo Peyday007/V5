@@ -191,6 +191,10 @@ There must be no workflow where the user has to remember "now go update the data
 47. No possibility discarded for ranking poorly — a rank is a view of the space
     and never the space, simplification happens in the presentation, and what
     is not in the top five is not thereby worthless.
+48. No external effect reported as done without the provider's own identifier
+    read back, and no capability reported available because an adapter exists
+    or a credential was entered — only because the provider answered for the
+    credential actually deployed.
 
 ## 8. Model prose never mutates project state.
 
@@ -11386,6 +11390,90 @@ that would have chosen between them exists.**
   along, which is why §32 names its file: **a number is a position two
   workstreams can both reach for; a filename is the thing itself.**
 
+## 50. An effect outside Brain is a receipt and a read-back, or it did not happen.
+
+External actions (`server/services/external/`, `server/repos/externalActions.ts`,
+`server/routes/external.ts`, `client/src/russell/Actions.tsx`,
+`docs/EXTERNAL-ACTIONS.md`) are how Brain sends a message, an email or an
+invoice and knows what actually happened. Everything is an entrance to
+machinery that already existed — Step 6's `runExternalEffect` is the arbiter of
+"exactly once", `checkCommercialAuthority` decides what a third-party effect
+may be, `decideProjectAccess` decides who may connect and approve, and
+`project_events` carries the history.
+
+**Read before building.** Production held no messaging, email, invoicing or
+payment credential (`flyctl secrets list`, 2026-09-23), and the live sprint had
+0 ready pieces and no commercial grant — so nothing was blocked on messaging
+yet. That is why the first provider is owner notification (ntfy): useful today,
+self-directed, and the only one that could be proved from here. Email (Resend)
+and invoice/payment (Stripe) are built and contract-tested against a scripted
+provider, and **have not run against a real account**; saying otherwise would
+be the claim this section exists to refuse.
+
+- **A capability is a reading of three facts together.** A connection row a
+  person created, a credential actually deployed under the name Brain assigned,
+  and the provider having answered for *that* credential (by digest) within a
+  day, in live mode. A row alone is `WAITING_FOR_SECRET`, a rotated secret is
+  `CREDENTIAL_CHANGED`, a Stripe test key is `TEST_ONLY` — none of them reads
+  PRESENT. `readCapability` takes the project, because a connection belongs to
+  one; asked without one it answers UNKNOWN rather than borrowing another
+  project's connection.
+- **No credential is ever a value Brain holds.** The row stores a secret's
+  name; the value is set in the deployment by an administrator and read only
+  at the moment of use. Nothing returns, logs or stores it, and the connect
+  route refuses a value that looks like one rather than ignoring it. ntfy's
+  topic is its credential, so it travels in the body on the send path.
+- **Brain proposing is not Brain authorized.** Everything but a message to the
+  owner's own phone waits for a project ADMIN to approve exactly what will be
+  sent. A third-party effect additionally needs the standing commercial
+  authority, asked at preparation, at approval and immediately before the send
+  — a grant withdrawn between approval and send stops it. A Russell turn may
+  propose (`PREPARE_EXTERNAL_ACTION`), under the conversation owner's
+  authority, and cannot approve.
+- **The key is the action.** `xac.<actionId>`, nothing else, so a retry, a
+  restart and a second tick are one effect. A rate limit is backpressure and
+  retries under the same key; a refusal is `REFUSED`; an exception is decided
+  by the attempt rows (nothing reached `SENT` → nothing left Brain); an unknown
+  outcome is `UNCERTAIN`, answered by asking a reconcilable provider again or by
+  a person, and never resent.
+- **"Not found yet" is not "absent".** ntfy writes its cache about a second
+  after answering a publish — measured on the first real proof, where the
+  immediate read-back said `NOT_VISIBLE_YET`. So ntfy reconciliation never
+  answers ABSENT: that answer licenses a resend, and here it would have been
+  wrong for a second after every send.
+- **The engine asked reconcile about the wrong id, and the adapter does not
+  trust it.** Step 6's resume paths pass the operation id where the send was
+  tagged with the business id. A reconcilable adapter is built per action and
+  asks about that action; matching the argument would search for a tag nothing
+  carried and could license a second send.
+- **Issued, paid and settled are three facts.** An invoice reads back `ISSUED`,
+  then `PAYMENT_MADE`, then `FUNDS_SETTLED` from the balance transaction's own
+  status. Money reaches the ledger only from a live connection, against an
+  opening, with the provider's reference — test money is not money.
+- **The result goes back by itself.** Once, through a compare-and-swap: the
+  originating conversation, the project's history, and the opening — whose
+  first recorded action is now the provider-confirmed send rather than a
+  button press. `advanceWithinAuthority` used to record `CONTACT_BUYER` as
+  performed with nothing behind it, kept honest only by the capability always
+  reading MISSING; it now prepares an approval-gated email to an address the
+  card actually holds, and the piece moves when the provider confirms.
+- **A decision waiting reaches the owner.** With a healthy notification
+  connection, each open Needs You request and each action awaiting approval is
+  pushed once, keyed from the request, bounded at thirty a day.
+- **Publishing and signing are unavailable by policy, and say so.** A connector
+  would not change `ALWAYS_PROHIBITED_COMMERCIAL`; letting Brain publish an
+  offer or bind the account is a code change a person reviews.
+
+**Proved once, locally, against the real provider**: `scripts/prove-external-action.ts`
+connected ntfy through the HTTP routes, deployed the credential by restart,
+checked it (MISSING → PRESENT), sent from a Russell conversation, got receipt
+`qQrFq73pRfjQ`, read it back as `PUBLISHED`, confirmed it with a request sharing
+no code with Brain's, found the result in the conversation, replayed the request
+as the same action, revoked (PRESENT → MISSING, prepare refused), and found the
+credential in neither the log nor the database. **Production has no connection
+yet**: that needs a person to set a deployment secret, which is the remaining
+step `docs/EXTERNAL-ACTIONS.md` names.
+
 ## Repository map
 
 ```
@@ -11440,6 +11528,7 @@ server/
     register.ts       workstreams, what they point at, and what happened to them
     bridge.ts         a person's bearer, a transcript exactly as it arrived, and its receipts
     dealflow.ts       both sides of a transaction, and everything hard between them
+    externalActions.ts connections, health readings, prepared actions; a secret's name, never its value
     puzzle.ts         the universe, the systems, the puzzles, the products, the trade
     faculties.ts      sources, candidates, faculties and their typed edges
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
@@ -11537,6 +11626,11 @@ server/
       adopt.ts          a surface Brain already fires, recorded as somebody's
       contribution.ts   whose connection is usable capacity, and why not when it is not
     storageHealth.ts    how much room is left, measured rather than guessed
+    external/
+      http.ts           one bounded provider request; no URL, header or body in an error
+      drivers.ts        ntfy, Resend and Stripe: the promise each can keep, and the read-back
+      connections.ts    connected, deployed, answered for — three facts, read together
+      actions.ts        prepare, approve, execute, read back, return — and the tick
     knowledge/
       shared.ts         what crosses between projects, and what may never
     register/
@@ -11783,6 +11877,7 @@ server/
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
+    external.ts         external actions' door: connect, check, prepare, approve, resolve
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
@@ -11804,6 +11899,7 @@ client/                 React UI
   src/russell/Machines.tsx  the ladder, what entering costs, and the three decisions that are a person's
   src/russell/cashPage.ts  both payloads, normalized; the capabilities the server sent
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
+  src/russell/Actions.tsx    what Brain may do outside itself, what waits for you, what happened
   src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
   src/russell/Register.tsx  the six answers, and the one form Brain may not fill in
   src/russell/Devices.tsx    your own passkeys, and nobody else's
@@ -11835,6 +11931,7 @@ scripts/
                             (reached by .github/workflows/puzzle-report.yml, which
                             checks the marker it prints)
   admin.ts                  emergency administration, on a terminal rather than a page
+  prove-external-action.ts  one real send through the real routes, read back twice
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
   generate-pg-baseline.mjs  the Postgres schema, generated from the SQLite one
@@ -11905,6 +12002,7 @@ tests/                  Vitest suites
   connectorIsolation.test.ts one site, two private operations, two identities
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
+  externalActions.test.ts    what a capability may claim, what may leave, what Brain says happened
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```

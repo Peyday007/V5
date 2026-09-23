@@ -400,7 +400,7 @@ describe('Brain acts inside the standing authority', () => {
     // Authorized, and still unable: this Brain has no messaging integration,
     // and the honest report of that is the whole point of the capability
     // register reading rows rather than declaring.
-    expect((await readCapability('SEND_A_MESSAGE')).state).toBe('MISSING');
+    expect((await readCapability('SEND_A_MESSAGE', projectId)).state).toBe('MISSING');
     const advanced = await advanceWithinAuthority(projectId);
     const withheld = advanced.withheld.find((one) => one.opportunityId === piece.id)!;
     expect(withheld.because).toContain('SEND_A_MESSAGE');

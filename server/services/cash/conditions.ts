@@ -75,7 +75,7 @@ export async function readNeedCondition(need: CashNeed): Promise<NeedVerificatio
 
   if (need.requestKey.startsWith('capability:')) {
     const capabilityId = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
-    const reading = await readCapability(capabilityId);
+    const reading = await readCapability(capabilityId, need.projectId);
     return {
       holds: reading.state === 'PRESENT',
       reading:

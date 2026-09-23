@@ -494,6 +494,13 @@ export const EVENT_TYPES = [
   // The answering transition for a work item whose attempt ceiling now
   // binds at the claim as well as at `failWork`.
   'WORK_ATTEMPTS_REGRANTED',
+  // External actions (§50). Prepared, approved, and what the provider said —
+  // each on the project's own history, so an effect outside Brain is never
+  // only in the table that performed it.
+  'EXTERNAL_ACTION_PREPARED',
+  'EXTERNAL_ACTION_APPROVED',
+  'EXTERNAL_ACTION_RESULT',
+  'EXTERNAL_CONNECTION_CHANGED',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -10311,5 +10318,174 @@ export interface PuzzleObservation {
   statement: string;
   /** A person, or BRAIN reading its own rows. `lessons` counts them apart. */
   recordedBy: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// External actions (§50) — migration 092_external_actions.sql / pg 083.
+//
+// A connection holds the NAME of a deployment secret and never its value; an
+// action holds what will be done, to whom, and then what the provider said.
+// ---------------------------------------------------------------------------
+
+export const EXTERNAL_PROVIDERS = ['NTFY', 'RESEND', 'STRIPE'] as const;
+export type ExternalProvider = (typeof EXTERNAL_PROVIDERS)[number];
+
+export const EXTERNAL_ACTION_KINDS = ['NOTIFY_OWNER', 'SEND_EMAIL', 'ISSUE_INVOICE'] as const;
+export type ExternalActionKind = (typeof EXTERNAL_ACTION_KINDS)[number];
+
+export const EXTERNAL_ACTION_STATES = [
+  'AWAITING_APPROVAL',
+  'APPROVED',
+  'SENDING',
+  'CONFIRMED',
+  'REFUSED',
+  'FAILED',
+  'UNCERTAIN',
+  'CANCELLED',
+] as const;
+export type ExternalActionState = (typeof EXTERNAL_ACTION_STATES)[number];
+
+export interface ExternalConnectionRow {
+  id: string;
+  project_id: string;
+  provider: string;
+  label: string;
+  secret_name: string;
+  self_destination: string | null;
+  sender: string | null;
+  state: string;
+  connected_by: string;
+  revoked_by: string | null;
+  revoked_reason: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExternalConnection {
+  id: string;
+  projectId: string;
+  provider: ExternalProvider;
+  label: string;
+  secretName: string;
+  selfDestination: string | null;
+  sender: string | null;
+  state: 'ACTIVE' | 'REVOKED';
+  connectedBy: string;
+  revokedBy: string | null;
+  revokedReason: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExternalHealthCheckRow {
+  id: string;
+  connection_id: string;
+  ok: number;
+  mode: string | null;
+  credential_digest: string | null;
+  detail: string;
+  checked_at: string;
+}
+
+export interface ExternalHealthCheck {
+  id: string;
+  connectionId: string;
+  ok: boolean;
+  mode: 'TEST' | 'LIVE' | null;
+  credentialDigest: string | null;
+  detail: string;
+  checkedAt: string;
+}
+
+export interface ExternalActionRow {
+  id: string;
+  project_id: string;
+  connection_id: string;
+  kind: string;
+  commercial_action: string | null;
+  opportunity_id: string | null;
+  conversation_id: string | null;
+  destination: string;
+  content: string;
+  expected_effect: string;
+  amount_cents: number | null;
+  currency: string | null;
+  state: string;
+  approval_required: number;
+  requested_by_type: string;
+  requested_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  request_key: string;
+  operation_id: string | null;
+  provider_ref: string | null;
+  outcome_detail: string | null;
+  attempts: number;
+  next_attempt_at: string | null;
+  readback_state: string | null;
+  readback_detail: string | null;
+  readback_at: string | null;
+  readback_final: number;
+  returned_at: string | null;
+  resolved_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExternalActionContent {
+  subject?: string;
+  body?: string;
+  /** Invoice lines, in minor units. */
+  lines?: Array<{ description: string; amountCents: number }>;
+  daysUntilDue?: number;
+}
+
+export interface ExternalAction {
+  id: string;
+  projectId: string;
+  connectionId: string;
+  kind: ExternalActionKind;
+  commercialAction: string | null;
+  opportunityId: string | null;
+  conversationId: string | null;
+  destination: string;
+  content: ExternalActionContent;
+  expectedEffect: string;
+  amountCents: number | null;
+  currency: string | null;
+  state: ExternalActionState;
+  approvalRequired: boolean;
+  requestedByType: string;
+  requestedBy: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  requestKey: string;
+  operationId: string | null;
+  providerRef: string | null;
+  outcomeDetail: string | null;
+  attempts: number;
+  nextAttemptAt: string | null;
+  readbackState: string | null;
+  readbackDetail: string | null;
+  readbackAt: string | null;
+  readbackFinal: boolean;
+  returnedAt: string | null;
+  resolvedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExternalActionEvent {
+  id: string;
+  projectId: string;
+  actionId: string | null;
+  connectionId: string | null;
+  kind: string;
+  actorRef: string;
+  summary: string;
+  detail: Record<string, unknown>;
   createdAt: string;
 }

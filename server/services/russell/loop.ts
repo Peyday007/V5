@@ -151,6 +151,7 @@ import type { RussellCandidate, RussellMission, RussellVisibility } from '../../
 export const RUSSELL_TICK_MS = 30_000;
 
 import { advanceSources } from '../capability/extraction.ts';
+import { externalActionsTick, type ExternalTickReport } from '../external/actions.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
@@ -572,6 +573,12 @@ export interface TickReport {
   ranked: string[];
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
+  /**
+   * External actions (§50): connections re-checked, approved actions sent,
+   * provider state read back, owners told what is waiting. `null` when the
+   * pass could not run, which is reported rather than hidden.
+   */
+  external: ExternalTickReport | null;
 }
 
 const EMPTY: TickReport = {
@@ -636,6 +643,7 @@ const EMPTY: TickReport = {
   sharedPromoted: [],
   ranked: [],
   bounded: false,
+  external: null,
 };
 
 /**
@@ -979,6 +987,19 @@ export async function tick(owner: string): Promise<TickReport> {
      * reconciling a stranded lease — it is a reading about Brain, never a
      * precondition of Brain.
      */
+    /*
+     * External actions (§50), fleet-wide like the kernel below it: an approved
+     * send is sent, a confirmed one is read back, and a connection nobody has
+     * checked in half an hour is asked again — so a provider that went away
+     * stops reading as available without anybody having to look. Swallowed
+     * for the same reason: a provider that is down must not stop Russell.
+     */
+    try {
+      report.external = await externalActionsTick();
+    } catch {
+      report.external = null;
+    }
+
     try {
       const advanced = await advanceSources();
       report.capability.dispatched = advanced.dispatched;

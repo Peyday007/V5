@@ -291,7 +291,7 @@ export async function assessTask(input: {
   independentVerification: boolean | null;
 }): Promise<NecessityReading> {
   const capability = input.task.capabilityId
-    ? await readCapability(input.task.capabilityId)
+    ? await readCapability(input.task.capabilityId, input.task.projectId)
     : null;
 
   const live = new Map<NecessityQuestion, LaborNecessityAnswer>();
