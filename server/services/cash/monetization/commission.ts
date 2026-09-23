@@ -70,6 +70,7 @@ import { ATTRIBUTE } from '../../../domain/monetization.ts';
 import { CRITERIA, compareOn } from './rank.ts';
 import type { RankableEntry } from './rank.ts';
 import type { LedgerEntry } from './ledger.ts';
+import { MONETIZATION_ATTRIBUTES } from '../../../domain/types.ts';
 import type {
   MonetizationAttribute,
   MonetizationCommission,
@@ -312,7 +313,29 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
     );
     const decisive = decisiveCriteria(mine, neighbours);
 
-    for (const attribute of entry.unknowns) {
+    /*
+     * Every unanswered question, **and** every answered one whose claim has
+     * since been contradicted.
+     *
+     * The second half was missing and the rule that needed it could never
+     * fire. `entry.unknowns` is attributes with no fact at all, so a
+     * contradicted *answer* — which by definition has one — was never reached,
+     * and `admit`'s contradiction branch was a mechanism nothing called. That
+     * is the seventh time this repository has had to write that sentence, and
+     * the first time I wrote one into a module whose whole purpose is removing
+     * them; found by reading the diff rather than by a test, which is recorded
+     * rather than quietly fixed.
+     *
+     * Re-asking destroys nothing. `mayReplace` refuses an `EVIDENCE` answer
+     * replacing an `EVIDENCE` answer, so the recorded answer stands exactly
+     * where it is and the new claim keeps its own row — §17's rule that new
+     * evidence never silently overwrites old, which is why this is safe to ask
+     * at all.
+     */
+    const contradictedHere = MONETIZATION_ATTRIBUTES.filter((attribute) =>
+      input.contradicted.has(`${entry.path.id}::${attribute}`),
+    );
+    for (const attribute of [...entry.unknowns, ...contradictedHere]) {
       const history = byPathAttribute.get(`${entry.path.id}::${attribute}`) ?? [];
 
       if (history.some((one) => one.state === 'OPEN')) {
@@ -332,8 +355,24 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
         });
         continue;
       }
+      const contradicted = input.contradicted.has(`${entry.path.id}::${attribute}`);
       const last = history[history.length - 1];
-      if (last?.settledAt && input.now - Date.parse(last.settledAt) < COMMISSION_COOL_OFF_MS) {
+      /*
+       * The cool-off does not apply to a contradiction, and the reason is the
+       * cool-off's own.
+       *
+       * It exists because *the same sources will not have changed* — which is
+       * true of a question that simply went unanswered and is exactly what a
+       * contradiction refutes: something now says otherwise, and waiting a day
+       * to look at it would be waiting out a condition that has already
+       * changed. It cannot loop, because `MAX_COMMISSION_ROUNDS` still bounds
+       * it at one further asking.
+       */
+      if (
+        !contradicted &&
+        last?.settledAt &&
+        input.now - Date.parse(last.settledAt) < COMMISSION_COOL_OFF_MS
+      ) {
         declined.push({
           subject: `${entry.path.title} — ${ATTRIBUTE[attribute].label}`,
           why: 'it was researched within the last day, and the same sources will not have changed',
@@ -358,7 +397,7 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
         attribute,
         moves,
         round: history.length + 1,
-        contradicted: input.contradicted.has(`${entry.path.id}::${attribute}`),
+        contradicted,
       });
       if (!admitted) {
         declined.push({

@@ -866,26 +866,77 @@ describe('adversarial: contradiction, stale evidence and unsupported answers', (
     const answered = await pathFact(asked.pathId, asked.attribute);
     expect(answered?.kind).toBe('EVIDENCE');
 
-    const ledger = await composeLedger({ projectId });
-    const plan = allocateCommissions({
-      entries: ledger.entries,
-      rankable: ledger.entries.map(rankableOf),
-      commissions: await listCommissions({ projectId }),
-      contradicted: new Set([`${asked.pathId}::${asked.attribute}`]),
-      slots: MAX_OPEN_COMMISSIONS,
-      now: Date.now(),
-    });
     /*
-     * The attribute is answered, so it is not in `unknowns` and the allocator
-     * does not reach it — which is correct: a contradicted answer is still an
-     * answer, and re-asking it is a decision a person makes through the
-     * existing contradiction path. What must not happen is the answer being
-     * destroyed, and it is not.
+     * The rule fires, and it fires from the tick's own pass rather than from a
+     * hand-built allocation — which is the part that matters, because
+     * `contradictedAnswers` reads `research_claims.contradiction_state` itself
+     * and nothing here tells it what to find.
+     *
+     * An earlier version of this test asserted the opposite and explained why
+     * that was correct. It was not: the allocator only iterated `unknowns`, so
+     * a contradicted *answer*, which by definition has a fact, could never be
+     * reached, and `admit`'s contradiction branch was a mechanism nothing
+     * called.
      */
-    expect(await pathFact(asked.pathId, asked.attribute)).not.toBeNull();
-    expect(plan.asks.every((one) => one.pathId !== asked.pathId || one.attribute !== asked.attribute)).toBe(
-      true,
+    const reask = (await commissionsFor(asked.pathId)).find(
+      (one) => one.attribute === asked.attribute && one.round === 2,
     );
+    expect(reask).toBeTruthy();
+    expect(reask!.ruleRank).toBe(20);
+    expect(reask!.reason).toContain('contradicted');
+    expect(reask!.state).toBe('OPEN');
+
+    // And nothing recorded is destroyed by asking again.
+    expect(await pathFact(asked.pathId, asked.attribute)).not.toBeNull();
+  });
+
+  it('says a re-asked answer was held rather than that nothing was found', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+    const asked = (await tick()).opened[0]!;
+    await finishResearch({
+      candidateId: asked.candidateId,
+      claims: [{ claim: 'The published rate card lists USD 450.00.', lane: asked.attribute }],
+    });
+    await tick();
+    expect(await pathFact(asked.pathId, asked.attribute)).not.toBeNull();
+
+    /*
+     * A second asking whose research finds a source and cannot land it, because
+     * the recorded answer is of equal standing and `mayReplace` keeps it. The
+     * research did its job; saying the sources do not settle it would be a lie
+     * about a search that settled it.
+     */
+    const second = await openCommission({
+      projectId,
+      cashModeId,
+      pathId: asked.pathId,
+      attribute: asked.attribute,
+      round: 2,
+      candidateId: (
+        await createCandidate({
+          projectId,
+          visibility: 'SHARED',
+          title: 'ask again',
+          statement: 'ask again',
+        })
+      ).id,
+      reason: 'the claim behind it was contradicted',
+      ruleRank: 20,
+    });
+    await finishResearch({
+      candidateId: second.commission.candidateId,
+      claims: [{ claim: 'A different publisher lists USD 600.00.', lane: asked.attribute }],
+    });
+    await tick();
+
+    const closed = (await commissionsFor(asked.pathId)).find(
+      (one) => one.id === second.commission.id,
+    )!;
+    expect(closed.state).toBe('ANSWERED');
+    expect(closed.outcome).toContain('outranks it');
+    // The recorded answer is untouched, and both claims keep their rows.
+    expect((await pathFact(asked.pathId, asked.attribute))!.value).toContain('450');
   });
 
   it('refuses a lower authority replacing a higher one, at the repository', async () => {

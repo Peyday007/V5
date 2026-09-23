@@ -395,12 +395,13 @@ async function settleFinished(input: {
     if (state !== 'DONE' && state !== 'FAILED' && state !== 'CANCELLED') continue;
 
     const claims = orchestrationId ? await citableClaims(orchestrationId) : [];
-    const answers = await fileAnswers({
+    const filed = await fileAnswers({
       projectId: input.projectId,
       pathId: commission.pathId,
       currency: input.currency,
       claims,
     });
+    const answers = filed.recorded;
     recorded.push(...answers);
 
     /*
@@ -415,10 +416,28 @@ async function settleFinished(input: {
      * is the failure mode this file cares about most.
      */
     const hitTheAsk = answers.some((one) => one.attribute === commission.attribute);
-    const outcome = describeOutcome({ state, hitTheAsk, answers: answers.length, commission });
+    /*
+     * A claim that answered the question and was refused by authority.
+     *
+     * The research did its job: a gated claim arrived on the asked attribute,
+     * and a stronger answer — somebody's decision, or an earlier gated one —
+     * already stood there, so `mayReplace` kept it. Both claims keep their
+     * rows in `research_claims` and a reader can hold them against each other,
+     * which is exactly what re-asking a contradicted answer is for. Calling
+     * that UNRESOLVED would say the sources do not settle it, about a search
+     * that settled it.
+     */
+    const held = !hitTheAsk && filed.heldBack.includes(commission.attribute);
+    const outcome = describeOutcome({
+      state,
+      hitTheAsk,
+      held,
+      answers: answers.length,
+      commission,
+    });
     const closed = await settleCommission({
       id: commission.id,
-      state: hitTheAsk ? 'ANSWERED' : 'UNRESOLVED',
+      state: hitTheAsk || held ? 'ANSWERED' : 'UNRESOLVED',
       answered: answers.length,
       outcome,
     });
@@ -453,10 +472,17 @@ async function settleFinished(input: {
 function describeOutcome(input: {
   state: string;
   hitTheAsk: boolean;
+  held: boolean;
   answers: number;
   commission: MonetizationCommission;
 }): string {
   const label = ATTRIBUTE[input.commission.attribute].label.toLowerCase();
+  if (input.held) {
+    return (
+      `A published source answers the ${label}, and the answer already recorded here outranks ` +
+      'it, so that one stands. Both claims keep their rows and can be held against each other.'
+    );
+  }
   if (input.hitTheAsk) {
     const beside = input.answers - 1;
     return (
@@ -505,8 +531,18 @@ async function fileAnswers(input: {
   pathId: string;
   currency: string;
   claims: readonly ResearchClaim[];
-}): Promise<RecordedAnswer[]> {
+}): Promise<{ recorded: RecordedAnswer[]; heldBack: MonetizationAttribute[] }> {
   const out: RecordedAnswer[] = [];
+  /*
+   * Attributes a gated claim arrived for and could not land on.
+   *
+   * Reported rather than dropped, because the two cases read identically from
+   * the outside and are not the same fact: *nobody publishes this* and *a
+   * source answered it and a stronger answer already stands* have opposite
+   * meanings, and settling the second as the first would tell a person the
+   * research found nothing when it found exactly what it was sent for.
+   */
+  const heldBack: MonetizationAttribute[] = [];
   const taken = new Set<string>();
 
   for (const claim of input.claims) {
@@ -533,7 +569,10 @@ async function fileAnswers(input: {
     if (!claim.sourceUrl) continue;
 
     const existing = await pathFact(input.pathId, attribute);
-    if (!mayReplace(existing, 'EVIDENCE')) continue;
+    if (!mayReplace(existing, 'EVIDENCE')) {
+      heldBack.push(attribute);
+      continue;
+    }
 
     const declared = ATTRIBUTE[attribute];
     const value = clamp(claim.claim, 600);
@@ -581,7 +620,7 @@ async function fileAnswers(input: {
     taken.add(attribute);
     out.push({ pathId: input.pathId, attribute, claimId: claim.id });
   }
-  return out;
+  return { recorded: out, heldBack };
 }
 
 /**
