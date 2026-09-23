@@ -59,7 +59,7 @@ import { listDispatchesForBin } from '../../repos/bins.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
 import { gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
-import { recordCampaignOutcome } from './writeback.ts';
+import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
 import {
   acceptIntegration,
   integrationBranchDrift,
@@ -2018,6 +2018,28 @@ export async function tickAllRemoteCampaigns(): Promise<RemoteTickReport[]> {
        * second failure, so it is best-effort.
        */
       await recordTickFailure(campaign.id, message).catch(() => undefined);
+    }
+  }
+
+  /*
+   * A finished campaign is not live, so the loop above never reaches it again
+   * — and it is exactly the campaign whose writeback still has work to do: a
+   * workstream filed against it after it finished has no PULL_REQUEST
+   * attestation, and a pull request somebody merged afterwards has nobody
+   * asking the forge. `listCampaignsPendingOutcome` already says which ones,
+   * and the local `tickAllCampaigns` has always read it; this plane did not, so
+   * in production the merge observer ran for nobody and a merged request went
+   * on being shown to its owner as one to merge. Each call is idempotent by its
+   * own rows, and a failure is recorded rather than taken down with the pass.
+   */
+  const pending = await listCampaignsPendingOutcome().catch(() => []);
+  for (const campaign of pending) {
+    if (campaign.executionMode !== 'REMOTE') continue;
+    try {
+      await recordCampaignOutcome(campaign.id);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      await recordTickFailure(campaign.id, `the outcome writeback threw: ${message}`).catch(() => undefined);
     }
   }
   return reports;
