@@ -537,23 +537,47 @@ part of the suite this lane's migration and derived counter actually touch.
 
 ### 7.4 The gate on the SHA production actually serves
 
-The table above is the integrated branch. **`production` is now `901a42db`,
-and it contains this integration** — `ba5c0b2f` is an ancestor of it, checked
-with `git merge-base --is-ancestor` rather than asserted, and every file and
-symbol this lane added reads back at that tip: `088_routine_no_show_boundary.sql`
-and `pg-migrations/079_…`, `unansweredFiresByRoutine`, `no_shows_forgiven_at`,
+The table above is the integrated branch. **`production` has moved several
+times since and still contains this integration** — `ba5c0b2f` is an ancestor
+of every tip it has had, checked with `git merge-base --is-ancestor` at each
+one rather than asserted once, and every file and symbol this lane added reads
+back at the current tip: `088_routine_no_show_boundary.sql` and
+`pg-migrations/079_…`, `unansweredFiresByRoutine`, `no_shows_forgiven_at`,
 `PoolVerdict`, `accountsServing`, `role = 'VIEWER'` in
 `tests/factoryReleaseSurface.test.tsx`, and `"tests/**/*.tsx"` in
-`tsconfig.json`.
+`tsconfig.json`. The eight fleet commits are preserved with their original
+SHAs — `3ccb623d` through `e8a34b00` — rather than reimplemented, which is
+checkable with `git log f727b143..e8a34b00`.
 
-So the gate that matters is the one on **that** SHA, and it exists:
+**An earlier version of this paragraph fixed production at `901a42db`**, and
+the rows below were written against it. They are kept as the record of what
+that SHA was gated on; what follows them is the gate on the code production
+serves now.
 
 | Gate | SHA | Result |
 | --- | --- | --- |
-| `npm run typecheck` (CI) | **`901a42db`** | clean |
-| `npm test` (PostgreSQL, `postgres-suite.yml` run 369) | **`901a42db`** | **215 files / 4632 tests, all passed**, 2414s, `success` |
-| `npm run typecheck` + `npm test` + `npm run build` (`deploy.yml` `verify`) | **`901a42db`** | passed — the release job would not have run otherwise |
+| `npm run typecheck` (CI) | `901a42db` | clean |
+| `npm test` (PostgreSQL, `postgres-suite.yml` run 369) | `901a42db` | **215 files / 4632 tests, all passed**, 2414s, `success` |
+| `npm run typecheck` + `npm test` + `npm run build` (`deploy.yml` `verify`) | `901a42db` | passed — the release job would not have run otherwise |
 | `npm test` (SQLite, local) | `3d020b42`, this branch's tip | 4520 passed, 44 skipped, exit 0 |
+
+**The gate on the code production serves now**, which is `67089909`'s — every
+tip since has changed documentation only, verified as an empty diff over
+`server/`, `client/`, `scripts/`, `package.json`, `package-lock.json`,
+`Dockerfile`, `fly.toml`, `.github/`, `blueprints/` and `objectives/` rather
+than assumed from the commit subjects:
+
+| Gate | SHA | Result |
+| --- | --- | --- |
+| `npm test` (PostgreSQL, `postgres-suite.yml` run **384**) | **`67089909`** | **219 files / 4746 tests, all passed**, 2964.60s, `success` |
+| `npm run typecheck` (local) | `4d734039`, identical code | exit 0 |
+| `npm test` (SQLite, local) | `4d734039`, identical code | **218 files passed, 1 skipped; 4702 passed, 44 skipped**, 1073.20s, exit 0 |
+
+**The two suites agree, and the way they agree is the point.** SQLite runs
+4702 and skips 44; Postgres runs 4746 and skips none. 4702 + 44 = 4746, so the
+forty-four the local run skips are exactly the ones that require the second
+backend, and neither run is quietly missing a file the other has — which is
+what §25 says the second backend is for.
 
 Run 369 fired on `production`'s own push trigger, so it is the repository's
 gate answering about the repository's canonical tip on a clean runner — which
@@ -1287,7 +1311,7 @@ unfinished rows live somewhere else is a checklist that reads as finished.
 | 3 | Create the integrated tree; do not reimplement; resolve genuine conflicts | `bb6d538d` is the fleet lane merged into the closeout lane with no conflict. No fleet commit was reimplemented — the eight are preserved and `e8a34b00` is still their tip. |
 | 4 | Fix the vacuous `'READER'` fixture; verify it exercises the real denial path | §7.1. Measured against the old fixture before it was trusted: the corrected test fails on the un-fixed code and passes on the fixed. TypeScript coverage was not narrowed and `tests/**/*.tsx` was not removed from `tsconfig.json`. |
 | 5 | Run the cross-lane proof first | §7.3. |
-| 6 | Complete SQLite and Postgres gates on the **same** final SHA; reuse no old green run | §7.4. `postgres-suite.yml` run **384** on `67089909` — success. The local SQLite suite on that tree. No green run from either source branch is offered as evidence for the integrated commit. |
+| 6 | Complete SQLite and Postgres gates on the **same** final SHA; reuse no old green run | §7.4. `postgres-suite.yml` run **384** on `67089909` — 219 files / 4746 tests, success. Local SQLite on the identical code — 218 files / 4702 passed, 44 skipped, exit 0 — and the 44 it skips are exactly the 44 Postgres adds. No green run from either source branch is offered as evidence for the integrated commit. |
 | 7 | Review the four-account acceptance claim; do not convert configuration into proof | §5 and §7.5. The three categories are kept apart and the middle one is **unticked**. |
 | 8 | Update the handoff; remove stale predictions once measured | §7.2's prediction is replaced by §8.4's reading. Three stale pointers were corrected — §0, §5 and §8.1 — and each correction is recorded rather than edited away. |
 | 9 | Follow the release path to a terminal verdict, including hosted verification both sides of the restart | **Deploy 327 on `67089909`**: every step green, `PASS 234/234` before the restart and `PASS 253/253` after it — read out of the run's own step logs rather than from memory, which is how the count was found to differ. §8.2, §8.5 and §8.7 are the three runs it took and why two of them did not release. |
