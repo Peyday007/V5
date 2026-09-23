@@ -475,7 +475,9 @@ function humanDecision(
  * Claude account behind it. Routine names and states only, never a trigger ref
  * or a secret's name: those are operator depth (§34).
  */
-async function surfaceRemedy(projectId: string): Promise<string> {
+async function surfaceRemedy(
+  projectId: string,
+): Promise<{ diagnosis: string | null; remedy: string; since: string | null }> {
   const workers = new Set(
     (await listMembershipsForProject(projectId))
       .filter((one) => one.principalType === 'WORKER' && one.active)
@@ -483,7 +485,12 @@ async function surfaceRemedy(projectId: string): Promise<string> {
   );
   const serving = (await listRoutines()).filter((one) => one.workerId !== null && workers.has(one.workerId));
   if (serving.length === 0) {
-    return 'No Routine is bound to any worker that is a member of this project. An operator binds one (npm run fleet -- bind-worker) or grants an existing worker the project (npm run admin -- access grant); the bin fires on the next tick after that.';
+    return {
+      diagnosis: null,
+      remedy:
+        'No Routine is bound to any worker that is a member of this project. An operator binds one (npm run fleet -- bind-worker) or grants an existing worker the project (npm run admin -- access grant); the bin fires on the next tick after that.',
+      since: null,
+    };
   }
   const down = serving.filter((one) => one.state !== 'ENABLED');
   const reasons = new Map<string, string[]>();
@@ -494,7 +501,30 @@ async function surfaceRemedy(projectId: string): Promise<string> {
     else reasons.set(why, [routine.name]);
   }
   const listed = [...reasons.entries()].map(([why, names]) => `${names.join(', ')} (${why})`).join('; ');
-  return `Every Routine that serves this project is out of routing — ${listed}. When the reason is sessions that never checked in, the Brain connector in the Claude account behind those Routines has stopped authorizing: reconnect it there, then lift the quarantine (npm run fleet -- set-state --kind routine --to ENABLED). The bin fires on the next tick after that, with nothing else to press.`;
+  if (down.length < serving.length) {
+    return {
+      diagnosis: null,
+      remedy:
+        'At least one Routine serving this project is enabled, so the dispatcher will route to it as capacity frees; if it does not, read the bin trace (Dispatch diagnose).',
+      since: null,
+    };
+  }
+  /*
+   * The dispatcher's own sentence for this refusal is about a missing
+   * membership, and here the membership exists: printing it beside a remedy
+   * about a quarantine would be two readings of one bin that disagree. And the
+   * dispatch intent is re-stamped every tick, so its timestamp makes a
+   * condition hours old read as minutes old; when the last serving surface
+   * went out of routing is the honest age, and a quarantined Routine is not
+   * fired, so its row is not touched again after that.
+   */
+  const since = down.map((one) => one.updatedAt).sort().at(-1) ?? null;
+  const remedy = `Every Routine that serves this project is out of routing — ${listed}. When the reason is sessions that never checked in, the Brain connector in the Claude account behind those Routines has stopped authorizing: reconnect it there, then lift the quarantine (npm run fleet -- set-state --kind routine --to ENABLED). The bin fires on the next tick after that, with nothing else to press.`;
+  return {
+    diagnosis: `no enabled Routine serves this project — ${serving.length} would, and every one is out of routing`,
+    remedy,
+    since,
+  };
 }
 
 async function dispatchOf(bin: Bin): Promise<GoalWork['dispatch']> {
@@ -734,16 +764,22 @@ export async function assembleGoals(options: {
     }
     for (const bin of work) {
       if (bin.dispatch && bin.dispatch.state === 'PENDING' && bin.dispatch.waitsFor === 'OPERATOR' && !bin.workerOnIt) {
+        const surface =
+          bin.dispatch.refusal === 'NO_SURFACE_SERVES_THIS_PROJECT' && goal.projectId
+            ? await surfaceRemedy(goal.projectId)
+            : null;
+        const since = surface?.since ?? bin.dispatch.at;
         blockers.push({
-          text: `bin ${bin.binId} cannot be fired: ${bin.dispatch.refusal} — ${bin.dispatch.message ?? 'no message recorded'}`,
+          text: surface?.diagnosis
+            ? `bin ${bin.binId} cannot be fired: ${surface.diagnosis}`
+            : `bin ${bin.binId} cannot be fired: ${bin.dispatch.refusal} — ${bin.dispatch.message ?? 'no message recorded'}`,
           remedy:
-            bin.dispatch.refusal === 'NO_SURFACE_SERVES_THIS_PROJECT' && goal.projectId
-              ? await surfaceRemedy(goal.projectId)
-              : 'Brain defers it and re-checks on every fleet change; an operator makes it routable (the refusal above names how), and it fires on the next tick after that with nothing to press.',
+            surface?.remedy ??
+            'Brain defers it and re-checks on every fleet change; an operator makes it routable (the refusal above names how), and it fires on the next tick after that with nothing to press.',
           by: 'OPERATOR',
           ref: bin.binId,
-          since: bin.dispatch.at,
-          ageHours: ageHours(bin.dispatch.at, now),
+          since,
+          ageHours: ageHours(since, now),
         });
       }
       if (bin.dispatch && bin.dispatch.state === 'ABANDONED') {
