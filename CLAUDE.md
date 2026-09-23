@@ -1488,12 +1488,25 @@ for.
   completed chain behind it. Both report two numbers now, each labelled as what
   it counts, and which surfaces have actually run.
 
-`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **None of it has
-a production reading**: no four-account Factory pool has been commissioned, so
-the quarantine has never fired against a real dead surface and `STALE` has never
-been printed about a real revoked connector. The engine passing its tests says
-nothing about whether the fleet behaves this way, which is the separation Step 3
-drew and which this does not get to waive.
+`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **The quarantine
+has a production reading and the rest does not**, and that sentence used to say
+none of it did — corrected rather than edited away, because it was true when it
+was written and the rows disproved half of it on 2026-09-23. At 12:15:04,
+12:15:05, 12:16:27 and 12:16:28 the four `Airyn` Routines were taken out of
+routing, each with the recorded reason and `refusals=0`, **while five surfaces
+bound to the same worker stayed enabled and three of them held work at that
+instant**. That last clause is what makes it a reading of the repair rather than
+of an outage: under `consecutive_no_shows` any one of those arrivals would have
+cleared the counter for all nine, so the four could never have reached the
+threshold. `shouldQuarantine` is no longer a mechanism nothing calls.
+
+What still has no production reading: no four-account Factory pool has been
+commissioned, `STALE` has never been printed about a real revoked connector,
+and no fire has been routed across four accounts. The four surfaces above carry
+`caps=[]` and resolve to one worker identity, so they are research surfaces and
+not a pool. The engine passing its tests says nothing about whether the fleet
+behaves this way, which is the separation Step 3 drew and which this does not
+get to waive.
 
 ## 24. Russell is a way in, not a second brain.
 
@@ -3603,6 +3616,39 @@ remote.
   `beforeRestart: true`, `afterRestart: false`, with the image live and
   serving throughout and the served bundle checked independently of the gate.
 
+  **And that condition reached no diagnosis at all, which is this section's
+  own most-recorded defect arriving at the sentences it wrote to prevent it.**
+  §27 built `describePoolExhaustion` for the two conditions `pg-pool`
+  collapses and `describePoolerRefusal` for the pooler refusing a new client,
+  *"so the next occurrence turns into a number instead of a seventh
+  anecdote"*. Neither fired here. Brain's own pool had not timed out, so the
+  first was never reached; the marker is `ECHECKOUTTIMEOUT` rather than
+  `EMAXCONNSESSION`, so the second returned null. What a reader got was the
+  driver's bare string — and then both console reads dispatched twenty-five
+  minutes later failed identically, which is the tell that it is not about the
+  caller. **A mechanism that does not reach the condition it exists for is not
+  a mechanism**, for the eighth time in this file.
+
+  The two pooler conditions are named apart rather than folded together,
+  because they say different things about where the limit is.
+  `EMAXCONNSESSION` is *too many clients of the pooler*, refused outright.
+  `ECHECKOUTTIMEOUT` is the pooler accepting the client and then failing to
+  get **it** a database connection inside its own timeout — so the binding
+  number is the pooler's upstream pool or the database's own capacity, and a
+  database that has simply gone slow produces it too. Sending a reader to
+  count clients when the database is the thing that is unwell is the
+  cries-wolf failure one category along. What they agree on is the half that
+  matters, and it is the opposite of the other two: **raising
+  `BRAIN_DATABASE_POOL_SIZE` makes both worse.**
+
+  **The codes are matched differently, and that is a statement about the
+  evidence rather than a loosening.** `EMAXCONNSESSION` keeps its
+  code-and-marker pair because `XX000` alone is generic. `ECHECKOUTTIMEOUT`
+  was observed through a harness that printed the message and no fields, so
+  its code is **not established and is not required** — asserting `XX000` for
+  it would be a guess wearing a matcher. The marker carries the specificity in
+  both. Both functions stay pure and report; nothing acts on either string.
+
   A sentence here used to end *"whatever is actually driving the growth is
   still unmeasured"*, and it survived two rewrites that each measured it — the
   store at 316 and the statement counts at 318. It is corrected rather than
@@ -3997,6 +4043,37 @@ remote.
   tolerance, it is a removed check**, so that is the half the guard pins: the
   step must still carry an `::error::` and an `exit 1`, and must not end in
   `|| true`.
+
+- **And the Depot fallback that sentence compares itself to was matching
+  everything, which is that same rule failing at the neighbour it was named
+  after.** `flyctl` prints `Waiting for depot builder...` on **every** Depot
+  build, and the classifier's `depot builder` alternative matched it — so
+  *was this a builder failure?* answered yes for every failed deploy that used
+  Depot, whatever had actually gone wrong, and the honest branch beside it,
+  *"The deploy failed for a reason that is not the builder"*, was unreachable
+  for all of them.
+
+  Deploy 324, 2026-09-23, is the worked example and the expensive one. Depot
+  built the image successfully at 09:58:54; the deploy was refused by a health
+  check at 10:04:19 because Supabase's storage API was answering `544
+  DatabaseTimeout` and the Brain correctly refused to boot (§18); and the step
+  then printed `The Depot builder never answered` and spent a **second full
+  build and a second machine replacement, while production was down**, on a
+  builder that had done nothing wrong. It also left a false sentence about
+  Depot in the log of a run somebody reads later, which is the half this file
+  cares about most.
+
+  **The haystack is narrowed rather than the patterns**, so a real Depot
+  failure naming `depot builder` in its own error is still caught and the only
+  thing that stops matching is a line that was never evidence of anything.
+  `tests/deployBuilderClassification.test.ts` reads the alternation *and* the
+  exclusion out of the workflow rather than restating them, and models a whole
+  `deploy.txt` rather than one line — because that is what `grep` is given,
+  and it is the entire mechanism: the progress line and the real failure sit
+  in the same file, so one match anywhere decided for all of it. Four of its
+  five assertions fail against the unfixed workflow; the fifth passes both
+  ways on purpose, because a guard that only passed after the change would not
+  be a guard against losing what the change kept.
 
 - **A tolerance one line up is the same removed check, and `continue-on-error`
   is the quietest form of it.** The bullet above is about a step that must
