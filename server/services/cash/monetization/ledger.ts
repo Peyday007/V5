@@ -25,6 +25,7 @@
  */
 import { ATTRIBUTE, METHOD, MONETIZATION_ATTRIBUTES } from '../../../domain/monetization.ts';
 import { listNeeds, listOpportunities } from '../../../repos/cashPortfolio.ts';
+import { listNodes } from '../../../repos/industry.ts';
 import {
   latestSnapshots,
   listEdges,
@@ -235,6 +236,16 @@ export async function composeLedger(input: {
   const paths = await listPaths({ projectId });
   const opportunities = await listOpportunities({ projectId });
   const subjects = new Map(opportunities.map((one) => [one.id, one]));
+  /*
+   * And the industry map's own subjects, which were resolved by nothing.
+   *
+   * `subjectOf` fell back to the raw id as the title for an industry-node
+   * possibility, so a seeded one rendered `ind_eb01b182ff4640358862` where its
+   * name belongs — a generated identifier presented to a person as the name of
+   * a thing, which is §29's *status nobody can read* at a heading. One extra
+   * read for a map that is usually small, and never a second query per path.
+   */
+  const nodes = new Map((await listNodes(projectId)).map((one) => [one.id, one]));
   const recordedEdges = await listEdges(projectId);
   const snapshots = await latestSnapshots(projectId);
 
@@ -393,7 +404,7 @@ export async function composeLedger(input: {
         produces: declaration.produces,
         scaleDependent: declaration.scaleDependent,
       },
-      subject: subjectOf(path, subjects),
+      subject: subjectOf(path, subjects, nodes),
       status: reading.status,
       statusBecause: reading.because,
       answers: answersFor(facts),
@@ -475,6 +486,7 @@ function subjectKey(path: MonetizationPath): string {
 function subjectOf(
   path: MonetizationPath,
   subjects: Map<string, CashOpportunity>,
+  nodes: Map<string, { id: string; name: string }>,
 ): LedgerEntry['subject'] {
   if (path.opportunityId) {
     const found = subjects.get(path.opportunityId);
@@ -483,7 +495,14 @@ function subjectOf(
       : { id: path.opportunityId, title: path.opportunityId, kind: 'OPPORTUNITY' };
   }
   if (path.industryNodeId) {
-    return { id: path.industryNodeId, title: path.industryNodeId, kind: 'INDUSTRY_NODE' };
+    const node = nodes.get(path.industryNodeId);
+    return {
+      id: path.industryNodeId,
+      // The id as the title only where the row is genuinely gone, which is the
+      // honest reading of a dangling reference rather than a default.
+      title: node?.name ?? path.industryNodeId,
+      kind: 'INDUSTRY_NODE',
+    };
   }
   return null;
 }

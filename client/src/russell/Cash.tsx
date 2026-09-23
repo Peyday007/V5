@@ -3297,6 +3297,7 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
                     {path.movementReason ? ` ${path.movementReason}` : ''}
                   </p>
 
+                  <PathDetail pathId={pathId} />
                   {page.capabilities.mayActOnJob ? (
                     <PathJudgment pathId={pathId} status={path.status} onChanged={onChanged} />
                   ) : null}
@@ -3367,6 +3368,7 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
                               * *mechanism nothing calls* this codebase keeps
                               * correcting.
                               */}
+                            <PathDetail pathId={id} />
                             {page.capabilities.mayActOnJob ? (
                               <PathJudgment
                                 pathId={id}
@@ -3451,6 +3453,193 @@ function derivedGroups(shared: {
  * wrong stops being true — and the ledger derives *worth reconsidering* by
  * comparing the judgement's date against what has been established since.
  */
+/**
+ * Everything about one possibility that the list has no room for.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this exists at all
+ * ---------------------------------------------------------------------------
+ *
+ * An audit of the shipped ledger found a long list of things written every tick
+ * and read by nobody: how a possibility came to be in the ledger, the claim it
+ * traces to, what it was split out of, when it was last evaluated, what a
+ * proposal rests on and how uncertain it is, who recorded a judgement and
+ * through which channel, which criterion decided each rank movement, and every
+ * question Brain has ever asked about it. The per-path route that could answer
+ * all of that had existed since the ledger shipped and **no client ever called
+ * it.**
+ *
+ * That is not a missing nicety. §22 is explicit that simplification must happen
+ * through presentation rather than information destruction, and a column
+ * nothing in the product can reach is destruction with the row left behind for
+ * appearances. This is the presentation.
+ *
+ * It fetches on open rather than with the page, because it is one possibility's
+ * worth of detail behind a disclosure and loading it for all forty would be
+ * paying for forty reads nobody asked for. A failed fetch keeps the words and
+ * says so — the interface is never optimistic.
+ */
+function PathDetail({ pathId }: { pathId: string }): JSX.Element {
+  const [state, setState] = useState<
+    | { kind: 'IDLE' }
+    | { kind: 'LOADING' }
+    | { kind: 'ERROR'; because: string }
+    | { kind: 'READY'; detail: Awaited<ReturnType<typeof CashApi.pathDetail>> }
+  >({ kind: 'IDLE' });
+
+  async function open(): Promise<void> {
+    if (state.kind === 'LOADING' || state.kind === 'READY') return;
+    setState({ kind: 'LOADING' });
+    try {
+      setState({ kind: 'READY', detail: await CashApi.pathDetail(pathId) });
+    } catch (error) {
+      setState({
+        kind: 'ERROR',
+        because: error instanceof Error ? error.message : 'It could not be read.',
+      });
+    }
+  }
+
+  return (
+    <details
+      className="rs-cash-path-detail"
+      onToggle={(event) => {
+        if ((event.currentTarget as HTMLDetailsElement).open) void open();
+      }}
+    >
+      <summary>Everything recorded about this one</summary>
+      {state.kind === 'LOADING' ? <p className="rs-hint">Reading it&hellip;</p> : null}
+      {state.kind === 'ERROR' ? <p className="rs-hint">{state.because}</p> : null}
+      {state.kind === 'READY' ? (
+        <div>
+          <p className="rs-hint">
+            {/*
+              * How it came to be in the ledger. ENUMERATED means the method
+              * table produced it structurally; EVIDENCED means a source named
+              * it and it traces to that claim; SEED means a person did.
+              */}
+            {state.detail.provenance.origin === 'SEED'
+              ? 'Somebody named this one. The enumeration would not have produced it.'
+              : state.detail.provenance.origin === 'EVIDENCED'
+                ? 'A source named this way of being paid, and it traces to that claim.'
+                : 'Brain enumerated this from the shapes of transaction that structurally apply.'}
+            {state.detail.provenance.splitFromId
+              ? ' It was split out of another possibility, which still has its own row.'
+              : ''}
+            {state.detail.provenance.mergedIntoId
+              ? ' It has been merged into another one. Nothing was deleted, and the merge is one pointer that clearing reverses.'
+              : ''}
+            {state.detail.provenance.lastEvaluatedAt
+              ? ` Last evaluated ${state.detail.provenance.lastEvaluatedAt}.`
+              : ''}
+          </p>
+
+          {state.detail.facts.length > 0 ? (
+            <>
+              <h5>What is established, and what it rests on</h5>
+              <ul>
+                {state.detail.facts.map((fact) => (
+                  <li key={fact.attribute}>
+                    <strong>{fact.attribute}</strong>: {fact.value}{' '}
+                    <span className="rs-hint">
+                      {fact.kind === 'EVIDENCE'
+                        ? '(from a published source)'
+                        : fact.kind === 'PERSON'
+                          ? '(somebody decided this)'
+                          : '(Brain proposes this)'}
+                    </span>
+                    {/*
+                      * A proposal shows its basis, its assumptions and its
+                      * uncertainty, because one rendered the way a source is
+                      * rendered has told somebody a guess was checked. All
+                      * three are required to write one and none of them was
+                      * shown anywhere before this.
+                      */}
+                    {fact.basis ? <p className="rs-hint">Rests on: {fact.basis}</p> : null}
+                    {fact.assumptions ? (
+                      <p className="rs-hint">Assumes: {fact.assumptions}</p>
+                    ) : null}
+                    {fact.uncertainty ? (
+                      <p className="rs-hint">Unsure about: {fact.uncertainty}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {state.detail.questions.length > 0 ? (
+            <>
+              <h5>Every question Brain has asked about it</h5>
+              <ul>
+                {state.detail.questions.map((one) => (
+                  <li key={one.id}>
+                    <strong>{one.attribute}</strong>
+                    {one.round > 1 ? ` (round ${one.round})` : ''} &mdash; {one.state.toLowerCase()}
+                    <p className="rs-hint">{one.reason}</p>
+                    {one.outcome ? <p className="rs-hint">{one.outcome}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {state.detail.history.length > 0 ? (
+            <>
+              <h5>Every position it has held</h5>
+              <ul>
+                {state.detail.history.map((one, index) => (
+                  <li key={index}>
+                    #{one.rank}
+                    {one.previousRank === null ? ' on entering the ledger' : ` from #${one.previousRank}`}{' '}
+                    &mdash; {one.reason.toLowerCase().replace(/_/g, ' ')}
+                    {/*
+                      * The criterion that actually came out differently. The
+                      * order is lexicographic, so this is the whole reason and
+                      * nothing below it was consulted — and it was recorded
+                      * every time a rank moved and displayed nowhere.
+                      */}
+                    {one.criterion ? (
+                      <span className="rs-hint"> (on {one.criterion.toLowerCase().replace(/_/g, ' ')})</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {state.detail.toEnterTop.conditions.length > 0 ? (
+            <>
+              <h5>What would have to become true</h5>
+              <ul>
+                {state.detail.toEnterTop.conditions.map((one, index) => (
+                  <li key={index}>{one.sentence}</li>
+                ))}
+              </ul>
+            </>
+          ) : state.detail.toEnterTop.note ? (
+            <p className="rs-hint">{state.detail.toEnterTop.note}</p>
+          ) : null}
+
+          {state.detail.judgments.length > 0 ? (
+            <>
+              <h5>What anybody recorded about it</h5>
+              <ul>
+                {state.detail.judgments.map((one, index) => (
+                  <li key={index}>
+                    {one.judgment.toLowerCase()} &mdash; {one.reason}
+                    <span className="rs-hint"> ({one.createdAt})</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
 function PathJudgment({
   pathId,
   status,

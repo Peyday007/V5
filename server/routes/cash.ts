@@ -122,7 +122,13 @@ import {
   splitPath,
   unmergePath,
 } from '../services/cash/monetization/decisions.ts';
-import { getPath, snapshotsFor } from '../repos/monetization.ts';
+import {
+  commissionsFor,
+  getPath,
+  judgmentsFor,
+  pathFactsFor,
+  snapshotsFor,
+} from '../repos/monetization.ts';
 import {
   isMonetizationEdgeKind,
   isMonetizationMethod,
@@ -1501,6 +1507,32 @@ cashRouter.get(
       /** Every position it has held, oldest first. Nothing is ever removed. */
       history: await snapshotsFor(path.id),
       toEnterTop: conditionsToEnterTop(ledger, path.id),
+      /*
+       * Everything about this possibility that the ledger derives and the list
+       * has no room for.
+       *
+       * An audit of the shipped ledger found each of these written and read by
+       * nobody — `origin`, `source_claim_id`, `split_from_id`,
+       * `last_evaluated_at`, a fact's `basis`, `assumptions` and `uncertainty`,
+       * a judgement's actor and channel, a snapshot's `criterion`, and every
+       * asking Brain has ever made about it. §22 is explicit that
+       * simplification happens by **presentation** rather than by information
+       * destruction, and a column nothing can read is destruction with extra
+       * steps. This is where the presentation puts them.
+       */
+      provenance: {
+        origin: path.origin,
+        sourceClaimId: path.sourceClaimId,
+        splitFromId: path.splitFromId,
+        mergedIntoId: path.mergedIntoId,
+        lastEvaluatedAt: path.lastEvaluatedAt,
+      },
+      /** Every recorded answer with where it came from and what it rests on. */
+      facts: await pathFactsFor(path.id),
+      /** Every judgement anybody recorded, oldest first. Never deleted. */
+      judgments: await judgmentsFor(path.id),
+      /** Every question Brain has asked about it, and what came of each. */
+      questions: await commissionsFor(path.id),
     };
   }),
 );

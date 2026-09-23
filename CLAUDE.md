@@ -10234,6 +10234,133 @@ that would have chosen between them exists.**
   what is inside it and never whether it is there — §36's rule, at a new
   section.
 
+- **The ledger could not ask a single one of the questions it printed, and I
+  closed the section saying so as though it were a boundary. The correction is
+  recorded rather than quietly applied.** An audit of the shipped ledger
+  measured it: **two of the thirteen attributes had a production writer**, both
+  `RECOMMENDATION`, both carried from a figure already on the discovery.
+  `kind = 'EVIDENCE'` had never been written, `claim_id` had never been written,
+  `days` had no code path that passed it, seven of the eleven ranking criteria
+  were dead on real data, and `ACTIVE` and `WEAK` were unreachable by
+  construction. Every row read as healthy the whole time. A surface printing
+  *nothing has read a payment term for this* every tick, for ever, with nothing
+  that could ever read one, is §24's own sentence arriving at a ledger rather
+  than at a state machine — the eighth time this file has had to write it, and
+  the first time I wrote the stuck state down and called it the honest
+  boundary.
+
+  **`monetization_commissions` is an entrance, not a pipeline.** No agent, no
+  queue, no scheduler, no second evidence system. A commission creates a Russell
+  candidate and the path that already exists does all of it: `judgeCandidate`
+  asks the archive first, the compiler writes the specification,
+  `RUSSELL_MONETIZATION_ATTRIBUTE_V1` decides whether it may start,
+  `nextLaunchable` orders it at ordinal 140, the durable queue leases it,
+  `gateFragment` applies all seven evidence conditions and three separately
+  sessioned audit roles decide whether the report stands. What is new is one row
+  saying *Brain asked this, about this possibility, about this attribute, for
+  this reason* — `industry_rounds`' shape one axis along, because that table had
+  already solved the identical problem.
+
+- **The unique index is the whole concurrency design, and the allocator is
+  deliberately no protection at all.** `UNIQUE (project_id, path_id, attribute,
+  round)` with `ON CONFLICT DO NOTHING` and a read-back comparing ids. Two ticks
+  may both compute correctly that the same attribute is the decisive unknown on
+  the same path; exactly one insert matches and the loser is an ordinary
+  outcome. `allocateCommissions` is pure over a recorded snapshot so *why did
+  Brain research this* is answerable from a recorded input rather than from a
+  re-run — which is the same split `services/dispatch/router.ts` draws, and the
+  **ninth** time this codebase has needed a compare-and-swap on a value the
+  claimant does not supply. `round` is inside the key rather than beside it,
+  because a retry that shared a key with the original would be
+  indistinguishable from a duplicate.
+
+- **What cannot change a decision is not researched, and that is the sort
+  function read backwards rather than a tuning.** The order is lexicographic, so
+  two neighbours are separated by the *first* criterion they differ on and
+  `explainRanking` says in those words that nothing below it was consulted. An
+  attribute feeding only lower criteria therefore cannot move the path however
+  well it is answered. `decisiveCriteria` computes that set and `feeds()` maps
+  each attribute to what an answer could reach. It bites exactly where it
+  should: a path already separated from both neighbours at `STATUS` can only be
+  moved by something that changes its status, so asking how contested it is
+  would spend an activation on a criterion nothing will reach. A weighted
+  importance score was the alternative and is §8's invented judgement at the
+  field where it costs real capacity.
+
+- **A blocker outranks a position, deliberately.** A BLOCKED possibility ranks
+  below every live one *because* it is blocked, so a rule that reached only the
+  top of the ledger could never reach the one thing standing between it and
+  being actionable. §33 records the same ordering mistake one kernel along,
+  where decomposing a qualified opening's capital ranked behind starting the
+  map.
+
+- **An absence never becomes a negative answer, and that is a lane necessity
+  rather than a promise.** All thirteen lanes are `CONDITIONAL`. Only a
+  `REQUIRED` lane can fail a fragment, and failing this one would discard the
+  well-sourced claims beside it and turn *nobody publishes this* into a blocked
+  fragment. `CONDITIONAL` rather than `OPTIONAL` because the gate **reports** an
+  empty conditional lane, so the question stays visibly open. A
+  `NEGATIVE_EXISTENCE` claim is a real finding about the world and is never
+  recorded as an answer: *no published rate card was found*, sitting in the
+  expected-revenue field, would read to every reader and to the ranking as an
+  established answer.
+
+- **The destination is a column, never a reading.** The profile's lane ids are
+  the thirteen `MONETIZATION_ATTRIBUTES` verbatim, and a submission carrying an
+  undeclared lane is refused whole before a row is written — `FIELD_BY_LANE`'s
+  bargain one table along, and §33 records what deciding a destination by
+  matching prose costs. A `CHOICE` attribute records a declared value or
+  nothing, because a sentence stored where a choice belongs sorts as unknown
+  *and* displays as answered, which stops the question being asked while nothing
+  can read the answer. A `MONEY` attribute takes the **lowest** figure the
+  source states, for §33's reason.
+
+- **No probability came back in through the door this opened.** `rule_rank` is
+  one of four declared positions from a spaced constant and no arithmetic
+  consumes it; there is no confidence, no score and no weight on the commission,
+  in the allocator or in the selection; `probabilityOfSuccess` still refuses a
+  `RECOMMENDATION` at the repository. A test reads `commission.ts` itself,
+  because a rule stated in a comment is a claim rather than a reading.
+
+- **`recordPathFact` asks `mayReplace` itself now, and a person may revise their
+  own answer.** The statement is an upsert, so without the guard a later pass
+  could replace a gated answer with a proposal; both callers already checked,
+  correctly, and **a guard on one of several entrances is not a guard** — the
+  file's own argument about `mayAnswer`, one paragraph down. What `mayReplace`
+  does not decide, because `cash_card_facts` never needed it to, is whether an
+  authority may replace *itself*, and there it answers no for `PERSON`. Taking
+  that verbatim would have meant somebody who recorded the wrong figure could
+  never correct it, which is an escalation with no answering transition at a
+  column.
+
+- **Three things the ledger derived every tick were rendered by nobody, and one
+  transition was reachable by nothing.** The rank movement reason — which the
+  brief asks for by name — the whole per-path route carrying the position
+  history, the deciding criterion, a proposal's basis and uncertainty, the
+  judgement trail and the provenance. And `REVIVE`: the judgement control
+  rendered only inside the top five, which excludes `INVALIDATED` and `ARCHIVED`
+  by construction, so the one transition that brings a possibility back could
+  not be reached at all. §22 says simplification happens through **presentation**
+  rather than information destruction, and a column nothing in the product can
+  reach is destruction with the row left behind for appearances.
+
+- **An industry-node possibility rendered its generated id as its name**, because
+  `subjectOf` had no map to resolve one against and fell back to the id. A
+  generated identifier presented to a person as the name of a thing is §29's
+  status nobody can read, at a heading.
+
+- **The surface is one block inside the monetization section, which was the
+  explicit instruction.** A question and the possibility it is about are one
+  subject; two surfaces describing it would eventually disagree about what is
+  happening, and a person who catches that stops believing both. The work state
+  is derived on the read path from the mission the candidate launched, never
+  stored — and the branch it exists for is the one that must never read as
+  patience: a commission with no mission is `WAITING_TO_START` with the reason,
+  not *researching*. A member sees the same questions, because which questions
+  are being asked about the space is discovery; what they get instead of Brain's
+  recorded reason is the **rule** that admitted it, as a constant, because the
+  owner's sentence quotes the ledger and two of the criteria read money.
+
 ## Repository map
 
 ```
@@ -10428,6 +10555,9 @@ server/
         ledger.ts       every answer the brief asks for, composed from one read
         surface.ts      the five, the groups, and the operator's own questions
         decisions.ts    naming, judging, merging, splitting — and destroying nothing
+        commission.ts   which question is worth asking, as the sort function read backwards
+        commissionPass.ts  asking it through the machinery that already exists, and filing the answer
+        inFlight.ts     what is being researched, derived rather than stored
       readiness.ts      four people and four surfaces, counted from rows
     design/
       surfaces.ts       what can be looked at, and what each screen is about
@@ -10682,6 +10812,7 @@ tests/                  Vitest suites
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
   cashOpportunityStandard.test.ts  what is an opportunity, and whose question is whose
   monetizationLedger.test.ts   forty ways preserved, ranked, and never rounded to one
+  monetizationCommissioning.test.ts  a discovery to a moved rank, and every way it must not double-ask
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
   cashDeploymentSmoke.test.ts  the artifact booted, driven over HTTP as a person and a worker

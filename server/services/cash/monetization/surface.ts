@@ -193,7 +193,25 @@ function risksFor(entry: LedgerEntry): string[] {
   }
   for (const edge of entry.edges) {
     if (edge.kind !== 'REQUIRES' || edge.toPathId !== entry.path.id) continue;
-    out.push(edge.rationale);
+    /*
+     * A derived requirement and a recorded one read identically and are not the
+     * same fact, so each says which it is.
+     *
+     * `ledger.ts` treats only a recorded one as a blocker, correctly: a derived
+     * REQUIRES exists wherever exactly one peer produces something this method
+     * needs, and none of them is proven on day one — treating those as blockers
+     * made every possibility in a fresh ledger read BLOCKED. This list is risks
+     * rather than blockers, so both belong on it; what was wrong is that the
+     * two readers of one edge presented them alike, and a structural
+     * consequence rendered as a finding is what §21's own `source` column
+     * exists to prevent.
+     */
+    out.push(
+      edge.source === 'DERIVED'
+        ? `${edge.rationale} (a consequence of what this shape of transaction needs, ` +
+          'not something anybody established about this situation)'
+        : edge.rationale,
+    );
   }
   if (entry.margin.withheld) out.push(entry.margin.withheld);
   return out;

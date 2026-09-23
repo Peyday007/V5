@@ -549,6 +549,63 @@ export const CashApi = {
         (against ? `&b=${p(against)}` : ''),
     ),
 
+  /**
+   * Everything about one possibility, including what the list has no room for.
+   *
+   * The per-path route existed from the start and no client called it, which
+   * made it the only reader of the rank history, of a snapshot's deciding
+   * criterion, of a fact's basis and uncertainty, and of the judgement trail —
+   * so all of those were written every tick and read by nobody. §22 requires
+   * simplification to happen by presentation rather than by removing the
+   * information; this is the presentation.
+   */
+  pathDetail: (
+    pathId: string,
+  ): Promise<{
+    entry: { path: { id: string; title: string }; rank: number; statusBecause: string };
+    history: {
+      rank: number;
+      previousRank: number | null;
+      reason: string;
+      status: string;
+      criterion: string | null;
+      evaluatedAt: string;
+    }[];
+    toEnterTop: {
+      conditions: { criterion: string; label: string; now: string; needed: string; sentence: string }[];
+      against: string | null;
+      note: string | null;
+    };
+    provenance: {
+      origin: string;
+      sourceClaimId: string | null;
+      splitFromId: string | null;
+      mergedIntoId: string | null;
+      lastEvaluatedAt: string | null;
+    };
+    facts: {
+      attribute: string;
+      kind: string;
+      value: string;
+      claimId: string | null;
+      basis: string | null;
+      assumptions: string | null;
+      uncertainty: string | null;
+      updatedAt: string;
+    }[];
+    judgments: { judgment: string; reason: string; channel: string; createdAt: string }[];
+    questions: {
+      id: string;
+      attribute: string;
+      round: number;
+      state: string;
+      reason: string;
+      outcome: string | null;
+      answered: number | null;
+      openedAt: string;
+    }[];
+  }> => api(`/api/cash/monetization/paths/${p(pathId)}`),
+
   judgePath: (
     pathId: string,
     judgment: 'WATCH' | 'INVALIDATE' | 'ARCHIVE' | 'REVIVE',

@@ -4040,3 +4040,33 @@ details.rs-card > section.rs-card {
   margin: 0 0 var(--rs-space-1);
   overflow-wrap: anywhere;
 }
+
+/* Everything recorded about one possibility, behind a disclosure.
+ *
+ * §22: simplification happens by presentation rather than by removing the
+ * information. A column nothing in the product can reach is destruction with
+ * the row left behind for appearances. */
+.rs-cash-path-detail {
+  margin-top: var(--rs-space-2);
+}
+
+.rs-cash-path-detail > summary {
+  cursor: pointer;
+  font-size: var(--rs-text-sm);
+  color: var(--rs-text-muted);
+}
+
+.rs-cash-path-detail h5 {
+  margin: var(--rs-space-3) 0 var(--rs-space-1);
+  font-size: var(--rs-text-sm);
+}
+
+.rs-cash-path-detail ul {
+  margin: 0;
+  padding-inline-start: var(--rs-space-4);
+}
+
+.rs-cash-path-detail li {
+  margin-bottom: var(--rs-space-2);
+  overflow-wrap: anywhere;
+}

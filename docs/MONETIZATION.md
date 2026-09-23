@@ -358,14 +358,167 @@ even though it quotes neither.
 
 ---
 
-## 11. What this version does not do
+## 11. Brain asks its own questions
+
+**The first version of this document ended by saying it did not, and that is
+corrected here rather than edited away.** It read: *"It does not research a path
+on its own: an unanswered attribute is an unanswered attribute."* That was true
+when it was written and it was not a boundary, it was a defect. An audit of the
+shipped ledger measured what it cost:
+
+| what | reachable writer |
+| --- | --- |
+| 11 of 13 attributes | **none** |
+| `monetization_path_facts.kind = 'EVIDENCE'` | **none** |
+| `monetization_path_facts.claim_id` | **none** |
+| `monetization_path_facts.days` | **none** |
+| 7 of 11 ranking criteria | dead on real data |
+| `ACTIVE` and `WEAK` statuses | unreachable by construction |
+
+A surface that printed *nothing has read a payment term for this* every tick,
+for ever, with nothing that could ever read one, is §24's own sentence arriving
+at a ledger rather than at a state machine — and a person who reads it twice
+stops reading it.
+
+### It is an entrance, not a pipeline
+
+`monetization_commissions` is one row saying **Brain asked this, about this
+possibility, about this attribute, for this reason.** It is not an agent, a
+queue, a scheduler or a second evidence system. A commission creates a Russell
+candidate and lets the path that already exists do all of it:
+
+    allocateCommissions  →  createCandidate
+                         →  judgeCandidate       (the archive first, §13)
+                         →  compileMission        RUSSELL_MONETIZATION_ATTRIBUTE_V1
+                         →  nextLaunchable        ordinal 140
+                         →  launch                the standing authority's concurrency
+                         →  the durable queue     leases, fencing, attempts
+                         →  gateFragment          all seven evidence conditions
+                         →  three audit roles
+                         →  citableClaims         →  monetization_path_facts
+
+Every one of those is untouched and none is duplicated.
+
+### The unique index is the whole concurrency design
+
+    UNIQUE (project_id, path_id, attribute, round)
+
+with `INSERT ... ON CONFLICT DO NOTHING` and a read-back comparing ids. The
+allocator is a **pure function** over a recorded snapshot, which makes *why did
+Brain research this* answerable afterwards and makes it **useless as a safety
+mechanism** — two ticks may both decide correctly and both try. Exactly one
+insert matches; the loser reports not-created and moves on. The ninth time this
+codebase has needed a compare-and-swap on a value the claimant does not supply.
+
+`round` is inside the key rather than beside it, because a second asking is a
+different commission with its own reason and its own outcome, and collapsing
+them would make a retry indistinguishable from a duplicate.
+
+### What cannot change a decision is not researched
+
+The instruction was to prioritize by decision value and — the half that
+constrains anything — to avoid spending work on attributes whose answers cannot
+change a decision. A weighted "importance" score would be invented judgement at
+the field where it costs real research capacity, so the rule is **the sort
+function read backwards**:
+
+The order is lexicographic. Two neighbours are separated by the *first*
+criterion they differ on, and `explainRanking` says so in those words —
+*nothing below that was consulted*. So an attribute feeding only criteria below
+that one cannot move the path however well it is answered. `decisiveCriteria`
+computes exactly that set, and `feeds()` maps each attribute to the criteria an
+answer could reach.
+
+It has teeth where it should. A path already separated from both neighbours at
+`STATUS`, the first criterion, can only be moved by something that changes its
+status — a load-bearing question, or one of the four readings that can make it
+weak. Asking what it is up against competitively would be spending an
+activation on something the sort function will never reach.
+
+### Four reasons to ask, in the brief's own order
+
+| rank | rule |
+| --- | --- |
+| 10 | a blocker keeping an otherwise promising possibility out of reach |
+| 20 | the claim behind an answer that decides its position has been contradicted |
+| 30 | an unanswered question that could move something near the top |
+| 40 | a decisive contrast between two possibilities competing for one discovery |
+
+The blocker rule is **ahead of position deliberately**: a BLOCKED path ranks
+below every live one *because* it is blocked, so a rule reaching only the top of
+the ledger could never reach the one thing standing between a possibility and
+being actionable.
+
+### Bounds, and what each one is
+
+* `MAX_OPEN_COMMISSIONS = 3` — **concurrency**, not an allowance. §24 removed
+  three lifetime quotas from the standing authority and recorded why. Under the
+  industry kernel's four, because a possibility's attribute is the narrowest of
+  the three kinds of question this sprint asks.
+* One live question per possibility, so three slots do not go to three
+  attributes of one path while the rest of the ledger waits.
+* `MAX_COMMISSION_ROUNDS = 2` — a third pass against the same sources is the
+  same search again, which `repair.ts` refuses by name.
+* `COMMISSION_COOL_OFF_MS` — a day. The same sources will not have changed.
+* `NEAR_THE_TOP = 12`, deliberately wider than the five the surface shows,
+  because a question that would move number nine into number four is exactly the
+  one worth asking.
+
+### An absence never becomes a negative answer
+
+Every one of the profile's thirteen lanes is `CONDITIONAL`. Only a `REQUIRED`
+lane can fail a fragment, and failing this one would discard the well-sourced
+claims beside it and turn *nobody publishes this* into a blocked fragment.
+`CONDITIONAL` rather than `OPTIONAL` because the gate **reports** an empty
+conditional lane, so the question stays visibly open.
+
+When nothing lands on the asked attribute the commission settles `UNRESOLVED`
+with the reason, the attribute stays unknown, and the ledger goes on printing
+the question. A `NEGATIVE_EXISTENCE` claim is a real finding about the world and
+is never recorded as an answer: *no published rate card was found* in the
+expected-revenue field would read to every reader, and to the ranking, as an
+established answer.
+
+### The destination is a column, never a reading
+
+A claim answers an attribute because its `evidence_lane` **is** that attribute —
+the profile's lane ids are the thirteen `MONETIZATION_ATTRIBUTES` verbatim, and
+a submission carrying an undeclared lane is refused whole before a row is
+written. `FIELD_BY_LANE` makes the identical bargain one table along.
+
+A `CHOICE` attribute records a value from its own list or nothing at all: a
+sentence stored where a choice belongs sorts as unknown *and* displays as
+answered, which would stop the question being asked while nothing could read the
+answer. A `MONEY` attribute takes the **lowest** figure the source states, for
+§33's reason — the top of a range is the number Brain could least defend.
+
+### No probability is smuggled back in
+
+`rule_rank` is one of four declared positions from a spaced constant and no
+arithmetic anywhere consumes it. There is no confidence, no score and no weight
+on the commission, in the allocator or in the selection. `probabilityOfSuccess`
+still refuses a `RECOMMENDATION` at the repository, and a test reads
+`commission.ts` itself to keep the ordering lexicographic.
+
+### Reading it
+
+It is one block inside the monetization section — **not** a second research
+dashboard, which was the explicit instruction. It names the possibility, the
+attribute, why Brain chose it, where the work has got to and what came back.
+The work state is **derived on the read path** from the mission the candidate
+launched, never stored, and the case it exists for is the one that must never
+read as patience: a commission with no mission is `WAITING_TO_START` with the
+reason, not "researching".
+
+A member sees the same questions, because which questions are being asked about
+the possibility space is discovery (§34). What they get instead of Brain's
+recorded reason is the **rule** that admitted it, as a constant: the owner's
+sentence quotes the ledger, and two of the criteria read money.
+
+## 12. What this version does not do
 
 It records the possibility space, what is known about it, and what a person
-decided. It does not research a path on its own: an unanswered attribute is an
-unanswered attribute, and what fills one is the research machinery Cash Mode
-already has — a gated claim reaching the ledger as an `EVIDENCE` answer, or
-Brain's own proposal carrying its basis, its assumptions and what would change
-it.
+decided.
 
 Nothing here forms a view about what settling a question is **worth**, for
 `judgment.ts`'s reason. Nothing here spends, commits, contacts or publishes: the
