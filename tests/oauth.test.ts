@@ -797,7 +797,8 @@ describe('the token exchange', () => {
     expect(token.body['error']).toBe('unsupported_grant_type');
   });
 
-  it('rotates a refresh token and revokes the one it replaced', async () => {
+  /** A fresh authorization, as a connector holds it: one access and one refresh token. */
+  async function freshGrant(): Promise<{ access: string; refresh: string }> {
     const { verifier, challenge } = pkce();
     const approved = await approve(challenge);
     const first = await exchange({
@@ -807,14 +808,107 @@ describe('the token exchange', () => {
       client_id: clientId,
       code_verifier: verifier,
     });
-    const refresh = first.body['refresh_token']!;
+    return { access: first.body['access_token']!, refresh: first.body['refresh_token']! };
+  }
 
-    const second = await exchange({ grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId });
+  /** Run `fn` against the database the server is using, then let go of it. */
+  async function withDb<T>(fn: () => Promise<T>): Promise<T> {
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    try {
+      return await fn();
+    } finally {
+      await closeDatabase();
+    }
+  }
+
+  it('rotates a refresh token into a new pair', async () => {
+    const grant = await freshGrant();
+    const second = await exchange({ grant_type: 'refresh_token', refresh_token: grant.refresh, client_id: clientId });
     expect(second.status).toBe(200);
     expect(second.body['access_token']).toBeTruthy();
+    expect(second.body['refresh_token']).not.toBe(grant.refresh);
+  });
 
-    // A stolen copy is usable at most once, and its reuse is visible.
-    const reused = await exchange({ grant_type: 'refresh_token', refresh_token: refresh, client_id: clientId });
+  it('lets every session sharing one connector refresh through the same hour', async () => {
+    // The production failure, 2026-09-23: five Routines attach one connector,
+    // so their sessions present one refresh token. Before this, the first
+    // exchange revoked it and every other session was answered invalid_grant,
+    // which a client reads as "the connector needs re-authorization".
+    const grant = await freshGrant();
+    const body = { grant_type: 'refresh_token', refresh_token: grant.refresh, client_id: clientId };
+    const concurrent = await Promise.all([exchange(body), exchange(body), exchange(body)]);
+    expect(concurrent.map((r) => r.status)).toEqual([200, 200, 200]);
+    // And one that arrives a moment later, still inside the overlap.
+    const late = await exchange(body);
+    expect(late.status).toBe(200);
+    // Every pair it minted is usable.
+    for (const pair of [...concurrent, late]) {
+      expect((await callTool(pair.body['access_token']!, 'brain_whoami')).isError).toBe(false);
+    }
+  });
+
+  it('does not revoke the access token another session is still presenting', async () => {
+    const grant = await freshGrant();
+    expect((await callTool(grant.access, 'brain_whoami')).isError).toBe(false);
+    const refreshed = await exchange({ grant_type: 'refresh_token', refresh_token: grant.refresh, client_id: clientId });
+    expect(refreshed.status).toBe(200);
+    // A sibling session mid-call with the old access token keeps working until
+    // that token's own hour ends.
+    const still = await callTool(grant.access, 'brain_whoami');
+    expect(still.status).toBe(200);
+    expect(still.isError).toBe(false);
+  });
+
+  it('refuses a rotated refresh token once its overlap has ended, and records why', async () => {
+    const grant = await freshGrant();
+    const body = { grant_type: 'refresh_token', refresh_token: grant.refresh, client_id: clientId };
+    expect((await exchange(body)).status).toBe(200);
+
+    // Move the first exchange out of the window, rather than waiting for it.
+    const tokenId = await withDb(async () => {
+      const prefix = grant.refresh.slice(0, grant.refresh.indexOf('.'));
+      const row = await getDb().get<{ id: string; rotated_at: string | null }>(
+        "SELECT id, rotated_at FROM oauth_tokens WHERE kind = 'REFRESH' AND token_prefix = ?",
+        [prefix],
+      );
+      expect(row?.rotated_at).toBeTruthy();
+      expect(row).toBeTruthy();
+      await getDb().run('UPDATE oauth_tokens SET rotated_at = ? WHERE id = ?', [
+        new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        row!.id,
+      ]);
+      return row!.id;
+    });
+
+    // A stolen copy is still bounded: past the overlap it is refused.
+    const reused = await exchange(body);
+    expect(reused.status).toBe(400);
+    expect(reused.body['error']).toBe('invalid_grant');
+
+    const denied = await withDb(() =>
+      getDb().all<{ metadata: string }>(
+        "SELECT metadata FROM identity_events WHERE action = 'OAUTH_TOKEN' AND result = 'DENIED'",
+      ),
+    );
+    const reasons = denied.map((row) => JSON.parse(row.metadata) as Record<string, unknown>);
+    expect(reasons).toContainEqual(expect.objectContaining({ reason: 'ROTATED_PAST_GRACE', tokenId }));
+    // Ids and a category only — never the token itself.
+    expect(JSON.stringify(denied)).not.toContain(grant.refresh);
+  });
+
+  it('never gives a revoked refresh token an overlap', async () => {
+    // Rotation and revocation are two facts. A token somebody revoked is
+    // refused at once, however recently it was rotated.
+    const grant = await freshGrant();
+    const body = { grant_type: 'refresh_token', refresh_token: grant.refresh, client_id: clientId };
+    expect((await exchange(body)).status).toBe(200);
+    await withDb(async () => {
+      await getDb().run(
+        "UPDATE oauth_tokens SET revoked_at = ? WHERE kind = 'REFRESH' AND token_prefix = ?",
+        [new Date().toISOString(), grant.refresh.slice(0, grant.refresh.indexOf('.'))],
+      );
+    });
+    const reused = await exchange(body);
     expect(reused.status).toBe(400);
   });
 

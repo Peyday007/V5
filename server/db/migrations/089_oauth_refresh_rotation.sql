@@ -1,0 +1,19 @@
+-- When a refresh token was first exchanged, kept apart from when it was revoked.
+--
+-- Rotation used to set `revoked_at` on the presented refresh token and on the
+-- access token minted beside it. That is right for one client holding one
+-- copy, and Claude's connector is not one: every Routine and every session of
+-- an account that attaches the same connector share its credential, and they
+-- run at once. Two sessions reaching the hour together both present the same
+-- refresh token; the first rotated it, the second was answered
+-- `invalid_grant`, and the client concluded the grant was gone — "the Cloud
+-- Brain connector needs re-authorization", on a connector nobody had revoked.
+--
+-- `rotated_at` records the first exchange, and the token stays redeemable for
+-- a bounded overlap after it (RFC 9700 §4.14.2). `revoked_at` keeps meaning a
+-- decision somebody made — a worker disabled, a connection taken back — and a
+-- revoked token is never inside any overlap. Two facts, two columns.
+--
+-- Nothing is rewritten. Refresh tokens rotated under the old rule keep their
+-- `revoked_at`, which was true of them when it was written.
+ALTER TABLE oauth_tokens ADD COLUMN rotated_at TEXT;

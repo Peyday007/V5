@@ -973,6 +973,37 @@ tokens were minted by the rotation grant rather than by an authorization code
 and every one of them was then used, so a client refreshed and carried on. It
 took no longer-lived token and no permanent one.
 
+**Refresh worked for one client and broke the moment a connector had several,
+and the correction is recorded rather than quietly applied.** Rotation set
+`revoked_at` on the presented refresh token *and* on the access token minted
+beside it, which is exactly right for one client holding one copy. A Claude
+connector is not one: every Routine and every session of an account that
+attaches the same connector share one credential, and since Step 11 the fleet
+fires several of them at once — `Brain Research 1/B`, `1/C`, `1-D` and
+`Brain Worker (dispatch)` all attach the one `cloud-brain` connector. Two
+sessions reaching the hour together both present the same refresh token; the
+first rotated it, the second was answered `invalid_grant`, and a client
+answered `invalid_grant` on a refresh concludes — correctly, by the
+specification — that the grant is gone. Production, 2026-09-23 01:32:
+*"Brain Worker routine couldn't connect — the Cloud Brain connector needs
+re-authorization"*, on a connector nobody had revoked, with no deploy in flight
+and the September tool-allowlist cause long since closed. And a refused refresh
+wrote **no row at all**, so the failure could only be reasoned about.
+
+`rotated_at` (089 / pg 080) is its own column now: the first exchange is
+recorded, the token stays redeemable for `REFRESH_ROTATION_GRACE_MS` — five
+minutes, RFC 9700 §4.14.2's bounded overlap — and past it is refused as before.
+Rotation revokes nothing: the sibling access token ends within its own hour.
+`revoked_at` keeps meaning a decision somebody made, and a revoked token is
+never inside any overlap. So §22's sentence becomes *a stolen refresh token is
+usable for at most five minutes after its first use*, which is the price of a
+connector several sessions share, and every refused refresh is an
+`OAUTH_TOKEN DENIED` row naming its category. `tokenIsLive` is the one reader
+of "can this still be presented", because a rotated token is neither revoked
+nor expired and three readers asking only those two columns would have called
+it a live grant for thirty days. `tests/oauth.test.ts` fails three ways against
+the old rotation.
+
 So: one unattended worker has completed bins end to end, and the concurrency
 ramp has since run six rungs — 1, 2, 5, 10, 20, 30 — on an unblocked fleet.
 Rungs 1 to 20 completed every bin, with zero duplicate activations, zero fenced

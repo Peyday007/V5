@@ -2370,6 +2370,7 @@ async function main(): Promise<void> {
             `  client ${token.clientId}` +
             `  used ${token.lastUsedAt ?? 'never'}` +
             `  ${rotated ? `rotated from ${token.parentTokenId}` : 'from an authorization code'}` +
+            (token.rotatedAt ? `  rotated ${token.rotatedAt}` : '') +
             (token.revokedAt ? `  revoked ${token.revokedAt}` : ''),
         );
       }

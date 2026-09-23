@@ -4960,6 +4960,8 @@ export interface OAuthTokenRow {
   expires_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
+  /** When a refresh token was first exchanged. Migration 089 / pg 080. */
+  rotated_at: string | null;
   parent_token_id: string | null;
 }
 
@@ -4975,6 +4977,12 @@ export interface OAuthToken {
   expiresAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  /**
+   * When a refresh token was first exchanged. Not a revocation: it stays
+   * redeemable for `REFRESH_ROTATION_GRACE_MS` afterwards, and `tokenIsLive`
+   * is the one reader that knows that.
+   */
+  rotatedAt: string | null;
   parentTokenId: string | null;
 }
 

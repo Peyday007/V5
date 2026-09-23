@@ -64,7 +64,7 @@
 import { listConnections } from '../../repos/capacityConnections.ts';
 import { getAccount, getRoutine } from '../../repos/fleet.ts';
 import { getUser, getWorkerByName, getWorkerRouting } from '../../repos/identity.ts';
-import { listTokensForWorker } from '../../repos/oauth.ts';
+import { listTokensForWorker, tokenIsLive } from '../../repos/oauth.ts';
 import { resolveToken } from '../dispatch/fire.ts';
 import { namesFor, settleConnection } from './connection.ts';
 
@@ -128,9 +128,7 @@ export async function contributedCapacity(): Promise<ContributedCapacity> {
 
     const tokens = worker ? await listTokensForWorker(worker.id) : [];
     const at = new Date().toISOString();
-    const authorizationLive = tokens.some(
-      (token) => token.revokedAt === null && token.expiresAt > at,
-    );
+    const authorizationLive = tokens.some((token) => tokenIsLive(token, at));
 
     const because = ((): string | null => {
       if (connection.state === 'REVOKED') {

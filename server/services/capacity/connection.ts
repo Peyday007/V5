@@ -102,6 +102,7 @@ import {
   getClientByClientId,
   listTokensForWorker,
   revokeTokensForWorker,
+  tokenIsLive,
 } from '../../repos/oauth.ts';
 import { getProject } from '../../repos/projects.ts';
 import { nowIso } from '../../repos/util.ts';
@@ -555,7 +556,7 @@ function authorizationFrom(tokens: readonly OAuthToken[]): {
   expiresAt: string | null;
 } {
   const at = nowIso();
-  const alive = tokens.filter((token) => token.revokedAt === null && token.expiresAt > at);
+  const alive = tokens.filter((token) => tokenIsLive(token, at));
   const used = tokens.filter((token) => token.lastUsedAt !== null);
   return {
     live: alive.length > 0,
@@ -984,7 +985,7 @@ export async function connectionView(input: {
    * no address and no session to report. What there is, is the `client_name` a
    * client sent to `/oauth/register`, and it is reported as exactly that.
    */
-  const clientId = tokens.find((token) => token.revokedAt === null)?.clientId ?? tokens[0]?.clientId;
+  const clientId = tokens.find((token) => tokenIsLive(token))?.clientId ?? tokens[0]?.clientId;
   const client = clientId ? await getClientByClientId(clientId) : null;
 
   const membershipRow = worker

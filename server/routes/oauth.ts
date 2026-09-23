@@ -45,13 +45,13 @@ import {
   ACCESS_TOKEN_TTL_MS,
   REFRESH_TOKEN_TTL_MS,
   clientSecretMatches,
-  findLiveToken,
   getClientByClientId,
   issueAuthorizationCode,
   issueToken,
   redeemAuthorizationCode,
   registerClient,
-  revokeTokenChain,
+  findRefreshToken,
+  markRefreshRotated,
 } from '../repos/oauth.ts';
 import { getWorker, listWorkers, listMembershipsForPrincipal, recordIdentityEvent } from '../repos/identity.ts';
 import { getProject } from '../repos/projects.ts';
@@ -772,20 +772,43 @@ export function oauthRouter(): Router {
           res.status(400).json({ error: 'invalid_grant' });
           return;
         }
-        const existing = await findLiveToken(parsed.prefix, parsed.secret, 'REFRESH');
-        if (!existing || existing.clientId !== clientId) {
+        const found = await findRefreshToken(parsed.prefix, parsed.secret);
+        const refuse = async (reason: string): Promise<void> => {
+          // Recorded, because a refused refresh is the event that makes a
+          // client ask a person to re-authorize, and it used to leave no row.
+          // A category and ids only; the caller hears `invalid_grant` whatever
+          // the reason.
+          await audit({
+            action: 'OAUTH_TOKEN',
+            actor: null,
+            targetId: found.token?.workerId ?? null,
+            result: 'DENIED',
+            metadata: { clientId, grant: 'refresh_token', reason, tokenId: found.token?.id ?? null },
+          });
           res.status(400).json({ error: 'invalid_grant' });
+        };
+        if (!found.ok) {
+          await refuse(found.reason);
           return;
         }
+        if (found.token.clientId !== clientId) {
+          await refuse('CLIENT_MISMATCH');
+          return;
+        }
+        const existing = found.token;
         const worker = await getWorker(existing.workerId);
         if (!worker || worker.disabled) {
-          res.status(400).json({ error: 'invalid_grant' });
+          await refuse('WORKER_DISABLED');
           return;
         }
-        // Rotation: the presented refresh token and anything minted from it are
-        // revoked, so a stolen copy is usable at most once and its use is
-        // visible the next time the real client tries.
-        await revokeTokenChain(existing.id);
+        // Rotation: the presented refresh token is marked exchanged and stays
+        // redeemable only inside `REFRESH_ROTATION_GRACE_MS`, so every session
+        // sharing this connector's credential can refresh through the same
+        // hour without one of them answering the others `invalid_grant`. It
+        // revokes nothing — not this token, and not the access token beside
+        // it, which another session may be presenting right now and which ends
+        // within the hour by itself. See `REFRESH_ROTATION_GRACE_MS`.
+        await markRefreshRotated(existing.id);
         await issueTokenPair(res, {
           clientId,
           workerId: existing.workerId,
@@ -797,7 +820,7 @@ export function oauthRouter(): Router {
           actor: null,
           targetId: existing.workerId,
           result: 'SUCCESS',
-          metadata: { clientId, grant: 'refresh_token' },
+          metadata: { clientId, grant: 'refresh_token', rotation: found.rotation, tokenId: existing.id },
         });
         return;
       }

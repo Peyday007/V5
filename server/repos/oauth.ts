@@ -48,6 +48,29 @@ export const AUTHORIZATION_CODE_TTL_MS = 60_000;
 export const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000;
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * How long a refresh token stays redeemable after it was first rotated.
+ *
+ * Rotation used to revoke the presented refresh token outright, and that is
+ * correct for exactly one client holding exactly one copy. Claude's connector
+ * is not that: one connector's credential is shared by every Routine and every
+ * session of an account that attaches it, and those sessions run concurrently.
+ * Two of them reaching the hour at once both present the same refresh token;
+ * the first rotates it, the second is answered `invalid_grant`, and a client
+ * answered `invalid_grant` on a refresh concludes — correctly, by the
+ * specification — that the grant is gone and the connector needs a person to
+ * re-authorize it. Production, 2026-09-23: "Brain Worker routine couldn't
+ * connect — the Cloud Brain connector needs re-authorization", from a fleet of
+ * five Routines sharing one `cloud-brain` connector.
+ *
+ * A bounded overlap is RFC 9700 §4.14.2's own answer to exactly this. Inside
+ * the window a rotated token mints another pair; outside it, it is refused as
+ * before. A *revoked* token — a worker disabled, a connection taken back — is
+ * never inside any window: revocation and rotation are different facts and are
+ * recorded in different columns.
+ */
+export const REFRESH_ROTATION_GRACE_MS = 5 * 60 * 1000;
+
 /* ------------------------------------------------------------------------- */
 /* Mapping                                                                    */
 /* ------------------------------------------------------------------------- */
@@ -104,8 +127,28 @@ export function mapToken(row: OAuthTokenRow): OAuthToken {
     expiresAt: row.expires_at,
     lastUsedAt: row.last_used_at,
     revokedAt: row.revoked_at,
+    rotatedAt: row.rotated_at,
     parentTokenId: row.parent_token_id,
   };
+}
+
+/**
+ * Whether a token can still be presented, as of `at`.
+ *
+ * One reader for the question, because a rotated refresh token is neither
+ * revoked nor expired and still stops being usable once its overlap ends — a
+ * reader that asked only `revokedAt` and `expiresAt` would report a rotated
+ * token as a live grant for thirty days.
+ */
+export function tokenIsLive(token: OAuthToken, at: string = nowIso()): boolean {
+  if (token.revokedAt !== null) return false;
+  if (token.expiresAt <= at) return false;
+  if (token.rotatedAt !== null && rotationGraceEnds(token.rotatedAt) <= at) return false;
+  return true;
+}
+
+function rotationGraceEnds(rotatedAt: string): string {
+  return new Date(Date.parse(rotatedAt) + REFRESH_ROTATION_GRACE_MS).toISOString();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -367,6 +410,61 @@ export async function revokeTokensForWorker(workerId: string): Promise<number> {
 }
 
 /** Revoke a refresh token and everything minted from it. */
+/**
+ * A presented refresh token, and why it may or may not be redeemed.
+ *
+ * Distinct from `findLiveToken` because the refusal has to be *recorded* by
+ * category: a refresh that failed because a rotated token came back after its
+ * overlap and one that failed because the worker was revoked have opposite
+ * remedies, and before this nothing about a failed refresh was written down at
+ * all — which is why the connector failure could only be reasoned about.
+ * The category goes on the audit row; the caller is told `invalid_grant`
+ * either way.
+ */
+export type RefreshLookup =
+  | { ok: true; token: OAuthToken; rotation: 'FIRST_USE' | 'WITHIN_ROTATION_GRACE' }
+  | {
+      ok: false;
+      token: OAuthToken | null;
+      reason: 'UNKNOWN' | 'REVOKED' | 'EXPIRED' | 'ROTATED_PAST_GRACE';
+    };
+
+export async function findRefreshToken(prefix: string, secret: string): Promise<RefreshLookup> {
+  const row = await getDb().get<OAuthTokenRow>(
+    'SELECT * FROM oauth_tokens WHERE token_prefix = ? AND kind = ?',
+    [prefix, 'REFRESH'],
+  );
+  if (!row || !constantTimeEquals(digestSecret(secret), row.token_digest)) {
+    return { ok: false, token: null, reason: 'UNKNOWN' };
+  }
+  const token = mapToken(row);
+  const at = nowIso();
+  if (token.revokedAt !== null) return { ok: false, token, reason: 'REVOKED' };
+  if (token.expiresAt <= at) return { ok: false, token, reason: 'EXPIRED' };
+  if (token.rotatedAt === null) return { ok: true, token, rotation: 'FIRST_USE' };
+  if (rotationGraceEnds(token.rotatedAt) > at) {
+    return { ok: true, token, rotation: 'WITHIN_ROTATION_GRACE' };
+  }
+  return { ok: false, token, reason: 'ROTATED_PAST_GRACE' };
+}
+
+/**
+ * Record that a refresh token has been exchanged.
+ *
+ * Guarded on `rotated_at IS NULL`, so the first rotation's instant is the one
+ * kept: a concurrent second exchange inside the overlap cannot move the window
+ * forward and so cannot extend it. It revokes nothing — not the refresh token,
+ * and not the access token minted beside it, which another session of the same
+ * connector may be presenting at this moment and which expires within the hour
+ * on its own.
+ */
+export async function markRefreshRotated(tokenId: string): Promise<void> {
+  await getDb().run(
+    'UPDATE oauth_tokens SET rotated_at = ? WHERE id = ? AND rotated_at IS NULL',
+    [nowIso(), tokenId],
+  );
+}
+
 export async function revokeTokenChain(tokenId: string): Promise<void> {
   const now = nowIso();
   await getDb().run(
