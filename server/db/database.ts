@@ -124,6 +124,13 @@ export function hintFor(reason: string): string {
       'which is reachable over IPv4.'
     );
   }
+  if (/EAUTHQUERY/.test(reason)) {
+    return (
+      ' The pooler answered and could not check the credential in time, because it checks by ' +
+      'querying the database itself: this is the database itself answering slowly, not a wrong ' +
+      "password and not a shortage of pooler clients. Check the database's health, then try again."
+    );
+  }
   if (/password|authentication|role .* does not exist/i.test(reason)) {
     return ' The host answered, so the address is right and the credentials are not.';
   }
