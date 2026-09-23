@@ -69,7 +69,42 @@ was loosened.
 
 ## 3. Evidence
 
-<!-- EVIDENCE -->
+Every figure is from a run on the tree named beside it. The local runs used
+Node 22.22.2; the local Postgres cluster was PostgreSQL 16 with
+`max_locks_per_transaction = 1024`.
+
+| Gate | Tree | Result |
+|---|---|---|
+| Fleet-related suites, SQLite, **before any change** | `533463f` (production) | 22 files, **462 passed** |
+| Same suites, **PostgreSQL 16**, before any change | `533463f` | 22 files, **462 passed** |
+| New regressions against the unfixed code | `533463f` + tests only | **5 failed** as expected (D1 ×4, D4 separation); D2 router guard and D3 pooled guard each shown failing with only that guard removed |
+| Full suite, SQLite | `602f968` | 214 files passed / 1 skipped, **4597 passed**, 44 skipped, **0 failed** |
+| Fleet, pool, dispatch, capacity, separation, labor, cash, attribution, step12b suites, **PostgreSQL 16** (local) | `602f968` | 29 files, **752 passed** |
+| **Postgres suite, CI run 367** (`postgres-suite.yml`, clean `npm ci`) | `602f968` | **215 files, 4641 passed, 0 failed**, typecheck clean — <https://github.com/Peyday007/V5/actions/runs/35834630022> |
+| Tests that read the repository's docs | `602f968` + docs | 8 files, **355 passed** |
+| `npm run typecheck`, `npm run build` | `602f968` | clean; `index-T4sTcb6M.js` |
+
+4597 + 44 = 4641: the SQLite skips are exactly the tests that need the other
+backend, and the CI Postgres run has none.
+
+**Production-current compatibility.**
+
+* `ba5c0b2..533463f` (the puzzle kernel) touched no file under
+  `server/services/dispatch/`, `server/services/fleet/`, `server/repos/fleet.ts`,
+  `server/repos/bins.ts`, `server/services/bins/`, identity or capacity. Its
+  only migrations are `089_puzzle_kernel.sql` / pg `080_puzzle_kernel.sql`,
+  additive and numbered after the fleet lane's `088` / `079`. The unchanged
+  fleet suites passing on both backends at `533463f` is the proof that it did
+  not alter fleet semantics.
+* Production then advanced again to `901a42d` (the audit round-trip fix:
+  `repos/audits.ts`, `repos/extraction.ts`, `services/audit/context.ts`,
+  `stateEngine.ts`), touching no fleet file and no migration. It is merged into
+  this branch without conflict; the merged-tree run is below.
+* **Live, read-only:** `Fleet` run 280, `verify-pool --repository Peyday007/V5`
+  against production `533463f` — `FLEET: OK verify-pool peyday007/v5 VERIFIED
+  surfaces=1` (§4 carries the output). This change adds no migration, so the
+  deployed schema needs nothing to accept it.
+
 
 ---
 
