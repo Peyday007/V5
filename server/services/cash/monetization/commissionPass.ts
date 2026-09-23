@@ -150,14 +150,26 @@ export async function runCommissions(input: {
   const mode = await getCashMode(input.projectId);
   if (!mode) return EMPTY;
 
-  const abandoned = await abandonPutAway({
-    projectId: input.projectId,
-    ledger: input.ledger,
-  });
-
   const finished = await settleFinished({
     projectId: input.projectId,
     currency: mode.currency,
+    ledger: input.ledger,
+  });
+  /*
+   * Settling comes first, and abandoning only reaches what is *still being
+   * asked*. The order is the whole difference between two records of one
+   * event.
+   *
+   * A run that finished and a possibility archived before the next tick read
+   * it is a question that **was answered** and a possibility that was then put
+   * away. Abandoning first would record the opposite — the question never
+   * answered — and discard gated claims the activation had already been spent
+   * on, which is §5 at a settled commission. `inFlight.ts` says the condition
+   * in its own sentence: put away *while the question was still being asked*.
+   * This is what makes that true of the code rather than only of the comment.
+   */
+  const abandoned = await abandonPutAway({
+    projectId: input.projectId,
     ledger: input.ledger,
   });
   /*

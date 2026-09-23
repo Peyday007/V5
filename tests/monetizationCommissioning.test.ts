@@ -1483,3 +1483,64 @@ describe('adversarial: a possibility put away while its question is still being 
     expect(askedAgain).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Finishing and being put away are two different records of two different
+ * events, and the order the pass does them in decides which one is written.
+ *
+ * A run that completed, produced gated claims, and whose possibility was
+ * archived before the next tick read it is a question that **was answered**
+ * and a possibility that was *then* put away. Settling has to come first or
+ * the row says the opposite and the gated claims — already paid for with a
+ * real activation — are never filed onto the ledger at all.
+ */
+describe('adversarial: research that finished before the possibility was put away', () => {
+  it('records the answer it found rather than calling it abandoned', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+
+    const opened = await tick();
+    const asked = opened.opened[0]!;
+
+    // The research runs to completion and produces a gated claim on the very
+    // attribute that was asked about.
+    await finishResearch({
+      candidateId: asked.candidateId,
+      claims: [
+        {
+          claim: 'The published rate is 1.50 USD per minute.',
+          lane: asked.attribute,
+          sourceUrl: 'https://example.invalid/published-rate',
+        },
+      ],
+      missionState: 'DONE',
+    });
+
+    // Only then does somebody put the possibility away.
+    const put = await judgePath({
+      projectId,
+      pathId: asked.pathId,
+      judgment: 'ARCHIVE',
+      reason: 'decided against this one',
+      decidedByUserId: userId,
+    });
+    expect(put.ok).toBe(true);
+
+    await tick();
+
+    const row = (await listCommissions({ projectId })).find((one) => one.id === asked.commissionId);
+    /*
+     * Not ABANDONED. The question reached an answer; what happened to the
+     * possibility afterwards is a separate fact, and the ledger already
+     * records it as ARCHIVED.
+     */
+    expect(row?.state).not.toBe('ABANDONED');
+    expect(['ANSWERED', 'UNRESOLVED']).toContain(row?.state);
+
+    // And the evidence the activation was spent on reached the ledger.
+    const facts = await pathFactsFor(asked.pathId);
+    expect(facts.some((one) => one.kind === 'EVIDENCE' && one.claimId !== null)).toBe(true);
+  });
+});
