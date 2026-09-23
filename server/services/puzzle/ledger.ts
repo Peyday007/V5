@@ -46,6 +46,7 @@ import type {
 } from '../../domain/types.ts';
 import type { FormatMaturity } from './maturity.ts';
 import type { UnitEconomics } from './economics.ts';
+import { canGenerate } from './formats/index.ts';
 
 /**
  * What a route needs before anybody could earn from it.
@@ -461,6 +462,23 @@ export function readLedger(input: LedgerInput): LedgerEntry[] {
     rejected.set(one.monetizationRoute, one.statement);
   }
 
+  /*
+   * Decided once, from the map and the registry, and never from the ladder.
+   *
+   * `canGenerate` asks the directory of implementations directly — the same
+   * source `GENERATABLE` is read from — rather than `reached.includes(...)`,
+   * because the ladder is a *business* ladder that stops at its first unmet
+   * rung, so a format's position in it is not a statement about what this
+   * repository can do. That is the exact substitution the comment inside this
+   * function records costing a false line in a production report.
+   */
+  const output: OutputGap =
+    input.maturity.length === 0
+      ? 'NO_FORMAT'
+      : input.maturity.some((one) => canGenerate(one.formatKey))
+        ? 'NOT_MADE_YET'
+        : 'NO_GENERATOR';
+
   const entries: LedgerEntry[] = MONETIZATION_ROUTES.map((route) => {
     /*
      * A requirement is met if *any* format meets it, and the format that does
@@ -569,7 +587,7 @@ export function readLedger(input: LedgerInput): LedgerEntry[] {
       state,
       met,
       unmet,
-      next: nextFor(state, unmet, rejectedBecause),
+      next: nextFor(state, unmet, rejectedBecause, output),
       rejectedBecause,
       bestFormat,
     };
@@ -578,10 +596,72 @@ export function readLedger(input: LedgerInput): LedgerEntry[] {
   return entries.sort(compare);
 }
 
+/**
+ * Why `VALIDATED_OUTPUT` is unmet, which is three conditions and not one.
+ *
+ * The first version answered all three with *"That is a generator, which is a
+ * code change somebody reviews"*, and the first production reading printed it
+ * five times over a Brain holding **four working generators** — sudoku, word
+ * search, maze and cryptogram, each of which produces puzzles that pass an
+ * independent validator. What was missing was a *format on the map* to point
+ * them at, which a person seeds or the SEED_FORMATS round finds, and which was
+ * in flight at that very moment.
+ *
+ * So the report sent an operator to write code that already exists, for a
+ * condition already being answered. §24's sentence — a remedy the person
+ * cannot use is not a remedy — and §27's beside it: a warning that cries wolf
+ * teaches a reader to stop believing the one line that says what to do next.
+ *
+ * It is the same defect this file already records fixing once at this exact
+ * requirement, one layer along: *every row healthy, the arithmetic right, and
+ * the sentence about it false.* That repair made `met` read the catalog
+ * instead of the ladder; this one makes the **remedy** read it too, because a
+ * correct verdict with a false instruction under it is not an improvement.
+ */
+type OutputGap =
+  /** Nothing is on the map, so there is nothing for a generator to generate. */
+  | 'NO_FORMAT'
+  /** Formats are on the map and this repository implements none of them. */
+  | 'NO_GENERATOR'
+  /** Brain can make one and has not yet. Nobody has to do anything. */
+  | 'NOT_MADE_YET';
+
+/**
+ * A `Record` rather than a switch, so a condition added to `OutputGap` later is
+ * a compile error until somebody says what to do about it — §27's own shape,
+ * and the alternative here is worse than usual: a switch that fell through
+ * would answer the *other* generic sentence at the bottom of `nextFor`, which
+ * is exactly the silently-wrong remedy this whole repair is about.
+ */
+const OUTPUT_GAP_REMEDY: Record<OutputGap, string> = {
+  NO_FORMAT:
+    'No kind of puzzle is on the map yet, so there is nothing for a generator to make. A ' +
+    'person names one, or the question that finds them answers — and this repository already ' +
+    'implements several, so a format arriving is often the whole of what is missing.',
+  NO_GENERATOR:
+    'Formats are on the map and this repository implements none of them. That is a generator, ' +
+    'which is a code change somebody reviews.',
+  /*
+   * Deliberately short of naming a remedy, because this one splits again and
+   * the ledger cannot see the split. `maturity.ts`' VALIDATABLE rung already
+   * distinguishes them exactly — no system set up yet is a PERSON, a system
+   * whose every seed is refused is CODE and the failing checks are recorded
+   * against each — and it does so *per format*, which a route-level sentence
+   * is the wrong shape for. Asserting "nobody has to do anything" here would
+   * have been this repair's own defect one condition along.
+   */
+  NOT_MADE_YET:
+    'Brain can make one of the formats on the map and nothing has passed validation yet. ' +
+    'Whether a format is waiting on the tick to set a system up, or on a generator whose ' +
+    'seeds keep being refused, is per format — the maturity reading says which for each, ' +
+    'and the failing checks are recorded against every refused seed.',
+};
+
 function nextFor(
   state: RouteState,
   unmet: readonly RouteRequirement[],
   rejectedBecause: string | null,
+  output: OutputGap,
 ): string {
   if (state === 'ARCHIVED') {
     return `Turned down: ${rejectedBecause ?? 'no reason was recorded.'} It stays in the ledger ` +
@@ -595,8 +675,7 @@ function nextFor(
   const first = unmet[0];
   switch (first) {
     case 'VALIDATED_OUTPUT':
-      return 'No format here yet produces puzzles that pass their own checks. That is a ' +
-        'generator, which is a code change somebody reviews.';
+      return OUTPUT_GAP_REMEDY[output];
     case 'HUMAN_EDIT':
       return 'Nobody has read or played what the machine produced. One person, one sitting, ' +
         'and there is no flag that stands in for it.';

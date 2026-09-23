@@ -3958,6 +3958,122 @@ remote.
   proved on 277, where the same failing probe read `conclusion: failure` and
   both `always()` steps ran after it regardless.
 
+- **A boot that never opens the port says nothing at all, and the whole of what
+  this Brain knows about itself is printed one line after the point it did not
+  reach.** `logBanner` — the revision, the persistence, the gate, the fleet
+  target, the connection headroom §27 added precisely so a deploy log would
+  carry it — runs inside the `listen` callback. Every phase before it reports
+  only a non-zero *result*, and only after returning, so **a phase that does
+  not return is indistinguishable from a phase that did nothing.**
+
+  Production, 2026-09-23: machine `811d651c26d948` `started` since 07:20:21Z
+  with `1 total, 1 critical`, `/healthz` answering **503 after 35.5s** for over
+  an hour, and the proxy saying why — `[PR01] no known healthy instances found
+  for route tcp/443`. The log buffer held twenty-eight minutes, 07:36 to 08:04,
+  and carried **not one application line**: only proxy refusals and a single
+  `New SSH session`. That silence is the reading rather than the absence of
+  one. A process that had crashed would have been restarted and printed a
+  *second* boot; a healthy one runs a ten-second dispatch tick that logs. Alive,
+  looping nothing, port never opened — and **which of fifteen phases it was in
+  was not recorded anywhere and could not be.**
+
+  The remedy an operator reached for did not exist. `logs.yml` takes a
+  `LOG_PATTERN`, it was run with `boot`, and it answered
+  `LOGS: EXCERPT pattern=boot` / `(no line matched)`. §24's sentence at a log
+  grep: a remedy the person cannot use is not a remedy. So the prefix is the
+  word they already looked for, each phase names itself *before* it runs, and
+  the property that makes it a diagnosis is one sentence — **the last `boot:`
+  line printed is the phase that did not return.** The recompute loop names
+  each project rather than the phase, because it is the one phase whose cost is
+  unbounded in data rather than fixed in code: §27 measured a single
+  `recomputeProject` going from four minutes to over fifteen as one archive grew
+  from 373 documents to 431, and *stuck on this project, this far in* is a
+  reading where *stuck in derived state* is not.
+
+  **And the machine's own log then measured what the silence was hiding, which
+  is the reading this was written to make repeatable.** Deploy 320 captured two
+  consecutive boots of `811d651c26d948` on 2026-09-23:
+
+  | | boot A, 07:08:14 | boot B, 07:15:17 |
+  |---|---|---|
+  | 12s in | `The document store could not be checked (HTTP 544)` | — |
+  | 10s in | — | design kernel seeded |
+  | 55s in | — | `client.query() when the client is already executing a query` |
+  | 4m09s in | — | **`Brain is running`**, schema 80 |
+  | 4m21s in | — | health check passing |
+
+  So **boot takes four minutes and nine seconds to open the port, against a
+  `grace_period` of 45 seconds** — and between the design kernel at 07:15:27
+  and the banner at 07:19:26 there were **three minutes and fifty-nine seconds
+  in which the process printed one deprecation warning and nothing else.** That
+  is the window the phases above now name. §27 already recorded "about two
+  minutes in which every MCP call fails" as the cost of a restart; it is twice
+  that, it grows with the archive, and every worker fired into it finds the
+  connector dead.
+
+  **And the same run names the condition the whole window sat in, which is the
+  part worth having.** Step 13 of that deploy — the hosted verification, run
+  from inside the container — did not fail at the judge or at a timeout. It
+  could not open a database connection at all:
+
+      DatabaseConfigurationError: … could not reach
+      aws-0-us-east-2.pooler.supabase.com:5432/postgres
+      detail: (ECHECKOUTTIMEOUT) unable to check out connection from the pool
+              after 15000ms in Session mode
+
+  That is **Supabase's pooler refusing**, not a slow query, and it lines up
+  with the arithmetic §27 already wrote down from the other end: the app holds
+  ten of the pooler's fifteen session-mode clients — its banner says so on the
+  same boot, `pool ceiling 10 … 10 backend(s) connected now` — which leaves
+  five for everything else. **Counted rather than asserted:** in the twenty
+  minutes around those two boots, two `Logs` runs were live, and that
+  workflow's second job opens `psql "$BRAIN_DATABASE_URL"` against the same
+  pooler twice; a `Step 10` run was executing a script inside the container;
+  a second `Deploy` had been dispatched; and the verification this one was
+  about to run sets itself a ceiling of two. Ten plus those reaches fifteen.
+  So `544 DatabaseTimeout` at 07:08:26 is the same
+  exhaustion seen through **Supabase's storage API**, which needs a connection
+  of its own; a boot can therefore fail outright on contention nobody in this
+  repository caused, and `serveMigrationFailure` then answers **500 to every
+  path including `/healthz`** — correct, because that version is not serving
+  and a deploy must not read as successful, and it means the reason it went to
+  the trouble of serving is unreadable over HTTP, with `logs.yml` the only way
+  to it.
+
+  **What that does and does not settle.** It settles why boot A died. It does
+  **not** settle the four minutes: a boot waiting on pooler checkouts and a
+  boot grinding through per-project recomputes look identical from outside, and
+  both are consistent with every reading here. Which one it is, is exactly what
+  the phases above answer — `opening the database and applying migrations` or
+  `reaching the document store` says contention, `rebuilding derived state`
+  says recompute — and it is a fact nobody has yet. §27 refused to raise
+  `BRAIN_DATABASE_POOL_SIZE` on a hunch and the same refusal holds pointing the
+  other way: **ten of fifteen may be too large a share rather than too small a
+  one**, and that is a reading somebody should take rather than a number to
+  change here.
+
+  And pg's warning names a real site. `recomputeProjectWithin` runs
+  `Promise.all` over every layer's recompute **inside `db.transaction`**, and
+  §34 already records that a statement inside a transaction goes to that
+  transaction's pinned client rather than to the pool — so pg queues them on
+  the one client and the concurrency is fictional. It costs nothing today and
+  it is a landmine: the warning says this becomes an error in pg@9. **It is
+  recorded and deliberately not changed here**, because it is not a speed-up —
+  they are already serial — and the recompute path is exactly where those four
+  minutes go, so altering it before the phase instrumentation says which phase
+  spends them is changing the hottest path in the application on a hypothesis.
+  Read first, then change what the reading names.
+
+  **It is instrumentation and it is not a cure**, which is the half this section
+  has had to write about itself twice. Nothing boot does moves and no phase is
+  taken out of the pre-`listen()` sequence. The tempting remedy is to widen the
+  grace period, and it is refused: the grace period is not what fails here —
+  the machine survives, the check goes critical and passes the moment the port
+  opens — so widening it would hide the four minutes rather than shorten them.
+  *Instrument first, size from the reading.* On a healthy empty Brain the whole
+  sequence measures 0.6s, so the phase that spends the four minutes on a full
+  one names itself on the next boot rather than being a sixth anecdote.
+
 - **A fleet that is merely switched off said it had no routing row.** Every
   candidate was refused on its own state and `continue`d before any scope
   question was asked, so the flags those questions set stayed false and the first
@@ -10595,6 +10711,127 @@ than about reaching it.**
   reconcile, so a collision that stops the application booting arrives as a
   *successful* merge with nothing red anywhere. `deploymentOwnership` walking
   both chains is the only thing between that and a refused boot.
+
+- **A NULL is not a key, so the one question that carries no format opened
+  twice — and the pass that wrote the duplicate was told it had lost.** The
+  first production tick after the kernel was released opened
+  `pzq_b04df7d4c4574c59ad1d` and `pzq_6e4bc50e9a2046b28c52`: one project, both
+  `SEED_FORMATS`, both round 1 — one research mission and one activation spent
+  to learn what the other was already learning.
+
+  **What bounded it at two is the race window rather than the slot ceiling, and
+  an earlier draft of this paragraph said otherwise.** A *later* tick opens no
+  third round: the allocator's own filter finds a live one and declines. Two
+  exist because two passes overlapped and neither saw the other, which is
+  precisely the window a unique index is the answer to.
+  `MAX_OPEN_PUZZLE_ROUNDS` would have capped a wider race at three and had
+  nothing to do with this one.
+
+  **The allocator was not what was wrong**, and that is the point rather than an
+  exoneration. Within one pass it finds the live round and declines, because
+  `null === null` holds in JavaScript. §38 already states what is supposed to
+  catch the race between two passes — *being pure makes it useless as a safety
+  mechanism… the exclusion is the unique index* — and `089` wrote that index on
+  `format_key` and `product_class` directly, which are NULL for exactly this
+  question and therefore distinct from every other NULL on both backends. So the
+  index could not refuse the one row it most needed to refuse. §38's
+  `industry_rounds` and §39's `manufacturing_rounds` both write
+  `COALESCE(…, '-')` for this reason and both were proved on two backends; this
+  kernel was the only one of the three that did not copy it, and the sentinel is
+  now theirs verbatim so a reader comparing the three finds one rule rather than
+  three spellings.
+
+  **Nothing reported it, and writing the guard is what established why.**
+  `openPuzzleRound` reads back by the natural key and answers
+  `created: rows[0].id === id` — so with two rows present the read matches
+  **both**, `rows[0]` is the earlier one, and the pass that genuinely *did*
+  write a duplicate is told it lost. `openPuzzleAsks` then does exactly what a
+  loser should, `if (!opened.created) continue`, and writes no `cash_events`
+  row. **The project's own append-only history recorded a single opening over a
+  condition where two rounds existed**, which is why this was invisible until a
+  report printed the rounds themselves. The row count is therefore the assertion
+  that binds in `puzzleIntegrationPass`, and `created` is kept beside it as the
+  ordinary-outcome contract rather than as the proof — asserting `created` alone
+  would have been §41's vacuous guard, passing against the very defect it names.
+
+  The duplicate is renumbered rather than deleted, to the number the allocator
+  would itself have computed had its snapshot included the first: every row
+  keeps its id, its candidate, its state, its timestamps and its mission, and
+  what moves is a counter that was wrong rather than a record of what happened.
+  The ordering is `(created_at, id)` rather than `rowid`, because `dialect.ts`
+  rewrites `rowid` to `seq` and a tiebreak on a column one backend does not have
+  is §27's own recurring defect; a correlated count rather than a window
+  function, for the same reason.
+
+- **A correct verdict with a false instruction under it is not an
+  improvement.** This section already records fixing `VALIDATED_OUTPUT`'s
+  *verdict* — it asked how far up the business ladder a format had climbed,
+  which stops at its first unmet rung, so a catalog of 136 proved puzzles read
+  as none. The **remedy** beside it was left as one hardcoded sentence for three
+  different conditions: *"That is a generator, which is a code change somebody
+  reviews."* The first production reading printed it five times, over a Brain
+  holding **four working generators**, while the SEED_FORMATS round that would
+  have supplied the missing format was open at that very moment. It sent an
+  operator to write code that already exists, for a condition already being
+  answered — §24's *a remedy the person cannot use is not a remedy*, and §27's
+  cries-wolf beside it, which is what teaches a reader to stop believing the one
+  line that says what to do next.
+
+  The three conditions have three remedies and are decided from rows and the
+  registry: nothing on the map at all, so a person names a format or the
+  question that finds them answers; formats on the map that this repository
+  implements none of, which genuinely is a code change; and a format Brain can
+  make with nothing validated yet, which is **not** a code change and is the
+  answer no version of the old sentence could give.
+
+  **That third one stops short of naming a remedy, and an earlier draft of it
+  did not — the correction is recorded rather than quietly applied.** It said
+  *nobody has to do anything: the tick makes them*, which is this repair's own
+  defect one condition along, because the condition splits again:
+  `maturity.ts`' `VALIDATABLE` rung already separates *a generator exists and
+  no system has been set up from it* (a person) from *a system exists and
+  nothing it made has passed validation* (a generator, with the failing checks
+  recorded against each refused seed). It does that **per format**, which is
+  the wrong shape for a route-level sentence, so the ledger names the split and
+  sends the reader to the reading that resolves it rather than asserting past
+  what it can see.
+
+  `canGenerate` asks the directory of implementations rather than
+  `reached.includes(…)`, because the ladder's position is not a statement about
+  what this repository can do — which is the exact substitution the verdict's
+  own repair was written from, made twice at one requirement.
+
+  **And the same report contradicted itself about it, four sections apart**,
+  which is what made the finding unarguable rather than a reading: *"That is a
+  generator, which is a code change"* under five ledger routes, and
+  `PRESENT GENERATE_A_PUZZLE — 4 format(s) generate: Sudoku, Word search, Maze,
+  Cryptogram` under the capability block. One document, two answers, and the
+  wrong one under the line an operator acts on.
+
+- **"No slot is free" was not the bound, and the allocator had already written
+  down what was.** The same report's `NEXT` line read *"2 question(s) are
+  already being researched and no slot is free"* against a
+  `MAX_OPEN_PUZZLE_ROUNDS` of **three**. A slot was free. What had actually
+  stopped the pass is on `plan.declined`, in the allocator's own words and
+  naming the row — *"Already being asked: round 1 is open (pzq_…)"* — because
+  with nothing on the map the one question this kernel can ask already had a
+  live round. An operator reading the old sentence would raise the slot
+  ceiling, and a third slot would have changed nothing.
+
+  `nextAction` prints the recorded refusal now and composes none of its own.
+  §47 settled the identical question the identical way one kernel along, and
+  gave the reason: a report with its own copy of an eligibility rule is the
+  *two readers of one fact* defect, and it is always the copy nobody exercises
+  that drifts. Beside it, `MATURITY, PER FORMAT` printed a heading and nothing
+  at all when the map was empty, where every neighbouring section says why it
+  is empty — so a reader could not tell *no formats* from *this section failed
+  to render*.
+
+  **All three were found by reading one live report against the rows behind
+  it, and none of them by any test.** Every row was healthy, every count was
+  right, and three sentences about them were false — which is the shape this
+  file cares about most, arriving at the one surface whose entire job is to be
+  read.
 
 ---
 
