@@ -51,6 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
+import { followSoftwareDeliveries } from './softwareDelivery.ts';
 import {
   claimCycle,
   completeCycle,
@@ -244,6 +245,12 @@ export interface TickReport {
     expansionsSettled: number;
     problems: string[];
   };
+  /**
+   * Software changes asked for in a conversation, followed back to it: the
+   * milestones recorded this tick, and any message a crashed tick left unsaid.
+   * See `services/russell/softwareDelivery.ts`.
+   */
+  softwareDelivery: { recorded: string[]; orphansWritten: number; problems: string[] };
   /**
    * Ideas the project's own archive already answered, judged and parked without
    * anything being dispatched. §13's default outcome, and the cheapest one.
@@ -598,6 +605,7 @@ const EMPTY: TickReport = {
     },
   },
   design: { ingested: 0, learned: 0, expansionsOpened: 0, expansionsSettled: 0, problems: [] },
+  softwareDelivery: { recorded: [], orphansWritten: 0, problems: [] },
   answeredByArchive: [],
   planning: [],
   resumed: [],
@@ -1105,6 +1113,26 @@ export async function tick(owner: string): Promise<TickReport> {
      */
     for (const entry of await reconcileArguedAuditRoles(cycle.maxEventsPerCycle)) {
       report.retiredPacketWork.push(entry);
+    }
+
+    /*
+     * 1a-iv-c. Follow authorized software changes back to their conversation.
+     *
+     * Beside the other reconciliations for their reason: it is derived from
+     * rows, so it reaches a request whatever happened to the process that
+     * authorized it, and a tick that dies halfway leaves nothing a later tick
+     * cannot finish. Its own `try`, because a forge that did not answer must not
+     * stop Russell writing back a mission.
+     */
+    try {
+      const delivery = await followSoftwareDeliveries(cycle.maxEventsPerCycle);
+      for (const followed of delivery.followed) {
+        for (const kind of followed.recorded) report.softwareDelivery.recorded.push(`${followed.requestId}:${kind}`);
+        if (followed.note?.startsWith('could not follow')) report.softwareDelivery.problems.push(followed.note);
+      }
+      report.softwareDelivery.orphansWritten = delivery.orphansWritten;
+    } catch (error: unknown) {
+      report.softwareDelivery.problems.push(String(error));
     }
 
     const lineage = await recoverExecutionLineage(cycle.maxEventsPerCycle);

@@ -1855,7 +1855,17 @@ function SoftwareDecisions({
     setBusy(requestId);
     setProblem(null);
     try {
-      await RussellApi.authorizeSoftware(requestId, { grantId });
+      /*
+       * What success is travels with the decision. The server will not invent
+       * conditions and the factory will not approve a contract without them, so
+       * this card authorizes with the proposal it shows above the button —
+       * which it used to omit, and every Authorize here was refused.
+       */
+      const entry = software.find((one) => one.request.id === requestId);
+      await RussellApi.authorizeSoftware(requestId, {
+        grantId,
+        acceptanceConditions: entry?.request.acceptanceConditions ?? [],
+      });
       onAnswered();
     } catch (error) {
       setProblem(error instanceof Error ? error.message : 'That did not work.');
@@ -1898,6 +1908,16 @@ function SoftwareDecisions({
                 <p className="rs-hint">
                   Afterwards: {entry.request.expectedOutcome}
                 </p>
+                {proposed && (entry.request.acceptanceConditions ?? []).length > 0 ? (
+                  <ul className="rs-thread-software-conditions" aria-label="Done means">
+                    {(entry.request.acceptanceConditions ?? []).map((condition, index) => (
+                      <li key={index}>
+                        {condition.statement}{' '}
+                        <span className="rs-hint">Checked by: {condition.verification}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
 
                 {proposed ? (
                   <>

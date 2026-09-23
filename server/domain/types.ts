@@ -6731,8 +6731,83 @@ export interface RussellSoftwareRequest {
   campaignId: string | null;
   authorizedByUserId: string | null;
   declineReason: string | null;
+  /**
+   * What "done" means, shown before anybody authorizes and passed to the
+   * contract when they do. Proposed by the worker that read the conversation,
+   * or derived from the expected outcome when it proposed none — never empty,
+   * because the factory refuses to approve a contract with no conditions.
+   */
+  acceptanceConditions: SoftwareAcceptanceCondition[];
+  /** The one behaviour Brain confirms in production after a release, if any. */
+  liveCheck: SoftwareLiveCheck | null;
+  /** When the forge was last asked about this request's release. */
+  deliveryPolledAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SoftwareAcceptanceCondition {
+  statement: string;
+  verification: string;
+}
+
+/**
+ * A path on this Brain's own origin and text it must serve once the change is
+ * live. Brain supplies the host — its own — and never a caller.
+ */
+export interface SoftwareLiveCheck {
+  path: string;
+  contains: string;
+}
+
+/**
+ * What happened to a software request after it was authorized, once each.
+ *
+ * A closed set, and each kind is written by exactly one transition in
+ * `services/russell/softwareDelivery.ts`.
+ */
+export const SOFTWARE_DELIVERY_KINDS = [
+  'STARTED',
+  'STAGE',
+  'BLOCKED',
+  'CANCELLED',
+  'RELEASE_READY',
+  'CHECKS',
+  'RELEASE_REFUSED',
+  'CLOSED_UNMERGED',
+  'MERGED',
+  'DEPLOYED',
+  'DEPLOY_UNOBSERVABLE',
+  'LIVE_VERIFIED',
+  'LIVE_CHECK_FAILED',
+  'RELEASED',
+] as const;
+export type SoftwareDeliveryKind = (typeof SOFTWARE_DELIVERY_KINDS)[number];
+
+export interface SoftwareDeliveryMilestone {
+  id: string;
+  requestId: string;
+  conversationId: string;
+  milestoneKey: string;
+  kind: SoftwareDeliveryKind;
+  detail: Record<string, unknown>;
+  messageId: string | null;
+  actorType: 'BRAIN' | 'PERSON';
+  actorId: string | null;
+  observedAt: string;
+}
+
+export interface SoftwareDeliveryMilestoneRow {
+  id: string;
+  request_id: string;
+  conversation_id: string;
+  milestone_key: string;
+  kind: string;
+  detail: string;
+  message_id: string | null;
+  actor_type: string;
+  actor_id: string | null;
+  observed_at: string;
 }
 
 export interface RussellSoftwareRequestRow {
@@ -6753,6 +6828,9 @@ export interface RussellSoftwareRequestRow {
   campaign_id: string | null;
   authorized_by_user_id: string | null;
   decline_reason: string | null;
+  acceptance_conditions: string | null;
+  live_check: string | null;
+  delivery_polled_at: string | null;
   created_at: string;
   updated_at: string;
 }

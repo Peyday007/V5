@@ -26,6 +26,11 @@ import { newId, nowIso, parseJson, toJson } from './util.ts';
 import type {
   RussellSoftwareRequest,
   RussellSoftwareRequestRow,
+  SoftwareAcceptanceCondition,
+  SoftwareDeliveryKind,
+  SoftwareDeliveryMilestone,
+  SoftwareDeliveryMilestoneRow,
+  SoftwareLiveCheck,
   SoftwareRequestState,
 } from '../domain/types.ts';
 
@@ -48,6 +53,11 @@ function toRequest(row: RussellSoftwareRequestRow): RussellSoftwareRequest {
     campaignId: row.campaign_id,
     authorizedByUserId: row.authorized_by_user_id,
     declineReason: row.decline_reason,
+    acceptanceConditions: row.acceptance_conditions
+      ? parseJson<SoftwareAcceptanceCondition[]>(row.acceptance_conditions, [])
+      : [],
+    liveCheck: row.live_check ? parseJson<SoftwareLiveCheck | null>(row.live_check, null) : null,
+    deliveryPolledAt: row.delivery_polled_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -68,6 +78,8 @@ export async function captureSoftwareRequest(input: {
   objective: string;
   expectedOutcome: string;
   submissionKey: string;
+  acceptanceConditions?: SoftwareAcceptanceCondition[];
+  liveCheck?: SoftwareLiveCheck | null;
 }): Promise<{ request: RussellSoftwareRequest; created: boolean }> {
   const existing = await getDb().get<RussellSoftwareRequestRow>(
     'SELECT * FROM russell_software_requests WHERE project_id = ? AND submission_key = ?',
@@ -83,9 +95,10 @@ export async function captureSoftwareRequest(input: {
          (id, project_id, conversation_id, message_id, title, objective, expected_outcome,
           grant_id, repository_id, base_branch, requested_scope, submission_key, state,
           change_request_id, campaign_id, authorized_by_user_id, decline_reason,
+          acceptance_conditions, live_check, delivery_polled_at,
           created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, 'PROPOSED',
-               NULL, NULL, NULL, NULL, ?, ?)`,
+               NULL, NULL, NULL, NULL, ?, ?, NULL, ?, ?)`,
       [
         id,
         input.projectId,
@@ -95,6 +108,8 @@ export async function captureSoftwareRequest(input: {
         input.objective,
         input.expectedOutcome,
         input.submissionKey,
+        toJson(input.acceptanceConditions ?? []),
+        input.liveCheck ? toJson(input.liveCheck) : null,
         at,
         at,
       ],
@@ -235,5 +250,149 @@ export async function declineSoftwareRequest(input: {
       WHERE id = ? AND state = 'PROPOSED'`,
     [input.reason, input.userId, nowIso(), input.id],
   );
+  return result.changes === 1;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Delivery: what happened after a request was authorized                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Authorized requests whose delivery is still being followed.
+ *
+ * A request stops being followed when a terminal milestone exists for it — the
+ * person refused the release, the pull request closed unmerged, the campaign was
+ * cancelled, or the release was confirmed (or could not be observed). Everything
+ * else is re-read on every tick, which is what reaches a request a crashed tick
+ * left halfway.
+ */
+export async function listFollowedSoftwareRequests(limit: number): Promise<RussellSoftwareRequest[]> {
+  const rows = await getDb().all<RussellSoftwareRequestRow>(
+    `SELECT * FROM russell_software_requests r
+      WHERE r.state = 'AUTHORIZED' AND r.campaign_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM software_delivery_milestones m
+           WHERE m.request_id = r.id
+             AND m.kind IN ('RELEASE_REFUSED', 'CLOSED_UNMERGED', 'CANCELLED',
+                            'LIVE_VERIFIED', 'RELEASED', 'DEPLOY_UNOBSERVABLE')
+        )
+      ORDER BY r.updated_at, r.id
+      LIMIT ?`,
+    [limit],
+  );
+  return rows.map(toRequest);
+}
+
+function toMilestone(row: SoftwareDeliveryMilestoneRow): SoftwareDeliveryMilestone {
+  return {
+    id: row.id,
+    requestId: row.request_id,
+    conversationId: row.conversation_id,
+    milestoneKey: row.milestone_key,
+    kind: row.kind as SoftwareDeliveryKind,
+    detail: parseJson<Record<string, unknown>>(row.detail, {}),
+    messageId: row.message_id,
+    actorType: row.actor_type === 'PERSON' ? 'PERSON' : 'BRAIN',
+    actorId: row.actor_id,
+    observedAt: row.observed_at,
+  };
+}
+
+/**
+ * Record one milestone, once.
+ *
+ * `ON CONFLICT DO NOTHING` against `(request_id, milestone_key)` is the whole
+ * guarantee: of any number of ticks or instances that observe the same fact,
+ * exactly one inserts, and only that one is told `created: true` — which is what
+ * decides who writes the conversation message.
+ */
+export async function recordDeliveryMilestone(input: {
+  requestId: string;
+  conversationId: string;
+  milestoneKey: string;
+  kind: SoftwareDeliveryKind;
+  detail: Record<string, unknown>;
+  actorType?: 'BRAIN' | 'PERSON';
+  actorId?: string | null;
+}): Promise<{ milestone: SoftwareDeliveryMilestone; created: boolean }> {
+  const id = newId('sdm');
+  const result = await getDb().run(
+    `INSERT INTO software_delivery_milestones
+       (id, request_id, conversation_id, milestone_key, kind, detail, message_id,
+        actor_type, actor_id, observed_at)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+     ON CONFLICT (request_id, milestone_key) DO NOTHING`,
+    [
+      id,
+      input.requestId,
+      input.conversationId,
+      input.milestoneKey,
+      input.kind,
+      toJson(input.detail),
+      input.actorType ?? 'BRAIN',
+      input.actorId ?? null,
+      nowIso(),
+    ],
+  );
+  const row = await getDb().get<SoftwareDeliveryMilestoneRow>(
+    'SELECT * FROM software_delivery_milestones WHERE request_id = ? AND milestone_key = ?',
+    [input.requestId, input.milestoneKey],
+  );
+  if (!row) throw new Error('A delivery milestone could not be written and none was found.');
+  return { milestone: toMilestone(row), created: result.changes === 1 && row.id === id };
+}
+
+/** Attach the conversation message a milestone produced, once. */
+export async function attachMilestoneMessage(milestoneId: string, messageId: string): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE software_delivery_milestones SET message_id = ?
+      WHERE id = ? AND message_id IS NULL`,
+    [messageId, milestoneId],
+  );
+  return result.changes === 1;
+}
+
+export async function listDeliveryMilestones(requestId: string): Promise<SoftwareDeliveryMilestone[]> {
+  const rows = await getDb().all<SoftwareDeliveryMilestoneRow>(
+    `SELECT * FROM software_delivery_milestones WHERE request_id = ?
+      ORDER BY observed_at, id`,
+    [requestId],
+  );
+  return rows.map(toMilestone);
+}
+
+/** Milestones whose message a crashed tick never wrote. */
+export async function milestonesAwaitingMessage(limit: number): Promise<SoftwareDeliveryMilestone[]> {
+  const rows = await getDb().all<SoftwareDeliveryMilestoneRow>(
+    `SELECT * FROM software_delivery_milestones
+      WHERE message_id IS NULL AND kind <> 'CHECKS'
+      ORDER BY observed_at, id LIMIT ?`,
+    [limit],
+  );
+  return rows.map(toMilestone);
+}
+
+/**
+ * Claim the right to ask the forge about this request now.
+ *
+ * Guarded on the value that was read, so two ticks cannot both spend a forge
+ * call on one request inside the interval.
+ */
+export async function claimDeliveryPoll(input: {
+  requestId: string;
+  previous: string | null;
+  at: string;
+}): Promise<boolean> {
+  const result = input.previous === null
+    ? await getDb().run(
+        `UPDATE russell_software_requests SET delivery_polled_at = ?
+          WHERE id = ? AND delivery_polled_at IS NULL`,
+        [input.at, input.requestId],
+      )
+    : await getDb().run(
+        `UPDATE russell_software_requests SET delivery_polled_at = ?
+          WHERE id = ? AND delivery_polled_at = ?`,
+        [input.at, input.requestId, input.previous],
+      );
   return result.changes === 1;
 }

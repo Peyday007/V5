@@ -95,7 +95,43 @@ export interface ValidatedProposal {
    * repositories this project was actually given, and the scope comes with the
    * choice.
    */
-  software: { title: string; objective: string; expectedOutcome: string } | null;
+  software: {
+    title: string;
+    objective: string;
+    expectedOutcome: string;
+    /**
+     * What "done" means, in words a person can check before saying yes.
+     *
+     * Optional in the proposal and never empty on the row: when a worker
+     * proposes none, `captureSoftwareChange` derives one from the expected
+     * outcome, because the factory refuses — correctly — to approve a contract
+     * with no conditions, and an Authorize that always fails is a control that
+     * pretends.
+     */
+    acceptanceConditions: { statement: string; verification: string }[];
+    /**
+     * The one behaviour Brain confirms in production after a release: a path on
+     * Brain's own origin and text it must serve. A path, never a host.
+     */
+    liveCheck: { path: string; contains: string } | null;
+  } | null;
+}
+
+/** At most this many conditions: a card nobody reads to the end is not a decision. */
+export const MAX_SOFTWARE_CONDITIONS = 6;
+
+/**
+ * A live-check path: absolute, on Brain's own origin, with nothing that could
+ * climb, redirect or name a host. Brain composes the URL; the proposal supplies
+ * only this.
+ */
+export function validLiveCheckPath(path: string): boolean {
+  return (
+    /^\/[A-Za-z0-9._~\/-]*$/.test(path) &&
+    !path.startsWith('//') &&
+    !path.split('/').some((part) => part === '..' || part === '.') &&
+    path.length <= 200
+  );
 }
 
 export interface ProposalRefusal {
@@ -420,7 +456,58 @@ export function validateProposal(input: {
         'an expected outcome has to say what a person would see differently afterwards',
       );
     }
-    software = { title, objective, expectedOutcome };
+    const conditions: { statement: string; verification: string }[] = [];
+    const rawConditions = record['acceptanceConditions'];
+    if (rawConditions !== undefined && rawConditions !== null) {
+      if (!Array.isArray(rawConditions) || rawConditions.length > MAX_SOFTWARE_CONDITIONS) {
+        return refuse(
+          'MISSING_REQUIRED_PART',
+          `acceptance conditions are a list of at most ${MAX_SOFTWARE_CONDITIONS}`,
+        );
+      }
+      for (const entry of rawConditions) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          return refuse('MISSING_REQUIRED_PART', 'an acceptance condition was not readable');
+        }
+        const condition = entry as Record<string, unknown>;
+        const statement = text(condition['statement'], 500);
+        const verification = text(condition['verification'], 500);
+        /*
+         * The contract's own minimums, asked here so a card is never shown that
+         * the contract would refuse in front of somebody who already said yes.
+         */
+        if (!statement || statement.length < 8 || !verification || verification.length < 4) {
+          return refuse(
+            'MISSING_REQUIRED_PART',
+            'an acceptance condition needs a statement and a way to check it',
+          );
+        }
+        conditions.push({ statement, verification });
+      }
+    }
+    let liveCheck: { path: string; contains: string } | null = null;
+    const rawLive = record['liveCheck'];
+    if (rawLive !== undefined && rawLive !== null) {
+      if (typeof rawLive !== 'object' || Array.isArray(rawLive)) {
+        return refuse('MISSING_REQUIRED_PART', 'the live check was not readable');
+      }
+      const live = rawLive as Record<string, unknown>;
+      const path = text(live['path'], 200);
+      const contains = text(live['contains'], 200);
+      if (!path || !validLiveCheckPath(path) || !contains || contains.length < 3) {
+        /*
+         * A host, a scheme, a climb or an empty needle refuses the whole
+         * proposal rather than dropping the check: a check that silently went
+         * missing is a release that silently went unverified.
+         */
+        return refuse(
+          'MISSING_REQUIRED_PART',
+          'a live check is a path on this Brain (starting with /) and text of at least three characters it must serve',
+        );
+      }
+      liveCheck = { path, contains };
+    }
+    software = { title, objective, expectedOutcome, acceptanceConditions: conditions, liveCheck };
   }
 
   // Actions that cannot be carried out without the part they act on. Checked
