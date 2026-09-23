@@ -10351,6 +10351,55 @@ crosswords — the largest syndication market in this trade and the one format
 here that cannot be generated. Both are reported as MISSING with what they
 would take, rather than existing as tables nothing could honestly fill.
 
+**Landing it on production found two more, neither of them the kernel's, and
+both the same shape one altitude out: a rule that was about the file rather
+than about reaching it.**
+
+- **A report with no door is a reading nobody can take.**
+  `scripts/puzzle-report.sh` shipped correct and unreachable. §39's rule had
+  already been generalised over `scripts/*.sh` — one pooler client, the serving
+  revision — and every one of those rules is about what a script does *when
+  something runs it*. Nothing ran this one: the rows that matter are the
+  deployed Brain's, and the only door into that container is a workflow. The
+  whole suite passed. `puzzle-report.yml` is the door, and the guard is the
+  durable half: every `*-report.sh` must be invoked by some workflow, every such
+  workflow must check that script's own `: OK` marker, and the script must print
+  what they look for. It found a second defect on its first run —
+  `closeout-report.yml` greped `^PACKET-REPORT`, which `PACKET-REPORT: FAILED`
+  also matches, and that step merges stderr into the file it greps, so the check
+  went green on the one outcome it exists to catch. **A marker that matches its
+  own failure is worse than no marker**, because the tick above it is read as
+  evidence.
+
+- **A test that wins a race on an idle machine is a test that fails on a
+  runner.** `laborSurface` asserted a reason reached the screen with
+  `getByText(/human interface/)`; two sections say it, `getByText` throws on two
+  matches, and the assertion passed only while it ran *before* the second
+  section re-rendered. Deploys 316 and 317 both failed there with the deploy job
+  skipped, while the same commit passed locally on every run — including three
+  consecutive ones taken while diagnosing it. It is §33's *a test that hopes for
+  a race is a flake* in the direction that costs most: **not a flake that
+  sometimes goes red, but one that is green on the machine where it is written
+  and red on the machine that gates the release** — so nothing could deploy at
+  all, three commits sat unreleased, and the branch and the running image
+  disagreed with nothing saying so.
+
+  **Two sessions found it independently and the one on `production` ships**,
+  which is §37's own rule about a number that landed first. Theirs scopes the
+  query to the roles section; mine waited for the settled state first. Both are
+  correct and the second is not worth a second mechanism, so it went.
+
+  What did not overlap is the half worth keeping, and it is the reason to write
+  this down rather than defer silently: their fix **preserves a comment that has
+  never been true**. It claims the backing is `PERSON` "because somebody
+  answered the question", and no assertion there has ever read the backing —
+  `/human interface/` did not, and the `not.toBe('RESEARCH')` below it is
+  satisfied by `ASSERTED` and `PERSON` alike. It is `ASSERTED`, and the product
+  is right: recording *who produces* a task writes an allocation, not a
+  necessity answer. **An assertion weak enough to pass either way is what lets
+  the comment beside it drift**, which is this file's most-recorded defect
+  wearing its smallest clothes.
+
 ---
 
 ## Repository map
@@ -10784,6 +10833,8 @@ scripts/
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
   puzzle-report.sh          the same, inside the deployed container, on one connection
+                            (reached by .github/workflows/puzzle-report.yml, which
+                            checks the marker it prints)
   admin.ts                  emergency administration, on a terminal rather than a page
   step12a-acceptance.ts     the nineteen gates, from rows; exit 0 only if all PASS
   fleet.ts                  the operator's fleet surface: register, target, explain, verify a pool
