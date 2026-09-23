@@ -1145,6 +1145,24 @@ describe('the operating pass as the tick calls it', () => {
       dependentWork: [],
       validations: { started: [], settled: [] },
       authority: { took: [], withheld: [] },
+      /*
+       * The possibility ledger reports nothing too, and that is the assertion
+       * rather than an addition to it: `enumeratePossibilities` and
+       * `recordMovements` both run on every pass, and a project with no sprint
+       * must come out of them having written no path, no snapshot and no
+       * evaluation timestamp.
+       */
+      monetization: {
+        pathsAdded: [],
+        figuresCarried: [],
+        evidenced: [],
+        moved: 0,
+        evaluated: 0,
+        // A project with no sprint asks nothing and settles nothing. Reported
+        // as an empty pass rather than omitted, because the shape of what
+        // `operate` returns is the contract every reader is written against.
+        commissions: { opened: [], recorded: [], settled: [], declined: [], openNow: 0 },
+      },
     });
   });
 });

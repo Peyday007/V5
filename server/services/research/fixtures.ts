@@ -131,6 +131,7 @@ function claim(input: {
     claimType: input.type ?? 'SOURCED_FACT',
     primarySource: input.primary ?? true,
     searchedRepositories: [],
+    monetizationMethod: null,
     capabilityFinding: null,
     capabilitySubject: null,
     capabilityObservedOn: null,

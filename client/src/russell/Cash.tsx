@@ -268,6 +268,15 @@ export function CashView_({
       <Decisions page={page} projectId={rootId} onChanged={view.reload} />
       <YourWork page={page} onChanged={view.reload} />
       <BestOpportunities page={page} onChanged={view.reload} />
+      {/*
+        * How each of those could actually be monetized, in full.
+        *
+        * Directly under the best openings because the two answer consecutive
+        * questions — *which discovery* and *which way of being paid from it* —
+        * and because the possibility space is the thing this section exists to
+        * stop being collapsed into one answer at promotion.
+        */}
+      <Monetization page={page} onChanged={view.reload} />
       <MoneyRow page={page} />
       <Details page={page} onChanged={view.reload} />
       {/*
@@ -2993,3 +3002,799 @@ function Lifecycle({
 }
 
 export { CashView_ as CashSection };
+
+/**
+ * The monetization possibility ledger, as a person reads it.
+ *
+ * ---------------------------------------------------------------------------
+ * The five are a view and the section says so
+ * ---------------------------------------------------------------------------
+ *
+ * The brief's own instruction is that reducing forty possibilities to five and
+ * forgetting the rest is the failure. So the count of the whole space is on the
+ * screen beside the five, the disclosure under them carries every group with
+ * its own count, and there is no branch here that drops a path: a possibility
+ * that is invalidated, archived, weak or unproven is rendered with its reason,
+ * because what made one of those wrong is a fact and a fact can stop being
+ * true.
+ *
+ * ---------------------------------------------------------------------------
+ * One section, two roles
+ * ---------------------------------------------------------------------------
+ *
+ * Everything structural — which possibilities exist, where each stands, where
+ * it ranks, which of its questions are open, how much of it rests on a source —
+ * comes from `page.frontier.monetization`, which is the **same object the
+ * server builds for a member**. The figures, the risks quoted from answers and
+ * the full ranking sentences come from `page.full`, which a member's payload
+ * does not contain at all. A permission changes what is inside this section and
+ * never whether it is here.
+ *
+ * Nothing is derived here. The ranking, the status, the margin and the reason
+ * one path outranks another are all the server's, for §29's reason: a client
+ * deriving any of them would be a second opinion about one ledger.
+ */
+/**
+ * What Brain is researching about the possibility space, and what came back.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it is here and not on a page of its own
+ * ---------------------------------------------------------------------------
+ *
+ * The instruction was explicit: show what is being researched, which path and
+ * attribute it serves, why it was selected, its work state, what changed and
+ * whether the rank moved — and **do not create a second research dashboard.**
+ * A question and the possibility it is about are one subject. Two surfaces
+ * describing it would eventually disagree, and §29 records what that costs: a
+ * person stops believing both.
+ *
+ * So it sits inside the monetization section, under the five and above the
+ * whole space, which is exactly where a reader is already looking when they
+ * ask *why is that one still unproven*.
+ *
+ * ---------------------------------------------------------------------------
+ * One block, two roles
+ * ---------------------------------------------------------------------------
+ *
+ * The questions themselves come from `page.frontier.monetization.questions` —
+ * the **same object the server builds for a member** — because which questions
+ * are being asked about the space is discovery (§34). What the owner
+ * additionally gets is the recorded reason in Brain's own words and the outcome
+ * sentence, both of which quote the ledger. A permission changes what is inside
+ * this block and never whether it is here.
+ *
+ * Nothing is derived here. The work state, its explanation and the count of
+ * answers are all the server's.
+ */
+function ResearchInFlight({ page }: { page: CashPage }): JSX.Element | null {
+  const questions = page.frontier.monetization?.questions ?? [];
+  const owner = page.full?.monetizationWork ?? null;
+  if (questions.length === 0) return null;
+
+  const detail = new Map(
+    [...(owner?.open ?? []), ...(owner?.recentlySettled ?? [])].map((one) => [
+      `${one.pathId}::${one.attribute}::${one.round}`,
+      one,
+    ]),
+  );
+  const live = questions.filter(
+    (one) => one.state === 'WAITING_TO_START' || one.state === 'RESEARCHING' || one.state === 'PARKED',
+  );
+  const done = questions.filter((one) => one.state === 'SETTLED' || one.state === 'STOPPED');
+
+  return (
+    <div className="rs-cash-commissions">
+      <h4>What Brain is finding out</h4>
+      <p className="rs-hint">
+        {live.length === 0
+          ? 'No question about a possibility is being researched right now.'
+          : `${live.length} ${live.length === 1 ? 'question is' : 'questions are'} being researched${
+              owner ? ` of ${owner.capacity} that may run at once` : ''
+            }. Each one is a single attribute of a single possibility, from published sources only.`}
+      </p>
+      <ul className="rs-cash-commission-list">
+        {[...live, ...done].map((one) => {
+          const key = `${one.pathId}::${one.attribute}::${one.round}`;
+          const full = detail.get(key) ?? null;
+          return (
+            <li key={key} className="rs-cash-commission">
+              <p>
+                <strong>{one.attributeLabel}</strong>
+                {' — '}
+                {one.pathTitle}
+                {one.round > 1 ? ` (round ${one.round})` : ''}
+              </p>
+              {/*
+                * The state, and when it was asked.
+                *
+                * `askedAt` was composed by the in-flight projection, carried
+                * across the shared boundary as well, and rendered by neither
+                * surface — so a question opened five minutes ago and one open
+                * since yesterday read identically, on the one screen whose job
+                * is to say whether this loop is moving. §33 records the same
+                * fact one kernel along, where a question holding a slot with
+                * nothing working on it was invisible until somebody measured
+                * the elapsed time by hand.
+                */}
+              <p className="rs-hint">
+                {WORK_STATE_LABEL[one.state] ?? one.state} Asked {one.askedAt}.
+              </p>
+              {/*
+                * Why Brain chose this question over the others open.
+                *
+                * The owner sees the reason recorded at the moment it was
+                * decided, over a ledger that has since moved; a member sees the
+                * rule that admitted it, because the owner's sentence quotes the
+                * ledger and two of the ranking criteria read money.
+                */}
+              <p className="rs-hint">{full ? full.why : one.why}</p>
+              {full ? <p className="rs-hint">{full.stateBecause}</p> : null}
+              {one.settledAt ? (
+                <p className="rs-hint">
+                  {full?.outcome ??
+                    (one.answered === null || one.answered === 0
+                      ? 'It settled without answering this one. The question stays open and is not a no.'
+                      : `It answered ${one.answered} question${
+                          one.answered === 1 ? '' : 's'
+                        } about this possibility.`)}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * What each work state means, in a person's words.
+ *
+ * A constant map rather than a formatted enum, because the five are genuinely
+ * different situations with different remedies and the word alone says none of
+ * that. `WAITING_TO_START` in particular must not read as `RESEARCHING`.
+ */
+const WORK_STATE_LABEL: Readonly<Record<string, string>> = Object.freeze({
+  WAITING_TO_START: 'Queued. Nothing has started reading for it yet.',
+  RESEARCHING: 'Being researched now.',
+  PARKED: 'Stopped at something a person has to decide.',
+  SETTLED: 'Finished.',
+  STOPPED: 'Did not finish.',
+});
+
+function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }): JSX.Element {
+  const shared = page.frontier.monetization ?? null;
+  const owner = page.full?.monetization ?? null;
+  const byId = new Map((shared?.paths ?? []).map((one) => [one.id, one]));
+  const ownerTop = new Map((owner?.top ?? []).map((one) => [one.pathId, one]));
+
+  return (
+    <section className="rs-card rs-cash-monetization">
+      <h3>Monetization paths</h3>
+      {!shared || shared.total === 0 ? (
+        <p className="rs-hint">
+          Nothing is in the possibility ledger yet. Brain gives every discovery its complete set of
+          ways money could come out of it &mdash; one per shape of transaction that could apply, all
+          of them kept, none of them a claim that it works.
+        </p>
+      ) : (
+        <>
+          <p className="rs-hint">
+            {shared.total} {shared.total === 1 ? 'way' : 'ways'} of being paid are in the ledger.
+            The {shared.topPathIds.length} below are a view of that and never the whole of it
+            &mdash; everything else is under <em>All monetization paths</em>, with its reason.
+          </p>
+          <ul className="rs-cash-tiers">
+            <li>
+              <strong>{shared.byStatus.ACTIVE}</strong>
+              <span>Active</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.WATCH}</strong>
+              <span>Watching</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.BLOCKED}</strong>
+              <span>Blocked</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.WEAK}</strong>
+              <span>Weak</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.UNPROVEN}</strong>
+              <span>Unproven</span>
+            </li>
+            <li>
+              <strong>{shared.byStatus.INVALIDATED + shared.byStatus.ARCHIVED}</strong>
+              <span>Put away</span>
+            </li>
+          </ul>
+
+          <ol className="rs-cash-paths">
+            {shared.topPathIds.map((pathId) => {
+              const path = byId.get(pathId);
+              if (!path) return null;
+              const detail = ownerTop.get(pathId) ?? null;
+              const why = shared.whyEachTop.find((one) => one.pathId === pathId) ?? null;
+              const openQuestion = path.openQuestions[0] ?? null;
+              return (
+                <li key={pathId} className="rs-cash-path">
+                  <h4>
+                    {/*
+                      * Its rank in the **ledger**, not its position in this
+                      * list. The five are the best *live* possibilities, so an
+                      * invalidated one at rank two makes those two numbers
+                      * differ — and a page that showed a rank a path does not
+                      * have would disagree with every other reading of it,
+                      * including the movement history that says where it came
+                      * from.
+                      */}
+                    <span className="rs-cash-path-rank">#{path.rank}</span> {path.title}
+                  </h4>
+                  <p className="rs-decision-why">{detail?.what ?? path.methodWhat}</p>
+                  <p className="rs-hint">
+                    <strong>{path.status}</strong> &mdash; {path.statusNote}
+                  </p>
+
+                  {/*
+                    * Why it ranks highly. The owner's sentence quotes both
+                    * sides of the comparison and two of the criteria read
+                    * money, so a member is told the *criterion* instead: it is
+                    * the whole of why, and it carries no figure at all.
+                    */}
+                  <p className="rs-hint">
+                    {detail
+                      ? detail.whyItRanksHighly
+                      : why?.label
+                        ? `It is above the best one not shown on ${why.label}.`
+                        : 'Nothing is ranked below it, so it is not being preferred over anything.'}
+                  </p>
+
+                  {detail ? (
+                    <>
+                      <p className="rs-hint">
+                        Revenue {detail.economics.revenue ?? 'unknown'} &middot; costs{' '}
+                        {detail.economics.costs ?? 'unknown'} &middot;{' '}
+                        {detail.economics.margin !== null
+                          ? `margin ${detail.economics.margin}`
+                          : detail.economics.withheld}
+                      </p>
+                      <p className="rs-hint">{detail.timeToCash}</p>
+                    </>
+                  ) : (
+                    <p className="rs-hint">
+                      What this would pay, what it would cost and when the money would arrive belong
+                      to whoever owns an execution job, and no figure of them is sent to this page.
+                    </p>
+                  )}
+
+                  <p className="rs-hint">
+                    <strong>Next:</strong>{' '}
+                    {detail?.requiredAction ??
+                      openQuestion?.task ??
+                      'Everything load-bearing is answered. What is left is a decision only a person can make.'}
+                  </p>
+
+                  {/*
+                    * Confidence, as three counts. There is no percentage here
+                    * and there must not be one: a confidence figure nobody
+                    * measured reads exactly like one somebody did.
+                    */}
+                  <p className="rs-hint">
+                    {path.answered.fromASource} answered from a source &middot;{' '}
+                    {path.answered.brainsOwnProposal} proposed by Brain &middot;{' '}
+                    {path.answered.unanswered} unanswered
+                  </p>
+
+                  {detail && detail.risks.length > 0 ? (
+                    <ul className="rs-cash-path-risks">
+                      {detail.risks.map((risk, index) => (
+                        <li key={index}>{risk}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  {/*
+                    * Why it moved, in the server's own words.
+                    *
+                    * This rendering used to compose its own sentence and then
+                    * append the **raw** `movementReason` — so a person read
+                    * `ITS_OWN_EVIDENCE_CHANGED` on the page while
+                    * `readableReason` sat one field away turning exactly that
+                    * token into prose. The comment that used to be here
+                    * claimed it had closed the *no reader* half of this audit;
+                    * what it rendered was the enum, and `whatChanged` — which
+                    * says the direction as well as the reason — stayed unread.
+                    *
+                    * One derivation now, two readers: `movementSentence` is
+                    * what the owner's `whatChanged` and this shared field are
+                    * both composed from, so the two cannot come to disagree
+                    * about one position.
+                    */}
+                  <p className="rs-hint">{detail?.whatChanged ?? path.whatChanged}</p>
+
+                  {/*
+                    * Why it is above the one directly below it — the ninth of
+                    * the nine questions the brief asks of each of the five,
+                    * derived since this surface was written and rendered by
+                    * nothing. It is not the sentence above it: that one
+                    * compares against the best possibility *not shown*, and
+                    * this compares against the next one down.
+                    *
+                    * Owner only. It quotes the deciding criterion on both
+                    * sides, and two of the criteria read money.
+                    */}
+                  {detail ? <p className="rs-hint">{detail.whyItOutranksTheNext}</p> : null}
+
+                  <PathDetail pathId={pathId} />
+                  {page.capabilities.mayActOnJob ? (
+                    <PathJudgment pathId={pathId} status={path.status} onChanged={onChanged} />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+
+          <ResearchInFlight page={page} />
+
+          <details className="rs-cash-paths-all">
+            <summary>
+              <strong>All monetization paths</strong>
+              <span className="rs-hint">
+                {' '}
+                every one of the {shared.total}, grouped, with nothing removed
+              </span>
+            </summary>
+            {shared.sequences.length > 0 ? (
+              <div className="rs-cash-sequences">
+                <h4>Sequences</h4>
+                <p className="rs-hint">
+                  Chains where running one produces something the next one needs. That is what these
+                  claim and all they claim &mdash; not that the chain is worth running.
+                </p>
+                <ul>
+                  {shared.sequences.map((sequence, index) => (
+                    <li key={index}>{sequence.titles.join(' → ')}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {(owner?.groups ?? []).length > 0 || shared.paths.length > 0 ? (
+              <div className="rs-cash-groups">
+                {(owner?.groups ?? derivedGroups(shared)).map((group) => (
+                  <section key={group.id}>
+                    <h4>
+                      {group.label} ({group.pathIds.length})
+                    </h4>
+                    <p className="rs-hint">{group.what}</p>
+                    <ul>
+                      {group.pathIds.map((id) => {
+                        const path = byId.get(id);
+                        if (!path) return null;
+                        return (
+                          <li key={id}>
+                            <strong>#{path.rank}</strong> {path.title} &mdash; {path.status}
+                            {path.openQuestions.length > 0 ? (
+                              <span className="rs-hint">
+                                {' '}
+                                ({path.openQuestions.length} open:{' '}
+                                {path.openQuestions.map((one) => one.label).join(', ')})
+                              </span>
+                            ) : null}
+                            {/*
+                              * The judgement control, on every possibility
+                              * rather than on the top five alone.
+                              *
+                              * It was rendered only inside the top list, and
+                              * that list excludes INVALIDATED and ARCHIVED by
+                              * construction — so `REVIVE`, the one transition
+                              * that brings a possibility back, was reachable
+                              * by nothing. §20 requires a possibility to be
+                              * revivable and §22 requires simplification to
+                              * happen by presentation rather than by removing
+                              * the way to do something; a control that exists
+                              * for a state it can never be shown in is the
+                              * *mechanism nothing calls* this codebase keeps
+                              * correcting.
+                              */}
+                            <PathDetail pathId={id} />
+                            {page.capabilities.mayActOnJob ? (
+                              <PathJudgment
+                                pathId={id}
+                                status={path.status}
+                                onChanged={onChanged}
+                              />
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            ) : null}
+          </details>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The groups a member gets, from the shared projection alone.
+ *
+ * The owner's payload carries the server's own groups; a member's does not,
+ * because the group list is composed alongside the figures. Rather than leave a
+ * member with no grouping at all — which would take the *All monetization
+ * paths* content off half the pages and is exactly the divergence §36 removed
+ * — the three groups that need nothing but a status are composed here from the
+ * shared paths.
+ *
+ * It derives no status, no rank and no order: every one of those is read off
+ * the server's own projection, which is already sorted.
+ */
+function derivedGroups(shared: {
+  paths: { id: string; status: string }[];
+}): { id: string; label: string; what: string; pathIds: string[] }[] {
+  const withStatus = (...statuses: string[]): string[] =>
+    shared.paths.filter((one) => statuses.includes(one.status)).map((one) => one.id);
+  return [
+    {
+      id: 'ALL_ACTIVE',
+      label: 'All active',
+      what: 'Every possibility whose load-bearing questions are answered and whose way is clear.',
+      pathIds: withStatus('ACTIVE'),
+    },
+    {
+      id: 'BLOCKED',
+      label: 'Blocked',
+      what: 'Something named has to happen first.',
+      pathIds: withStatus('BLOCKED'),
+    },
+    {
+      id: 'UNPROVEN',
+      label: 'Unproven',
+      what: 'Nothing has established enough about these yet.',
+      pathIds: withStatus('UNPROVEN'),
+    },
+    {
+      id: 'INVALIDATED_OR_ARCHIVED',
+      label: 'Invalidated or archived',
+      what: 'Put away or established as not working. Never deleted.',
+      pathIds: withStatus('INVALIDATED', 'ARCHIVED'),
+    },
+  ];
+}
+
+/**
+ * The three judgements about a possibility that nothing can derive, and the one
+ * that answers them.
+ *
+ * This is the legitimate case for a person-answer control, and it is worth
+ * saying why given how many of them §33 removed. Every one of those asked
+ * somebody to attest to a *fact about the world* that Brain researches. These
+ * four are not facts: whether to keep an eye on something, whether it has been
+ * established as not working, whether to put it away, and whether to bring it
+ * back are decisions with no row that could answer them.
+ *
+ * The reason is required by the server and by this control. A possibility put
+ * away with no reason is one nobody can reconsider when the thing that made it
+ * wrong stops being true — and the ledger derives *worth reconsidering* by
+ * comparing the judgement's date against what has been established since.
+ */
+/**
+ * Everything about one possibility that the list has no room for.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this exists at all
+ * ---------------------------------------------------------------------------
+ *
+ * An audit of the shipped ledger found a long list of things written every tick
+ * and read by nobody: how a possibility came to be in the ledger, the claim it
+ * traces to, what it was split out of, when it was last evaluated, what a
+ * proposal rests on and how uncertain it is, who recorded a judgement and
+ * through which channel, which criterion decided each rank movement, and every
+ * question Brain has ever asked about it. The per-path route that could answer
+ * all of that had existed since the ledger shipped and **no client ever called
+ * it.**
+ *
+ * That is not a missing nicety. §22 is explicit that simplification must happen
+ * through presentation rather than information destruction, and a column
+ * nothing in the product can reach is destruction with the row left behind for
+ * appearances. This is the presentation.
+ *
+ * It fetches on open rather than with the page, because it is one possibility's
+ * worth of detail behind a disclosure and loading it for all forty would be
+ * paying for forty reads nobody asked for. A failed fetch keeps the words and
+ * says so — the interface is never optimistic.
+ */
+function PathDetail({ pathId }: { pathId: string }): JSX.Element {
+  const [state, setState] = useState<
+    | { kind: 'IDLE' }
+    | { kind: 'LOADING' }
+    | { kind: 'ERROR'; because: string }
+    | { kind: 'READY'; detail: Awaited<ReturnType<typeof CashApi.pathDetail>> }
+  >({ kind: 'IDLE' });
+
+  async function open(): Promise<void> {
+    if (state.kind === 'LOADING' || state.kind === 'READY') return;
+    setState({ kind: 'LOADING' });
+    try {
+      setState({ kind: 'READY', detail: await CashApi.pathDetail(pathId) });
+    } catch (error) {
+      setState({
+        kind: 'ERROR',
+        because: error instanceof Error ? error.message : 'It could not be read.',
+      });
+    }
+  }
+
+  return (
+    <details
+      className="rs-cash-path-detail"
+      onToggle={(event) => {
+        if ((event.currentTarget as HTMLDetailsElement).open) void open();
+      }}
+    >
+      <summary>Everything recorded about this one</summary>
+      {state.kind === 'LOADING' ? <p className="rs-hint">Reading it&hellip;</p> : null}
+      {state.kind === 'ERROR' ? <p className="rs-hint">{state.because}</p> : null}
+      {state.kind === 'READY' ? (
+        <div>
+          <p className="rs-hint">
+            {/*
+              * How it came to be in the ledger. ENUMERATED means the method
+              * table produced it structurally; EVIDENCED means a source named
+              * it and it traces to that claim; SEED means a person did.
+              */}
+            {state.detail.provenance.origin === 'SEED'
+              ? 'Somebody named this one. The enumeration would not have produced it.'
+              : state.detail.provenance.origin === 'EVIDENCED'
+                ? 'A source named this way of being paid, and it traces to that claim.'
+                : 'Brain enumerated this from the shapes of transaction that structurally apply.'}
+            {state.detail.provenance.splitFromId
+              ? ' It was split out of another possibility, which still has its own row.'
+              : ''}
+            {state.detail.provenance.mergedIntoId
+              ? ' It has been merged into another one. Nothing was deleted, and the merge is one pointer that clearing reverses.'
+              : ''}
+            {state.detail.provenance.lastEvaluatedAt
+              ? ` Last evaluated ${state.detail.provenance.lastEvaluatedAt}.`
+              : ''}
+          </p>
+
+          {state.detail.facts.length > 0 ? (
+            <>
+              <h5>What is established, and what it rests on</h5>
+              <ul>
+                {state.detail.facts.map((fact) => (
+                  <li key={fact.attribute}>
+                    <strong>{fact.attribute}</strong>: {fact.value}{' '}
+                    <span className="rs-hint">
+                      {fact.kind === 'EVIDENCE'
+                        ? '(from a published source)'
+                        : fact.kind === 'PERSON'
+                          ? '(somebody decided this)'
+                          : '(Brain proposes this)'}
+                    </span>
+                    {/*
+                      * A proposal shows its basis, its assumptions and its
+                      * uncertainty, because one rendered the way a source is
+                      * rendered has told somebody a guess was checked. All
+                      * three are required to write one and none of them was
+                      * shown anywhere before this.
+                      */}
+                    {fact.basis ? <p className="rs-hint">Rests on: {fact.basis}</p> : null}
+                    {fact.assumptions ? (
+                      <p className="rs-hint">Assumes: {fact.assumptions}</p>
+                    ) : null}
+                    {fact.uncertainty ? (
+                      <p className="rs-hint">Unsure about: {fact.uncertainty}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {state.detail.questions.length > 0 ? (
+            <>
+              <h5>Every question Brain has asked about it</h5>
+              <ul>
+                {state.detail.questions.map((one) => (
+                  <li key={one.id}>
+                    <strong>{one.attribute}</strong>
+                    {one.round > 1 ? ` (round ${one.round})` : ''} &mdash; {one.state.toLowerCase()}
+                    <p className="rs-hint">{one.reason}</p>
+                    {one.outcome ? <p className="rs-hint">{one.outcome}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {state.detail.history.length > 0 ? (
+            <>
+              <h5>Every position it has held</h5>
+              <ul>
+                {state.detail.history.map((one, index) => (
+                  <li key={index}>
+                    #{one.rank}
+                    {one.previousRank === null ? ' on entering the ledger' : ` from #${one.previousRank}`}{' '}
+                    &mdash; {one.reason.toLowerCase().replace(/_/g, ' ')}
+                    {/*
+                      * The criterion that actually came out differently. The
+                      * order is lexicographic, so this is the whole reason and
+                      * nothing below it was consulted — and it was recorded
+                      * every time a rank moved and displayed nowhere.
+                      */}
+                    {one.criterion ? (
+                      <span className="rs-hint"> (on {one.criterion.toLowerCase().replace(/_/g, ' ')})</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {state.detail.toEnterTop.conditions.length > 0 ? (
+            <>
+              <h5>What would have to become true</h5>
+              <ul>
+                {state.detail.toEnterTop.conditions.map((one, index) => (
+                  <li key={index}>{one.sentence}</li>
+                ))}
+              </ul>
+            </>
+          ) : state.detail.toEnterTop.note ? (
+            <p className="rs-hint">{state.detail.toEnterTop.note}</p>
+          ) : null}
+
+          {state.detail.judgments.length > 0 ? (
+            <>
+              <h5>What anybody recorded about it</h5>
+              <ul>
+                {state.detail.judgments.map((one, index) => (
+                  <li key={index}>
+                    {one.judgment.toLowerCase()} &mdash; {one.reason}
+                    {/*
+                     * Who, and how the call got in, because those are two facts
+                     * and §23 settled that they are recorded in two columns for
+                     * exactly that reason: `decided_by_id` is whose authority
+                     * this carries, and `channel` is the door it came through,
+                     * which defaults to the weaker unverifiable value because
+                     * Brain cannot check one. This module's own comment above
+                     * already promised to render both and rendered neither —
+                     * the field was on the wire, in this file's own type, and
+                     * dropped at the last hop, which is §27's `decisionWaiting`
+                     * at a smaller scale.
+                     */}
+                    <span className="rs-hint">
+                      {' '}
+                      ({one.createdAt}
+                      {one.decidedById ? `, by ${one.decidedById}` : ''},{' '}
+                      {one.channel === 'BROWSER_SESSION'
+                        ? 'in a browser session'
+                        : 'through a terminal inside the deployment'}
+                      )
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {/*
+            * Recorded relations only, which is what this list is for.
+            *
+            * The derived graph is already what the risks and the chains are
+            * built out of; what had no reader anywhere was the *recorded*
+            * edge's author — written from the authenticated principal by a
+            * live route and printed by nothing. A relation somebody recorded
+            * is a statement about this situation rather than about shapes of
+            * transaction, and who made it is half of what makes it that.
+            */}
+          {state.detail.relations.length > 0 ? (
+            <>
+              <h5>What anybody recorded about how it relates to the others</h5>
+              <ul>
+                {state.detail.relations.map((one, index) => (
+                  <li key={index}>
+                    {one.kind.toLowerCase().replace(/_/g, ' ')} &mdash; {one.rationale}
+                    <span className="rs-hint">
+                      {' '}
+                      ({one.createdAt}
+                      {one.decidedById ? `, by ${one.decidedById}` : ''}
+                      {one.sourceClaimId ? `, claim ${one.sourceClaimId}` : ''})
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
+function PathJudgment({
+  pathId,
+  status,
+  onChanged,
+}: {
+  pathId: string;
+  status: string;
+  onChanged(): void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [judgment, setJudgment] = useState<'WATCH' | 'INVALIDATE' | 'ARCHIVE' | 'REVIVE'>(
+    status === 'INVALIDATED' || status === 'ARCHIVED' ? 'REVIVE' : 'WATCH',
+  );
+  const [reason, setReason] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (!open) {
+    return (
+      <div className="rs-cash-actions">
+        <button type="button" className="rs-button-quiet" onClick={() => setOpen(true)}>
+          Record a decision
+        </button>
+        {message ? <span className="rs-hint">{message}</span> : null}
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="rs-cash-actions"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (busy) return;
+        setBusy(true);
+        CashApi.judgePath(pathId, judgment, reason)
+          .then((answer) => {
+            setMessage(answer.message);
+            setOpen(false);
+            setReason('');
+            onChanged();
+          })
+          .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'It did not go through.'))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <label>
+        <span>Decision</span>
+        <select
+          value={judgment}
+          onChange={(event) =>
+            setJudgment(event.target.value as 'WATCH' | 'INVALIDATE' | 'ARCHIVE' | 'REVIVE')
+          }
+        >
+          <option value="WATCH">Watch it</option>
+          <option value="INVALIDATE">It does not work</option>
+          <option value="ARCHIVE">Put it away</option>
+          <option value="REVIVE">Bring it back</option>
+        </select>
+      </label>
+      <label>
+        <span>Why</span>
+        <input
+          value={reason}
+          required
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="What you know that the ledger does not."
+        />
+      </label>
+      <button type="submit" disabled={busy || reason.trim().length === 0}>
+        {busy ? 'Recording…' : 'Record'}
+      </button>
+      <button type="button" className="rs-button-quiet" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+      {message ? <span className="rs-hint">{message}</span> : null}
+    </form>
+  );
+}

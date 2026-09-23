@@ -133,8 +133,17 @@ export async function cardFactsForProject(projectId: string): Promise<CashCardFa
  * because the proposal existed to stand in for one. And a recommendation never
  * replaces a recommendation, so a tick cannot churn the card by re-deriving the
  * same thing with a different sentence every pass.
+ *
+ * It takes the *kind* rather than the row, so the monetization ledger's own
+ * facts go through this one function too. There are two fact tables because a
+ * path is not an opportunity — thirty paths on one opening would collide on
+ * every field — and there is exactly one authority order, because a second copy
+ * of it is the two-readers-disagreeing defect this repository keeps correcting.
  */
-export function mayReplace(existing: CashCardFact | null, incoming: CashCardFact['kind']): boolean {
+export function mayReplace(
+  existing: { kind: CashCardFact['kind'] } | null,
+  incoming: CashCardFact['kind'],
+): boolean {
   if (!existing) return true;
   if (existing.kind === 'PERSON') return false;
   if (existing.kind === 'EVIDENCE') return incoming === 'PERSON';

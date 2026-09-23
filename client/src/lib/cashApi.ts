@@ -20,8 +20,24 @@ import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
 import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
 import type { SharedCashView } from '../../../server/services/cash/shared.ts';
+import type { CommissionView } from '../../../server/services/cash/monetization/inFlight.ts';
+import type {
+  MonetizationSurface,
+  TopEntry,
+} from '../../../server/services/cash/monetization/surface.ts';
+import type { LedgerEntry } from '../../../server/services/cash/monetization/ledger.ts';
+import type { RankExplanation } from '../../../server/services/cash/monetization/rank.ts';
 
-export type { CashReadiness, CashRoadmap, CashForecast, SharedCashView };
+export type {
+  CashReadiness,
+  CashRoadmap,
+  CashForecast,
+  SharedCashView,
+  MonetizationSurface,
+  LedgerEntry,
+  TopEntry,
+  RankExplanation,
+};
 
 /**
  * Two readers of one section, told apart by the server rather than by the page.
@@ -344,6 +360,29 @@ export interface CashView {
    * pages to disagree about one sprint.
    */
   frontier: Omit<SharedCashView, 'scope'>;
+  /**
+   * The whole possibility ledger with the figures on it.
+   *
+   * The frontier above carries the same space in names and counts, which is
+   * what a member is sent. This is the owner's reading, and it is absent from a
+   * member's payload rather than blanked in it — so there is no arrangement of
+   * the page that could render a figure somebody may not read.
+   *
+   * Optional for the same deploy reason `byTier` is: an older server does not
+   * send it, and the section renders what it has rather than crashing.
+   */
+  monetization?: MonetizationSurface;
+  /**
+   * What Brain is researching about that space, in the owner's own words.
+   *
+   * Optional for the reason `monetization` is: a rolling deploy serves an older
+   * body to a newer bundle until the last instance turns over, and a section
+   * that assumed the field would render nothing at all rather than rendering
+   * what it has. The questions themselves are on `frontier.monetization`, which
+   * both roles get — this carries only the recorded reason and the outcome
+   * sentence, both of which quote the ledger.
+   */
+  monetizationWork?: CommissionView;
   decisionsForMe: { items: ReviewItem[]; underlyingCount: number; summary: string };
   vocabulary: {
     mechanisms: string[];
@@ -483,6 +522,126 @@ export const CashApi = {
 
   view: (projectId: string): Promise<CashViewReading> =>
     api(`/api/projects/${p(projectId)}/cash`),
+
+  /*
+   * The possibility ledger's own two questions, and its four decisions.
+   *
+   * The ledger itself is **not** fetched here: it travels with the section, so
+   * the page and the ranking cannot disagree about it. What these add is what a
+   * payload cannot carry — a comparison somebody asks for, and the decisions
+   * only a person makes.
+   */
+  whyRanked: (
+    projectId: string,
+    pathId: string,
+    against?: string,
+  ): Promise<{
+    criteria: { id: string; label: string }[];
+    comparison?: RankExplanation;
+    toEnterTop?: {
+      conditions: { criterion: string; label: string; now: string; needed: string; sentence: string }[];
+      against: string | null;
+      note: string | null;
+    };
+  }> =>
+    api(
+      `/api/projects/${p(projectId)}/cash/monetization/compare?a=${p(pathId)}` +
+        (against ? `&b=${p(against)}` : ''),
+    ),
+
+  /**
+   * Everything about one possibility, including what the list has no room for.
+   *
+   * The per-path route existed from the start and no client called it, which
+   * made it the only reader of the rank history, of a snapshot's deciding
+   * criterion, of a fact's basis and uncertainty, and of the judgement trail —
+   * so all of those were written every tick and read by nobody. §22 requires
+   * simplification to happen by presentation rather than by removing the
+   * information; this is the presentation.
+   */
+  pathDetail: (
+    pathId: string,
+  ): Promise<{
+    entry: { path: { id: string; title: string }; rank: number; statusBecause: string };
+    history: {
+      rank: number;
+      previousRank: number | null;
+      reason: string;
+      status: string;
+      criterion: string | null;
+      evaluatedAt: string;
+    }[];
+    toEnterTop: {
+      conditions: { criterion: string; label: string; now: string; needed: string; sentence: string }[];
+      against: string | null;
+      note: string | null;
+    };
+    provenance: {
+      origin: string;
+      sourceClaimId: string | null;
+      splitFromId: string | null;
+      mergedIntoId: string | null;
+      lastEvaluatedAt: string | null;
+    };
+    facts: {
+      attribute: string;
+      kind: string;
+      value: string;
+      claimId: string | null;
+      basis: string | null;
+      assumptions: string | null;
+      uncertainty: string | null;
+      updatedAt: string;
+    }[];
+    judgments: {
+      judgment: string;
+      reason: string;
+      /** Whose authority it carries. Never the same fact as the channel. */
+      decidedById: string | null;
+      channel: string;
+      createdAt: string;
+    }[];
+    /** Relations somebody recorded, with whose statement each one is. */
+    relations: {
+      fromPathId: string;
+      toPathId: string;
+      kind: string;
+      rationale: string;
+      source: string;
+      sourceClaimId: string | null;
+      decidedById: string | null;
+      createdAt: string;
+    }[];
+    questions: {
+      id: string;
+      attribute: string;
+      round: number;
+      state: string;
+      reason: string;
+      outcome: string | null;
+      answered: number | null;
+      openedAt: string;
+    }[];
+  }> => api(`/api/cash/monetization/paths/${p(pathId)}`),
+
+  judgePath: (
+    pathId: string,
+    judgment: 'WATCH' | 'INVALIDATE' | 'ARCHIVE' | 'REVIVE',
+    reason: string,
+  ): Promise<{ message: string }> =>
+    api(`/api/cash/monetization/paths/${p(pathId)}/judgment`, {
+      method: 'POST',
+      body: JSON.stringify({ judgment, reason }),
+    }),
+
+  seedPath: (
+    projectId: string,
+    body: { method: string; opportunityId?: string; industryNodeId?: string; thesis?: string },
+  ): Promise<{ message: string }> =>
+    api(`/api/projects/${p(projectId)}/cash/monetization/paths`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 
   activate: (
     projectId: string,
