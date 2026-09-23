@@ -74,7 +74,7 @@ async function readings(projectId: string): Promise<Reading[]> {
               proposal: 'Brain resumes starting deep dives and discovery rounds on the next tick.',
             }
           : {
-              whatChanged: `The research grant this sprint runs under is ${to.toLowerCase()} (was ${from ?? 'unknown'}).`,
+              whatChanged: `The research grant this sprint runs under is ${to.toLowerCase()} (was ${from ?? 'not yet read'}).`,
               proposal:
                 'Brain starts no new deep dive or discovery round; the ones already running are ' +
                 'left to finish, and their answers still land. Restarting the sprint restores it.',
@@ -95,12 +95,13 @@ async function readings(projectId: string): Promise<Reading[]> {
           : {
               whatChanged:
                 to === 'NONE'
-                  ? `No execution surface can run work right now (was ${from ?? 'unknown'}).`
+                  ? `No execution surface can run work right now (was ${from ?? 'not yet read'}).`
                   : 'Brain could not read the fleet, so it cannot say whether anything can run.',
               proposal:
-                'Dives already out will wait rather than run. Brain proposes fixing the fleet ' +
-                '(the People & capacity page names which surface and why) before judging any ' +
-                'dive that stalls in the meantime as a failure of the dive itself.',
+                'Dives already out will wait rather than run, and any that stall meanwhile are ' +
+                'recorded as never attempted — evidence about the conditions, never about their ' +
+                'openings. Brain proposes fixing the fleet first; the People & capacity page ' +
+                'names which surface and why.',
             },
     },
     {
