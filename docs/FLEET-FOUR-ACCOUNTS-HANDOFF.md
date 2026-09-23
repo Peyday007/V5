@@ -336,13 +336,19 @@ documents deriving one fact is how they come to disagree about it.
   tick's reading and was quietly becoming a claim about the counter rather
   than about that moment. The 12:13Z read in §8.4 is the one that matters:
   nine Routines bound to one worker carrying four different counts, which is
-  precisely what the replaced column could not express, and none of them at
-  the quarantine threshold.
-* **It does not exist for the other half, and that is not rounded up.** The
-  quarantine has never fired against a real dead surface; `STALE` has never
-  been printed about a real revoked connector; no fire has been routed across
-  four accounts. Those need the four accounts to exist, which is the category
-  above. The engine passing its tests says nothing about whether the fleet
+  precisely what the replaced column could not express.
+* **The quarantine has now fired against real surfaces, and this is the one
+  item that moved.** At 12:15:04, 12:15:05, 12:16:27 and 12:16:28 the four
+  `Airyn` Routines were taken out of routing, each with the recorded reason
+  and `refusals=0`, while five surfaces bound to the **same** worker stayed
+  enabled and three of them held work at that instant. §8.4 is the reading.
+  Under the replaced column those four could not have reached the threshold at
+  all. It is a research surface rather than a Factory one, so it does not
+  touch the category below.
+* **The rest does not exist, and that is not rounded up.** `STALE` has never
+  been printed about a real revoked connector, and no fire has been routed
+  across four accounts. Those need the four accounts to exist, which is the
+  category above. The engine passing its tests says nothing about whether the fleet
   behaves this way, which is the separation Step 3 drew and which this lane
   does not get to waive.
 
@@ -606,12 +612,18 @@ integrated image is live and serving; the machinery this lane added answers
 from the deployed rows; and it tells the truth about an uncommissioned pool
 on a run that *passes* rather than only on one that fails.
 
+**Proven in production, and it was not when this line was first written** —
+the no-show quarantine firing against real surfaces. §8.4 records the four
+rows, their timestamps, their recorded reason, and the five same-worker
+surfaces that stayed enabled beside them, which is what makes it a reading of
+the repair rather than of the incident.
+
 **Not proven, and not claimed** — that four real Claude accounts run as one
-Factory fleet. No such pool has been commissioned. The quarantine has never
-fired against a real dead surface and `STALE` has never been printed about a
-real revoked connector. The engine passing its tests says nothing about
-whether the fleet behaves this way, which is the separation Step 3 drew and
-which this integration does not get to waive. §5's
+Factory fleet. No such pool has been commissioned. `STALE` has never been
+printed about a real revoked connector, and no fire has been routed across
+four accounts. The engine passing its tests says nothing about whether the
+fleet behaves this way, which is the separation Step 3 drew and which this
+integration does not get to waive. §5's
 **AWAITING HUMAN ACCOUNT / CREDENTIAL AUTHORIZATION** list is unchanged and
 unticked.
 
@@ -893,12 +905,90 @@ have agreed with each other by construction. They do not, because
 Routine that was fired — §2.5 and §2.7, demonstrated by a real event rather
 than by a test.
 
-**And none of them has reached the threshold**, which is the other half
-working. Three unanswered fires quarantine a surface; the highest here is two,
-and the cause was an upstream store outage rather than a dead connector. A
-counter that had walked these surfaces into quarantine for somebody else's
-incident would have been the defect §23 warns about — *a refusal is not
-misconduct* — arriving one table along.
+**And none of them has reached the threshold** at that moment. Three
+unanswered fires quarantine a surface and the highest here is two.
+
+#### Two minutes later four of them crossed it, and this is the mechanism firing in anger
+
+**The sentence that used to end the paragraph above said the twos were caused
+by the morning's store outage rather than by a dead connector. That was a
+guess, and the rows disproved it within two minutes.** It is corrected here
+rather than edited away, because a document whose whole subject is telling a
+measurement from an attribution should not quietly swap one for the other.
+
+`fleet_routines.state_reason`, read at **12:44Z**, timestamped by the rows
+themselves:
+
+```
+Airyn 2-A  QUARANTINED  2026-09-23T12:15:04.343Z  unanswered=4  refusals=0  fires=115
+Airyn 2-D  QUARANTINED  2026-09-23T12:15:05.143Z  unanswered=4  refusals=0  fires=115
+Airyn 2-B  QUARANTINED  2026-09-23T12:16:27.303Z  unanswered=3  refusals=0  fires=115
+Airyn 2-C  QUARANTINED  2026-09-23T12:16:28.103Z  unanswered=3  refusals=0  fires=115
+
+  reason, on all four:
+    3 consecutive fired sessions never checked in. That is a surface that
+    cannot authorize, and every further fire costs an activation to learn it
+    again. Recover it once the surface is fixed.
+```
+
+**This is the first time the no-show quarantine has taken a real surface out
+of routing**, and §5 and §7.5 both previously said it never had. Every part of
+this lane's §2.5 and §2.6 is in those four rows: the mechanism `shouldQuarantine`
+had stated since Step 11 and that nothing called, called by the dispatch tick;
+the per-surface count it is called with; the recorded reason a reader can act
+on; and an answering transition named in the reason itself rather than left to
+be discovered.
+
+**The discriminating fact is the five surfaces that were *not* taken out.**
+All nine are bound to `wkr_1cdd82cfb2a54faf8edd`. At 12:44Z:
+
+```
+Brain Research A     ENABLED  unanswered=1  fires=367  in-flight=0
+Brain Research 1-B   ENABLED  unanswered=1  fires=96   in-flight=1
+Brain Research 1-C   ENABLED  unanswered=0  fires=97   in-flight=2
+Brain Research 1-D   ENABLED  unanswered=1  fires=97   in-flight=1
+V2                   QUARANTINED since 2026-09-05, for a different reason
+```
+
+Three of those are holding work at that instant, so **the worker identity
+authorizes perfectly well** — and under `consecutive_no_shows` every one of
+those arrivals would have cleared the counter for all nine, so the Airyn four
+could not have reached three and would have been fired at indefinitely, one
+activation each time, with every row reading healthy. That is §2.5's defect
+stated as a counterfactual and §2.7's as an observation, and it is the reason
+the column had to be replaced rather than read more carefully.
+
+**It is the no-show branch and not the refusal branch**, which matters because
+§23 is explicit that a refusal is not misconduct: `refusals=0` on all four, so
+nothing here quarantined a surface for being busy or rate-limited.
+
+**Two things about it are reported rather than explained.** The counts read 4,
+3, 3 and 4 *after* a quarantine that triggers at 3 — most likely because
+`reopenNoShowDispatches` establishes a no-show from a fire already sent, so a
+fire in flight at the moment of quarantine can be established afterwards, but
+that is a reading of the code rather than something measured here. And
+`candidates 16 considered, 4 eligible now`, down from 12 at 12:13Z, is a drop
+of eight against four quarantines; `in flight 6` accounts for the rest by
+surfaces sitting at their target, and no attempt is made here to apportion it
+exactly.
+
+**What it does not establish is a four-account Factory pool**, and it is not
+offered as though it did. Those four Routines carry `caps=[]`, so they are
+research surfaces, and all nine resolve to one worker identity. §5's middle
+category is unchanged.
+
+#### One configuration observation, reported and not acted on
+
+The `Caleb` account's four Routines are bound to a **different** worker,
+`wkr_1db1193323454ee69bb1`, and their secret names appear transposed:
+`Caleb 3-A` expects `BRAIN_ROUTINE_TOKEN_CALEB_3_D`, `3-B` expects `…_3_C`,
+`3-C` expects `…_3_B`, `3-D` expects `…_3_A`. Each carries `refusals=1`.
+
+It is recorded because a reader of this fleet should see it, and it is **not
+changed**: a Routine's secret name is an operator's declaration, the mapping
+may well be deliberate, and `fleet` has a command for correcting one if it is
+not. Guessing at somebody's fleet configuration from the shape of four strings
+is exactly the inference this document keeps refusing to make.
 
 #### And the parallel lane's D2 is latent here, which is a measurement rather than a hope
 
@@ -1325,11 +1415,14 @@ unfinished rows live somewhere else is a checklist that reads as finished.
 ### 10.2 The three things that are not settled, stated as such
 
 **No four-account Factory pool has been commissioned.** This is item 7's
-middle category and nothing in ten items moved it. The quarantine has never
-fired against a real dead surface, `STALE` has never been printed about a real
-revoked connector, and no fire has been routed across four accounts. Those
-need four real Claude accounts and their deployment secrets, which is the one
-thing in this lane that is not an engineering task.
+middle category, and one thing moved inside it while the rest did not. The
+no-show quarantine **has** now fired against four real surfaces — §8.4 — so
+that clause is withdrawn. `STALE` has still never been printed about a real
+revoked connector, and no fire has still been routed across four accounts.
+Those need four real Claude accounts and their deployment secrets, which is
+the one thing in this lane that is not an engineering task. The four surfaces
+that were quarantined are research surfaces on one worker identity and are not
+a Factory pool.
 
 **The parallel lane's D2 is unlanded.** §9. Its fix is on
 `claude/fleet-four-account-acceptance-uey8cw`, which is still moving and has

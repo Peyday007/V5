@@ -1488,12 +1488,25 @@ for.
   completed chain behind it. Both report two numbers now, each labelled as what
   it counts, and which surfaces have actually run.
 
-`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **None of it has
-a production reading**: no four-account Factory pool has been commissioned, so
-the quarantine has never fired against a real dead surface and `STALE` has never
-been printed about a real revoked connector. The engine passing its tests says
-nothing about whether the fleet behaves this way, which is the separation Step 3
-drew and which this does not get to waive.
+`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **The quarantine
+has a production reading and the rest does not**, and that sentence used to say
+none of it did — corrected rather than edited away, because it was true when it
+was written and the rows disproved half of it on 2026-09-23. At 12:15:04,
+12:15:05, 12:16:27 and 12:16:28 the four `Airyn` Routines were taken out of
+routing, each with the recorded reason and `refusals=0`, **while five surfaces
+bound to the same worker stayed enabled and three of them held work at that
+instant**. That last clause is what makes it a reading of the repair rather than
+of an outage: under `consecutive_no_shows` any one of those arrivals would have
+cleared the counter for all nine, so the four could never have reached the
+threshold. `shouldQuarantine` is no longer a mechanism nothing calls.
+
+What still has no production reading: no four-account Factory pool has been
+commissioned, `STALE` has never been printed about a real revoked connector,
+and no fire has been routed across four accounts. The four surfaces above carry
+`caps=[]` and resolve to one worker identity, so they are research surfaces and
+not a pool. The engine passing its tests says nothing about whether the fleet
+behaves this way, which is the separation Step 3 drew and which this does not
+get to waive.
 
 ## 24. Russell is a way in, not a second brain.
 
