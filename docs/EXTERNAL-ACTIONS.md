@@ -43,12 +43,40 @@ carry, and changing that is a policy decision, not a connection.
 | **prepare** | the project's live connection for the provider, read *now* (deployed secret + provider answered for that exact credential within 24h + live mode); a valid destination; for anybody other than the owner, a standing commercial authority covering `CONTACT_BUYER` / `QUOTE_AND_INVOICE`; the opening and conversation belong to the project. A failure writes nothing and names the remedy. |
 | **approve** | every action except a message to the owner's own phone waits for a project ADMIN (`requirePerson`). All preconditions are asked again. |
 | **execute** | Step 6 `runExternalEffect`, key `xac.<actionId>` (nothing else contributes). Preconditions asked a third time. Rate limit → waits and retries under the same key. Refusal → `REFUSED`. Unknown → `UNCERTAIN`, never resent automatically; a reconcilable provider is asked again on the tick. |
-| **read back** | the provider is asked, by its own identifier, what state the effect produced. Email: `DELIVERED`/`BOUNCED`/…; invoice: `ISSUED` → `PAYMENT_MADE` → `FUNDS_SETTLED`; ntfy: `PUBLISHED`. |
-| **return** | once (`claimReturn`): a SYSTEM message in the originating Russell conversation, a `project_events` row, and — for an opening — a cash event, the opening's first recorded action with the provider identifier as its reference, and (live mode only) `CUSTOMER_PAYMENT`/`SETTLEMENT` ledger entries with verifiable references. |
+| **read back** | the provider is asked, by its own identifier, what state the effect produced — and first whether the object is this action's at all (ntfy tag, Stripe `metadata[brain]`, Resend recipient), so an identifier a person supplies for someone else's object reads `NOT_THIS_ACTION` and records nothing. Email: `ACCEPTED` (queued/sent — **never** "delivered") → `DELIVERED`/`BOUNCED`/`DELAYED`/…; invoice: `ISSUED` → `PAYMENT_ATTEMPTED` (a declined attempt, no money) → `PAYMENT_MADE` → `FUNDS_SETTLED` with the provider fee and net; ntfy: `PUBLISHED`. |
+| **return** | once (`claimReturn`): a SYSTEM message in the originating Russell conversation ("the provider accepted it … reading it back says …", never "done" about something only accepted), a `project_events` row, and — for an opening — a cash event, the opening's recorded commercial act with the provider identifier as its reference, and (live money only) `CUSTOMER_PAYMENT`, `SETTLEMENT` (gross) and `COST` (the fee), so available funds come out at the net. |
+
+### Crash and ambiguity
+
+- **Accepted, then Brain died before the receipt was written.** The action is
+  left `SENDING`; five minutes later the tick hands the Step 6 operation back to
+  recovery (`releaseAbandonedOperation`). ntfy is *asked* (and the message is
+  found, not re-sent); Resend and Stripe repeat the **same** idempotency key, so
+  the provider returns what it already made. Past 22 hours — inside the
+  providers' 24-hour key windows — nothing is repeated: the action goes
+  `UNCERTAIN` for a person.
+- **Step 6 defect fixed on the way.** `latestSentAttempt` filtered on
+  `provider_key IS NOT NULL`, and only idempotent adapters have one, so crash
+  recovery could not see a reconcilable or opaque attempt and **sent it again**.
+  It reads the attempt phase now; `tests/idempotency.test.ts` holds the opaque
+  case and `tests/externalActionBoundaries.test.ts` the ntfy one.
+- **Intent recorded, provider never answered.** No receipt, no read-back and no
+  "sent" anywhere; the action is `UNCERTAIN` and is never resent automatically
+  (ntfy reconciliation never answers ABSENT). A transport error to Resend or
+  Stripe before any reply is retried only under the same key.
+- **Money.** Written only when the connection reads HEALTHY *and* the invoice
+  says `livemode: true`. Each entry is keyed, so a second read-back writes
+  nothing, and a refused entry (no sprint, no `ACCEPT_PAYMENT` grant) is retried
+  on the next read-back rather than lost.
 
 A Russell turn may propose `PREPARE_EXTERNAL_ACTION` (NOTIFY_OWNER or
 SEND_EMAIL only); it lands as a prepared row under the conversation owner's
-authority. Cash Mode's `advanceWithinAuthority` no longer records a contact that
+authority. A proposal is never an approval — an email waits for an administrator
+whatever the worker wrote — and a recipient address must appear in something the
+person wrote in that conversation, or nothing is prepared. A refusal is posted
+in the conversation by the server. Nothing can record a commercial act as
+performed **by Brain** without a provider-confirmed external action carrying the
+same reference: `recordAction` refuses it, whoever calls. Cash Mode's `advanceWithinAuthority` no longer records a contact that
 never happened: for a READY piece whose card holds an email address, it prepares
 an approval-gated email, and the piece moves to EXECUTING only when the provider
 confirms a send.

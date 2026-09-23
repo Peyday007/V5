@@ -11526,6 +11526,38 @@ be the claim this section exists to refuse.
 - **A decision waiting reaches the owner.** With a healthy notification
   connection, each open Needs You request and each action awaiting approval is
   pushed once, keyed from the request, bounded at thirty a day.
+- **Accepted is not delivered, and the sentence says which.** A Resend `sent`
+  reads `ACCEPTED`; only `delivered` (or an event implying it) reads
+  `DELIVERED`. The result posted in a conversation used to begin "Done:" and
+  quote the expected effect — *"an email … is delivered to"* — about an email
+  the provider had only accepted. It now says the provider accepted it, then
+  what reading it back established, then what was asked for.
+- **A crash after the provider accepted is recovered, not repeated — and Step 6
+  could not do that for two of its three classes.** `latestSentAttempt`
+  filtered on `provider_key IS NOT NULL`; only an idempotent adapter has one,
+  so recovery could not see a reconcilable or opaque attempt, concluded
+  nothing had been sent, and sent it again. Found by a crash test on ntfy, and
+  fixed at the engine. An abandoned `SENDING` action hands its operation back
+  to recovery rather than reading "sending" for ever, and a keyed repeat stops
+  at `UNCERTAIN` once it is outside the provider's 24-hour key window.
+- **A read-back asks whether the object is this action's before reading it.**
+  A person resolving an `UNCERTAIN` send supplies a provider identifier; that is
+  a claim, and an identifier naming somebody else's invoice would otherwise
+  have put their payment in this opening's ledger. It reads `NOT_THIS_ACTION`.
+- **Six facts about an invoice, and money only from live money.** Issued,
+  payment attempted (no money), paid, settled, the provider's fee and the net.
+  The ledger gets `CUSTOMER_PAYMENT`, `SETTLEMENT` (gross) and the fee as
+  `COST`, only when the connection reads HEALTHY *and* the invoice says it is
+  live, each keyed so a second read-back writes nothing.
+- **Brain performed it only if a provider said so.** `recordAction` refuses a
+  `BRAIN` row unless a CONFIRMED external action on that opening, for that act,
+  carries the same reference — in the only writer, so no route or service can
+  reach the old fake contact again. A person recording what they did is
+  `PERSON`.
+- **A recipient is the person's, not the model's.** An address a Russell turn
+  proposes must appear in the person's own words in that conversation, and a
+  declined proposal is said in the conversation by the server rather than left
+  to the worker's reply.
 - **Publishing and signing are unavailable by policy, and say so.** A connector
   would not change `ALWAYS_PROHIBITED_COMMERCIAL`; letting Brain publish an
   offer or bind the account is a code change a person reviews.
@@ -12076,6 +12108,7 @@ tests/                  Vitest suites
   laborKernel.test.ts        who produces the work, and what an absence may never conclude
   laborFrontierAudit.test.ts every answer combination; silent exactly when defensible
   externalActions.test.ts    what a capability may claim, what may leave, what Brain says happened
+  externalActionBoundaries.test.ts  crash, lost response, key window, six invoice facts, a recipient only the person named
   fixtures/             generated PDFs and DOCX packages, not opaque binaries
 data/                   database, documents, backups, runtime state (gitignored)
 ```
