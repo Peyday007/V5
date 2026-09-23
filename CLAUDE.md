@@ -3995,6 +3995,37 @@ remote.
   step must still carry an `::error::` and an `exit 1`, and must not end in
   `|| true`.
 
+- **And the Depot fallback that sentence compares itself to was matching
+  everything, which is that same rule failing at the neighbour it was named
+  after.** `flyctl` prints `Waiting for depot builder...` on **every** Depot
+  build, and the classifier's `depot builder` alternative matched it — so
+  *was this a builder failure?* answered yes for every failed deploy that used
+  Depot, whatever had actually gone wrong, and the honest branch beside it,
+  *"The deploy failed for a reason that is not the builder"*, was unreachable
+  for all of them.
+
+  Deploy 324, 2026-09-23, is the worked example and the expensive one. Depot
+  built the image successfully at 09:58:54; the deploy was refused by a health
+  check at 10:04:19 because Supabase's storage API was answering `544
+  DatabaseTimeout` and the Brain correctly refused to boot (§18); and the step
+  then printed `The Depot builder never answered` and spent a **second full
+  build and a second machine replacement, while production was down**, on a
+  builder that had done nothing wrong. It also left a false sentence about
+  Depot in the log of a run somebody reads later, which is the half this file
+  cares about most.
+
+  **The haystack is narrowed rather than the patterns**, so a real Depot
+  failure naming `depot builder` in its own error is still caught and the only
+  thing that stops matching is a line that was never evidence of anything.
+  `tests/deployBuilderClassification.test.ts` reads the alternation *and* the
+  exclusion out of the workflow rather than restating them, and models a whole
+  `deploy.txt` rather than one line — because that is what `grep` is given,
+  and it is the entire mechanism: the progress line and the real failure sit
+  in the same file, so one match anywhere decided for all of it. Four of its
+  five assertions fail against the unfixed workflow; the fifth passes both
+  ways on purpose, because a guard that only passed after the change would not
+  be a guard against losing what the change kept.
+
 - **A tolerance one line up is the same removed check, and `continue-on-error`
   is the quietest form of it.** The bullet above is about a step that must
   still fail; this is about two that failed and were rendered as passing.
