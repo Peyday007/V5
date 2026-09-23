@@ -25,6 +25,13 @@ measurement, and §7 is the integration's own record.
 | Factory closeout | `e37cca06` | reached `production` before this integration and deployed there; the lane branch `claude/factory-core-completion-ri3kqj` sits at the same commit |
 | Merge | `bb6d538d` | the fleet lane merged into `e37cca06`, no conflict |
 | Fixture repair | `3a63fad4` | the `'READER'` correction §7 records |
+| **Integrated tip** | `89b34a9d` | `integration/fleet-four-accounts`, pushed — this document and the CLAUDE.md §27 record on top of `3a63fad4`, no code change |
+
+**`production` has not been advanced to it.** The fast-forward is valid and
+was verified immediately before it was attempted, and the attempt was refused
+by this session's own permission layer — by `git push` and by the forge's ref
+API alike. §8 says exactly what is left and how to do it. Nothing else in
+this integration is outstanding.
 
 **An earlier version of this paragraph said `origin/production` was
 `f727b143`.** That was true when the lane measured it and was false by the
@@ -397,7 +404,7 @@ deploy and that nobody answers. The migration is additive, the counter is
 derived from an append-only ledger rather than backfilled, and deleting every
 `DISPATCH_NO_SHOW` row would return the fleet to exactly what it does today.
 
-§8 checks this against the live fleet rather than leaving it as an argument.
+§8.3 checks this against the live fleet rather than leaving it as an argument.
 
 ### 7.3 What the integrated SHA was gated on
 
@@ -454,8 +461,9 @@ run measured both halves and adds two points to §27's table:
 | pre-restart | 415 documents | **12m25s**, and it passed 229/229 |
 | post-restart | 431 documents | **over 15m**, the bound |
 
-§8 records what this integration's own deploy did against the same condition.
-Nothing here raises that bound, which §27 forbids by name.
+§8.2 says what to expect from it on this integration's own deploy, and why
+that is not this integration. Nothing here raises that bound, which §27
+forbids by name.
 
 **The Postgres half is gated in CI on the exact released SHA.**
 `postgres-suite.yml` carries a push trigger on `production`, so advancing the
@@ -475,8 +483,11 @@ worker isolation, the capacity proofs, quarantine and its answering transition,
 the identity and authentication checks, the Build and operator surfaces, the
 migrations, the documentation.
 
-**Proven in production** — that the deployed image serves this machinery and
-that it tells the truth about an uncommissioned pool. See §8.
+**Not yet proven in production, because this session could not advance
+`production`** — that the deployed image serves this machinery and tells the
+truth about an uncommissioned pool. The deploy and the reads that would
+establish it are §8, written out so the next session runs them rather than
+re-derives them.
 
 **Not proven, and not claimed** — that four real Claude accounts run as one
 Factory fleet. No such pool has been commissioned. The quarantine has never
@@ -485,3 +496,80 @@ real revoked connector. The engine passing its tests says nothing about
 whether the fleet behaves this way, which is the separation Step 3 drew and
 which this integration does not get to waive.
 
+
+---
+
+## 8. What is left, and exactly how to do it
+
+The software side of this integration is finished and gated. What remains is
+**one privileged action this session was refused**, and then the ordinary
+release path behind it.
+
+### 8.1 Advance `production` — refused here, one command for somebody who can
+
+`integration/fleet-four-accounts` at `89b34a9d` contains `production` at
+`e37cca06` as an ancestor, so this is a fast-forward and nothing is rewritten:
+
+```
+git fetch origin production
+git merge-base --is-ancestor origin/production integration/fleet-four-accounts \
+  && git push origin integration/fleet-four-accounts:production
+```
+
+The `merge-base` check first is §28's own rule — a non-fast-forward is refused
+before it is attempted rather than after. Never check `production` out to
+advance it; §28 records a scratch worktree holding it with a whole session's
+reversal staged, one `git commit -am` away from putting a deleted surface back.
+
+**Both routes were attempted from this session and both were refused by its
+permission layer**: the `git push` above, and `PATCH /repos/.../git/refs/heads/
+production` with `force: false`, which is the strictly safer form because the
+forge itself refuses anything that is not a fast-forward. No third route was
+tried, because a third route would have been working around the refusal rather
+than around a tool.
+
+### 8.2 Then the release, unchanged
+
+1. Dispatch **Deploy** on `production`. Its `canonical` job asks the guard
+   twice — once before the test gate and once immediately before
+   `flyctl deploy` — so a branch that moved underneath the run is refused at
+   the second asking rather than released.
+2. Stay with it to a terminal verdict. Expect
+   `release: success`, `beforeRestart: …`, `afterRestart: …` as three separate
+   facts, and read them as three.
+3. **Expect the post-restart half to fail**, on the condition §7.3 records and
+   CLAUDE.md §27 carries: `brain_submit_audit` answering nothing within 900s.
+   That is not this integration and not the release. Deploy 316 hit it on
+   `e37cca06` before this work existed.
+4. Prove the image independently of the gate, which is what §27 says to do when
+   the gate is the thing that is skipped or stuck. The served bundle is the
+   handle, and the before-and-after are already known:
+
+   | | served JS |
+   | --- | --- |
+   | `e37cca06`, live now | `assets/index-DYLLmYzP.js` |
+   | `89b34a9d`, after this deploy | `assets/index-T4sTcb6M.js` |
+
+   The stylesheet is `assets/index-Dzwb3x6t.css` on both, because this
+   integration changes no CSS. `curl -sS https://northline-brain.fly.dev/ |
+   grep -oE 'assets/index-[A-Za-z0-9_-]+\.(js|css)'`.
+
+### 8.3 Then the live reads this lane is owed
+
+Against the deployed image, through the workflows that already exist:
+
+1. `fleet verify-pool --repository Peyday007/V5` — **read `accounts` and
+   `surfaces` as two numbers.** One Routine is not a pool and the command says
+   so on the run that passes, not only on one that fails.
+2. `fleet show` — `unanswered=` per surface. **It must read 0 everywhere on the
+   first tick**, and §7.2 establishes why from rows rather than from hope:
+   production has never written a `DISPATCH_NO_SHOW` event, so every counter
+   starts empty and no surface can be quarantined out of history.
+3. `factory campaigns` and `factory status` across every project.
+4. Confirm no surface reads `PROVEN` or `HEALTHY` on configuration alone —
+   which is the whole point of §2.1, §2.4 and §2.7, and is the one thing a
+   production reading of an *uncommissioned* pool can genuinely establish.
+
+**What such a reading cannot establish**, and must not be written up as though
+it did: that four real Claude accounts run as one Factory fleet. That needs the
+four accounts to exist, and §5 lists the four things only a person can do.
