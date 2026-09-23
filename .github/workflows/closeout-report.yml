@@ -44,7 +44,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'cash | people | fleet | refinement | product | candidate | packet | routing | projects | campaigns | campaign | bins'
+        description: 'cash | people | fleet | refinement | product | candidate | packet | routing | projects | campaigns | campaign | bins | deliverables'
         required: true
         default: cash
       project:
@@ -202,6 +202,15 @@ jobs:
               [ -n "$campaign" ] || { echo "::error::bins needs a campaign id."; exit 1; }
               cmd="sh /app/scripts/factory.sh bins --campaign $campaign"
               marker='.'
+              ;;
+            deliverables)
+              # Every deliverable, its versions, checks, review and delivery;
+              # --verify re-reads each stored file and opens it (§50). With a
+              # ref (dlv_…), just that one.
+              cmd="sh /app/scripts/deliverable-report.sh --verify"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              [ -n "$ref" ] && cmd="$cmd --deliverable $ref"
+              marker='^DELIVERABLE-REPORT: OK'
               ;;
             refinement)
               cmd="sh /app/scripts/refinement-report.sh"
