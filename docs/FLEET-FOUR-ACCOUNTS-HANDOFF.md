@@ -924,4 +924,39 @@ making it tolerate an unreachable store would trade a visible outage for a
 Brain that looks healthy and writes where nobody can see. The remedy is to
 retry once the upstream answers, which is what was done.
 
+**The retry worked, and the release it was carrying went with it.** Deploy
+325, same commit, no other change: the gate passed, both canonical askings
+passed, `flyctl deploy` **succeeded**, and `Record what was released` ran.
+Production answered `503` for the last time at 10:38:13 and `200 in 4.61s` at
+**10:38:48** — the cold-start tail §20 describes — then 0.25s, 0.16s, 0.16s.
+The outage ran from about 10:03 to 10:38:48, call it thirty-six minutes.
+
+The served bundle is `assets/index-T4sTcb6M.js` with `index-Dzwb3x6t.css`,
+**unchanged**, which was the prediction rather than a surprise:
+`901a42db..662d3373` touches no client file, so the bundle hash cannot
+distinguish this release and the proof of what is live has to come from
+somewhere else — `BRAIN_REVISION`, which every `scripts/*-report.sh` prints
+as `SERVING_REVISION`.
+
+### 8.6 The recovery floor is forty minutes, and that is a gap rather than a fact of life
+
+Worth recording because this incident measured it. **There is no supported
+way to restart the deployed Brain short of a full `Deploy`.** `deploy.yml` is
+the only workflow that restarts anything — every other one is a read behind
+`await-release` — and its restart sits on the far side of a nineteen-minute
+test gate and a build.
+
+So a condition whose actual remedy is a thirty-second process restart, which
+is exactly what this was once Supabase answered again at 10:16, has a
+recovery floor of roughly forty minutes. Twenty-two of those minutes were
+spent re-proving a tree that had already passed the identical gate on the
+identical commit an hour earlier.
+
+**It is recorded rather than built, and the reason is the reason.** Adding a
+remote-exec or a restart path to production, unreviewed, during an incident,
+is precisely how a console accumulates — §26's whole argument, and *"each new
+thing arrives because the page is already there"*. The decision about whether
+this Brain should have a guarded restart operation belongs to the owner, made
+when it is cheap rather than when something is down.
+
 <!-- FACTORY-READS -->
