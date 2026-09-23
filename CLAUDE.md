@@ -11526,6 +11526,24 @@ second ledger or a second queue.
   a Cash project carries it in the bin a worker reads, so Russell answers the
   question from live records rather than from the transcript.
 
+- **The deep dive researched the route to the buyer and threw it away.**
+  The validation profile's `contact_mode` lane asks *what the published route
+  to the buyer actually is*, and `FIELD_BY_LANE` sent every answer to
+  `phoneDependency` alone. So nothing Brain researched could ever fill
+  `access`, and a demand test, which cannot be formed without a route, could
+  come only from a person typing one in: a transition that exists, is tested,
+  and is reached by nothing, arriving exactly where the brief said the work
+  was Brain's. `ALSO_FILLS` carries the lane into `access` as well. The
+  second writer of a card field also accepted a `NEGATIVE_EXISTENCE` claim:
+  *"no published source names who would pay"* landed in the payer column, which
+  every reader of it, including the demand-test prefilter, reads as a payer
+  found. `answers.ts` already refused that, and the deep dive now refuses it
+  for payer and access. A disqualifier still takes a documented absence,
+  because that is what the field is for. Between two openings that have
+  answered the same amount, the one a buyer asked for is dived first, using
+  `commerce/select.ts`'s own ordering: a price list somebody else publishes can
+  answer none of the three questions a first sale needs.
+
 **What production held when this was built, read on 2026-09-23 from the
 serving revision `222f8fd`:** Cash Mode 1 ACTIVE in USD; forty openings, all
 `SIGNAL`, none with a payer recorded; **no commercial grant**; no money entry.

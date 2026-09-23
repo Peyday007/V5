@@ -57,6 +57,7 @@ import { cashTier } from './tier.ts';
 import { COLUMN } from './answers.ts';
 import { discoveryAllowed } from './lifecycle.ts';
 import { discoveryAuthority } from './discoveryAuthority.ts';
+import { DEMAND_DIRECTNESS } from './commerce/select.ts';
 import type { CashOpportunity, OpportunityValidationState } from '../../domain/types.ts';
 
 /** How many deep dives one project may have in flight. Provider capacity. */
@@ -454,7 +455,23 @@ export async function startValidations(input: {
  * to decide which of two pieces is asked about first.
  */
 function closestFirst(a: CashOpportunity, b: CashOpportunity): number {
-  return answeredCount(b) - answeredCount(a);
+  return answeredCount(b) - answeredCount(a) || directness(b) - directness(a);
+}
+
+/**
+ * Between two openings that have answered the same amount, the one somebody
+ * asked for goes first.
+ *
+ * A published request names its own buyer and usually its own reply route, so
+ * a dive on it is the one most likely to establish a payer, a route and an
+ * offer — the three things a demand test cannot be formed without. A price
+ * list somebody else publishes can answer none of them. It is the ordering
+ * `commerce/select.ts` already uses for a first sale, imported rather than
+ * restated, and it is a tiebreak rather than a ceiling: nothing is refused
+ * because of it, and it changes no tier.
+ */
+function directness(one: CashOpportunity): number {
+  return one.opportunitySignal ? DEMAND_DIRECTNESS[one.opportunitySignal] : 0;
 }
 
 function answeredCount(one: CashOpportunity): number {
@@ -785,6 +802,35 @@ export const FIELD_BY_LANE: Readonly<Record<string, string>> = Object.freeze({
   contact_mode: 'phoneDependency',
 });
 
+/**
+ * A lane whose claims answer a second card field as well as its own.
+ *
+ * `contact_mode` asks "what the published route to the buyer actually is, and
+ * specifically whether it requires a telephone call". The second half is
+ * `phoneDependency`; the first half *is* the card's `access` field, and for as
+ * long as this map had one field per lane that half was researched, gated and
+ * then thrown away — so no deep dive could ever establish how to reach a buyer,
+ * and the commercial journey's demand test, which cannot be formed without a
+ * route, could never be prepared from Brain's own research. Kept beside
+ * `FIELD_BY_LANE` rather than folded into it, because that map's shape is what
+ * `tests/cashOpportunityStandard` pins lane by lane.
+ */
+export const ALSO_FILLS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  contact_mode: Object.freeze(['access']),
+});
+
+/**
+ * Fields a documented absence may never answer.
+ *
+ * "No published source names who pays" is a real finding and a
+ * `NEGATIVE_EXISTENCE` claim, and written into the payer field it would read to
+ * every reader — the card, the tier, the demand-test prefilter — as a payer
+ * found. `answers.ts` already refuses a negative for every field it fills; the
+ * deep dive is the second writer and did not. A disqualifier is deliberately
+ * not here: "nothing rules this out" is exactly what that field is for.
+ */
+export const POSITIVE_ONLY: ReadonlySet<string> = new Set(['payer', 'access']);
+
 export interface AppliedValidation {
   opportunityId: string;
   field: string;
@@ -812,49 +858,53 @@ export async function applyValidationAnswers(projectId: string): Promise<Applied
     if (!opportunity.validationOrchestrationId) continue;
 
     for (const claim of await citableClaims(opportunity.validationOrchestrationId)) {
-      const field = FIELD_BY_LANE[claim.evidenceLane ?? ''];
-      if (!field) continue;
-      const existing = await cardFact(opportunity.id, field);
-      // A person's answer stands, and so does an earlier piece of evidence:
-      // `mayReplace` is the order, and it is about authority rather than
-      // recency.
-      if (!mayReplace(existing, 'EVIDENCE')) continue;
-      const value = clampText(claim.claim, 600);
-      /*
-       * The column as well as the fact, where the field has one.
-       *
-       * `answers.ts` writes both when a *need's* research settles a card field,
-       * and this wrote only the fact — so the same question, answered by the
-       * deep dive instead, reached `cash_card_facts` and never reached
-       * `evidenceCard`, `readyToTest` or anything else that reads the row. Two
-       * writers for one field with only one of them counting is this file's own
-       * recurring defect: a rule applied by one of two readers is worse than
-       * none, because the two disagree about the same opening.
-       *
-       * `COLUMN` is imported rather than restated for exactly that reason — a
-       * second copy is the thing that drifts. Most of the fields the deep dive
-       * fills are engine fields with no column at all, which is why this is a
-       * lookup rather than an assumption: `payer` has one, `hours` does not,
-       * and a field with none is a card fact and nothing else.
-       *
-       * It changes no evidence and lowers no bar: the claim already cleared the
-       * gate, `mayReplace` still decides authority, and a person's answer still
-       * stands.
-       */
-      const column = COLUMN[field];
-      if (column) {
-        await updateOpportunity(opportunity.id, { [column]: value } as never);
+      const lane = claim.evidenceLane ?? '';
+      const primary = FIELD_BY_LANE[lane];
+      if (!primary) continue;
+      for (const field of [primary, ...(ALSO_FILLS[lane] ?? [])]) {
+        if (claim.claimType === 'NEGATIVE_EXISTENCE' && POSITIVE_ONLY.has(field)) continue;
+        const existing = await cardFact(opportunity.id, field);
+        // A person's answer stands, and so does an earlier piece of evidence:
+        // `mayReplace` is the order, and it is about authority rather than
+        // recency.
+        if (!mayReplace(existing, 'EVIDENCE')) continue;
+        const value = clampText(claim.claim, 600);
+        /*
+         * The column as well as the fact, where the field has one.
+         *
+         * `answers.ts` writes both when a *need's* research settles a card field,
+         * and this wrote only the fact — so the same question, answered by the
+         * deep dive instead, reached `cash_card_facts` and never reached
+         * `evidenceCard`, `readyToTest` or anything else that reads the row. Two
+         * writers for one field with only one of them counting is this file's own
+         * recurring defect: a rule applied by one of two readers is worse than
+         * none, because the two disagree about the same opening.
+         *
+         * `COLUMN` is imported rather than restated for exactly that reason — a
+         * second copy is the thing that drifts. Most of the fields the deep dive
+         * fills are engine fields with no column at all, which is why this is a
+         * lookup rather than an assumption: `payer` has one, `hours` does not,
+         * and a field with none is a card fact and nothing else.
+         *
+         * It changes no evidence and lowers no bar: the claim already cleared the
+         * gate, `mayReplace` still decides authority, and a person's answer still
+         * stands.
+         */
+        const column = COLUMN[field];
+        if (column) {
+          await updateOpportunity(opportunity.id, { [column]: value } as never);
+        }
+        await recordCardFact({
+          projectId,
+          opportunityId: opportunity.id,
+          field,
+          kind: 'EVIDENCE',
+          value,
+          claimId: claim.id,
+          decidedBy: 'BRAIN',
+        });
+        out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
       }
-      await recordCardFact({
-        projectId,
-        opportunityId: opportunity.id,
-        field,
-        kind: 'EVIDENCE',
-        value,
-        claimId: claim.id,
-        decidedBy: 'BRAIN',
-      });
-      out.push({ opportunityId: opportunity.id, field, claimId: claim.id });
     }
   }
   return out;

@@ -43,6 +43,19 @@ import {
 } from '../server/services/cash/commerce/obligation.ts';
 import { issueInvoice, recordInvoiceState } from '../server/services/cash/commerce/payment.ts';
 import { commercialBriefing } from '../server/services/cash/commerce/briefing.ts';
+import { createRun } from '../server/repos/runs.ts';
+import {
+  createFragments,
+  createOrchestration,
+  currentFragments,
+  decideClaim,
+  insertClaims,
+  updateFragment,
+} from '../server/repos/research.ts';
+import { cardFact } from '../server/repos/cashCardFacts.ts';
+import { applyValidationAnswers, startValidations } from '../server/services/cash/validation.ts';
+import { ensureDiscoveryAuthority } from '../server/services/cash/discoveryAuthority.ts';
+import { proposeCommercialTerms } from '../server/services/cash/operate.ts';
 
 let projectId = '';
 let userId = '';
@@ -375,5 +388,107 @@ describe('Russell answers from the records', () => {
     }
     expect(text).toContain('In production');
     expect(text).toContain('pipeline USD 750.00');
+  });
+});
+
+describe('Brain finds the buyer and the route itself', () => {
+  /**
+   * A finished deep dive on one opening, carrying accepted claims in the lanes
+   * the validation profile declares — the rows a worker's gated submission
+   * leaves, written directly so the assertion is about what reaches the card.
+   */
+  async function finishedDive(
+    opportunityId: string,
+    claims: { lane: string; claim: string; negative?: boolean }[],
+  ): Promise<void> {
+    const layerId = (await getDb().get<{ id: string }>('SELECT id FROM layers WHERE project_id = ? LIMIT 1', [projectId]))!.id;
+    const run = await createRun({ projectId, layerId, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: 'qualify' });
+    const orchestration = await createOrchestration({
+      projectId, layerId, runId: run.id, title: 'Qualify', assignment: 'Who pays and how to reach them', provider: 'WORKER', autoApprove: false,
+    });
+    await createFragments([
+      {
+        orchestrationId: orchestration.id, projectId, layerId, geography: 'where the request was published',
+        requiredEvidence: [{ id: 'payer', description: 'who pays', necessity: 'REQUIRED' }],
+        acceptableSourceTypes: ['the request itself'], excludedSourceTypes: ['a forecast'],
+        completionCriteria: ['a located passage'], minIndependentSources: 1, maxRepairs: 2,
+        fragmentIndex: 0, fragmentKey: 'qualify', question: 'Who pays, and how are they reached?', dependsOn: [], attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+    const [fragment] = await currentFragments(orchestration.id);
+    await updateFragment(fragment!.id, { status: 'ACCEPTED', completedAt: NOW(), blockedReason: null });
+    const inserted = await insertClaims(
+      claims.map((one) => ({
+        orchestrationId: orchestration.id, fragmentId: fragment!.id, passId: null, passKey: 'BROAD_SCAN' as const,
+        claim: one.claim, sourceUrl: 'https://example.test/request/42', sourceTitle: 'The request', sourcePublisher: 'The marketplace',
+        sourceDate: '2026-09-20', evidenceExcerpt: one.claim, evidenceLocator: 'the request body', evidenceLane: one.lane,
+        retrievedAt: '2026-09-21', confidence: 0.9, validationState: 'SOURCED' as const, validationDetail: null, sourced: true,
+        claimType: one.negative ? ('NEGATIVE_EXISTENCE' as const) : ('SOURCED_FACT' as const), contentHash: `${one.lane}|${one.claim}`,
+      })),
+    );
+    for (const claim of inserted) await decideClaim(claim.id, { accepted: true });
+    await getDb().run(
+      "UPDATE cash_opportunities SET validation_state = 'COMPLETE', validation_orchestration_id = ? WHERE id = ?",
+      [orchestration.id, opportunityId],
+    );
+  }
+
+  it('records the payer and the published route a deep dive established, and a test follows from them', async () => {
+    const id = await opening({ title: 'A clinic posted a paid intake-form repair', signal: 'PAID_TASK_OR_CONTRACT' });
+    await getDb().run('UPDATE cash_opportunities SET buying_signal = ? WHERE id = ?', ['Repair our patient intake form; budget stated.', id]);
+    expect(await operateCommerce(projectId)).toMatchObject({ prepared: null });
+
+    await finishedDive(id, [
+      { lane: 'payer', claim: 'Lakeside Clinic is the named client on the posting.' },
+      { lane: 'contact_mode', claim: 'Proposals are submitted through the marketplace message thread on the posting; no phone number is given.' },
+    ]);
+    await applyValidationAnswers(projectId);
+    const card = await getOpportunity(id);
+    expect(card?.payer).toContain('Lakeside Clinic');
+    // The route the dive read reaches the access field, not only the phone question.
+    expect(card?.reachableChannel).toContain('marketplace message thread');
+    expect((await cardFact(id, 'access'))?.kind).toBe('EVIDENCE');
+    expect((await cardFact(id, 'phoneDependency'))?.value).toContain('no phone number');
+
+    // Brain proposes the offer from the request itself, and then can form a
+    // test from its own research with no person having typed a buyer.
+    await proposeCommercialTerms(projectId);
+    expect((await getOpportunity(id))?.offerScope).toBeTruthy();
+    const pass = await operateCommerce(projectId);
+    expect(pass.prepared).toBeTruthy();
+    const [test] = await listDemandTests(projectId);
+    expect(test?.opportunityId).toBe(id);
+    expect(test?.maxSpendCents).toBe(0);
+    // Prepared is not contacted: nobody has been reached.
+    expect(test?.state).toBe('PREPARED');
+  });
+
+  it('never records a documented absence as a payer or a route', async () => {
+    const id = await opening({ title: 'A price list somebody publishes', signal: 'PAID_TASK_OR_CONTRACT' });
+    await finishedDive(id, [
+      { lane: 'payer', claim: 'No published source names who would pay for this.', negative: true },
+      { lane: 'contact_mode', claim: 'No published route to any buyer was found.', negative: true },
+    ]);
+    await applyValidationAnswers(projectId);
+    const card = await getOpportunity(id);
+    expect(card?.payer).toBeNull();
+    expect(card?.reachableChannel).toBeNull();
+    expect(await cardFact(id, 'payer')).toBeNull();
+    expect(await cardFact(id, 'access')).toBeNull();
+    expect((await operateCommerce(projectId)).prepared).toBeNull();
+  });
+
+  it('dives on the opening somebody asked for before a price list, when neither has answered more', async () => {
+    await ensureDiscoveryAuthority(projectId);
+    // Created in both orders, so arrival cannot be what decides it.
+    const request = await opening({ title: 'A client posted a paid 5-page site build', signal: 'PAID_TASK_OR_CONTRACT' });
+    const price = await opening({ title: 'A vendor publishes $1.99 a minute', signal: 'PRICING_OR_INFORMATION_ASYMMETRY' });
+    const later = await opening({ title: 'A second client posted a paid logo', signal: 'ACTIVE_BUYER_DEMAND' });
+    for (const one of [price, request, later]) {
+      await getDb().run('UPDATE cash_opportunities SET buying_signal = ? WHERE id = ?', ['published', one]);
+    }
+    const started = await startValidations({ projectId, limit: 2 });
+    expect(started.map((one) => one.opportunityId).sort()).toEqual([later, request].sort());
+    expect(started.map((one) => one.opportunityId)).not.toContain(price);
   });
 });
