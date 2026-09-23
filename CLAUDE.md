@@ -10966,6 +10966,26 @@ that would have chosen between them exists.**
   saying it is provenance, which is what stops the next auditor spending an
   hour rediscovering it.
 
+- **This pair moved three times, and the third move is what says the rule is
+  about position rather than about being first.** It was written at `088` /
+  pg `079`, moved to `089` / pg `080` when the four-account fleet lane landed
+  that pair mid-gate, and moved again to `090`/`091` and pg `081`/`082` when
+  §48's puzzle kernel took `089` / pg `080` the same way. The section heading
+  moved with it: both branches wrote a `## 48`, so this one is `## 49` and its
+  five code references moved too. §47 settles the tiebreak as **uniqueness over
+  precedence** — the index that landed first keeps it, and renumbering your own
+  heading is the edit least likely to collide with a session still running.
+
+  **What made all three invisible until a boot is the same fact, and it is worth
+  restating where somebody renumbering will read it.** Git sees two
+  differently-named files at two numbers and has nothing to reconcile, so a
+  collision that stops the application booting arrives as a *clean merge*.
+  `deploymentOwnership` walking both chains is the only thing between that and a
+  refused boot, and it is the reason the number is checked at load time at all
+  (§25). A reader following a *number* in prose has the same problem one layer
+  along, which is why §32 names its file: **a number is a position two
+  workstreams can both reach for; a filename is the thing itself.**
+
 ## Repository map
 
 ```
