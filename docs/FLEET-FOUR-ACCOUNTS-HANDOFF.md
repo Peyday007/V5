@@ -633,6 +633,15 @@ image, including the judge pass, `434 claim(s) across 434 readable
 document(s)`, and the work and campaign deliberately left behind for the pass
 after the restart.
 
+**That figure was read from the run's live log and is no longer
+re-verifiable**, which is worth saying rather than leaving a reader to
+discover. Run 323's `Deploy to Fly` job was cancelled by the concurrency group
+after the release step, and GitHub keeps no step detail and no artifact for
+it: the API now returns two surviving step logs and `total_count: 0`
+artifacts. So the durable evidence for *this* run is that production went on
+serving `901a42db`, and the durable evidence for the release as a whole is
+deploy 327's, which is a file rather than a log line — see §8.7.
+
 The post-restart failure is **not** the condition §7.3 predicted, and saying
 so precisely matters more than the prediction being nearly right. It got a
 long way — 08:57:49 to 09:13:17, the archive read at 434 documents, a worker
@@ -1062,6 +1071,32 @@ refused at 10:51:04 after the restart, booted at 11:45:25. **Three refusals
 and two successes**, on images whose pre-restart verification passes every
 time it gets to run.
 
+**Its verification numbers, read out of the run's own step logs.**
+`HOSTED-VERIFICATION: PASS 234/234` at *Prove the live Brain is actually
+shut*, and `PASS 253/253` at *Prove it survived the restart* — **nineteen
+checks more after the restart than before it**, because the post-restart pass
+adds the restart-survival checks to the same suite. An earlier draft of §10
+reported 234/234 for both halves; the numbers were pulled from the run and the
+difference is the point, since a post-restart pass that carried the *same*
+count would mean the survival checks had not run.
+
+**And this run left a durable record, which §8.2's could not.** The
+`step12b-hosted-verification` artifact is the acceptance reporter's own file:
+
+```json
+{
+  "revision": "6708990938e1bbc82af535b12f374315ae5b1b18",
+  "ranAt": "2026-09-23T12:08:01Z",
+  "beforeRestart": true,
+  "afterRestart": true,
+  "workflowRun": "https://github.com/Peyday007/V5/actions/runs/35853813546"
+}
+```
+
+A log line is evidence until the log is pruned; a committed artifact naming
+the revision it ran against is evidence afterwards. That is why this run
+rather than 323 is what §0 and §5 point at.
+
 ### 8.8 The recovery floor is forty minutes, and that is a gap rather than a fact of life
 
 Worth recording because this incident measured it. **There is no supported
@@ -1233,3 +1268,68 @@ correct as it stands, and their fix is still worth landing, because it is one
 **What the two lanes agree on, and it is the thing that matters most:** no
 four-account Factory pool has been commissioned, and neither document claims
 one has.
+
+---
+
+## 10. Reconciliation, item by item, against evidence rather than recollection
+
+The integration was worked to a list. This is that list, with what settles
+each item rather than a tick — and with the three items that are **not**
+settled kept in the same table as the ones that are, because a checklist whose
+unfinished rows live somewhere else is a checklist that reads as finished.
+
+### 10.1 What was asked, and what answers it
+
+| # | Asked | Settled by |
+| --- | --- | --- |
+| 1 | Fetch and reconcile current state; do not assume a SHA is still current | Production moved **ten** times during this work. §8.1 lists every tip, and every one was re-verified as a real ancestor of the current one with `git merge-base --is-ancestor` rather than transcribed. |
+| 2 | Read both handoffs and `CLAUDE.md`; treat repository rules as authoritative | §6 is where the two lanes' overlaps were reconciled. §28 decided how production was advanced, §18 decided that a boot refusal during the outage was not to be relaxed, §41 decided that the vacuous fixture had to be measured rather than characterized. |
+| 3 | Create the integrated tree; do not reimplement; resolve genuine conflicts | `bb6d538d` is the fleet lane merged into the closeout lane with no conflict. No fleet commit was reimplemented — the eight are preserved and `e8a34b00` is still their tip. |
+| 4 | Fix the vacuous `'READER'` fixture; verify it exercises the real denial path | §7.1. Measured against the old fixture before it was trusted: the corrected test fails on the un-fixed code and passes on the fixed. TypeScript coverage was not narrowed and `tests/**/*.tsx` was not removed from `tsconfig.json`. |
+| 5 | Run the cross-lane proof first | §7.3. |
+| 6 | Complete SQLite and Postgres gates on the **same** final SHA; reuse no old green run | §7.4. `postgres-suite.yml` run **384** on `67089909` — success. The local SQLite suite on that tree. No green run from either source branch is offered as evidence for the integrated commit. |
+| 7 | Review the four-account acceptance claim; do not convert configuration into proof | §5 and §7.5. The three categories are kept apart and the middle one is **unticked**. |
+| 8 | Update the handoff; remove stale predictions once measured | §7.2's prediction is replaced by §8.4's reading. Three stale pointers were corrected — §0, §5 and §8.1 — and each correction is recorded rather than edited away. |
+| 9 | Follow the release path to a terminal verdict, including hosted verification both sides of the restart | **Deploy 327 on `67089909`**: every step green, `PASS 234/234` before the restart and `PASS 253/253` after it — read out of the run's own step logs rather than from memory, which is how the count was found to differ. §8.2, §8.5 and §8.7 are the three runs it took and why two of them did not release. |
+| 10 | Run live Factory operator reads against production; inspect rows and semantics | §8.4. Campaigns across two projects, one campaign's full status, throughput with an evidence class on every figure, 43 events, and the fleet reads beside them. |
+| 11 | Final reconciliation | This section. |
+
+### 10.2 The three things that are not settled, stated as such
+
+**No four-account Factory pool has been commissioned.** This is item 7's
+middle category and nothing in ten items moved it. The quarantine has never
+fired against a real dead surface, `STALE` has never been printed about a real
+revoked connector, and no fire has been routed across four accounts. Those
+need four real Claude accounts and their deployment secrets, which is the one
+thing in this lane that is not an engineering task.
+
+**The parallel lane's D2 is unlanded.** §9. Its fix is on
+`claude/fleet-four-account-acceptance-uey8cw`, which is still moving and has
+no open pull request, so it is not this lane's to merge. Measured on
+production today the condition has **no instance** — every Routine's bound
+worker is `ACTIVE` — so `fleet show`'s `12 eligible` is correct as it stands
+and the defect is one `bind-worker` away from biting.
+
+**The forty-minute recovery floor is a gap, not a fact of life.** §8.8. A
+condition whose real remedy is a process restart costs a full `Deploy`,
+because `deploy.yml` is the only workflow that restarts anything. It was
+proposed rather than built, because adding a remote restart path to production
+during an incident is the change least likely to be reviewed properly.
+
+### 10.3 What was deliberately not done
+
+Four things, each because doing them would have been worse than the problem:
+
+* **The parallel lane was not merged.** Taking a live lane's work onto
+  `production` out from under the session that owns it is the cross-lane
+  collision §28 is written from.
+* **`production` was never checked out to advance it.** Every advance was
+  `git merge-base --is-ancestor` then `git push <branch>:production`, which is
+  §28's own rule and is what makes a stale index unable to travel.
+* **The boot's storage check was not given a retry.** §18 says cloud mode
+  never falls back, and relaxing a boot refusal while it is refusing is how a
+  control becomes a formality. It is proposed in §8.8 and left for a reviewer
+  who is not under an incident.
+* **No gate, migration, type check or release guard was weakened to obtain
+  green.** Where something failed it was diagnosed; where a test was wrong it
+  was measured against the defect it claimed to catch before it was trusted.
