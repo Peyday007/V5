@@ -3396,6 +3396,39 @@ remote.
   did not work" would send somebody to re-deploy a version that is already
   there.
 
+  **And this paragraph is a trap read backwards, which a tenth run sprung.**
+  It has been correct about nine runs, so a reader arriving at a red `Deploy`
+  now expects *released, gate failed* — and a genuinely failed **release**
+  looks identical from the run's conclusion, from the verdict step and from a
+  tail of the log, all three of which say failure either way. Deploy 319 on
+  2026-09-23 was the second kind: `flyctl deploy` exited 1, and the run still
+  carried a red verdict and a `HOSTED-VERIFICATION` artifact reading
+  `beforeRestart: false, afterRestart: false`, which is exactly what the nine
+  before it carried.
+
+  **The step that answers it is `Record what was released`, and its conclusion
+  is `skipped` when nothing was.** That is the one fact that separates the two,
+  it is free to read, and it is not the run's conclusion. On 319 every check
+  after it is `skipped` too — *on purpose*, which the workflow says in its own
+  words: *"nothing in this commit is live and the app is still serving the
+  previous version. Read the Deploy step; the checks below it were skipped on
+  purpose."* A reader who applied the paragraph above would have concluded the
+  commit was live, and it was not.
+
+  The cause there is worth keeping beside it because it is §18 behaving exactly
+  as designed and therefore reads as a fault when it is a refusal:
+  `Brain could not use the document storage it was configured for` /
+  `The document store could not be checked (HTTP 544)` — Supabase Storage
+  answering with a `DatabaseTimeout` body — so the boot served the migration
+  error, the health check never passed, and `flyctl` gave up twice, once on
+  Depot and once on the `--depot=false` fallback. **The bucket listing is a boot
+  condition, not only the Postgres connection**, and a reader who reaches for
+  the connection string first is debugging the wrong half. `no known healthy
+  instances found for route tcp/443` in the proxy log, and `/healthz` answering
+  503 after 35s from outside, are what that looks like from the far side — the
+  same shape §20 records for a *restart window*, and here it was a standing
+  condition rather than two minutes.
+
   **A ninth run produced both readings at once, and the first of them names a
   mechanism rather than a shape.** 2026-09-20, `a2fd13c`: release success, the
   restart step itself succeeded for the first time in four deploys, and both
