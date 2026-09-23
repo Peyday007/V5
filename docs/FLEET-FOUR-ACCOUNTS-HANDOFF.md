@@ -26,13 +26,20 @@ measurement, and §7 is the integration's own record.
 | Merge | `bb6d538d` | the fleet lane merged into `e37cca06`, no conflict |
 | Fixture repair | `3a63fad4` | the `'READER'` correction §7 records |
 | Integrated tip | `ba5c0b2f` | `integration/fleet-four-accounts`, after reconciling against production four times |
-| **Production** | **`901a42db`** | **contains `ba5c0b2f`**, gated on both backends at that SHA, released by deploy 323, live and serving |
+| **Production** | **`08d6a787`** | **contains `ba5c0b2f`**, live and serving; the release that proved the integration live end to end is deploy 327 on `67089909` — see §8.7 |
 
 **`production` has been advanced to it, and the integration is deployed.**
-`ba5c0b2f` is an ancestor of `901a42db` — checked with
-`git merge-base --is-ancestor`, and confirmed file by file and symbol by
-symbol at the tip rather than inferred from the ancestry. §8 is the record of
-the release and the live reads rather than a plan for them.
+`ba5c0b2f` is an ancestor of every tip production has had since — checked with
+`git merge-base --is-ancestor` at each one, and confirmed file by file and
+symbol by symbol at the tip rather than inferred from the ancestry. §8 is the
+record of the release and the live reads rather than a plan for them.
+
+**An earlier version of this row named `901a42db` and deploy 323.** That was
+true when it was written and production has moved four times since, so it is
+corrected here rather than edited away: deploy 323's own reading is §8.2, it
+passed before its restart and failed after it, and the run that passed both
+sides is 327. A SHA table that named a superseded tip would send a reader to
+verify the integration against a tree production no longer serves.
 
 **An earlier version of this paragraph said `origin/production` was
 `f727b143`.** That was true when the lane measured it and was false by the
@@ -594,13 +601,15 @@ git merge-base --is-ancestor origin/production integration/fleet-four-accounts  
 
 `production` was never checked out to advance it.
 
-**Production moved seven times while this was being done** — `f727b143` →
+**Production moved ten times while this was being done** — `f727b143` →
 `e37cca06` → `6f489918` → `41f4373f` → `533463f3` → `901a42db` → `e8e066ea` →
-`662d3373` — each move requiring a fresh merge and a fresh fast-forward check.
-An earlier version of this sentence said four, over a list that already showed
-five arrows; it is corrected rather than edited away, because a document about
-reconciling against a moving target should not be wrong about how far it
-moved. The integration was
+`662d3373` → `96b1bfcd` → `67089909` → `08d6a787` — each move requiring a fresh
+merge and a fresh fast-forward check, and every one of them verified as a real
+ancestor of the current tip rather than transcribed from notes. An earlier
+version of this sentence said four, over a list that already showed five
+arrows, and a later one said seven; both are corrected rather than edited away,
+because a document about reconciling against a moving target should not be
+wrong about how far it moved. The integration was
 re-merged and re-verified each time rather than re-derived, and it survives at
 the final tip, checked file by file and symbol by symbol rather than assumed.
 
