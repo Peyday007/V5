@@ -72,6 +72,17 @@ import {
 import { recordFactoryEvent, recordIntegration } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { matchesGlob } from './integrate.ts';
+import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
+
+/**
+ * The forbidden set for a repository the forge addresses.
+ *
+ * Derived here rather than passed in, so that no caller of a verification can
+ * forget to ask — the omission that let a wide glob reach the deploy workflow.
+ */
+function forbiddenForRemote(repository: ForgeRepository): string[] {
+  return forbiddenPathsFor(`https://${repository.host}/${repository.slug}`);
+}
 import {
   compareCommits,
   findPullRequestForBranch,
@@ -779,6 +790,13 @@ export async function verifyUnitReport(
         'extra files ignored — a change nobody declared is a change nobody reviewed the scope of.',
     );
   }
+  const forbiddenChanged = forbiddenIn(comparison.body.files, forbiddenForRemote(repository));
+  if (forbiddenChanged.length > 0) {
+    problems.push(
+      `${forbiddenChanged.length} file(s) changed that no unit may change in this repository: ` +
+        `${forbiddenChanged.slice(0, 10).join(', ')}. Owning a wide path does not reach them.`,
+    );
+  }
 
   return {
     ok: problems.length === 0,
@@ -1086,6 +1104,13 @@ export async function verifyIntegrationReport(
     problems.push(
       `${outside.length} file(s) in this integration are outside every merged unit's declared ` +
         `paths: ${outside.slice(0, 10).join(', ')}. The whole integration is refused.`,
+    );
+  }
+  const forbiddenChanged = forbiddenIn(comparison.body.files, forbiddenForRemote(repository));
+  if (forbiddenChanged.length > 0) {
+    problems.push(
+      `${forbiddenChanged.length} file(s) in this integration are ones no unit may change in this ` +
+        `repository: ${forbiddenChanged.slice(0, 10).join(', ')}. The whole integration is refused.`,
     );
   }
 

@@ -752,6 +752,69 @@ describe('ownership and integration', () => {
     fs.rmSync(worktreePath, { recursive: true, force: true });
   });
 
+  it('rejects a diff that reached a forbidden path, however widely the unit owned', async () => {
+    /*
+     * Ownership of `**` passes the ownership check for every file; the forbidden
+     * list is a separate question on the files that actually moved, and it is
+     * the one that binds.
+     */
+    const changeRequest = await approvedChangeRequest({ mutationScope: ['**'] });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 1,
+      laneTargetReason: 'initial',
+    });
+    const { unit } = await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: 'everything',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'everything',
+      objective: 'o',
+      acceptance: ['a'],
+      ownedPaths: ['**'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a commit',
+      state: 'READY',
+    });
+    const worktreePath = path.join(os.tmpdir(), `factory-wt-forbidden-${Date.now()}`);
+    const branch = 'factory/test/forbidden';
+    await ensureWorktree(repoRoot, { path: worktreePath, branch, baseSha: changeRequest.baseSha });
+    fs.writeFileSync(path.join(worktreePath, 'src', 'one.txt'), 'changed\n');
+    fs.mkdirSync(path.join(worktreePath, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(worktreePath, '.claude', 'settings.json'), '{"permissions":{}}\n');
+    const head = await commitAll(worktreePath, 'touch a forbidden file');
+    const claimed = await claimUnits({ campaignId: campaign.id, workerId: 'w1', unitIds: [unit.id] });
+    await markImplemented(
+      {
+        unitId: unit.id,
+        workerId: 'w1',
+        leaseId: claimed[0]?.leaseId ?? '',
+        leaseGeneration: claimed[0]?.leaseGeneration ?? 0,
+      },
+      {
+        branch,
+        headSha: head ?? '',
+        baseSha: changeRequest.baseSha,
+        worktreePath,
+        workerSummary: 'did the thing',
+        terminalResult: null,
+      },
+    );
+    const fresh = (await listUnits(campaign.id))[0];
+    expect(fresh?.state).toBe('IMPLEMENTED');
+    const result = await integrateUnit({ repoRoot, campaign, changeRequest, unit: fresh ?? unit });
+    expect(result.outcome).toBe('REJECTED');
+    expect(result.rejectedPaths).toEqual(['.claude/settings.json']);
+    const after = await getUnit(unit.id);
+    expect(after?.failureCategory).toBe('OUT_OF_SCOPE_MUTATION');
+    expect(after?.state).toBe('READY');
+    fs.rmSync(worktreePath, { recursive: true, force: true });
+  });
+
   it('merges a diff that stayed inside the unit, and unblocks what waited on it', async () => {
     const changeRequest = await approvedChangeRequest({ mutationScope: ['src/**'] });
     const { campaign } = await ensureCampaign({
@@ -823,6 +886,8 @@ describe('ownership and integration', () => {
     const unit = await getUnit(first.unit.id);
     const result = await integrateUnit({ repoRoot, campaign, changeRequest, unit: unit! });
     expect(result.outcome).toBe('MERGED');
+    // Something ran: `every` over an empty list is true and would pass here too.
+    expect(result.verification.length).toBeGreaterThan(0);
     expect(result.verification.every((entry) => entry.exitCode === 0)).toBe(true);
     expect((await getUnit(first.unit.id))?.state).toBe('INTEGRATED');
     // Integration, not implementation, is what unblocks downstream work.

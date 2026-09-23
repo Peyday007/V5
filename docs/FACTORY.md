@@ -957,8 +957,28 @@ it on bins.
   handing it out forever — `liveBinOfKind` deliberately ignores a FAILED bin, so
   without the cap a stage would be re-created on the very next tick, and a
   campaign spinning is harder to notice than one that stopped. The campaign goes
-  BLOCKED with the reason and is re-examined every tick, so cancelling the stuck
-  bins or amending the contract starts it moving again.
+  BLOCKED with the reason and is re-examined every tick. The failed bins are
+  counted **from the newest `FACTORY_STAGE_REAUTHORIZED`**, so once what failed
+  the stage is corrected, `factory reauthorize --why stage-corrected` hands it
+  out again and every failed bin keeps its row. (This used to say that
+  cancelling the stuck bins or amending the contract restarted it. Neither
+  could: a FAILED bin is already terminal, an amendment touches no bin, and the
+  count had no baseline, so a re-authorization was re-blocked on the next tick.)
+- **A unit runs out of attempts.** `UNIT_EXHAUSTED_ATTEMPTS` blocks the campaign
+  on both planes, and its answer is `factory regrant-unit --campaign … --unit
+  <key> --to <n> --why <code>` (`services/factory/regrant.ts`): it raises the
+  ceiling, never resets the count or the recorded reason, returns a FAILED unit
+  to READY, and records `UNIT_ATTEMPTS_REGRANTED`. Before it existed the remedy
+  the blocker named could not be taken, and retiring the campaign was the only
+  way past.
+- **A confirmed report Brain cannot record yet.** A units report the forge
+  confirmed and `acceptUnitReport` could not claim is written as `UNIT_REFUSED`
+  (uncharged) and the units stage is held rather than fired again; after five
+  tries on one bin it is refused through `refuseUnit`, which charges the one
+  attempt that bounds it.
+- **A tick that throws.** `tickAllRemoteCampaigns` records `FACTORY_TICK_FAILED`
+  once per distinct message per hour, and `factory status` prints it beside the
+  other refusals — the loop reads nothing else about a failed tick.
 - **A refused unit report costs an attempt.** Locally an attempt is charged when
   a worker is handed the unit, because the process doing the work *is* the
   claim. Remotely the unit row is not claimed until a report comes back and is
@@ -1455,6 +1475,18 @@ Two things must keep working and are tested as such: ordinary product code passe
 `requiredContext` may name a forbidden file, because the list refuses
 **ownership** and never reading. A reviewer of a change that has to agree with
 the authorization model has to be able to open it.
+
+**That test used exact paths, and the check it exercised read an owned glob as
+though it were a path.** So a unit owning `**`, `server/**` or `.github/**`
+passed planning — none of those strings is itself inside a forbidden glob — and
+its diff then passed ownership at integration, because nothing after the planner
+read the list at all. `services/factory/forbidden.ts` is both halves now: the
+planner refuses an owned glob that *reaches into* a forbidden one (a stem
+comparison that over-approximates, the right direction for an early refusal),
+and the files that actually moved are refused on both planes — `integrateUnit`
+locally, `verifyUnitReport` and `verifyIntegrationReport` against the forge. The
+second is the binding one, and a verification cannot forget to ask because it
+derives the list from the repository itself.
 
 Everything after that is the pipeline as it already stood: scoped work against
 the project's directory boundary, a diff rejected whole if it reached outside the

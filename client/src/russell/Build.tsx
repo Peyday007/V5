@@ -704,6 +704,24 @@ function CampaignRow({ campaign }: { campaign: FactoryCampaign }): JSX.Element {
             Read the pull request{campaign.prRef ? ` ${campaign.prRef}` : ''}
           </a>
         </p>
+      ) : campaign.prRef ? (
+        /*
+         * A campaign that ran on a checkout stops at a reviewed branch: `assemble.ts`
+         * produces the branch, the patch and the body and deliberately publishes
+         * nothing. This used to fall through to "No pull request yet", which told
+         * a person the work did not exist while the thing they needed was sitting
+         * on a named branch.
+         */
+        <p>
+          The reviewed work is on branch <code>{campaign.prRef}</code>
+          {campaign.integrationSha ? (
+            <>
+              {' '}at <code>{campaign.integrationSha.slice(0, 12)}</code>
+            </>
+          ) : null}
+          . This campaign ran on a checkout, so it stops there: opening the pull request is a
+          person&apos;s step.
+        </p>
       ) : (
         <p className="rs-hint">
           No pull request yet. One is opened when the work has been integrated and an

@@ -4127,6 +4127,17 @@ remote.
   **ownership**, never reading, and a reviewer of a change that has to agree with
   the policy module must be able to open it.
 
+  **And "enforced by the planner" was enforced for exact paths only. The
+  correction is recorded rather than quietly applied.** The check asked whether
+  a unit's owned *glob* matched a forbidden glob as though it were a literal
+  path, so `**`, `server/**` and `.github/**` all passed — and nothing after the
+  planner read the list, so a unit owning `**` could change the deploy workflow
+  or the policy module and pass ownership at integration. Every test named a
+  forbidden file exactly, which is the one plan nobody reaching for it would
+  write. `services/factory/forbidden.ts` asks it twice: at planning, whether an
+  owned glob reaches into a forbidden one; and on the files that actually moved,
+  on both planes, which is the half that binds.
+
 - **A question Brain asks has to be answerable in the words a person answers
   in.** The gate declines *"V4"* — two characters, no verb, nothing to do — and
   it is right to: that is not a change request. But it is the correct answer to
@@ -10186,8 +10197,11 @@ server/
       git.ts            worktrees, diffs and merges — the factory's only evidence
       dispatch.ts       one unit on one worker, and the four ways it can end
       integrate.ts      ownership, the merge, and the verification that follows it
+      glob.ts           what a path glob matches, asked by two questions
+      forbidden.ts      what no unit may change, refused at the plan and on the diff
       review.ts         the independent verdict, and the lineage that makes it one
       repair.ts         a finding becomes work, exactly once
+      regrant.ts        the answer to a unit that ran out of attempts
       assemble.ts       the reviewable artifact, and the publishing it refuses
       metrics.ts        throughput from the ledger, with an evidence class
       sessions.ts       what the hosted plane ran, read back from Brain's own rows

@@ -114,6 +114,12 @@ export interface RemoteTickReport {
   ingested: string[];
   progress: boolean;
   tickHeld: boolean;
+  /**
+   * Confirmed unit reports this pass could not record yet. While there are any,
+   * the units stage is not handed out again: the completed report is still the
+   * answer, and a second bin would only buy the same work twice.
+   */
+  awaitingRecord: number;
 }
 
 function empty(
@@ -133,6 +139,7 @@ function empty(
     ingested: [],
     progress: false,
     tickHeld: false,
+    awaitingRecord: 0,
   };
 }
 
@@ -284,7 +291,44 @@ async function ingestUnitsBin(
       binId: bin.id,
     });
     if (!accepted.accepted) {
-      report.notes.push(`${key} could not be recorded: ${accepted.reason}`);
+      /*
+       * A report the forge confirmed and Brain could not record.
+       *
+       * This used to be a note and nothing else: no row, no attempt, and the unit
+       * still READY — so the stage below saw a ready unit with no live bin and
+       * fired a fresh activation while the completed report was still perfectly
+       * acceptable, and nothing anywhere said why. The usual cause is transient
+       * (a claim refused because another acceptance briefly holds an overlapping
+       * surface), so the first tries cost nothing: the refusal is recorded, the
+       * stage is held, and the next tick asks again. A cause that persists is
+       * refused through `refuseUnit` after `ACCEPT_RETRIES`, which charges the one
+       * attempt that bounds it — ending, if it keeps happening, at
+       * `UNIT_EXHAUSTED_ATTEMPTS`, whose answer is `factory regrant-unit`.
+       */
+      const tries = await acceptanceRefusals(campaign.id, unit.id, bin.id);
+      if (tries + 1 >= ACCEPT_RETRIES) {
+        await refuseUnit(
+          campaign,
+          unit,
+          'WORKER_ERROR',
+          `Brain could not record this confirmed report after ${ACCEPT_RETRIES} tries: ` +
+            accepted.reason,
+          report,
+          bin.id,
+        );
+        continue;
+      }
+      await recordFactoryEvent({
+        campaignId: campaign.id,
+        unitId: unit.id,
+        sessionId: who.sessionId,
+        workerId: who.workerId,
+        kind: FACTORY_EVENT_KINDS.unitRefused,
+        evidenceClass: 'MEASURED',
+        detail: { stage: 'UNITS', binId: bin.id, unitKey: key, reason: accepted.reason, try: tries + 1 },
+      });
+      report.notes.push(`${key} could not be recorded yet (try ${tries + 1}): ${accepted.reason}`);
+      report.awaitingRecord += 1;
       continue;
     }
     moved += 1;
@@ -431,6 +475,22 @@ async function refuseUnit(
     detail: { unitKey: unit.unitKey, category, binId, detail: detail.slice(0, 500) },
   });
   report.notes.push(`${unit.unitKey} goes back for another attempt: ${category}.`);
+}
+
+/** How many times a confirmed units report may fail to record before it costs an attempt. */
+const ACCEPT_RETRIES = 5;
+
+/** The uncharged recording refusals already written for this bin's report on this unit. */
+async function acceptanceRefusals(campaignId: string, unitId: string, binId: string): Promise<number> {
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.unitRefused],
+    limit: 5000,
+  });
+  return events.filter((event) => {
+    if (event.unitId !== unitId) return false;
+    const detail = (event.detail ?? {}) as { binId?: unknown; stage?: unknown };
+    return detail.binId === binId && detail.stage === 'UNITS';
+  }).length;
 }
 
 /**
@@ -999,11 +1059,27 @@ const MAX_BINS_PER_STAGE = 3;
  * fleet cannot do as specified, and the remedy is a person's: amend the contract,
  * or stop.
  *
- * Neither is terminal. The campaign is BLOCKED and re-examined on the next tick,
- * so cancelling the stuck bins or amending the contract starts it moving again
- * without anybody reaching into a row.
+ * Neither is terminal. The campaign is BLOCKED and re-examined on the next tick.
+ * A bin at `NEEDS_HUMAN` is answered by `factory answer-bin`. Exhaustion is
+ * answered by `factory reauthorize --why stage-corrected`, a person saying the
+ * condition that failed the stage has been corrected — so the failed bins are
+ * counted **from the newest re-authorization**, the same baseline the
+ * surface-block ceiling below uses. Every failed bin keeps its row; what moves
+ * is where the count starts.
+ *
+ * It used to count every failed bin the campaign ever had, and this comment said
+ * that amending the contract or cancelling the stuck bins started it moving
+ * again. Neither could: an amendment touches no bin, a FAILED bin is already
+ * terminal so there is nothing to cancel, and a re-authorization was re-blocked
+ * on the very next tick by the same three rows. The only way out was to retire
+ * the whole campaign — §24's waiting-nobody-can-resolve, with the remedy named
+ * in the sentence that denied it.
  */
-function stalledStage(bins: Bin[], kind: string): { detail: string } | null {
+export function stalledStage(
+  bins: Bin[],
+  kind: string,
+  since: string | null,
+): { detail: string } | null {
   const mine = bins.filter((bin) => bin.kind === kind);
   const waiting = mine.find((bin) => bin.state === 'NEEDS_HUMAN');
   if (waiting) {
@@ -1014,17 +1090,36 @@ function stalledStage(bins: Bin[], kind: string): { detail: string } | null {
         'duplicate the work rather than unblock it.',
     };
   }
-  const failed = mine.filter((bin) => bin.state === 'FAILED').length;
+  const failed = mine.filter(
+    (bin) => bin.state === 'FAILED' && (since === null || bin.createdAt > since),
+  ).length;
   if (failed >= MAX_BINS_PER_STAGE) {
     return {
       detail:
-        `${failed} ${kind} bins have failed on this campaign. The fleet cannot do this stage as ` +
-        'specified, so it is not handed out a fourth time. Amending the contract — which may ' +
-        'narrow a scope or add a verification command, and may never change what success is — ' +
-        'or stopping the campaign are the ways out.',
+        `${failed} ${kind} bins have failed on this campaign` +
+        `${since ? ' since it was last re-authorized' : ''}. The fleet cannot do this stage as ` +
+        'specified, so it is not handed out again. Correct what failed it — amend the contract, ' +
+        'which may narrow a scope or add a verification command and may never change what ' +
+        'success is, or fix the surface — and then `factory reauthorize --why stage-corrected`; ' +
+        'or stop the campaign.',
     };
   }
   return null;
+}
+
+/**
+ * When a person last said a stage's blocking condition was corrected, or null.
+ *
+ * Its own read, of the one kind, taking the newest: `listFactoryEvents` returns
+ * the oldest rows first, so a limit shared with other kinds would drop exactly
+ * the row that matters on a long campaign.
+ */
+async function lastReauthorization(campaignId: string): Promise<string | null> {
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.stageReauthorized],
+    limit: 5000,
+  });
+  return events.at(-1)?.at ?? null;
 }
 
 /** Has this integration bin's report already become rows, either way? */
@@ -1283,6 +1378,7 @@ async function runRemoteTick(
     ingested: [],
     progress: false,
     tickHeld: false,
+    awaitingRecord: 0,
   };
 
   /*
@@ -1351,6 +1447,7 @@ async function runRemoteTick(
    * carries the production sequence this cost.
    */
   const liveBins = binsThisPassMayJudge(bins, await campaignBins(fresh.id));
+  const reauthorizedAt = await lastReauthorization(fresh.id);
 
   /*
    * 1b. Say so when a stage is ready and nobody may be handed it.
@@ -1369,7 +1466,7 @@ async function runRemoteTick(
       await stageIsLive(fresh, 'PLANNING', 'waiting for a worker to take the plan', report);
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_PLAN');
+    const stall = stalledStage(liveBins, 'FACTORY_PLAN', reauthorizedAt);
     if (stall) return await blockStage(fresh, 'planning', stall, report);
     const bin = await createPlanBin(fresh, changeRequest);
     report.created.push(`plan:${bin.id}`);
@@ -1396,12 +1493,18 @@ async function runRemoteTick(
   );
 
   if (ready.length > 0) {
+    if (report.awaitingRecord > 0) {
+      const waiting = `${report.awaitingRecord} confirmed unit report(s) not recorded yet; asking again next tick`;
+      report.notes.push(waiting);
+      await stageIsLive(fresh, 'EXECUTING', waiting, report);
+      return report;
+    }
     if (liveBinOfKind(liveBins, 'FACTORY_UNITS')) {
       report.notes.push(`waiting for a worker on ${ready.length} ready unit(s)`);
       await stageIsLive(fresh, 'EXECUTING', `${ready.length} unit(s) with the fleet`, report);
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_UNITS');
+    const stall = stalledStage(liveBins, 'FACTORY_UNITS', reauthorizedAt);
     if (stall) return await blockStage(fresh, 'implementation', stall, report);
     const bin = await createUnitsBin(fresh, changeRequest, ready);
     if (bin) {
@@ -1440,7 +1543,7 @@ async function runRemoteTick(
       );
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_INTEGRATE');
+    const stall = stalledStage(liveBins, 'FACTORY_INTEGRATE', reauthorizedAt);
     if (stall) return await blockStage(fresh, 'integration', stall, report);
     const surface = await surfaceBlockedIntegrations(fresh.id);
     if (surface.count >= SURFACE_BLOCK_CEILING) {
@@ -1545,9 +1648,13 @@ async function runRemoteTick(
    *
    * It is BLOCKED with the unit's own recorded reason rather than failed: the
    * work is intact, every attempt kept its row, and the ways out are a person's —
-   * amend the contract, which may narrow a scope or add a verification command
-   * and may never change what success is, or stop. Re-examined every tick, so
-   * either one starts it moving without anybody reaching into a row.
+   * correct what failed it and `factory regrant-unit`, which raises the unit's
+   * ceiling and puts it back to READY, or stop. Re-examined every tick, so the
+   * regrant starts it moving without anybody reaching into a row.
+   *
+   * This used to say that amending the contract started it moving. It could
+   * not: an amendment touches no unit, and nothing moved a FAILED unit back out,
+   * so the only real way past was retiring the whole campaign.
    */
   const failed = units.filter((unit) => unit.state === 'FAILED');
   if (failed.length > 0) {
@@ -1594,8 +1701,8 @@ async function runRemoteTick(
       report.notes.push('waiting for a reviewer');
       await stageIsLive(fresh, 'REVIEWING', 'waiting for a reviewer', report);
       return report;
-    } else if (stalledStage(liveBins, 'FACTORY_REVIEW')) {
-      const stall = stalledStage(liveBins, 'FACTORY_REVIEW');
+    } else if (stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt)) {
+      const stall = stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt);
       if (stall) return await blockStage(fresh, 'review', stall, report);
     } else if (!alreadyReviewed || latest?.verdict !== 'PASS') {
       const bin = await createReviewBin(fresh, changeRequest, reviewedSha, reviews.length + 1);
@@ -1643,7 +1750,7 @@ async function runRemoteTick(
       report.notes.push(`delivery needs a person: bin ${stuck.id}`);
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_DELIVER');
+    const stall = stalledStage(liveBins, 'FACTORY_DELIVER', reauthorizedAt);
     if (stall && usable.length === 0) return await blockStage(fresh, 'delivery', stall, report);
     if (usable.length === 0) {
       const deliverable = await pullRequestFor(fresh.id);
@@ -1896,18 +2003,58 @@ export async function tickAllRemoteCampaigns(): Promise<RemoteTickReport[]> {
     try {
       reports.push(await tickRemoteCampaign(campaign.id));
     } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       reports.push(
-        empty(
-          campaign.id,
-          campaign.projectId,
-          campaign.state,
-          campaign.state,
-          `the tick threw: ${error instanceof Error ? error.message : String(error)}`,
-        ),
+        empty(campaign.id, campaign.projectId, campaign.state, campaign.state, `the tick threw: ${message}`),
       );
+      /*
+       * And a row, because the report above is read by nobody: the loop keeps
+       * only whether anything was created, and ends in `.catch(() => undefined)`.
+       * A campaign whose tick throws on every pass — a manifest Brain itself
+       * refuses, a statement that fails in one dialect — otherwise goes on
+       * reading as the last stage it reached while nothing happens, which is the
+       * silence this factory keeps correcting. Recording it must not become the
+       * second failure, so it is best-effort.
+       */
+      await recordTickFailure(campaign.id, message).catch(() => undefined);
     }
   }
   return reports;
+}
+
+/** How long one tick-failure message is kept to a single row. */
+const TICK_FAILURE_REPEAT_MS = 60 * 60 * 1000;
+
+/**
+ * Record that a campaign's tick threw — once per distinct message per hour.
+ *
+ * A throw that repeats every twenty seconds would otherwise write four thousand
+ * identical rows a day, and a ledger that noisy is one nobody reads. A different
+ * message is a different fact and is always written; the same one is written
+ * again after an hour, so a failure that is still happening still shows as
+ * current rather than as history.
+ */
+export async function recordTickFailure(campaignId: string, message: string): Promise<boolean> {
+  const bounded = message.slice(0, 800);
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.tickFailed],
+    limit: 5000,
+  });
+  const last = events.at(-1);
+  if (
+    last &&
+    (last.detail as { message?: unknown }).message === bounded &&
+    Date.now() - Date.parse(last.at) < TICK_FAILURE_REPEAT_MS
+  ) {
+    return false;
+  }
+  await recordFactoryEvent({
+    campaignId,
+    kind: FACTORY_EVENT_KINDS.tickFailed,
+    evidenceClass: 'MEASURED',
+    detail: { message: bounded },
+  });
+  return true;
 }
 
 /* ------------------------------------------------------------------------- */

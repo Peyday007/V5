@@ -545,6 +545,46 @@ describe('a unit is believed only as far as the forge confirms it', () => {
     expect(verdict.problems.join(' ')).toContain('factory/c/u/a2');
   });
 
+  it('refuses a forbidden file even when the unit owns everything', async () => {
+    /*
+     * The binding half of the forbidden list: whatever the plan said, a file
+     * the forge says moved inside a forbidden glob refuses the report. Owning
+     * `**` is exactly the case the planner's check used to miss.
+     */
+    const brain = parseRemote('https://github.com/Peyday007/V5')!;
+    stubForge({
+      branches: { 'factory/c/u/a1': HEAD },
+      compares: {
+        [`${BASE}...${HEAD}`]: {
+          files: ['client/src/russell/Home.tsx', '.github/workflows/deploy.yml'],
+          status: 'ahead',
+        },
+      },
+    });
+    const verdict = await verifyUnitReport(
+      brain,
+      { branch: 'factory/c/u/a1', baseSha: BASE, ownedPaths: ['**'] },
+      report,
+    );
+    expect(verdict.ok).toBe(false);
+    expect(verdict.problems.join(' ')).toContain('.github/workflows/deploy.yml');
+    expect(verdict.problems.join(' ')).not.toContain('Home.tsx');
+
+    // And the same diff without the forbidden file is accepted, so the refusal
+    // above is about that file and nothing else.
+    stubForge({
+      branches: { 'factory/c/u/a1': HEAD },
+      compares: { [`${BASE}...${HEAD}`]: { files: ['client/src/russell/Home.tsx'], status: 'ahead' } },
+    });
+    const clean = await verifyUnitReport(
+      brain,
+      { branch: 'factory/c/u/a1', baseSha: BASE, ownedPaths: ['**'] },
+      report,
+    );
+    expect(clean.problems).toEqual([]);
+    expect(clean.ok).toBe(true);
+  });
+
   it('refuses a file the unit does not own, and names it', async () => {
     stubForge({
       branches: { 'factory/c/u/a1': HEAD },
@@ -654,6 +694,27 @@ describe('an integration must carry the work it names', () => {
     const verdict = await verifyIntegrationReport(repository, expected, report);
     expect(verdict.ok).toBe(false);
     expect(verdict.problems.join(' ')).toContain('Brain believes the repository');
+  });
+
+  it('refuses a forbidden file even when a merged unit owned everything', async () => {
+    stubForge({
+      branches: { 'factory/campaign/c1': integrationHead },
+      compares: {
+        [`${unitHead}...${integrationHead}`]: { files: [], status: 'ahead' },
+        [`${BASE}...${integrationHead}`]: {
+          files: ['index.html', '.claude/settings.json'],
+          status: 'ahead',
+        },
+      },
+    });
+    const verdict = await verifyIntegrationReport(
+      repository,
+      { ...expected, units: [{ unitKey: 'u', headSha: unitHead, ownedPaths: ['**'] }] },
+      report,
+    );
+    expect(verdict.ok).toBe(false);
+    expect(verdict.problems.join(' ')).toContain('.claude/settings.json');
+    expect(verdict.problems.join(' ')).not.toContain('outside every merged unit');
   });
 
   it('accepts one the repository agrees with, and says what it carried', async () => {
@@ -847,6 +908,29 @@ describe('a plan may not reach where the repository grant forbids', () => {
     ]) {
       it(`refuses a unit owning ${path}`, async () => {
         const validation = await planOwning([path]);
+        expect(validation.ok).toBe(false);
+        expect(validation.errors.join(' ')).toContain('out of the factory');
+      });
+    }
+
+    /*
+     * A glob that *contains* a forbidden path owns it exactly as much as naming it
+     * does. The check used to ask whether the owned glob, read as a literal path,
+     * was inside a forbidden glob — so `**` passed, and a unit owning it could
+     * then change the deploy workflow and pass ownership at integration.
+     */
+    for (const glob of [
+      '**',
+      '*',
+      'server/**',
+      'server/services/**',
+      'server/services/identity/*.ts',
+      '.github/**',
+      '.github/workflows/*',
+      '.claude/*',
+    ]) {
+      it(`refuses a unit owning the glob ${glob}, which reaches a forbidden path`, async () => {
+        const validation = await planOwning([glob]);
         expect(validation.ok).toBe(false);
         expect(validation.errors.join(' ')).toContain('out of the factory');
       });
@@ -1607,6 +1691,194 @@ describe('a unit out of attempts stops the campaign before any review', () => {
     expect(after?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
     expect(after?.blockerDetail).toContain('declared paths');
   });
+
+  /*
+   * The answering transition, which did not exist: the blocker's remedy said
+   * "raise its ceiling or replan the work" and nothing could raise a unit's
+   * ceiling or move a FAILED unit back out, so the only way past was retiring
+   * the whole campaign.
+   */
+  it('has an answer: a regrant raises the ceiling, keeps the history, and the next tick hands the unit out', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'exhausted-then-regranted',
+      objective: 'Something whose only unit ran out of attempts on a condition since corrected.',
+      expectedOutcome: 'It moves again without being retired.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const created = await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: 'spent',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'A unit that spent its attempts',
+      objective: 'Do one bounded thing.',
+      acceptance: ['it is done'],
+      ownedPaths: ['index.html'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a change',
+      risk: 'LOW',
+      criticalPath: true,
+      priority: 5,
+      modelClass: 'FAST',
+      state: 'FAILED',
+    });
+    const { getDb } = await import('../server/db/database.ts');
+    await getDb().run(
+      `UPDATE factory_work_units
+          SET attempt = max_attempts, failure_category = ?, failure_detail = ? WHERE id = ?`,
+      ['WORKER_ERROR', 'the surface could not reach the repository', created.unit.id],
+    );
+    const spent = (await getUnitByKey(campaign.id, 'spent'))!;
+
+    stubForge({});
+    await tickRemoteCampaign(campaign.id);
+    expect((await getCampaign(campaign.id))?.blockerKind).toBe('UNIT_EXHAUSTED_ATTEMPTS');
+
+    const { regrantUnit } = await import('../server/services/factory/regrant.ts');
+    // Refusals first: a code outside the closed set, and a "raise" that is not one.
+    expect(
+      (await regrantUnit({ campaignId: campaign.id, unitKey: 'spent', maxAttempts: spent.maxAttempts + 2, reasonCode: 'because', operator: 'operator:t' })).ok,
+    ).toBe(false);
+    expect(
+      (await regrantUnit({ campaignId: campaign.id, unitKey: 'spent', maxAttempts: spent.maxAttempts, reasonCode: 'surface-blocked', operator: 'operator:t' })).ok,
+    ).toBe(false);
+    expect((await getUnitByKey(campaign.id, 'spent'))?.state).toBe('FAILED');
+
+    const outcome = await regrantUnit({
+      campaignId: campaign.id,
+      unitKey: 'spent',
+      maxAttempts: spent.maxAttempts + 2,
+      reasonCode: 'surface-blocked',
+      operator: 'operator:t',
+    });
+    expect(outcome).toEqual({ ok: true, from: spent.maxAttempts, to: spent.maxAttempts + 2, state: 'READY' });
+    const regranted = (await getUnitByKey(campaign.id, 'spent'))!;
+    // Raised, never reset: the attempt count and the reason it ran out stay.
+    expect(regranted.attempt).toBe(spent.attempt);
+    expect(regranted.failureDetail).toBe('the surface could not reach the repository');
+
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    const events = await listFactoryEvents(campaign.id, { kinds: ['UNIT_ATTEMPTS_REGRANTED'] });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.detail).toMatchObject({ code: 'surface-blocked', from: spent.maxAttempts });
+
+    const next = await tickRemoteCampaign(campaign.id);
+    expect(next.created.some((entry) => entry.startsWith('units:'))).toBe(true);
+    const moving = await getCampaign(campaign.id);
+    expect(moving?.state).toBe('EXECUTING');
+    expect(moving?.blockerKind).toBeNull();
+  });
+});
+
+/* ========================================================================= */
+
+describe('a stage that failed its bins to exhaustion has a way back', () => {
+  /*
+   * `stalledStage` counted every FAILED bin the campaign ever had, so three
+   * failed plan bins blocked it for good: a re-authorization was re-blocked on
+   * the next tick by the same three rows, an amendment touches no bin, and a
+   * FAILED bin is already terminal. The count now starts at the newest
+   * re-authorization, the baseline the surface-block ceiling already used.
+   */
+  it('blocks after three failed plan bins, and a re-authorization hands the stage out again', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'plan-fails-three-times',
+      objective: 'Something whose planning stage fails on a surface that is later fixed.',
+      expectedOutcome: 'It plans once the surface is fixed.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({
+      changeRequestId: changeRequest.id,
+      via: 'PERSON',
+      userId: approverId,
+      authorityId: null,
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const { getDb } = await import('../server/db/database.ts');
+    stubForge({});
+    for (let round = 0; round < 3; round += 1) {
+      const tick = await tickRemoteCampaign(campaign.id);
+      const planBin = tick.created.find((entry) => entry.startsWith('plan:'));
+      expect(planBin, `round ${round} made a plan bin`).toBeTruthy();
+      await getDb().run(`UPDATE bins SET state = 'FAILED' WHERE id = ?`, [planBin!.slice('plan:'.length)]);
+    }
+    const stopped = await tickRemoteCampaign(campaign.id);
+    expect(stopped.created).toEqual([]);
+    const blocked = await getCampaign(campaign.id);
+    expect(blocked?.state).toBe('BLOCKED');
+    expect(blocked?.blockerDetail).toContain('have failed on this campaign');
+    expect(blocked?.blockerDetail).toContain('stage-corrected');
+
+    // Still blocked on the next tick: nothing has changed.
+    expect((await tickRemoteCampaign(campaign.id)).created).toEqual([]);
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await recordFactoryEvent({
+      campaignId: campaign.id,
+      kind: 'FACTORY_STAGE_REAUTHORIZED',
+      evidenceClass: 'MEASURED',
+      detail: { operator: 'operator:t', code: 'stage-corrected' },
+    });
+    const resumed = await tickRemoteCampaign(campaign.id);
+    expect(resumed.created.some((entry) => entry.startsWith('plan:'))).toBe(true);
+    expect((await getCampaign(campaign.id))?.state).toBe('PLANNING');
+    // Every failed bin keeps its row.
+    const failed = await getDb().all<{ id: string }>(
+      `SELECT id FROM bins WHERE factory_campaign_id = ? AND state = 'FAILED'`,
+      [campaign.id],
+    );
+    expect(failed).toHaveLength(3);
+  });
 });
 
 /* ========================================================================= */
@@ -1743,6 +2015,98 @@ describe('accepting a unit does not undo itself', () => {
     expect(afterMore?.state).toBe('IMPLEMENTED');
     expect(afterMore?.attempt).toBe(chargedOnce);
     expect(afterMore?.failureCategory).toBeNull();
+  });
+
+  /** Hand the unit out, and complete its bin with a report the forge confirms. */
+  async function completeConfirmedReport(): Promise<string> {
+    stubForge({});
+    const handed = await tickRemoteCampaign(campaignId);
+    expect(handed.created.some((entry) => entry.startsWith('units:'))).toBe(true);
+    const assigned = await assignNextBin({ workerId, projectIds: [fixture.project.id] });
+    const bin = assigned!.bin;
+    const { declaredBranchFor } = await import('../server/services/factory/remote.ts');
+    const branch = declaredBranchFor(bin, 'form-contract')!;
+    stubForge({
+      branches: { [branch]: unitHead },
+      compares: { [`${BASE}...${unitHead}`]: { files: ['test/form.test.js'], status: 'ahead' } },
+    });
+    await putBinUnitResult({
+      binId: bin.id,
+      unitKey: 'form-contract',
+      value: JSON.stringify({
+        unitKey: 'form-contract',
+        outcome: 'IMPLEMENTED',
+        branch,
+        headSha: unitHead,
+        filesChanged: ['test/form.test.js'],
+        commands: [{ command: 'npm test', exitCode: 0 }],
+        summary: 'added the contract test',
+      }),
+      contentHash: 'h-impl',
+      leaseId: assigned!.leaseId,
+      leaseGeneration: assigned!.leaseGeneration,
+    });
+    await finishBin(
+      { binId: bin.id, leaseId: assigned!.leaseId, leaseGeneration: assigned!.leaseGeneration, workerId },
+      { state: 'COMPLETE', reason: 'implemented' },
+    );
+    return bin.id;
+  }
+
+  /*
+   * A confirmed report Brain could not record used to be a note and nothing
+   * else: no row, no attempt, and the stage fired a fresh activation while the
+   * completed report was still acceptable. The claim is made to refuse here by
+   * deferring the unit, which is one of the real reasons `claimUnits` declines.
+   */
+  it('records a report it could not yet record, holds the stage, and accepts it once it can', async () => {
+    const binId = await completeConfirmedReport();
+    const { getDb } = await import('../server/db/database.ts');
+    const { getUnitByKey } = await import('../server/repos/factory.ts');
+    const before = (await getUnitByKey(campaignId, 'form-contract'))!;
+    await getDb().run(`UPDATE factory_work_units SET not_before = ? WHERE id = ?`, [
+      '2999-01-01T00:00:00.000Z',
+      before.id,
+    ]);
+
+    const held = await tickRemoteCampaign(campaignId);
+    expect(held.created).toEqual([]);
+    expect(held.awaitingRecord).toBe(1);
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    const refusals = await listFactoryEvents(campaignId, { kinds: ['UNIT_REFUSED'] });
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]?.detail).toMatchObject({ stage: 'UNITS', binId, try: 1 });
+    const unchanged = (await getUnitByKey(campaignId, 'form-contract'))!;
+    expect(unchanged.state).toBe('READY');
+    expect(unchanged.attempt).toBe(before.attempt);
+
+    await getDb().run(`UPDATE factory_work_units SET not_before = NULL WHERE id = ?`, [before.id]);
+    const accepted = await tickRemoteCampaign(campaignId);
+    expect(accepted.ingested).toContain(`units:${binId}`);
+    expect((await getUnitByKey(campaignId, 'form-contract'))?.state).toBe('IMPLEMENTED');
+  });
+
+  it('stops asking after a bounded number of tries, and charges the one attempt that bounds it', async () => {
+    const binId = await completeConfirmedReport();
+    const { getDb } = await import('../server/db/database.ts');
+    const { getUnitByKey } = await import('../server/repos/factory.ts');
+    const before = (await getUnitByKey(campaignId, 'form-contract'))!;
+    await getDb().run(`UPDATE factory_work_units SET not_before = ? WHERE id = ?`, [
+      '2999-01-01T00:00:00.000Z',
+      before.id,
+    ]);
+    for (let tick = 0; tick < 5; tick += 1) await tickRemoteCampaign(campaignId);
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    const failed = await listFactoryEvents(campaignId, { kinds: ['UNIT_FAILED'] });
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.detail).toMatchObject({ binId });
+    expect(String(failed[0]?.detail['detail'])).toContain('could not record');
+    expect((await listFactoryEvents(campaignId, { kinds: ['UNIT_REFUSED'] }))).toHaveLength(4);
+    const after = (await getUnitByKey(campaignId, 'form-contract'))!;
+    expect(after.attempt).toBe(before.attempt + 1);
+    // Judged once: more ticks over the same bin add nothing.
+    await tickRemoteCampaign(campaignId);
+    expect(await listFactoryEvents(campaignId, { kinds: ['UNIT_FAILED'] })).toHaveLength(1);
   });
 });
 
@@ -2147,7 +2511,10 @@ describe('a finding whose repair landed is closed on this plane too', () => {
     await markIntegrated(unit.id, 'd'.repeat(40));
 
     // Before the tick the finding is still carried as open work.
-    expect((await listFindings(campaign.id)).every((f) => f.state !== 'REPAIRED')).toBe(true);
+    const beforeTick = await listFindings(campaign.id);
+    // A finding exists to be carried; `every` over none would pass vacuously.
+    expect(beforeTick.length).toBeGreaterThan(0);
+    expect(beforeTick.every((f) => f.state !== 'REPAIRED')).toBe(true);
 
     stubForge({});
     await tickRemoteCampaign(campaign.id);
@@ -3951,5 +4318,55 @@ describe('a completed delivery bin that could not be ingested says so in the led
     const status = source.slice(source.indexOf("case 'status': {"), source.indexOf("case 'events': {"));
     // A ledger nothing prints is the defect this row was written to close.
     expect(status).toMatch(/deliveryNotIngested/);
+  });
+});
+
+/* ========================================================================= */
+
+describe('a tick that throws leaves a row', () => {
+  /*
+   * `startFactoryRemoteLoop` keeps only whether a tick created anything and
+   * ends in `.catch(() => undefined)`, so the "the tick threw" note it was given
+   * was read by nobody and the campaign went on reading as its last stage.
+   */
+  it('records a failure once per message per hour, and a different message always', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'tick-throws',
+      objective: 'A campaign whose tick throws.',
+      expectedOutcome: 'Somebody can see that it does.',
+      nonGoals: [],
+      acceptanceConditions: [
+        { id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true },
+      ],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    const { recordTickFailure } = await import('../server/services/factory/remoteLoop.ts');
+    const { listFactoryEvents } = await import('../server/repos/factoryFleet.ts');
+    expect(await recordTickFailure(campaign.id, 'MANIFEST_REFUSED: too large')).toBe(true);
+    expect(await recordTickFailure(campaign.id, 'MANIFEST_REFUSED: too large')).toBe(false);
+    expect(await recordTickFailure(campaign.id, 'relation "x" does not exist')).toBe(true);
+    const rows = await listFactoryEvents(campaign.id, { kinds: ['FACTORY_TICK_FAILED'] });
+    expect(rows.map((row) => row.detail['message'])).toEqual([
+      'MANIFEST_REFUSED: too large',
+      'relation "x" does not exist',
+    ]);
   });
 });

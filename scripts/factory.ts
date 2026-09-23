@@ -611,13 +611,18 @@ async function main(): Promise<void> {
           // reader who has to know the kind exists in order to ask for it is
           // reading a ledger with no reader again.
           FACTORY_EVENT_KINDS.deliveryNotIngested,
+          // A report Brain could not yet record, and a reviewer refused for
+          // lineage: both cost nothing, and both are why a stage is not moving.
+          FACTORY_EVENT_KINDS.unitRefused,
+          // A tick that threw. The loop reads nothing else about it.
+          FACTORY_EVENT_KINDS.tickFailed,
         ],
       });
       for (const event of refusals) {
         const detail = (event.detail ?? {}) as Record<string, unknown>;
         process.stdout.write(
           `  REFUSED ${event.kind.padEnd(26)} ${event.at}\n` +
-            `        ${String(detail['reason'] ?? detail['means'] ?? '').slice(0, 300)}\n` +
+            `        ${String(detail['reason'] ?? detail['means'] ?? detail['message'] ?? '').slice(0, 300)}\n` +
             `${detail['binId'] ? `        bin ${String(detail['binId'])}\n` : ''}` +
             `${detail['problems'] ? `        ${JSON.stringify(detail['problems']).slice(0, 400)}\n` : ''}` +
             `${detail['errors'] ? `        ${JSON.stringify(detail['errors']).slice(0, 400)}\n` : ''}`,
@@ -896,6 +901,39 @@ async function main(): Promise<void> {
      * condition has *not* been fixed the stage simply blocks again with the same
      * reason. That is the difference between a way out and an override.
      */
+    /*
+     * Give a unit that ran out of attempts more of them — the answer to
+     * `UNIT_EXHAUSTED_ATTEMPTS`, which had none. Raises and never resets; the
+     * reason is a code from a closed set. See `services/factory/regrant.ts`.
+     */
+    case 'regrant-unit': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const unitKey = flagString(flags, 'unit') ?? fail('--unit is required: the unit key');
+      const to = Number(flagString(flags, 'to') ?? '0');
+      const code = flagString(flags, 'why') ?? 'work-corrected';
+      const users = await listUsers();
+      const operator = users.find((candidate) => candidate.isBrainAdmin && !candidate.disabled);
+      if (!operator) fail('no administrator exists to attribute this to');
+      const { regrantUnit } = await import('../server/services/factory/regrant.ts');
+      const outcome = await regrantUnit({
+        campaignId,
+        unitKey,
+        maxAttempts: to,
+        reasonCode: code,
+        operator: `operator:${operator!.id}`,
+      });
+      if (!outcome.ok) {
+        process.stdout.write(`FACTORY REFUSED: regrant-unit — ${outcome.reason}\n`);
+        process.exitCode = 1;
+        break;
+      }
+      process.stdout.write(
+        `regranted ${unitKey} on ${campaignId}: ceiling ${outcome.from} -> ${outcome.to}, ` +
+          `now ${outcome.state} (${code}). The next tick decides what is true.\n`,
+      );
+      break;
+    }
+
     case 'reauthorize': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const REASONS: Record<string, string> = {
@@ -905,6 +943,15 @@ async function main(): Promise<void> {
         'surface-restored':
           'The execution surface that could not reach the repository has been restored where the ' +
           'workers run.',
+        /*
+         * The answer to a stage that failed its bins to exhaustion. The failed
+         * bins keep their rows; the count starts again from this row, and if the
+         * condition was not in fact corrected the stage fails its way back to
+         * the same block.
+         */
+        'stage-corrected':
+          'The condition that failed this stage has been corrected — the contract amended or the ' +
+          'surface fixed — so the stage may be handed out again.',
       };
       const code = flagString(flags, 'why') ?? 'repository-granted';
       const reason = REASONS[code];
@@ -1044,7 +1091,7 @@ async function main(): Promise<void> {
           '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
           '  set-state,\n' +
           '  answer-bin,\n' +
-          '  reauthorize, retire, release\n',
+          '  reauthorize, regrant-unit, retire, release\n',
       );
       // An unknown command is the caller getting it wrong, and it used to be
       // reported as success — see the verdict line below.

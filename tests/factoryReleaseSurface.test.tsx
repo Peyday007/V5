@@ -396,3 +396,26 @@ describe('the release decision, on the surface a person already uses', () => {
     expect((await getRelease(campaignId, 'CONTROL_PLANE'))?.decision).toBe('REQUESTED');
   });
 });
+
+describe('the deliverable of a campaign that ran on a checkout', () => {
+  /*
+   * `assemble.ts` stops at a reviewed branch and a patch and sets `prRef`, never
+   * `prUrl` — publishing is deliberately not the factory's. The card read only
+   * `prUrl`, so a finished local campaign said "No pull request yet" while the
+   * thing a person needed sat on a named branch.
+   */
+  it('names the branch and commit instead of saying there is nothing', async () => {
+    await patchCampaign(campaignId, {
+      state: 'COMPLETE',
+      stageDetail: 'assembled',
+      prRef: 'factory/campaign/local-1',
+      integrationSha: INTEGRATION,
+    });
+    await act(async () => {
+      render(createElement(BuildView, { projectId }));
+    });
+    await waitFor(() => expect(screen.getByText('factory/campaign/local-1')).toBeTruthy());
+    expect(screen.getByText(INTEGRATION.slice(0, 12))).toBeTruthy();
+    expect(screen.queryByText(/No pull request yet/)).toBeNull();
+  });
+});

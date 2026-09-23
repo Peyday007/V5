@@ -42,8 +42,7 @@ import {
 import { recordFactoryEvent } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { narrowsOrEqual } from './contract.ts';
-import { matchesGlob } from './integrate.ts';
-import { UNIVERSAL_FORBIDDEN_PATHS, decideRepository } from './repositoryEnvelope.ts';
+import { forbiddenPathsFor, ownershipReachesForbidden } from './forbidden.ts';
 
 /** The only shape a proposed unit may have. An unknown field refuses the plan. */
 export interface UnitSpec {
@@ -125,8 +124,7 @@ export function validatePlan(
    * repository is one that will be missing from one of them, so it moved into the
    * envelope as a floor a grant may add to and cannot subtract from.
    */
-  const grant = decideRepository(changeRequest.repository).grant;
-  const forbiddenHere = [...UNIVERSAL_FORBIDDEN_PATHS, ...(grant?.forbiddenPaths ?? [])];
+  const forbiddenHere = forbiddenPathsFor(changeRequest.repository);
 
   if (typeof proposed !== 'object' || proposed === null || Array.isArray(proposed)) {
     return { ok: false, units: [], errors: ['The plan is not an object.'], warnings, uncoveredConditions: [] };
@@ -210,11 +208,14 @@ export function validatePlan(
      * envelope in code, so a contract cannot widen it by asking.
      */
     for (const path of ownedPaths) {
-      const forbidden = forbiddenHere.find((glob) => matchesGlob(path, glob) || path === glob);
+      // Asked of the glob, not of a path: `**` owns `.github/workflows/deploy.yml`
+      // exactly as much as naming it does. See `forbidden.ts`.
+      const forbidden = ownershipReachesForbidden(path, forbiddenHere);
       if (forbidden) {
         errors.push(
-          `${key}: \`${path}\` is inside \`${forbidden}\`, which this repository's grant puts ` +
-            'out of the factory\'s reach whatever a contract says.',
+          `${key}: \`${path}\` reaches into \`${forbidden}\`, which this repository's grant puts ` +
+            'out of the factory\'s reach whatever a contract says. Name narrower paths that ' +
+            'stay clear of it.',
         );
       }
     }

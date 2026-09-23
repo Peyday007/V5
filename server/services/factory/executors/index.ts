@@ -100,20 +100,3 @@ export async function probeExecutor(
   if (!executor) return { ok: false, detail: `No executor implements ${kind}.` };
   return await executor.probe();
 }
-
-/**
- * A seam for tests, and deliberately nothing more.
- *
- * A test that wants a scripted worker replaces one here; what it must never be
- * able to do is register a worker kind production would then dispatch to. So
- * the replacement is explicit, reversible, and has no path from a row: nothing
- * a caller sends can reach this function.
- */
-export function installExecutorForTests(executor: Executor): () => void {
-  const previous = EXECUTORS.get(executor.kind);
-  EXECUTORS.set(executor.kind, executor);
-  return () => {
-    if (previous) EXECUTORS.set(executor.kind, previous);
-    else EXECUTORS.delete(executor.kind);
-  };
-}

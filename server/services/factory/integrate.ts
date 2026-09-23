@@ -68,47 +68,10 @@ import {
 /* Ownership                                                                  */
 /* ------------------------------------------------------------------------- */
 
-/**
- * Does this path match this glob?
- *
- * `**` crosses directory separators, `*` does not, `?` is one character. Small
- * and exact rather than a dependency, because the answer decides whether a
- * worker's diff is accepted and a surprising matcher would be a surprising
- * rejection.
- */
-export function matchesGlob(candidate: string, glob: string): boolean {
-  const normalise = (value: string): string => value.split(path.sep).join('/').replace(/^\.\//, '');
-  const target = normalise(candidate);
-  const pattern = normalise(glob);
+import { matchesGlob } from './glob.ts';
+import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
 
-  if (pattern === '**' || pattern === '*') return true;
-
-  let regex = '';
-  for (let i = 0; i < pattern.length; i += 1) {
-    const char = pattern[i];
-    if (char === '*' && pattern[i + 1] === '*') {
-      // `a/**` owns `a` itself as well as everything under it, which is what a
-      // reader of the glob expects and what a directory-owning unit means by it.
-      // So the separator in front of the `**` becomes part of the optional tail
-      // rather than something the path must contain.
-      if (regex.endsWith('/')) regex = `${regex.slice(0, -1)}(?:/.*)?`;
-      else regex += '.*';
-      i += 1;
-      if (pattern[i + 1] === '/') i += 1;
-    } else if (char === '*') {
-      regex += '[^/]*';
-    } else if (char === '?') {
-      regex += '[^/]';
-    } else if (char && '\\^$.|+()[]{}'.includes(char)) {
-      regex += `\\${char}`;
-    } else {
-      regex += char;
-    }
-  }
-  // A pattern naming a directory owns everything under it.
-  const asDirectory = pattern.endsWith('/') ? `${regex}.*` : `${regex}(/.*)?`;
-  return new RegExp(`^${asDirectory}$`).test(target);
-}
+export { matchesGlob };
 
 export interface OwnershipVerdict {
   ok: boolean;
@@ -354,6 +317,31 @@ export async function integrateUnit(options: IntegrateOptions): Promise<Integrat
         : 'The diff reaches outside the paths this unit owns, so it was rejected whole rather ' +
             'than partially taken.',
       { rejectedPaths: ownership.outside },
+    );
+  }
+
+  /*
+   * And nothing it changed is out of every unit's reach.
+   *
+   * Asked after ownership rather than folded into it, because the two refusals
+   * have different remedies: outside its paths is the unit's mistake, and inside
+   * a forbidden path is a change no plan may carry however it was worded. This
+   * is the binding half of `forbidden.ts` — the planner's refusal is early, this
+   * one is on the files that actually moved.
+   */
+  const forbiddenChanged = forbiddenIn(paths, forbiddenPathsFor(options.changeRequest.repository));
+  if (forbiddenChanged.length > 0) {
+    await reopenUnit(
+      unit.id,
+      'OUT_OF_SCOPE_MUTATION',
+      `The diff changed paths no unit may change in this repository: ` +
+        `${forbiddenChanged.slice(0, 20).join(', ')}. Redo the unit without touching them.`,
+    );
+    return await record(
+      'REJECTED',
+      'The diff reaches a path this repository puts out of the factory\'s reach, so it was ' +
+        'rejected whole.',
+      { rejectedPaths: forbiddenChanged },
     );
   }
 

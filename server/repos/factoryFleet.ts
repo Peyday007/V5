@@ -557,14 +557,6 @@ export async function listSessions(campaignId: string): Promise<FactorySession[]
   return rows.map(mapSession);
 }
 
-export async function sessionsForUnit(unitId: string): Promise<FactorySession[]> {
-  const rows = await getDb().all<FactorySessionRow>(
-    `SELECT * FROM factory_sessions WHERE unit_id = ? ORDER BY started_at, rowid`,
-    [unitId],
-  );
-  return rows.map(mapSession);
-}
-
 /**
  * Sessions that have already done implementation work inside this campaign.
  *

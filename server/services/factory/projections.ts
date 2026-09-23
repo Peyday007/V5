@@ -48,7 +48,9 @@ const BLOCKER_REMEDIES: Record<FactoryBlockerKind, string> = {
     'Register or free up a worker that can review independently of whoever implemented the work.',
   DEPENDENCY_CYCLE: 'Fix the plan: two or more units depend on each other in a cycle.',
   STALE_BASE: "Rebase the campaign's integration branch onto the repository's current base.",
-  UNIT_EXHAUSTED_ATTEMPTS: 'A unit exhausted its attempts; raise its ceiling or replan the work.',
+  UNIT_EXHAUSTED_ATTEMPTS:
+    'A unit exhausted its attempts. Once what failed it is corrected, raise its ceiling with ' +
+    '`factory regrant-unit`, or stop the campaign.',
   CONTRADICTORY_CONTRACT: 'Resolve the contradiction in the change request before continuing.',
   AWAITING_HUMAN_RELEASE: 'A person needs to approve or refuse the release.',
   /*

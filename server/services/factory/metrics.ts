@@ -130,6 +130,18 @@ export const FACTORY_EVENT_KINDS = {
    * action with no author answers nothing later.
    */
   stageReauthorized: 'FACTORY_STAGE_REAUTHORIZED',
+  /**
+   * A person raised a unit's attempt ceiling — the answer to
+   * `UNIT_EXHAUSTED_ATTEMPTS`. It raises and never resets, and the reason is a
+   * code from a closed set. See `services/factory/regrant.ts`.
+   */
+  unitAttemptsRegranted: 'UNIT_ATTEMPTS_REGRANTED',
+  /**
+   * A remote tick threw. Written by `tickAllRemoteCampaigns`, at most once an
+   * hour per distinct message, because the loop discards its report and without
+   * a row a campaign whose every tick throws reads as waiting on its last stage.
+   */
+  tickFailed: 'FACTORY_TICK_FAILED',
 } as const;
 
 export interface RoleMetrics {
