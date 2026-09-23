@@ -808,6 +808,59 @@ accounts holding four Routines each.
 the whole point of §2.1, §2.4 and §2.7 and is the one thing a production
 reading of an *uncommissioned* pool can genuinely establish.
 
+#### The counter then earned its keep, which the first reading could not show
+
+The reading above was taken on the first tick, when §7.2 had already
+established from rows that every counter would be zero. A second `fleet show`
+at **12:13Z**, after a morning that included two outages and a great many
+fires that nobody answered, reads differently — and the difference is the
+whole repair:
+
+```
+accounts 6 · routines 18 · target 12 · in flight 7
+candidates 16 considered, 12 eligible now
+
+  Brain Research A     worker=wkr_1cdd82cf…   unanswered=1
+  Brain Research 1-B   worker=wkr_1cdd82cf…   unanswered=1
+  Brain Research 1-C   worker=wkr_1cdd82cf…   unanswered=0
+  Brain Research 1-D   worker=wkr_1cdd82cf…   unanswered=0
+  Airyn 2-A … 2-D      worker=wkr_1cdd82cf…   unanswered=2  (each)
+  Factory surface 1    worker=wkr_f8e118e8…   unanswered=0
+  … every other surface 0
+```
+
+**Nine of those Routines are bound to the same worker identity and they carry
+four different counts.** That is exactly what the column this lane replaced
+could not do: `recordWorkerArrival` cleared `consecutive_no_shows` for *every*
+Routine bound to the same worker, so under the old reading these nine would
+have agreed with each other by construction. They do not, because
+`unansweredFiresByRoutine` counts `DISPATCH_NO_SHOW` rows that now carry the
+Routine that was fired — §2.5 and §2.7, demonstrated by a real event rather
+than by a test.
+
+**And none of them has reached the threshold**, which is the other half
+working. Three unanswered fires quarantine a surface; the highest here is two,
+and the cause was an upstream store outage rather than a dead connector. A
+counter that had walked these surfaces into quarantine for somebody else's
+incident would have been the defect §23 warns about — *a refusal is not
+misconduct* — arriving one table along.
+
+#### And the parallel lane's D2 is latent here, which is a measurement rather than a hope
+
+§9 records that the deployed `routeBin` cannot exclude a Routine bound to a
+**disabled** worker, and left the `12 eligible now` figure qualified. The two
+reads together settle it. `npm run admin -- workers list` on production
+returns ten workers: one `ARCHIVED` holding no project, three `DISABLED` each
+still holding one — `worker-01`, `worker-02`, `worker-06` — and six `ACTIVE`.
+Every Routine in `fleet show` resolves to one of five workers, and **all five
+are `ACTIVE`**; the three disabled ones are bound to no registered Routine at
+all.
+
+So the condition D2 describes has **no instance in this fleet today**, the
+`12` is correct as it stands, and the qualification in §9 is discharged by
+measurement rather than removed. The defect is still real and still worth
+their fix — it is one `bind-worker` away from biting.
+
 ### 8.5 Deploy 324 did not release, and the reason was upstream
 
 `release: failure`, `hosted verification: skipped`, `after the restart:
@@ -1072,10 +1125,19 @@ is that lane's `surfaceIneligibility` — one bin-independent answer asked by th
 router, the capacity reading and the page alike — and re-deriving it in this
 document would be the second reader of one rule that both lanes exist to stop.
 
-Nothing else in §8.4 is affected. `unanswered=0` is read from `bin_events`,
-`verify-pool`'s `PROVEN` is the four-row chain, the `state_reason` lines are
-the rows' own words, and `accounts 1 · surfaces 1` counts two things that are
-not each other. None of those passes through the eligibility predicate.
+Nothing else in §8.4 is affected. The unanswered counters are read from
+`bin_events`, `verify-pool`'s `PROVEN` is the four-row chain, the
+`state_reason` lines are the rows' own words, and `accounts 1 · surfaces 1`
+counts two things that are not each other. None of those passes through the
+eligibility predicate.
+
+**And the qualification is now discharged by measurement rather than left
+standing.** §8.4 records the cross-reference: ten workers on production, three
+of them `DISABLED` and still holding a membership — so the defect is real —
+and every one of the five workers any Routine is actually bound to is
+`ACTIVE`. The condition has no instance in this fleet today, the `12` is
+correct as it stands, and their fix is still worth landing, because it is one
+`bind-worker` away from biting.
 
 **What the two lanes agree on, and it is the thing that matters most:** no
 four-account Factory pool has been commissioned, and neither document claims
