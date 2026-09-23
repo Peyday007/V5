@@ -1598,8 +1598,8 @@ unfinished rows live somewhere else is a checklist that reads as finished.
 
 **No four-account Factory pool has been commissioned.** This is item 7's
 middle category, and one thing moved inside it while the rest did not. The
-no-show quarantine **has** now fired against four real surfaces — §8.4 — so
-that clause is withdrawn. `STALE` has still never been printed about a real
+no-show quarantine **has** now fired against real surfaces — four by 12:16Z
+and eight by 14:14Z, §8.4 — so that clause is withdrawn. `STALE` has still never been printed about a real
 revoked connector, and no fire has still been routed across four accounts.
 Those need four real Claude accounts and their deployment secrets, which is
 the one thing in this lane that is not an engineering task. The surfaces that
@@ -1610,8 +1610,13 @@ carrying `caps=[]` on one worker identity, and are not a Factory pool.
 `claude/fleet-four-account-acceptance-uey8cw`, which is still moving and has
 no open pull request, so it is not this lane's to merge. Measured on
 production today the condition has **no instance** — every Routine's bound
-worker is `ACTIVE` — so `fleet show`'s `12 eligible` is correct as it stands
-and the defect is one `bind-worker` away from biting.
+worker is `ACTIVE` — so the eligibility count is correct as it stands and the
+defect is one `bind-worker` away from biting. **That reading named `12
+eligible`, which was true when it was taken and is not now**: the 14:14Z read
+says `16 considered, 4 eligible`, because eight surfaces quarantined in
+between. The *conclusion* is unchanged, since it rests on every bound worker
+being `ACTIVE` rather than on the count; the number is corrected because a
+document that quotes a figure has to say which moment it belongs to.
 
 **The forty-minute recovery floor is a gap, not a fact of life.** §8.8. A
 condition whose real remedy is a process restart costs a full `Deploy`,
