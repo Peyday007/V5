@@ -92,6 +92,10 @@ export const CONTRACT_MIN_LEASE_MS: Record<CompletionContract, number | null> = 
   BLUEPRINT_AUDIT_V1: null,
   DESIGN_REVIEW_V1: null,
   DESIGN_RENDER_V1: null,
+  // Reads a manifest of claims and composes a document or a workbook; no
+  // repository, no suite. The default lease and a heartbeat are enough.
+  DELIVERABLE_BUILD_V1: null,
+  DELIVERABLE_REVIEW_V1: null,
 };
 
 /**

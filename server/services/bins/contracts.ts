@@ -29,6 +29,7 @@ import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { getDocument } from '../../repos/documents.ts';
 import { listAuditsByProject } from '../../repos/audits.ts';
 import { readObject, storageKeyOf } from '../storage.ts';
+import { evaluateBuild, evaluateReview } from '../deliverables/contract.ts';
 
 /** What an evaluation concluded, and why. */
 export interface ContractVerdict {
@@ -851,6 +852,14 @@ const EVALUATORS: Record<string, Evaluator> = {
   FACTORY_DELIVERY_V1: evaluateFactoryDelivery,
   DESIGN_REVIEW_V1: evaluateDesignReview,
   DESIGN_RENDER_V1: evaluateDesignRender,
+  DELIVERABLE_BUILD_V1: async (bin) => {
+    const verdict = await evaluateBuild(bin);
+    return verdict.satisfied ? satisfied(verdict.observed) : refuse('RETRY', verdict.reasons, verdict.observed);
+  },
+  DELIVERABLE_REVIEW_V1: async (bin) => {
+    const verdict = await evaluateReview(bin);
+    return verdict.satisfied ? satisfied(verdict.observed) : refuse('RETRY', verdict.reasons, verdict.observed);
+  },
 };
 
 /**

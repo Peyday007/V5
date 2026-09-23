@@ -20,6 +20,7 @@
  * let anyone enumerate other people's threads by watching which id changed the
  * status code.
  */
+import { deliverablesForConversation } from '../services/russell/deliverable.ts';
 import { Router } from 'express';
 import {
   DESIGN_DECISIONS,
@@ -280,6 +281,12 @@ russellRouter.get(
        * person to decide something they did not raise.
        */
       clarification: await softwareClarificationFor(conversation.id),
+      /*
+       * The files this conversation asked for, and where each one got to — the
+       * current version's link, the version in progress, and what is missing.
+       * A projection over rows, like `software` beside it.
+       */
+      deliverables: await deliverablesForConversation(conversation.id),
     };
   }),
 );

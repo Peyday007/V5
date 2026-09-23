@@ -11,6 +11,7 @@
  * server is bundled.
  */
 import { api } from './api.ts';
+import type { DeliverableView } from '../../../server/services/russell/deliverable.ts';
 import type {
   CandidatePriority,
   CandidateState,
@@ -126,6 +127,12 @@ export interface ThreadResponse {
    * would eventually paraphrase it wrongly.
    */
   clarification: SoftwareClarification | null;
+  /**
+   * The files this conversation asked for — the current version's link, the
+   * version in progress, and anything the request needs that Brain lacks.
+   * Server-derived, like `software`.
+   */
+  deliverables: DeliverableView[];
 }
 
 export interface TurnResponse {
@@ -244,6 +251,13 @@ export const RussellApi = {
       body: JSON.stringify({ title, projectId: projectId ?? null }),
     }),
 
+  deliverables: (projectId: string): Promise<{ deliverables: DeliverableView[] }> =>
+    api(`/api/projects/${encodeURIComponent(projectId)}/deliverables`),
+  reviseDeliverable: (deliverableId: string, correction: string): Promise<{ deliverable: DeliverableView }> =>
+    api(`/api/deliverables/${encodeURIComponent(deliverableId)}/revise`, {
+      method: 'POST',
+      body: JSON.stringify({ correction }),
+    }),
   thread: (conversationId: string): Promise<ThreadResponse> =>
     api(`/api/russell/conversations/${encodeURIComponent(conversationId)}`),
 

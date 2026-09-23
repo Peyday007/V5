@@ -57,6 +57,15 @@ export const PROPOSAL_ACTIONS = [
    * see `software` below.
    */
   'REQUEST_SOFTWARE_CHANGE',
+  /*
+   * A concrete output somebody asked for — a dossier, a comparison, a
+   * spreadsheet, a dataset — or a revision of one already delivered.
+   *
+   * Its whole effect is a `deliverables` row in the conversation's project.
+   * Brain carries it to a file from there, from the project's own evidence,
+   * and delivers the file back into this conversation. See §50.
+   */
+  'REQUEST_DELIVERABLE',
 ] as const;
 export type ProposalAction = (typeof PROPOSAL_ACTIONS)[number];
 
@@ -96,7 +105,31 @@ export interface ValidatedProposal {
    * choice.
    */
   software: { title: string; objective: string; expectedOutcome: string } | null;
+  /**
+   * A deliverable somebody asked for, or a revision of one.
+   *
+   * What it is for, who reads it, what it must contain and what would make it
+   * acceptable — every one of which a check or a reviewer is held against
+   * later. A revision names the deliverable and the correction and nothing
+   * else, because everything else about it was established the first time.
+   */
+  deliverable: ProposedDeliverable | null;
 }
+
+export type ProposedDeliverable =
+  | {
+      mode: 'NEW';
+      title: string;
+      kind: 'WRITTEN' | 'STRUCTURED';
+      requestedFormat: string | null;
+      intendedUse: string;
+      audience: string;
+      requiredContents: string[];
+      sourceRequirements: string;
+      acceptanceConditions: string[];
+      externalDelivery: string | null;
+    }
+  | { mode: 'REVISION'; revisionOf: string; correction: string };
 
 export interface ProposalRefusal {
   ok: false;
@@ -129,6 +162,7 @@ const KNOWN_FIELDS = new Set([
   'probe',
   'priority',
   'software',
+  'deliverable',
 ]);
 
 /**
@@ -161,6 +195,10 @@ export const FIELD_LIMITS = {
    */
   softwareObjective: 4_000,
   softwareOutcome: 2_000,
+  deliverableTitle: 200,
+  deliverableText: 1_000,
+  deliverableItems: 20,
+  deliverableCorrection: 3_000,
 } as const;
 
 /**
@@ -222,6 +260,12 @@ export const EXECUTABLE_ACTIONS = [
    * more.
    */
   'REQUEST_SOFTWARE_CHANGE',
+  /*
+   * Executable: a row the tick carries to a file, delivered back into this
+   * conversation. It reads the project's own evidence, spends only the fleet's
+   * fixed capacity, and sends nothing anywhere.
+   */
+  'REQUEST_DELIVERABLE',
 ] as const satisfies readonly ProposalAction[];
 
 export const REQUIRED_PART: Partial<Record<ProposalAction, string>> = {
@@ -232,6 +276,7 @@ export const REQUIRED_PART: Partial<Record<ProposalAction, string>> = {
   PARK_CANDIDATE: 'priority',
   REJECT_CANDIDATE: 'reason',
   REQUEST_SOFTWARE_CHANGE: 'software',
+  REQUEST_DELIVERABLE: 'deliverable',
 };
 
 /** The hardest bound a proposed probe may name. The envelope narrows further. */
@@ -423,6 +468,13 @@ export function validateProposal(input: {
     software = { title, objective, expectedOutcome };
   }
 
+  let deliverable: ValidatedProposal['deliverable'] = null;
+  if (body['deliverable'] !== undefined && body['deliverable'] !== null) {
+    const parsedDeliverable = parseDeliverable(body['deliverable']);
+    if (!parsedDeliverable.ok) return refuse('MISSING_REQUIRED_PART', parsedDeliverable.reason);
+    deliverable = parsedDeliverable.value;
+  }
+
   // Actions that cannot be carried out without the part they act on. Checked
   // after the parts are validated, so the refusal names the missing piece
   // rather than the first thing that happened to be wrong.
@@ -438,6 +490,7 @@ export function validateProposal(input: {
     PARK_CANDIDATE: () => priority !== null,
     REJECT_CANDIDATE: () => text(body['reason'], FIELD_LIMITS.reason) !== null,
     REQUEST_SOFTWARE_CHANGE: () => software !== null,
+    REQUEST_DELIVERABLE: () => deliverable !== null,
   };
   const required = needs[action as ProposalAction];
   if (required && !required()) {
@@ -456,6 +509,97 @@ export function validateProposal(input: {
       probe,
       priority,
       software,
+      deliverable,
+    },
+  };
+}
+
+const DELIVERABLE_KEYS = [
+  'title',
+  'kind',
+  'requestedFormat',
+  'intendedUse',
+  'audience',
+  'requiredContents',
+  'sourceRequirements',
+  'acceptanceConditions',
+  'externalDelivery',
+];
+const REVISION_KEYS = ['revisionOf', 'correction'];
+
+function textList(value: unknown, max: number, count: number): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > count) return null;
+  const out: string[] = [];
+  for (const one of value) {
+    const t = text(one, max);
+    if (!t) return null;
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * A proposed deliverable, parsed exactly.
+ *
+ * Two shapes and no mixing: a new deliverable carries its full brief, and a
+ * revision carries the deliverable it revises and the correction. A field from
+ * the other shape refuses the whole proposal, for the unknown-field rule's
+ * reason — a worker that believed its title would rename a delivered file is a
+ * worker whose proposal should not be acted on halfway.
+ */
+function parseDeliverable(value: unknown): { ok: true; value: ProposedDeliverable } | { ok: false; reason: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, reason: 'the proposed deliverable was not readable' };
+  }
+  const record = value as Record<string, unknown>;
+  if (record['revisionOf'] !== undefined) {
+    if (Object.keys(record).some((k) => !REVISION_KEYS.includes(k))) {
+      return { ok: false, reason: 'a revision carries only "revisionOf" and "correction"' };
+    }
+    const revisionOf = record['revisionOf'];
+    const correction = text(record['correction'], FIELD_LIMITS.deliverableCorrection);
+    if (typeof revisionOf !== 'string' || !/^dlv_[0-9a-f]{20}$/.test(revisionOf) || !correction) {
+      return { ok: false, reason: 'a revision needs the deliverable id it revises and the correction, in the person’s terms' };
+    }
+    return { ok: true, value: { mode: 'REVISION', revisionOf, correction } };
+  }
+  if (Object.keys(record).some((k) => !DELIVERABLE_KEYS.includes(k))) {
+    return { ok: false, reason: 'the proposed deliverable carried a field this version does not accept' };
+  }
+  const title = text(record['title'], FIELD_LIMITS.deliverableTitle);
+  const kind = record['kind'];
+  const intendedUse = text(record['intendedUse'], FIELD_LIMITS.deliverableText);
+  const audience = text(record['audience'], FIELD_LIMITS.deliverableText);
+  const sourceRequirements = text(record['sourceRequirements'], FIELD_LIMITS.deliverableText);
+  const requiredContents = textList(record['requiredContents'], FIELD_LIMITS.deliverableText, FIELD_LIMITS.deliverableItems);
+  const acceptanceConditions = textList(record['acceptanceConditions'], FIELD_LIMITS.deliverableText, FIELD_LIMITS.deliverableItems);
+  if (kind !== 'WRITTEN' && kind !== 'STRUCTURED') {
+    return { ok: false, reason: 'a deliverable is "WRITTEN" (a document) or "STRUCTURED" (a spreadsheet or dataset)' };
+  }
+  if (!title || !intendedUse || !audience || !sourceRequirements || !requiredContents || !acceptanceConditions) {
+    return {
+      ok: false,
+      reason:
+        'a deliverable needs a title, its intended use, its audience, the required contents, the source requirements and the acceptance conditions',
+    };
+  }
+  const rawFormat = record['requestedFormat'];
+  const requestedFormat = rawFormat === undefined || rawFormat === null ? null : text(rawFormat, 20);
+  const rawExternal = record['externalDelivery'];
+  const externalDelivery = rawExternal === undefined || rawExternal === null ? null : text(rawExternal, FIELD_LIMITS.deliverableText);
+  return {
+    ok: true,
+    value: {
+      mode: 'NEW',
+      title,
+      kind,
+      requestedFormat: requestedFormat ? requestedFormat.toUpperCase() : null,
+      intendedUse,
+      audience,
+      requiredContents,
+      sourceRequirements,
+      acceptanceConditions,
+      externalDelivery,
     },
   };
 }

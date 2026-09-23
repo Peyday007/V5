@@ -11386,6 +11386,72 @@ that would have chosen between them exists.**
   along, which is why §32 names its file: **a number is a position two
   workstreams can both reach for; a filename is the thing itself.**
 
+## 50. A plan for a file is not the file.
+
+A person asking Russell for a dossier, a comparison or a spreadsheet used to get
+an answer, an idea, or a prompt for some other model — and when a file existed
+at all it lived in a worker's scratch directory that stopped existing with the
+session. `server/services/deliverables/`, `server/repos/deliverables.ts` and
+`docs/DELIVERABLES.md` carry the request to a file a person opens from a link,
+and every piece of it is an entrance to machinery that already existed: the
+turn, the bins, the fleet, the evidence gate's accepted claims, the storage
+layer and the conversation.
+
+- **The worker never uploads a file.** It submits *content* — sections and
+  paragraphs, or sheets and rows — each piece citing the claims it rests on, and
+  Brain renders the DOCX or XLSX itself. There is therefore nothing in a
+  worker's environment to strand, and the bytes a person opens are bytes Brain
+  wrote from content Brain validated.
+- **The content contract runs while the worker holds the lease.** Every cited id
+  must be a citable claim of *this* project now (`projectCitableClaims`, re-read,
+  never trusted); every factual block cites, and an uncited one may only be
+  `framing` with no figure in it; every figure must appear in a claim it cites —
+  its statement, passage, locator or date — so a number no source states is
+  refused rather than rounded into existence; and every required content is
+  covered or declared a gap with a reason. A refusal is RETRY with the exact
+  problem, so the repair happens in the same session instead of costing a build.
+  The ingest runs it again, because a lease can be retaken and claims can change.
+- **A file is checked in its native form, by readers that did not write it.**
+  The bytes are read back *out of the store* — what is checked is what will be
+  downloaded — and opened with `jszip`; a document is rendered by `mammoth` and
+  every heading, passage, table, citation number, source and link is looked for
+  in what it produced; a workbook's cells are read back and every formula is
+  recomputed from the cells it names and compared with the value the file shows.
+  A tampered cache fails, which the suite proves rather than asserts. The writer
+  is `zip.ts` and deliberately not the reader's library, because a writer and a
+  reader agreeing with each other proves only that they agree.
+- **Review is independent by recorded lineage.** `decideReviewIndependence` —
+  the design kernel's own function, not a copy — over sessions read from Brain's
+  dispatch rows. The builder's session reviewing its own file is refused and the
+  review is asked again, bounded; `PASS` beside a material finding is refused
+  outright.
+- **Versions are append-only and "current" is one column.** A repair and a
+  revision each make a new `deliverable_versions` row; the previous one keeps its
+  bytes, content, checks, review and permanent link. `current_version_id` moves
+  only when a later version passes review, so a revision in progress never
+  replaces a delivered file with an unchecked one.
+- **Every stage move is a compare-and-swap on the state and the bin it read,**
+  derived on the tick rather than hooked to a completion, so two instances, a
+  dead tick and a deploy mid-flight converge — and a delivery message a dead tick
+  never posted is posted by the next one (claim, then act).
+- **Honest about format and about reach.** Brain builds and verifies DOCX and
+  XLSX. A request for a PDF, a deck or a CSV gets the nearest verified format and
+  a named need saying what is missing; a request to send the file to somebody is
+  a need too, because nothing here is authorized to contact anyone. Both are
+  written into the file and into the delivery message.
+- **Bounded, and stuck is never silent.** Four builds and three review attempts,
+  then `NEEDS_PERSON` with a message in the conversation that names the last
+  problem and links the last version that passed and the attempt that did not.
+
+**What is true today, said plainly.** The walk in `tests/deliverables.test.ts`
+drives a person's message through a real turn, two real bins with Brain's own
+dispatch rows behind them, a refused submission, a refused same-session review,
+a reviewer's repair, a delivery, a revision and three versions that all still
+open over HTTP. The Cowork activations are simulated there, as every walk in
+this file says of itself; a production delivery needs this deployed and a
+person asking in Russell, and until one has happened the engine passing its
+tests is not evidence that the fleet produces files.
+
 ## Repository map
 
 ```
@@ -11421,6 +11487,7 @@ server/
     monetization.ts     every shape of transaction, what it needs and what it leaves
     labor.ts            what a labor finding means, and the one validator both doors call
     dealflow.ts         what a claim establishes about a transaction, and where it lands
+    deliverables.ts     a request for a file, its versions, its checks and its findings
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     design.ts           surfaces, captures, findings, patterns, corrections, gaps
@@ -11440,6 +11507,7 @@ server/
     register.ts       workstreams, what they point at, and what happened to them
     bridge.ts         a person's bearer, a transcript exactly as it arrived, and its receipts
     dealflow.ts       both sides of a transaction, and everything hard between them
+    deliverables.ts   the brief, the append-only versions, the findings, the one current version
     puzzle.ts         the universe, the systems, the puzzles, the products, the trade
     faculties.ts      sources, candidates, faculties and their typed edges
     passkeys.ts       devices, enrollment links and challenges; digests, never secrets
@@ -11668,6 +11736,16 @@ server/
       seed.ts           the two things a person does to this kernel directly
       view.ts           the operator surface: what exists, what is next, what blocks
       kernel.ts         the tick: file, pair, promote, allocate
+    deliverables/
+      content.ts        what a worker submits, and the four rules it is refused by
+      evidence.ts       the project's citable claims, packed for the manifest and resolved by id
+      zip.ts            the OOXML writer, deliberately not the reader's library
+      docx.ts           a written deliverable, cited, with a Sources section of claim ids
+      xlsx.ts           a structured one: About, the data with live totals, Sources
+      check.ts          the file read back from the store and checked in its native form
+      review.ts         the independent reviewer's verdict, matched exactly
+      contract.ts       the two completion contracts, the build one validating in-lease
+      pipeline.ts       build · render · store · check · review · repair · deliver, on the tick
     capability/
       ingest.ts         a blueprint becomes a registered, readable source
       sections.ts       the sections a document declares, from its own headings
@@ -11783,6 +11861,7 @@ server/
     connect.ts          a connected site's door: records, projections, one command (Step 12C)
     cash.ts             Cash Mode's door: the sprint, the grant, the portfolio, the money
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
+    deliverables.ts     a deliverable's record, its permanent version links, a revision
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
@@ -11849,6 +11928,7 @@ tests/                  Vitest suites
   puzzleKernel.test.ts       broken grids the validator has to catch by itself
   puzzleIntegrationPass.test.ts  a seeded format to a promoted product, over the wire
   dealflowIntegrationPass.test.ts  one deal, walked the whole way, over the wire
+  deliverables.test.ts       a Russell request to a file, repaired, revised, and every version opened
   capabilityKernel.test.ts   one blueprint, read the whole way: bytes to canonical
   capabilityReopen.test.ts   a failed reading put back, and everything it must not destroy
   systemSelfModel.test.ts    what a reading may claim, and the seven it may not

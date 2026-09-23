@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Brain \u2014 local-first research operations platform (project state, dependencies, prompts, audits, synthesis, freeze).",
+  "description": "Brain — local-first research operations platform (project state, dependencies, prompts, audits, synthesis, freeze).",
   "engines": {
     "node": ">=22.5.0"
   },
@@ -50,6 +50,7 @@
     "@modelcontextprotocol/sdk": "1.30.0",
     "cross-env": "^7.0.3",
     "express": "^4.21.2",
+    "jszip": "^3.10.1",
     "mammoth": "^1.12.1",
     "multer": "^2.0.2",
     "pdfjs-dist": "^6.2.108",

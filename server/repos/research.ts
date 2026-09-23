@@ -1044,6 +1044,34 @@ export async function citableClaims(orchestrationId: string): Promise<ResearchCl
 }
 
 /**
+ * Every citable claim in one project, across all of its packets.
+ *
+ * `citableClaims`' rule, widened from one orchestration to a project, for the
+ * deliverable pipeline: a dossier or a workbook is built from what the whole
+ * project has established rather than from one packet. Contested and refuted
+ * claims stay out — a deliverable a person forwards must not carry a claim the
+ * project itself disputes — and so does anything with no source URL, because a
+ * citation that cannot be followed is not one.
+ */
+export async function projectCitableClaims(projectId: string, ids?: readonly string[]): Promise<ResearchClaim[]> {
+  if (ids && ids.length === 0) return [];
+  const idFilter = ids ? `AND c.id IN (${ids.map(() => '?').join(', ')})` : '';
+  return (await getDb().all<ResearchClaimRow>(
+      `SELECT c.* FROM research_claims c
+         JOIN research_fragments f ON f.id = c.fragment_id
+         JOIN research_orchestrations o ON o.id = c.orchestration_id
+        WHERE o.project_id = ? AND c.accepted = 1
+          AND f.status IN ('ACCEPTED', 'BLOCKED')
+          AND c.source_url IS NOT NULL AND c.source_url <> ''
+          AND c.contradiction_state NOT IN ('CONTESTED', 'REFUTED')
+          ${idFilter}
+        ORDER BY c.created_at, c.id`,
+      [projectId, ...(ids ?? [])],
+    ))
+    .map(mapClaim);
+}
+
+/**
  * Every citable claim in one project that says it is an opening.
  *
  * The typed replacement for walking candidate → mission → orchestration, which

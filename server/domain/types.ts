@@ -494,6 +494,14 @@ export const EVENT_TYPES = [
   // The answering transition for a work item whose attempt ceiling now
   // binds at the claim as well as at `failWork`.
   'WORK_ATTEMPTS_REGRANTED',
+  // A deliverable carried from a request to a file (§50).
+  'DELIVERABLE_REQUESTED',
+  'DELIVERABLE_BUILD_OPENED',
+  'DELIVERABLE_VERSION_RECORDED',
+  'DELIVERABLE_REVIEWED',
+  'DELIVERABLE_DELIVERED',
+  'DELIVERABLE_REVISION_REQUESTED',
+  'DELIVERABLE_NEEDS_PERSON',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -5328,6 +5336,16 @@ export const COMPLETION_CONTRACTS = [
   // or a second picture of one thing refuses the whole submission. See
   // `services/design/render.ts`.
   'DESIGN_RENDER_V1',
+  // A deliverable's content, built from the project's citable claims. The
+  // worker submits structured content — never a file — and the evaluator runs
+  // the same validator the ingest does, so a figure no cited claim states or a
+  // citation that is not a claim of this project comes back as RETRY while the
+  // worker still holds the lease. Brain renders the file. See
+  // `services/deliverables/`.
+  'DELIVERABLE_BUILD_V1',
+  // That file, read by a session that did not build it, against the request's
+  // own acceptance conditions. `PASS` beside a material finding is refused.
+  'DELIVERABLE_REVIEW_V1',
 ] as const;
 export type CompletionContract = (typeof COMPLETION_CONTRACTS)[number];
 

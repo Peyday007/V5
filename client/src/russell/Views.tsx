@@ -207,6 +207,7 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
        * already opens.
        */}
       <Register projectId={projectId} />
+      <Deliverables projectId={projectId} />
     <Panel title="Work" state={state} onRetry={query.reload}>
       {groups.map((group) => (
         <div key={group.group} className="rs-group">
@@ -237,6 +238,69 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
       ) : null}
     </Panel>
     </>
+  );
+}
+
+/**
+ * The files this project has had made for it, each findable again.
+ *
+ * A deliverable is delivered into the conversation that asked, and this is
+ * where it can be found afterwards without remembering which conversation that
+ * was: every one, its state, the current version's download, and the version
+ * history — each version's link is permanent, because a version never changes.
+ */
+function Deliverables({ projectId }: { projectId: string | null }): JSX.Element | null {
+  const query = useAsync(
+    () => (projectId ? RussellApi.deliverables(projectId) : Promise.resolve(null)),
+    [projectId],
+  );
+  const items = query.data?.deliverables ?? [];
+  if (!projectId || (items.length === 0 && !query.loading && !query.error)) return null;
+  return (
+    <section className="rs-panel rs-deliverables" aria-labelledby="rs-deliverables-title">
+      <h2 id="rs-deliverables-title">Files</h2>
+      {query.error ? (
+        <p className="rs-state rs-state-error" role="alert">
+          Could not load the files. {query.error.message}
+        </p>
+      ) : null}
+      <ul className="rs-list">
+        {items.map((d) => (
+          <li key={d.id} className="rs-deliverable" data-state={d.state}>
+            <strong>{d.title}</strong>{' '}
+            <span className="rs-count">{d.state.toLowerCase().replace(/_/g, ' ')}</span>
+            {d.stateReason ? <p className="rs-meta">{d.stateReason}</p> : null}
+            {d.current ? (
+              <p>
+                <a href={d.current.fileUrl} download>
+                  Download current version {d.current.versionNumber} ({d.format.toLowerCase()})
+                </a>
+              </p>
+            ) : null}
+            {d.versions.length > 1 ? (
+              <details>
+                <summary>{d.versions.length} versions</summary>
+                <ul>
+                  {d.versions.map((v) => (
+                    <li key={v.versionNumber}>
+                      <a href={v.fileUrl} download>
+                        Version {v.versionNumber}
+                      </a>{' '}
+                      — {v.reason.toLowerCase()}, {v.status.toLowerCase().replace(/_/g, ' ')}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+            {d.needs.map((need) => (
+              <p key={need.capability} className="rs-meta">
+                {need.capability}: {need.detail}
+              </p>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

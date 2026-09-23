@@ -22,6 +22,7 @@ import type {
   SoftwareClarification,
   SoftwareRequestView,
 } from '../../../server/services/russell/software.ts';
+import type { DeliverableView } from '../../../server/services/russell/deliverable.ts';
 import { turnLabel } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { ApiError } from '../lib/api.ts';
@@ -60,6 +61,63 @@ function SoftwareTrail({ software }: { software: SoftwareRequestView[] }): JSX.E
                 Review the pull request
               </a>
             ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const DELIVERABLE_STATE: Record<DeliverableView['state'], string> = {
+  BRIEFED: 'Understood — starting',
+  BUILDING: 'Being built',
+  REVIEWING: 'Being checked',
+  DELIVERED: 'Ready',
+  NEEDS_PERSON: 'Needs you',
+};
+
+/**
+ * The files this conversation asked for, and a link that opens each.
+ *
+ * The delivery message in the thread carries the account of what was checked;
+ * this is the part a person comes back for — the current version, one click
+ * away, and what is in progress or missing. Every sentence is the server's.
+ * Asking for a change is done by saying so in the conversation, which is where
+ * the request came from.
+ */
+function DeliverableTrail({ deliverables }: { deliverables: DeliverableView[] }): JSX.Element | null {
+  if (deliverables.length === 0) return null;
+  return (
+    <section className="rs-thread-software rs-thread-deliverables" aria-label="Files asked for in this conversation">
+      <h3>Files you asked for here</h3>
+      <ul>
+        {deliverables.map((d) => (
+          <li key={d.id} className="rs-thread-software-item" data-state={d.state}>
+            <strong>{d.title}</strong>
+            <span className="rs-thread-software-line">
+              {DELIVERABLE_STATE[d.state]}
+              {d.stateReason ? ` — ${d.stateReason}` : ''}
+            </span>
+            {d.current ? (
+              <a href={d.current.fileUrl} download>
+                Download version {d.current.versionNumber} ({d.format.toLowerCase()})
+              </a>
+            ) : null}
+            {d.current?.previewUrl ? (
+              <a href={d.current.previewUrl} target="_blank" rel="noreferrer noopener">
+                Preview
+              </a>
+            ) : null}
+            {d.latest && d.latest.versionNumber !== d.current?.versionNumber ? (
+              <span className="rs-thread-software-line">
+                Version {d.latest.versionNumber}: {d.latest.status.toLowerCase().replace(/_/g, ' ')}
+              </span>
+            ) : null}
+            {d.needs.map((need) => (
+              <span key={need.capability} className="rs-thread-software-needs">
+                {need.capability}: {need.detail}
+              </span>
+            ))}
           </li>
         ))}
       </ul>
@@ -202,6 +260,7 @@ export function Conversation({
         ))}
       </ol>
       <SoftwareTrail software={thread.data?.software ?? []} />
+      <DeliverableTrail deliverables={thread.data?.deliverables ?? []} />
       <Clarification clarification={thread.data?.clarification ?? null} />
       <div ref={bottom} />
 

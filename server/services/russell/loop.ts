@@ -51,6 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
+import { advanceDeliverables } from '../deliverables/pipeline.ts';
 import {
   claimCycle,
   completeCycle,
@@ -167,6 +168,8 @@ export interface TickReport {
   probed: string[];
   /** Turn bins whose proposal was applied and whose pending turn now reads. */
   answered: string[];
+  /** Deliverables moved a step toward a file this tick (§50). */
+  deliverables: { opened: string[]; ingested: string[]; delivered: string[]; needsPerson: string[] };
   /**
    * Missions retired because they ran on a specification this build no longer
    * produces, each with the idea it was recompiled for.
@@ -604,6 +607,7 @@ const EMPTY: TickReport = {
   expiredProbes: [],
   probed: [],
   answered: [],
+  deliverables: { opened: [], ingested: [], delivered: [], needsPerson: [] },
   launched: [],
   parked: [],
   awaitingFiling: [],
@@ -664,6 +668,7 @@ export async function tick(owner: string): Promise<TickReport> {
     expiredProbes: [],
     probed: [],
     answered: [],
+    deliverables: { opened: [], ingested: [], delivered: [], needsPerson: [] },
     launched: [],
     parked: [],
     awaitingFiling: [],
@@ -1118,6 +1123,20 @@ export async function tick(owner: string): Promise<TickReport> {
     for (const binId of await answeredTurnBins(cycle.maxEventsPerCycle)) {
       const applied = await applyTurn(binId);
       if (applied.ok && !applied.alreadyAnswered) report.answered.push(binId);
+    }
+
+    /*
+     * 1b'. Carry deliverables a step toward a file.
+     *
+     * Right after the turns, because a turn that just landed may be the brief
+     * this opens a build for — which is what makes the first bin fire in the
+     * same tick rather than the next. Wrapped, because a deliverable that
+     * cannot advance must never stop Russell writing back a mission.
+     */
+    try {
+      report.deliverables = await advanceDeliverables(cycle.maxEventsPerCycle);
+    } catch (error) {
+      console.error('[russell] deliverables could not advance:', error instanceof Error ? error.message : error);
     }
 
     /*

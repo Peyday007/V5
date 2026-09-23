@@ -5,6 +5,7 @@
  * middleware come last so every route above them can throw freely and still
  * produce `{ error, detail? }` instead of an HTML stack trace.
  */
+import { deliverablesRouter } from './deliverables.ts';
 import { Router } from 'express';
 import { adminRouter } from './admin.ts';
 import { workRouter } from './work.ts';
@@ -108,6 +109,9 @@ export function createApiRouter(): Router {
   // an opportunity, a commitment or a need directly. Before the projects router
   // so its own `/:projectId/...` routes do not swallow them.
   router.use(cashRouter);
+  // Deliverables (§50). Root-mounted: it carries /projects/:id/deliverables and
+  // /deliverables/:id, and must sit before the projects router.
+  router.use(deliverablesRouter);
   // The labor kernel (§41). Root-mounted for the same reason and with the same
   // ordering requirement: its routes carry their own `/projects/:id/labor/...`
   // prefix and must sit before the projects router.

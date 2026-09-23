@@ -33,6 +33,8 @@
  * never self-authorizes; a refusal is stored as a refusal rather than thrown
  * away, so a person can see that Russell was asked something it would not do.
  */
+import { captureDeliverableRequest } from './deliverable.ts';
+import { listDeliverablesForConversation } from '../../repos/deliverables.ts';
 import { createBin, getBin, listBinUnitResults } from '../../repos/bins.ts';
 import { getUser, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import {
@@ -342,6 +344,24 @@ export async function beginTurn(input: {
  * `createdById` is how `applyTurn` finds its way back to the pending turn, so
  * the caller supplies the message this bin answers and nothing else links them.
  */
+/**
+ * The deliverables this conversation already holds, so a worker asked to
+ * revise one can name it. Absent when there are none — a heading over nothing
+ * reads as though something was left out.
+ */
+async function deliverablesRendered(conversationId: string): Promise<string> {
+  const held = await listDeliverablesForConversation(conversationId);
+  if (held.length === 0) return '';
+  return [
+    'Deliverables in this conversation (revise one with {"revisionOf": id, "correction": …}):',
+    ...held.map(
+      (d) =>
+        `- ${d.id} — "${d.title}" (${d.kind === 'WRITTEN' ? 'document' : 'workbook'}), ${d.state.toLowerCase()}` +
+        `${d.currentVersionId ? ', has a delivered version' : ''}`,
+    ),
+  ].join('\n');
+}
+
 async function createTurnBin(input: {
   projectId: string;
   conversationId: string;
@@ -368,6 +388,7 @@ async function createTurnBin(input: {
           input: [
             await transcriptFor(input.conversationId),
             openIdeas.rendered,
+            await deliverablesRendered(input.conversationId),
           ]
             .filter(Boolean)
             .join('\n\n'),
@@ -440,6 +461,30 @@ async function createTurnBin(input: {
           '(what a person would see differently afterwards). Do not name a repository, ' +
           'a branch, a file or a directory — Brain supplies those from what this project ' +
           'is authorized to change.',
+        /*
+         * A deliverable is the one action whose effect is a file rather than a
+         * row somebody reads. The brief is what every later check and reviewer
+         * is held against, so it has to be written from the request rather
+         * than invented: a required content the person never mentioned is a
+         * requirement nobody can be shown to have met.
+         */
+        'REQUEST_DELIVERABLE is for a concrete output the person asks to have made from ' +
+          'this project — a research dossier, a comparison, a document, a spreadsheet, a ' +
+          'dataset. Brain builds the file from the project’s accepted evidence, checks it, ' +
+          'has it reviewed and delivers it back into this conversation; your answer should ' +
+          'say that it is being built, not contain it. Do not answer with a plan for the ' +
+          'file or a prompt for another model. If what they want is genuinely ambiguous in ' +
+          'a way you cannot settle sensibly (for example who it is for changes what it must ' +
+          'contain), use ANSWER_ONLY to ask one question instead.',
+        'for REQUEST_DELIVERABLE: a "deliverable" object with "title", "kind" ("WRITTEN" ' +
+          'for a document, "STRUCTURED" for a spreadsheet or dataset), "requestedFormat" ' +
+          '(what they named — "DOCX", "XLSX", "CSV", "PDF", "PPTX" — or null), "intendedUse", ' +
+          '"audience", "requiredContents" (a list, from what they asked for), ' +
+          '"sourceRequirements", "acceptanceConditions" (a list of checkable conditions) and ' +
+          '"externalDelivery" (null, or who they asked for it to be sent to — Brain will not ' +
+          'send it, and says so). To revise a deliverable listed under "Deliverables in this ' +
+          'conversation", send instead only {"revisionOf": its id, "correction": what to change, ' +
+          'in full}.',
         /*
          * The card is read on its own, days later, by somebody deciding whether
          * to spend a fleet on it. "Do the same for the contact page" is a
@@ -540,6 +585,10 @@ async function createTurnBin(input: {
         `candidate title is at most ${FIELD_LIMITS.candidateTitle} characters, ` +
           `statement at most ${FIELD_LIMITS.candidateStatement}`,
         `reason is at most ${FIELD_LIMITS.reason} characters`,
+        `deliverable title is at most ${FIELD_LIMITS.deliverableTitle} characters; each of its ` +
+          `texts at most ${FIELD_LIMITS.deliverableText}; requiredContents and ` +
+          `acceptanceConditions at most ${FIELD_LIMITS.deliverableItems} entries each; a ` +
+          `correction at most ${FIELD_LIMITS.deliverableCorrection}`,
         'confidence is a number from 0 to 100',
         'projectId, when given, is the project this bin already names',
         'no other field — an unrecognised one refuses the whole proposal',
@@ -1296,6 +1345,39 @@ async function applyValidated(input: {
           // Said out loud, because "written down for you to authorize" and
           // "you already have this waiting" are different answers.
           softwareOutcome: outcome.reason,
+        },
+        candidateId: null,
+      };
+    }
+
+    case 'REQUEST_DELIVERABLE': {
+      if (!proposal.deliverable) break;
+      /*
+       * The owner's authority, never the worker's, and a deterministic gate on
+       * the person's own words — `REQUEST_SOFTWARE_CHANGE`'s two rules, for the
+       * same two reasons. The whole effect is a brief or a recorded correction;
+       * the tick carries it to a file.
+       */
+      const outcome = await captureDeliverableRequest({
+        projectId: conversation.projectId,
+        conversationId,
+        askedMessageId: input.askedMessageId ?? null,
+        askedText: input.askedText,
+        proposed: proposal.deliverable,
+        owner,
+      });
+      if (!outcome.ok) {
+        return {
+          produced: { deliverableDeclined: true, gateReason: outcome.reason, clarify: outcome.answer },
+          candidateId: null,
+        };
+      }
+      return {
+        produced: {
+          deliverableId: outcome.deliverable.id,
+          deliverableCreated: outcome.created,
+          deliverableOutcome: outcome.reason,
+          deliverableNeeds: outcome.deliverable.needs,
         },
         candidateId: null,
       };
