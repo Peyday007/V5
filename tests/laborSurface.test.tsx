@@ -353,24 +353,24 @@ describe('the Labor screen, over the real route', () => {
       expect(screen.getByText(/Recording that a person produces this engages nobody/)).toBeTruthy(),
     );
 
-    // And the role is now on the map with what backs it — which is `PERSON`
-    // rather than `RESEARCH`, because somebody answered the question and no
-    // published source did.
+    // And the role is now on the map with what backs it — which is
+    // `ASSERTED` rather than `PERSON`: somebody recorded who produces the
+    // task, and nothing answered the question of why a person is necessary.
     /*
      * Scoped to the roles section, because two sections legitimately carry the
      * reason and an unscoped query stopped naming which one it meant.
      *
      * The second element is the **capacity need**, not a label the form
-     * offered — this comment said the latter and the correction is recorded
+     * offered — this comment said the latter, and the correction is recorded
      * here rather than quietly applied, because a comment that misnames the
-     * other match sends the next reader to the wrong section. Measured in the
-     * settled state rather than argued: the two matches are
-     * `STRONG|human interface` and
+     * other match sends the next reader to look at form lifecycle when the
+     * answer is a second section. Re-measured on this tree rather than argued:
+     * the two elements carrying the words are `STRONG|human interface` and
      * `P.rs-item-meta|The role exists for human interface.`, which is what
-     * deploy 317's own failure dump listed. `capacityNeeds` carries
+     * deploy 317's own failure dump listed too. `capacityNeeds` carries
      * `allocation.necessityReason` the moment a human layer is recorded with
      * nothing published about sourcing it, so recording the role writes both
-     * at once.
+     * at once and the second one is permanent rather than transient.
      *
      * `waitFor` resolves on its first successful poll, so the unscoped query
      * passed only while that poll landed in the gap between the two renders
@@ -384,9 +384,38 @@ describe('the Labor screen, over the real route', () => {
       expect(roles).toBeTruthy();
       expect(within(roles!).getByText(/human interface/)).toBeTruthy();
     });
+
+    /*
+     * And the correction their fix leaves behind, which is the half of mine
+     * that does not overlap.
+     *
+     * Two sessions found this race independently; the one on `production`
+     * ships, which is this repository's own rule about a number that landed
+     * first. What it preserves is the comment three lines up, and that comment
+     * has never been true: it claims the backing is `PERSON` "because somebody
+     * answered the question", and no assertion here has ever read the backing
+     * — `/human interface/` did not, and `not.toBe('RESEARCH')` below is
+     * satisfied by `ASSERTED` and `PERSON` alike.
+     *
+     * It is `ASSERTED`, and the product is right. Recording *who produces* a
+     * task writes an allocation, not a `labor_necessity_answers` row, and
+     * `HUMAN_INTERFACE` is one of the reasons `questionAnsweredBy` settles
+     * nothing for. So a person has said a person is necessary and nothing
+     * backs that, which is exactly the distinction the field exists to keep.
+     *
+     * An assertion weak enough to pass either way is what let the comment
+     * beside it drift, so this reads the sentence the screen actually renders.
+     */
+    const role = within(
+      document.querySelector('.rs-labor-roles') as HTMLElement,
+    ).getByText(/Necessary because of/);
+    expect(role.textContent).toMatch(/human interface/);
+    expect(role.textContent).toMatch(/nothing — the reason is asserted/);
     const withRole = await laborView(projectId);
     expect(withRole.humanDependencies).toHaveLength(1);
-    expect(withRole.humanDependencies[0]?.backing).not.toBe('RESEARCH');
+    // Pinned exactly rather than as "not RESEARCH", which ASSERTED and PERSON
+    // both satisfy: the value that is true here is the one worth guarding.
+    expect(withRole.humanDependencies[0]?.backing).toBe('ASSERTED');
 
     /* --- and then moving it to Brain -------------------------------------- */
     const again = await waitForButton(/Record who produces/);

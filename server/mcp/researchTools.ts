@@ -58,6 +58,17 @@ import {
 } from '../domain/dealflow.ts';
 import type { DealFinding } from '../domain/types.ts';
 import {
+  PUZZLE_COST_COMPONENTS,
+  PUZZLE_ECONOMIC_COMPONENTS,
+  PUZZLE_FINDINGS,
+  PUZZLE_FINDING_GUIDE,
+  PUZZLE_PRODUCT_CLASSES,
+  PUZZLE_REVENUE_COMPONENTS,
+  PUZZLE_RIGHTS_CONSTRAINTS,
+  validatePuzzleFinding,
+} from '../domain/puzzle.ts';
+import type { PuzzleFinding, PuzzleProductClass } from '../domain/types.ts';
+import {
   TerminalEffectFailure,
   type OperationNamespace,
 } from '../services/effects/engine.ts';
@@ -1265,6 +1276,49 @@ function dealOf(
   };
 }
 
+/**
+ * The wire door's puzzle declaration, delegated to the one validator.
+ *
+ * The snake_case names are what a worker sends and the camelCase ones are what
+ * the store takes, so this is a rename and nothing else: every rule about what
+ * a finding requires lives in `domain/puzzle.ts` and is applied identically
+ * here and on the provider path. Four axes, four functions, and neither door
+ * holds a copy of a rule.
+ */
+function puzzleOf(
+  row: Record<string, unknown>,
+  where: string,
+): {
+  puzzleFinding: PuzzleFinding | null;
+  puzzleSubject: string | null;
+  puzzleFormat: string | null;
+  puzzleProductClass: PuzzleProductClass | null;
+  puzzleValue: string | null;
+  puzzleAmountCents: number | null;
+  puzzleCurrency: string | null;
+} {
+  const parsed = validatePuzzleFinding({
+    where,
+    finding: row['puzzle_finding'],
+    subject: row['puzzle_subject'],
+    format: row['puzzle_format'],
+    productClass: row['puzzle_product_class'],
+    value: row['puzzle_value'],
+    amountCents: row['puzzle_amount_cents'],
+    currency: row['puzzle_currency'],
+  });
+  if (!parsed.ok) throw invalidInput(parsed.error);
+  return {
+    puzzleFinding: parsed.value.finding,
+    puzzleSubject: parsed.value.subject,
+    puzzleFormat: parsed.value.format,
+    puzzleProductClass: parsed.value.productClass,
+    puzzleValue: parsed.value.value,
+    puzzleAmountCents: parsed.value.amountCents,
+    puzzleCurrency: parsed.value.currency,
+  };
+}
+
 const submitClaimsTool: McpTool = {
   name: 'brain_submit_claims',
   title: 'Submit a fragment\'s claims',
@@ -1311,8 +1365,16 @@ const submitClaimsTool: McpTool = {
     DEAL_FINDINGS.map((one) => `${one} — ${DEAL_FINDING_GUIDE[one]}`).join('; ') +
     '. All but DECISION_MAKER also require deal_equipment, and the two requirement kinds ' +
     'require deal_jurisdiction and deal_value. ' +
-    'The three axes are independent: a claim can carry an opportunity_signal, a ' +
-    'structural_finding and a deal_finding at once, and most claims carry none of them. ' +
+    'And separately again, where a claim establishes something about the puzzle trade — ' +
+    'which kinds of puzzle sell, who publishes a need for puzzle content, how it reaches ' +
+    'them, who prints it, what somebody is paid, what a line of the cost is, or what may not ' +
+    'be published — set puzzle_finding to the kind it is: ' +
+    PUZZLE_FINDINGS.map((one) => `${one} — ${PUZZLE_FINDING_GUIDE[one]}`).join('; ') +
+    '. All but RIGHTS_CONSTRAINT also require puzzle_format, and the two figure kinds ' +
+    'require puzzle_product_class, puzzle_value, puzzle_amount_cents and puzzle_currency. ' +
+    'The axes are independent: a claim can carry an opportunity_signal, a ' +
+    'structural_finding, a deal_finding and a puzzle_finding at once, and most claims carry ' +
+    'none of them. ' +
     'One submission per work item; a redelivery replays it rather than adding to it.',
   inputSchema: {
     type: 'object',
@@ -1600,6 +1662,83 @@ const submitClaimsTool: McpTool = {
                 'landed cost withheld and says why; a figure relabelled into a currency the ' +
                 'source did not use would be a number nobody can check.',
             },
+            /*
+             * Declared, not merely described — the fourth axis, and the
+             * comment beside `structural_finding` is why. §33 records what an
+             * `additionalProperties: false` schema that omits a field its own
+             * prose asks for costs: a client honouring the schema drops the
+             * one field that decides whether anything is ever created, and the
+             * failure reads exactly like a worker honestly finding nothing.
+             */
+            puzzle_finding: {
+              type: 'string',
+              enum: [...PUZZLE_FINDINGS],
+              description:
+                'Optional, and absent for most claims. Set it when this claim establishes ' +
+                'something about the puzzle trade: ' +
+                PUZZLE_FINDINGS.map((one) => `${one} — ${PUZZLE_FINDING_GUIDE[one]}`).join('; ') +
+                '. Independent of the other axes — a claim may carry any of them, or none.',
+            },
+            puzzle_subject: {
+              type: 'string',
+              description:
+                'Required whenever puzzle_finding is set: what the finding names, as the ' +
+                'source writes it. The buyer, the channel, the printer, the standard — a ' +
+                'name, not a sentence about it.',
+            },
+            puzzle_format: {
+              type: 'string',
+              description:
+                'Required for every puzzle_finding except RIGHTS_CONSTRAINT, and refused for ' +
+                'that one: which kind of puzzle this is about. Where the assignment names a ' +
+                'format, copy that string verbatim — a different wording is a different ' +
+                'format to Brain and will join nothing. A rights rule applies across formats, ' +
+                'so filing it under one would hide it from every other.',
+            },
+            puzzle_product_class: {
+              type: 'string',
+              enum: [...PUZZLE_PRODUCT_CLASSES],
+              description:
+                'Required for PRICE_POINT and PRODUCTION_COST and refused for every other ' +
+                'puzzle_finding: which kind of product the figure is about. It is what the ' +
+                'figure is judged against — a downloadable PDF with no freight line is fully ' +
+                'costed and a boxed game with no freight line is one whose largest variable ' +
+                'cost nobody has established.',
+            },
+            puzzle_value: {
+              type: 'string',
+              enum: [...PUZZLE_ECONOMIC_COMPONENTS, ...PUZZLE_RIGHTS_CONSTRAINTS],
+              description:
+                'Required for PRICE_POINT, PRODUCTION_COST and RIGHTS_CONSTRAINT, and refused ' +
+                'otherwise. For PRICE_POINT, which kind of receipt: ' +
+                PUZZLE_REVENUE_COMPONENTS.join(', ') +
+                '. NET_RECEIPT_PER_UNIT is what the publisher actually receives and ' +
+                'RETAIL_PRICE is what a shopper pays — they are different numbers by a factor ' +
+                'nobody can guess, Brain refuses to compute a margin from the second, and ' +
+                'mixing them up is the one error here that makes a product look profitable. ' +
+                'For PRODUCTION_COST, which line: ' +
+                PUZZLE_COST_COMPONENTS.join(', ') +
+                '. For RIGHTS_CONSTRAINT, which kind of rule: ' +
+                PUZZLE_RIGHTS_CONSTRAINTS.join(', ') +
+                '.',
+            },
+            puzzle_amount_cents: {
+              type: 'integer',
+              description:
+                'Required for PRICE_POINT and PRODUCTION_COST and refused for every other ' +
+                'puzzle_finding: the figure the source publishes, in minor units. A published ' +
+                'zero is a figure — report it as 0 rather than omitting it, because an absent ' +
+                'line and a zero line have opposite meanings and only one of them withholds ' +
+                'the total.',
+            },
+            puzzle_currency: {
+              type: 'string',
+              description:
+                'Required for PRICE_POINT and PRODUCTION_COST and refused otherwise: the ' +
+                'three-letter ISO 4217 code the source published the figure in. Report it as ' +
+                'published. Brain never converts, so a product class whose figures are in two ' +
+                'currencies has its contribution withheld and says why.',
+            },
             retrieval_state: {
               type: 'string',
               enum: [...RETRIEVAL_STATES],
@@ -1716,6 +1855,7 @@ const submitClaimsTool: McpTool = {
          * dropped the one field that decided whether anything was created.
          */
         ...dealOf(row, where),
+        ...puzzleOf(row, where),
         retrievalState: retrievalStateOf(row, where),
         derived: bool(row, 'derived', where, false),
         derivedFrom: strList(row, 'derived_from', where),

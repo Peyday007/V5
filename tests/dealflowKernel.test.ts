@@ -450,6 +450,45 @@ describe('a report read beside a running app', () => {
       // is a reading of what is actually serving.
       expect(body).toMatch(/SERVING_REVISION \$\{BRAIN_REVISION/);
     });
+
+    /*
+     * And a report with no door is a reading nobody can take.
+     *
+     * The two rules above are about a script that runs. This one is about
+     * whether anything can run it: the rows that matter are the deployed
+     * Brain's, `npm run report:*` needs a checkout and a database, and a
+     * script committed without a workflow is reachable only from a machine
+     * nobody has. §45's sentence — *a reading nobody can take is not a
+     * reading* — asked of the door rather than of the connection count.
+     *
+     * Found by shipping one. `puzzle-report.sh` was correct, carried both
+     * lines above, and had no workflow at all; the whole suite passed, because
+     * every rule that existed was about the file rather than about reaching
+     * it.
+     */
+    it(`${name} is reachable from a workflow, which checks it finished`, () => {
+      const callers = readdirSync('.github/workflows')
+        .filter((file) => file.endsWith('.yml'))
+        .map((file) => ({ file, body: readFileSync(`.github/workflows/${file}`, 'utf8') }))
+        .filter((one) => one.body.includes(`scripts/${name}`));
+
+      expect(callers.map((one) => one.file).length).toBeGreaterThan(0);
+
+      /*
+       * And every one of them verifies the terminal marker, because
+       * `flyctl ssh console` exits 0 whether the script finished or a restart
+       * cut the session off part way — so without the check, a truncated
+       * report and a complete one are the same green tick.
+       */
+      const marker = `${name.replace(/\.sh$/, '').toUpperCase()}: OK`;
+      for (const caller of callers) {
+        expect(caller.body).toContain(marker);
+      }
+
+      // And the script it calls actually prints what they look for.
+      const printer = readFileSync(`scripts/${name.replace(/\.sh$/, '.ts')}`, 'utf8');
+      expect(printer).toContain(marker);
+    });
   }
 });
 

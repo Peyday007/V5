@@ -76,7 +76,8 @@ import { isSelectableCashEnvelope } from '../cash/lifecycle.ts';
 import { profileFor, type CompilerProfile } from './compilerProfiles.ts';
 import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
-import type { DealRoundPurpose } from '../../domain/types.ts';
+import { puzzleRoundForCandidate } from '../../repos/puzzle.ts';
+import type { DealRoundPurpose, PuzzleRoundPurpose } from '../../domain/types.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
 import { laborRoundForCandidate } from '../../repos/labor.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
@@ -158,6 +159,24 @@ const DEALFLOW_TERM_PURPOSES: ReadonlySet<DealRoundPurpose> = new Set<DealRoundP
   'COMPLIANCE',
   'LANDED_COST',
   'STRUCTURE',
+]);
+
+/**
+ * Which of the puzzle kernel's questions are about money and rules rather than
+ * about who is out there.
+ *
+ * A `Set` of the terms purposes with the market ones falling through, rather
+ * than a `Record` over the union — and the difference matters here in the safe
+ * direction: a purpose added later and forgotten is judged by the *market*
+ * envelope, whose completion standard demands a named organisation, so it
+ * would refuse a figure rather than accept one under the looser of the two.
+ * Falling through to the stricter thing is the correct direction to be wrong
+ * in, which is why this one is a `Set`.
+ */
+const PUZZLE_TERM_PURPOSES: ReadonlySet<PuzzleRoundPurpose> = new Set<PuzzleRoundPurpose>([
+  'PRODUCTION',
+  'ECONOMICS',
+  'RIGHTS',
 ]);
 
 async function envelopeIdFor(
@@ -305,6 +324,25 @@ async function envelopeIdFor(
     return DEALFLOW_TERM_PURPOSES.has(dealflow.purpose)
       ? 'RUSSELL_DEALFLOW_TERMS_V1'
       : 'RUSSELL_DEALFLOW_PARTIES_V1';
+  }
+
+  /*
+   * A puzzle question is decided the same way again, by the round that asked
+   * it, and split for the same reason: establishing who buys puzzle content is
+   * a question whose deliverable is a name, and establishing what it earns is
+   * one whose deliverable is a figure. Judging either by the other's
+   * completion standard is the Westbrook defect at a compiler.
+   *
+   * Neither widens anything: both take their source classes and their
+   * forbidden actions verbatim from the discovery envelope, so nothing here
+   * authorizes an effect the sprint's own grant did not — which is nothing at
+   * all beyond reading.
+   */
+  const puzzle = await puzzleRoundForCandidate(candidate.id);
+  if (puzzle) {
+    return PUZZLE_TERM_PURPOSES.has(puzzle.purpose)
+      ? 'RUSSELL_PUZZLE_TERMS_V1'
+      : 'RUSSELL_PUZZLE_MARKET_V1';
   }
   if (await opportunityForOwnCandidate(project.id, candidate.id)) {
     return 'RUSSELL_CASH_VALIDATION_V1';
