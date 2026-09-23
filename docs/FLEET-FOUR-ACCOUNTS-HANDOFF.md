@@ -739,8 +739,12 @@ deploy 305 on 2026-09-21. Two days, two deploys, the same wall — so a worker
 fired into that window sees exactly what that section describes, and asking
 again is the answer.
 
-Production returned at **08:50:33** and has answered `/healthz` in about 0.4s
-on every probe since. `/api/auth/login` with a deliberately wrong credential
+Production returned at **08:50:33** and answered `/healthz` in about 0.4s on
+every probe for the next ninety minutes — and then went down again at 10:03
+for the reason §8.5 records, which is a different cause with the same
+symptom. The two are kept apart deliberately: this one was a restart landing
+on a database already timing out, and that one was Supabase's storage API
+refusing to answer at all. `/api/auth/login` with a deliberately wrong credential
 answers `HTTP 401` with the PIN sentence — the app serving and reading
 Postgres — though it took 24.27s to do it, which is the same pooler pressure
 seen from the front door.
