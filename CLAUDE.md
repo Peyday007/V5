@@ -1488,12 +1488,25 @@ for.
   completed chain behind it. Both report two numbers now, each labelled as what
   it counts, and which surfaces have actually run.
 
-`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **None of it has
-a production reading**: no four-account Factory pool has been commissioned, so
-the quarantine has never fired against a real dead surface and `STALE` has never
-been printed about a real revoked connector. The engine passing its tests says
-nothing about whether the fleet behaves this way, which is the separation Step 3
-drew and which this does not get to waive.
+`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **The quarantine
+has a production reading and the rest does not**, and that sentence used to say
+none of it did — corrected rather than edited away, because it was true when it
+was written and the rows disproved half of it on 2026-09-23. At 12:15:04,
+12:15:05, 12:16:27 and 12:16:28 the four `Airyn` Routines were taken out of
+routing, each with the recorded reason and `refusals=0`, **while five surfaces
+bound to the same worker stayed enabled and three of them held work at that
+instant**. That last clause is what makes it a reading of the repair rather than
+of an outage: under `consecutive_no_shows` any one of those arrivals would have
+cleared the counter for all nine, so the four could never have reached the
+threshold. `shouldQuarantine` is no longer a mechanism nothing calls.
+
+What still has no production reading: no four-account Factory pool has been
+commissioned, `STALE` has never been printed about a real revoked connector,
+and no fire has been routed across four accounts. The four surfaces above carry
+`caps=[]` and resolve to one worker identity, so they are research surfaces and
+not a pool. The engine passing its tests says nothing about whether the fleet
+behaves this way, which is the separation Step 3 drew and which this does not
+get to waive.
 
 ## 24. Russell is a way in, not a second brain.
 
@@ -11242,7 +11255,8 @@ that would have chosen between them exists.**
   way the product does. A row id belongs where somebody can look the row up,
   so `cash-report` prints it, with the instant the question was opened beside
   it — §45's rule that every line resolves to a row, at the one reading that
-  will be used as production acceptance for this loop.
+  was used as production acceptance for this loop, and it is what makes the
+  three commission ids below quotable rather than merely counted.
 
   Each of the four regressions was run against its own defect before it was
   trusted to pass, because a regression nobody has seen fail is a claim rather
@@ -11280,6 +11294,59 @@ that would have chosen between them exists.**
   push to `production` while somebody else's deploy is between its two askings
   aborts their release, so a branch waits for the deploy in flight rather than
   racing it.
+
+- **The loop ran in production, and what it produced is three questions rather
+  than a figure.** Deploy 327 released `96b1bfc` inside `6708990`, and the
+  reading taken through `cash-report.yml` inside that image — the container
+  naming its own `SERVING_REVISION 6708990938e1bbc82af535b12f374315ae5b1b18`,
+  because a report read out of a container says nothing about *which*
+  container unless the container says so (§45) — is:
+
+      possibilities=802 ledger_sourced=0 ledger_proposed=28
+      asked=3 asking_now=3 answered=0 unresolved=0 abandoned=0
+
+  Eight hundred and two possibilities enumerated from the forty real
+  discoveries this sprint already held, `MONETIZATION_PATHS_ENUMERATED=40` on
+  the project's own append-only history beside it. Every one of the 802 reads
+  `BLOCKED`, and the eight the report prints each carry twelve of thirteen
+  attributes open — which is the audit's own finding holding on live rows.
+  Twenty-eight answers across eight hundred possibilities, **none of them from
+  a published source**, is what a ledger looks like when `carryFigures` is the
+  only thing writing to it, and it is the number the commissioning loop exists
+  to move.
+
+  **What it asked is the ordering rule rather than the ranking.** All three
+  questions are `requiredCapability` under the blocker rule, on the three
+  top-ranked possibilities, each recorded reason beginning *"This possibility
+  is blocked"* — so the rule that a blocker outranks a position is what chose
+  the work, which is the one thing about this allocator that reading it could
+  not establish. Each row names what it serves: `mzc_ed9c18222fe4466dbc9a`,
+  `mzc_b0460e34190543f4a9ef` and `mzc_21c035fa3acf47239f86`, each with its
+  path, its attribute, its round, its reason and the idea it created —
+  `rcn_30acfb36fea24632980b`, `rcn_dba057453d184df986f9`,
+  `rcn_f22e90cb5c64460ea7b5`. That last column is the attribution answered by
+  a row rather than by a claim, and it is also the proof that the question
+  entered the Russell path that already exists rather than a second one.
+
+  **Three open is exactly `MAX_OPEN_COMMISSIONS`, and the second reading is
+  what makes that a bound rather than a coincidence.** A second `cash-report`
+  thirty-two minutes later — some sixty-four durable ticks at
+  `RUSSELL_TICK_MS` — printed the identical three ids and the identical
+  `asked=3 asking_now=3`. Nothing was asked twice, no fourth question was
+  created, and the ceiling held with nobody involved. That is the
+  duplicate-commissioning requirement observed in production rather than
+  argued from the unique index, and it is the reading the index exists for.
+
+  **`answered=0` is the honest boundary and is not rounded up.** The three
+  questions are open and their research has not come back, so the last link of
+  the chain — accepted evidence answering a ledger attribute, recomputing the
+  status and the rank, and appending a movement when the ordering actually
+  changes — is proven by `tests/monetizationCommissioning.test.ts` on both
+  backends and **not yet by production rows**. Calling it proven because the
+  machinery is correct is the separation Step 3 drew between an engine passing
+  its tests and a real job having actually run, and this section does not get
+  to waive it either. What production has established is everything up to the
+  question: the space, the selection, the bound and the entrance.
 
 - **This pair moved three times, and the third move is what says the rule is
   about position rather than about being first.** It was written at `088` /
