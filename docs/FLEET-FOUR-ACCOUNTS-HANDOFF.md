@@ -39,11 +39,22 @@ change is deliberate.** Two earlier versions named a tip — `901a42db` with
 deploy 323, then `08d6a787` — and both went stale within hours, the first
 while pointing at a run that passed before its restart and failed after it.
 `production` is a moving ref and a document cannot track one; **the deployed
-image is a fact that only changes when somebody deploys**, and every tip since
-`67089909` has changed documentation only, which §7.4 establishes as an empty
-diff over the shipped paths rather than as a reading of commit subjects. A
-reader who wants the current tip should ask git; a reader who wants to know
-what is *running* wants this row.
+image is a fact that only changes when somebody deploys**. A reader who wants
+the current tip should ask git; a reader who wants to know what is *running*
+wants this row.
+
+**A sentence here said every tip since `67089909` had changed documentation
+only, and it stopped being true while this file was being written.** It was a
+measurement rather than a reading of commit subjects — `git diff` over
+`server`, `client`, `scripts` and `.github` was empty at the time — and
+production has since taken `222f8fd7`, whose diff over those same paths is
+`server/mcp/researchTools.ts`, +18/-2. The correction is recorded rather than
+edited away, because it is the second time a row in this section has gone
+stale within hours and the lesson is the same one: **a claim about a moving
+ref expires, and the honest form of it names the instant it was taken.** What
+still holds is the row above: `ba5c0b2f` is an ancestor of every tip
+production has had, and `67089909` is the image that was live when §8.7 was
+measured.
 
 **An earlier version of this paragraph said `origin/production` was
 `f727b143`.** That was true when the lane measured it and was false by the
@@ -571,11 +582,15 @@ serves now.
 | `npm run typecheck` + `npm test` + `npm run build` (`deploy.yml` `verify`) | `901a42db` | passed — the release job would not have run otherwise |
 | `npm test` (SQLite, local) | `3d020b42`, this branch's tip | 4520 passed, 44 skipped, exit 0 |
 
-**The gate on the code production serves now**, which is `67089909`'s — every
-tip since has changed documentation only, verified as an empty diff over
-`server/`, `client/`, `scripts/`, `package.json`, `package-lock.json`,
-`Dockerfile`, `fly.toml`, `.github/`, `blueprints/` and `objectives/` rather
-than assumed from the commit subjects:
+**The gate on the image production was serving when this was measured**,
+which is `67089909`'s. At that instant every tip since was a documentation
+change, verified as an empty diff over `server/`, `client/`, `scripts/`,
+`package.json`, `package-lock.json`, `Dockerfile`, `fly.toml`, `.github/`,
+`blueprints/` and `objectives/` rather than assumed from the commit subjects.
+**That stopped being true afterwards** — `222f8fd7` carries
+`server/mcp/researchTools.ts` at +18/-2 — so this table describes the image it
+names and no later one. §0 records the same correction and the rule it is an
+instance of:
 
 | Gate | SHA | Result |
 | --- | --- | --- |
