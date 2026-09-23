@@ -30,7 +30,13 @@
  * coarse health word for the *project's* capacity and no totals at all —
  * §24's rule that hidden nodes, edges and counts must not leak.
  */
-import { listAccounts, listRoutines, currentPolicy, effectiveTarget } from '../../repos/fleet.ts';
+import {
+  listAccounts,
+  listRoutines,
+  currentPolicy,
+  effectiveTarget,
+  unansweredFiresByRoutine,
+} from '../../repos/fleet.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 import { getUser, getWorker } from '../../repos/identity.ts';
 import { decideProjectAccess } from '../identity/policy.ts';
@@ -244,11 +250,12 @@ export async function whoForProject(input: {
   }
 
   const now = new Date().toISOString();
-  const [accounts, routines, policy, invitations] = await Promise.all([
+  const [accounts, routines, policy, invitations, unanswered] = await Promise.all([
     listAccounts(),
     listRoutines(),
     currentPolicy('FLEET', null),
     invitationsForProject(input.projectId),
+    unansweredFiresByRoutine(),
   ]);
   const accountName = new Map(accounts.map((account) => [account.id, account.name]));
 
@@ -274,7 +281,10 @@ export async function whoForProject(input: {
       boundWorker: worker ? workerIdentity(worker) : null,
       fires: routine.totalFires,
       refusals: routine.totalRefusals,
-      noShows: routine.consecutiveNoShows,
+      // The derived per-surface count. `consecutive_no_shows` is cleared by any
+      // sibling bound to the same worker, so it reads 0 on a dead surface in a
+      // pool — see `unansweredFiresByRoutine`.
+      noShows: unanswered.get(routine.id) ?? 0,
       lastFiredAt: routine.lastFiredAt,
       lastCheckInAt: routine.lastCheckInAt,
     });

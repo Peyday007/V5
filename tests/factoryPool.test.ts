@@ -40,6 +40,7 @@ import {
   credentialDigest,
   getRoutineByRef,
   listRoutines,
+  recordWorkerArrival,
   recordWorkerSession,
   routineRegistrationCollision,
   setPolicy,
@@ -57,11 +58,14 @@ import {
   markDispatchSent,
 } from '../server/repos/bins.ts';
 import { dispatchTick } from '../server/services/dispatch/loop.ts';
-import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
+import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from '../server/services/dispatch/candidates.ts';
 import { routeBin } from '../server/services/dispatch/router.ts';
 import { decideBinRouting } from '../server/services/bins/routing.ts';
 import { judgePool, readFactoryPool, verifyFactoryPool } from '../server/services/dispatch/pool.ts';
 import { createProbeBin } from '../server/services/fleet/probe.ts';
+import { NO_SHOW_QUARANTINE_THRESHOLD } from '../server/services/dispatch/scaler.ts';
+import { getDb } from '../server/db/database.ts';
+import fs from 'node:fs';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
 
 const REPOSITORY = 'peyday007/v5';
@@ -902,6 +906,41 @@ describe('proving each surface, one at a time', () => {
     expect(alone.problems).toEqual([]);
   });
 
+  it('counts accounts and surfaces as two numbers, because they are two facts', async () => {
+    /*
+     * §23 draws this distinction and then warns about the arithmetic that
+     * ignores it: an account holds a subscription allowance and a Routine is a
+     * fire surface, so a second Routine on one account doubles how fast Brain
+     * can *start* sessions and changes nothing about how much that account may
+     * *do*. `verify-pool` reported `surfaces 3` and nothing else, so a pool of
+     * three Routines on one subscription read exactly like three accounts on
+     * the one command whose whole job is to report the pool.
+     */
+    for (const surface of surfaces) await completeChainFor(surface);
+    const read = await readFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
+
+    const spread = judgePool(read);
+    expect(spread.accounts).toBe(3);
+    expect(spread.surfaces).toHaveLength(3);
+    expect(spread.notes.join(' ')).not.toMatch(/subscription/i);
+
+    // The same three surfaces reported as being on one account. Nothing is
+    // refused — that arrangement is legitimate and sometimes deliberate — and
+    // it is said out loud on the green run, which is the only run where
+    // somebody could read the surface count as an account count.
+    const onOne = judgePool({
+      ...read,
+      surfaces: read.surfaces.map((one) => ({
+        ...one,
+        account: { ...read.surfaces[0]!.account },
+      })),
+    });
+    expect(onOne.ok).toBe(true);
+    expect(onOne.accounts).toBe(1);
+    expect(onOne.surfaces).toHaveLength(3);
+    expect(onOne.notes.join(' ')).toMatch(/one Claude account/i);
+  });
+
   it('reports a cooldown only while it is still ahead, so it cannot contradict "eligible yes"', async () => {
     /*
      * `retry_at` in the past is history: the fire router compares it to the
@@ -999,3 +1038,409 @@ async function completeChainFor(surface: Surface): Promise<void> {
     ),
   ).toBe('OK');
 }
+
+/**
+ * A proof is evidence about the moment it was taken.
+ *
+ * `judgeSurface` closed the four-row chain and then wrote `problems.length = 0`,
+ * which is right about the *proof's* own complaints — "nothing has ever arrived
+ * here" is genuinely answered by an arrival — and wrong about every standing
+ * fact recorded beside them. Two of those reach that line: a bound worker that
+ * has been **archived**, and a Factory identity whose routing row also serves
+ * research. Both are faults about the surface *now*, both were discarded by a
+ * chain closed at any point in the past, and `judgePool` only reports problems
+ * for a surface whose verdict is not PROVEN — so the pool answered `ok: true`
+ * over a surface that cannot authenticate at all.
+ *
+ * And nothing bounded the chain's age. `proveSurface` walks every arrival ever
+ * attributed to a Routine and takes the first closed one, so a surface proved
+ * once and dead since certified itself for ever. That is the `CONFIGURED`
+ * masquerading as `HEALTHY` rule §23 and §32 both state, inverted: *verified
+ * once* masquerading as *verified now*.
+ *
+ * The remedy is not a timer. Brain cannot see a connector revoked inside
+ * somebody's Claude account, so an invented expiry would be a policy nobody
+ * measured — and this file already refuses that shape. What it *can* read is
+ * its own later evidence: a fire it made after the proof that produced no
+ * arrival, and a refusal the provider issued after it. A proof contradicted by
+ * what happened next is `STALE`, which is a third answer with its own remedy —
+ * re-probe — rather than a green tick over a surface that has stopped working.
+ */
+describe('a proof is not a certificate', () => {
+  /** One surface with its chain genuinely closed, as the real path writes it. */
+  async function provenSurface() {
+    await completeChainFor(surfaces[0]!);
+    const read = await readFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
+    const first = read.surfaces.find((s) => s.routine.routineRef === surfaces[0]!.routineRef)!;
+    return { read, first };
+  }
+
+  const judgeOne = (
+    read: Awaited<ReturnType<typeof readFactoryPool>>,
+    surface: (typeof read.surfaces)[number],
+  ) =>
+    judgePool({
+      now: new Date().toISOString(),
+      expectedWorker: read.expectedWorker,
+      repository: read.repository,
+      surfaces: [surface],
+    });
+
+  it('closes the chain it is built on, so the rest of this reads a real proof', async () => {
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, first);
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.ok).toBe(true);
+  });
+
+  it('does not let a past proof erase an archived worker', async () => {
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      worker: { ...first.worker!, archived: true },
+    });
+    // An archived identity cannot authenticate, so this is a fault about now
+    // rather than a proof that is merely missing.
+    expect(report.surfaces[0]!.verdict).toBe('FAULT');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('archived');
+    expect(report.ok).toBe(false);
+    // And the pool says so, rather than reporting problems only for surfaces it
+    // had already decided were not proven.
+    expect(report.problems.join(' ')).toContain('archived');
+  });
+
+  it('does not let a past proof erase a Factory identity that also serves research', async () => {
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      routing: { ...first.routing!, families: ['FACTORY', 'RESEARCH'] },
+    });
+    expect(report.surfaces[0]!.verdict).toBe('FAULT');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('research');
+    expect(report.ok).toBe(false);
+  });
+
+  it('calls a proof contradicted by a later unanswered fire stale rather than proven', async () => {
+    const { read, first } = await provenSurface();
+    // The one fact both this report and the dispatcher's quarantine read: a
+    // fire that reached SENT, aged out of the in-flight window, and whose bin
+    // was still claimable at the generation that fire named.
+    const report = judgeOne(read, { ...first, unansweredFires: 1 });
+    expect(report.surfaces[0]!.verdict).toBe('STALE');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('no arrival');
+    expect(report.ok).toBe(false);
+    expect(report.problems.join(' ')).toContain('--probe');
+  });
+
+  it('does not call a fire that is still in flight a contradiction', async () => {
+    /*
+     * The half that stops this being a warning that cries wolf. A surface fired
+     * at thirty seconds ago has an unanswered fire by construction — its worker
+     * is booting — and `consecutive_no_shows` reads 1 on every healthy surface
+     * in that state. Only a fire that has aged out of the window produces a
+     * `DISPATCH_NO_SHOW` row, so a live one contributes nothing here.
+     */
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      routine: { ...first.routine, lastFiredAt: new Date(Date.now() - 30_000).toISOString() },
+    });
+    expect(first.unansweredFires).toBe(0);
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.ok).toBe(true);
+  });
+
+  it('does not call a proof stale because the provider was busy', async () => {
+    /*
+     * The defect the first version of this check had, and the reason the fact
+     * is read from the ledger rather than derived from `last_fired_at`:
+     * `claimRoutineFireSlot` advances that column when it takes the slot,
+     * *before* the HTTP call, so a fire the provider rate-limited advances it
+     * exactly as a delivered one does. Comparing it against the newest arrival
+     * therefore called a busy account's proof stale — §23's "a refusal is not
+     * misconduct", broken by the check written to catch a dead surface.
+     */
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      routine: {
+        ...first.routine,
+        totalRefusals: 6,
+        lastFiredAt: new Date(Date.now() - 4 * 60 * 60_000).toISOString(),
+        retryAt: new Date(Date.now() + 60_000).toISOString(),
+      },
+      sessions: first.sessions.map((session) => ({
+        ...session,
+        observedAt: new Date(Date.now() - 8 * 60 * 60_000).toISOString(),
+      })),
+      unansweredFires: 0,
+    });
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.ok).toBe(true);
+  });
+
+  it('calls a proof contradicted by a later failed fire stale rather than proven', async () => {
+    const { read, first } = await provenSurface();
+    // Not a rate limit: `consecutive_failures` is left alone by one of those on
+    // purpose, so a non-zero value is a fact about this surface rather than
+    // about how busy the account is.
+    const report = judgeOne(read, {
+      ...first,
+      routine: { ...first.routine, consecutiveFailures: 1 },
+    });
+    expect(report.surfaces[0]!.verdict).toBe('STALE');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('not a rate limit');
+    expect(report.ok).toBe(false);
+  });
+
+  it('leaves a rate-limited surface proven, because a refusal is not misconduct', async () => {
+    const { read, first } = await provenSurface();
+    // What a rate limit actually writes: a retry point and a refusal count, and
+    // deliberately no failure. A busy account is not a broken one.
+    const report = judgeOne(read, {
+      ...first,
+      routine: {
+        ...first.routine,
+        totalRefusals: 4,
+        retryAt: new Date(Date.now() + 60_000).toISOString(),
+      },
+    });
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.surfaces[0]!.cooldownUntil).not.toBeNull();
+  });
+
+  it('keeps an ordinary healthy proof green, so the guard is not a blanket refusal', async () => {
+    const { read, first } = await provenSurface();
+    // Cooling down and carrying work are eligibility facts, never faults: a
+    // surface at its target has been proven and is simply busy.
+    const report = judgeOne(read, {
+      ...first,
+      routineInFlight: 99,
+      routineTarget: 1,
+    });
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.surfaces[0]!.eligible).toBe(false);
+  });
+});
+
+/**
+ * One dead account in a pool, and the signal that could not see it.
+ *
+ * `shouldQuarantine` states the fleet's own rule — repeated no-shows take a
+ * surface out of routing, because a session that starts and never arrives is a
+ * permission or connector fault that will repeat for ever at one activation
+ * each — and it had exactly one caller in the repository: `fleet scale-advice`,
+ * which prints a line. Nothing anywhere acted on it, so no surface has ever
+ * been quarantined for not answering.
+ *
+ * Wiring the function up as it stood would not have helped, and that is the
+ * part only a pool shows. Its input was `fleet_routines.consecutive_no_shows`,
+ * which `recordWorkerArrival` clears **for every Routine bound to the same
+ * worker** — which is exactly what a Factory pool is. So in a fleet of four
+ * accounts on one identity, one dead surface has its counter reset by its
+ * healthy siblings' arrivals and is fired at for ever: an activation each time,
+ * out of a fixed subscription allowance, with every row reading healthy.
+ *
+ * The per-surface fact was already being established and was being thrown away.
+ * `reopenNoShowDispatches` decides, exactly, that a fire produced no arrival —
+ * `SENT`, aged past the window in which it still counts as a live activation,
+ * and the bin still claimable at the very generation that fire named — and the
+ * event it wrote named no surface at all, so the ledger recorded that a fire
+ * went unanswered and nothing about whose. §23's own sentence, at the one row
+ * that says an account has stopped working.
+ */
+describe('a surface that stops answering leaves routing, and its siblings do not', () => {
+  /** Fire at one named surface and let the window close with nobody arriving. */
+  async function unansweredFire(surface: Surface, title: string): Promise<void> {
+    const binId = await factoryBin(title, { pinnedRoutineId: surface.routineId });
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+    const dispatch = (await listDispatchesForBin(binId))[0];
+    expect(dispatch?.state).toBe('SENT');
+    expect(dispatch?.routineRef).toBe(surface.routineRef);
+    /*
+     * The one thing a test cannot do by waiting. Everything else here is the
+     * real path: Brain routed it, claimed the fire slot, fired, recorded the
+     * dispatch — and nothing arrived.
+     */
+    await getDb().run('UPDATE bin_dispatch SET sent_at = ? WHERE id = ?', [
+      new Date(Date.now() - IN_FLIGHT_WINDOW_MS - 60_000).toISOString(),
+      dispatch!.id,
+    ]);
+  }
+
+  it('quarantines the surface whose fires go unanswered, and only that one', async () => {
+    const dead = surfaces[1]!;
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD; i += 1) {
+      await unansweredFire(dead, `unanswered ${i}`);
+      // Each tick reopens the aged fire and re-asks the question.
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+
+    const after = await listRoutines();
+    const quarantined = after.find((one) => one.id === dead.routineId)!;
+    expect(quarantined.state).toBe('QUARANTINED');
+    expect(quarantined.stateReason ?? '').toMatch(/never checked in|arriv/i);
+    // Its siblings are untouched: this is a fact about one account's surface,
+    // and a fleet-wide consequence would be the poisoning the pool exists to
+    // avoid.
+    for (const other of surfaces.filter((one) => one.routineId !== dead.routineId)) {
+      expect(after.find((one) => one.id === other.routineId)!.state).toBe('ENABLED');
+    }
+  });
+
+  it('is not cleared by a sibling arriving, which is what the counter could not express', async () => {
+    const dead = surfaces[1]!;
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD; i += 1) {
+      await unansweredFire(dead, `unanswered ${i}`);
+      /*
+       * A healthy surface answers in between. `brain_check_in` is what a real
+       * worker calls on arrival and it clears `consecutive_no_shows` on
+       * **every** Routine bound to this worker — including the dead one, which
+       * is why that column cannot express a pool. `recordWorkerArrival` is that
+       * write, called here directly because `assignNextBin` reaches only the
+       * per-Routine reset beside it.
+       */
+      await completeChainFor(surfaces[0]!);
+      await recordWorkerArrival(factoryWorkerId);
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+
+    const after = await listRoutines();
+    expect(after.find((one) => one.id === dead.routineId)!.consecutiveNoShows).toBe(0);
+    expect(after.find((one) => one.id === dead.routineId)!.state).toBe('QUARANTINED');
+    expect(after.find((one) => one.id === surfaces[0]!.routineId)!.state).toBe('ENABLED');
+  });
+
+  it('stops counting once the surface answers again, so a repair is the end of it', async () => {
+    const recovering = surfaces[1]!;
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD - 1; i += 1) {
+      await unansweredFire(recovering, `unanswered ${i}`);
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+    expect((await listRoutines()).find((one) => one.id === recovering.routineId)!.state).toBe(
+      'ENABLED',
+    );
+
+    // It answers. Every no-show before this instant is history about a surface
+    // that has since worked, and history does not quarantine anything.
+    await completeChainFor(recovering);
+    await unansweredFire(recovering, 'one after the repair');
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+
+    expect((await listRoutines()).find((one) => one.id === recovering.routineId)!.state).toBe(
+      'ENABLED',
+    );
+  });
+
+  it('lets an operator re-enable it, which is the whole point of the transition', async () => {
+    /*
+     * The defect §27 records one object along, arriving in this rule: a
+     * transition that exists, reports success and changes nothing that lasts.
+     *
+     * The count is read from an append-only ledger, so re-enabling a surface
+     * does not touch it — and an arrival is what would, which cannot happen
+     * until Brain fires the surface again, which it will not do while the
+     * surface is quarantined. So `fleet set-state --to ENABLED` would have
+     * returned true, and the very next tick would have re-quarantined it on the
+     * same three rows, for ever, with the connector genuinely repaired.
+     *
+     * Re-enabling is a person saying the operational condition is fixed. Every
+     * no-show before that moment is history, exactly as §27's factory worker
+     * transition resets the failure streak for the same reason — and a
+     * condition that was *not* actually fixed quarantines again three
+     * unanswered fires later rather than immediately.
+     */
+    const dead = surfaces[1]!;
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD; i += 1) {
+      await unansweredFire(dead, `unanswered ${i}`);
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+    expect((await getRoutineByRef(dead.routineRef))!.state).toBe('QUARANTINED');
+
+    expect(
+      await setRoutineState({
+        routineId: dead.routineId,
+        from: 'QUARANTINED',
+        to: 'ENABLED',
+        reason: 'the connector was reconnected as the right worker',
+      }),
+    ).toBe(true);
+
+    // Two ticks, so this is not merely "it survived the instant it was set".
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+    expect((await getRoutineByRef(dead.routineRef))!.state).toBe('ENABLED');
+
+    // And the ceiling still binds. A condition somebody said was fixed and was
+    // not takes the surface out again on its own evidence.
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD; i += 1) {
+      await unansweredFire(dead, `still broken ${i}`);
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+    expect((await getRoutineByRef(dead.routineRef))!.state).toBe('QUARANTINED');
+  });
+
+  it('names which surface did not answer on the ledger, rather than only that one did not', async () => {
+    const dead = surfaces[2]!;
+    await unansweredFire(dead, 'attributed');
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+
+    const rows = await getDb().all<{ routine_id: string | null; routine_ref: string | null }>(
+      `SELECT routine_id, routine_ref FROM bin_events WHERE event_type = 'DISPATCH_NO_SHOW'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.routine_id).toBe(dead.routineId);
+    expect(rows[0]!.routine_ref).toBe(dead.routineRef);
+  });
+});
+
+/**
+ * The column nobody may print again, and why the rule is worth writing down.
+ *
+ * `fleet_routines.consecutive_no_shows` is a real column with a real meaning —
+ * its own repository comment calls it "fires awaiting an arrival" — and it is
+ * the wrong number to put in front of a person under any heading. It is
+ * advanced optimistically on every successful fire, so a healthy surface whose
+ * worker is still booting reads 1; and `recordWorkerArrival` clears it for
+ * **every Routine bound to the same worker**, which is precisely what a pool
+ * is, so a dead surface in a four-account fleet reads 0 while its siblings
+ * answer.
+ *
+ * Six surfaces were printing it: the Fleet page, the People page, `who`,
+ * `fleet show`, `fleet verify-surface` and `fleet scale-advice` — the last of
+ * which also *advised* on it. Every one of them under-reported exactly the
+ * condition an operator is looking for.
+ *
+ * Asserted by reading the source, for `operatorConsoleRemoved`'s reason: what
+ * must not exist is somewhere to read it, and a passing request cannot show you
+ * one.
+ */
+describe('no surface prints the counter that cannot express a pool', () => {
+  const read = (relative: string): string =>
+    fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
+
+  const SURFACES = [
+    '../client/src/russell/Fleet.tsx',
+    '../client/src/russell/People.tsx',
+    '../server/services/fleet/view.ts',
+    '../server/services/fleet/capacity.ts',
+    '../server/services/russell/who.ts',
+  ];
+
+  it('keeps it out of every view type and every screen', () => {
+    // Non-vacuous: these files exist and are substantial.
+    for (const path of SURFACES) expect(read(path).length).toBeGreaterThan(500);
+    for (const path of SURFACES) {
+      const source = read(path).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      expect({ path, hit: source.includes('consecutiveNoShows') }).toEqual({ path, hit: false });
+    }
+  });
+
+  it('is read only where a decision is made, and there from the derived count', () => {
+    const cli = read('../scripts/fleet.ts').replace(/\/\*[\s\S]*?\*\//g, '');
+    // The one occurrence left is the argument name `shouldQuarantine` takes,
+    // and the value handed to it is the derived map rather than the column.
+    const hits = [...cli.matchAll(/consecutiveNoShows:\s*([^,\n]+)/g)].map((m) => m[1]!.trim());
+    expect(hits).toEqual(['unanswered.get(routine.id) ?? 0']);
+  });
+});

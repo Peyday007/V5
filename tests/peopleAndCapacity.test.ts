@@ -307,7 +307,77 @@ describe('a person is declared, never recognised by their name', () => {
  * That topology is the whole reason the old reading was wrong by a factor of
  * four, so the test builds it rather than a convenient one.
  */
-async function productionFleet(): Promise<{ accountId: string; workerId: string }> {
+/**
+ * One surface's four-row chain, through the paths that write it.
+ *
+ * `assignNextBin` is what records the arrival, from Brain's own dispatch row,
+ * so nothing here asserts a session the machinery did not observe — and
+ * `markDispatchRoutine` is the row `creditDispatchArrival` resolves the Routine
+ * and account from, which `dispatchTick` writes after routing and before
+ * firing.
+ */
+async function completeChainFor(routineId: string, workerId: string): Promise<void> {
+  const { createBin, ensureDispatchIntent, claimDispatchIntent, markDispatchRoutine, markDispatchSent, assignNextBin, finishBin, getBin } =
+    await import('../server/repos/bins.ts');
+  const { getRoutine } = await import('../server/repos/fleet.ts');
+  const routine = (await getRoutine(routineId))!;
+  const created = await createBin({
+    projectId: project.id,
+    kind: 'RESEARCH_PACKET',
+    title: 'A bounded self-test',
+    objective: 'Prove this surface answers.',
+    manifest: {
+      objective: 'Prove this surface answers.',
+      why: 'a bounded self-test',
+      lineage: { projectId: project.id, layerId: null, goal: null, orchestrationId: null },
+      units: [{ key: 'u', establishes: 'a value', input: '{}', transform: 'sha256', dependsOn: [] }],
+      acceptableSources: [],
+      excludedSources: [],
+      evidence: ['a stored value'],
+      outputs: ['one result'],
+      authorizedActions: ['submit unit results'],
+      prohibitedActions: ['anything with an external effect'],
+      budgetUnits: 1,
+      retry: { maxAttempts: 3, backoffSeconds: 30 },
+      stoppingConditions: ['the declared unit has a result'],
+    },
+    completionContract: 'DETERMINISTIC_UNITS_V1',
+    workloadClass: 'RESEARCH',
+    createdByType: 'SYSTEM',
+    createdById: 'peopleAndCapacity.test',
+    ready: true,
+  });
+  const bin = (await getBin(created.id))!;
+  await ensureDispatchIntent(bin);
+  const intent = await claimDispatchIntent();
+  await markDispatchRoutine(intent!.id, routine.id);
+  await markDispatchSent(intent!.id, {
+    routineRef: routine.routineRef,
+    sessionRef: `cse_${routine.id}`,
+    routineId: routine.id,
+    accountId: routine.accountId,
+  });
+  const assigned = await assignNextBin({
+    workerId,
+    projectIds: [project.id],
+    credentialId: `cse_${routine.id}`,
+    sessionRef: `cse_${routine.id}`,
+  });
+  expect(assigned?.bin.id).toBe(bin.id);
+  expect(
+    await finishBin(
+      {
+        binId: bin.id,
+        leaseId: assigned!.leaseId,
+        leaseGeneration: assigned!.leaseGeneration,
+        workerId,
+      },
+      { state: 'COMPLETE', reason: 'the surface answered' },
+    ),
+  ).toBe('OK');
+}
+
+async function productionFleet(): Promise<{ accountId: string; workerId: string; routineId: string }> {
   const worker = await createWorker({
     name: 'shared-research-worker',
     displayName: 'Research',
@@ -325,15 +395,17 @@ async function productionFleet(): Promise<{ accountId: string; workerId: string 
     grantedById: 'peopleAndCapacity.test',
   });
   const account = await createAccount({ name: 'Brain Research A', declaredPlanPower: 'Max' });
+  let firstRoutineId = '';
   for (const name of ['Brain Research A', 'Brain Research 1-B', 'Brain Research 1-C', 'Brain Research 1-D']) {
     process.env[`SECRET_${name.replace(/\W/g, '_')}`] = 'a-bearer-that-is-present';
-    await createRoutine({
+    const made = await createRoutine({
       accountId: account.id,
       routineRef: `trig_${name.replace(/\W/g, '')}`,
       name,
       tokenSecretName: `SECRET_${name.replace(/\W/g, '_')}`,
       workerId: worker.id,
     });
+    if (!firstRoutineId) firstRoutineId = made.id;
   }
 
   // The verification fixtures, exactly as `verify-hosted.ts` registers them:
@@ -347,7 +419,7 @@ async function productionFleet(): Promise<{ accountId: string; workerId: string 
     tokenSecretName: 'VERIFY_HOSTED_NEVER_SET',
   });
 
-  return { accountId: account.id, workerId: worker.id };
+  return { accountId: account.id, workerId: worker.id, routineId: firstRoutineId };
 }
 
 describe('capacity is counted the way the dispatcher counts it', () => {
@@ -394,6 +466,45 @@ describe('capacity is counted the way the dispatcher counts it', () => {
     // observed one is a refusal rather than a pass.
     expect(reading.proven).toBe(0);
     expect(reading.surfaces.every((one) => one.health === 'CONFIGURING')).toBe(true);
+  });
+
+  it('keeps "has this ever run" apart from "would Brain fire it now"', async () => {
+    /*
+     * `HEALTHY` is *eligible **and** proven*, which is the right word for a
+     * surface and the wrong one to read a proof out of. A surface that ran real
+     * work and whose deployment secret was then removed reads `WAITING`,
+     * correctly — and until `proven` was its own field, a reader could not tell
+     * it from one that has never run at all. *We could not tell* reading the
+     * same as *we checked*, at the column that says whether a Claude account is
+     * capacity or a hope.
+     *
+     * It matters here because the factory's repository card reads this module
+     * rather than deriving a second answer, so a proof invisible at this level
+     * is a proof invisible on that screen too.
+     */
+    const { workerId, routineId } = await productionFleet();
+    await completeChainFor(routineId, workerId);
+
+    const withSecret = await capacityReading();
+    const proven = withSecret.surfaces.find((one) => one.routineId === routineId)!;
+    expect(proven.health).toBe('HEALTHY');
+    expect(proven.proven).toBe(true);
+
+    // The secret goes, and nothing about what already happened changes.
+    const routine = (await listRoutines()).find((one) => one.id === routineId)!;
+    const held = process.env[routine.tokenSecretName];
+    delete process.env[routine.tokenSecretName];
+    try {
+      const after = await capacityReading();
+      const same = after.surfaces.find((one) => one.routineId === routineId)!;
+      expect(same.health).toBe('WAITING');
+      expect(same.proven).toBe(true);
+      // And a surface nothing ever fired at is still not proven, so the field
+      // is reporting history rather than simply agreeing with itself.
+      expect(after.surfaces.filter((one) => one.proven)).toHaveLength(1);
+    } finally {
+      if (held !== undefined) process.env[routine.tokenSecretName] = held;
+    }
   });
 
   it('reports a registered surface with no deployed secret as waiting, not missing', async () => {
