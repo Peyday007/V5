@@ -603,10 +603,12 @@ never a process-local lock.
   gives up at 60. Every number there is a property of whichever client is
   connected, so the contract cannot rest on the operation being quick — and
   making it quick on a guess is what §27 explicitly refuses. What the judge
-  branch actually spends its time on is still **not established**, and a reader
-  starting from `recomputeProject` should know that Cash Mode 1 holds one layer
-  and fourteen documents, so the archive scan is seconds rather than minutes
-  there.
+  branch spends its time on **was established on deploy 316**, and it was
+  `recomputeProject` after all: three serial bucket round trips per document per
+  recompute, which is seconds for Cash Mode 1's fourteen documents and more than
+  fifteen minutes for the verification project's four hundred — see §27. The
+  contract above still stands, because a client's bound is still not Brain's to
+  choose.
 
   **A retry is the answer, and nothing was telling anybody.** The server's own
   instruction block has always said a mutation is idempotent by work item; the
@@ -3359,7 +3361,25 @@ remote.
   verification packet files one document, so that pass is O(1) in the archive
   however large the archive gets. Whatever is actually driving the growth is
   somewhere else, and a reader starting from the correlation should not start
-  there. The beat makes the harness
+  there.
+
+  **It was the store, three times per document per recompute, and the
+  correlation became a cause on deploy 316.** That run measured the JUDGE
+  submission at **12m26s over 415 documents** before the restart and **more than
+  fifteen minutes over 431** after it, where the harness gave up; filing the
+  synthesis took 4m44s and then 9m13s. Both mutations end in `recomputeProject`,
+  and one recompute asked the bucket whether each document's bytes exist in the
+  file-state pass, again in the dependency refresh and again in the planner —
+  one serial Supabase listing at a time, inside the recompute's transaction —
+  and the judge path recomputes twice. Roughly 2 600 round trips at a quarter
+  of a second each is the twelve minutes. And the verification's own project
+  *is* the archive that grows, by a filed document or two on every deploy, so
+  each deploy was slower than the last and every later one would have failed at
+  this step. `tests/recomputeStorageCalls.test.ts` counts the calls: three per
+  document before, one after. `objectExists` answers from a memo scoped to one
+  `recomputeProject`, prefetched sixteen at a time before the transaction
+  opens; the memo never outlives the call, so it de-duplicates rather than
+  caches, and a document whose bytes are gone still reads as missing. The beat makes the harness
   survive whichever end of that range it gets; it makes nothing faster, and
   whatever is actually driving the growth is still unmeasured. **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so

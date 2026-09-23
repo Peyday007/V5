@@ -18,6 +18,7 @@
  * used to guard paths now guard keys, and they refuse for the same reasons.
  */
 import path from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
 import { PROJECTS_ROOT, DATA_ROOT, toDataRelative } from '../env.ts';
 
@@ -210,11 +211,68 @@ export function storageKeyOf(
 
 export async function objectExists(key: string | null | undefined): Promise<boolean> {
   if (!key) return false;
+  const memo = existenceMemo.getStore();
+  if (memo) {
+    const known = memo.get(key);
+    if (known) return await known;
+    const asked = askStore(key);
+    memo.set(key, asked);
+    return await asked;
+  }
+  return await askStore(key);
+}
+
+async function askStore(key: string): Promise<boolean> {
   try {
     return await getStorage().exists(key);
   } catch {
     return false;
   }
+}
+
+/*
+ * One answer per key for the length of one piece of work.
+ *
+ * A recompute asked the store whether each document's bytes exist three times
+ * over — the file-state pass, the dependency refresh and the planner each asked
+ * again — one serial round trip at a time. Locally that is a `stat`; in cloud
+ * mode it is a bucket request, and the hosted verification's JUDGE submission
+ * measured 12m26s over a 415-document archive and more than fifteen minutes
+ * over 431, because the judge path recomputes twice. See
+ * `tests/recomputeStorageCalls.test.ts`.
+ *
+ * The memo lives exactly as long as the function it wraps and is never shared
+ * between two of them, so it is a de-duplication rather than a cache: a later
+ * recompute asks again, and nothing here can make a stale answer outlive the
+ * pass that took it. It stores the pending promise, so two callers asking at
+ * the same moment share one request.
+ */
+const existenceMemo = new AsyncLocalStorage<Map<string, Promise<boolean>>>();
+
+/** Run `work` with existence answers de-duplicated inside it. Nested calls share the outer memo. */
+export async function withExistenceMemo<T>(work: () => Promise<T>): Promise<T> {
+  if (existenceMemo.getStore()) return await work();
+  return await existenceMemo.run(new Map(), work);
+}
+
+/** How many existence questions are in flight at once when a whole set is asked up front. */
+const PREFETCH_CONCURRENCY = 16;
+
+/**
+ * Ask about a set of keys up front, a bounded number at a time, into the
+ * current memo — so the serial checks that follow are answered without a round
+ * trip each. Outside a memo there is nowhere to keep the answers, so it does
+ * nothing rather than asking for nothing.
+ */
+export async function prefetchExistence(keys: Array<string | null | undefined>): Promise<void> {
+  if (!existenceMemo.getStore()) return;
+  const queue = [...new Set(keys.filter((key): key is string => Boolean(key)))];
+  const workers = Array.from({ length: Math.min(PREFETCH_CONCURRENCY, queue.length) }, async () => {
+    for (let key = queue.shift(); key !== undefined; key = queue.shift()) {
+      await objectExists(key);
+    }
+  });
+  await Promise.all(workers);
 }
 
 export async function objectSize(key: string): Promise<number | null> {
