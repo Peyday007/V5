@@ -36,6 +36,9 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { adviseDeepDiveLaunch } from '../learning/advise.ts';
+import { DEEP_DIVE_EXPECTATION } from '../learning/expectation.ts';
+import { recordPrediction } from '../../repos/learning.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   getOpportunity,
@@ -223,7 +226,7 @@ export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRe
 }
 
 /** The card's own reading of how far this piece has got. */
-async function qualifiedTier(opportunity: CashOpportunity): Promise<string> {
+export async function qualifiedTier(opportunity: CashOpportunity): Promise<string> {
   const card = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
   return cashTier({ opportunity, card, readiness: evidenceCard(opportunity).readiness }).tier;
 }
@@ -376,10 +379,30 @@ export async function startValidations(input: {
    * It is a preference and never a ceiling. Nothing is refused because of it,
    * and a piece at the back still takes a slot the moment one is free.
    */
-  const ordered = [
+  const byCard = [
     ...all.filter((one) => one.validationState === null).sort(closestFirst),
     ...all.filter((one) => one.validationState !== null).sort(closestFirst),
   ];
+
+  /*
+   * And then what the outcomes of earlier dives say.
+   *
+   * `adviseDeepDiveLaunch` reads every dive this project has run, and when the
+   * last several never reached research at all it narrows this pass to one
+   * probe rather than filling every slot again — production launched two dives
+   * every six hours into twenty-two refusals in a row before this existed.
+   * It can only ever lower how many start and move a kind of opening later;
+   * it refuses nothing, and whatever it changed is written down with the
+   * outcomes it rested on. See `services/learning/`.
+   */
+  const advice = await adviseDeepDiveLaunch({
+    projectId: input.projectId,
+    defaultCap: Math.min(room, limit),
+    slotsHeld: inFlight,
+    ordered: byCard,
+  });
+  const ordered = advice.ordered;
+  room = Math.min(room, advice.cap);
 
   const out: StartedValidation[] = [];
   for (const opportunity of ordered) {
@@ -438,6 +461,24 @@ export async function startValidations(input: {
           : 'Brain is qualifying this opening from published sources: who pays, what it pays, ' +
             'what it costs and what would rule it out. Nothing is being contacted or spent.',
       detail: { candidateId: candidate.id, signal: opportunity.buyingSignal, round },
+    });
+    /*
+     * What Brain expects from this dive, written now rather than reconstructed
+     * after the result is known — the only honest time to write a prediction.
+     */
+    await recordPrediction({
+      projectId: input.projectId,
+      approach: 'CASH_DEEP_DIVE',
+      subjectKind: 'cash_opportunities',
+      subjectId: opportunity.id,
+      attempt: round,
+      recommendation: advice.probeDecisionId
+        ? `Launch deep dive round ${round} as a probe, one at a time.`
+        : `Launch deep dive round ${round} on this opening.`,
+      expected: DEEP_DIVE_EXPECTATION,
+      basis: advice.explanation ?? 'No lesson changed this launch; it is the ordinary queue order.',
+      provenance: 'RECORDED',
+      decisionId: advice.probeDecisionId,
     });
     out.push({ opportunityId: opportunity.id, candidateId: candidate.id });
     room -= 1;

@@ -10313,3 +10313,106 @@ export interface PuzzleObservation {
   recordedBy: string;
   createdAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Learning from outcomes (migration 092 / pg 083). See `domain/learning.ts`.
+// ---------------------------------------------------------------------------
+
+export interface OutcomePredictionRow {
+  id: string;
+  project_id: string;
+  approach: string;
+  subject_kind: string;
+  subject_id: string;
+  attempt: number;
+  recommendation: string;
+  expected: string;
+  basis: string;
+  provenance: string;
+  decision_id: string | null;
+  decided_at: string;
+  created_at: string;
+}
+
+export interface OutcomeRecordRow {
+  id: string;
+  project_id: string;
+  approach: string;
+  subject_kind: string;
+  subject_id: string;
+  attempt: number;
+  goal_kind: string;
+  success_condition: string;
+  result: string;
+  work_performed: number;
+  blocker_class: string | null;
+  explanation: string;
+  measures: string;
+  conditions: string;
+  source_refs: string;
+  prediction_id: string | null;
+  observed_at: string;
+  created_at: string;
+}
+
+export interface OutcomeCorrectionRow {
+  id: string;
+  project_id: string;
+  target_kind: string;
+  target_key: string;
+  action: string;
+  reason: string;
+  decided_by_id: string | null;
+  authority_channel: string;
+  created_at: string;
+}
+
+export interface OutcomeDecisionRow {
+  id: string;
+  project_id: string;
+  decision: string;
+  subject_id: string;
+  default_choice: string;
+  chosen: string;
+  lesson_key: string;
+  lesson_fingerprint: string;
+  outcome_ids: string;
+  reason: string;
+  context: string;
+  created_at: string;
+}
+
+export interface OutcomeWatchRow {
+  id: string;
+  project_id: string;
+  fact: string;
+  fact_ref: string;
+  why: string;
+  last_value: string | null;
+  last_checked_at: string | null;
+  created_at: string;
+}
+
+export interface OutcomeWatchChangeRow {
+  id: string;
+  watch_id: string;
+  project_id: string;
+  from_value: string | null;
+  to_value: string;
+  what_changed: string;
+  proposal: string;
+  observed_at: string;
+}
+
+export interface CapabilityDecisionRow {
+  id: string;
+  project_id: string;
+  blocker_key: string;
+  route: string;
+  reason: string;
+  change_request_id: string | null;
+  landed_at: string | null;
+  decided_by_id: string | null;
+  authority_channel: string;
+  created_at: string;
+}

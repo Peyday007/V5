@@ -29,6 +29,7 @@ import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
 import { registerRouter } from './register.ts';
 import { bridgeRouter } from './bridge.ts';
+import { learningRouter } from './learning.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -113,6 +114,8 @@ export function createApiRouter(): Router {
   // prefix and must sit before the projects router.
   router.use(laborRouter);
   router.use(manufacturingRouter);
+  // What Brain learned from its own outcomes (§50).
+  router.use(learningRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

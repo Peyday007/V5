@@ -129,7 +129,7 @@ export function ownActionMatches(prose: string, pattern: RegExp): OwnActionMatch
     const at = match.index ?? 0;
     const clauseStart = clauseStartBefore(prose, at);
     const before = prose.slice(clauseStart, at);
-    if (!isOwnAction(before)) continue;
+    if (!isOwnAction(before, match[0])) continue;
     out.push({
       phrase: match[0],
       clause: prose.slice(clauseStart, clauseEndAfter(prose, at)).trim(),
@@ -170,8 +170,50 @@ function clauseEndAfter(prose: string, at: number): number {
  * an instruction, which includes the clause-initial imperative and the second
  * verb of "find the listing and purchase it".
  */
-function isOwnAction(before: string): boolean {
+function isOwnAction(before: string, phrase: string): boolean {
   const head = before.replace(LEADING_FILLER, '');
   if (RESEARCHER_SUBJECT.test(head)) return true;
-  return !GOVERNOR.test(head.slice(-GOVERNOR_WINDOW));
+  const scope = afterLastInstruction(head, phrase);
+  if (EMBEDDED_QUESTION.test(scope)) return false;
+  return !GOVERNOR.test(scope.slice(-GOVERNOR_WINDOW));
+}
+
+/**
+ * A *whether* governs its whole question, not the forty characters after it.
+ *
+ * The window above is right for a verb like *says* or *requires*, whose object
+ * sits beside it. It is wrong for *whether*, which opens an embedded question:
+ * everything after it until the clause ends is the question's content, and the
+ * content of a question is a thing being asked about, never an instruction.
+ * Production measured the cost of the window. Every Cash deep dive compiled
+ * after 2026-09-21 04:00 asked *"…and whether the only published route to the
+ * buyer is a telephone call"* — fifty-one characters from *whether* to the
+ * phrase — so the screen read Brain's own question as an order to telephone
+ * somebody, refused the plan, and twenty-two dives in a row stopped before a
+ * single research pass. The learning kernel found it as a recurring blocker
+ * (`services/learning/capability.ts`), which is how it was traced here.
+ *
+ * **And a coordinated new instruction ends every governor before it**, which is
+ * the half that keeps the widening from being a loosening. *", and …"*, *",
+ * then …"*, a bare *then*, or *and* directly followed by an action verb starts
+ * a second thing, and *"Establish whether it is listed, and then call the
+ * seller"* is two things of which the second is an order. Before this, a
+ * governor within the window covered a phrase on the far side of such a
+ * boundary; now nothing does. So on the far side of a coordinator the screen
+ * is stricter than it was, and only inside an uninterrupted question is it
+ * wider.
+ */
+const EMBEDDED_QUESTION = /\bwhether\b/i;
+const NEW_INSTRUCTION =
+  /,\s*(?:and|but|so|then)\b|\bthen\b|\band\s+(?=(?:call|telephone|phone|email|e-mail|contact|write|message|dm|reach|submit|file|register|apply|sign|subscribe|purchase|buy|pay|hire|engage|post|publish|place|list|run|negotiate|agree|commit|make|send)\b)/gi;
+
+/** The part of the clause after the last coordinated instruction before the phrase. */
+function afterLastInstruction(head: string, phrase: string): string {
+  const text = head + phrase;
+  let cut = 0;
+  for (const match of text.matchAll(NEW_INSTRUCTION)) {
+    const at = match.index ?? 0;
+    if (at < head.length) cut = Math.min(head.length, at + match[0].length);
+  }
+  return head.slice(cut);
 }

@@ -22,6 +22,7 @@
  * person is needed. `briefing()` composes exactly those four and nothing else,
  * because a briefing that leads with an orchestration id has already lost.
  */
+import { learningLine } from '../learning/view.ts';
 import { listLayers } from '../../repos/layers.ts';
 import { groupOf, listMissions, listCurrentKnowledge } from '../../repos/russellMissions.ts';
 import { authorityFor } from './authority.ts';
@@ -68,6 +69,12 @@ export interface Briefing {
    * having none.
    */
   openGaps: string[];
+  /**
+   * The newest thing Brain changed because of an outcome it observed, or a
+   * watched fact that moved — with what Brain proposes to do. Null when nothing
+   * has. From `services/learning/view.ts`, which the Learning page reads too.
+   */
+  learned: string | null;
   /** Whether a person is actually needed, and for what. */
   needsYou: string;
   /**
@@ -213,8 +220,20 @@ export async function briefing(input: {
   const blocking = requests.filter((request) => request.urgency !== 'WHENEVER');
   const decisions = requests.length + software.length + (needsApproval ? 1 : 0);
 
+  /*
+   * Read apart from the list above so a learning table that cannot be read
+   * costs the briefing one line rather than the whole card.
+   */
+  let learned: string | null = null;
+  try {
+    learned = await learningLine(input.projectId);
+  } catch {
+    learned = null;
+  }
+
   return {
     focus: focusOf(input.projectName, missions),
+    learned,
     progress,
     latest: knowledge[0]?.statement ?? null,
     next: nextOf(missions),

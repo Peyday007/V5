@@ -273,11 +273,19 @@ function Changes({ view }: { view: HomeView }): JSX.Element | null {
   // briefing without it. Absent is not empty and neither is a crash: the field
   // is checked rather than assumed, the same way `progress` is above.
   const openGaps = Array.isArray(view.briefing.openGaps) ? view.briefing.openGaps : [];
-  if (!latest && !next && openGaps.length === 0) return null;
+  // `learned` postdates the rest of the briefing too, so it is checked the same way.
+  const learned = typeof view.briefing.learned === 'string' ? view.briefing.learned : null;
+  if (!latest && !next && openGaps.length === 0 && !learned) return null;
   return (
     <section className="rs-group" aria-label="What changed and what is next">
       <h3 className="rs-group-title">Where things stand</h3>
       {latest ? <p className="rs-mission-why">{latest}</p> : null}
+      {learned ? (
+        <p className="rs-mission-why rs-learned">
+          <strong>Learned from outcomes: </strong>
+          {learned} <a href="/learning">See the evidence</a>
+        </p>
+      ) : null}
       <p className="rs-mission-next">{next}</p>
       {openGaps.length > 0 ? (
         <ul className="rs-milestones rs-at-interested">

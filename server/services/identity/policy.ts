@@ -397,6 +397,16 @@ const OVERRIDES: Override[] = [
   //
   // Reading is deliberately absent and takes the default READ, so every member
   // of the project can see who does the work here and why.
+  // The learning kernel (§50)
+  // ---------------------------------------------------------------------
+  //
+  // Withdrawing a lesson, choosing a route for a capability Brain lacks, and
+  // saying a change is live are decisions *about* Brain's judgement, so they
+  // carry the level a membership change already carries. No entry names a
+  // worker scope and every handler calls `requirePerson`: a machine that could
+  // withdraw the lesson slowing it down, or declare its own fix verified, is
+  // what §22 keeps a worker out of. Reading takes the default READ.
+  { pattern: /^\/api\/projects\/[^/]+\/learning\//, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'POST', level: 'ADMIN' },
   { pattern: /^\/api\/projects\/[^/]+\/labor\//, method: 'PATCH', level: 'ADMIN' },
   // The manufacturing kernel's programme (§39)

@@ -1144,6 +1144,9 @@ describe('the operating pass as the tick calls it', () => {
       continuations: [],
       dependentWork: [],
       validations: { started: [], settled: [] },
+      // Nothing observed and nothing watched: a project with no sprint has no
+      // deep dives whose outcomes could teach anything.
+      learning: { observed: 0, changes: [] },
       authority: { took: [], withheld: [] },
       /*
        * The possibility ledger reports nothing too, and that is the assertion

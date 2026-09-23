@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { runLearning, type LearningPass } from '../learning/kernel.ts';
 import {
   getOpportunity,
   listNeeds,
@@ -737,6 +738,7 @@ export async function operate(
   continuations: Continuation[];
   dependentWork: DependentWork[];
   validations: ValidationProgress;
+  learning: LearningPass;
   authority: AuthorityAdvance;
   monetization: MonetizationPass;
 }> {
@@ -750,6 +752,7 @@ export async function operate(
       continuations: [],
       dependentWork: [],
       validations: { started: [], settled: [] },
+      learning: { observed: 0, changes: [] },
       authority: { took: [], withheld: [] },
       monetization: {
         pathsAdded: [],
@@ -794,6 +797,18 @@ export async function operate(
    * and `mayReplace` decides which answer stands — by authority rather than by
    * whichever arrived last.
    */
+  /*
+   * What earlier dives actually produced, read before the next ones start.
+   *
+   * `startValidations` asks the learning kernel how many dives to launch, and
+   * the answer is only as current as the outcomes it reads — so they are
+   * observed first. A dive that settles inside `runValidations` below is
+   * observed on the next tick, twenty seconds later; one whose packet already
+   * stopped is observed now, because its stop does not wait for a settle.
+   * Neither pass can refuse anything or spend anything; see
+   * `services/learning/`.
+   */
+  const learning = await runLearning(projectId);
   const validations = await runValidations(projectId);
   /*
    * Last, and that order is the point: a piece only becomes ready because the
@@ -828,6 +843,7 @@ export async function operate(
     continuations,
     dependentWork,
     validations,
+    learning,
     authority,
     monetization,
   };

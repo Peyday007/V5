@@ -44,7 +44,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'cash | people | fleet | refinement | product | candidate | packet | routing | projects | campaigns | campaign | bins'
+        description: 'cash | people | fleet | refinement | learning | product | candidate | packet | routing | projects | campaigns | campaign | bins'
         required: true
         default: cash
       project:
@@ -207,6 +207,12 @@ jobs:
               cmd="sh /app/scripts/refinement-report.sh"
               [ -n "$project" ] && cmd="$cmd --project $project"
               marker='^REFINEMENT-REPORT: OK'
+              ;;
+            learning)
+              # Read-only: what Brain learned from its own outcomes (§50).
+              cmd="sh /app/scripts/learning-report.sh"
+              [ -n "$project" ] && cmd="$cmd --project $project"
+              marker='^LEARNING-REPORT: OK'
               ;;
             *)
               echo "::error::Unknown report '${{ inputs.what }}'."

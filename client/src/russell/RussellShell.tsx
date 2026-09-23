@@ -38,6 +38,7 @@ import { FleetCentre } from './Fleet.tsx';
 import { BuildView } from './Build.tsx';
 import { MachinesView } from './Machines.tsx';
 import { LaborView } from './Labor.tsx';
+import { LearningPage } from './Learning.tsx';
 import {
   FleetView,
   ProjectView,
@@ -100,6 +101,12 @@ const SECTIONS = [
    * here.
    */
   { name: 'LABOR' as const, label: 'Labor', primary: false },
+  /*
+   * Learning is secondary: a person reads it when asking why Brain changed
+   * what it does, and the one line that matters most already reaches Home's
+   * briefing without anybody opening it.
+   */
+  { name: 'LEARNING' as const, label: 'Learning', primary: false },
 ];
 
 const DEPTH_KEY = 'brain.depth';
@@ -563,6 +570,7 @@ export function RussellShell({
         {route.name === 'SITES' ? <SitesView projectId={projectId} /> : null}
         {route.name === 'MACHINES' ? <MachinesView projectId={projectId} /> : null}
         {route.name === 'LABOR' ? <LaborView projectId={projectId} /> : null}
+        {route.name === 'LEARNING' ? <LearningPage projectId={projectId} /> : null}
         {route.name === 'DEVICES' ? <Devices /> : null}
         {route.name === 'PEOPLE' ? <PeopleAndCapacityView /> : null}
         {route.name === 'CASH' ? (

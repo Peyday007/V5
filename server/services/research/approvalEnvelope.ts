@@ -1060,7 +1060,7 @@ const CASH_SOURCE_RULE =
  * how long after invoicing a buyer pays", which is the ordinary question these
  * envelopes exist to allow.
  */
-const CASH_FORBIDDEN_ACTIONS =
+export const CASH_FORBIDDEN_ACTIONS =
   /\b(purchase|paid api|api key|subscription fee|subscribe to|pay for access|paywall bypass|buy (?:the |a |an )?(?:list|data|access|leads)|telephone call|phone call|call the|cold call|email the|write to the|contact the|reach out to|message the|dm the|submit a (?:request|bid|proposal|application) to|file a (?:complaint|request|petition)|register with|apply for a|sign up (?:for|with)|place an? (?:ad|advert|order|bid)|run an? (?:ad|advert|campaign)|post to|publish (?:a|our|the report|this report|a listing)|list (?:it |the item )?for sale|negotiate with|agree terms with|commit (?:funds|money)|make a payment|send payment|hire|engage a contractor)\b/i;
 
 export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Object.freeze({

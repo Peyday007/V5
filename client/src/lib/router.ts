@@ -35,6 +35,8 @@ export type Route =
    * in a month or two would take it down with one.
    */
   | { name: 'LABOR' }
+  /** What Brain learned from the outcomes of its own work (§50). */
+  | { name: 'LEARNING' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -99,6 +101,8 @@ export function parseRoute(pathname: string): Route {
       return { name: 'MACHINES' };
     case 'labor':
       return { name: 'LABOR' };
+    case 'learning':
+      return { name: 'LEARNING' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
@@ -144,6 +148,8 @@ export function pathFor(route: Route): string {
       return '/machines';
     case 'LABOR':
       return '/labor';
+    case 'LEARNING':
+      return '/learning';
     case 'SEARCH':
       return '/search';
     case 'INVITE':

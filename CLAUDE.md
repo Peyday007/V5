@@ -11386,6 +11386,88 @@ that would have chosen between them exists.**
   along, which is why §32 names its file: **a number is a position two
   workstreams can both reach for; a filename is the thing itself.**
 
+## 50. An outcome Brain observed must be able to change what Brain does next.
+
+Before this, Brain's learning ended at the reader. `research_retrospectives`
+say in their own header that no code path lets a lesson change a gate or a
+plan; `deal_observations` "inform and never gate"; the puzzle lessons render
+and stop. Each is careful and each is right about what it refuses — and the
+consequence was measured in production: from 2026-09-21 06:34 every Cash deep
+dive, twenty-four in a row, stopped before a single research pass, and the
+launcher went on filling both slots each time the six-hour stall freed them,
+because nothing it read had ever heard of the attempts before.
+
+`server/services/learning/`, `server/repos/learning.ts`,
+`server/domain/learning.ts` and `docs/LEARNING.md` are the path from a
+measured result to a changed decision, and every property below is what keeps
+it from becoming a way to manufacture conclusions.
+
+- **A prediction is written when the decision is made.** `startValidations`
+  records what it expects from each dive before the result exists; an older
+  dive gets a prediction reconstructed from its launch event and labelled
+  `RECONSTRUCTED`, because an expectation written after the result is known is
+  how a record flatters whoever kept it.
+- **An outcome says what kind of fact each figure is** — `MEASURED`,
+  `ESTIMATE`, `WORKER_CLAIM`, `JUDGMENT` or `UNKNOWN` — and the repository
+  refuses an unknown carrying a value and a figure carrying no class. Success is
+  the goal's own condition: a research goal succeeds when the question is
+  answered, not when money moves, so creative and research work are not
+  forced into a revenue measure that would report them as permanent failures.
+- **An attempt that never touched its subject is evidence about the
+  conditions and nothing else.** `NOT_ATTEMPTED` and `work_performed = 0`
+  separate it, and subject lessons read only attempts that did work. Fifteen
+  refused dives on pricing-asymmetry openings are fifteen facts about a
+  refusal and none about pricing asymmetry.
+- **Independence, not count.** Two dives on openings from one discovery packet
+  are one observation (§14, applied to outcomes). Below `PATTERN_FLOOR` a
+  lesson is an anecdote: shown in full, and inert. Production's two dives that
+  did research — GoTranscript and Rev.com — are exactly that.
+- **A lesson changes little and says exactly what.** A conditions lesson
+  replaces full slots with one probe, and a new probe only on a new revision or
+  after a day; a subject lesson moves a kind of opening later in the queue.
+  Nothing is refused, no bar moves, and the first probe that reaches research
+  ends the lesson on the next read. Stopping outright was the tempting remedy
+  and is refused: nothing would ever find out the condition had cleared.
+- **Every change is traced.** `outcome_decisions` holds the default, the
+  choice, the lesson and the exact outcome ids, written once per
+  (decision, subject, sample, choice). A person withdrawing a lesson appends a
+  correction; the next decision stops using it and the decisions that already
+  did are flagged. Nothing is deleted, and a test reads the repository to keep
+  it that way.
+- **Lessons are derived, never stored** (§45), so a sample can always be read
+  and a lesson moves the moment its evidence does.
+- **Watches reread what live goals depend on** — the research grant, whether
+  any surface can run work, whether the active lesson still holds — advance by
+  compare-and-swap, and put what changed and what Brain proposes into Russell's
+  briefing. A watch reads; the decision it describes is made where that
+  decision already lives, so the sentence and the behaviour are one fact.
+- **A recurring blocker becomes a proposal, and a person decides.** Implement
+  it, connect a service, or have a person do it, each with viability, cost in
+  measured units or `UNKNOWN`, and a first test. `IMPLEMENT` can submit the
+  composed objective to the factory as a change request, which still needs its
+  own approval on Build. Verification reads only attempts launched after a
+  person recorded the change as live: any hit on the same refusal is
+  `NOT_SOLVED`; work performed and no hit is `VERIFIED_SOLVED`.
+
+**The first blocker it found was Brain refusing its own plan.** Commit
+`e5882ae` added "…and whether the only published route to the buyer is a
+telephone call" to every deep-dive question, fifty-one characters from
+*whether* to the phrase, and `actorScope.ts`'s governor window was forty. The
+screen read Brain's own question as an order to telephone somebody. Verified
+on production packets `orc_51370d393d144cd9baea` (the first refused dive),
+`orc_94d6b7cfdee24095a655` and `orc_56c29a5cab1e4e41822e` (the latest), reproduced word for word by driving a real dive
+through the real tick, and fixed by giving *whether* its whole embedded
+question — and, so the widening is not a loosening, making a coordinated new
+instruction (", and …", "then", "and call …") end every governor before it,
+which is stricter than before on the far side of the coordinator.
+
+**It went through this build, not the factory, and that is stated rather than
+blurred.** Approving a factory campaign is a person's decision on Build and
+deploying is the canonical branch's; neither is this session's to take. So the
+proposal carries the composed objective for the next blocker, the fix is here,
+and the verification is armed and waiting for a person to record the change as
+live. Until then the production reading of it is: proposed, not verified.
+
 ## Repository map
 
 ```
@@ -11421,6 +11503,7 @@ server/
     monetization.ts     every shape of transaction, what it needs and what it leaves
     labor.ts            what a labor finding means, and the one validator both doors call
     dealflow.ts         what a claim establishes about a transaction, and where it lands
+    learning.ts         approaches, result classes, evidence classes, and the floors a lesson must clear
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     design.ts           surfaces, captures, findings, patterns, corrections, gaps
@@ -11449,6 +11532,7 @@ server/
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
     labor.ts          workflows, tasks, who produces each, and what has been asked
     monetization.ts   the possibility ledger; nothing in it is ever deleted
+    learning.ts       predictions, outcomes, corrections, the decision trace, watches; inserts only
   services/
     storage.ts          document keys, confinement, and writing through the store
     storage/
@@ -11668,6 +11752,15 @@ server/
       seed.ts           the two things a person does to this kernel directly
       view.ts           the operator surface: what exists, what is next, what blocks
       kernel.ts         the tick: file, pair, promote, allocate
+    learning/
+      observe.ts        work Brain did, as outcome rows — and whether it touched its subject
+      expectation.ts    what a deep dive is expected to produce, stated once
+      lessons.ts        conditions and subject lessons, with samples, independence and floors
+      advise.ts         where an outcome changes a decision, and the trace it leaves
+      watch.ts          facts live goals depend on, rechecked, and what Brain proposes
+      capability.ts     a recurring blocker as three routes compared, and its verification
+      view.ts           the Russell-facing account, and the briefing line
+      kernel.ts         the pass on the tick, which never stops the sprint's own work
     capability/
       ingest.ts         a blueprint becomes a registered, readable source
       sections.ts       the sections a document declares, from its own headings
@@ -11785,6 +11878,7 @@ server/
     labor.ts            the labor kernel's door: workflows, tasks, who produces each
     manufacturing.ts    the programme's door: the ladder, the categories, the ledger
     register.ts         the work register's door: workstreams, links, corrections
+    learning.ts         what Brain learned: read by members; corrections and capability decisions by ADMIN
     bridge.ts           the conversation entrance: credentials, sync, transcript, status
     russell.ts          Russell's surface: threads, briefing, work, ideas, sites, Needs You
     passkeys.ts         enrolling, signing in with a device, and your own devices
@@ -11806,6 +11900,7 @@ client/                 React UI
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
   src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
   src/russell/Register.tsx  the six answers, and the one form Brain may not fill in
+  src/russell/Learning.tsx  outcomes, lessons with samples, decisions they changed, and proposals
   src/russell/Devices.tsx    your own passkeys, and nobody else's
   src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate
   src/components/SignIn.tsx  one button; no address, no password, no alternative
@@ -11830,6 +11925,8 @@ scripts/
   refinement-report.ts      where every deep dive spent its time, stage by stage
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
+  learning-report.ts        outcomes, lessons, decisions changed, watches and proposals, by row id
+  learning-report.sh        the same, inside the deployed container (closeout-report what=learning)
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
   puzzle-report.sh          the same, inside the deployed container, on one connection
                             (reached by .github/workflows/puzzle-report.yml, which
@@ -11872,6 +11969,7 @@ tests/                  Vitest suites
   cashProposal.test.ts       the seven terms, and the numbers Brain will not invent
   cashOpportunityStandard.test.ts  what is an opportunity, and whose question is whose
   monetizationLedger.test.ts   forty ways preserved, ranked, and never rounded to one
+  outcomeLearning.test.ts    production's own deep dives replayed, a real dive driven, a lesson traced
   monetizationCommissioning.test.ts  a discovery to a moved rank, and every way it must not double-ask
   cashBrowserToDatabase.test.ts  the screen, the route and the row, with no seam
   cashFourAccounts.test.ts   four private operations, and the walls between them
