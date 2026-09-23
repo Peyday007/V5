@@ -52,6 +52,8 @@ import { createFragments, createOrchestration, insertClaims } from '../server/re
 import { createCandidate, getCandidate } from '../server/repos/russellCandidates.ts';
 import { getProject } from '../server/repos/projects.ts';
 import { compileMission } from '../server/services/russell/compiler.ts';
+import { judgeCandidate } from '../server/services/russell/planning.ts';
+import { withdrawDiscoveryAuthority } from '../server/services/cash/discoveryAuthority.ts';
 import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
 import {
   commissionForCandidate,
@@ -436,6 +438,59 @@ describe('it enters the machinery that already exists, rather than beside it', (
 function fragmentSources(fragment: { acceptableSourceTypes: string[] }): string[] {
   return fragment.acceptableSourceTypes;
 }
+
+describe('the judgment queues it, which is the last link before a worker', () => {
+  it('reaches QUEUED with a mission specification, through the real judgment', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+    const asked = (await tick()).opened[0]!;
+
+    /*
+     * The real thing, not `compileMission` alone: `judgeCandidate` asks the
+     * archive first (§13), checks the standing authority, decides whether a
+     * cheap look would settle it, and only then stores a compiled
+     * specification. If any of those refused, the question would be captured
+     * and never researched — which is exactly the shape of stuck state this
+     * whole change exists to remove, so it is asserted rather than assumed.
+     */
+    const verdict = await judgeCandidate(asked.candidateId);
+    expect(verdict.ok).toBe(true);
+    expect(verdict.answeredByArchive).toBe(false);
+    expect(verdict.launchable).toBe(true);
+
+    const candidate = (await getCandidate(asked.candidateId))!;
+    expect(candidate.state).toBe('QUEUED');
+    const judgment = candidate.judgment as unknown as Record<string, unknown>;
+    expect(judgment['envelopeId']).toBe('RUSSELL_MONETIZATION_ATTRIBUTE_V1');
+    expect(judgment['missionSpec']).toBeTruthy();
+
+    /*
+     * And it is ordered behind anything already under way and ahead of a new
+     * broad search — "finish what has already been spent before starting the
+     * next search", which is a property of the profile rather than of this.
+     */
+    expect(candidate.ordinal ?? 999).toBeLessThan(500);
+  });
+
+  it('parks rather than researching when the sprint has no standing authority', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+
+    // Withdraw what pressing Start granted. Nothing should be asked at all —
+    // capturing a question that would immediately park is how a project
+    // accumulates parks nobody will ever answer.
+    await withdrawDiscoveryAuthority({
+      projectId,
+      actorUserId: userId,
+      reason: 'testing what happens without it',
+    });
+    const pass = await tick();
+    expect(pass.opened).toEqual([]);
+    expect(pass.declined.some((one) => one.why.includes('no standing research authority'))).toBe(
+      true,
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 
