@@ -626,3 +626,47 @@ describe('one puzzle business, from an activated sprint to the portfolio', () =>
     expect(view.rightNow.validPuzzles).toBe(madeBefore);
   }, 120_000);
 });
+
+/**
+ * The sentence about what happens next must agree with the capability block
+ * printed above it.
+ *
+ * Found by reading the report against a seeded Brain with no fleet: it said
+ * `RESEARCH_A_QUESTION  MISSING` and then, four lines later, "3 question(s)
+ * are already being researched ... the next thing happens when one of them
+ * settles." Both came from real rows and they cannot both be acted on — and
+ * the condition that produces it is a fleet with no healthy surface, which is
+ * exactly when an operator reads this.
+ *
+ * §29's rule: a status that contradicts the control beside it is worse than no
+ * status, because it teaches a person to stop reading it.
+ */
+describe('what happens next, when nothing can answer a question', () => {
+  it('names the surface rather than claiming the open rounds are being worked on', async () => {
+    await activate({
+      projectId,
+      ownerUserId: userId,
+      actorUserId: userId,
+      objective: 'Maximize additional usable cash over the next few weeks.',
+    });
+    await seedFormat({ projectId, actorRef: userId, name: FORMAT, note: null });
+    await runPuzzleKernel(projectId);
+
+    const view = await puzzleView(projectId);
+
+    // The precondition this exists for: rounds are open, and no surface.
+    expect(view.beingMade.openQuestions.length).toBeGreaterThan(0);
+    expect(
+      view.capabilities.commercial.find((one) => one.id === 'RESEARCH_A_QUESTION')?.state,
+    ).not.toBe('PRESENT');
+
+    // It must not say the open rounds are in progress ...
+    expect(view.nextAction).not.toMatch(/already being researched/i);
+    expect(view.nextAction).not.toMatch(/when one of them settles/i);
+
+    // ... and it must name the condition and whose it is to fix.
+    expect(view.nextAction).toMatch(/nothing can answer them|could answer it/i);
+    expect(view.nextAction).toMatch(/execution surface/i);
+  });
+});
+

@@ -205,7 +205,7 @@ export async function puzzleView(projectId: string): Promise<PuzzleView> {
     /* Newest first, which is the one place in this module where recency is the point. */
     recent: [...snapshot.observations].reverse().slice(0, 10),
     needsPerson: needsPerson(maturity, ledger, capabilities.puzzle),
-    nextAction: nextAction(plan, maturity, snapshot),
+    nextAction: nextAction(plan, maturity, snapshot, capabilities.commercial),
     capabilities,
   };
 }
@@ -304,11 +304,38 @@ function nextAction(
   plan: { asks: { purpose: string; formatName: string | null; why: string }[] },
   maturity: readonly FormatMaturity[],
   snapshot: PuzzleSnapshot,
+  commercial: readonly CapabilityReading[],
 ): string {
+  /*
+   * Whether anything can actually answer a question, asked before any sentence
+   * that says one is being answered.
+   *
+   * `RESEARCH_A_QUESTION` is PRESENT only while the fleet has a healthy
+   * execution surface, which is the same reading `auditAdmission` uses. An
+   * open round with no surface is not work in progress; it is work nothing can
+   * reach, and saying "the next thing happens when one of them settles" about
+   * it is a status that contradicts the capability block printed directly
+   * above it — §29's defect, in the state where an operator most needs the
+   * truth, because a fleet that is down is exactly when this is read.
+   */
+  const canResearch =
+    commercial.find((one) => one.id === 'RESEARCH_A_QUESTION')?.state === 'PRESENT';
+
   const first = plan.asks[0];
-  if (first) {
+  if (first && canResearch) {
     return (
       `Ask ${first.purpose}${first.formatName ? ` about ${first.formatName}` : ''}. ${first.why}`
+    );
+  }
+  if (!canResearch && (first || snapshot.openRounds > 0)) {
+    const open =
+      snapshot.openRounds > 0
+        ? `${snapshot.openRounds} question(s) are open and nothing can answer them`
+        : 'There is a question worth asking and nothing could answer it';
+    return (
+      `${open}: no healthy execution surface, so RESEARCH_A_QUESTION reads MISSING. ` +
+      'Nothing here is stuck on the puzzle kernel — the remedy is operational and it is the ' +
+      'fleet’s, not this project’s.'
     );
   }
   if (snapshot.openRounds > 0) {
