@@ -41,6 +41,22 @@
 import { describe, it, expect } from 'vitest';
 import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
 
+/**
+ * The checkout timeout exactly as production printed it, and nothing more.
+ *
+ * Deploy 323's post-restart hosted verification, 2026-09-23 09:13:17Z, after
+ * reading 434 documents and handing a worker its assignment; then both
+ * console reads dispatched at 09:38:43Z, which is the tell that it is not
+ * about the caller. **No `code` is set on this fixture on purpose**: the
+ * harness printed the message and no fields, so the code is not established,
+ * and a fixture that invented one would be pinning a guess.
+ */
+function productionCheckoutTimeout(): Error {
+  return new Error(
+    '(ECHECKOUTTIMEOUT) unable to check out connection from the pool after 15000ms in Session mode',
+  );
+}
+
 /** The error exactly as `pg` raised it in production. */
 function productionRefusal(): Error & { code: string } {
   const error = new Error(
@@ -108,5 +124,90 @@ describe('a pooler refusing a new client says so, and says whose limit it is', (
     const said = describePoolerRefusal(productionRefusal()) ?? '';
     expect(said).not.toContain('had no free connection within');
     expect(said).not.toContain('caller(s) waiting');
+  });
+});
+
+/*
+ * The fourth condition, and the one that had no sentence until it had already
+ * failed a release gate.
+ *
+ * Deploy 323 released `901a42db`, passed its pre-restart verification
+ * 229/229, and then died after the restart on a checkout timeout — with
+ * neither diagnosis firing. Brain's own pool had not timed out, so
+ * `describePoolExhaustion` was never reached; the marker is not
+ * `EMAXCONNSESSION`, so `describePoolerRefusal` returned null. What a reader
+ * got was the driver's bare string, which is what these sentences exist to
+ * replace.
+ *
+ * Each assertion below was run against the unwidened function first and fails
+ * there, because a regression nobody has seen fail is a claim rather than a
+ * reading.
+ */
+describe('a pooler that cannot get this client a connection says so too', () => {
+  it('recognises the checkout timeout production actually raised', () => {
+    const said = describePoolerRefusal(productionCheckoutTimeout());
+    expect(said).not.toBeNull();
+    expect(said).toContain('could not get it a database connection in time');
+  });
+
+  it('carries the pooler’s own words, including the timeout that was binding', () => {
+    const said = describePoolerRefusal(productionCheckoutTimeout()) ?? '';
+    expect(said).toContain('ECHECKOUTTIMEOUT');
+    expect(said).toContain('15000ms');
+  });
+
+  /*
+   * The half that matters most, and it is the same half for both pooler
+   * conditions: somebody reading this reaches for the one knob they know
+   * about, and it is the wrong way round.
+   */
+  it('names raising the ceiling as the wrong remedy, exactly as its neighbour does', () => {
+    const said = describePoolerRefusal(productionCheckoutTimeout()) ?? '';
+    expect(said).toMatch(/BRAIN_DATABASE_POOL_SIZE would make this worse/);
+    expect(said).toMatch(/fewer concurrent clients/);
+  });
+
+  /*
+   * Named apart from `EMAXCONNSESSION` rather than folded into it. One is the
+   * pooler refusing a client outright; this is the pooler accepting one and
+   * then failing upstream, which can equally be a database that has gone
+   * slow. Telling a reader the wrong one sends them to count clients when the
+   * database is the thing that is unwell.
+   */
+  it('does not claim the client was refused, because it was not', () => {
+    const said = describePoolerRefusal(productionCheckoutTimeout()) ?? '';
+    expect(said).not.toContain('refused a new client');
+    expect(said).toContain('accepted this client');
+    expect(said).toMatch(/database itself|gone slow/);
+  });
+
+  it('does not borrow the pool reading, which does not describe this', () => {
+    const said = describePoolerRefusal(productionCheckoutTimeout());
+    /*
+     * Asserted non-null first, and that is not ceremony. With `?? ''` every
+     * `not.toContain` below passes against a function that recognises
+     * nothing — which is exactly how this assertion behaved against the
+     * unwidened version while its five neighbours failed. §41: a vacuous
+     * guard is worse than none, because it reads as coverage.
+     */
+    expect(said).not.toBeNull();
+    expect(said ?? '').not.toContain('had no free connection within');
+    expect(said ?? '').not.toContain('caller(s) waiting');
+  });
+
+  /*
+   * The code is not required, and that is a statement about the evidence
+   * rather than a loosening. The marker is what carries the specificity —
+   * nothing else in this system emits the literal `(ECHECKOUTTIMEOUT)` — so
+   * keying on it alone is as narrow as the code-and-marker pair beside it.
+   */
+  it('recognises it whatever the driver put in `code`, and still refuses everything else', () => {
+    const withCode = productionCheckoutTimeout() as Error & { code: string };
+    withCode.code = 'XX000';
+    expect(describePoolerRefusal(withCode)).not.toBeNull();
+
+    const unrelated = new Error('could not check out a book from the library');
+    expect(describePoolerRefusal(unrelated)).toBeNull();
+    expect(describePoolerRefusal({ message: 42 })).toBeNull();
   });
 });
