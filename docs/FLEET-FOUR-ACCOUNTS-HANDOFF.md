@@ -714,4 +714,53 @@ accounts holding four Routines each.
 the whole point of §2.1, §2.4 and §2.7 and is the one thing a production
 reading of an *uncommissioned* pool can genuinely establish.
 
+---
+
+## 9. A parallel lane found four defects in this one's code, and one qualifies §8.4
+
+`claude/fleet-four-account-acceptance-uey8cw` is a second session on the same
+subject, taken against production `533463f3` — which already contained this
+integration through `ba5c0b2f`. It tested the shape this lane did not: **four
+people each holding their own connector, and therefore their own worker**,
+where this lane proved one worker identity served by several accounts. It
+found four defects, all of this lane's own class — correct machinery, a false
+sentence about it — and `docs/FLEET-FOUR-ACCOUNT-ACCEPTANCE.md` on that branch
+is its record. That document already reconciles with this one, and correctly:
+it says this handoff still stands and that its §8 is overtaken.
+
+**It is gated and unlanded.** Full SQLite suite 4597 passed on `602f9680`,
+`postgres-suite.yml` run 367 at 215 files / 4641 passed with typecheck clean,
+build clean. There is no open pull request for it, and the branch has moved
+since that run, so **the session that owns it is still working.** Nothing here
+merges it: taking a live lane's work onto `production` out from under it is
+the cross-lane collision §28 is written from, and a gate somebody else has not
+finished asking for is not mine to answer.
+
+**One of its findings bears directly on a number in §8.4, and the number is
+therefore qualified rather than left standing.** Its D2: a Routine bound to a
+**DISABLED** worker is routable on the deployed code. Archiving a worker
+revokes its memberships, so `servesProjects` already takes an archived one out
+— but disabling is reversible and *keeps* them, so the deployed `routeBin`
+checks the account's state, the Routine's state and the served project, and
+has nothing that can see a disabled bound worker.
+
+`fleet show`'s `candidates 16 considered, 12 eligible now` is computed by
+running a real `routeBin` probe per candidate, which is a stronger reading
+than the Fleet page's and is still that `routeBin`. So **12 is what the
+deployed code computes, and the deployed code cannot subtract a surface whose
+bound worker is disabled.** The error, if any, is in the direction of
+overstating. This is recorded rather than re-measured here because the remedy
+is that lane's `surfaceIneligibility` — one bin-independent answer asked by the
+router, the capacity reading and the page alike — and re-deriving it in this
+document would be the second reader of one rule that both lanes exist to stop.
+
+Nothing else in §8.4 is affected. `unanswered=0` is read from `bin_events`,
+`verify-pool`'s `PROVEN` is the four-row chain, the `state_reason` lines are
+the rows' own words, and `accounts 1 · surfaces 1` counts two things that are
+not each other. None of those passes through the eligibility predicate.
+
+**What the two lanes agree on, and it is the thing that matters most:** no
+four-account Factory pool has been commissioned, and neither document claims
+one has.
+
 <!-- FACTORY-READS -->
