@@ -1517,44 +1517,50 @@ concurrency group nothing else writes to.
 first was a reader reporting the wrong row; the second is a CI policy behaving
 exactly as designed, met by asking it somewhere it is not contended.
 
-### 10.4 One test this lane's gate found, which is open and is not this lane's
+### 10.4 One test this lane's gate found, measured to a flake and not repaired
 
 `tests/puzzleIntegrationPass.test.ts` — §48's kernel — failed the full local
 SQLite gate on this branch with `expected 2 to be greater than or equal to 20`.
-It is recorded here because this lane's gate is what surfaced it, and it is
-recorded as **open** because what is established falls well short of a cause.
+It is recorded because this lane's gate surfaced it, and what it took to
+establish is worth more than the finding.
 
-What is established, by measurement rather than by argument:
+**Five readings, and only one is red:**
 
-* **This branch cannot reach it.** Over the deployed image the whole delta is
-  three files — `.github/workflows/fleet.yml`, this document, and one new test.
-  No server code at all, which `git diff --name-only` says rather than a
-  reading of the commits.
-* **It passes in isolation on production's tip**, in a detached worktree at
-  that commit: four tests, 5.81s.
-* **It passes in isolation on this branch**: four tests, 5.69s.
-* **It passes in CI on Postgres.** `postgres-suite.yml` run **384** on
-  `67089909`, which contains that test, at 219 files and 4746 tests.
+| tree | backend | where | result |
+| --- | --- | --- | --- |
+| production tip `ec93d435`, 219 files | SQLite | this machine, full suite | 4746 passed, exit 0 |
+| this branch `f1fb996a`, 220 files | SQLite | this machine, full suite | **1 failed** |
+| this branch `f1fb996a`, 220 files | SQLite | this machine, full suite, re-run | 4750 passed, exit 0 |
+| this branch `f1fb996a`, 220 files | Postgres | CI run **395** | **220 files, 4750 passed**, that test ✓ 8479ms |
+| either tree, that file alone | SQLite | this machine | 4 passed |
 
-So it fails only under a full local SQLite run on this machine. The bound it
-hit is a **count rather than a clock**, which rules out the obvious
-explanation: `GENERATION_BUDGET` is 25, the test sets up one system so the
-share is the whole of it, word search declares `catalogCeiling: null` so the
-target does not bind, and `want` was therefore 25 against a ceiling of 75
-attempts. Two were made, so seventy-three were lost to duplicates or to
-validation.
+**So it is intermittent, and the two obvious causes are excluded by
+measurement rather than by argument.** Not the tree: production's tip passes
+and CI passes the identical branch. Not this lane's change: CI run 395 carries
+the 220th file and is green, and the local re-run of the same tree is green.
+What is left is a concurrency-sensitive test under local SQLite, which failed
+once in five.
 
-**Which of those it was is not established, and no remedy is proposed.** The
-generator's own `blocked` sentence names one candidate exactly — *a master
-whose parameter space is smaller than the batch asked for rather than a
-fault* — and cross-worker interference is another, and this lane has measured
-neither. §27 records what a remedy for a condition nobody established costs,
-and §41 records that a guard written against a guess reads as coverage. What
-the next person needs is the reproduction above and the two facts that bound
-it: it is not the tree, because CI and both isolated runs pass, and it is not
-timing, because the budget is counted.
+**Two corrections of mine are recorded rather than edited away**, because both
+were reported before the measurement existed. I first said the failure was
+pre-existing and not this lane's — the production-tip run then passed, which
+said the opposite, and I withdrew it. I then said the four-test arithmetic
+*pinned* the new file as the cause; it pins it as the only **difference**,
+which is a different claim, and CI passing with that same file present is
+direct evidence against it being the cause at all.
 
-### 10.4 What was deliberately not done
+**No remedy is proposed and none should be read into this.** The bound the
+generator hit is a count rather than a clock — `GENERATION_BUDGET` is 25, one
+system takes the share, word search declares `catalogCeiling: null` — so 73 of
+75 attempts were lost to duplicates or to validation, and the generator's own
+`blocked` sentence names one candidate exactly: *a master whose parameter
+space is smaller than the batch asked for rather than a fault.* Which it was
+is **not established**. §27 records what a remedy for a condition nobody
+established costs, and §41 that a guard written against a guess reads as
+coverage. What the next person needs is this table and the isolated
+reproduction, not a patch from a lane that does not own the kernel.
+
+### 10.5 What was deliberately not done
 
 Four things, each because doing them would have been worse than the problem:
 
