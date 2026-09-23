@@ -635,7 +635,14 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       ` ledger_sourced=${sourced} ledger_proposed=${proposed}` +
       ` asked=${commissions.length} asking_now=${openAsks.length}` +
       ` answered=${commissions.filter((one) => one.state === 'ANSWERED').length}` +
-      ` unresolved=${commissions.filter((one) => one.state === 'UNRESOLVED').length}`,
+      ` unresolved=${commissions.filter((one) => one.state === 'UNRESOLVED').length}` +
+      /*
+       * Counted because it can happen. `ABANDONED` became reachable when
+       * `abandonPutAway` got its writer, and a state a row can hold that the
+       * one line an operator reads does not count is how a reader concludes
+       * every question is still being asked.
+       */
+      ` abandoned=${commissions.filter((one) => one.state === 'ABANDONED').length}`,
   );
   return true;
 }
