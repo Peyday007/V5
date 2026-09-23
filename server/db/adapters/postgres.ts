@@ -194,6 +194,21 @@ export function describePoolerRefusal(error: unknown): string | null {
     );
   }
 
+  /*
+   * The pooler checks a credential by querying the database itself, and that
+   * query did not come back in time. Not a client count and not a password:
+   * production, 2026-09-23 22:17:51Z, printed no diagnosis for this at all.
+   */
+  if (text.includes('EAUTHQUERY')) {
+    return (
+      'The connection pooler in front of the database could not check this credential in ' +
+      `time: ${text.trim()}. It checks by querying the database itself, so this is the ` +
+      'database itself answering slowly (or not at all) — not a wrong password, and not a ' +
+      'shortage of pooler clients. Raising BRAIN_DATABASE_POOL_SIZE changes nothing; check ' +
+      "the database's health, then try again."
+    );
+  }
+
   return null;
 }
 
