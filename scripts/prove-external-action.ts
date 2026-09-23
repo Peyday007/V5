@@ -44,7 +44,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
-const PORT = 7400 + Math.floor(Math.random() * 400);
+// Outside every range a test suite owns (7400–7999 are taken), so a proof run
+// beside the suite cannot answer another suite's readiness probe.
+const PORT = 13000 + Math.floor(Math.random() * 400);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = 'owner@example.invalid';
 const BOOT_PASSWORD = 'bootstrap-password-01';
@@ -66,7 +68,7 @@ function tagFor(actionId: string): string {
 /* ------------------------------------------------------------------------- */
 
 const relay = { dropNextPublishResponse: false, publishes: 0, dropped: 0 };
-const RELAY_PORT = 7900 + Math.floor(Math.random() * 90);
+const RELAY_PORT = 13500 + Math.floor(Math.random() * 90);
 const certDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-relay-cert-'));
 
 function makeCertificate(): { key: Buffer; cert: Buffer; bundle: string } {
