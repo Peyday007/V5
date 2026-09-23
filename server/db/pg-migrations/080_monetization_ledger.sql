@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 088. See that file for why nothing
+-- The Postgres half of SQLite migration 089. See that file for why nothing
 -- derivable is stored, why a possibility is enumerated or evidenced and never
 -- invented, why a rank snapshot is an observation rather than a cache, and why
 -- nothing in this ledger is ever deleted.
