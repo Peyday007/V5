@@ -1120,15 +1120,14 @@ function optionalSignal(row: Record<string, unknown>, where: string): Opportunit
 /**
  * How a claim says money would be made from the opening it establishes.
  *
- * Refused rather than ignored when it is outside the closed set, for
- * `optionalSignal`'s reason — a method stored as an unrecognised string would
- * compare against nothing for ever.
- *
- * And refused when it arrives **without** a signal, which is the part worth
- * stating: a way of monetizing something has to say what it is a way of
- * monetizing, and the only unambiguous anchor is the opening this same claim
- * establishes. Reading the subject out of the claim's prose is the guess §25
- * records the cost of, at the field that decides what a possibility is about.
+ * Both conditions — matched exactly against the closed set, and refused
+ * without a signal beside it — are `validateMonetizationMethod`'s, which is
+ * also what the provider path in `services/research/schema.ts` calls, for the
+ * reason `structuralOf` gives directly below. They were written here as a
+ * private function and `ParsedClaim` carried no field at all, so the other
+ * door had no rule rather than a different one — which is the fifth time, and
+ * the first where the second reader did not exist. This is a rename of the
+ * wire's field names onto a rule that lives somewhere both can reach.
  */
 function optionalMethod(
   row: Record<string, unknown>,
