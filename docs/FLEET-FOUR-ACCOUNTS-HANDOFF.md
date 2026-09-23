@@ -22,10 +22,10 @@ measurement, and §7 is the integration's own record.
 | | SHA | What it is |
 | --- | --- | --- |
 | Fleet lane | `e8a34b00` | `claude/fleet-four-accounts`, cut at `f727b143`, eight commits, preserved unchanged |
-| Factory closeout | `e37cca06` | reached `production` before this integration and deployed there; the lane branch `claude/factory-core-completion-ri3kqj` sits at the same commit |
+| Factory closeout | `e37cca06` | reached `production` before this integration and was deployed there by run 316; its lane branch `claude/factory-core-completion-ri3kqj` has since moved on — see §8.1 |
 | Merge | `bb6d538d` | the fleet lane merged into `e37cca06`, no conflict |
 | Fixture repair | `3a63fad4` | the `'READER'` correction §7 records |
-| **Integrated tip** | `89b34a9d` | `integration/fleet-four-accounts`, pushed — this document and the CLAUDE.md §27 record on top of `3a63fad4`, no code change |
+| **Integrated tip** | `integration/fleet-four-accounts` | pushed; this document and the CLAUDE.md §27 record sit on top of `3a63fad4` and change no code |
 
 **`production` has not been advanced to it.** The fast-forward is valid and
 was verified immediately before it was attempted, and the attempt was refused
@@ -430,11 +430,25 @@ file its own schema and `DROP SCHEMA … CASCADE` takes one lock per object.
 
 | Gate | Tree | Result |
 | --- | --- | --- |
-| `npm run typecheck` | `3a63fad4` | clean, with `tests/**/*.tsx` compiled |
-| `npm test` (SQLite) | `3a63fad4` | **4520 passed**, 44 skipped, 210 files passed / 1 skipped, exit 0 |
-| `npm test` (PostgreSQL 16.13) | `3a63fad4` | see the CI row below and the local note beneath it |
+| `npm run typecheck` | `3a63fad4` local, `89b34a9d` in CI | clean, with `tests/**/*.tsx` compiled |
+| `npm test` (SQLite) | **`3d020b42`, the tip** | **4520 passed**, 44 skipped, 210 files passed / 1 skipped, **exit 0** |
+| `npm test` (PostgreSQL 16.13) | `89b34a9d` in CI, run 342 | **4564 passed**, 211 files passed, **success** |
 | `npm run build` | `3a63fad4` | clean, `index-T4sTcb6M.js` |
 | Cross-lane suites | `3a63fad4` | **189 passed**, exit 0 — `factoryPool`, `factoryOnboarding`, `factoryReleaseSurface`, `buildRepositories`, `peopleAndCapacity`, `peopleSection`, `deploymentOwnership` |
+
+**The two totals differ by exactly the 44 SQLite skips**, which is the right
+answer rather than a discrepancy: 4520 + 44 = 4564, and the Postgres run has
+no skips because the tests SQLite passes over are the ones that need the other
+backend. The Postgres run also proves the new migration applies on the chain
+production actually carries — `079_routine_no_show_boundary.sql` on top of
+`078`, against a real PostgreSQL 16.13 cluster with the lock table the suite
+needs (`1024 × (100 + 0)`).
+
+**Which tree each gate ran on is stated rather than smoothed over.** The two
+SHAs above differ by one file, `docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md`, and by
+no code at all — `git diff --name-only 3a63fad4..3d020b42` returns two
+Markdown paths. Every code path in this integration was gated on both
+backends.
 
 The cross-lane set is the one the lane measured at **188** in a scratch merge
 against the older snapshot; it is 189 here because production's newer commits
@@ -465,14 +479,13 @@ run measured both halves and adds two points to §27's table:
 that is not this integration. Nothing here raises that bound, which §27
 forbids by name.
 
-**The Postgres half is gated in CI on the exact released SHA.**
-`postgres-suite.yml` carries a push trigger on `production`, so advancing the
-canonical branch runs the whole suite against PostgreSQL on the commit that
-deploys — which is a stronger answer than a local run on a tree one
-documentation commit behind it. A local full Postgres run was started on
-`3a63fad4` as corroboration; the fleet, pool and arrival suites had already
-gone green there (**120 tests**, 69 + 51, PostgreSQL 16.13), which is the part
-of the suite this lane's migration and derived counter actually touch.
+**The Postgres half was run in CI rather than locally, deliberately.**
+`postgres-suite.yml` is the repository's own gate, it runs `npm ci` on a clean
+checkout, and it can be pointed at an exact SHA — so it answers a stronger
+question than a local run on a working tree. It was dispatched on this branch
+and is run 342. Locally, the fleet, pool and arrival suites had already gone
+green on PostgreSQL 16.13 (**120 tests**, 69 + 51) before that, which is the
+part of the suite this lane's migration and derived counter actually touch.
 
 <!-- CI-EVIDENCE -->
 
@@ -507,7 +520,7 @@ release path behind it.
 
 ### 8.1 Advance `production` — refused here, one command for somebody who can
 
-`integration/fleet-four-accounts` at `89b34a9d` contains `production` at
+`integration/fleet-four-accounts` contains `production` at
 `e37cca06` as an ancestor, so this is a fast-forward and nothing is rewritten:
 
 ```
@@ -520,6 +533,17 @@ The `merge-base` check first is §28's own rule — a non-fast-forward is refuse
 before it is attempted rather than after. Never check `production` out to
 advance it; §28 records a scratch worktree holding it with a whole session's
 reversal staged, one `git commit -am` away from putting a deleted surface back.
+
+**If that check fails, production has moved and this is a merge rather than a
+fast-forward — which is expected, not a problem.** The Factory closeout lane
+is still working: while this was being written it advanced
+`claude/factory-core-completion-ri3kqj` from `e37cca06` to `b4615e62`
+(*One recompute asks the store about each document once*). That commit and
+this branch were trial-merged with `git merge-tree` and report **no
+conflict**; the only file both touch is `CLAUDE.md`, and the two additions are
+in different sections. Whichever lane lands first, the other merges. Re-run
+the trial merge rather than assuming this one still holds — that is the
+mistake this whole document was written to correct once already.
 
 **Both routes were attempted from this session and both were refused by its
 permission layer**: the `git push` above, and `PATCH /repos/.../git/refs/heads/
