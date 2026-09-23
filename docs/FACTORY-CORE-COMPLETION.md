@@ -11,9 +11,9 @@ lives in `FACTORY-*-EVIDENCE.md` beside this file and is not restated.
 |---|---|
 | Final branch | `claude/factory-core-completion-ri3kqj` |
 | Final code SHA of this work | `901a42d` (all Factory-core code; nothing after it is this work's) |
-| Released image carrying it | `662d337` — `901a42d` plus another session's `scripts/manufacturing.ts`, one test and docs |
-| `deployed/production` tag | `662d337` (moved by deploy 325 at 10:38:54Z; `901a42d` before it, from deploy 323) |
-| Deploy runs | 323 (`35836137130`, `901a42d`) and 325 (`35847875747`, `662d337`) |
+| Final deployed SHA | `6708990` — contains `901a42d`; everything after it is other sessions' work |
+| `deployed/production` tag | `6708990` (moved by deploy 327 at 11:45:36Z; `662d337` from deploy 325 and `901a42d` from deploy 323 before it) |
+| Deploy runs | **327 (`35853813546`, `6708990`): release, both hosted verifications and the verdict all success**; earlier 323 (`35836137130`, `901a42d`) and 325 (`35847875747`, `662d337`) |
 | Production before this work | `f727b14` (deploy 315) |
 
 **Ancestry.** A fast-forward throughout, nothing rebased or rewritten:
@@ -211,6 +211,18 @@ by the step's own success (the step fails unless the harness prints its PASS
 marker), not by a pass count. Deploy 326 (`35850047752`, `96b1bfc`, another
 session) was cancelled before release.
 
+**Deploy 327** (`35853813546`, `6708990`, another session's dispatch; contains
+`901a42d`): guard, typecheck, tests and build passed; the late guard found
+`6708990` still the tip; **released 11:45:36Z** and `deployed/production` moved
+to `6708990`. Before the restart: **`HOSTED-VERIFICATION: PASS 234/234`**
+(11:48:27Z), the JUDGE submission taking 51s over 436 documents. Restart:
+`healthy again after 1 attempt(s)` (11:51:52Z). After the restart:
+**`HOSTED-VERIFICATION: PASS 253/253`** (12:07:54Z), the JUDGE submission
+taking 4m09s over 437 documents. Verdict: `release: success`, `hosted
+verification: success`, `after the restart: success` — *"The live Brain refused
+everything it should have, twice, either side of a real restart."* `/healthz`
+answered 200 in 0.40s. This is the terminal green verdict for this work's code.
+
 ## Production acceptance (live, read through `factory.yml` on the deployed image)
 
 Taken on `e37cca0` after deploy 316's release and restart. The attempt to
@@ -248,19 +260,37 @@ repeat them on the final image is recorded at the end of this section.
 
 ### On the final image
 
-A read-only `factory campaigns` against `662d337` (`35848602130`) could not
-open the database (`Connection terminated due to connection timeout`, 10:49:59Z)
-because of the Supabase condition above, so there is **no operator reading on
-the final image**. The readings above were taken on `e37cca0`. Nothing in the
-Factory has changed since them that could move them: every code change after
-`e37cca0` in this work is to the audit/recompute read path (defects 9–12) and
-to throughput/lineage reporting (10, 11), and `fcp_189ea30c7ded4e7b9280` is
-terminal — COMPLETE, 4/4 units integrated, 13/13 bins COMPLETE, two reviews
-(round 1 CHANGES_REQUIRED, round 2 PASS), both findings REPAIRED, PR #31
-delivered at `6f92e79` and merged into `production` at 2026-09-22T14:12:44Z.
-Its integration SHAs are `4b63f5c` → `95b87ea` → `6f92e79` on
-`factory/campaign/fcp_189ea30c7ded4e7b9280`; its only refusal row is the
-historical `INTEGRATION_REJECTED` on `bin_0b6cdc2502d54b75b8c1`.
+A first attempt at 10:24 (`35848602130`) could not open the database during the
+Supabase outage (`Connection terminated due to connection timeout`). After
+deploy 327 the reads were taken on `6708990`, all four `FACTORY: OK`:
+
+- **`campaigns`** (`35858645897`, 12:08Z): Deal Dispatch —
+  `fcp_189ea30c7ded4e7b9280` REMOTE COMPLETE → PR #31 "reviewed and confirmed by
+  the forge"; the Oakwood campaign COMPLETE → PR #1; two CANCELLED "retired by
+  an operator". Verification scope — `fcp_bb1fda90085a4d3fb97a` LOCAL COMPLETE,
+  "a beacon, never executed".
+- **`status --campaign fcp_189ea30c7ded4e7b9280`** (`35858917530`, 12:11Z):
+  COMPLETE; base `58c6deccf11f` → `6f92e7968fa5` on
+  `factory/campaign/fcp_189ea30c7ded4e7b9280`; units 4/4 integrated (0 ready,
+  0 leased, 0 failed), each at attempt 1/3 — `writeback-pr-link` and
+  `pr-merge-observation` @ `4b63f5c430ff`, `repair-late-link-never-attested` @
+  `95b87eaa12dd`, `repair-merge-observer-has-no-caller` @ `6f92e7968fa5`;
+  13 sessions, max observed concurrency 2 (MEASURED); reviews 2 (round 1
+  CHANGES_REQUIRED on `4b63f5c430ff`, round 2 PASS on `95b87eaa12dd`
+  SESSION_SEPARATED); findings 2, 0 open, both REPAIRED; paid-API executions 0;
+  one refusal row, `INTEGRATION_REJECTED` on `bin_0b6cdc2502d54b75b8c1`. Round
+  1's stored tier still reads `WORKER_SEPARATED`: the historical row keeps what
+  it said, and defect 10 stops the rounding up on every review after it.
+- **`events`** (`35859090612`): 43 rows, the chain above, every acceptance
+  `verifiedBy: forge`, `VERIFICATION_RAN` `UNKNOWN` where no forge checks
+  existed, and `STALE_BASE_DETECTED` recorded where the forge disagreed with
+  Brain's head.
+- **`throughput`** (`35859179160`): units/hour 0.16 (DERIVED); 13 session
+  durations, 11 513 592 ms total (MEASURED); max observed concurrency 2
+  (MEASURED); declared 3 (UNKNOWN, a target); ceiling "not measured"; per
+  account **Brain Research A 10 sessions and UNKNOWN for the three that
+  recorded none** — defect 11's fix on live rows, where `e37cca0` read 13 for
+  Brain Research A.
 
 ## Proven by tests versus proven live
 
@@ -272,17 +302,17 @@ historical `INTEGRATION_REJECTED` on `bin_0b6cdc2502d54b75b8c1`.
   together**: on deploy 323's released image the JUDGE submission took 1m42s
   over 434 documents, against 12m25s over 415 before either repair, inside a
   pre-restart hosted verification of `PASS 229/229`.
-- **Not proven live on this work's final code:** survival of a restart. Both
-  post-restart halves that ran on it failed for reasons outside the code —
-  deploy 323's on the Supabase pooler's `ECHECKOUTTIMEOUT` with 34 backends
-  connected, deploy 325's because the machine could not reach Supabase at all.
-  Restart survival of campaign, units, reviews and writeback *is* live-proven
-  on earlier images (deploys 314/315), and nothing in this work touches the
-  persistence those checks read; that is an argument, not a reading, and is
-  labelled as one.
+- **Live on this work's final code (deploy 327, `6708990`):** a full hosted
+  verification either side of a real restart — `PASS 234/234` then
+  `PASS 253/253` — including restart survival of the campaign, its units, its
+  reviews and its writeback, and the four operator reads above — among them
+  the per-account grouping of defect 11 on live rows. Two earlier
+  post-restart halves on this code failed for reasons outside it (deploy 323 on
+  the Supabase pooler's `ECHECKOUTTIMEOUT`, deploy 325 on the Supabase outage);
+  327 ran after Supabase recovered and passed.
 - **Tests only:** the forbidden-path refusals, stage re-authorization, unit
   regrant, the unrecordable-report hold, tick-failure rows, the local
-  deliverable card, the per-account grouping, and the audit round-trip bound
+  deliverable card, and the audit round-trip bound
   (`tests/auditRoundTrips.test.ts`) — each exercised by a regression run against
   its own defect first. None of those conditions has occurred on the live
   campaign, so production has had nothing to show.
@@ -314,13 +344,11 @@ failure detail, reviews, findings, sessions, and every refusal row) · `bins` ·
 
 ## Remaining blockers
 
-None inside the Factory core. One outside it, and it is the only thing between
-this work and a green post-restart verdict: **the Supabase project
-`somjwbtqwmnxndmpujgn` was unreachable from 09:59Z** (storage `544
-DatabaseTimeout` at boot, database connection timeouts from an operator read,
-Supabase's own status page reporting degraded Compute, Storage and us-east-2).
-When it answers again, re-dispatch `Deploy` on the tip of `production`; the
-code it needs is already there.
+None. The Supabase project was unreachable from about 09:59Z to 10:39Z and
+again after deploy 325's restart (Supabase's status page reported degraded
+Compute, Storage and us-east-2); it had recovered by deploy 327, which passed
+end to end. It is recorded because it is why deploys 324 and 325 are red, not
+because anything is waiting on it.
 
 ## Seams the four-account fleet lane integrates with
 
