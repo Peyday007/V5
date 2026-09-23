@@ -11075,6 +11075,39 @@ that would have chosen between them exists.**
   trusted to pass, because a regression nobody has seen fail is a claim rather
   than a reading.
 
+  **And `docs/MONETIZATION.md` had been right about two of them all along**,
+  which is §27's shape with the documentation on the correct side for the
+  second time. Its operator-surface section says the Top 5 is *"answered the
+  nine ways the brief asks for: … what changed recently, and why it outranks
+  the one below it"* — true of what `composeSurface` **composed** and false of
+  what any screen **rendered**, because the last two reached no surface at all.
+  What closed it is the code catching up rather than the sentence being
+  softened, exactly as the release control one file along. A canonical document
+  that describes a surface the product does not have is the same defect as a
+  surface nothing documents, and only reading them against each other finds
+  either.
+
+- **Production moved under this branch twice while it was being gated, and the
+  second time the guard §28 exists for is what caught it — in somebody else's
+  deploy rather than in mine.** The first was the puzzle kernel taking this
+  pair's migration numbers. The second was `901a42d` landing mid-gate: Deploy
+  322 had passed the *first* canonical asking on `533463f`, spent twenty
+  minutes in its test job, and was refused at the **second** asking —
+  `The ref must still be the canonical tip, now` — because the branch had moved
+  past the tree it was about to release. That is the run 283 defect being
+  prevented rather than recorded, and it is the first observation of that guard
+  firing in anger.
+
+  What it cost is worth stating plainly, because it is the argument for the
+  guard rather than against it: the refused deploy was a **recovery** of a
+  production Brain that had been down since 07:27, so the guard lengthened an
+  outage in order to prevent a rollback. Both halves are correct. The remedy is
+  the one the message names — re-dispatch against the current tip, which Deploy
+  323 did — and the lesson for a session holding a branch is the ordering: a
+  push to `production` while somebody else's deploy is between its two askings
+  aborts their release, so a branch waits for the deploy in flight rather than
+  racing it.
+
 - **This pair moved three times, and the third move is what says the rule is
   about position rather than about being first.** It was written at `088` /
   pg `079`, moved to `089` / pg `080` when the four-account fleet lane landed
