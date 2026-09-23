@@ -991,12 +991,38 @@ Brain's own bucket check — which reaches storage's database — timed out. Two
 facts about one service, and only the second is the one that decides whether
 this Brain may boot.
 
+**And the upstream says so itself, which takes this out of inference
+entirely.** `status.supabase.com` reports **Partially Degraded Service** with
+an open incident — *"Storage search failing for restored projects"*,
+component **Storage: degraded_performance**, opened **09:31:49Z**, *"Users
+may experience increased 500 errors"* — moved to `monitoring` at 10:20:36Z
+with *"A fix has been implemented for the affected tenants and we are
+monitoring the results."*
+
+Against Brain's own timeline that is conclusive rather than suggestive:
+
+| when | what |
+| --- | --- |
+| 09:31:49Z | Supabase opens the Storage incident |
+| 09:58:55Z | the machine takes the new image; 09:59:18Z the Brain refuses to boot on `544` |
+| 10:06:03Z | second refusal, same words |
+| 10:20:36Z | Supabase: *a fix has been implemented … monitoring* |
+| **10:38:48Z** | **the Brain boots and serves** — the window |
+| 10:39–10:42Z | the pre-restart hosted verification **passes** against it |
+| 10:42:30Z | `deploy.yml`'s restart |
+| 10:51:04Z | refuses to boot again, same `544` |
+
+So the successful boot sits inside the eighteen minutes after Supabase said
+it had shipped a fix, and the next failure sits after it. The condition is
+theirs, it is acknowledged, and it was not fully cleared for this project.
+
 **Nothing here is a reason to weaken the check**, for the third time in this
 section: a Brain that booted past an unreachable store would accept research
 and write it where nobody can find it, which is the outcome §18 exists to
 prevent and is strictly worse than being visibly down. What is owed to the
-operator is the reading and the one action only they can take, which §9 of
-this document does not cover and §8.7 explains the cost of.
+operator is the reading and the one thing only they can do about somebody
+else's incident — watch it, and escalate it to Supabase if it does not clear.
+§8.7 is the cost of each retry while it has not.
 
 ### 8.7 The recovery floor is forty minutes, and that is a gap rather than a fact of life
 
