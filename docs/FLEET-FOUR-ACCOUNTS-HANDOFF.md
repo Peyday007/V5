@@ -11,8 +11,19 @@ deployed and nothing here advanced `production`. Where a thing has not happened,
 this file says so rather than rounding it up.
 
 **Branch.** `claude/fleet-four-accounts`, cut from `origin/production` at
-`f727b143`. Three commits, listed under *What changed* below. The tree is
-merge-ready: no migration collision, no workflow edit, no deployment change.
+`f727b143`. Eight commits, listed under *What changed* below.
+
+**Merge-readiness is measured rather than asserted**, and re-measured on
+2026-09-23 rather than carried forward from when this file was written.
+`origin/production` is still `f727b143`, so the base is unmoved and this branch
+has not diverged from it. Against the Factory closeout lane at `9262bbd0`, a
+trial `git merge-tree` reports **no conflict**; the merged tree was materialized
+in a scratch worktree and its cross-lane suites run there — `factoryPool`,
+`factoryOnboarding`, `factoryReleaseSurface`, `buildRepositories`,
+`peopleAndCapacity`, `peopleSection`, `deploymentOwnership`: **188 passed,
+exit 0**. One typecheck error survives the merge, it belongs to the other lane,
+and §6 says exactly what it is and why it is not repaired here. No migration
+collision, no workflow edit, no deployment change.
 
 ---
 
@@ -174,6 +185,8 @@ required field since it was added.
 | `57267ee0` | this handoff; `idx_worker_sessions_routine`, the index the new reading needs |
 | `6fd3ef7d` | three findings from re-reading the diff: a guard keyed on prose, a quarantine the tick never announced, and the record in CLAUDE.md §23 |
 | `76e54d4b` | accounts counted by identity rather than by display name — and the vacuous first test for it, replaced |
+| `90397070` | the measured run numbers recorded in this handoff |
+| *(this one)* | merge-readiness re-measured against the closeout lane, and the prediction in §6 replaced by the reading |
 
 **Schema.** One additive column on `fleet_routines`, on both chains, numbered
 `088` (SQLite) and `079` (Postgres). Nothing is dropped, rewritten or
@@ -252,7 +265,10 @@ lane, including the fourth verdict.
 
 ### AWAITING FINAL INTEGRATION AND PRODUCTION DEPLOYMENT
 
-* This branch is unmerged and undeployed. `origin/production` is `f727b143`.
+* This branch is unmerged and undeployed. `origin/production` is `f727b143`,
+  re-verified on 2026-09-23 rather than carried forward — the base has not
+  moved since this branch was cut, and the Factory closeout lane's work is on
+  `claude/software-factory-progress-ir4qqz`, unmerged as well.
 * No four-account Factory pool has been commissioned in production. The three
   research accounts in `docs/FLEET-12-ACTIVATION-EVIDENCE.md` are a different
   worker identity and a different workload family.
@@ -279,13 +295,40 @@ against `production` at `9262bbd0` rather than assumed:
   lane adds the release-decision card; this lane changes the repository card's
   surface sentence. Different components in one file.
 * **`server/services/factory/onboard.ts`** is this lane's alone.
-* **One consequence worth expecting.** This lane brought `tests/**/*.tsx` into
-  `tsconfig.json`, and the closeout branch adds a new component suite
-  (`tests/factoryReleaseSurface.test.tsx`) that has therefore never been
-  compiled. Merging the two makes the typecheck read it for the first time. If
-  it reports errors there, that is the guard doing its job on a fixture nobody
-  had checked — the same condition this lane found in two existing fixtures —
-  and not a regression introduced by either branch.
+* **One consequence, predicted here and since measured.** This lane brought
+  `tests/**/*.tsx` into `tsconfig.json`, and the closeout branch adds a
+  component suite (`tests/factoryReleaseSurface.test.tsx`) that had therefore
+  never been compiled. An earlier version of this bullet said that if the merge
+  reported errors there, the guard would be doing its job. It reported exactly
+  one, and it is the guard doing its job:
+
+  ```
+  tests/factoryReleaseSurface.test.tsx(389,5): error TS2322:
+    Type '"READER"' is not assignable to type '"OWNER" | "ADMIN" | "MEMBER" | "VIEWER"'.
+  ```
+
+  **What it is, stated no more strongly than the evidence allows.** It is *not*
+  an authorization gap. The test lowers the caller's level and asserts the
+  release route answers 404, and it genuinely does — but `roleAtLeast` denies
+  `'READER'` through `PROJECT_ROLES.indexOf(role) === -1`, the unknown-role
+  branch, rather than through the rank comparison the test means to exercise.
+  `WRITE` needs `MEMBER`, so a real `VIEWER` is refused too, and the
+  conclusion holds. What is weaker than it claims is the reason it holds: the
+  guard passes for a role that could never exist rather than for the lowest one
+  that can. That is this repository's own vacuous-guard pattern, and it is
+  exactly what a typecheck over fixtures is for.
+
+  **The remedy is one word, and it is verified rather than proposed.** With
+  `role = 'VIEWER'` applied in the scratch worktree, the merged tree
+  typechecks clean and that suite's five tests still pass — so the assertion
+  survives, now reaching the rank comparison.
+
+  **It is deliberately not repaired on this branch.** The file is the closeout
+  lane's, created by its own commit for its own work, and it is under that
+  lane's active ownership; editing it here would be repairing another lane's
+  defect and would put a conflict into the one file they are still working in.
+  It is recorded so the integration conversation can apply it in one edit and
+  know what it is applying.
 
 **One observation reported rather than acted on.** `docs/FACTORY.md` says of the
 *factory worker registry* — `factoryFleet.ts`, the local-plane executor
@@ -296,8 +339,10 @@ than a defect, it belongs to the closeout lane's subsystem, and correcting a
 sentence about another module's behaviour on a guess would be worse than leaving
 it. It is recorded here so somebody can settle it from the code.
 
-**What to run before merging.** `npm run typecheck`, `npm test`, and the fleet
-suites against Postgres:
+**What to run before merging.** The one-word correction above first —
+`tests/factoryReleaseSurface.test.tsx:389`, `'READER'` to `'VIEWER'` — because
+without it the merged tree does not typecheck, and then `npm run typecheck`,
+`npm test`, and the fleet suites against Postgres:
 
 ```
 BRAIN_TEST_DATABASE_URL=postgresql://... npx vitest run \
