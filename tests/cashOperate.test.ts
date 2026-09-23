@@ -1158,6 +1158,10 @@ describe('the operating pass as the tick calls it', () => {
         evidenced: [],
         moved: 0,
         evaluated: 0,
+        // A project with no sprint asks nothing and settles nothing. Reported
+        // as an empty pass rather than omitted, because the shape of what
+        // `operate` returns is the contract every reader is written against.
+        commissions: { opened: [], recorded: [], settled: [], declined: [], openNow: 0 },
       },
     });
   });

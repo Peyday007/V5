@@ -17,10 +17,14 @@
  */
 import { getDb } from '../db/database.ts';
 import { mayAnswer } from '../domain/monetization.ts';
+import { mayReplace } from './cashCardFacts.ts';
 import { newId, nowIso } from './util.ts';
 import type {
   FactKind,
   MonetizationAttribute,
+  MonetizationCommission,
+  MonetizationCommissionRow,
+  MonetizationCommissionState,
   MonetizationEdgeKind,
   MonetizationMethod,
   MonetizationPath,
@@ -337,6 +341,46 @@ export async function recordPathFact(input: NewPathFact): Promise<MonetizationPa
         'domain/monetization.ts for what it admits and why.',
     );
   }
+  /*
+   * Authority, not recency — and asked here rather than only at the callers.
+   *
+   * The statement below is an upsert, so without this a later pass could
+   * replace a gated answer with a proposal, or a person's own decision with
+   * either. Both callers that existed when this was written already asked
+   * `mayReplace` and skipped, correctly; **a guard on one of several entrances
+   * is not a guard**, and this file's own comment two paragraphs up makes that
+   * argument about `mayAnswer`. It is the same argument.
+   *
+   * It throws rather than silently declining, for `mayAnswer`'s reason: a
+   * caller that reaches here without checking has a defect, and returning the
+   * row it failed to write would let that defect look like success. Nothing in
+   * production reaches it, and a test asserts that it refuses.
+   */
+  const held = await pathFact(input.pathId, input.attribute);
+  /*
+   * A person may revise their own answer. Nothing else may overwrite a
+   * stronger one.
+   *
+   * `mayReplace` is the authority *order* and is reused rather than restated,
+   * because a second copy of it would eventually disagree with the first about
+   * what outranks what. What it does not decide — because the table it was
+   * written for never needed to — is whether an authority may replace *itself*,
+   * and there it answers no for `PERSON`.
+   *
+   * Taking that verbatim would mean a person who recorded the wrong figure
+   * could never correct it, which is §24's *escalation with no answering
+   * transition* one column along. So a person revising a person's answer is
+   * permitted, explicitly, and everything else falls to the order: Brain's
+   * research may not overwrite somebody's decision, and Brain's proposal may
+   * not overwrite a gated claim.
+   */
+  const revisingOwn = held !== null && held.kind === 'PERSON' && input.kind === 'PERSON';
+  if (!revisingOwn && !mayReplace(held, input.kind)) {
+    throw new Error(
+      `A ${input.kind} answer may not replace the ${held?.kind} answer already recorded against ` +
+        `${input.attribute}. Authority decides this, never recency: ask mayReplace first.`,
+    );
+  }
   const at = nowIso();
   await getDb().run(
     `INSERT INTO monetization_path_facts
@@ -647,4 +691,180 @@ export async function snapshotsFor(pathId: string): Promise<MonetizationRankSnap
     [pathId],
   );
   return rows.map(mapSnapshot);
+}
+
+/* --------------------------------------------------------------------------
+ * Commissions — what Brain asked, and what came of it
+ * ------------------------------------------------------------------------ */
+
+function mapCommission(row: MonetizationCommissionRow): MonetizationCommission {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    cashModeId: row.cash_mode_id,
+    pathId: row.path_id,
+    attribute: row.attribute as MonetizationAttribute,
+    round: row.round,
+    candidateId: row.candidate_id,
+    reason: row.reason,
+    ruleRank: row.rule_rank,
+    state: row.state as MonetizationCommissionState,
+    openedAt: row.opened_at,
+    settledAt: row.settled_at,
+    answered: row.answered,
+    outcome: row.outcome,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Ask one question about one attribute of one possibility, at most once.
+ *
+ * The whole concurrency design is the unique index this collides with. Two
+ * ticks may both decide, correctly, that the same attribute is the decisive
+ * unknown on the same path — the allocator is pure and is therefore no
+ * protection at all, exactly as `services/dispatch/router.ts` says of its own.
+ * Exactly one `INSERT` matches; the loser reads back the row it collided with
+ * and is told it did not create it, which is an ordinary outcome rather than
+ * an error.
+ *
+ * `created` is decided by comparing the id that came back against the id this
+ * call generated, never by comparing timestamps: two inserts inside one
+ * millisecond are indistinguishable by clock and perfectly distinguishable by
+ * key. `openRound` settled this question first and this follows it.
+ */
+export async function openCommission(input: {
+  projectId: string;
+  cashModeId: string;
+  pathId: string;
+  attribute: MonetizationAttribute;
+  round: number;
+  candidateId: string;
+  reason: string;
+  ruleRank: number;
+}): Promise<{ created: boolean; commission: MonetizationCommission }> {
+  const id = newId('mzc');
+  const at = nowIso();
+  await getDb().run(
+    `INSERT INTO monetization_commissions
+       (id, project_id, cash_mode_id, path_id, attribute, round, candidate_id,
+        reason, rule_rank, state, opened_at, settled_at, answered, outcome,
+        created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, NULL, NULL, NULL, ?, ?)
+     ON CONFLICT (project_id, path_id, attribute, round) DO NOTHING`,
+    [
+      id,
+      input.projectId,
+      input.cashModeId,
+      input.pathId,
+      input.attribute,
+      input.round,
+      input.candidateId,
+      input.reason,
+      input.ruleRank,
+      at,
+      at,
+      at,
+    ],
+  );
+  const rows = await getDb().all<MonetizationCommissionRow>(
+    `SELECT * FROM monetization_commissions
+      WHERE project_id = ? AND path_id = ? AND attribute = ? AND round = ?`,
+    [input.projectId, input.pathId, input.attribute, input.round],
+  );
+  const row = rows[0];
+  if (!row) throw new Error('The commission disappeared immediately after being written.');
+  return { created: row.id === id, commission: mapCommission(row) };
+}
+
+/** Every commission in a project, oldest first. */
+export async function listCommissions(input: {
+  projectId: string;
+  state?: MonetizationCommissionState;
+}): Promise<MonetizationCommission[]> {
+  const where: string[] = ['project_id = ?'];
+  const params: string[] = [input.projectId];
+  if (input.state) {
+    where.push('state = ?');
+    params.push(input.state);
+  }
+  const rows = await getDb().all<MonetizationCommissionRow>(
+    `SELECT * FROM monetization_commissions
+      WHERE ${where.join(' AND ')} ORDER BY opened_at, id`,
+    params,
+  );
+  return rows.map(mapCommission);
+}
+
+/** Every commission ever opened about one possibility, oldest first. */
+export async function commissionsFor(pathId: string): Promise<MonetizationCommission[]> {
+  const rows = await getDb().all<MonetizationCommissionRow>(
+    'SELECT * FROM monetization_commissions WHERE path_id = ? ORDER BY opened_at, id',
+    [pathId],
+  );
+  return rows.map(mapCommission);
+}
+
+/** The live askings of a project, keyed by the idea each one asked. */
+export async function openCommissionsByCandidate(
+  projectId: string,
+): Promise<Map<string, MonetizationCommission>> {
+  const rows = await getDb().all<MonetizationCommissionRow>(
+    `SELECT * FROM monetization_commissions
+      WHERE project_id = ? AND state = 'OPEN' ORDER BY opened_at, id`,
+    [projectId],
+  );
+  const out = new Map<string, MonetizationCommission>();
+  for (const row of rows) out.set(row.candidate_id, mapCommission(row));
+  return out;
+}
+
+/**
+ * Close one asking, once.
+ *
+ * Guarded on `state = 'OPEN'` in the statement that makes the change, so two
+ * ticks reading one finished mission settle it exactly once and the loser is
+ * told it changed nothing. It never reopens: a settled commission keeps its
+ * outcome, its count and its timestamp for ever, and asking the same question
+ * again is a *new* round with its own row and its own reason.
+ */
+export async function settleCommission(input: {
+  id: string;
+  state: Exclude<MonetizationCommissionState, 'OPEN'>;
+  answered: number;
+  outcome: string;
+}): Promise<MonetizationCommission | null> {
+  const at = nowIso();
+  const moved = await getDb().run(
+    `UPDATE monetization_commissions
+        SET state = ?, answered = ?, outcome = ?, settled_at = ?, updated_at = ?
+      WHERE id = ? AND state = 'OPEN'`,
+    [input.state, Math.max(0, Math.trunc(input.answered)), input.outcome, at, at, input.id],
+  );
+  if (moved.changes !== 1) return null;
+  const rows = await getDb().all<MonetizationCommissionRow>(
+    'SELECT * FROM monetization_commissions WHERE id = ?',
+    [input.id],
+  );
+  return rows[0] ? mapCommission(rows[0]) : null;
+}
+
+/**
+ * Which question this idea is asking, if it is asking one.
+ *
+ * `envelopeIdFor` reads this to know it is compiling a question about one way
+ * of being paid rather than a broad market search. The answer is unambiguous
+ * because `idx_monetization_commissions_candidate` makes one candidate at most
+ * one commission — `industry_rounds` carries the same index for the same
+ * reason, and without it a lookup that has to be certain would be a guess.
+ */
+export async function commissionForCandidate(
+  candidateId: string,
+): Promise<MonetizationCommission | null> {
+  const rows = await getDb().all<MonetizationCommissionRow>(
+    'SELECT * FROM monetization_commissions WHERE candidate_id = ?',
+    [candidateId],
+  );
+  return rows[0] ? mapCommission(rows[0]) : null;
 }

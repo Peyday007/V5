@@ -20,6 +20,7 @@ import type { CashReadiness } from '../../../server/services/cash/readiness.ts';
 import type { CashRoadmap } from '../../../server/services/cash/roadmap.ts';
 import type { CashForecast } from '../../../server/services/cash/forecast.ts';
 import type { SharedCashView } from '../../../server/services/cash/shared.ts';
+import type { CommissionView } from '../../../server/services/cash/monetization/inFlight.ts';
 import type {
   MonetizationSurface,
   TopEntry,
@@ -371,6 +372,17 @@ export interface CashView {
    * send it, and the section renders what it has rather than crashing.
    */
   monetization?: MonetizationSurface;
+  /**
+   * What Brain is researching about that space, in the owner's own words.
+   *
+   * Optional for the reason `monetization` is: a rolling deploy serves an older
+   * body to a newer bundle until the last instance turns over, and a section
+   * that assumed the field would render nothing at all rather than rendering
+   * what it has. The questions themselves are on `frontier.monetization`, which
+   * both roles get — this carries only the recorded reason and the outcome
+   * sentence, both of which quote the ledger.
+   */
+  monetizationWork?: CommissionView;
   decisionsForMe: { items: ReviewItem[]; underlyingCount: number; summary: string };
   vocabulary: {
     mechanisms: string[];

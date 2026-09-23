@@ -9615,3 +9615,88 @@ export interface MonetizationRankSnapshot {
   criterion: string | null;
   evaluatedAt: string;
 }
+
+/* --------------------------------------------------------------------------
+ * What Brain asked about a possibility, and why it asked it then
+ *
+ * §48's ledger says which questions are open on every way a discovery could be
+ * paid for. A commission is the record of one of them actually being asked: a
+ * `(path, attribute, round)` with the reason it was chosen recorded at the
+ * moment it was chosen, over a ledger that has since moved.
+ *
+ * It is a record, never a queue. The work is a Russell candidate, the
+ * specification is the compiler's, the permission is the approval envelope's,
+ * the lease is the durable queue's and the acceptance is the evidence gate's.
+ * Nothing here is a second one of any of those.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Where one asking got to.
+ *
+ * `UNRESOLVED` is not a failure and is deliberately not spelled like one. It
+ * says the research ran and the sources do not publish this — which is a real
+ * finding, stays visible, and never becomes a negative answer to the question.
+ * The attribute is still unknown afterwards, exactly as it was, because §30's
+ * rule holds here as everywhere: an unknown is never read as a favourable
+ * assumption, and it is never read as an unfavourable one either.
+ *
+ * `ABANDONED` is the possibility itself going away underneath a live asking —
+ * archived, invalidated, merged into another. The question stopped being worth
+ * answering rather than being answered.
+ */
+export const MONETIZATION_COMMISSION_STATES = [
+  'OPEN',
+  'ANSWERED',
+  'UNRESOLVED',
+  'ABANDONED',
+] as const;
+export type MonetizationCommissionState = (typeof MONETIZATION_COMMISSION_STATES)[number];
+
+export interface MonetizationCommissionRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  path_id: string;
+  attribute: string;
+  round: number;
+  candidate_id: string;
+  reason: string;
+  rule_rank: number;
+  state: string;
+  opened_at: string;
+  settled_at: string | null;
+  answered: number | null;
+  outcome: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MonetizationCommission {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  /** The possibility this is a question about. */
+  pathId: string;
+  /** The exact attribute being investigated, and the evidence lane that answers it. */
+  attribute: MonetizationAttribute;
+  round: number;
+  candidateId: string;
+  /** Why resolving it mattered now, recorded when it was decided. */
+  reason: string;
+  /** Which selection rule admitted it. Lower is stronger. */
+  ruleRank: number;
+  state: MonetizationCommissionState;
+  openedAt: string;
+  settledAt: string | null;
+  /**
+   * How many ledger attributes the finished research answered.
+   *
+   * Null while OPEN rather than 0 — §33's own defect, which published a column
+   * default as a measurement and reported every live round as barren.
+   */
+  answered: number | null;
+  /** Why it ended as it did. Null only while it has not. */
+  outcome: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

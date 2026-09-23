@@ -78,6 +78,7 @@ import { manufacturingRoundForCandidate } from '../../repos/manufacturing.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
 import type { DealRoundPurpose } from '../../domain/types.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
+import { commissionForCandidate } from '../../repos/monetization.ts';
 import { laborRoundForCandidate } from '../../repos/labor.ts';
 import { describeSource, subjectContextFor, type SubjectContext } from './subject.ts';
 import type {
@@ -283,6 +284,26 @@ async function envelopeIdFor(
     }
     if (kernel.purpose === 'CAPITAL') return 'RUSSELL_CAPITAL_STRUCTURE_V1';
   }
+
+  /*
+   * A question about one way of being paid is decided by the commission that
+   * asked it.
+   *
+   * `monetization_commissions` is the exact statement — this candidate is
+   * asking this attribute about this possibility — written by Brain when the
+   * question was opened. Read before the deep dive's own check for the kernel
+   * rounds' reason: a commission creates its own candidate, and nothing should
+   * have to reason about whether that candidate could also look like an
+   * opportunity's own.
+   *
+   * It widens nothing. `RUSSELL_MONETIZATION_ATTRIBUTE_V1` takes its source
+   * classes and its forbidden actions verbatim from the discovery envelope;
+   * what differs is the assignment template, because asking a market a broad
+   * question and asking one possibility what its payment terms are must not be
+   * judged by the same completion standard.
+   */
+  const commission = await commissionForCandidate(candidate.id);
+  if (commission) return 'RUSSELL_MONETIZATION_ATTRIBUTE_V1';
 
   /*
    * A dealflow question is decided the same way, by the round that asked it.

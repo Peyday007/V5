@@ -3034,6 +3034,120 @@ export { CashView_ as CashSection };
  * one path outranks another are all the server's, for §29's reason: a client
  * deriving any of them would be a second opinion about one ledger.
  */
+/**
+ * What Brain is researching about the possibility space, and what came back.
+ *
+ * ---------------------------------------------------------------------------
+ * Why it is here and not on a page of its own
+ * ---------------------------------------------------------------------------
+ *
+ * The instruction was explicit: show what is being researched, which path and
+ * attribute it serves, why it was selected, its work state, what changed and
+ * whether the rank moved — and **do not create a second research dashboard.**
+ * A question and the possibility it is about are one subject. Two surfaces
+ * describing it would eventually disagree, and §29 records what that costs: a
+ * person stops believing both.
+ *
+ * So it sits inside the monetization section, under the five and above the
+ * whole space, which is exactly where a reader is already looking when they
+ * ask *why is that one still unproven*.
+ *
+ * ---------------------------------------------------------------------------
+ * One block, two roles
+ * ---------------------------------------------------------------------------
+ *
+ * The questions themselves come from `page.frontier.monetization.questions` —
+ * the **same object the server builds for a member** — because which questions
+ * are being asked about the space is discovery (§34). What the owner
+ * additionally gets is the recorded reason in Brain's own words and the outcome
+ * sentence, both of which quote the ledger. A permission changes what is inside
+ * this block and never whether it is here.
+ *
+ * Nothing is derived here. The work state, its explanation and the count of
+ * answers are all the server's.
+ */
+function ResearchInFlight({ page }: { page: CashPage }): JSX.Element | null {
+  const questions = page.frontier.monetization?.questions ?? [];
+  const owner = page.full?.monetizationWork ?? null;
+  if (questions.length === 0) return null;
+
+  const detail = new Map(
+    [...(owner?.open ?? []), ...(owner?.recentlySettled ?? [])].map((one) => [
+      `${one.pathId}::${one.attribute}::${one.round}`,
+      one,
+    ]),
+  );
+  const live = questions.filter(
+    (one) => one.state === 'WAITING_TO_START' || one.state === 'RESEARCHING' || one.state === 'PARKED',
+  );
+  const done = questions.filter((one) => one.state === 'SETTLED' || one.state === 'STOPPED');
+
+  return (
+    <div className="rs-cash-commissions">
+      <h4>What Brain is finding out</h4>
+      <p className="rs-hint">
+        {live.length === 0
+          ? 'No question about a possibility is being researched right now.'
+          : `${live.length} ${live.length === 1 ? 'question is' : 'questions are'} being researched${
+              owner ? ` of ${owner.capacity} that may run at once` : ''
+            }. Each one is a single attribute of a single possibility, from published sources only.`}
+      </p>
+      <ul className="rs-cash-commission-list">
+        {[...live, ...done].map((one) => {
+          const key = `${one.pathId}::${one.attribute}::${one.round}`;
+          const full = detail.get(key) ?? null;
+          return (
+            <li key={key} className="rs-cash-commission">
+              <p>
+                <strong>{one.attributeLabel}</strong>
+                {' — '}
+                {one.pathTitle}
+                {one.round > 1 ? ` (round ${one.round})` : ''}
+              </p>
+              <p className="rs-hint">{WORK_STATE_LABEL[one.state] ?? one.state}</p>
+              {/*
+                * Why Brain chose this question over the others open.
+                *
+                * The owner sees the reason recorded at the moment it was
+                * decided, over a ledger that has since moved; a member sees the
+                * rule that admitted it, because the owner's sentence quotes the
+                * ledger and two of the ranking criteria read money.
+                */}
+              <p className="rs-hint">{full ? full.why : one.why}</p>
+              {full ? <p className="rs-hint">{full.stateBecause}</p> : null}
+              {one.settledAt ? (
+                <p className="rs-hint">
+                  {full?.outcome ??
+                    (one.answered === null || one.answered === 0
+                      ? 'It settled without answering this one. The question stays open and is not a no.'
+                      : `It answered ${one.answered} question${
+                          one.answered === 1 ? '' : 's'
+                        } about this possibility.`)}
+                </p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * What each work state means, in a person's words.
+ *
+ * A constant map rather than a formatted enum, because the five are genuinely
+ * different situations with different remedies and the word alone says none of
+ * that. `WAITING_TO_START` in particular must not read as `RESEARCHING`.
+ */
+const WORK_STATE_LABEL: Readonly<Record<string, string>> = Object.freeze({
+  WAITING_TO_START: 'Queued. Nothing has started reading for it yet.',
+  RESEARCHING: 'Being researched now.',
+  PARKED: 'Stopped at something a person has to decide.',
+  SETTLED: 'Finished.',
+  STOPPED: 'Did not finish.',
+});
+
 function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }): JSX.Element {
   const shared = page.frontier.monetization ?? null;
   const owner = page.full?.monetization ?? null;
@@ -3173,6 +3287,14 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
                       : `It moved from ${path.previousRank} to ${path.rank}${
                           path.movedAt ? ` on ${path.movedAt}` : ''
                         }.`}
+                    {/*
+                      * Why it moved, which the server has always derived and
+                      * which nothing rendered. The brief asks for the reason a
+                      * position changed by name, and `readableReason` was a
+                      * whole switch no screen displayed — the *no reader*
+                      * half of the audit this section was rewritten from.
+                      */}
+                    {path.movementReason ? ` ${path.movementReason}` : ''}
                   </p>
 
                   {page.capabilities.mayActOnJob ? (
@@ -3182,6 +3304,8 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
               );
             })}
           </ol>
+
+          <ResearchInFlight page={page} />
 
           <details className="rs-cash-paths-all">
             <summary>
@@ -3226,6 +3350,29 @@ function Monetization({ page, onChanged }: { page: CashPage; onChanged(): void }
                                 ({path.openQuestions.length} open:{' '}
                                 {path.openQuestions.map((one) => one.label).join(', ')})
                               </span>
+                            ) : null}
+                            {/*
+                              * The judgement control, on every possibility
+                              * rather than on the top five alone.
+                              *
+                              * It was rendered only inside the top list, and
+                              * that list excludes INVALIDATED and ARCHIVED by
+                              * construction — so `REVIVE`, the one transition
+                              * that brings a possibility back, was reachable
+                              * by nothing. §20 requires a possibility to be
+                              * revivable and §22 requires simplification to
+                              * happen by presentation rather than by removing
+                              * the way to do something; a control that exists
+                              * for a state it can never be shown in is the
+                              * *mechanism nothing calls* this codebase keeps
+                              * correcting.
+                              */}
+                            {page.capabilities.mayActOnJob ? (
+                              <PathJudgment
+                                pathId={id}
+                                status={path.status}
+                                onChanged={onChanged}
+                              />
                             ) : null}
                           </li>
                         );

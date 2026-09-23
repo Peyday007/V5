@@ -257,9 +257,21 @@ function defaultValue(attribute: MonetizationAttribute): string {
 }
 
 /** Every load-bearing question answered, which is what ACTIVE requires. */
-async function answerEverything(pathId: string): Promise<void> {
+/**
+ * Answer every load-bearing question on a path, as a person.
+ *
+ * `except` is there because a person's answer outranks a gated claim, so a test
+ * that wants evidence on one attribute must not have already put a decision
+ * there — `recordPathFact` refuses it, which is the guard doing its job rather
+ * than an inconvenience. Leaving the attribute alone is the honest fixture.
+ */
+async function answerEverything(
+  pathId: string,
+  except: readonly MonetizationAttribute[] = [],
+): Promise<void> {
   for (const attribute of MONETIZATION_ATTRIBUTES) {
     if (!ATTRIBUTE[attribute].loadBearing) continue;
+    if (except.includes(attribute)) continue;
     if (attribute === 'expectedRevenue') {
       await answer(pathId, attribute, { value: 'USD 900.00', amountCents: 90_000 });
     } else if (attribute === 'directCosts') {
@@ -1054,7 +1066,7 @@ describe('a member reads the space in names and counts, and no figure of it', ()
     await enumeratePossibilities(projectId);
     const claimId = await acceptedClaim('A published rate for this work.');
     const path = await pathOf('DIRECT_SALE');
-    await answerEverything(path);
+    await answerEverything(path, ['legalRequirements']);
     await answer(path, 'legalRequirements', {
       kind: 'EVIDENCE',
       claimId,

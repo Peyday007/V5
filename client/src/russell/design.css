@@ -4011,3 +4011,32 @@ details.rs-card > section.rs-card {
 .rs-cash-sequences li {
   overflow-wrap: anywhere;
 }
+
+/* What Brain is finding out about the possibility space.
+ *
+ * Inside the monetization card rather than a card of its own: a question and
+ * the possibility it is about are one subject, and a second research surface
+ * would eventually disagree with this one about what is happening. */
+.rs-cash-commissions {
+  margin-top: var(--rs-space-4);
+  padding-top: var(--rs-space-3);
+  border-top: 1px solid var(--rs-border);
+}
+
+.rs-cash-commission-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--rs-space-3);
+}
+
+.rs-cash-commission {
+  padding-inline-start: var(--rs-space-3);
+  border-inline-start: 2px solid var(--rs-border);
+}
+
+.rs-cash-commission p {
+  margin: 0 0 var(--rs-space-1);
+  overflow-wrap: anywhere;
+}

@@ -46,6 +46,8 @@ import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { cashForecast, type CashForecast } from './forecast.ts';
 import { composeLedger } from './monetization/ledger.ts';
 import { composeSurface, type MonetizationSurface } from './monetization/surface.ts';
+import { commissionView, type CommissionView } from './monetization/inFlight.ts';
+import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
 
 export interface CashView {
   /** Null when the section has never been activated here. */
@@ -199,6 +201,16 @@ export interface CashView {
    * not.
    */
   monetization: MonetizationSurface;
+  /**
+   * What Brain is researching about that space right now, and what came back.
+   *
+   * Beside the ledger rather than on a page of its own, because the one thing
+   * the instruction was explicit about is that there must not be a second
+   * research dashboard. A question and the possibility it serves are one
+   * subject, and two surfaces describing it would eventually disagree about
+   * what is happening — which is how a person learns to stop believing either.
+   */
+  monetizationWork: CommissionView;
 }
 
 export async function cashView(input: {
@@ -412,6 +424,11 @@ export async function cashView(input: {
      * the mistake the second projection exists to make impossible.
      */
     monetization: composeSurface({ ledger }),
+    monetizationWork: await commissionView({
+      projectId: input.projectId,
+      ledger,
+      capacity: MAX_OPEN_COMMISSIONS,
+    }),
     decisionsForMe: compressedReview({
       mode,
       authority,

@@ -68,6 +68,8 @@ import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts'
 import { runValidations, type ValidationProgress } from './validation.ts';
 import { enumeratePossibilities } from './monetization/enumerate.ts';
 import { recordMovements } from './monetization/movement.ts';
+import { composeLedger } from './monetization/ledger.ts';
+import { runCommissions, type CommissionPass } from './monetization/commissionPass.ts';
 import { recordWorkModelReclassification, type Reclassification } from './reclassify.ts';
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
@@ -749,7 +751,14 @@ export async function operate(
       dependentWork: [],
       validations: { started: [], settled: [] },
       authority: { took: [], withheld: [] },
-      monetization: { pathsAdded: [], figuresCarried: [], evidenced: [], moved: 0, evaluated: 0 },
+      monetization: {
+        pathsAdded: [],
+        figuresCarried: [],
+        evidenced: [],
+        moved: 0,
+        evaluated: 0,
+        commissions: { opened: [], recorded: [], settled: [], declined: [], openNow: 0 },
+      },
     };
   }
   /*
@@ -834,6 +843,8 @@ export interface MonetizationPass {
   /** Positions that changed. A ledger nothing moved in records nothing. */
   moved: number;
   evaluated: number;
+  /** The questions Brain asked about a possibility this pass, and what came back. */
+  commissions: CommissionPass;
 }
 
 async function runMonetizationLedger(
@@ -841,6 +852,24 @@ async function runMonetizationLedger(
   now?: string,
 ): Promise<MonetizationPass> {
   const enumerated = await enumeratePossibilities(projectId);
+
+  /*
+   * Ask and settle *before* the positions are recorded, so a movement this
+   * pass's own answer caused is the movement that gets written down.
+   *
+   * `recordMovements` appends a snapshot only where the derived position
+   * differs from the last recorded one, and it is what makes "why did this
+   * move" answerable at all. Running it first would record the ledger as it
+   * was before the answer landed, and the movement the answer caused would be
+   * attributed to whatever happened next — §33's *the evidence was right and
+   * the sentence about it was wrong*, at a rank history.
+   *
+   * `runCommissions` composes nothing of its own: it takes the ledger read
+   * here, so the snapshot the allocator decided against and the snapshot a
+   * reader sees are one object rather than two that could disagree.
+   */
+  const ledger = await composeLedger({ projectId, now });
+  const commissions = await runCommissions({ projectId, ledger, now });
   const movements = await recordMovements({ projectId, now });
   return {
     pathsAdded: enumerated.added.flatMap((one) => one.pathIds),
@@ -848,6 +877,7 @@ async function runMonetizationLedger(
     evidenced: enumerated.evidenced,
     moved: movements.movements.length,
     evaluated: movements.evaluated,
+    commissions,
   };
 }
 

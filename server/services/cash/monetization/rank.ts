@@ -301,7 +301,16 @@ export function compareEntries(a: RankableEntry, b: RankableEntry): number {
 }
 
 /** Lower first, and a null last whichever way the criterion runs. */
-function compareOn(criterion: Criterion, a: RankableEntry, b: RankableEntry): number {
+/**
+ * Where two entries stand on one criterion, with a null always last.
+ *
+ * Exported because `commission.ts` reads the sort function backwards to decide
+ * which questions could still change an order: the criteria at or above the
+ * first one two neighbours differ on are the only ones anything consults. A
+ * second copy of this comparison there would be the two-readers-of-one-fact
+ * defect this repository records more than any other.
+ */
+export function compareOn(criterion: Criterion, a: RankableEntry, b: RankableEntry): number {
   const left = criterion.order(a);
   const right = criterion.order(b);
   if (left === right) return 0;

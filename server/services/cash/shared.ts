@@ -73,6 +73,8 @@ import { chooseBest, rank } from './portfolio.ts';
 import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { authorityFor } from './opportunities.ts';
 import { composeLedger, type Ledger } from './monetization/ledger.ts';
+import { commissionView, type CommissionWorkState } from './monetization/inFlight.ts';
+import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
 import { composeSurface, TOP_SHOWN } from './monetization/surface.ts';
 import { explainRanking } from './monetization/rank.ts';
 import { rankableOf } from './monetization/ledger.ts';
@@ -238,6 +240,14 @@ export interface SharedMonetizationPath {
 export interface SharedMonetization {
   /** Every possibility in the project, best first. Nothing is withheld. */
   paths: SharedMonetizationPath[];
+  /**
+   * What Brain is researching about this space, and what it recently settled.
+   *
+   * §34's line one table along: which questions are being asked about the
+   * possibility space is *discovery*, so it crosses. What each answer says is
+   * the operation's, and does not.
+   */
+  questions: SharedMonetizationQuestion[];
   /** The five, by id, in rank order. */
   topPathIds: string[];
   /**
@@ -272,11 +282,54 @@ const SHARED_STATUS_NOTE: Readonly<Record<MonetizationStatus, string>> = Object.
   ARCHIVED: 'This was put away deliberately. It is kept in full, with its reason.',
 });
 
+/**
+ * Why Brain is asking, in a sentence that carries no figure.
+ *
+ * The owner's recorded reason quotes the ledger — a status explanation reads
+ * two private numbers, and a criterion comparison quotes both sides of it — so
+ * a member is given the *rule* that admitted the question instead. It is a
+ * constant per rule rather than a redaction of the owner's sentence, for the
+ * reason this whole module is a second projection rather than a filter: a
+ * redaction is one forgotten branch away from a disclosure, and a constant
+ * cannot leak a figure that was never in it.
+ */
+const SHARED_ASK_NOTE: Readonly<Record<number, string>> = Object.freeze({
+  10: 'Something named is in this one\u2019s way, and this is the question that would clear it.',
+  20: 'The answer this rests on has been contradicted, so it is being established again. ' +
+    'Nothing recorded was replaced.',
+  30: 'It is near the top and this answer could change where it sits.',
+  40: 'It competes with another way of taking the same discovery, and this is what would ' +
+    'separate them.',
+});
+
+/** One question a member can see being asked, with no figure in it. */
+export interface SharedMonetizationQuestion {
+  pathId: string;
+  pathTitle: string;
+  attribute: string;
+  attributeLabel: string;
+  round: number;
+  /** The rule that admitted it, as a sentence. Never the owner's reason. */
+  why: string;
+  state: CommissionWorkState;
+  askedAt: string;
+  settledAt: string | null;
+  /**
+   * Whether it produced an answer. A count, never the answer.
+   *
+   * Null while it is still being asked — §33's rule that a column default
+   * published as a measurement reads as modesty and is an understatement
+   * nobody checks.
+   */
+  answered: number | null;
+}
+
 async function sharedMonetization(
   projectId: string,
   composed?: Ledger,
 ): Promise<SharedMonetization> {
   const ledger = composed ?? (await composeLedger({ projectId }));
+  const work = await commissionView({ projectId, ledger, capacity: MAX_OPEN_COMMISSIONS });
   const surface = composeSurface({ ledger });
   const live = ledger.entries.filter(
     (one) => one.status !== 'INVALIDATED' && one.status !== 'ARCHIVED',
@@ -284,6 +337,22 @@ async function sharedMonetization(
   const bestNotShown = live[TOP_SHOWN] ?? null;
 
   return {
+    questions: [...work.open, ...work.recentlySettled].map((one) => ({
+      pathId: one.pathId,
+      pathTitle: one.pathTitle,
+      attribute: one.attribute,
+      attributeLabel: one.attributeLabel,
+      round: one.round,
+      // The rule, never the recorded reason. An unrecognised rule number is a
+      // neutral sentence rather than a fallback to the owner's words: a new
+      // rule must be given a shared sentence deliberately, and until it is the
+      // member is told less rather than something they should not see.
+      why: SHARED_ASK_NOTE[one.ruleRank] ?? 'Brain chose this question over the others open.',
+      state: one.state,
+      askedAt: one.askedAt,
+      settledAt: one.settledAt,
+      answered: one.answered,
+    })),
     paths: ledger.entries.map((entry) => ({
       id: entry.path.id,
       method: entry.path.method,
