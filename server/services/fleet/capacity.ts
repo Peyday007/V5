@@ -108,7 +108,22 @@ export interface SurfaceReading {
     accountState: string;
     totalFires: number;
     totalRefusals: number;
-    consecutiveNoShows: number;
+    /**
+     * Fires at this surface that nobody answered, since it last answered.
+     *
+     * Derived per surface rather than read from
+     * `fleet_routines.consecutive_no_shows`, which is the number every screen
+     * used to print under this heading and which cannot express a pool: an
+     * arrival clears it for **every** Routine bound to the same worker, so in a
+     * fleet of several Claude accounts on one identity a dead surface reads 0
+     * because its healthy siblings keep answering. It is also 1 on a perfectly
+     * healthy surface whose worker is still booting, since it is advanced
+     * optimistically on each successful fire.
+     *
+     * The same function the dispatcher quarantines on, so a screen cannot
+     * disagree with the decision it is describing.
+     */
+    unansweredFires: number;
     /** The provider's own words for a quarantine, when there are any. */
     stateReason: string | null;
     lastArrivalAt: string | null;
@@ -230,7 +245,8 @@ export async function capacityReading(
    * thing this page must not do: the whole point of it is to name the one
    * outstanding action.
    */
-  const { listRoutines } = await import('../../repos/fleet.ts');
+  const { listRoutines, unansweredFiresByRoutine } = await import('../../repos/fleet.ts');
+  const unanswered = await unansweredFiresByRoutine();
   for (const routine of await listRoutines()) {
     const account = accountById.get(routine.accountId);
     if (!keep(account)) continue;
@@ -287,7 +303,7 @@ export async function capacityReading(
         accountState: owner.state,
         totalFires: routine.totalFires,
         totalRefusals: routine.totalRefusals,
-        consecutiveNoShows: routine.consecutiveNoShows,
+        unansweredFires: unanswered.get(routine.id) ?? 0,
         stateReason: routine.stateReason,
         lastArrivalAt: chain.lastArrivalAt,
         lastCompletedBinId: chain.lastCompletedBinId,

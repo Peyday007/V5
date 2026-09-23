@@ -22,6 +22,7 @@ import {
   effectiveTarget,
   getAccountByName,
   getRoutineByRef,
+  unansweredFiresByRoutine,
   sessionsForRoutine,
   listAccounts,
   listRoutines,
@@ -733,6 +734,21 @@ async function main(): Promise<void> {
     const routines = await listRoutines();
     const snapshot = await fleetSnapshot();
     const fleetPolicy = await currentPolicy('FLEET', null);
+    /*
+     * Unanswered fires, per surface, since that surface last answered.
+     *
+     * Printed instead of `consecutive_no_shows`, which this line used to show
+     * and which cannot express a pool: an arrival clears it for **every**
+     * Routine bound to the same worker, so in a fleet of four Claude accounts
+     * on one Factory identity a dead surface reads 0 because its healthy
+     * siblings keep answering. It is also 1 on every working surface whose
+     * worker is still booting, because it is advanced optimistically on each
+     * successful fire.
+     *
+     * This is the number the dispatcher actually quarantines on, read from the
+     * same function, so the screen and the decision cannot disagree.
+     */
+    const unanswered = await unansweredFiresByRoutine();
 
     console.log('FLEET');
     console.log(`  accounts    ${accounts.length}`);
@@ -815,7 +831,7 @@ async function main(): Promise<void> {
             // operator reading everything except the deciding field guesses.
             `caps=[${routine.capabilities.join(',')}]  ` +
             `secret=${routine.tokenSecretName}  fires=${routine.totalFires} ` +
-            `refusals=${routine.totalRefusals} no-shows=${routine.consecutiveNoShows}` +
+            `refusals=${routine.totalRefusals} unanswered=${unanswered.get(routine.id) ?? 0}` +
             (inFlight ? `  in-flight=${inFlight.routineInFlight}` : '  (not routable)') +
             (routine.retryAt ? `  retry_at=${routine.retryAt}` : ''),
         );
@@ -1100,7 +1116,17 @@ async function probeBin(input: {
       const used = tokens.filter((token) => token.lastUsedAt !== null);
       console.log(`  oauth       ${tokens.length} token(s) minted for this worker, ${used.length} used`);
       console.log(`  fires       ${routine.totalFires} sent, ${routine.totalRefusals} refused`);
-      console.log(`  arrivals    ${routine.consecutiveNoShows} consecutive fire(s) with nobody arriving`);
+      /*
+       * The derived per-surface count, never `consecutive_no_shows`.
+       *
+       * That column is cleared by an arrival on **any** Routine bound to the
+       * same worker, which is exactly what a pool is — so on the one command
+       * whose whole job is to ask whether *this* surface works, it read 0 for a
+       * dead surface whose healthy siblings were answering. It is also 1 on a
+       * working surface whose worker is still booting.
+       */
+      const unansweredHere = (await unansweredFiresByRoutine()).get(routine.id) ?? 0;
+      console.log(`  arrivals    ${unansweredHere} fire(s) since the last arrival with nobody arriving`);
 
       /*
        * The correlation, which is the only thing that proves *this Routine* uses
@@ -1151,7 +1177,7 @@ async function probeBin(input: {
         problems.push('a token exists for this worker but has never been used to call Brain');
       }
       problems.push(...proof.problems);
-      if (routine.totalFires > 0 && routine.consecutiveNoShows >= routine.totalFires) {
+      if (unansweredHere > 0 && routine.totalFires > 0 && unansweredHere >= routine.totalFires) {
         problems.push('every fire to this Routine has gone unanswered');
       }
     }
@@ -1514,8 +1540,24 @@ async function probeBin(input: {
     console.log(`  ${proposal.direction}  ${proposal.from} -> ${proposal.to}`);
     console.log(`  ${proposal.reason}`);
     console.log(`  automatic=${proposal.automatic}`);
+    /*
+     * The same per-surface count the dispatcher decides on.
+     *
+     * This passed the Routine row straight in, so it advised on
+     * `consecutive_no_shows` — a column a sibling's arrival clears — while the
+     * tick quarantines on the derived count. Two readers of one question, and
+     * the advice was the one that could not see a dead surface in a pool.
+     *
+     * It remains advice: nothing here changes a state. A surface the tick has
+     * already taken out of routing is not proposed again.
+     */
+    const unanswered = await unansweredFiresByRoutine();
     for (const routine of await listRoutines()) {
-      const verdict = shouldQuarantine(routine);
+      if (routine.state !== 'ENABLED') continue;
+      const verdict = shouldQuarantine({
+        consecutiveNoShows: unanswered.get(routine.id) ?? 0,
+        consecutiveFailures: routine.consecutiveFailures,
+      });
       if (verdict.quarantine) console.log(`  QUARANTINE CANDIDATE ${routine.routineRef}: ${verdict.reason}`);
     }
     return ok(`scale-advice ${proposal.direction} ${proposal.from}->${proposal.to}`);

@@ -676,6 +676,61 @@ export async function recordRoutineFire(input: {
 }
 
 /**
+ * Fires each surface made that nobody answered, since that surface last
+ * answered.
+ *
+ * The per-surface no-show fact, derived from rows rather than counted in a
+ * column, and the reason it has to be is `recordWorkerArrival`: an arrival
+ * clears `consecutive_no_shows` for **every Routine bound to the same worker**,
+ * which is precisely what a Factory pool is. In a fleet of four Claude accounts
+ * on one identity, one dead surface has its counter reset by its healthy
+ * siblings and is fired at for ever — an activation each time, out of a fixed
+ * subscription allowance, with every row reading healthy. That column's own
+ * documentation says what it is: "fires awaiting an arrival", advanced
+ * optimistically on every successful fire, which is also why its ordinary value
+ * on a working surface whose worker is still booting is 1.
+ *
+ * `DISPATCH_NO_SHOW` is the exact fact instead. `reopenNoShowDispatches` writes
+ * one when a fire it made is `SENT`, has aged past the window in which it still
+ * counts as a live activation, and the bin is still claimable at the very
+ * generation that fire named — so nothing was handed out in between and the
+ * session genuinely never came. It is read from `bin_events` rather than from
+ * `bin_dispatch` because that table is append-only: a reopened intent's
+ * `routine_id` is rewritten when it is re-routed to another surface, so a count
+ * read back from the dispatch row would credit one account's no-show to the
+ * next account that tried.
+ *
+ * **Since that surface's own last arrival**, so a repair ends it. A surface
+ * that answers has every no-show before that instant turned into history, and
+ * history does not take anything out of routing.
+ *
+ * "That surface's own arrival" is `worker_sessions`, and deliberately not
+ * `fleet_routines.last_check_in_at`. The second is written by
+ * `recordWorkerArrival` across every Routine bound to one worker, so falling
+ * back to it would reintroduce the very defect this function exists to fix, one
+ * column along: a healthy sibling's check-in would silently forgive a dead
+ * surface's no-shows. `worker_sessions` is written from Brain's own dispatch
+ * row — one fire, one Routine, one arrival — so it is the only per-surface
+ * arrival evidence there is. With none, every no-show counts, which is correct:
+ * a surface Brain has never been able to attribute an arrival to has never
+ * answered.
+ */
+export async function unansweredFiresByRoutine(): Promise<Map<string, number>> {
+  const rows = await getDb().all<{ routine_id: string; n: number }>(
+    `SELECT e.routine_id AS routine_id, COUNT(*) AS n
+       FROM bin_events e
+      WHERE e.event_type = 'DISPATCH_NO_SHOW'
+        AND e.routine_id IS NOT NULL
+        AND e.at > COALESCE(
+              (SELECT MAX(s.observed_at) FROM worker_sessions s
+                WHERE s.routine_id = e.routine_id),
+              '')
+      GROUP BY e.routine_id`,
+  );
+  return new Map(rows.map((row) => [row.routine_id, Number(row.n)]));
+}
+
+/**
  * A fired session never arrived.
  *
  * Counted separately from a refusal because the remedies differ: a refusal is

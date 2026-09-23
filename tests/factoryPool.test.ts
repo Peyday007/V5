@@ -40,6 +40,7 @@ import {
   credentialDigest,
   getRoutineByRef,
   listRoutines,
+  recordWorkerArrival,
   recordWorkerSession,
   routineRegistrationCollision,
   setPolicy,
@@ -62,6 +63,9 @@ import { routeBin } from '../server/services/dispatch/router.ts';
 import { decideBinRouting } from '../server/services/bins/routing.ts';
 import { judgePool, readFactoryPool, verifyFactoryPool } from '../server/services/dispatch/pool.ts';
 import { createProbeBin } from '../server/services/fleet/probe.ts';
+import { NO_SHOW_QUARANTINE_THRESHOLD } from '../server/services/dispatch/scaler.ts';
+import { getDb } from '../server/db/database.ts';
+import fs from 'node:fs';
 import type { BinManifest, Principal } from '../server/domain/types.ts';
 
 const REPOSITORY = 'peyday007/v5';
@@ -1083,21 +1087,10 @@ describe('a proof is not a certificate', () => {
 
   it('calls a proof contradicted by a later unanswered fire stale rather than proven', async () => {
     const { read, first } = await provenSurface();
-    /*
-     * The production shape, from rows rather than from a counter: Brain fired
-     * this surface after the arrival that proved it, and that fire has aged
-     * past the window in which it still counts as a live activation with
-     * nothing having turned up. The proof is still a true statement about
-     * August; the most recent thing Brain knows is that the surface did not
-     * answer.
-     */
-    const provenAt = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
-    const firedAt = new Date(Date.now() - IN_FLIGHT_WINDOW_MS - 60_000).toISOString();
-    const report = judgeOne(read, {
-      ...first,
-      sessions: first.sessions.map((session) => ({ ...session, observedAt: provenAt })),
-      routine: { ...first.routine, lastFiredAt: firedAt },
-    });
+    // The one fact both this report and the dispatcher's quarantine read: a
+    // fire that reached SENT, aged out of the in-flight window, and whose bin
+    // was still claimable at the generation that fire named.
+    const report = judgeOne(read, { ...first, unansweredFires: 1 });
     expect(report.surfaces[0]!.verdict).toBe('STALE');
     expect(report.surfaces[0]!.problems.join(' ')).toContain('no arrival');
     expect(report.ok).toBe(false);
@@ -1109,16 +1102,43 @@ describe('a proof is not a certificate', () => {
      * The half that stops this being a warning that cries wolf. A surface fired
      * at thirty seconds ago has an unanswered fire by construction — its worker
      * is booting — and `consecutive_no_shows` reads 1 on every healthy surface
-     * in that state, which is why this judgment reads the fire's age instead.
+     * in that state. Only a fire that has aged out of the window produces a
+     * `DISPATCH_NO_SHOW` row, so a live one contributes nothing here.
      */
     const { read, first } = await provenSurface();
     const report = judgeOne(read, {
       ...first,
+      routine: { ...first.routine, lastFiredAt: new Date(Date.now() - 30_000).toISOString() },
+    });
+    expect(first.unansweredFires).toBe(0);
+    expect(report.surfaces[0]!.verdict).toBe('PROVEN');
+    expect(report.ok).toBe(true);
+  });
+
+  it('does not call a proof stale because the provider was busy', async () => {
+    /*
+     * The defect the first version of this check had, and the reason the fact
+     * is read from the ledger rather than derived from `last_fired_at`:
+     * `claimRoutineFireSlot` advances that column when it takes the slot,
+     * *before* the HTTP call, so a fire the provider rate-limited advances it
+     * exactly as a delivered one does. Comparing it against the newest arrival
+     * therefore called a busy account's proof stale — §23's "a refusal is not
+     * misconduct", broken by the check written to catch a dead surface.
+     */
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      routine: {
+        ...first.routine,
+        totalRefusals: 6,
+        lastFiredAt: new Date(Date.now() - 4 * 60 * 60_000).toISOString(),
+        retryAt: new Date(Date.now() + 60_000).toISOString(),
+      },
       sessions: first.sessions.map((session) => ({
         ...session,
-        observedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+        observedAt: new Date(Date.now() - 8 * 60 * 60_000).toISOString(),
       })),
-      routine: { ...first.routine, lastFiredAt: new Date(Date.now() - 30_000).toISOString() },
+      unansweredFires: 0,
     });
     expect(report.surfaces[0]!.verdict).toBe('PROVEN');
     expect(report.ok).toBe(true);
@@ -1165,5 +1185,179 @@ describe('a proof is not a certificate', () => {
     });
     expect(report.surfaces[0]!.verdict).toBe('PROVEN');
     expect(report.surfaces[0]!.eligible).toBe(false);
+  });
+});
+
+/**
+ * One dead account in a pool, and the signal that could not see it.
+ *
+ * `shouldQuarantine` states the fleet's own rule — repeated no-shows take a
+ * surface out of routing, because a session that starts and never arrives is a
+ * permission or connector fault that will repeat for ever at one activation
+ * each — and it had exactly one caller in the repository: `fleet scale-advice`,
+ * which prints a line. Nothing anywhere acted on it, so no surface has ever
+ * been quarantined for not answering.
+ *
+ * Wiring the function up as it stood would not have helped, and that is the
+ * part only a pool shows. Its input was `fleet_routines.consecutive_no_shows`,
+ * which `recordWorkerArrival` clears **for every Routine bound to the same
+ * worker** — which is exactly what a Factory pool is. So in a fleet of four
+ * accounts on one identity, one dead surface has its counter reset by its
+ * healthy siblings' arrivals and is fired at for ever: an activation each time,
+ * out of a fixed subscription allowance, with every row reading healthy.
+ *
+ * The per-surface fact was already being established and was being thrown away.
+ * `reopenNoShowDispatches` decides, exactly, that a fire produced no arrival —
+ * `SENT`, aged past the window in which it still counts as a live activation,
+ * and the bin still claimable at the very generation that fire named — and the
+ * event it wrote named no surface at all, so the ledger recorded that a fire
+ * went unanswered and nothing about whose. §23's own sentence, at the one row
+ * that says an account has stopped working.
+ */
+describe('a surface that stops answering leaves routing, and its siblings do not', () => {
+  /** Fire at one named surface and let the window close with nobody arriving. */
+  async function unansweredFire(surface: Surface, title: string): Promise<void> {
+    const binId = await factoryBin(title, { pinnedRoutineId: surface.routineId });
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+    const dispatch = (await listDispatchesForBin(binId))[0];
+    expect(dispatch?.state).toBe('SENT');
+    expect(dispatch?.routineRef).toBe(surface.routineRef);
+    /*
+     * The one thing a test cannot do by waiting. Everything else here is the
+     * real path: Brain routed it, claimed the fire slot, fired, recorded the
+     * dispatch — and nothing arrived.
+     */
+    await getDb().run('UPDATE bin_dispatch SET sent_at = ? WHERE id = ?', [
+      new Date(Date.now() - IN_FLIGHT_WINDOW_MS - 60_000).toISOString(),
+      dispatch!.id,
+    ]);
+  }
+
+  it('quarantines the surface whose fires go unanswered, and only that one', async () => {
+    const dead = surfaces[1]!;
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD; i += 1) {
+      await unansweredFire(dead, `unanswered ${i}`);
+      // Each tick reopens the aged fire and re-asks the question.
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+
+    const after = await listRoutines();
+    const quarantined = after.find((one) => one.id === dead.routineId)!;
+    expect(quarantined.state).toBe('QUARANTINED');
+    expect(quarantined.stateReason ?? '').toMatch(/never checked in|arriv/i);
+    // Its siblings are untouched: this is a fact about one account's surface,
+    // and a fleet-wide consequence would be the poisoning the pool exists to
+    // avoid.
+    for (const other of surfaces.filter((one) => one.routineId !== dead.routineId)) {
+      expect(after.find((one) => one.id === other.routineId)!.state).toBe('ENABLED');
+    }
+  });
+
+  it('is not cleared by a sibling arriving, which is what the counter could not express', async () => {
+    const dead = surfaces[1]!;
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD; i += 1) {
+      await unansweredFire(dead, `unanswered ${i}`);
+      /*
+       * A healthy surface answers in between. `brain_check_in` is what a real
+       * worker calls on arrival and it clears `consecutive_no_shows` on
+       * **every** Routine bound to this worker — including the dead one, which
+       * is why that column cannot express a pool. `recordWorkerArrival` is that
+       * write, called here directly because `assignNextBin` reaches only the
+       * per-Routine reset beside it.
+       */
+      await completeChainFor(surfaces[0]!);
+      await recordWorkerArrival(factoryWorkerId);
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+
+    const after = await listRoutines();
+    expect(after.find((one) => one.id === dead.routineId)!.consecutiveNoShows).toBe(0);
+    expect(after.find((one) => one.id === dead.routineId)!.state).toBe('QUARANTINED');
+    expect(after.find((one) => one.id === surfaces[0]!.routineId)!.state).toBe('ENABLED');
+  });
+
+  it('stops counting once the surface answers again, so a repair is the end of it', async () => {
+    const recovering = surfaces[1]!;
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD - 1; i += 1) {
+      await unansweredFire(recovering, `unanswered ${i}`);
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+    expect((await listRoutines()).find((one) => one.id === recovering.routineId)!.state).toBe(
+      'ENABLED',
+    );
+
+    // It answers. Every no-show before this instant is history about a surface
+    // that has since worked, and history does not quarantine anything.
+    await completeChainFor(recovering);
+    await unansweredFire(recovering, 'one after the repair');
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+
+    expect((await listRoutines()).find((one) => one.id === recovering.routineId)!.state).toBe(
+      'ENABLED',
+    );
+  });
+
+  it('names which surface did not answer on the ledger, rather than only that one did not', async () => {
+    const dead = surfaces[2]!;
+    await unansweredFire(dead, 'attributed');
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+
+    const rows = await getDb().all<{ routine_id: string | null; routine_ref: string | null }>(
+      `SELECT routine_id, routine_ref FROM bin_events WHERE event_type = 'DISPATCH_NO_SHOW'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.routine_id).toBe(dead.routineId);
+    expect(rows[0]!.routine_ref).toBe(dead.routineRef);
+  });
+});
+
+/**
+ * The column nobody may print again, and why the rule is worth writing down.
+ *
+ * `fleet_routines.consecutive_no_shows` is a real column with a real meaning —
+ * its own repository comment calls it "fires awaiting an arrival" — and it is
+ * the wrong number to put in front of a person under any heading. It is
+ * advanced optimistically on every successful fire, so a healthy surface whose
+ * worker is still booting reads 1; and `recordWorkerArrival` clears it for
+ * **every Routine bound to the same worker**, which is precisely what a pool
+ * is, so a dead surface in a four-account fleet reads 0 while its siblings
+ * answer.
+ *
+ * Six surfaces were printing it: the Fleet page, the People page, `who`,
+ * `fleet show`, `fleet verify-surface` and `fleet scale-advice` — the last of
+ * which also *advised* on it. Every one of them under-reported exactly the
+ * condition an operator is looking for.
+ *
+ * Asserted by reading the source, for `operatorConsoleRemoved`'s reason: what
+ * must not exist is somewhere to read it, and a passing request cannot show you
+ * one.
+ */
+describe('no surface prints the counter that cannot express a pool', () => {
+  const read = (relative: string): string =>
+    fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
+
+  const SURFACES = [
+    '../client/src/russell/Fleet.tsx',
+    '../client/src/russell/People.tsx',
+    '../server/services/fleet/view.ts',
+    '../server/services/fleet/capacity.ts',
+    '../server/services/russell/who.ts',
+  ];
+
+  it('keeps it out of every view type and every screen', () => {
+    // Non-vacuous: these files exist and are substantial.
+    for (const path of SURFACES) expect(read(path).length).toBeGreaterThan(500);
+    for (const path of SURFACES) {
+      const source = read(path).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      expect({ path, hit: source.includes('consecutiveNoShows') }).toEqual({ path, hit: false });
+    }
+  });
+
+  it('is read only where a decision is made, and there from the derived count', () => {
+    const cli = read('../scripts/fleet.ts').replace(/\/\*[\s\S]*?\*\//g, '');
+    // The one occurrence left is the argument name `shouldQuarantine` takes,
+    // and the value handed to it is the derived map rather than the column.
+    const hits = [...cli.matchAll(/consecutiveNoShows:\s*([^,\n]+)/g)].map((m) => m[1]!.trim());
+    expect(hits).toEqual(['unanswered.get(routine.id) ?? 0']);
   });
 });

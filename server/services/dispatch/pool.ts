@@ -46,7 +46,6 @@
 import type { Bin, BinDispatch, FleetAccount, FleetRoutine } from '../../domain/types.ts';
 import type { WorkerSession } from '../../repos/fleet.ts';
 import { proveSurface, type SurfaceChain } from './surfaceProof.ts';
-import { IN_FLIGHT_WINDOW_MS } from './candidates.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
 
 /** What a surface is, once every row about it has been read. */
@@ -68,6 +67,27 @@ export interface PoolSurfaceInput {
   accountTarget: number | null;
   /** Arrivals attributed to this Routine, newest first. */
   sessions: readonly WorkerSession[];
+  /**
+   * Fires Brain made at this surface that nobody answered, since it last
+   * answered.
+   *
+   * `unansweredFiresByRoutine`, rather than a comparison of `last_fired_at`
+   * against the newest arrival — which is what this read the first time and was
+   * wrong, because `claimRoutineFireSlot` advances `last_fired_at` at the
+   * moment the slot is taken, *before* the HTTP call. A fire the provider then
+   * rate-limited advances it too, so that comparison called a proof stale over
+   * a busy account: §23's "a refusal is not misconduct", broken by the very
+   * check written to catch a dead surface. A `DISPATCH_NO_SHOW` row exists only
+   * for a dispatch that actually reached `SENT`, so a refusal cannot produce
+   * one.
+   *
+   * It is also the number the dispatcher quarantines on, read from the same
+   * function, so the report and the routing decision cannot come to disagree
+   * about whether a surface answered. They differ in what they do about it —
+   * one says re-probe at the first, the other removes it from routing at the
+   * threshold — and never in the fact.
+   */
+  unansweredFires: number;
   bins: ReadonlyMap<string, Bin | null>;
   dispatches: ReadonlyMap<string, readonly BinDispatch[]>;
 }
@@ -312,7 +332,7 @@ function judgeSurface(
   // standing fact above: an archived identity or a Factory surface that also
   // serves research is wrong *now*, and a past proof cannot answer it.
   const fault = proof.foreignWorkerIds.length > 0 || standing.length > 0;
-  const contradiction = proof.chain ? contradicts(input, proof.chain, now) : null;
+  const contradiction = proof.chain ? contradicts(input, proof.chain) : null;
 
   const verdict: PoolVerdict = fault
     ? 'FAULT'
@@ -374,14 +394,20 @@ function judgeSurface(
  * wrote itself, and neither introduces a constant:
  *
  *   1. **A fire since the proof that is over and produced nothing.**
- *      `fleet_routines.last_fired_at` is after the newest arrival attributed to
- *      this Routine, and that fire has aged past `IN_FLIGHT_WINDOW_MS` — the
- *      same instant `inFlightByRoutine` stops counting it as a live activation
- *      and `reopenNoShowDispatches` starts treating it as unanswered. The
- *      constant is **imported rather than restated**, for §24's reason one
- *      object along: ceasing to count as an activation and counting as an
- *      unanswered fire must be one instant, or there is a window between them
- *      for two readers to disagree in.
+ *      `unansweredFiresByRoutine`, which counts the `DISPATCH_NO_SHOW` rows
+ *      `reopenNoShowDispatches` writes — a dispatch that reached `SENT`, aged
+ *      past the window in which it still counts as a live activation, and whose
+ *      bin was still claimable at the very generation that fire named.
+ *
+ *      Read from that one function rather than derived here, for two reasons.
+ *      It is the number the dispatcher quarantines on, so the report and the
+ *      routing decision cannot disagree about whether a surface answered. And
+ *      the obvious derivation is wrong: comparing `fleet_routines.last_fired_at`
+ *      against the newest arrival — which this did first — calls a proof stale
+ *      over a **rate limit**, because `claimRoutineFireSlot` advances that
+ *      column when it takes the slot, before the HTTP call, so a refused fire
+ *      advances it too. §23's "a refusal is not misconduct", broken by the
+ *      check written to catch a dead surface.
  *
  *   2. **A fire that failed for a reason that was not a rate limit.**
  *      `consecutive_failures` is reset to zero by every successful fire and is
@@ -408,11 +434,7 @@ function judgeSurface(
  * is really "fires awaiting an arrival". Condition 1 asks the same question
  * from rows that are per-surface and exact.
  */
-function contradicts(
-  input: PoolSurfaceInput,
-  chain: SurfaceChain,
-  now: string,
-): string | null {
+function contradicts(input: PoolSurfaceInput, chain: SurfaceChain): string | null {
   if (input.routine.consecutiveFailures > 0) {
     return (
       `this surface was proven at ${chain.observedAt}, and ${input.routine.consecutiveFailures} ` +
@@ -421,19 +443,15 @@ function contradicts(
     );
   }
 
-  const lastFired = input.routine.lastFiredAt;
-  if (!lastFired) return null;
-  // The newest arrival on *this* Routine, from `worker_sessions`, newest first.
-  const newestArrival = input.sessions[0]?.observedAt ?? chain.observedAt;
-  if (lastFired <= newestArrival) return null;
-  const overAt = new Date(new Date(lastFired).getTime() + IN_FLIGHT_WINDOW_MS).toISOString();
-  if (overAt > now) return null;
+  if (input.unansweredFires > 0) {
+    return (
+      `this surface was proven at ${chain.observedAt}, and ${input.unansweredFires} fire(s) since ` +
+      'then produced no arrival before they stopped counting as live activations. The most recent ' +
+      'evidence about this surface is that it did not answer — re-run with --probe.'
+    );
+  }
 
-  return (
-    `this surface was proven at ${chain.observedAt}, and the fire Brain made at ${lastFired} ` +
-    'produced no arrival before it stopped counting as a live activation. The most recent ' +
-    'evidence about this surface is that it did not answer — re-run with --probe.'
-  );
+  return null;
 }
 
 /**
@@ -497,8 +515,14 @@ export async function readFactoryPool(input: {
   const { getWorkerByName, getWorker, getWorkerRouting, listMembershipsForPrincipal } = await import(
     '../../repos/identity.ts'
   );
-  const { listAccounts, listRoutines, currentPolicy, effectiveTarget, sessionsForRoutine } =
-    await import('../../repos/fleet.ts');
+  const {
+    listAccounts,
+    listRoutines,
+    currentPolicy,
+    effectiveTarget,
+    sessionsForRoutine,
+    unansweredFiresByRoutine,
+  } = await import('../../repos/fleet.ts');
   const { getBin, listDispatchesForBin } = await import('../../repos/bins.ts');
   const { inFlightByRoutine } = await import('./candidates.ts');
   const { resolveToken } = await import('./fire.ts');
@@ -513,10 +537,11 @@ export async function readFactoryPool(input: {
 
   const now = input.now ?? new Date();
   const nowIso = now.toISOString();
-  const [accounts, routines, perRoutine] = await Promise.all([
+  const [accounts, routines, perRoutine, unanswered] = await Promise.all([
     listAccounts(),
     listRoutines(),
     inFlightByRoutine(now.getTime()),
+    unansweredFiresByRoutine(),
   ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
 
@@ -558,6 +583,7 @@ export async function readFactoryPool(input: {
     ]);
 
     const sessions = await sessionsForRoutine(routine.id, 20);
+    const unansweredFires = unanswered.get(routine.id) ?? 0;
     const bins = new Map<string, Bin | null>();
     const dispatches = new Map<string, readonly BinDispatch[]>();
     for (const session of sessions) {
@@ -587,6 +613,7 @@ export async function readFactoryPool(input: {
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
       sessions,
+      unansweredFires,
       bins,
       dispatches,
     });
