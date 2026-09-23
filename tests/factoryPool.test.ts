@@ -906,6 +906,41 @@ describe('proving each surface, one at a time', () => {
     expect(alone.problems).toEqual([]);
   });
 
+  it('counts accounts and surfaces as two numbers, because they are two facts', async () => {
+    /*
+     * §23 draws this distinction and then warns about the arithmetic that
+     * ignores it: an account holds a subscription allowance and a Routine is a
+     * fire surface, so a second Routine on one account doubles how fast Brain
+     * can *start* sessions and changes nothing about how much that account may
+     * *do*. `verify-pool` reported `surfaces 3` and nothing else, so a pool of
+     * three Routines on one subscription read exactly like three accounts on
+     * the one command whose whole job is to report the pool.
+     */
+    for (const surface of surfaces) await completeChainFor(surface);
+    const read = await readFactoryPool({ workerName: 'factory-brain', repository: REPOSITORY });
+
+    const spread = judgePool(read);
+    expect(spread.accounts).toBe(3);
+    expect(spread.surfaces).toHaveLength(3);
+    expect(spread.notes.join(' ')).not.toMatch(/subscription/i);
+
+    // The same three surfaces reported as being on one account. Nothing is
+    // refused — that arrangement is legitimate and sometimes deliberate — and
+    // it is said out loud on the green run, which is the only run where
+    // somebody could read the surface count as an account count.
+    const onOne = judgePool({
+      ...read,
+      surfaces: read.surfaces.map((one) => ({
+        ...one,
+        account: { ...read.surfaces[0]!.account },
+      })),
+    });
+    expect(onOne.ok).toBe(true);
+    expect(onOne.accounts).toBe(1);
+    expect(onOne.surfaces).toHaveLength(3);
+    expect(onOne.notes.join(' ')).toMatch(/one Claude account/i);
+  });
+
   it('reports a cooldown only while it is still ahead, so it cannot contradict "eligible yes"', async () => {
     /*
      * `retry_at` in the past is history: the fire router compares it to the
@@ -1295,6 +1330,54 @@ describe('a surface that stops answering leaves routing, and its siblings do not
     expect((await listRoutines()).find((one) => one.id === recovering.routineId)!.state).toBe(
       'ENABLED',
     );
+  });
+
+  it('lets an operator re-enable it, which is the whole point of the transition', async () => {
+    /*
+     * The defect §27 records one object along, arriving in this rule: a
+     * transition that exists, reports success and changes nothing that lasts.
+     *
+     * The count is read from an append-only ledger, so re-enabling a surface
+     * does not touch it — and an arrival is what would, which cannot happen
+     * until Brain fires the surface again, which it will not do while the
+     * surface is quarantined. So `fleet set-state --to ENABLED` would have
+     * returned true, and the very next tick would have re-quarantined it on the
+     * same three rows, for ever, with the connector genuinely repaired.
+     *
+     * Re-enabling is a person saying the operational condition is fixed. Every
+     * no-show before that moment is history, exactly as §27's factory worker
+     * transition resets the failure streak for the same reason — and a
+     * condition that was *not* actually fixed quarantines again three
+     * unanswered fires later rather than immediately.
+     */
+    const dead = surfaces[1]!;
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD; i += 1) {
+      await unansweredFire(dead, `unanswered ${i}`);
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+    expect((await getRoutineByRef(dead.routineRef))!.state).toBe('QUARANTINED');
+
+    expect(
+      await setRoutineState({
+        routineId: dead.routineId,
+        from: 'QUARANTINED',
+        to: 'ENABLED',
+        reason: 'the connector was reconnected as the right worker',
+      }),
+    ).toBe(true);
+
+    // Two ticks, so this is not merely "it survived the instant it was set".
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+    await dispatchTick({ burst: 5, projectIds: [projectId] });
+    expect((await getRoutineByRef(dead.routineRef))!.state).toBe('ENABLED');
+
+    // And the ceiling still binds. A condition somebody said was fixed and was
+    // not takes the surface out again on its own evidence.
+    for (let i = 0; i < NO_SHOW_QUARANTINE_THRESHOLD; i += 1) {
+      await unansweredFire(dead, `still broken ${i}`);
+      await dispatchTick({ burst: 5, projectIds: [projectId] });
+    }
+    expect((await getRoutineByRef(dead.routineRef))!.state).toBe('QUARANTINED');
   });
 
   it('names which surface did not answer on the ledger, rather than only that one did not', async () => {

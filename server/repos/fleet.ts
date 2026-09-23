@@ -92,6 +92,7 @@ function mapRoutine(row: FleetRoutineRow): FleetRoutine {
     fireGeneration: row.fire_generation,
     consecutiveFailures: row.consecutive_failures,
     consecutiveNoShows: row.consecutive_no_shows,
+    noShowsForgivenAt: row.no_shows_forgiven_at ?? null,
     totalFires: row.total_fires,
     totalRefusals: row.total_refusals,
     lastFiredAt: row.last_fired_at,
@@ -323,10 +324,38 @@ export async function setRoutineState(input: {
   to: FleetState;
   reason: string;
 }): Promise<boolean> {
+  const at = nowIso();
+  /*
+   * Leaving QUARANTINED forgives the no-shows before this instant, and that is
+   * not tidiness — it is what makes the transition a transition.
+   *
+   * `unansweredFiresByRoutine` counts from an append-only ledger since the
+   * surface's own last arrival, and re-enabling produces no arrival: an
+   * arrival needs a fire, and Brain does not fire a quarantined surface. So
+   * without this the recovery would return true and the very next tick would
+   * re-quarantine on the identical rows, for ever, with the connector
+   * genuinely repaired — §27's own defect, at a second registry.
+   *
+   * It forgives nothing beyond itself. A condition somebody said was fixed and
+   * was not takes the surface out again three unanswered fires later rather
+   * than immediately, which is the same asymmetry
+   * `FACTORY_STAGE_REAUTHORIZED` already carries.
+   *
+   * Written in the statement that makes the change, so a lost race cannot
+   * forgive anything, and only on the way *out* of QUARANTINED: quarantining
+   * must not erase the evidence it was quarantined on.
+   */
+  const forgiving = input.from === 'QUARANTINED' && input.to !== 'QUARANTINED';
   const result = await getDb().run(
-    `UPDATE fleet_routines SET state = ?, state_reason = ?, updated_at = ?
-      WHERE id = ? AND state = ?`,
-    [input.to, input.reason, nowIso(), input.routineId, input.from],
+    forgiving
+      ? `UPDATE fleet_routines
+            SET state = ?, state_reason = ?, updated_at = ?, no_shows_forgiven_at = ?
+          WHERE id = ? AND state = ?`
+      : `UPDATE fleet_routines SET state = ?, state_reason = ?, updated_at = ?
+          WHERE id = ? AND state = ?`,
+    (forgiving
+      ? [input.to, input.reason, at, at, input.routineId, input.from]
+      : [input.to, input.reason, at, input.routineId, input.from]) as never[],
   );
   return result.changes === 1;
 }
@@ -714,6 +743,13 @@ export async function recordRoutineFire(input: {
  * arrival evidence there is. With none, every no-show counts, which is correct:
  * a surface Brain has never been able to attribute an arrival to has never
  * answered.
+ *
+ * The second boundary is `no_shows_forgiven_at`, written when a person takes a
+ * surface out of QUARANTINED. Without it the answering transition would answer
+ * nothing: re-enabling produces no arrival, an arrival needs a fire, and Brain
+ * does not fire a quarantined surface — so the next tick would re-quarantine on
+ * the identical rows, for ever. The later of the two wins, because either is a
+ * reason the rows before it have stopped bearing on the decision.
  */
 export async function unansweredFiresByRoutine(): Promise<Map<string, number>> {
   const rows = await getDb().all<{ routine_id: string; n: number }>(
@@ -721,9 +757,24 @@ export async function unansweredFiresByRoutine(): Promise<Map<string, number>> {
        FROM bin_events e
       WHERE e.event_type = 'DISPATCH_NO_SHOW'
         AND e.routine_id IS NOT NULL
+        -- Later than both boundaries, as two scalar subqueries.
+        --
+        -- The first version took MAX over a UNION of the two inside a derived
+        -- table, and the reason given for rewriting it was that Postgres
+        -- refuses a correlated reference into a subquery in FROM without
+        -- LATERAL. **That reason is wrong and the correction is recorded
+        -- rather than quietly applied**: measured on PostgreSQL 16.13, the
+        -- correlated form is accepted. What is true is simply that a
+        -- conjunction says "later than both" directly, in one line each, and
+        -- an aggregate over a union is a longer way to write the same
+        -- predicate.
         AND e.at > COALESCE(
               (SELECT MAX(s.observed_at) FROM worker_sessions s
                 WHERE s.routine_id = e.routine_id),
+              '')
+        AND e.at > COALESCE(
+              (SELECT r.no_shows_forgiven_at FROM fleet_routines r
+                WHERE r.id = e.routine_id),
               '')
       GROUP BY e.routine_id`,
   );

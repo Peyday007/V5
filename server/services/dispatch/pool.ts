@@ -147,6 +147,18 @@ export interface PoolReport {
   expectedWorkerName: string;
   repository: string;
   surfaces: PoolSurface[];
+  /**
+   * Distinct Claude accounts behind those surfaces, and never their count.
+   *
+   * §23's distinction is that an account holds a subscription allowance and a
+   * Routine is a fire surface: a second Routine on one account doubles how fast
+   * Brain can *start* sessions and changes nothing about how much that account
+   * may *do*. This command reported `surfaces 3` and nothing else, so a pool of
+   * three Routines on one subscription read exactly like three accounts — on
+   * the one command whose whole job is to report the pool. Two numbers,
+   * each labelled as what it counts.
+   */
+  accounts: number;
   /** True only when every expected surface closed its own chain. */
   ok: boolean;
   /** One sentence per thing that stops this being a pool. */
@@ -198,7 +210,23 @@ export function judgePool(input: PoolInput): PoolReport {
         'no pool to verify. Onboard the repository and register one Routine per Claude account.',
     );
   }
+  const accounts = new Set(input.surfaces.map((surface) => surface.account.id)).size;
   const notes: string[] = [];
+  if (accounts > 0 && accounts < surfaces.length) {
+    /*
+     * Said rather than refused. Several Routines on one subscription is a
+     * legitimate and sometimes deliberate arrangement — it is how Brain starts
+     * sessions faster on one account — and it is not the capacity a reader
+     * counting surface names would take it for. On the green run, because that
+     * is the only run where somebody could read the surface count as an
+     * account count.
+     */
+    notes.push(
+      `${surfaces.length} surfaces run on ${accounts === 1 ? 'one Claude account' : `${accounts} Claude accounts`}. ` +
+        'A second Routine on an account starts sessions faster and adds no allowance, so this is ' +
+        `${accounts === 1 ? 'one subscription' : `${accounts} subscriptions`} of capacity rather than ${surfaces.length}.`,
+    );
+  }
   if (surfaces.length === 1) {
     /*
      * Said rather than counted as a failure. One surface is a working Factory
@@ -226,6 +254,7 @@ export function judgePool(input: PoolInput): PoolReport {
     expectedWorkerName: input.expectedWorker.name,
     repository: input.repository,
     surfaces,
+    accounts,
     // Every expected surface, or none of it. A pool with one member unproven is
     // a pool that will hand work to something nothing has ever run on.
     ok: surfaces.length > 0 && surfaces.every((surface) => surface.verdict === 'PROVEN'),

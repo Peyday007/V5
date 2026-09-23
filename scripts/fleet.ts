@@ -51,7 +51,11 @@ import {
   tryPair,
   type DecidedPair,
 } from '../server/services/dispatch/secretReconcile.ts';
-import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scaler.ts';
+import {
+  NO_SHOW_QUARANTINE_THRESHOLD,
+  proposeScale,
+  shouldQuarantine,
+} from '../server/services/dispatch/scaler.ts';
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
 import { getBin, listBins, listDispatchesForBin } from '../server/repos/bins.ts';
@@ -590,6 +594,22 @@ async function main(): Promise<void> {
     if (!routine) return refuse(`no Routine registered as ${ref}.`);
     const changed = await setRoutineState({ routineId: routine.id, from: routine.state, to, reason });
     if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
+    /*
+     * And say what leaving QUARANTINED just did, because it is not obvious and
+     * it is the whole reason the transition works.
+     *
+     * The no-show count is read from an append-only ledger since this surface's
+     * own last arrival, and re-enabling produces no arrival. Without a boundary
+     * the next tick would put it straight back, so leaving QUARANTINED writes
+     * one — and an operator who is not told that will not know what to expect
+     * if the condition was not actually fixed.
+     */
+    if (routine.state === 'QUARANTINED' && to !== 'QUARANTINED') {
+      console.log(
+        `  Unanswered fires before now are forgiven. If the condition is not actually fixed, ` +
+          `${NO_SHOW_QUARANTINE_THRESHOLD} more unanswered fires take it out again.`,
+      );
+    }
     return ok(`set-state routine ${ref} ${routine.state} -> ${to}`);
   }
 
@@ -852,6 +872,15 @@ async function main(): Promise<void> {
          * healthy Routine's last recorded reason is history rather than a
          * condition, and printing it would read as a live problem.
          */
+        if (routine.noShowsForgivenAt && routine.state === 'ENABLED') {
+          /*
+           * Only while it is a live fact. A surface an operator restored is
+           * counting unanswered fires from that instant rather than from its
+           * last arrival, and a reader comparing `unanswered=0` against a fire
+           * count in the hundreds is owed the reason.
+           */
+          console.log(`          restored ${routine.noShowsForgivenAt}; unanswered counts from there`);
+        }
         if (routine.state !== 'ENABLED' && routine.stateReason?.trim()) {
           /*
            * With the row's own timestamp, precisely labelled.
@@ -1420,6 +1449,10 @@ async function probeBin(input: {
     }
 
     console.log(`POOL  ${report.repository}  as ${report.expectedWorkerName}`);
+    // Two numbers, each labelled as what it counts. A pool of three Routines on
+    // one subscription is not three accounts' capacity, and a line reading
+    // `surfaces 3` alone is how it gets read as one.
+    console.log(`  accounts   ${report.accounts}`);
     console.log(`  surfaces   ${report.surfaces.length}`);
     for (const surface of report.surfaces) {
       console.log('');
