@@ -590,18 +590,52 @@ the final tip, checked file by file and symbol by symbol rather than assumed.
 **Deploy run 323, `901a42db`.** `release: success`. `beforeRestart: true`.
 `afterRestart: false`.
 
+**The pre-restart half is a complete pass and is the strongest single reading
+this release produced: `HOSTED-VERIFICATION: PASS 229/229`** on the released
+image, including the judge pass, `434 claim(s) across 434 readable
+document(s)`, and the work and campaign deliberately left behind for the pass
+after the restart.
+
 The post-restart failure is **not** the condition §7.3 predicted, and saying
-so precisely matters more than the prediction being nearly right. It was:
+so precisely matters more than the prediction being nearly right. It got a
+long way — 08:57:49 to 09:13:17, the archive read at 434 documents, a worker
+claiming the planning job over MCP, the assignment handed to it, fragments
+proposed against the live archive and a coverage row recorded — and then:
 
 ```
 (ECHECKOUTTIMEOUT) unable to check out connection from the pool after
 15000ms in Session mode
-  on SELECT * FROM research_fragments WHERE orchestration_id = $1 …
+  in: SELECT * FROM research_fragments WHERE orchestration_id = $1 …
 ```
 
-which is CLAUDE.md §27's pooler condition — the Supabase session-mode limit
-of fifteen clients against an application pool that defaults to ten — and not
-the judge pass at all.
+which is a pooler condition and not the judge pass at all.
+
+**An earlier version of this section named `BRAIN_DATABASE_POOL_SIZE` as the
+remedy. That was wrong, and the correction is here rather than edited into
+it.** Two things say so. The message carries **no pool statistics** —
+CLAUDE.md §27 added `describePoolExhaustion` precisely so that Brain's own
+pool prints `N/M in use, X idle, Y waiting, ceiling M`, and this prints none
+of it, while `ECHECKOUTTIMEOUT` and *Session mode* are Supavisor's own
+vocabulary. So the refusal is **upstream of Brain's client pool** rather than
+Brain's pool running out. And §27 has already settled the knob on its own
+terms: the secret is unset, so `readPoolSize()` answers its default of ten,
+ten of the pooler's fifteen is the arithmetic that leaves room for the
+operator script's two, and *"ten is both the intended default and the highest
+defensible value"*. **Raising it would make this worse, not better.**
+
+**My own console reads did not contribute, which I checked rather than
+assumed.** `fleet` runs 282, 283 and 284 executed at 09:14:27, 09:16:21 and
+09:18:48 — all *after* the 09:13:17 failure — and run 281 waited on
+`await-release` and ran at 08:50:5x, before the pre-restart verification that
+then passed 229/229. Run 282 failing to reach the database at 09:14:27 and
+succeeding at 09:16:21 is the same pressure seen from a second place, and it
+dates the condition as transient: present around 09:13 to 09:15, gone by
+09:16.
+
+**So there is no operator action named here for it**, which is the honest
+answer rather than a convenient one. What remains is an open reading: the
+condition is real, it is upstream of anything this repository sets, and
+§27's own investigation is where it belongs.
 
 **Because the judge pass came back, and the number is the point.** §27's table
 records this deploy's predecessor at **12m25s over 415 documents**, and run
@@ -644,10 +678,16 @@ The Brain boots cleanly on the released image — migrations applied at
 seconds afterwards while the previous process still holds its Supabase
 connections. **And the database was already timing out statements at
 06:07:32**, twenty minutes before this deploy's own run started at 06:27:39.
-So the condition preceded the release, the release did not introduce it, and
-the fix for it is not in this repository: `BRAIN_DATABASE_POOL_SIZE` is a Fly
-deployment secret, and `logs.yml` refuses `flyctl secrets set` by whole-command
-form. §9 is the one action that leaves.
+So the condition preceded the release and the release did not introduce it.
+
+**What the remedy is, is not established, and the obvious one is refused.**
+No workflow in this repository can set `BRAIN_DATABASE_POOL_SIZE` — every
+`flyctl secrets` invocation was read: `logs.yml` refuses `set` and `unset` by
+whole-command form, `step10-activation.yml` sets three hardcoded Routine
+secrets and no others, and `deploy.yml` only unsets the bootstrap pair. But
+per §8.2 raising it is the wrong move anyway, so that is a boundary rather
+than a blocker, and naming it as an action for somebody would be handing over
+a remedy that makes the condition worse.
 
 Production returned at **08:50:33** and has answered `/healthz` in about 0.4s
 on every probe since. `/api/auth/login` with a deliberately wrong credential
