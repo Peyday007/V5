@@ -83,11 +83,19 @@ export interface StorageProvider {
 /** A storage failure that is about configuration rather than one object. */
 export class StorageConfigurationError extends Error {
   readonly detail: string;
+  /**
+   * The store did not answer *now* — no connection, a timeout, a 5xx, a rate
+   * limit — as opposed to answering that the bucket or the key is wrong. Boot
+   * waits and asks again for a transient failure; a configuration failure is
+   * served as the reason Brain cannot start. Neither ever falls back to disk.
+   */
+  readonly transient: boolean;
 
-  constructor(message: string, detail = '') {
+  constructor(message: string, detail = '', options: { transient?: boolean } = {}) {
     super(message);
     this.name = 'StorageConfigurationError';
     this.detail = detail;
+    this.transient = options.transient ?? false;
   }
 }
 

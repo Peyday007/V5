@@ -57,10 +57,18 @@ export interface Database {
  */
 export class DatabaseConfigurationError extends Error {
   readonly detail: string;
+  /**
+   * The database did not answer *now*, as opposed to being configured wrongly.
+   * Boot waits and asks again for a transient failure (see `server/bootWait.ts`);
+   * anything else is reported and served as the reason Brain cannot start.
+   * Neither ever falls back to local.
+   */
+  readonly transient: boolean;
 
-  constructor(message: string, detail = '') {
+  constructor(message: string, detail = '', options: { transient?: boolean } = {}) {
     super(message);
     this.name = 'DatabaseConfigurationError';
     this.detail = detail;
+    this.transient = options.transient ?? false;
   }
 }

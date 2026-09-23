@@ -108,6 +108,9 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new StorageConfigurationError(
         `Could not reach the document store at ${this.describe()} to ${what}.`,
         error instanceof Error ? error.message : String(error),
+        // No response at all is a fact about the network or the store's
+        // availability, never about the bucket or the key.
+        { transient: true },
       );
     }
     return response;
@@ -381,9 +384,24 @@ export class SupabaseStorageProvider implements StorageProvider {
       throw new StorageConfigurationError(
         `The document store could not be checked (HTTP ${response.status}).`,
         await safeBody(response),
+        { transient: isTransientStatus(response.status) },
       );
     }
   }
+}
+
+/**
+ * A status that says the store could not answer right now rather than that
+ * Brain asked it the wrong thing.
+ *
+ * Supabase's storage API fronts the project's own Postgres, and when that query
+ * times out it answers **544 `DatabaseTimeout`** — a non-standard 5xx, which is
+ * exactly what production's boot probe got on 2026-09-23 (Deploy #319). Every
+ * 5xx is therefore transient, plus 408 and 429. 400/401/403/404 are the
+ * configuration answers `verify` already names.
+ */
+export function isTransientStatus(status: number): boolean {
+  return status >= 500 || status === 408 || status === 429;
 }
 
 /** A response body, truncated, with nothing echoed that was sent. */

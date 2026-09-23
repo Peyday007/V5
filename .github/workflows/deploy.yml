@@ -745,7 +745,12 @@ jobs:
           echo "hosted verification: $before"
           echo "after the restart:   $after"
           if [ "$release" != "success" ]; then
-            echo "::error::No new image was released, so nothing in this commit is live and the app is still serving the previous version. Read the Deploy step; the checks below it were skipped on purpose."
+            # Not "still serving the previous version": with one machine and a
+            # rolling update, a release that fails its health check has
+            # usually already replaced the machine's image — Deploy #319's
+            # machine table read the new version, started, 1 critical. What
+            # is certain is only that this commit was not proved healthy.
+            echo "::error::The release did not complete, so this commit was never proved healthy. The machine may already be running its image unhealthily rather than the previous version: 'Machine state' and 'Boot log' above say which, and why. The checks below it were skipped on purpose."
             exit 1
           fi
           # Name the condition, not the step. "Read the two steps above" is

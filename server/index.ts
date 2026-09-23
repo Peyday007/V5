@@ -63,6 +63,7 @@ import { repairLaunches } from './services/russell/launch.ts';
 import { describeFireTarget } from './services/dispatch/fire.ts';
 import { resumePulledPackets } from './services/research/packetRunner.ts';
 import { recoverInterruptedImports } from './services/archive/import.ts';
+import { untilAvailable } from './bootWait.ts';
 
 /**
  * `node:sqlite` prints an experimental-feature warning the moment it is loaded.
@@ -478,8 +479,12 @@ async function main(): Promise<void> {
   //
   // `verify()` runs a real operation. Having SUPABASE_URL set is not the same
   // fact as the bucket answering, and only one of those may be reported.
+  //
+  // A store that did not answer *now* — Supabase's 544 `DatabaseTimeout`, a
+  // reset, a 503 — is asked again rather than served as a permanent failure.
+  // See `server/bootWait.ts` for what Deploy #319 cost before it was.
   try {
-    await initStorage();
+    await untilAvailable('The document store', () => initStorage());
   } catch (error) {
     const failure = error instanceof Error ? error : new Error(String(error));
     console.error('');
@@ -502,7 +507,7 @@ async function main(): Promise<void> {
 
   let migrations: MigrationReport;
   try {
-    migrations = (await initDatabase()).migrations;
+    migrations = (await untilAvailable('The database', () => initDatabase())).migrations;
   } catch (error) {
     const failure = error instanceof Error ? error : new Error(String(error));
     console.error('');

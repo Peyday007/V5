@@ -122,6 +122,26 @@ function hintFor(reason: string): string {
   return '';
 }
 
+/**
+ * A connection failure that says the server could not answer *now*, rather
+ * than that the address, the TLS arrangement or the credentials are wrong.
+ *
+ * Deliberately narrow: a wrong host (`ENOTFOUND`), a refused port, a TLS
+ * mismatch and a bad password are configuration and stay out of it, because
+ * waiting on them would hide the one sentence that says what to fix. What is
+ * in it is timeouts, resets, a pooler at its client limit and a server that is
+ * starting up or shutting down — conditions that end without anybody doing
+ * anything.
+ */
+export function isTransientConnectionFailure(reason: string): boolean {
+  if (/password|authentication|certificate|SSL|ENOTFOUND|ECONNREFUSED|does not exist/i.test(reason)) {
+    return false;
+  }
+  return /timeout|timed out|ETIMEDOUT|ECONNRESET|EPIPE|EAI_AGAIN|Connection terminated|max clients|too many clients|EMAXCONNSESSION|starting up|shutting down|57P0[123]|53300/i.test(
+    reason,
+  );
+}
+
 function openLocal(file: string): { db: Database; describedPath: string } {
   ensureDataDirs();
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -153,6 +173,7 @@ async function openCloud(config: DatabaseConfig): Promise<{ db: Database; descri
       `${reason}${hintFor(reason)} Nothing was written locally: cloud mode does not fall back, ` +
         `because a server that quietly kept working against a local file would report itself as ` +
         `cloud-backed while the work went somewhere nobody else can see.`,
+      { transient: isTransientConnectionFailure(reason) },
     );
   }
   /*

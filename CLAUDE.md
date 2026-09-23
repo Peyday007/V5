@@ -487,6 +487,26 @@ worth having if it is honest about which it is doing.
   fell back would look healthy, accept research, write it where nobody else can
   see it, and report itself as cloud-backed the whole time — and nobody would
   find out until they looked for the work from somewhere else.
+- **A dependency that did not answer *now* is waited on; one configured
+  wrongly is reported.** Deploy #319 (2026-09-23): the new image's one bucket
+  probe got Supabase's `HTTP 544 DatabaseTimeout`, boot handed that single
+  answer to the error server, and `/healthz` answered 500 for the life of the
+  process — machine `started`, check critical, `flyctl deploy` timed out, and
+  the machine stayed down until something restarted it. The previous image had
+  done the same eight minutes earlier. `server/bootWait.ts` asks again, with a
+  capped backoff and a log line each time, for a failure that carries
+  `transient: true` — a 5xx (544 included), 408, 429, no response, a connection
+  timeout or reset, a pooler at its limit — and continues the boot the moment
+  it answers. **Nothing listens while it waits**, so the health check is
+  honestly failing rather than green over a Brain with no data, and nothing
+  falls back. A wrong bucket, key, host, TLS arrangement or password is not
+  transient and still reaches the error page on the first attempt, because
+  waiting on it would hide the one sentence that says what to fix. There is no
+  attempt ceiling: a ceiling ends in either the error page this replaces or an
+  exit the platform restarts into the same wait.
+  `tests/bootDependencyWait.test.ts` boots the real server against a store that
+  answers 544 twice; against the old boot it logs production's exact lines and
+  answers 500 for ever.
 - Having the environment variables set is not the same fact as the database
   answering. Boot runs a real query and a real bucket listing, and only then may
   anything say cloud mode is active.
@@ -10588,6 +10608,7 @@ server/
   index.ts              boot: migrate -> seed -> recompute -> serve
   env.ts                every path the app uses
   config.ts             which database and which store, validated; no silent fallback
+  bootWait.ts           a dependency slow at boot is asked again; a wrong one is reported
   db/
     types.ts            the async Database interface both backends implement
     driver.ts           SQLite driver abstraction (node:sqlite, or better-sqlite3 if installed)
