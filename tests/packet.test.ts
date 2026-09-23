@@ -14,7 +14,8 @@
  * this" is a claim about a database.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
+import { addDocument, freshProject, type TestProject } from './helpers.ts';
+import { extractDocument } from '../server/services/documents/extraction.ts';
 import { findTool } from '../server/mcp/tools.ts';
 import { getDb } from '../server/db/database.ts';
 import { createWorker, grantMembership } from '../server/repos/identity.ts';
@@ -51,6 +52,7 @@ import { listAuditsByProject } from '../server/repos/audits.ts';
 import { listEvents, recordEvent } from '../server/repos/events.ts';
 import { parseAdversarialPass } from '../server/services/audit/schema.ts';
 import { readObject } from '../server/services/storage.ts';
+import { getStorage } from '../server/services/storage/index.ts';
 import {
   createFixturePacket,
   FIXTURE_BANNER,
@@ -96,6 +98,7 @@ const FULL: WorkerScope[] = [
 
 let project: Project;
 let layer: Layer;
+let fixtureProject: TestProject;
 let workerId = '';
 let run = '';
 
@@ -370,6 +373,7 @@ const MATCHES = {
 
 beforeEach(async () => {
   const fixture = await freshProject();
+  fixtureProject = fixture;
   project = fixture.project;
   layer = await fixture.layerByName('Monetization Logic');
   const worker = await createWorker({
@@ -2844,6 +2848,107 @@ describe('the audit passes', () => {
       ...over,
     };
   }
+
+  /*
+   * The hosted failure, reproduced without the hosted verification.
+   *
+   * Deploy 318's post-restart run died on the JUDGE `brain_submit_audit` as
+   * `UNAVAILABLE` ten minutes after the adversarial pass, over a verification
+   * layer that held 433 documents and gains one or two every deploy. The whole
+   * submission — the brief it rebuilds, the audit it records, every recompute
+   * that follows — runs inside one effect transaction, and each of those
+   * statements is a round trip to a pooled Postgres. So the property that
+   * matters is not how fast a local database answers but how many statements
+   * the transaction issues, and whether that number grows with the layer.
+   *
+   * This drives the submission through the real tool, real queue and real
+   * independence matrix, twice, with the layer padded by readable documents
+   * in between. Per-document reads show up as statements that scale with the
+   * padding; a submission whose cost is fixed does not move.
+   */
+  it('costs the same number of statements however many documents share its layer', async () => {
+    let padded = 0;
+    async function pad(count: number): Promise<void> {
+      for (let i = 0; i < count; i += 1) {
+        padded += 1;
+        const document = await addDocument(fixtureProject, layer.name, `v${200 + padded}`, {
+          contents: [
+            `${layer.name} padding ${padded}`,
+            '',
+            'A sibling document in the same layer, readable and extracted, which the judge',
+            'lists by name and availability but does not audit. It exists here so that the',
+            'layer grows the way the hosted verification layer grows on every deploy.',
+          ].join('\n'),
+        });
+        await extractDocument(document.id);
+      }
+    }
+
+    async function judgeStatements(): Promise<{ statements: number; bucket: number }> {
+      await filedPacket();
+      const fleet = await auditFleet();
+      await as(fleet.primary, async () => {
+        const item = await claimNext('RESEARCH_AUDIT');
+        await call('brain_submit_audit', { ...proof(item), primary: PRIMARY });
+        await call('brain_complete_work', { ...proof(item), summary: 'primary in' });
+      });
+      await as(fleet.adversarial, async () => {
+        const item = await claimNext('RESEARCH_AUDIT');
+        await call('brain_submit_audit', { ...proof(item), adversarial: ADVERSARIAL });
+        await call('brain_complete_work', { ...proof(item), summary: 'adversarial in' });
+      });
+      const judgeItem = await as(fleet.judge, () => claimNext('RESEARCH_AUDIT'));
+
+      const db = getDb() as unknown as Record<'all' | 'get' | 'run', (...args: unknown[]) => unknown>;
+      const originals = { all: db.all, get: db.get, run: db.run };
+      let count = 0;
+      // And every question the submission asks the document store, which in
+      // cloud mode is a request to the bucket from inside the same transaction.
+      const store = getStorage() as unknown as { exists: (key: string) => Promise<boolean> };
+      const exists = store.exists;
+      let bucket = 0;
+      store.exists = (key: string) => {
+        bucket += 1;
+        return exists.call(store, key);
+      };
+      for (const method of ['all', 'get', 'run'] as const) {
+        const original = originals[method];
+        db[method] = (...args: unknown[]) => {
+          count += 1;
+          return original.apply(db, args);
+        };
+      }
+      try {
+        const value = await as(fleet.judge, () =>
+          call('brain_submit_audit', { ...proof(judgeItem), judge: judge() }));
+        expect(value['role']).toBe('JUDGE');
+      } finally {
+        Object.assign(db, originals);
+        store.exists = exists;
+      }
+      return { statements: count, bucket };
+    }
+
+    await pad(3);
+    const small = await judgeStatements();
+    await pad(25);
+    const large = await judgeStatements();
+
+    // Twenty-five more documents (and the first packet's filed report). A read
+    // per document per derivation adds several statements each; the fixed
+    // cost adds, at most, a handful for the second packet's own rows.
+    expect(
+      large.statements,
+      `judge submission: ${small.statements} -> ${large.statements} statements`,
+    ).toBeLessThan(small.statements + 15);
+    // Whether a document's bytes exist is asked once per document for the
+    // whole submission — not once per recompute, which was four times over.
+    expect(
+      large.bucket - small.bucket,
+      `judge submission: ${small.bucket} -> ${large.bucket} store requests`,
+    ).toBeLessThanOrEqual(26);
+    expect(await listAuditsByProject(project.id)).toHaveLength(2);
+  });
 
   it('records the primary and adversarial passes without moving anything', async () => {
     const orchestration = await filedPacket();

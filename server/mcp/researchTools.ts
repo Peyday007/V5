@@ -57,6 +57,7 @@ import {
   validateDealFinding,
 } from '../domain/dealflow.ts';
 import type { DealFinding } from '../domain/types.ts';
+import { withExistenceMemo } from '../services/storage.ts';
 import {
   PUZZLE_COST_COMPONENTS,
   PUZZLE_ECONOMIC_COMPONENTS,
@@ -2836,7 +2837,22 @@ const submitAuditTool: McpTool = {
         discriminator: role,
         payload: { workItemId: item.id, operation: 'submit-audit', role },
       },
-      async () => {
+      /*
+       * One answer per stored object for the whole submission.
+       *
+       * The judge's branch rebuilds the brief — which asks the store about
+       * every sibling in the layer — and then recomputes the project more than
+       * once, and each recompute asked the store about every document again,
+       * because its memo was scoped to that one recompute. That is roughly four
+       * bucket requests per document in the layer, all inside this effect's
+       * transaction, over a verification layer that gains a document or two
+       * every deploy. Deploy 318's judge died inside this transaction and the
+       * next release could not boot because the storage API itself answered
+       * `544 DatabaseTimeout`. Nothing in this effect writes an object, so an
+       * answer cannot go stale inside it, and the memo ends with the call: it
+       * de-duplicates rather than caches.
+       */
+      () => withExistenceMemo(async () => {
         const passId = await recordPass({
           orchestration,
           fragmentId: null,
@@ -2989,7 +3005,7 @@ const submitAuditTool: McpTool = {
             orchestrationStatus: outcome,
           },
         };
-      },
+      }),
     );
 
     /*
