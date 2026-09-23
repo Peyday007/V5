@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 088. See that file for why the
+-- The Postgres half of SQLite migration 089. See that file for why the
 -- specification is stored and the puzzle is not, why a generator's belief is
 -- never evidence, why a master and a product are two tables, why a reskin has
 -- nowhere to be declared, why every researched fact traces to a gated claim,
