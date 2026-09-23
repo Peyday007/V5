@@ -10539,6 +10539,46 @@ than about reaching it.**
   the comment beside it drift**, which is this file's most-recorded defect
   wearing its smallest clothes.
 
+- **The second backend refused this kernel's chain outright, and only the
+  second backend could say so.** The Postgres migration wrapped its CHECK
+  constraint in a `DO $$ … END $$;` existence guard, which is ordinary
+  Postgres and which neither of this repository's two scanners can read: the
+  first `;` inside the dollar-quoted body ends the statement, and the migration
+  fails with `unterminated dollar-quoted string at or near "$$"`. The SQLite
+  suite had just passed 4555 tests over that same chain. §25 makes the argument
+  in one line — *a repository layer over two databases is true or merely
+  compiling, and only one of the two can tell you which* — and it had applied
+  to a missing column, a missing identity column, a missing constraint and an
+  `ORDER BY`; this is the first time it has applied to a **construct**.
+
+  The guard bought nothing in any case, which is the part worth keeping: a
+  migration applies exactly once, in its own transaction, with its checksum
+  recorded, so asking whether the constraint is already there is asking the
+  runner for a guarantee it already gives. The constraint itself had to stay —
+  the SQLite column carries it inline, and a Postgres column with nothing on it
+  is the asymmetry §45 is written from.
+
+  **Teaching both scanners about dollar quoting is the obvious fix and is
+  deliberately refused.** `toPostgresSql` runs on every statement this
+  application issues, and widening its hot path for a construct exactly one
+  file wanted is out of all proportion to what it buys. What is refused instead
+  is putting one on the chain at all — in a gate, by name, with the remedy,
+  reading `pg-migrations/*.sql` the same way `splitStatements` reads them so
+  that what it refuses is exactly what that scanner cannot see. **The gate runs
+  on SQLite**, which is the only arrangement that helps: the backend that would
+  have caught it is the one nobody runs before pushing.
+
+- **The number this branch had was taken while it was in its gate, and the
+  merge that took it was clean.** `ba5c0b2` landed the four-account fleet lane
+  with `088_routine_no_show_boundary.sql` / pg `079`; this kernel's pair had
+  those numbers and moved to `089` / pg `080`. §47 records the same collision
+  twice in one evening and settles the tiebreak as **uniqueness over
+  precedence** — the one that landed first keeps its index. What is new is the
+  shape of the failure: git sees two differently-named files and has nothing to
+  reconcile, so a collision that stops the application booting arrives as a
+  *successful* merge with nothing red anywhere. `deploymentOwnership` walking
+  both chains is the only thing between that and a refused boot.
+
 ---
 
 ## Repository map
@@ -11057,6 +11097,17 @@ data/                   database, documents, backups, runtime state (gitignored)
   expression that is not in the select list of a `SELECT DISTINCT`, so name the
   aggregate and order by the alias — `SELECT DISTINCT … ORDER BY MAX(x)` passes
   the SQLite suite and throws on the database production runs.
+- **A migration may not carry a dollar-quoted body, and the refusal is in a
+  gate rather than in a deploy.** `splitStatements` and `toPostgresSql` both
+  walk a script character by character and neither knows what `$$ … $$` is, so
+  the first `;` inside one ends the statement and the migration fails with
+  `unterminated dollar-quoted string` — on the backend the SQLite suite cannot
+  see. Write the statement plainly: a migration applies exactly once, in its
+  own transaction, with its checksum recorded, so a `DO $$ … END $$;` existence
+  guard is asking the runner for a guarantee it already gives. Teaching both
+  scanners about it is a code change somebody reviews, and `toPostgresSql` runs
+  on every statement the application issues, so it is deliberately not made for
+  a construct one file wanted.
 - Booleans are `0`/`1` in the database and real booleans in view types; repositories are
   the only place the two representations meet.
 - **A suite that drives a real server owns a port range no other suite can
