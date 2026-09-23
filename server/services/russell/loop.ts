@@ -141,6 +141,7 @@ import { runIndustryKernel } from '../industry/kernel.ts';
 import { runLaborKernel } from '../labor/kernel.ts';
 import { runManufacturingKernel } from '../manufacturing/kernel.ts';
 import { runDealflowKernel } from '../dealflow/kernel.ts';
+import { runPuzzleKernel } from '../puzzle/kernel.ts';
 import { operate } from '../cash/operate.ts';
 import { getAudit } from '../../repos/audits.ts';
 import { RESEARCH_JUSTIFYING_GAPS } from '../../domain/types.ts';
@@ -499,6 +500,32 @@ export interface TickReport {
     promoted: string[];
     settled: string[];
   }[];
+  /**
+   * What the puzzle kernel did: what it filed, what it made and proved, what
+   * it compiled, what it promoted, and what it asked next and why.
+   *
+   * `made` and `refused` are both counted, and `blocked` names the systems
+   * that stopped. A batch whose failures crossed the defect ceiling is the
+   * most useful thing in this report — it says a generator is wrong while
+   * there is still something to fix — and reporting only what was made would
+   * hide exactly the condition that ceiling exists to catch.
+   */
+  puzzleKernel: {
+    projectId: string;
+    opened: { purpose: string; roundId: string; why: string }[];
+    formats: string[];
+    demand: string[];
+    routes: string[];
+    economics: string[];
+    constraints: string[];
+    systems: string[];
+    made: number;
+    refused: number;
+    blocked: { masterId: string; why: string }[];
+    compiled: string[];
+    promoted: string[];
+    settled: string[];
+  }[];
   cashOperations: {
     projectId: string;
     needsRaised: string[];
@@ -593,6 +620,7 @@ const EMPTY: TickReport = {
   laborKernel: [],
   manufacturingKernel: [],
   dealflowKernel: [],
+  puzzleKernel: [],
   cashOperations: [],
   sharedPromoted: [],
   ranked: [],
@@ -679,6 +707,7 @@ export async function tick(owner: string): Promise<TickReport> {
     laborKernel: [],
     manufacturingKernel: [],
     dealflowKernel: [],
+  puzzleKernel: [],
     cashOperations: [],
     sharedPromoted: [],
   };
@@ -1469,6 +1498,76 @@ export async function tick(owner: string): Promise<TickReport> {
         }
       } catch {
         /* a dealflow pass that could not run leaves every row exactly as it was */
+      }
+
+      try {
+        /*
+         * 1a-iv-g. The puzzle products and production kernel.
+         *
+         * The first kernel here that holds an artifact Brain **made** rather
+         * than facts it read somewhere. A puzzle is the one thing in this
+         * repository Brain can both produce and prove — it can generate a
+         * sudoku and then demonstrate, from the printed grid alone, that it
+         * has exactly one solution — and the pass turns that into a catalog,
+         * products compiled from it, and the research about who buys them.
+         *
+         * Its own `try`, for the reason every block around it has one: a
+         * puzzle pass that threw must not stop a sprint settling a need,
+         * harvesting what already ran, or advancing its map.
+         *
+         * Nothing it creates bypasses anything. A round is a Russell
+         * candidate, and it goes through the archive check, the judgment pass,
+         * the compiler, the approval envelope, the evidence gate and all three
+         * audit roles exactly as a bucket does. A product that becomes
+         * sellable is promoted into a `cash_opportunities` row and pursued by
+         * the machinery Cash Mode already has, so there is no second lifecycle
+         * here and no second work queue.
+         */
+        const puzzle = await runPuzzleKernel(project.id);
+        if (
+          puzzle.opened.length > 0 ||
+          puzzle.systems.length > 0 ||
+          puzzle.batches.length > 0 ||
+          puzzle.compiled.length > 0 ||
+          puzzle.promoted.length > 0 ||
+          puzzle.filed.formats.length > 0 ||
+          puzzle.filed.demand.length > 0 ||
+          puzzle.filed.routes.length > 0 ||
+          puzzle.filed.economics.length > 0 ||
+          puzzle.filed.constraints.length > 0 ||
+          puzzle.filed.settled.length > 0
+        ) {
+          report.puzzleKernel.push({
+            projectId: project.id,
+            opened: puzzle.opened.map((one) => ({
+              purpose: one.purpose,
+              roundId: one.roundId,
+              why: one.why,
+            })),
+            formats: puzzle.filed.formats.map((one) => one.id),
+            demand: puzzle.filed.demand.map((one) => one.id),
+            routes: puzzle.filed.routes.map((one) => one.id),
+            economics: puzzle.filed.economics.map((one) => one.id),
+            constraints: puzzle.filed.constraints.map((one) => one.id),
+            systems: puzzle.systems.map((one) => one.id),
+            /*
+             * What was made and what was refused, both. A batch that produced
+             * nothing because its generator is failing is the more useful
+             * half, and reporting only the successes would hide exactly the
+             * condition the defect ceiling exists to catch.
+             */
+            made: puzzle.batches.reduce((sum, one) => sum + one.made.length, 0),
+            refused: puzzle.batches.reduce((sum, one) => sum + one.invalid.length, 0),
+            blocked: puzzle.batches
+              .filter((one) => one.blocked !== null)
+              .map((one) => ({ masterId: one.masterId, why: one.blocked as string })),
+            compiled: puzzle.compiled.map((one) => one.id),
+            promoted: puzzle.promoted.map((one) => one.productId),
+            settled: puzzle.filed.settled.map((one) => one.roundId),
+          });
+        }
+      } catch {
+        /* a puzzle pass that could not run leaves every row exactly as it was */
       }
 
       try {
