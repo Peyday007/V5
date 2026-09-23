@@ -183,6 +183,32 @@ export async function getCurrentExtractionRun(documentId: string): Promise<Extra
   return row ? mapExtractionRun(row) : null;
 }
 
+/**
+ * `getCurrentExtractionRun` for many documents in one statement per chunk.
+ *
+ * The same rule — not superseded, newest first, `rowid` breaking a tie — so a
+ * caller that switches to this reads exactly the run it read before.
+ */
+export async function currentExtractionRunsFor(
+  documentIds: string[],
+): Promise<Map<string, ExtractionRun>> {
+  const current = new Map<string, ExtractionRun>();
+  const unique = [...new Set(documentIds)];
+  for (let start = 0; start < unique.length; start += 500) {
+    const slice = unique.slice(start, start + 500);
+    const rows = await getDb().all<ExtractionRunRow>(
+      `SELECT * FROM extraction_runs
+        WHERE document_id IN (${slice.map(() => '?').join(', ')}) AND superseded_by_run_id IS NULL
+        ORDER BY created_at DESC, rowid DESC`,
+      slice,
+    );
+    for (const row of rows) {
+      if (!current.has(row.document_id)) current.set(row.document_id, mapExtractionRun(row));
+    }
+  }
+  return current;
+}
+
 export async function updateExtractionRun(
   id: string,
   patch: {

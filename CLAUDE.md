@@ -3559,7 +3559,24 @@ remote.
   document before, one after. `objectExists` answers from a memo scoped to one
   `recomputeProject`, prefetched sixteen at a time before the transaction
   opens; the memo never outlives the call, so it de-duplicates rather than
-  caches, and a document whose bytes are gone still reads as missing. The beat makes the harness
+  caches, and a document whose bytes are gone still reads as missing.
+
+  **The store was half of it, and the other half was found by counting rather
+  than by reading.** Deploy 318 carried the memo and its pre-restart judge fell
+  from 12m26s to 2m56s — and after the restart the JUDGE submission died inside
+  `createAudit` on `canceling statement due to statement timeout`, nine minutes
+  into its transaction, and the next release could not boot because Supabase's
+  own storage API answered `544 DatabaseTimeout`. Replaying the verification
+  locally over one layer of 433 documents with every statement logged found
+  **3 240 statements inside the one judge transaction** and 1 946 inside the
+  filing: `deriveLayer` asked each present document for its latest audit and
+  its findings only to compare the answer with null, and a submission derives
+  the layer several times; `buildAuditContext` read every sibling's extraction
+  run and every block of it for text no prompt prints — a sibling is listed by
+  name and availability only. One `documentIdsWithAudits` and one
+  `currentExtractionRunsFor` per layer take them to **191 and 197**, and
+  `tests/auditRoundTrips.test.ts` asserts that sixteen more documents add no
+  statements (the old code went 29 → 77 on the context alone). The beat makes the harness
   survive whichever end of that range it gets; it makes nothing faster, and
   whatever is actually driving the growth is still unmeasured. **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so
