@@ -357,7 +357,9 @@ describe('the throttle, which is the whole strength of six digits', () => {
     await call('POST', '/api/auth/pin/set', { cookie: theirs.cookie, body: { pin } });
 
     /*
-     * Climbed to the top of the ladder. Every rung answers identically, so
+     * Eight refusals in a row. Failures inside a cooldown are not counted, so
+     * this reaches the third rung (five seconds), not the top — the restart
+     * test below climbs further on purpose. Every rung answers identically, so
      * there is nothing in the responses to tell them apart by — which is the
      * property, and is why the lockout is proved by what it *does* below
      * rather than by a status code that announces it.
@@ -406,6 +408,23 @@ describe('the throttle, which is the whole strength of six digits', () => {
      * is the only form of it a caller can observe now that every refusal reads
      * the same.
      */
+    /*
+     * A lockout long enough to outlive a restart, earned rather than written.
+     *
+     * Failures inside a cooldown are not counted — that is the throttle's own
+     * rule — so the eight rapid attempts above reach only the third rung, a
+     * five-second cooldown. A restart takes about as long, so this test used to
+     * pass or fail on which finished first: measured 5154ms on a loaded runner,
+     * after which the correct PIN got in and the lockout looked lost when it
+     * had simply expired. Waiting out each rung and failing once more climbs to
+     * the fifth, sixty seconds, which no restart here approaches.
+     */
+    for (const wait of [5_500, 15_500]) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      const climbed = await call('POST', '/api/auth/pin', { body: { identity: email, pin: '000003' } });
+      expect(climbed.status).toBe(401);
+    }
+
     const before = await call('POST', '/api/auth/pin', { body: { identity: email, pin } });
     expect(before.status).toBe(401);
 
