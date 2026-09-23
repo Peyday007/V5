@@ -434,6 +434,11 @@ describe('the decisions that are a person’s, from the screen to the row', () =
       );
     });
     await waitFor(async () => expect((await getProgram(projectId))!.state).toBe('PAUSED'));
+    // And the screen's own reload of it, before anything else is pressed. The
+    // row reaches PAUSED before the re-read lands, and a press in between is
+    // wiped by the re-render that follows it; under a loaded runner that is
+    // what made this fail with the confirmation nowhere on the page.
+    await screen.findByText('Resume', {}, { timeout: 10_000 });
 
     // Archiving withdraws an authorization, so it asks first. One press arms it.
     await act(async () => {
@@ -442,7 +447,7 @@ describe('the decisions that are a person’s, from the screen to the row', () =
       );
     });
     expect((await getProgram(projectId))!.state).toBe('PAUSED');
-    expect(screen.getByText(/withdraw its research authority/)).toBeTruthy();
+    expect(await screen.findByText(/withdraw its research authority/)).toBeTruthy();
 
     await act(async () => {
       screen.getByText('Yes').dispatchEvent(
