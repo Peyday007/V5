@@ -3540,7 +3540,25 @@ remote.
   name and availability only. One `documentIdsWithAudits` and one
   `currentExtractionRunsFor` per layer take them to **191 and 197**, and
   `tests/auditRoundTrips.test.ts` asserts that sixteen more documents add no
-  statements (the old code went 29 → 77 on the context alone). The beat makes the harness
+  statements (the old code went 29 → 77 on the context alone).
+
+  **And the submission itself is what is pinned now, because the two readers
+  it was repaired through are not the whole transaction.** A regression in
+  `tests/packet.test.ts` drives the JUDGE `brain_submit_audit` through the real
+  tool, queue and independence matrix, twice, with twenty-five readable
+  documents added to the layer between: production's tree went **400 → 577
+  statements**, about seven per document, and the repaired one **372 → 372**.
+  Counting the store as well found the half the statement count could not see:
+  **16 → 120 existence checks on both trees**, about four per document per
+  submission, because the brief checks every sibling and each recompute inside
+  the submission re-asked, its memo scoped to that one recompute — in cloud mode
+  a bucket request each, inside the same transaction, on the release whose
+  successor's storage API answered `544 DatabaseTimeout`. The effect runs inside
+  one `withExistenceMemo` now, so the submission asks once per document
+  (**4 → 30** for 26 more). Nothing in it writes an object, so no answer can go
+  stale inside it. That half is still linear in the layer, deliberately — a
+  recompute exists to notice a file that has gone — and is bounded at sixteen
+  in flight. The beat makes the harness
   survive whichever end of that range it gets; it makes nothing faster, and
   whatever is actually driving the growth is still unmeasured. **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so
