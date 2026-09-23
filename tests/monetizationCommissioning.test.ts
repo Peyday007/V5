@@ -500,7 +500,16 @@ describe('a question is fully identified before it is asked', () => {
     await enumeratePossibilities(projectId);
     const opened = (await tick()).opened[0]!;
 
-    const row = (await listCommissions({ projectId }))[0]!;
+    /*
+     * Found by id, not by position. A pass may open up to
+     * `MAX_OPEN_COMMISSIONS` questions inside one millisecond, so
+     * `listCommissions` correctly tiebreaks on the generated id — which means
+     * the first row is not necessarily the first one opened. Asserting on
+     * `[0]` passed in isolation and failed in the file, which is the tell.
+     */
+    const row = (await listCommissions({ projectId })).find(
+      (one) => one.id === opened.commissionId,
+    )!;
     expect(row.pathId).toBe(opened.pathId);
     expect(row.attribute).toBe(opened.attribute);
     expect(row.round).toBe(1);
@@ -1031,7 +1040,9 @@ describe('no probability is smuggled back in', () => {
     await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
     await enumeratePossibilities(projectId);
     const asked = (await tick()).opened[0]!;
-    const row = (await listCommissions({ projectId }))[0]!;
+    const row = (await listCommissions({ projectId })).find(
+      (one) => one.id === asked.commissionId,
+    )!;
 
     // `rule_rank` is an ordering position from a spaced constant, never a
     // score: it is one of a handful of declared values and no arithmetic
