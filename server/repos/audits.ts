@@ -257,13 +257,34 @@ export async function getLatestAuditForLayer(layerId: string): Promise<Audit | n
   return row ? await mapAudit(row, await loadFindings(row.id)) : null;
 }
 
-export async function getLatestAuditForDocument(documentId: string): Promise<Audit | null> {
-  const row = await getDb().get<AuditRow>(
-    'SELECT * FROM audits WHERE audited_document_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1',
-    [documentId],
-  );
-  return row ? await mapAudit(row, await loadFindings(row.id)) : null;
+/**
+ * Which of these documents any audit has named as its subject.
+ *
+ * `deriveLayer` asks one question of every present document — has anything
+ * audited it — and asked it with a per-document latest-audit read, one round
+ * trip per document plus the findings of every audit it found, only to compare the
+ * answer with null. Over the hosted verification's own archive that was 433
+ * statements per derivation and several derivations per judge submission, all
+ * inside the submission's transaction. One statement per few hundred documents
+ * answers the same question.
+ */
+export async function documentIdsWithAudits(documentIds: string[]): Promise<Set<string>> {
+  const found = new Set<string>();
+  const unique = [...new Set(documentIds)];
+  for (let start = 0; start < unique.length; start += IN_LIST_CHUNK) {
+    const slice = unique.slice(start, start + IN_LIST_CHUNK);
+    const rows = await getDb().all<{ audited_document_id: string }>(
+      `SELECT DISTINCT audited_document_id FROM audits
+        WHERE audited_document_id IN (${slice.map(() => '?').join(', ')})`,
+      slice,
+    );
+    for (const row of rows) found.add(row.audited_document_id);
+  }
+  return found;
 }
+
+/** Comfortably under SQLite's bound-parameter limit, and one statement a chunk. */
+const IN_LIST_CHUNK = 500;
 
 export async function getLatestAuditForRun(runId: string): Promise<Audit | null> {
   const row = await getDb().get<AuditRow>(

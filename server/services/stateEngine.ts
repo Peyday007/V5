@@ -35,7 +35,7 @@ import {
   waveForVersion,
 } from '../domain/version.ts';
 import { getDb } from '../db/database.ts';
-import { getLatestAuditForDocument, getLatestAuditForLayer } from '../repos/audits.ts';
+import { documentIdsWithAudits, getLatestAuditForLayer } from '../repos/audits.ts';
 import { listDocuments, listDocumentsByLayer, updateDocument } from '../repos/documents.ts';
 import { listEventsByLayer, recordEvent } from '../repos/events.ts';
 import { getLayer, listLayers, updateLayer, type UpdateLayerInput } from '../repos/layers.ts';
@@ -501,14 +501,12 @@ async function deriveLayer(layerId: string): Promise<LayerDerivation> {
     reopenedAt !== null && (latestActivityAt === null || reopenedAt > latestActivityAt);
 
   // The first unaudited document, resolved here so `deriveStatus` stays pure.
-  // One lookup per present document, awaited together rather than inside a
-  // `find` predicate — `find` does not await, so an async predicate would fire
-  // every query at once and then return the first document regardless of the
-  // answers, because a pending promise is truthy.
-  const latestAuditPerDocument = await Promise.all(
-    presentDocuments.map((document) => getLatestAuditForDocument(document.id)),
-  );
-  const unaudited = presentDocuments.find((_, i) => latestAuditPerDocument[i] === null) ?? null;
+  // Only whether an audit exists is asked, so it is one statement for the
+  // layer rather than a lookup per document: the per-document form cost a round
+  // trip each, and a derivation runs several times inside a judge submission's
+  // transaction, over an archive that grows every deploy.
+  const audited = await documentIdsWithAudits(presentDocuments.map((document) => document.id));
+  const unaudited = presentDocuments.find((document) => !audited.has(document.id)) ?? null;
 
   const derived = deriveStatus({
     layer,

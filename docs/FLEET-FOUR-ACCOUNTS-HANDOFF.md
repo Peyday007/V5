@@ -613,10 +613,18 @@ released image:
 | run 316 pre-restart | 415 documents | 12m25s |
 | **run 323, this image** | **434 documents** | **1m42s** — 08:52:40 → 08:54:22 |
 
-A larger archive and a seventh of the time. That is `b4615e62`'s repair —
-one recompute asking the document store once per document instead of three
-times — proved on the deploy that carried it, which is exactly the reading
-§7.3 said this release was the first chance to take.
+A larger archive and a seventh of the time. That is the repair proved on the
+deploy that carried it, which is exactly the reading §7.3 said this release
+was the first chance to take.
+
+**It is two repairs rather than one, and saying so matters.** `901a42db`
+carries the existence memo *and* the statement-count fix that followed it —
+`withExistenceMemo`, `documentIdsWithAudits` and `tests/auditRoundTrips.test.ts`
+all read back at that SHA. CLAUDE.md §27 records the memo alone reaching 2m56s
+pre-restart at deploy 318 and still dying after the restart, so crediting
+1m42s to the memo would claim a repair had been proved that had not. An
+earlier version of this paragraph did exactly that; the correction is here
+rather than edited into it.
 
 **The image was proved independently of the gate**, which is what §27 says to
 do when the gate is the thing that is stuck. The served bundle is
