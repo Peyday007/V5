@@ -39,7 +39,7 @@
  * this Brain can do research today.
  *
  * Messaging, invoicing, payment and owner notification are read from this
- * project's provider connection (§50): PRESENT only when a credential is
+ * project's provider connection (§51): PRESENT only when a credential is
  * deployed and the provider answered for it, in live mode, within the last
  * day. That sentence used to say every one of them was declared MISSING
  * because no integration existed; the correction is recorded rather than
@@ -83,7 +83,7 @@ export interface CapabilityAnswer {
 }
 
 /**
- * A capability that exists only through a provider connection (§50).
+ * A capability that exists only through a provider connection (§51).
  *
  * PRESENT only when this project's live connection reads HEALTHY: a row
  * somebody created, a credential actually deployed, and the provider having

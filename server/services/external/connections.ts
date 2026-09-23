@@ -1,5 +1,5 @@
 /**
- * Connecting a provider, checking it, and taking it away again (§50).
+ * Connecting a provider, checking it, and taking it away again (§51).
  *
  * A connection is three facts that are easy to confuse, and the reading below
  * keeps them apart because each has a different remedy:

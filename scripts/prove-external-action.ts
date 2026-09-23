@@ -1,5 +1,5 @@
 /**
- * Prove one external action end to end against a real provider (§50).
+ * Prove one external action end to end against a real provider (§51).
  *
  * Starts a real Brain on a throwaway SQLite data directory, signs in as its
  * administrator over HTTP, and walks the path a person walks: open a Russell

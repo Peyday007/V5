@@ -29,6 +29,7 @@ import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
 import { registerRouter } from './register.ts';
+import { goalsRouter } from './goals.ts';
 import { bridgeRouter } from './bridge.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
@@ -68,6 +69,7 @@ export function createApiRouter(): Router {
    * `decideProjectAccess` every other door resolves through.
    */
   router.use(registerRouter);
+  router.use(goalsRouter);
 
   /*
    * The conversation entrance. `requirePerson` at every route, so a worker is
@@ -109,7 +111,7 @@ export function createApiRouter(): Router {
   // an opportunity, a commitment or a need directly. Before the projects router
   // so its own `/:projectId/...` routes do not swallow them.
   router.use(cashRouter);
-  // External actions (§50). Project-scoped routes under their own
+  // External actions (§51). Project-scoped routes under their own
   // `/projects/:id/external` prefix, which the projects router does not claim.
   router.use(externalRouter);
   // The labor kernel (§41). Root-mounted for the same reason and with the same

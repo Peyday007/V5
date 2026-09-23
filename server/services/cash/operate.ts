@@ -639,7 +639,7 @@ export async function advanceWithinAuthority(projectId: string): Promise<Authori
      * This branch used to record `CONTACT_BUYER` as performed by Brain and move
      * the piece to EXECUTING with no integration behind it, and the only thing
      * stopping that lie was that the capability always read MISSING. Now that
-     * SEND_A_MESSAGE can read PRESENT (§50), the act is a prepared email that
+     * SEND_A_MESSAGE can read PRESENT (§51), the act is a prepared email that
      * waits for a person to approve exactly what it says, and the opening
      * moves to EXECUTING only when the provider has confirmed a send — which
      * `returnResult` does, with the provider's own identifier as the reference.

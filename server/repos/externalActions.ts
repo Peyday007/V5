@@ -1,5 +1,5 @@
 /**
- * Connections, health readings and prepared actions, as rows (§50).
+ * Connections, health readings and prepared actions, as rows (§51).
  *
  * Every state change here is one guarded `UPDATE` naming the state it comes
  * from, so two ticks, two tabs or a retry after a lost response produce one

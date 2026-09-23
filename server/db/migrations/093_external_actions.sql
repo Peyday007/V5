@@ -1,5 +1,5 @@
 -- External actions: the part where Brain does something outside itself and
--- finds out what actually happened (§50).
+-- finds out what actually happened (§51).
 --
 -- Three tables and an append-only history, and what each one refuses to hold
 -- is the design:

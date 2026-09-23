@@ -1,5 +1,5 @@
 /**
- * Doing something outside Brain, and knowing what actually happened (§50).
+ * Doing something outside Brain, and knowing what actually happened (§51).
  *
  * One path, five stages, and each stage is where one of the brief's demands is
  * kept rather than promised:

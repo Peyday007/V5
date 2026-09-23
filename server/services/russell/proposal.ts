@@ -59,7 +59,7 @@ export const PROPOSAL_ACTIONS = [
   'REQUEST_SOFTWARE_CHANGE',
   /*
    * Something done outside Brain — a push message to the owner's own phone,
-   * or an email — asked for in the conversation (§50).
+   * or an email — asked for in the conversation (§51).
    *
    * It prepares and never sends by itself: the whole effect is a row that
    * every requirement was checked for, and anything reaching somebody other

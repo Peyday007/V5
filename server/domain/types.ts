@@ -494,7 +494,7 @@ export const EVENT_TYPES = [
   // The answering transition for a work item whose attempt ceiling now
   // binds at the claim as well as at `failWork`.
   'WORK_ATTEMPTS_REGRANTED',
-  // External actions (§50). Prepared, approved, and what the provider said —
+  // External actions (§51). Prepared, approved, and what the provider said —
   // each on the project's own history, so an effect outside Brain is never
   // only in the table that performed it.
   'EXTERNAL_ACTION_PREPARED',
@@ -5431,6 +5431,8 @@ export interface BinRow {
   attempt_count: number;
   max_attempts: number;
   dispatch_not_before: string | null;
+  held_by_workstream_id?: string | null;
+  held_reason?: string | null;
   lease_generation: number;
   lease_id: string | null;
   worker_id: string | null;
@@ -5497,6 +5499,15 @@ export interface Bin {
    * fresh eligible session arriving for any reason still gets the bin at once.
    */
   dispatchNotBefore: string | null;
+  /**
+   * The goal a person paused, cancelled, or made wait on another goal, when
+   * that is why this bin is not being worked. A held bin is neither fired nor
+   * handed out and keeps every lease, attempt, generation and event it had, so
+   * releasing it continues the work rather than restarting it. See
+   * `services/goals/tick.ts`.
+   */
+  heldByWorkstreamId: string | null;
+  heldReason: string | null;
   /** The fencing token. Advances on every assignment and every cancellation. */
   leaseGeneration: number;
   leaseId: string | null;
@@ -10322,7 +10333,7 @@ export interface PuzzleObservation {
 }
 
 // ---------------------------------------------------------------------------
-// External actions (§50) — migration 093_external_actions.sql / pg 084_external_actions.sql.
+// External actions (§51) — migration 093_external_actions.sql / pg 084_external_actions.sql.
 //
 // A connection holds the NAME of a deployment secret and never its value; an
 // action holds what will be done, to whom, and then what the provider said.

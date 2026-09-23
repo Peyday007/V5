@@ -379,7 +379,7 @@ const OVERRIDES: Override[] = [
   // quietly narrow the space nobody else is looking at, which is exactly what
   // §22 keeps a worker out of.
   // ---------------------------------------------------------------------
-  // External actions (§50)
+  // External actions (§51)
   // ---------------------------------------------------------------------
   //
   // Connecting, checking, revoking and reconnecting a provider are ADMIN:

@@ -1,0 +1,145 @@
+# Reading and deciding goals on the deployed Brain, without a terminal.
+#
+# `show` is read-only: it opens the database, prints every goal's derived
+# reading — what happened, what is happening now, what happens next, what needs
+# a person — and closes. The decisions (`file`, `pause`, `resume`, `cancel`,
+# `reinstate`, `depends`, `terms`) each need `--admin`, resolved against the
+# database rather than trusted, and each calls the same function the HTTP route
+# calls, so there is one writer per decision.
+#
+# Nothing here starts work, approves a plan, spends anything or fires a worker.
+# A pause or a resume changes a decision column; what that means for the work
+# is the durable goal tick's, on its next pass, which is the point: the proof
+# that a resume needs no stage button is that this workflow does not press one.
+#
+# Its own concurrency group, and it waits for a release rather than racing
+# one — see `.github/actions/await-release` for why a shared group was worse.
+name: Goals
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'show | file | pause | resume | cancel | reinstate | depends | terms'
+        required: true
+        default: show
+      goal:
+        description: 'The goal (wst_...), for every command but show and file'
+        required: false
+        default: ''
+      other:
+        description: 'For depends: the goal it waits on (wst_...). For file: the row to file from (fcp_/fcr_/rms_/rcn_/orc_...)'
+        required: false
+        default: ''
+      purpose:
+        description: 'For file: REVENUE_DIRECT | REVENUE_ENABLING | CAPABILITY | LONG_TERM'
+        required: false
+        default: ''
+      reason:
+        description: 'For pause and cancel: why, in plain words (letters, digits, spaces and . , - _)'
+        required: false
+        default: ''
+      commitment:
+        description: 'For terms: NONE | INTERNAL | CUSTOMER'
+        required: false
+        default: ''
+      due:
+        description: 'For terms: a date, YYYY-MM-DD'
+        required: false
+        default: ''
+      project:
+        description: 'For show: optionally one project (prj_...)'
+        required: false
+        default: ''
+      admin:
+        description: '--admin <email>: required by every command but show'
+        required: false
+        default: ''
+
+concurrency:
+  group: brain-console-goals
+  cancel-in-progress: false
+
+jobs:
+  goals:
+    name: Goals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - uses: ./.github/actions/await-release
+
+      - name: Run
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          G_COMMAND: ${{ inputs.command }}
+          G_GOAL: ${{ inputs.goal }}
+          G_OTHER: ${{ inputs.other }}
+          G_PURPOSE: ${{ inputs.purpose }}
+          G_REASON: ${{ inputs.reason }}
+          G_COMMITMENT: ${{ inputs.commitment }}
+          G_DUE: ${{ inputs.due }}
+          G_PROJECT: ${{ inputs.project }}
+          G_ADMIN: ${{ inputs.admin }}
+        run: |
+          set -eu
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+
+          # The allowlist is the control; the input's description is a label.
+          case "$G_COMMAND" in
+            show|file|pause|resume|cancel|reinstate|depends|terms) ;;
+            *) echo "::error::Refusing '$G_COMMAND'."; exit 1 ;;
+          esac
+
+          # Ids and enums: letters, digits, underscore, dash. Refused rather
+          # than escaped — a value a shell could act on is a way to run
+          # something else inside the container.
+          for value in "$G_GOAL" "$G_OTHER" "$G_PURPOSE" "$G_COMMITMENT" "$G_DUE" "$G_PROJECT"; do
+            case "$value" in
+              '') ;;
+              *[!A-Za-z0-9_-]*) echo "::error::Refusing an id that is not letters, digits, underscore or dash."; exit 1 ;;
+            esac
+          done
+          case "$G_REASON" in
+            *[!A-Za-z0-9\ .,_-]*) echo "::error::Refusing the reason: letters, digits, spaces and . , - _ only."; exit 1 ;;
+          esac
+          case "$G_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*) echo "::error::Refusing the administrator address."; exit 1 ;;
+          esac
+          if [ "$G_COMMAND" != show ] && [ -z "$G_ADMIN" ]; then
+            echo "::error::'$G_COMMAND' changes something, so it needs an administrator."
+            exit 1
+          fi
+
+          args="$G_COMMAND"
+          [ -n "$G_GOAL" ] && args="$args $G_GOAL"
+          if [ "$G_COMMAND" = file ]; then
+            [ -n "$G_OTHER" ] && args="$args --from $G_OTHER"
+          else
+            [ -n "$G_OTHER" ] && args="$args $G_OTHER"
+          fi
+          [ -n "$G_PURPOSE" ] && args="$args --purpose $G_PURPOSE"
+          [ -n "$G_REASON" ] && args="$args --reason \"$G_REASON\""
+          [ -n "$G_COMMITMENT" ] && args="$args --commitment $G_COMMITMENT"
+          [ -n "$G_DUE" ] && args="$args --due $G_DUE"
+          [ -n "$G_PROJECT" ] && args="$args --project $G_PROJECT"
+          [ -n "$G_ADMIN" ] && args="$args --admin $G_ADMIN"
+
+          echo "goals $args"
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/goals.sh $args" \
+            2>&1 | tee goals.txt
+          set -e
+          # The verdict is a line the script printed, never an exit code that
+          # had to survive an SSH session, a shell and a CLI.
+          grep -q '^GOALS: OK' goals.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: goals
+          path: goals.txt

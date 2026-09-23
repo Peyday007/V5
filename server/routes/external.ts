@@ -1,5 +1,5 @@
 /**
- * External actions' door (§50).
+ * External actions' door (§51).
  *
  * Every route resolves through `requireProject` — `decideProjectAccess`
  * against the authenticated principal — so absent and forbidden are the same

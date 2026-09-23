@@ -1,5 +1,5 @@
 /**
- * External actions (§50): what Brain may do outside itself, and what it did.
+ * External actions (§51): what Brain may do outside itself, and what it did.
  *
  * Four sections, each answering one question a person asks:
  *

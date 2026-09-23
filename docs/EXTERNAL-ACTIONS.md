@@ -1,4 +1,4 @@
-# External actions (§50)
+# External actions (§51)
 
 How Brain does something outside itself — a message, an email, an invoice — and
 knows what actually happened.

@@ -20,7 +20,7 @@
  *
  * Nothing here publishes an offer or signs anything. `PUBLISH_EXTERNALLY` and
  * `IDENTITY_BEARING_ACT` are in `ALWAYS_PROHIBITED_COMMERCIAL`, and a connector
- * does not change what a grant may carry (§50).
+ * does not change what a grant may carry (§51).
  *
  * **The credential is read from the deployment, by name, at the moment it is
  * used**, and never stored, logged or returned — the fleet's rule for a

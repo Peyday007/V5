@@ -1,5 +1,5 @@
 /**
- * External actions (§50): what a capability reading may claim, what an action
+ * External actions (§51): what a capability reading may claim, what an action
  * may do without a person, and what Brain says happened.
  *
  * Only the network edge is scripted. Everything between — the connection

@@ -154,9 +154,16 @@ import { advanceSources } from '../capability/extraction.ts';
 import { externalActionsTick, type ExternalTickReport } from '../external/actions.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
+import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 
 export interface TickReport {
+  /**
+   * What the goal tick did to the work goals own: holds placed and released,
+   * bins re-prioritized, positions that moved. Optional because a tick that
+   * could not read the goals leaves it out rather than reporting zeros.
+   */
+  goals?: GoalTickReport;
   ran: boolean;
   /** Why it did not run, when it did not. An ordinary outcome, not an error. */
   skipped: string | null;
@@ -574,7 +581,7 @@ export interface TickReport {
   /** True when a bound stopped the tick short, with work preserved. */
   bounded: boolean;
   /**
-   * External actions (§50): connections re-checked, approved actions sent,
+   * External actions (§51): connections re-checked, approved actions sent,
    * provider state read back, owners told what is waiting. `null` when the
    * pass could not run, which is reported rather than hidden.
    */
@@ -988,7 +995,7 @@ export async function tick(owner: string): Promise<TickReport> {
      * precondition of Brain.
      */
     /*
-     * External actions (§50), fleet-wide like the kernel below it: an approved
+     * External actions (§51), fleet-wide like the kernel below it: an approved
      * send is sent, a confirmed one is read back, and a connection nobody has
      * checked in half an hour is asked again — so a provider that went away
      * stops reading as available without anybody having to look. Swallowed
@@ -1041,6 +1048,23 @@ export async function tick(owner: string): Promise<TickReport> {
       }
     } catch {
       /* a packet that could not be walked is left exactly as it was */
+    }
+
+    /*
+     * And every goal a person has set, fleet-wide.
+     *
+     * Beside the other reconciliations for their reason: derived from rows,
+     * idempotent by them, and it reaches whatever is already stranded. This is
+     * what makes a pause mean something and a resume need no button — a paused
+     * goal's bins are held here and released here once it is resumed, and a
+     * goal that waits on another is released the first pass after the other
+     * completes. Swallowed for `advanceSources`' reason: a goal that could not
+     * be read must never stop Russell writing back a mission.
+     */
+    try {
+      report.goals = await advanceGoals();
+    } catch {
+      /* goals that could not be read are left exactly as they were */
     }
 
     /*
