@@ -1083,6 +1083,79 @@ somebody is under pressure to get production back. That is exactly when a
 small tolerance looks like a good idea and exactly when it should not be
 decided. It is the owner's call, and the evidence for it is this section.
 
+#### The Factory reads, against the deployed image
+
+`factory campaigns`, with no `--project`, which is the reading run 78's fix
+exists for — every project rather than whichever one the list returned first:
+
+```
+prj_9d86dfaec863473cb498 Deal Dispatch
+  fcp_189ea30c7ded4e7b9280 REMOTE COMPLETE   https://github.com/Peyday007/V5/pull/31
+  fcp_bd1725a9b19b4688ac8e REMOTE CANCELLED  (no pull request)
+  fcp_84a56713cb174607970d REMOTE COMPLETE   …/oakwood-junk-removal/pull/1
+  fcp_05bc1b50de0f460680ec REMOTE CANCELLED  #1
+prj_3a90638acbb544ecb74b Verification scope
+  fcp_bb1fda90085a4d3fb97a LOCAL  COMPLETE   (no pull request)
+FACTORY: OK
+```
+
+`factory status --campaign fcp_189ea30c7ded4e7b9280` — **COMPLETE, reviewed
+and confirmed by the forge**, base `58c6deccf11f -> 6f92e7968fa5`, **4/4 units
+integrated** with 0 ready, 0 leased and 0 failed, **13 sessions, max observed
+concurrency 2 (MEASURED)**, two review rounds, two findings both `REPAIRED`,
+and **`paid-API executions recorded: 0`**.
+
+Several things in that output are this repository's own rules being obeyed
+where it counts, and they are worth naming rather than skimming:
+
+- **The two review rounds report different independence tiers** —
+  round 1 `CHANGES_REQUIRED` at `WORKER_SEPARATED`, round 2 `PASS` at
+  `SESSION_SEPARATED` — each against a named session. Neither is rounded up
+  (§27).
+- **Both findings resolve to a commit**, not to a worker's say-so: the BLOCKER
+  *"repaired by `repair-late-link-never-attested` at `95b87eaa…` and verified
+  on the merged tree"*, the MAJOR likewise at `6f92e796…`.
+- **The refusal is on the record beside the successes.** `REFUSED
+  INTEGRATION_REJECTED` on `bin_0b6cdc2502d54b75b8c1` — *"the merged unit is
+  not one of the units this bin was given"* — which is the duplicate
+  integration bin CLAUDE.md §27 documents, still readable months later.
+- **Thirteen sessions carry worker, account, bin, generation and duration.**
+  Three of them read `account UNKNOWN`, which is the honest half of §23's
+  attribution repair rather than a gap being hidden. The durations are the
+  ones §27's bin-lease floor was set from: 695s, 1803s, 1051s, **1356s**,
+  1291s, 1622s, 1153s.
+
+`factory throughput --campaign fcp_189ea30c7ded4e7b9280`, and **every figure
+carries its evidence class**, which is the whole honesty requirement of §23
+and §27 read back from production:
+
+```
+units per hour              0.16       DERIVED
+session duration total ms   11513592   MEASURED   (13 samples)
+session duration average ms 885661     DERIVED
+queue time average ms       not measured  UNKNOWN
+max observed concurrency    2          MEASURED
+concurrency declared        3          UNKNOWN    a declared target, never
+                                                  evidence of what overlapped
+ceiling                     not measured  UNKNOWN
+rate-limited sessions       0          PROVIDER_ENFORCED
+```
+
+**`concurrency declared 3` is labelled `UNKNOWN` beside a `MEASURED` 2.** That
+is the sentence §27 wrote — *the sum of declared concurrency is a projection
+and is never reported as throughput* — printed by the deployed code without
+anybody having to remember it.
+
+`factory events --campaign fcp_189ea30c7ded4e7b9280` returns **43 events**,
+each stamped `MEASURED` and carrying its payload: the plan bin, each
+`UNIT_PLANNED` with its owned paths, `UNIT_READY` with *"dependencies
+integrated"*, `UNIT_IMPLEMENTED` with the branch and head commit, and each
+`FACTORY_BIN_CREATED` with the contract and why it was made.
+
+**What these reads do not establish** is anything about a four-account Factory
+pool, and they are not offered as though they did. Every session above belongs
+to one worker, `wkr_f8e118e87fd141689adc`, on one account.
+
 <!-- FACTORY-READS -->
 
 ---
