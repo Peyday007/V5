@@ -35,7 +35,7 @@ export type Route =
    * in a month or two would take it down with one.
    */
   | { name: 'LABOR' }
-  /** What Brain may do outside itself, and what it did (§50). */
+  /** What Brain may do outside itself, and what it did (§51). */
   | { name: 'ACTIONS' }
   | { name: 'SEARCH' }
   /**
