@@ -106,8 +106,8 @@ export function describePoolExhaustion(reading: PoolReading): string {
 }
 
 /**
- * A pooler refusing a **new** client, which is a third condition and not the
- * two above.
+ * The pooler in front of the database saying no, which is a third and a
+ * fourth condition and not the two above.
  *
  * `describePoolExhaustion` answers *this pool could not hand me one of its
  * own connections*. Supabase's session-mode pooler has its own, lower client
@@ -117,12 +117,52 @@ export function describePoolExhaustion(reading: PoolReading): string {
  * script that prints the driver's error object shows twenty lines of
  * `undefined` fields and never names the remedy.
  *
- * The remedy is the opposite of the other two: lowering
- * `BRAIN_DATABASE_POOL_SIZE` would not help and raising it makes it worse,
- * because the binding number is not this application's. What clears it is
- * fewer *concurrent* clients of that pooler — which in practice is the
- * `flyctl ssh console` operator scripts, each of which opens its own pool
- * beside the running app's.
+ * **`ECHECKOUTTIMEOUT` is the fourth, and it went unrecognised until it had
+ * failed a release gate and two operator reads in one morning.** Deploy 323's
+ * post-restart hosted verification died on
+ * `(ECHECKOUTTIMEOUT) unable to check out connection from the pool after
+ * 15000ms in Session mode` after getting as far as reading 434 documents and
+ * handing a worker its assignment. Neither diagnosis fired: Brain's own pool
+ * had not timed out, so `describePoolExhaustion` was never reached, and the
+ * marker is not `EMAXCONNSESSION`, so this function returned null. **A
+ * mechanism that does not reach the condition it exists for is not a
+ * mechanism**, and what a reader got instead was the driver's bare string —
+ * which is the exact thing §27 added these sentences to stop.
+ *
+ * **An earlier version of this comment said the two console reads dispatched
+ * twenty-five minutes later "failed the same way". They did not, and the
+ * difference is the whole reason one fix here was not enough.** They failed
+ * in `openCloud`'s verification query, before any statement, with
+ * `Connection terminated due to connection timeout` wrapped in *"could not
+ * reach"* — a message carrying no pooler marker at all, which this function
+ * cannot match and should not try to. Their diagnosis is `hintFor` in
+ * `server/db/database.ts`, which had no branch for a timeout either. Same
+ * underlying scarcity, two paths, two sentences; widening only this one would
+ * have left the condition actually seen on the console still unexplained.
+ *
+ * The two pooler conditions are named apart rather than folded together,
+ * because they say different things about where the limit is. `EMAXCONNSESSION`
+ * is *too many clients of the pooler*: the client was refused outright.
+ * `ECHECKOUTTIMEOUT` is the pooler accepting the client and then failing to
+ * get **it** a database connection inside its own timeout, so the binding
+ * number is the pooler's upstream pool or the database's own capacity, and a
+ * database that has simply gone slow produces it too.
+ *
+ * What they agree on is the sentence that matters to whoever is reading, and
+ * it is the opposite of the other two: raising `BRAIN_DATABASE_POOL_SIZE`
+ * makes both *worse*, because the binding number is not this application's.
+ *
+ * **The codes are matched differently, and deliberately.** `EMAXCONNSESSION`
+ * was observed with `XX000` and keeps that pair, because `XX000` alone is
+ * generic and the pair is what makes it narrow. `ECHECKOUTTIMEOUT` was
+ * observed only through a harness that printed the message and no fields, so
+ * **its code is not established and is therefore not required** — asserting
+ * `XX000` for it would be a guess wearing a matcher. The marker carries the
+ * specificity in both cases: nothing else in this system emits the literal
+ * `(ECHECKOUTTIMEOUT)`, so keying on it alone is as narrow as the pair beside
+ * it rather than looser. The failure mode that matters is still naming a
+ * condition that is not this one — §29's warning that cries wolf, at a
+ * connection string.
  *
  * Pure, like its neighbour, and it reports rather than decides: nothing acts
  * on this string.
@@ -131,15 +171,30 @@ export function describePoolerRefusal(error: unknown): string | null {
   const code = (error as { code?: unknown } | null)?.code;
   const message = (error as { message?: unknown } | null)?.message;
   const text = typeof message === 'string' ? message : '';
-  if (code !== 'XX000' || !text.includes('EMAXCONNSESSION')) return null;
-  return (
-    'The connection pooler in front of the database refused a new client: ' +
-    `${text.trim()}. That limit is the pooler's rather than this application's, and it is ` +
-    'shared with every other client of it — the running app holds its own connections, and ' +
-    'each operator script opens a pool of its own beside them. Raising ' +
-    'BRAIN_DATABASE_POOL_SIZE would make this worse rather than better; what clears it is ' +
-    'fewer concurrent clients, or waiting for stale sessions to age out.'
-  );
+  const shared =
+    'Raising BRAIN_DATABASE_POOL_SIZE would make this worse rather than better; what clears ' +
+    'it is fewer concurrent clients, or waiting for stale sessions to age out.';
+
+  if (code === 'XX000' && text.includes('EMAXCONNSESSION')) {
+    return (
+      'The connection pooler in front of the database refused a new client: ' +
+      `${text.trim()}. That limit is the pooler's rather than this application's, and it is ` +
+      'shared with every other client of it — the running app holds its own connections, and ' +
+      `each operator script opens a pool of its own beside them. ${shared}`
+    );
+  }
+
+  if (text.includes('ECHECKOUTTIMEOUT')) {
+    return (
+      'The connection pooler in front of the database accepted this client and then could not ' +
+      `get it a database connection in time: ${text.trim()}. That timeout is the pooler's ` +
+      "rather than this application's, so it is the pooler's upstream pool or the database " +
+      'itself — a database that has gone slow produces this too, and so does every other ' +
+      `client of that pooler holding its connections. ${shared}`
+    );
+  }
+
+  return null;
 }
 
 interface TransactionContext extends TransactionFrame {

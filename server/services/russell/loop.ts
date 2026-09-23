@@ -548,6 +548,17 @@ export interface TickReport {
      */
     validationsStarted: string[];
     validationsSettled: string[];
+    /**
+     * Monetization possibilities added, and positions that moved.
+     *
+     * Reported for the same diagnostic reason the two lines above it are: a
+     * tick whose only effect was giving a new discovery its complete
+     * possibility space would otherwise have reported silence, which is
+     * indistinguishable from a tick that did nothing. A pass over an unchanged
+     * ledger genuinely reports nothing, because nothing was written.
+     */
+    monetizationPathsAdded: string[];
+    monetizationMoved: number;
   }[];
   /** Claims this pass promoted into the Brain-wide shared pool. */
   sharedPromoted: string[];
@@ -1654,7 +1665,9 @@ export async function tick(owner: string): Promise<TickReport> {
           operated.research.applied.length > 0 ||
           operated.proposed.length > 0 ||
           operated.validations.started.length > 0 ||
-          operated.validations.settled.length > 0
+          operated.validations.settled.length > 0 ||
+          operated.monetization.pathsAdded.length > 0 ||
+          operated.monetization.moved > 0
         ) {
           report.cashOperations.push({
             projectId: project.id,
@@ -1668,6 +1681,8 @@ export async function tick(owner: string): Promise<TickReport> {
             validationsSettled: operated.validations.settled.map(
               (one) => `${one.opportunityId}=${one.to}`,
             ),
+            monetizationPathsAdded: operated.monetization.pathsAdded,
+            monetizationMoved: operated.monetization.moved,
           });
         }
       } catch {

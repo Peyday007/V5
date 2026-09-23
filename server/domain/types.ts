@@ -2149,6 +2149,7 @@ export interface ResearchClaimRow {
   evidence_locator: string | null;
   evidence_lane: string | null;
   opportunity_signal: string | null;
+  monetization_method: string | null;
   structural_finding: string | null;
   structural_subject: string | null;
   structural_qualifier: string | null;
@@ -3302,6 +3303,20 @@ export interface ResearchClaim {
    * piece of work. Both are true of one claim and neither substitutes.
    */
   opportunitySignal: OpportunitySignal | null;
+  /**
+   * How this claim says money would be made from the opening it establishes.
+   *
+   * `opportunitySignal` one axis along again: that one says *this is a piece of
+   * work*, and this says *and the way to be paid for it is one the method table
+   * would not have produced*. Set only on a claim that also carries a signal —
+   * a way of monetizing something has to say what it is a way of monetizing,
+   * and reading that out of the claim's prose is the guess §25 records the cost
+   * of.
+   *
+   * Null on every claim written before it existed, and on most claims since,
+   * which is correct rather than a gap: nobody was asked.
+   */
+  monetizationMethod: MonetizationMethod | null;
   /**
    * The structural fact about an industry this claim establishes, if any.
    *
@@ -9213,6 +9228,299 @@ export interface ProgrammeDecision {
   updatedAt: string;
 }
 
+/* --------------------------------------------------------------------------
+ * The monetization possibility ledger
+ *
+ * The vocabularies are here, with every other closed set this codebase
+ * matches exactly. What a method structurally requires and produces, what each
+ * attribute asks, and which relations fall out of the method table are in
+ * `domain/monetization.ts`, which imports these — the same split
+ * `domain/industry.ts` already has, and the reason `types.ts` imports nothing.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The things a shape of transaction consumes or produces.
+ *
+ * Deliberately not "capabilities": `services/cash/capabilities.ts` answers what
+ * *this Brain* can verifiably do, from rows, which is a different question from
+ * what a method structurally requires of whoever runs it. The two meet in
+ * `services/cash/monetization/status.ts`, where a required endowment with no
+ * capability behind it is what makes a path BLOCKED rather than unproven.
+ */
+export const ENDOWMENTS = [
+  /** A route that actually reaches somebody who can approve payment. */
+  'BUYER_ACCESS',
+  /** A route to the thing being sold, at a price, now. */
+  'SUPPLY_ACCESS',
+  /** People who already listen. */
+  'AUDIENCE',
+  /** Recorded observations somebody else would pay to have. */
+  'DATA',
+  /** Named people who would take the call. */
+  'RELATIONSHIPS',
+  /** Cash that has to go out before any comes back. */
+  'CAPITAL',
+  /** Somebody or something that can actually do the work. */
+  'FULFILMENT_CAPACITY',
+  /** A tool that does the work again without a person. */
+  'SOFTWARE',
+  /** A licence, registration, qualification or standing. */
+  'CREDENTIAL',
+  /** A name a stranger would transact with. */
+  'BRAND',
+  /** Money that arrives again without being sold again. */
+  'RECURRING_REVENUE',
+] as const;
+export type Endowment = (typeof ENDOWMENTS)[number];
+
+/**
+ * Which side of the transaction a method puts you on.
+ *
+ * This is what makes *competes with* derivable. Two paths on one subject that
+ * put you in the same role are two ways of being the same party, and you are
+ * one of them or the other — a seller who is also the broker of the same
+ * transaction is one transaction, not two. Two paths in different roles coexist
+ * by construction, which is the honest default: selling a report about a market
+ * does not stop you trading in it.
+ */
+export const TRANSACTION_ROLES = [
+  'PRINCIPAL',
+  'INTERMEDIARY',
+  'INFORMATION',
+  'CAPITAL',
+  'PLATFORM',
+] as const;
+export type TransactionRole = (typeof TRANSACTION_ROLES)[number];
+
+/**
+ * Every shape of transaction Brain knows about.
+ *
+ * Closed, and the failure mode is deliberately **missing** a method rather than
+ * admitting a vague one — §27 records what happens to a closed list that has to
+ * be complete over ordinary English, and the answer there was to fix the
+ * failure mode rather than to keep widening. A method nobody can name costs one
+ * enumerated possibility; a method that is really a feeling costs a ledger
+ * entry that ranks against real ones.
+ */
+export const MONETIZATION_METHODS = [
+  'DIRECT_SALE',
+  'PRODUCTIZED_SERVICE',
+  'CONSULTING',
+  'DONE_WITH_YOU',
+  'TRAINING',
+  'AUDIT_OR_ASSESSMENT',
+  'MANAGED_SERVICE',
+  'MAINTENANCE_CONTRACT',
+  'SUBCONTRACTED_FULFILMENT',
+  'AGENCY_REPRESENTATION',
+  'BROKERAGE',
+  'LEAD_GENERATION',
+  'REFERRAL_FEE',
+  'AFFILIATE',
+  'MARKETPLACE',
+  'PLATFORM_FEE',
+  'ADVERTISING',
+  'SPONSORSHIP',
+  'DATA_SUBSCRIPTION',
+  'INTELLIGENCE_REPORT',
+  'API_ACCESS',
+  'SOFTWARE_TOOL',
+  'TEMPLATE_OR_ASSET_SALE',
+  'COMMUNITY_MEMBERSHIP',
+  'CERTIFICATION',
+  'EVENTS',
+  'LICENSING',
+  'WHITE_LABEL',
+  'FRANCHISE',
+  'ARBITRAGE',
+  'RESALE',
+  'DROP_SHIP',
+  'CONSIGNMENT',
+  'RENTAL',
+  'LEASING',
+  'AUCTION',
+  'BOUNTY',
+  'COMPETITION_PRIZE',
+  'GRANT',
+  'PROCUREMENT_CONTRACT',
+  'TENDER_SUPPORT',
+  'RECOVERY_OR_CLAIMS',
+  'COMPLIANCE_SERVICE',
+  'REVENUE_SHARE',
+  'JOINT_VENTURE',
+  'PURCHASE_ORDER_FINANCE',
+  'RECEIVABLES_FINANCE',
+] as const;
+export type MonetizationMethod = (typeof MONETIZATION_METHODS)[number];
+
+/**
+ * What every path in the ledger has to answer.
+ *
+ * The brief's own list, minus the four it asks for that are structural rather
+ * than answers — the method, the underlying discovery, the dependencies and the
+ * evidence are columns, edges and claims — and minus the four that are derived:
+ * the margin, the status, the rank and what is still unknown.
+ */
+export const MONETIZATION_ATTRIBUTES = [
+  'requiredCapability',
+  'requiredRelationships',
+  'requiredCapital',
+  'expectedRevenue',
+  'directCosts',
+  'timeToCash',
+  'probabilityOfSuccess',
+  'executionDifficulty',
+  'legalRequirements',
+  'externalDependencies',
+  'competition',
+  'scalability',
+  'repeatability',
+] as const;
+export type MonetizationAttribute = (typeof MONETIZATION_ATTRIBUTES)[number];
+
+/**
+ * The statuses the brief asks for.
+ *
+ * Five of the seven are **derived** on the read path — a row is not a decision,
+ * and a stored status is stale the moment the evidence it was waiting on
+ * arrives. The two that no derivation could recover are that a person said this
+ * cannot work and that a person put it away, and those are judgement rows.
+ *
+ * Ordered strongest first, which is also the first comparison the ranking makes.
+ */
+export const MONETIZATION_STATUSES = [
+  /** Evidence supports it and nothing named is in its way. */
+  'ACTIVE',
+  /** Somebody asked to be kept informed rather than to act. */
+  'WATCH',
+  /** Something named has to happen first: a capability, a dependency, a person. */
+  'BLOCKED',
+  /** Answered, and what it answers is not good: no margin, saturated, one-off by hand. */
+  'WEAK',
+  /** Nothing has established anything about it yet. */
+  'UNPROVEN',
+  /** Established as not working, and why. */
+  'INVALIDATED',
+  /** Put away, deliberately, by somebody. */
+  'ARCHIVED',
+] as const;
+export type MonetizationStatus = (typeof MONETIZATION_STATUSES)[number];
+
+/**
+ * What a person may record about a path.
+ *
+ * Deliberately not a status setter. Three judgements a derivation cannot make,
+ * and `REVIVE`, which is the answering transition for the last two — an
+ * escalation with no way out is stuck rather than waiting. Everything else
+ * about where a path stands is read from rows, so there is no shape of this
+ * that lets somebody mark a path healthy over evidence that says otherwise.
+ */
+export const PATH_JUDGMENTS = ['WATCH', 'INVALIDATE', 'ARCHIVE', 'REVIVE'] as const;
+export type PathJudgment = (typeof PATH_JUDGMENTS)[number];
+
+/**
+ * How a path came to be in the ledger.
+ *
+ * `ENUMERATED` is the method table applied to a subject's own recorded facts:
+ * arithmetic, reading no prose and claiming nothing beyond *this is a shape of
+ * transaction that could apply here*. `EVIDENCED` is a worker that read a
+ * source declaring one, and carries the claim. `SEED` is a person, and it is
+ * the one origin Brain may never write — §22's rule at a new table: a machine
+ * that could name its own possibilities would be deciding what the space is.
+ */
+export const PATH_ORIGINS = ['SEED', 'ENUMERATED', 'EVIDENCED'] as const;
+export type PathOrigin = (typeof PATH_ORIGINS)[number];
+
+/**
+ * Where an answer on a path came from.
+ *
+ * The same three words `cash_card_facts.kind` carries, and the same meaning:
+ * EVIDENCE resolves to a claim, RECOMMENDATION is Brain's own proposal and
+ * carries its basis, its assumptions and what would change it, and PERSON is
+ * somebody's decision that nothing automatic replaces.
+ */
+export const FACT_KINDS = ['EVIDENCE', 'RECOMMENDATION', 'PERSON'] as const;
+export type FactKind = (typeof FACT_KINDS)[number];
+
+/**
+ * How one path relates to another.
+ *
+ * Most of these are derived from the method table rather than stored, so §21's
+ * chain is a consequence of the vocabulary rather than a second graph somebody
+ * maintains beside it.
+ */
+export const MONETIZATION_EDGE_KINDS = [
+  /** Running the first makes the second possible. */
+  'ENABLES',
+  /** The second cannot start until the first has. */
+  'REQUIRES',
+  /** They are two ways of being the same party in one transaction. */
+  'COMPETES_WITH',
+  /** They can both run, and neither costs the other anything. */
+  'COEXISTS_WITH',
+  /** The first produces observations the second sells or uses. */
+  'PRODUCES_DATA_FOR',
+  /** The first produces the people the second needs. */
+  'PRODUCES_RELATIONSHIPS_FOR',
+  /** The first is the cheaper thing to do on the way to the second. */
+  'STEPPING_STONE_TO',
+  /** The second only works once the first has produced volume or an audience. */
+  'VIABLE_ONLY_AT_SCALE_OF',
+] as const;
+export type MonetizationEdgeKind = (typeof MONETIZATION_EDGE_KINDS)[number];
+
+/** Where a recorded edge came from. A derived one is not recorded at all. */
+export const EDGE_SOURCES = ['PERSON', 'EVIDENCED'] as const;
+export type EdgeSource = (typeof EDGE_SOURCES)[number];
+
+/**
+ * Why a path is not where it was.
+ *
+ * A closed set, because "the reason for ranking movement" has to be answerable
+ * by group across a ledger and a sentence somebody composed is not. Each one is
+ * derived from the comparison that actually changed, never from an account
+ * anything gives of itself.
+ */
+export const RANK_MOVEMENT_REASONS = [
+  /** It has only just arrived, so there is no previous position. */
+  'ENTERED_THE_LEDGER',
+  /** Something about this path was established or changed. */
+  'ITS_OWN_EVIDENCE_CHANGED',
+  /** Its derived status moved. */
+  'ITS_STATUS_CHANGED',
+  /** Nothing about it changed; something else did. */
+  'THE_FIELD_AROUND_IT_CHANGED',
+  /** A person recorded a judgement about it. */
+  'A_PERSON_DECIDED',
+] as const;
+export type RankMovementReason = (typeof RANK_MOVEMENT_REASONS)[number];
+
+/* --------------------------------------------------------------------------
+ * The ledger's rows
+ *
+ * What a method structurally requires and produces, what each attribute asks
+ * and what would answer it, and which relations fall out of the method table
+ * are in `domain/monetization.ts`. These are the rows and the shapes the
+ * repositories map them to.
+ * ------------------------------------------------------------------------ */
+
+export interface MonetizationPathRow {
+  id: string;
+  project_id: string;
+  opportunity_id: string | null;
+  industry_node_id: string | null;
+  method: string;
+  title: string;
+  thesis: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  merged_into_id: string | null;
+  split_from_id: string | null;
+  last_evaluated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /* ==========================================================================
  * THE PUZZLE PRODUCTS AND PRODUCTION KERNEL
  *
@@ -9458,6 +9766,51 @@ export interface PuzzleFormatRow {
   updated_at: string;
 }
 
+export interface MonetizationPath {
+  id: string;
+  projectId: string;
+  /** Exactly one of these is set, enforced by a CHECK rather than by a caller. */
+  opportunityId: string | null;
+  industryNodeId: string | null;
+  method: MonetizationMethod;
+  title: string;
+  /** Who would pay, for what. Null until something establishes a payer. */
+  thesis: string | null;
+  origin: PathOrigin;
+  sourceClaimId: string | null;
+  /**
+   * §20's lineage, and neither of these is a delete.
+   *
+   * A merged path keeps its id, its facts, its judgements and its whole rank
+   * history; the merge is one column and clearing it is the reversal. A split
+   * child names the parent it came out of.
+   */
+  mergedIntoId: string | null;
+  splitFromId: string | null;
+  /** When the derivation last looked at it. Null before the first pass. */
+  lastEvaluatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonetizationPathFactRow {
+  id: string;
+  project_id: string;
+  path_id: string;
+  attribute: string;
+  kind: string;
+  value: string;
+  amount_cents: number | null;
+  days: number | null;
+  claim_id: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decided_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PuzzleFormatEntry {
   id: string;
   projectId: string;
@@ -9484,6 +9837,193 @@ export interface PuzzleMasterRow {
   generator_version: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface MonetizationPathFact {
+  id: string;
+  projectId: string;
+  pathId: string;
+  attribute: MonetizationAttribute;
+  /** `EVIDENCE` carries a claim; `RECOMMENDATION` carries all three of its own. */
+  kind: FactKind;
+  value: string;
+  /**
+   * The structured reading, where the attribute declares a unit.
+   *
+   * Supplied by whoever established the fact and never parsed out of `value`:
+   * §25's Westbrook defect is what a number read from a sentence costs, and
+   * here it would be a figure nobody published wearing the authority of one
+   * that was. Null is unknown, and an unknown sorts last rather than best.
+   */
+  amountCents: number | null;
+  days: number | null;
+  claimId: string | null;
+  basis: string | null;
+  assumptions: string | null;
+  uncertainty: string | null;
+  decidedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonetizationPathJudgmentRow {
+  id: string;
+  project_id: string;
+  path_id: string;
+  judgment: string;
+  reason: string;
+  decided_by_id: string | null;
+  channel: string;
+  created_at: string;
+}
+
+export interface MonetizationPathJudgment {
+  id: string;
+  projectId: string;
+  pathId: string;
+  judgment: PathJudgment;
+  reason: string;
+  /** Whose authority it carries, resolved from rows. */
+  decidedById: string | null;
+  /** How the call got in. Brain cannot check one, so it never assumes the stronger. */
+  channel: 'BROWSER_SESSION' | 'DELEGATED_TERMINAL';
+  createdAt: string;
+}
+
+export interface MonetizationPathEdgeRow {
+  id: string;
+  project_id: string;
+  from_path_id: string;
+  to_path_id: string;
+  kind: string;
+  rationale: string;
+  source: string;
+  source_claim_id: string | null;
+  decided_by_id: string | null;
+  created_at: string;
+}
+
+export interface MonetizationPathEdge {
+  id: string;
+  projectId: string;
+  fromPathId: string;
+  toPathId: string;
+  kind: MonetizationEdgeKind;
+  rationale: string;
+  source: EdgeSource;
+  sourceClaimId: string | null;
+  decidedById: string | null;
+  createdAt: string;
+}
+
+export interface MonetizationRankSnapshotRow {
+  id: string;
+  project_id: string;
+  path_id: string;
+  rank: number;
+  previous_rank: number | null;
+  reason: string;
+  status: string;
+  criterion: string | null;
+  evaluated_at: string;
+}
+
+export interface MonetizationRankSnapshot {
+  id: string;
+  projectId: string;
+  pathId: string;
+  rank: number;
+  previousRank: number | null;
+  reason: RankMovementReason;
+  status: MonetizationStatus;
+  /** The first ranking comparison that came out differently. Null on entry. */
+  criterion: string | null;
+  evaluatedAt: string;
+}
+
+/* --------------------------------------------------------------------------
+ * What Brain asked about a possibility, and why it asked it then
+ *
+ * §49's ledger says which questions are open on every way a discovery could be
+ * paid for. A commission is the record of one of them actually being asked: a
+ * `(path, attribute, round)` with the reason it was chosen recorded at the
+ * moment it was chosen, over a ledger that has since moved.
+ *
+ * It is a record, never a queue. The work is a Russell candidate, the
+ * specification is the compiler's, the permission is the approval envelope's,
+ * the lease is the durable queue's and the acceptance is the evidence gate's.
+ * Nothing here is a second one of any of those.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Where one asking got to.
+ *
+ * `UNRESOLVED` is not a failure and is deliberately not spelled like one. It
+ * says the research ran and the sources do not publish this — which is a real
+ * finding, stays visible, and never becomes a negative answer to the question.
+ * The attribute is still unknown afterwards, exactly as it was, because §30's
+ * rule holds here as everywhere: an unknown is never read as a favourable
+ * assumption, and it is never read as an unfavourable one either.
+ *
+ * `ABANDONED` is the possibility itself going away underneath a live asking —
+ * archived, invalidated, merged into another. The question stopped being worth
+ * answering rather than being answered.
+ */
+export const MONETIZATION_COMMISSION_STATES = [
+  'OPEN',
+  'ANSWERED',
+  'UNRESOLVED',
+  'ABANDONED',
+] as const;
+export type MonetizationCommissionState = (typeof MONETIZATION_COMMISSION_STATES)[number];
+
+export interface MonetizationCommissionRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  path_id: string;
+  attribute: string;
+  round: number;
+  candidate_id: string;
+  reason: string;
+  rule_rank: number;
+  state: string;
+  opened_at: string;
+  settled_at: string | null;
+  answered: number | null;
+  outcome: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MonetizationCommission {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  /** The possibility this is a question about. */
+  pathId: string;
+  /** The exact attribute being investigated, and the evidence lane that answers it. */
+  attribute: MonetizationAttribute;
+  round: number;
+  candidateId: string;
+  /** Why resolving it mattered now, recorded when it was decided. */
+  reason: string;
+  /** Which selection rule admitted it. Lower is stronger. */
+  ruleRank: number;
+  state: MonetizationCommissionState;
+  openedAt: string;
+  settledAt: string | null;
+  /**
+   * How many ledger attributes the finished research answered.
+   *
+   * Null while OPEN rather than 0 — §33's own defect, which published a column
+   * default as a measurement and reported every live round as barren.
+   */
+  answered: number | null;
+  /** Why it ended as it did. Null only while it has not. */
+  outcome: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**

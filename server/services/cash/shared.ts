@@ -72,12 +72,23 @@ import { CASH_TIERS, cashTier, type CashTier, type TierReading } from './tier.ts
 import { chooseBest, rank } from './portfolio.ts';
 import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { authorityFor } from './opportunities.ts';
+import { composeLedger, type Ledger } from './monetization/ledger.ts';
+import { commissionView, type CommissionWorkState } from './monetization/inFlight.ts';
+import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
+import { composeSurface, movementSentence, TOP_SHOWN } from './monetization/surface.ts';
+import { explainRanking } from './monetization/rank.ts';
+import { rankableOf } from './monetization/ledger.ts';
 import type {
   CashMechanism,
   CashMode,
   CashOpportunity,
   CashOpportunityState,
+  MonetizationAttribute,
+  MonetizationEdgeKind,
+  MonetizationMethod,
+  MonetizationStatus,
   OpportunityValidationState,
+  PathOrigin,
 } from '../../domain/types.ts';
 
 /**
@@ -160,6 +171,245 @@ function sharedBecause(
   }
   if (!card.readiness.ready) return card.readiness.summary;
   return 'Every load-bearing question about this is answered. What happens to it next is a decision for whoever takes it on.';
+}
+
+/* --------------------------------------------------------------------------
+ * The monetization possibility ledger, at the shared boundary
+ * ------------------------------------------------------------------------ */
+
+/**
+ * One possibility, in names and counts.
+ *
+ * A **third** projection rather than a filter over the owner's, for the reason
+ * this file's header gives about the second: a read that composes broadly and
+ * strips fields on the way out is one forgotten line from a disclosure, and its
+ * safety depends on somebody remembering that a new attribute is private. Every
+ * field below is written in by hand, so an attribute added next month is absent
+ * from here until somebody decides it belongs.
+ *
+ * The line is the same one the file already draws, applied to a new table: a
+ * *signal is what a publisher said and a price is what this operation would
+ * charge*. So what crosses is which shapes of transaction exist on a discovery,
+ * where each one stands, where it ranks, which of its questions are still open
+ * **by name**, and how many of its answers rest on a source. What does not
+ * cross is the value of a single one of those answers — not a revenue, not a
+ * cost, not a capital requirement, not a margin, and not a sentence composed
+ * out of any of them.
+ */
+export interface SharedMonetizationPath {
+  id: string;
+  method: MonetizationMethod;
+  methodLabel: string;
+  /** What the method is. A sentence from the vocabulary, not about this money. */
+  methodWhat: string;
+  title: string;
+  origin: PathOrigin;
+  status: MonetizationStatus;
+  /**
+   * Why it is at that status, from a closed set keyed on the status itself.
+   *
+   * Deliberately **not** the owner's `statusBecause`. That one is composed from
+   * whatever decided it, and two of its branches are relations between figures
+   * — *the established revenue does not cover the established direct costs* is
+   * a statement about two private numbers even though it quotes neither. A
+   * generic sentence per status says the same useful thing to a member without
+   * being derived from anything they may not read.
+   */
+  statusNote: string;
+  rank: number;
+  previousRank: number | null;
+  /**
+   * The raw reason code, kept because it is a fact about the row.
+   *
+   * It is not what a person is shown. `whatChanged` beside it is the sentence,
+   * composed once in `surface.ts` and read here and by the owner's surface —
+   * a token like `ITS_OWN_EVIDENCE_CHANGED` rendered at a reader is what this
+   * pair was added to stop.
+   */
+  movementReason: string | null;
+  movedAt: string | null;
+  /** Why the position is where it is, in words the server composed. */
+  whatChanged: string;
+  /** Which discovery this is a way of monetizing. */
+  subjectId: string | null;
+  /** The questions still open, by name. The names are facts about progress. */
+  openQuestions: { attribute: MonetizationAttribute; label: string; task: string }[];
+  /**
+   * How much of it rests on what.
+   *
+   * Three counts and no percentage — the same refusal the owner's surface
+   * makes, for the same reason: a confidence figure nobody measured reads
+   * exactly like one somebody did.
+   */
+  answered: { fromASource: number; brainsOwnProposal: number; unanswered: number };
+  /** What it enables, competes with or waits on, by id and kind. */
+  edges: { toPathId: string; kind: MonetizationEdgeKind }[];
+  createdAt: string;
+}
+
+export interface SharedMonetization {
+  /** Every possibility in the project, best first. Nothing is withheld. */
+  paths: SharedMonetizationPath[];
+  /**
+   * What Brain is researching about this space, and what it recently settled.
+   *
+   * §34's line one table along: which questions are being asked about the
+   * possibility space is *discovery*, so it crosses. What each answer says is
+   * the operation's, and does not.
+   */
+  questions: SharedMonetizationQuestion[];
+  /** The five, by id, in rank order. */
+  topPathIds: string[];
+  /**
+   * Why each of the five is above the best one not being shown — as the
+   * *criterion*, never the readings.
+   *
+   * The owner's sentence quotes both sides, and two of the criteria read money.
+   * Naming the criterion answers the question without the figures: *it is above
+   * that one on how soon the money would be usable* is the whole of why, and
+   * carries no number at all.
+   */
+  whyEachTop: { pathId: string; criterion: string | null; label: string | null }[];
+  byStatus: Record<MonetizationStatus, number>;
+  total: number;
+  /** The chains worth looking at, as titles and reasons from the method table. */
+  sequences: { pathIds: string[]; titles: string[]; hops: string[] }[];
+}
+
+/**
+ * What a status means, in one sentence that is true of every path at it.
+ *
+ * Keyed on the status alone, so there is no branch here that could read a
+ * figure, a claim or anybody's judgement text.
+ */
+const SHARED_STATUS_NOTE: Readonly<Record<MonetizationStatus, string>> = Object.freeze({
+  ACTIVE: 'Every load-bearing question about this is answered and nothing named is in its way.',
+  WATCH: 'Somebody asked to be kept informed about this rather than to act on it.',
+  BLOCKED: 'Something named has to happen before this can start.',
+  WEAK: 'What has been established about this is not good. That is a fact, and facts change.',
+  UNPROVEN: 'Not enough has been established about this yet.',
+  INVALIDATED: 'Somebody established that this does not work, and recorded why.',
+  ARCHIVED: 'This was put away deliberately. It is kept in full, with its reason.',
+});
+
+/**
+ * Why Brain is asking, in a sentence that carries no figure.
+ *
+ * The owner's recorded reason quotes the ledger — a status explanation reads
+ * two private numbers, and a criterion comparison quotes both sides of it — so
+ * a member is given the *rule* that admitted the question instead. It is a
+ * constant per rule rather than a redaction of the owner's sentence, for the
+ * reason this whole module is a second projection rather than a filter: a
+ * redaction is one forgotten branch away from a disclosure, and a constant
+ * cannot leak a figure that was never in it.
+ */
+const SHARED_ASK_NOTE: Readonly<Record<number, string>> = Object.freeze({
+  10: 'Something named is in this one\u2019s way, and this is the question that would clear it.',
+  20: 'The answer this rests on has been contradicted, so it is being established again. ' +
+    'Nothing recorded was replaced.',
+  30: 'It is near the top and this answer could change where it sits.',
+  40: 'It competes with another way of taking the same discovery, and this is what would ' +
+    'separate them.',
+});
+
+/** One question a member can see being asked, with no figure in it. */
+export interface SharedMonetizationQuestion {
+  pathId: string;
+  pathTitle: string;
+  attribute: string;
+  attributeLabel: string;
+  round: number;
+  /** The rule that admitted it, as a sentence. Never the owner's reason. */
+  why: string;
+  state: CommissionWorkState;
+  askedAt: string;
+  settledAt: string | null;
+  /**
+   * Whether it produced an answer. A count, never the answer.
+   *
+   * Null while it is still being asked — §33's rule that a column default
+   * published as a measurement reads as modesty and is an understatement
+   * nobody checks.
+   */
+  answered: number | null;
+}
+
+async function sharedMonetization(
+  projectId: string,
+  composed?: Ledger,
+): Promise<SharedMonetization> {
+  const ledger = composed ?? (await composeLedger({ projectId }));
+  const work = await commissionView({ projectId, ledger, capacity: MAX_OPEN_COMMISSIONS });
+  const surface = composeSurface({ ledger });
+  const live = ledger.entries.filter(
+    (one) => one.status !== 'INVALIDATED' && one.status !== 'ARCHIVED',
+  );
+  const bestNotShown = live[TOP_SHOWN] ?? null;
+
+  return {
+    questions: [...work.open, ...work.recentlySettled].map((one) => ({
+      pathId: one.pathId,
+      pathTitle: one.pathTitle,
+      attribute: one.attribute,
+      attributeLabel: one.attributeLabel,
+      round: one.round,
+      // The rule, never the recorded reason. An unrecognised rule number is a
+      // neutral sentence rather than a fallback to the owner's words: a new
+      // rule must be given a shared sentence deliberately, and until it is the
+      // member is told less rather than something they should not see.
+      why: SHARED_ASK_NOTE[one.ruleRank] ?? 'Brain chose this question over the others open.',
+      state: one.state,
+      askedAt: one.askedAt,
+      settledAt: one.settledAt,
+      answered: one.answered,
+    })),
+    paths: ledger.entries.map((entry) => ({
+      id: entry.path.id,
+      method: entry.path.method,
+      methodLabel: entry.method.label,
+      methodWhat: entry.method.what,
+      title: entry.path.title,
+      origin: entry.path.origin,
+      status: entry.status,
+      statusNote: SHARED_STATUS_NOTE[entry.status],
+      rank: entry.rank,
+      previousRank: entry.previousRank,
+      movementReason: entry.movementReason,
+      movedAt: entry.movedAt,
+      whatChanged: movementSentence(entry),
+      subjectId: entry.subject?.id ?? null,
+      openQuestions: entry.answers
+        .filter((answer) => answer.value === null)
+        .map((answer) => ({
+          attribute: answer.attribute,
+          label: answer.label,
+          task: answer.task,
+        })),
+      answered: {
+        fromASource: entry.answers.filter((answer) => answer.kind === 'FACT').length,
+        brainsOwnProposal: entry.answers.filter((answer) => answer.kind === 'ESTIMATE').length,
+        unanswered: entry.unknowns.length,
+      },
+      edges: entry.edges
+        .filter((edge) => edge.fromPathId === entry.path.id)
+        .map((edge) => ({ toPathId: edge.toPathId, kind: edge.kind })),
+      createdAt: entry.path.createdAt,
+    })),
+    topPathIds: surface.top.map((one) => one.pathId),
+    whyEachTop: surface.top.map((one) => {
+      const entry = ledger.entries.find((two) => two.path.id === one.pathId)!;
+      if (!bestNotShown) return { pathId: one.pathId, criterion: null, label: null };
+      const explained = explainRanking(rankableOf(entry), rankableOf(bestNotShown));
+      return { pathId: one.pathId, criterion: explained.criterion, label: explained.label };
+    }),
+    byStatus: ledger.byStatus,
+    total: ledger.entries.length,
+    sequences: ledger.sequences.map((one) => ({
+      pathIds: one.pathIds,
+      titles: one.titles,
+      hops: one.hops,
+    })),
+  };
 }
 
 export interface SharedOpportunity {
@@ -317,6 +567,17 @@ export interface SharedFrontier {
   bestAreNearlyQualified: boolean;
   /** Brain's own activity, counted. No free text and no detail bag. */
   activity: { kind: string; count: number; mostRecentAt: string }[];
+  /**
+   * The monetization possibility ledger, in names and counts.
+   *
+   * Here rather than only on the owner's page because a discovery's possibility
+   * space is *discovery* — §34's own line, one table along: what shapes of
+   * transaction exist on an opening and how far each has got is the machine's
+   * progress, and a member reading the frontier without it is reading a list of
+   * openings with no way to see that one of them has nine live ways of being
+   * taken and another has one.
+   */
+  monetization: SharedMonetization;
 }
 
 export type SharedCashView = { scope: 'SHARED' } & SharedFrontier;
@@ -325,7 +586,23 @@ export async function sharedCashView(input: { projectId: string }): Promise<Shar
   return { scope: 'SHARED', ...(await sharedFrontier(input)) };
 }
 
-export async function sharedFrontier(input: { projectId: string }): Promise<SharedFrontier> {
+export async function sharedFrontier(input: {
+  projectId: string;
+  /**
+   * The possibility ledger, where the caller has already composed one.
+   *
+   * `cashView` has: it needs the owner's reading of the same ledger, and
+   * composing it twice on one page read is measurable — 673 possibilities
+   * across thirty-one discoveries took 118ms a pass. Passing it makes the two
+   * projections **one derivation** rather than two that agree, which is the
+   * stronger property as well as the cheaper one: the shared block and the
+   * owner's block are then provably the same rows read once.
+   *
+   * A member's read passes nothing and this composes its own, which is the
+   * same function over the same rows.
+   */
+  ledger?: Ledger;
+}): Promise<SharedFrontier> {
   const { mode, authority } = await authorityFor(input.projectId);
   const opportunities = await listOpportunities({ projectId: input.projectId });
   const byId = new Map(opportunities.map((one) => [one.id, one]));
@@ -472,5 +749,6 @@ export async function sharedFrontier(input: { projectId: string }): Promise<Shar
     activity: [...activity.entries()]
       .map(([kind, one]) => ({ kind, count: one.count, mostRecentAt: one.mostRecentAt }))
       .sort((a, b) => (a.mostRecentAt < b.mostRecentAt ? 1 : -1)),
+    monetization: await sharedMonetization(input.projectId, input.ledger),
   };
 }

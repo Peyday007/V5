@@ -131,6 +131,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     evidenceExcerpt: 'Employment: 81,580 telemarketers employment estimate',
     evidenceLocator: 'National estimates table',
     opportunitySignal: null,
+    monetizationMethod: null,
     evidenceLane: 'official statistics',
     retrievedAt: '2025-01-05',
     confidence: 0.8,

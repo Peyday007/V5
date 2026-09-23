@@ -37,8 +37,10 @@ import {
   type DealFinding,
   type PuzzleFinding,
   type PuzzleProductClass,
+  type MonetizationMethod,
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
+import { validateMonetizationMethod } from '../../domain/monetization.ts';
 import { validateLabor } from '../../domain/labor.ts';
 import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
 import { validateDealFinding } from '../../domain/dealflow.ts';
@@ -527,6 +529,14 @@ export interface ParsedClaim {
   evidenceLane: string | null;
   /** The kind of opening this claim establishes, or null for context. */
   opportunitySignal: OpportunitySignal | null;
+  /**
+   * And how the source says money would be made from that opening.
+   *
+   * Never on its own: `validateMonetizationMethod` refuses it without a signal
+   * beside it, because a way of being paid has to say what it is a way of
+   * being paid for.
+   */
+  monetizationMethod: MonetizationMethod | null;
   /** The structural fact about an industry it establishes, or null. */
   structuralFinding: StructuralFinding | null;
   /** What the finding is about: a name, or a value from that kind's own set. */
@@ -750,6 +760,23 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   }
 
   /*
+   * And how that opening would be paid for, where the source names it.
+   *
+   * Delegated to `validateMonetizationMethod` for the reason the paragraph
+   * below gives, and added here because this door did not have the rule at
+   * all: the field was parsed in the MCP tool, `ParsedClaim` did not carry it,
+   * and `recordFragmentClaims` carried only what it had been told about — so a
+   * method a worker declared over the wire was validated, accepted, and landed
+   * NULL. What that cost is the one path origin a worker can produce.
+   */
+  const method = validateMonetizationMethod({
+    where,
+    method: row['monetizationMethod'],
+    hasSignal: opportunitySignal !== null,
+  });
+  if (!method.ok) return method;
+
+  /*
    * The structural fact about an industry, if this claim establishes one.
    *
    * Delegated whole to `validateStructural`, which is also what the MCP tool
@@ -871,6 +898,7 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       confidence: confidence.value ?? 0,
       evidenceLane: lane.value || null,
       opportunitySignal,
+      monetizationMethod: method.value,
       structuralFinding: structural.value.finding,
       structuralSubject: structural.value.subject,
       structuralQualifier: structural.value.qualifier,

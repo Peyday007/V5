@@ -102,6 +102,31 @@ export async function recordFragmentClaims(input: {
         evidenceLane: claim.evidenceLane ?? null,
         opportunitySignal: claim.opportunitySignal ?? null,
         /*
+         * And how the source says money would be made from that opening.
+         *
+         * **The fourth instance of the defect the three paragraphs below
+         * record, committed while writing a ledger whose whole subject is
+         * mechanisms that are declared and unreachable.** The tool declares
+         * `monetization_method` in its schema, `optionalMethod` validates it
+         * against the closed set *and* refuses it without an
+         * `opportunity_signal` beside it, `research_claims` has the column and
+         * `insertClaims` carries it — and this mapper stood between them
+         * carrying only what it had been told about, so every method a worker
+         * declared over the wire landed NULL. `enumerate.ts` is the only
+         * reader, so what that cost is the one origin a worker can produce: a
+         * possibility the method table would not have enumerated, which is
+         * §20's *are there paths I could not see before*, silently impossible.
+         *
+         * It is one line and it is written down because of how it was found:
+         * by reading this mapper against the tool, rather than by any test.
+         * Every suite passed, because a unit suite writes the column directly
+         * and the walk that submits over the wire submits lanes — the answer
+         * path, not the enumeration one. `tests/monetizationLedger.test.ts`
+         * now submits a method through `brain_submit_claims` and reads the row
+         * back, which is the only shape of test that could have seen it.
+         */
+        monetizationMethod: claim.monetizationMethod ?? null,
+        /*
          * The structural declaration travels whole or not at all.
          *
          * Four fields that only mean anything together: a restructuring

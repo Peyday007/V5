@@ -433,6 +433,60 @@ read-only research into what is already published, and every action beyond readi
 a separate commercial authorization from a person.`;
 
 /**
+ * One question about one way of being paid.
+ *
+ * Its own template because the completion standard is unusual in the opposite
+ * direction from most: this assignment asks **one** thing, and a worker that
+ * answers the other twelve beautifully has still not done the job. The
+ * possibility ledger prints, under every possibility, the exact question that
+ * is open and the task that would settle it; this is that task handed to a
+ * worker verbatim, with the possibility it is about named above it.
+ *
+ * The lane instruction is the load-bearing sentence. A claim that answers the
+ * asked attribute must carry that attribute as its `evidence_lane`, because
+ * that column — and nothing about the claim's prose — is what puts the answer
+ * on the right row of the ledger. `FIELD_BY_LANE` makes the identical bargain
+ * one table along, and §33 records what the alternative costs.
+ */
+export const MONETIZATION_ATTRIBUTE_ASSIGNMENT_TEMPLATE = `Establish, from published sources, one specific thing about one specific way of making
+money:
+
+{QUESTION}
+
+Subject: the one way of being paid named above, on the one discovery named above. Other
+ways of taking the same discovery are different possibilities with their own questions;
+anything you establish about one of those is recorded under its own evidence lane rather
+than used to answer this.
+
+Market: {JURISDICTION}. Say which market each finding is about.
+
+Evidence lanes: set every claim's evidence_lane to the attribute it answers. The asked
+attribute is named in the question and is what this assignment is for; the other lanes
+exist because a source that publishes a price very often publishes a delivery term beside
+it, and discarding that would be throwing away evidence already paid for. A claim whose
+lane is not one of the declared ones is refused whole, so set it from the declared list.
+
+Evidence standard: published sources, each identified by its URL and by who publishes it,
+and each carrying the date it was published or last observed. A figure is read from a
+source, never produced: where nothing publishes one, record that it is unknown and say
+what would settle it. An organisation own site is conclusive about what that organisation
+says and worth nothing as independent confirmation of anything else. A published rate
+about how often this kind of transaction succeeds is evidence; an estimate of how often it
+would succeed is not, and must not be submitted as one.
+
+Completion standard: the asked attribute either answered from a quoted source, or
+explicitly recorded as unresolved naming what was searched and what was not found. An
+unknown stays unknown. Do not convert a blank into a zero, do not convert an absence into
+a negative answer, and do not estimate a figure no source states. Reporting that the
+published sources do not settle this is a complete and correct answer.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription
+or a paid API; placing an advertisement; publishing, posting, listing, filing or
+submitting anything anywhere; making any commitment on anybody behalf. This is read-only
+research into what is already published, and every action beyond reading needs a separate
+commercial authorization from a person.`;
+
+/**
  * Who is actually on each side of a cross-border equipment transaction.
  *
  * Its own template because the completion standard is unusual: a named
@@ -1210,6 +1264,49 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
     // One opening, and as many bounded questions about it as the unknowns
     // require. Every condition applies to each of them.
     maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * One open question about one way a discovery could be paid for.
+   *
+   * `RUSSELL_CASH_DISCOVERY_V1`'s permissions exactly — the same source
+   * classes, the same forbidden actions, the same zero external effect, taken
+   * by reference rather than written afresh so they cannot drift into
+   * authorizing different things. What differs is only the assignment it pins,
+   * which is why it is a separate envelope at all: `planFitsEnvelope` pins one
+   * template per envelope, and a packet has to be judged against the rules for
+   * the question it is actually asking.
+   *
+   * **It authorizes no effect that pressing Start did not already authorize.**
+   * Adding it is a code change somebody reviews, which is where "does this
+   * authorize something new?" gets asked, and the answer is no: it authorizes
+   * reading published sources about what one way of being paid would require,
+   * cost, pay and take. Acting on any of it is a `COMMERCIAL_ACTION` under a
+   * grant a person makes separately, and never this.
+   */
+  RUSSELL_MONETIZATION_ATTRIBUTE_V1: Object.freeze({
+    id: 'RUSSELL_MONETIZATION_ATTRIBUTE_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it: published sources only, across any industry, business model or ' +
+      'market, with no spending, no paid API or purchased data, no contact with any person or ' +
+      'organisation, no advertising, no publishing and no external effect of any kind. This ' +
+      'envelope is that authorization applied to one open question about one way of being paid ' +
+      'for an opening Brain has already found, so that the possibility can be ranked against ' +
+      'the others on what is established rather than on what is unknown. Acting is authorized ' +
+      'separately by a commercial grant a person makes, and never by this envelope.',
+    assignmentTemplate: MONETIZATION_ATTRIBUTE_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    // One attribute, one fragment. Unlike the deep dive, this assignment asks
+    // exactly one thing, so a plan that decomposed it into several would be
+    // answering a different question from the one that was commissioned.
+    maxFragments: 1,
     geography: /\S/,
     forbiddenScope: /(?!)/,
     allowedSourceTypes: CASH_SOURCE_TYPES,

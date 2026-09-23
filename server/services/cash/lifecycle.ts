@@ -45,6 +45,7 @@ import { ensureDiscoveryAuthority, withdrawDiscoveryAuthority } from './discover
 import { opportunitiesForCandidate } from '../../repos/cashPortfolio.ts';
 import { roundForCandidate } from '../../repos/cashDiscovery.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
+import { commissionForCandidate } from '../../repos/monetization.ts';
 import { dealRoundForCandidate } from '../../repos/dealflow.ts';
 import type {
   CashMode,
@@ -465,6 +466,22 @@ export async function launchableUnderCashMode(input: {
    * an obligation like any other, and nothing here touches it.
    */
   if (await dealRoundForCandidate(input.candidateId)) return false;
+
+  /*
+   * And a question about one way of being paid, for the same reason.
+   *
+   * A commission is about a possibility on a discovery the sprint already
+   * holds, so it reads like support work for something already found. It is
+   * not: it starts a fresh research packet to learn something the sprint does
+   * not know, and a person who has wound a sprint down has said to stop doing
+   * that. Classified by `monetization_commissions` rather than inferred from
+   * the absence of another table's row, which is how the buckets sailed
+   * through this guard before `cash_discovery_rounds` existed.
+   *
+   * What runs on is unchanged: settling a commission already asked is not a
+   * launch, and every obligation already entered into is untouched.
+   */
+  if (await commissionForCandidate(input.candidateId)) return false;
 
   const linked = await opportunitiesForCandidate(input.candidateId);
   if (linked.length === 0) return true;

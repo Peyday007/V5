@@ -44,6 +44,10 @@ import type { CashPosition } from './money.ts';
 import type { CompressedReview } from './review.ts';
 import { cashRoadmap, type CashRoadmap } from './roadmap.ts';
 import { cashForecast, type CashForecast } from './forecast.ts';
+import { composeLedger } from './monetization/ledger.ts';
+import { composeSurface, type MonetizationSurface } from './monetization/surface.ts';
+import { commissionView, type CommissionView } from './monetization/inFlight.ts';
+import { MAX_OPEN_COMMISSIONS } from './monetization/commission.ts';
 
 export interface CashView {
   /** Null when the section has never been activated here. */
@@ -183,6 +187,30 @@ export interface CashView {
    * safe one.
    */
   frontier: SharedFrontier;
+  /**
+   * The whole monetization possibility ledger, with the figures on it.
+   *
+   * The frontier above carries the same space in names and counts, which is
+   * what a member reads. This is the owner's reading of it: the established
+   * revenues, the costs, the capital, the derived margin with its refusals, the
+   * risks quoted from the answers, and the full explanation of why each of the
+   * five outranks what it outranks — every one of which quotes a figure
+   * somewhere, and none of which crosses the boundary §34 drew.
+   *
+   * It writes nothing and moves nothing, exactly as the three reads above it do
+   * not.
+   */
+  monetization: MonetizationSurface;
+  /**
+   * What Brain is researching about that space right now, and what came back.
+   *
+   * Beside the ledger rather than on a page of its own, because the one thing
+   * the instruction was explicit about is that there must not be a second
+   * research dashboard. A question and the possibility it serves are one
+   * subject, and two surfaces describing it would eventually disagree about
+   * what is happening — which is how a person learns to stop believing either.
+   */
+  monetizationWork: CommissionView;
 }
 
 export async function cashView(input: {
@@ -254,6 +282,14 @@ export async function cashView(input: {
     maxConcurrent: authority?.maxConcurrent ?? 0,
     discoveryOpen: mode?.state === 'ACTIVE',
   });
+
+  /*
+   * The possibility ledger, composed once for both blocks below.
+   *
+   * See `frontier` and `monetization` at the bottom of this object: one
+   * composition, two projections over it.
+   */
+  const ledger = await composeLedger({ projectId: input.projectId, now });
 
   const needs = await listNeeds({ projectId: input.projectId, states: ['OPEN'] });
   /*
@@ -368,7 +404,31 @@ export async function cashView(input: {
      * inspection. It writes nothing and moves nothing, exactly as the two
      * reads above do not.
      */
-    frontier: await sharedFrontier({ projectId: input.projectId }),
+    /*
+     * The shared frontier, reading the **same** composed ledger this view's own
+     * monetization block reads.
+     *
+     * Not a shortcut: the shared projection is still built field by field from
+     * the columns it names, so nothing about the boundary moves. What it
+     * removes is a second composition of one ledger on one page read — 118ms
+     * at production scale — and what it adds is the stronger property, that the
+     * two blocks are provably the same rows read once rather than two readings
+     * that agree today.
+     */
+    frontier: await sharedFrontier({ projectId: input.projectId, ledger }),
+    /*
+     * The owner's reading of that same ledger. It is a *different projection*
+     * over one composition: the shared one is names and counts by construction
+     * and this one carries the values, so neither is derived from the other —
+     * reconstructing figures the shared block deliberately left out is exactly
+     * the mistake the second projection exists to make impossible.
+     */
+    monetization: composeSurface({ ledger }),
+    monetizationWork: await commissionView({
+      projectId: input.projectId,
+      ledger,
+      capacity: MAX_OPEN_COMMISSIONS,
+    }),
     decisionsForMe: compressedReview({
       mode,
       authority,

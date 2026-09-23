@@ -34,12 +34,15 @@
  * `minIndependentSources`, cannot add a source type the envelope refuses, and
  * cannot make a fragment approvable that `planFitsEnvelope` would decline.
  */
+import { ATTRIBUTE } from '../../domain/monetization.ts';
+import { MONETIZATION_ATTRIBUTES } from '../../domain/types.ts';
 import type { EvidenceLane } from '../../domain/types.ts';
 
 export type CompilerProfileId =
   | 'PUBLIC_RECORDS'
   | 'MARKET_DISCOVERY'
   | 'COMMERCIAL_VALIDATION'
+  | 'MONETIZATION_ATTRIBUTE'
   | 'INDUSTRY_STRUCTURE'
   | 'CAPITAL_STRUCTURE'
   | 'LABOR_ALLOCATION'
@@ -322,6 +325,19 @@ const MARKET_DISCOVERY: CompilerProfile = {
       'claims are descriptive evidence and carry none, which is not a deficiency. It lowers ' +
       'no bar: a signalled claim passes exactly the same evidence gate as every other, and ' +
       'an unsignalled one is still evidence.',
+    /*
+     * And the same instruction one column along, at the same end of the job.
+     *
+     * Brain enumerates every shape of transaction that structurally applies to
+     * an opening of a given kind, so this is only for the one a source names
+     * and the table would not produce. A worker notices that while reading the
+     * source rather than while filling in a claim, which is why it is here as
+     * well as on the tool.
+     */
+    'If that same source also says how money would actually be made from the opening, and it ' +
+      'is a shape worth naming, set the claim\'s monetization_method as well — only ' +
+      'alongside an opportunity_signal, because a way of being paid has to say what it is a ' +
+      'way of being paid for. Almost every claim carries none, and it lowers no bar either.',
     'Sources that are really one source are counted once, and the duplication is reported: ' +
       'two pages of one site, one release carried by three outlets, three publishers ' +
       'restating one upstream estimate.',
@@ -1659,6 +1675,122 @@ const MACHINE_ACQUISITION: CompilerProfile = {
 };
 
 /**
+ * One open question about one way a discovery could be paid for.
+ *
+ * ---------------------------------------------------------------------------
+ * Why its lanes are the ledger's own attribute keys
+ * ---------------------------------------------------------------------------
+ *
+ * A lane id is what a worker must set as a claim's `evidence_lane`, and a
+ * submission carrying anything else is refused whole before a row is written.
+ * So making the lane ids the thirteen `MONETIZATION_ATTRIBUTES` verbatim is
+ * what lets an answer land on the right row of the ledger as a **lookup rather
+ * than a reading** — `FIELD_BY_LANE` makes the identical bargain one table
+ * along, and §33 records at length what the alternative costs when a bridge
+ * decides a destination by matching prose.
+ *
+ * ---------------------------------------------------------------------------
+ * Why not one of them is REQUIRED
+ * ---------------------------------------------------------------------------
+ *
+ * Only a REQUIRED lane can fail a fragment, and failing this one would be
+ * wrong in the direction that matters. A commission asks whether the published
+ * sources settle one specific thing; **that they do not is a complete and
+ * correct answer**, and it is the answer the ledger has to be able to record.
+ * A REQUIRED lane would turn "nobody publishes this" into a blocked fragment,
+ * which discards the well-sourced claims beside it and converts an absence
+ * into a failure — the exact shape §30 refuses.
+ *
+ * CONDITIONAL rather than OPTIONAL, though, and the difference is the point:
+ * the gate reports an empty CONDITIONAL lane, so the question stays visibly
+ * open instead of being silently enriched past. `DEALFLOW_PARTIES` and
+ * `DEALFLOW_TERMS` already declare every lane this way, for the same reason.
+ *
+ * The twelve lanes that were not asked are there because a source publishing a
+ * rate card very often publishes its payment terms in the next paragraph, and
+ * throwing that away would discard evidence the activation had already paid
+ * for. Which one was *commissioned* is a row on `monetization_commissions`,
+ * never an inference from what came back.
+ */
+const MONETIZATION_ATTRIBUTE: CompilerProfile = {
+  id: 'MONETIZATION_ATTRIBUTE',
+  fragmentKey: 'monetization-attribute',
+  // A way of being paid is not bounded by a jurisdiction the way a statute is:
+  // the same shape of transaction runs in four markets at once, and refusing a
+  // question that names several would refuse the work this exists to permit.
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Below the deep dive, the capital structure and the dealflow terms, and
+   * above everything that starts a new search.
+   *
+   * It is a question about something already found, so it belongs in the
+   * "finish what has already been spent" band rather than the broad-search
+   * one. Inside that band it is last, because it is the narrowest: a deep dive
+   * decides whether an opening is worth anything at all, and this decides
+   * where one already-qualified way of taking it sits in an order.
+   */
+  launchOrdinal: 140,
+  proposedSources: [
+    'a published price list, rate card or fee schedule',
+    'a marketplace, job board, classified or auction listing',
+    'a platform’s published terms, payout schedule or fee page',
+    'an organisation’s own website, press release or announcement',
+    'a procurement or tender notice, or a government contract award',
+    'an official registry, filing, permit or licence record',
+    'a regulator’s published rule, guidance or licensing requirement',
+    'a trade association, industry body or trade publication',
+    'a census, statistical or government publication',
+  ],
+  excludedSources: [
+    'a figure calculated, scaled or converted rather than read from a source',
+    'a rate of success estimated rather than published as a measured rate',
+    'a cost inferred from what a comparable thing "would probably" cost',
+    'a payment term inferred from industry norms rather than from a published term',
+    'a competitor count inferred from how crowded a market sounds',
+  ],
+  lanes: MONETIZATION_ATTRIBUTES.map((attribute) => ({
+    id: attribute,
+    description: `${ATTRIBUTE[attribute].question} ${ATTRIBUTE[attribute].task}`,
+    necessity: 'CONDITIONAL' as const,
+  })),
+  expectedClaimTypes: ['SOURCED_FACT', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'A figure is produced rather than read from a source.',
+    'An absence of published evidence is reported as a zero, a none or a no.',
+    'A rate of success is estimated. A published measured rate is evidence; anything else is ' +
+      'a number that reads like a measurement and is not one.',
+    'A claim is submitted with no evidence_lane, or with one outside the declared list.',
+    'A finding about a different way of taking the same discovery is used to answer this one.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'The one attribute named in the question is either answered from a quoted source, or ' +
+      'explicitly recorded as unresolved naming what was searched and what was not found. ' +
+      'Reporting that the published sources do not settle it is a complete answer and is ' +
+      'recorded as such.',
+    'An unknown stays unknown. A blank is never converted into a zero, and an absence of ' +
+      'published evidence is never converted into a negative answer to the question.',
+    'Nothing is estimated, scaled from something comparable, converted between currencies or ' +
+      'calculated to complete a picture. A plausible number here is worse than a blank, ' +
+      'because it reads exactly like a measured one once it is on a screen.',
+    'Every claim carries an evidence_lane from the declared list, naming the attribute it ' +
+      'answers. A claim with no lane, or with a lane outside that list, is refused whole.',
+    'Every money figure carries the currency the source published it in and the date it was ' +
+      'true; every duration carries the published term it was counted from.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from. A claim ' +
+      'submitted without one is rejected, and a fragment whose claims are mostly rejected is ' +
+      'blocked outright — which discards the well-sourced claims beside them.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
  * Who buys puzzle content, and how it reaches them.
  *
  * The half of the puzzle kernel whose deliverable is a **name**: a publication
@@ -1881,6 +2013,7 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   STEP11_AUDIT_INDEPENDENCE_V1: PUBLIC_RECORDS,
   RUSSELL_CASH_DISCOVERY_V1: MARKET_DISCOVERY,
   RUSSELL_CASH_VALIDATION_V1: COMMERCIAL_VALIDATION,
+  RUSSELL_MONETIZATION_ATTRIBUTE_V1: MONETIZATION_ATTRIBUTE,
   RUSSELL_INDUSTRY_MAP_V1: INDUSTRY_STRUCTURE,
   RUSSELL_CAPITAL_STRUCTURE_V1: CAPITAL_STRUCTURE,
   RUSSELL_LABOR_ALLOCATION_V1: LABOR_ALLOCATION,
