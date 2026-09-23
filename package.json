@@ -26,6 +26,7 @@
     "authorize:gap-policy": "tsx scripts/authorize-gap-policy.ts",
     "connect:report": "tsx scripts/connect-report.ts",
     "admin": "tsx scripts/admin.ts",
+    "goals": "tsx scripts/goals.ts",
     "report:packet": "tsx scripts/packet-report.ts",
     "report:cash": "tsx scripts/cash-report.ts",
     "report:refinement": "tsx scripts/refinement-report.ts",

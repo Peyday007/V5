@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 092. See that file for what each table
+-- The Postgres half of SQLite migration 093. See that file for what each table
 -- makes checkable, why `AWAITING_AUTHORITY` is derived rather than stored, and
 -- why the live-test index is where competing members are kept apart.
 --
