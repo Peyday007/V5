@@ -129,6 +129,30 @@ No trigger reference and no secret name appears anywhere in the reading.
    every tick. Where every serving Routine is out of routing it now says so,
    aged from when the last one went out.
 
+## Deploy 331: the privacy boundary, read from production — and one check that did nothing
+
+Deploy 331 released the goals boundary check and passed `238/238` before the
+restart and `257/257` after it. In the released Brain, both times:
+
+```
+Goals, as a member and as a machine
+  PASS  a member may read the goals briefing — 200
+  PASS  and reads no goal from a project it may not read — 0 goal(s) readable, 0 outside the member's projects
+  PASS  a foreign goal existed to compare with — no goal sits outside the member's projects; skipped
+  PASS  a worker credential is refused the goals — status 404
+```
+
+The third line is a skipped comparison that reads as a pass. It asked the
+verification administrator for a goal outside the member's projects, and that
+administrator administers only the verification project, so it could never
+find one — while four real goals sat in Deal Dispatch and Cash Mode 1. Recorded
+rather than rounded up: on deploy 331 the member was shown to read nothing it
+should not, and a worker was refused, but the *byte-identical refusal* of a real
+foreign goal was not exercised. The harness now takes a live foreign goal from
+the rows (filing and archiving one in the holdout only when none exists), also
+checks that the refused pause moved nothing, and a guard reads the harness and
+fails on the old version.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain

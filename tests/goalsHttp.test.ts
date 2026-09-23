@@ -190,3 +190,25 @@ describe('the goals door', () => {
     expect(cycle.body.error).toMatch(/wait on each other/);
   });
 });
+
+/*
+ * The hosted verification is the only thing that proves this boundary against
+ * production, and its first version skipped the comparison on every deploy:
+ * it asked the verification administrator for a foreign goal, and that
+ * administrator only administers the verification project. A skipped
+ * comparison read as a pass. Nothing in the suite runs the harness, so the
+ * guard reads it.
+ */
+describe('the hosted verification of the goals boundary', () => {
+  it('is called, and finds its foreign goal from the rows rather than from an administrator who cannot see one', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../scripts/verify-hosted.ts', import.meta.url), 'utf8');
+    expect(source).toMatch(/await goalsBoundary\(/);
+    const start = source.indexOf('async function goalsBoundary');
+    expect(start).toBeGreaterThan(-1);
+    const body = source.slice(start, source.indexOf('\nasync function ', start + 10));
+    expect(body).toMatch(/listWorkstreams\(\)/);
+    expect(body).toMatch(/byte-identical/);
+    expect(body).not.toMatch(/adminCookie/);
+  });
+});

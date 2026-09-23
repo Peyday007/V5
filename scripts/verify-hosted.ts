@@ -124,6 +124,7 @@ import { listWorkItems } from '../server/repos/workQueue.ts';
 import { readObject, storageKeyOf } from '../server/services/storage.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
 import { listUncertainties } from '../server/repos/researchIntelligence.ts';
+import { archiveWorkstream, createWorkstream, getWorkstream, listWorkstreams } from '../server/repos/register.ts';
 import { researchIntelligenceView } from '../server/services/research/intelligence/view.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import type { Project, WorkerScope } from '../server/domain/types.ts';
@@ -1230,13 +1231,32 @@ async function goalsBoundary(fixtures: Fixtures, cookie: string): Promise<void> 
     `${goals.length} goal(s) readable, ${stray.length} outside the member's projects`,
   );
 
-  const all = await call('/api/goals', { cookie: fixtures.adminCookie });
-  const foreign = (((all.json as { goals?: { id: string; projectId: string | null }[] })?.goals) ?? []).find(
-    (one) => one.projectId !== null && !visible.has(one.projectId),
-  );
+  /*
+   * The comparison needs a live goal in a project the member may not read, and
+   * the first version asked the verification administrator for one — who
+   * administers the verification project only, so it never found one and the
+   * byte-identical refusal was skipped on every deploy while reading as a pass.
+   * A vacuous guard reads as coverage (§41). The harness runs inside the
+   * container, so it reads the rows directly; on a Brain with no such goal it
+   * files one in the holdout project and archives it afterwards, keeping the
+   * row (§5).
+   */
+  let foreign = (await listWorkstreams()).find((one) => one.projectId !== null && !visible.has(one.projectId)) ?? null;
+  let filed: string | null = null;
+  if (!foreign && fixtures.holdout) {
+    foreign = await createWorkstream({
+      projectId: fixtures.holdout.id,
+      title: 'Hosted verification: a goal the member may not read',
+      intent: 'Exists only so the hosted verification can compare a forbidden goal with an absent one.',
+      purpose: 'CAPABILITY',
+      createdByUserId: null,
+    });
+    filed = foreign.id;
+  }
   if (!foreign) {
-    record('a foreign goal existed to compare with', true, 'no goal sits outside the member\'s projects; skipped');
+    record('a foreign goal existed to compare with', true, 'this Brain has no project the member may not read; skipped');
   } else {
+    try {
     const forbidden = await call(`/api/goals/${foreign.id}`, { cookie });
     const absent = await call('/api/goals/wst_00000000000000000000', { cookie });
     expectStatus("another operation's goal is not found", forbidden.status, 404);
@@ -1247,6 +1267,11 @@ async function goalsBoundary(fixtures: Fixtures, cookie: string): Promise<void> 
     );
     const pause = await call(`/api/goals/${foreign.id}/pause`, { cookie, method: 'POST', body: { reason: 'verification' } });
     expectStatus('and cannot be paused by the member', pause.status, 404);
+    const after = await getWorkstream(foreign.id);
+    record('and the refused pause changed nothing', after?.pausedAt === foreign.pausedAt, `pausedAt=${after?.pausedAt ?? 'null'}`);
+    } finally {
+      if (filed) await archiveWorkstream(filed, 'hosted verification finished comparing refusals').catch(() => undefined);
+    }
   }
 
   const machine = await call('/api/goals', { bearer: fixtures.credential });
