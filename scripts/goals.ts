@@ -95,7 +95,7 @@ function printGoal(goal: GoalView): void {
     console.log(`  depends on  ${dependency.goalId} ${dependency.title ?? '(not readable here)'} — ${dependency.met === null ? 'unreadable' : dependency.met ? 'met' : `not met (${dependency.lifecycle})`}`);
   }
   for (const work of goal.work) {
-    console.log(`  bin         ${work.binId} ${work.state} priority=${work.priority} attempts=${work.attempts}${work.heldReason ? ` HELD(${work.heldReason})` : ''}${work.workerOnIt ? ' worker-on-it' : ''}`);
+    console.log(`  bin         ${work.binId} ${work.state} priority=${work.priority} attempts=${work.attempts}${work.heldReason ? ` HELD(${work.heldReason})` : ''}${work.workerOnIt ? ' worker-on-it' : ''}${work.dispatch ? ` dispatch=${work.dispatch.state}${work.dispatch.refusal ? `(${work.dispatch.refusal})` : ''}` : ''}`);
   }
   console.log(`  waiting     ${goal.waiting.kind}: ${goal.waiting.detail}${goal.waiting.since ? ` (since ${goal.waiting.since})` : ''}`);
   console.log(`  next        [${goal.next.by}] ${goal.next.action}`);

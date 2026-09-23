@@ -58,6 +58,10 @@ import { personName } from '../../domain/personName.ts';
 import { viewOf, type WorkstreamView } from '../register/view.ts';
 import type { LinkReading } from '../register/resolve.ts';
 import { rankGoals, type PriorityFacts } from './priority.ts';
+import { listDispatchesForBin } from '../../repos/bins.ts';
+import { REFUSAL_WAIT, type RoutingRefusal } from '../dispatch/router.ts';
+import { listRoutines } from '../../repos/fleet.ts';
+import { listMembershipsForProject } from '../../repos/identity.ts';
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -65,6 +69,13 @@ import { rankGoals, type PriorityFacts } from './priority.ts';
 
 export interface GoalWork {
   binId: string;
+  /**
+   * What the dispatcher last decided about firing this bin, read from its own
+   * intent row. Null when there is no intent at the bin's generation. A goal
+   * that said "queued" over a bin the dispatcher has been refusing for hours
+   * would be the reassuring pending state §24 corrects — production had one.
+   */
+  dispatch: { state: string; refusal: string | null; waitsFor: 'CAPACITY' | 'OPERATOR' | null; message: string | null; at: string } | null;
   state: string;
   priority: number;
   attempts: string;
@@ -454,11 +465,64 @@ function humanDecision(
   };
 }
 
-function workOf(bins: Bin[], now: string): GoalWork[] {
-  return bins
-    .filter((bin) => bin.state === 'DRAFT' || bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'NEEDS_HUMAN')
+/**
+ * Why no surface serves a project, named down to the surfaces that would.
+ *
+ * `NO_SURFACE_SERVES_THIS_PROJECT` is true and too coarse: it sends a reader to
+ * grant a membership when, in production, the membership existed and every
+ * Routine bound to that worker had been quarantined for sessions that never
+ * checked in — a connector that stopped authorizing, whose remedy is in the
+ * Claude account behind it. Routine names and states only, never a trigger ref
+ * or a secret's name: those are operator depth (§34).
+ */
+async function surfaceRemedy(projectId: string): Promise<string> {
+  const workers = new Set(
+    (await listMembershipsForProject(projectId))
+      .filter((one) => one.principalType === 'WORKER' && one.active)
+      .map((one) => one.principalId),
+  );
+  const serving = (await listRoutines()).filter((one) => one.workerId !== null && workers.has(one.workerId));
+  if (serving.length === 0) {
+    return 'No Routine is bound to any worker that is a member of this project. An operator binds one (npm run fleet -- bind-worker) or grants an existing worker the project (npm run admin -- access grant); the bin fires on the next tick after that.';
+  }
+  const down = serving.filter((one) => one.state !== 'ENABLED');
+  const reasons = new Map<string, string[]>();
+  for (const routine of down) {
+    const why = `${routine.state}${routine.stateReason ? `: ${routine.stateReason.replace(/\s+/g, ' ').slice(0, 140)}` : ''}`;
+    const list = reasons.get(why);
+    if (list) list.push(routine.name);
+    else reasons.set(why, [routine.name]);
+  }
+  const listed = [...reasons.entries()].map(([why, names]) => `${names.join(', ')} (${why})`).join('; ');
+  return `Every Routine that serves this project is out of routing — ${listed}. When the reason is sessions that never checked in, the Brain connector in the Claude account behind those Routines has stopped authorizing: reconnect it there, then lift the quarantine (npm run fleet -- set-state --kind routine --to ENABLED). The bin fires on the next tick after that, with nothing else to press.`;
+}
+
+async function dispatchOf(bin: Bin): Promise<GoalWork['dispatch']> {
+  if (bin.state !== 'READY' && bin.state !== 'LEASED') return null;
+  const intents = (await listDispatchesForBin(bin.id)).filter((one) => one.leaseGeneration === bin.leaseGeneration);
+  const intent = intents[intents.length - 1];
+  if (!intent) return null;
+  const kind = intent.lastErrorKind;
+  const refusal = kind && kind in REFUSAL_WAIT ? (kind as RoutingRefusal) : null;
+  return {
+    state: intent.state,
+    refusal: kind,
+    waitsFor: refusal ? REFUSAL_WAIT[refusal] : null,
+    message: intent.lastError,
+    at: intent.updatedAt,
+  };
+}
+
+async function workOf(bins: Bin[], now: string): Promise<GoalWork[]> {
+  const live = bins.filter(
+    (bin) => bin.state === 'DRAFT' || bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'NEEDS_HUMAN',
+  );
+  const dispatches = new Map<string, GoalWork['dispatch']>();
+  for (const bin of live) dispatches.set(bin.id, bin.heldByWorkstreamId ? null : await dispatchOf(bin));
+  return live
     .map((bin) => ({
       binId: bin.id,
+      dispatch: dispatches.get(bin.id) ?? null,
       state: bin.state,
       priority: bin.priority,
       attempts: `${bin.attemptCount}/${bin.maxAttempts}`,
@@ -643,7 +707,7 @@ export async function assembleGoals(options: {
       .filter((other) => visible.has(other.goal.id) && dependsOn(other.goal.id).some((one) => one.ref === goal.id))
       .map((other) => other.goal.id);
 
-    const work = workOf(resolved.bins, now);
+    const work = await workOf(resolved.bins, now);
     const blockers: GoalBlocker[] = [];
     for (const reading of view.readings) {
       if (reading.missing) {
@@ -669,6 +733,29 @@ export async function assembleGoals(options: {
       });
     }
     for (const bin of work) {
+      if (bin.dispatch && bin.dispatch.state === 'PENDING' && bin.dispatch.waitsFor === 'OPERATOR' && !bin.workerOnIt) {
+        blockers.push({
+          text: `bin ${bin.binId} cannot be fired: ${bin.dispatch.refusal} — ${bin.dispatch.message ?? 'no message recorded'}`,
+          remedy:
+            bin.dispatch.refusal === 'NO_SURFACE_SERVES_THIS_PROJECT' && goal.projectId
+              ? await surfaceRemedy(goal.projectId)
+              : 'Brain defers it and re-checks on every fleet change; an operator makes it routable (the refusal above names how), and it fires on the next tick after that with nothing to press.',
+          by: 'OPERATOR',
+          ref: bin.binId,
+          since: bin.dispatch.at,
+          ageHours: ageHours(bin.dispatch.at, now),
+        });
+      }
+      if (bin.dispatch && bin.dispatch.state === 'ABANDONED') {
+        blockers.push({
+          text: `bin ${bin.binId}: the dispatcher gave up firing it — ${bin.dispatch.message ?? 'no message recorded'}`,
+          remedy: 'Read the bin trace (Dispatch diagnose); an abandoned intent is a surface problem a person must fix.',
+          by: 'OPERATOR',
+          ref: bin.binId,
+          since: bin.dispatch.at,
+          ageHours: ageHours(bin.dispatch.at, now),
+        });
+      }
       if (bin.exhausted && (bin.state === 'READY' || bin.state === 'LEASED')) {
         blockers.push({
           text: `bin ${bin.binId} has spent all ${bin.attempts} of its attempts with work still in it.`,
@@ -868,8 +955,13 @@ function waitingAndNext(input: {
   }
   const ready = work.find((one) => one.state === 'READY' || one.state === 'LEASED');
   if (ready) {
+    const deferred = ready.dispatch?.waitsFor === 'CAPACITY' ? ` (the fleet is full: ${ready.dispatch.refusal})` : '';
     return {
-      waiting: { kind: 'CAPACITY', detail: `bin ${ready.binId} is queued at priority ${ready.priority}`, since: ready.updatedAt },
+      waiting: {
+        kind: 'CAPACITY',
+        detail: `bin ${ready.binId} is queued at priority ${ready.priority}${deferred}`,
+        since: ready.dispatch?.at ?? ready.updatedAt,
+      },
       next: {
         action: `Brain fires the next free Routine at bin ${ready.binId}.`,
         by: 'BRAIN',

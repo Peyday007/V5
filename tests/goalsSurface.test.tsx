@@ -45,7 +45,7 @@ const goal: GoalView = {
   ],
   sources: [],
   work: [
-    { binId: 'bin_1', state: 'READY', priority: 8, attempts: '0/5', heldReason: null, workerOnIt: false, exhausted: false, updatedAt: '2026-09-23T00:00:00.000Z' },
+    { binId: 'bin_1', dispatch: null, state: 'READY', priority: 8, attempts: '0/5', heldReason: null, workerOnIt: false, exhausted: false, updatedAt: '2026-09-23T00:00:00.000Z' },
   ],
   dependencies: [],
   dependents: [],

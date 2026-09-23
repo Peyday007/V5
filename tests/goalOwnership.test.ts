@@ -22,12 +22,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
-import { createUser, createWorker } from '../server/repos/identity.ts';
+import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
+import { createAccount, createRoutine, setRoutineState } from '../server/repos/fleet.ts';
 import {
   assignNextBin,
   countDispatches,
   createBin,
   ensureDispatchIntent,
+  listDispatchesForBin,
+  markDispatchFailed,
   supersedeStaleIntents,
   getBin,
   listDispatchableBins,
@@ -429,5 +432,71 @@ describe('what production found on its first reading', () => {
     expect(runningView.priority?.aboveNext?.criterion).toBe('WORKABLE');
     expect(stoppedView.waiting.kind).toBe('PERSON');
     expect(stoppedView.decisions[0]?.proposedAction).toMatch(/no recommendation recorded/);
+  });
+});
+
+describe('a queued bin the dispatcher cannot route is a blocker, not a queue', () => {
+  it('reads the refusal off the intent and names who clears it', async () => {
+    const { goal, bin } = await goalWithWork({ title: 'Unroutable' });
+    await ensureDispatchIntent((await getBin(bin.id))!);
+    const intent = (await listDispatchesForBin(bin.id))[0]!;
+    await markDispatchFailed(intent.id, {
+      kind: 'NO_SURFACE_SERVES_THIS_PROJECT',
+      message: "No enabled Routine is bound to a worker holding a live membership on this bin's project.",
+      refundAttempt: true,
+    });
+    const view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(view.work[0]?.dispatch?.waitsFor).toBe('OPERATOR');
+    expect(view.waiting.kind).toBe('OPERATOR');
+    expect(view.waiting.detail).toMatch(/NO_SURFACE_SERVES_THIS_PROJECT/);
+    expect(view.next.by).toBe('OPERATOR');
+    expect(view.blockers[0]?.remedy).toMatch(/fires on the next tick/);
+  });
+
+  it('names the quarantined surfaces that would serve the project, and what brings them back', async () => {
+    const { goal, bin } = await goalWithWork({ title: 'Surfaces are down' });
+    await grantMembership({
+      projectId,
+      principalType: 'WORKER',
+      principalId: workerId,
+      role: null,
+      scopes: ['queue:read', 'queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2, 8)}` });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_${Math.random().toString(36).slice(2, 12)}`,
+      name: 'Research surface A',
+      tokenSecretName: 'SOME_SECRET',
+      workerId,
+    });
+    await setRoutineState({
+      routineId: routine.id,
+      from: 'ENABLED',
+      to: 'QUARANTINED',
+      reason: '3 consecutive fired sessions never checked in.',
+    });
+    await ensureDispatchIntent((await getBin(bin.id))!);
+    const intent = (await listDispatchesForBin(bin.id))[0]!;
+    await markDispatchFailed(intent.id, { kind: 'NO_SURFACE_SERVES_THIS_PROJECT', message: 'No enabled Routine…', refundAttempt: true });
+    const view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    const remedy = view.blockers[0]!.remedy;
+    expect(remedy).toMatch(/Research surface A \(QUARANTINED: 3 consecutive fired sessions never checked in\.\)/);
+    expect(remedy).toMatch(/reconnect it there/);
+    expect(remedy).not.toMatch(/trig_/);
+    expect(remedy).not.toMatch(/SOME_SECRET/);
+  });
+
+  it('calls a full fleet a capacity wait, which resolves by itself', async () => {
+    const { goal, bin } = await goalWithWork({ title: 'Waiting for room' });
+    await ensureDispatchIntent((await getBin(bin.id))!);
+    const intent = (await listDispatchesForBin(bin.id))[0]!;
+    await markDispatchFailed(intent.id, { kind: 'ACCOUNT_TARGETS_REACHED', message: 'Every capable surface is at its target.', refundAttempt: true });
+    const view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(view.waiting.kind).toBe('CAPACITY');
+    expect(view.waiting.detail).toMatch(/fleet is full/);
+    expect(view.blockers).toEqual([]);
   });
 });
