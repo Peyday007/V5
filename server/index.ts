@@ -16,7 +16,12 @@ import path from 'node:path';
 import type { Server } from 'node:http';
 import express from 'express';
 import type { Express, NextFunction, Request, Response } from 'express';
-import { closeDatabase, initDatabase, activeDatabaseConfig } from './db/database.ts';
+import {
+  closeDatabase,
+  initDatabase,
+  activeDatabaseConfig,
+  databaseConnectionHeadroom,
+} from './db/database.ts';
 import { DatabaseConfigurationError } from './db/types.ts';
 import { describePersistence, persistenceConfig } from './config.ts';
 import type { MigrationReport } from './db/migrate.ts';
@@ -32,6 +37,7 @@ import { getDefaultProject, listProjects } from './repos/projects.ts';
 import { errorMiddleware, withRequestContext } from './routes/helpers.ts';
 import { createApiRouter } from './routes/index.ts';
 import { seedIfEmpty } from './seed.ts';
+import { seedDesignKernel } from './services/design/kernel.ts';
 import { initStorage, activeStorageConfig } from './services/storage/index.ts';
 import { StorageConfigurationError } from './services/storage/types.ts';
 import { serveStoredObject } from './routes/files.ts';
@@ -41,6 +47,7 @@ import { MCP_PATHS, mcpRouter } from './mcp/endpoint.ts';
 import { OAUTH_BASE, oauthRouter, wellKnownRouter } from './routes/oauth.ts';
 import { authRouter } from './routes/auth.ts';
 import { bootstrapFirstAdmin, hasAnyAccount } from './services/identity/bootstrap.ts';
+import { breakGlassArmed } from './services/identity/passwordDoor.ts';
 import { writeProjectState } from './services/runtimeState.ts';
 import { recomputeProject } from './services/stateEngine.ts';
 import { recoverInterruptedExtractions } from './services/documents/extraction.ts';
@@ -337,6 +344,18 @@ function logBanner(
   console.log(`  Schema version  ${migrations.schemaVersion}`);
   console.log(`  Database        ${persistence.database.provider} · ${persistence.database.target}`);
   console.log(`  Documents       ${persistence.storage.provider} · ${persistence.storage.target}`);
+  /*
+   * The pool's headroom, on every cloud boot rather than only when it runs out.
+   *
+   * Eight production deploys have now failed a post-restart verification at a
+   * pool checkout, and §27 refused to raise the ceiling each time because the
+   * server's own limit was unknown. Printing it here is the cheapest place it
+   * could possibly go: a deploy log is already read after every release, and
+   * the alternative is discovering the number from the failure it causes.
+   * Null on SQLite, where there is no pool.
+   */
+  const headroom = databaseConnectionHeadroom();
+  if (headroom) console.log(`  Connections     ${headroom}`);
   console.log(
     `  Sign-in         ${
       identity.accounts
@@ -388,6 +407,21 @@ function logBanner(
   } else if (identity.bootstrapNote) {
     console.log('');
     console.log(`    Bootstrap administrator not created: ${identity.bootstrapNote}`);
+  }
+  /*
+   * An emergency switch that is on has to be loud.
+   *
+   * `BRAIN_BREAK_GLASS` re-opens the password door for every account, which is
+   * exactly right while somebody is recovering an account whose device is gone
+   * and exactly wrong for a minute longer than that. The banner names it so a
+   * deployment that was left armed says so every time it starts, rather than
+   * quietly keeping a second way in that nobody is looking at.
+   */
+  if (breakGlassArmed()) {
+    console.log('');
+    console.log('    BREAK-GLASS IS ARMED. Any account with a password can sign in with it,');
+    console.log('    including accounts that ordinarily sign in with a device. Remove');
+    console.log('    BRAIN_BREAK_GLASS as soon as the account it was set for is back.');
   }
   if (!identity.accounts) {
     console.log('');
@@ -517,6 +551,28 @@ async function main(): Promise<void> {
   // First boot creates Deal Dispatch; later boots only backfill missing layers
   // and re-create the folder tree.
   await seedIfEmpty();
+
+  /*
+   * The design kernel's seed: what can be looked at, what is already known about
+   * interfaces, and what this kernel can and cannot do.
+   *
+   * Idempotent by key on every boot, and it writes **no capability state** — only
+   * a reading moves one of those, which is the separation `capabilities.ts`
+   * exists to keep. A failure here is reported and does not stop the boot: a
+   * kernel that could not seed is a design surface that cannot be evaluated,
+   * never a Brain that cannot serve.
+   */
+  try {
+    const design = await seedDesignKernel();
+    console.log(
+      `  Design kernel: ${design.surfaces} surface(s), ${design.patterns} pattern(s), ` +
+        `${design.capabilities} declared capability(ies).`,
+    );
+  } catch (error) {
+    console.log(
+      `  Design kernel could not be seeded: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   // An extraction still marked in-flight was interrupted by a crash or a
   // restart. Mark it so, before anything can mistake a half-read document for a

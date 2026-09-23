@@ -39,6 +39,23 @@
  * enrollment journey only ever applies to `DEVICE`, so the distinction has to
  * travel rather than be inferred from a blank.
  *
+ * **Then a credential was added and this reading did not know about it, which
+ * is the same defect one credential along.** The ordinary human credential is
+ * a six-digit PIN now, and a reading that enumerates the ones it knows will
+ * mis-describe every account holding the one it does not. It failed in both
+ * directions at once: a member who enrolled with a PIN read `NOT_INVITED`,
+ * *a slot nobody has filled*, about somebody who had just joined; and a person
+ * holding only a passkey read `READY`, about somebody the served sign-in
+ * screen no longer offers a way in to. The second is the expensive one — it
+ * tells an administrator that a locked-out person needs nothing — so `READY`
+ * is now *holds a credential the product actually offers*, and a device alone
+ * is `NEEDS_A_NEW_LINK` with the remedy in the name.
+ *
+ * The lesson is the enumeration rather than the entry: adding a credential and
+ * not adding it here produces a confident wrong answer, and every reader of
+ * this type gets it. `SignsInWith` is exhaustive on purpose, so the next one
+ * is a compile error rather than a page that quietly understates.
+ *
  * Nothing private crosses. A name, a state, how they sign in, and whether this
  * row is you. Not a device, not what anybody can reach, and **not an address**
  * — including where a display name *is* one, which `bootstrap.ts` also
@@ -53,19 +70,51 @@
  * It writes nothing.
  */
 import { listUsers } from '../../repos/identity.ts';
+import { ambiguousSignInNames, signInName } from '../../domain/signInName.ts';
 import { countLivePasskeys, listEnrollments } from '../../repos/passkeys.ts';
 import { nowIso } from '../../repos/util.ts';
+import { personName } from '../../domain/personName.ts';
 
-export type MemberState = 'READY' | 'INVITED' | 'NOT_INVITED';
+/**
+ * How far this person has got, as a fact about what they can actually do.
+ *
+ * `NEEDS_A_NEW_LINK` is the state a *credential change* produced, and it is
+ * here rather than folded into one of the other three because each of those
+ * would have been a lie about the same row. Somebody holding only a passkey
+ * enrolled, so `NOT_INVITED` — *a slot nobody has filled* — is wrong; nothing
+ * is outstanding, so `INVITED` is wrong; and the sign-in screen no longer
+ * offers a device, so `READY` is wrong in the direction that matters most,
+ * telling an administrator that a locked-out person is fine.
+ *
+ * `NAME_IS_AMBIGUOUS` is a *fifth* for the same reason, and it is the one
+ * state here that is not about a credential at all. A member enrolled from a
+ * link holds no address, so their display name is the only identity they can
+ * present — and `getPinCredentialByIdentity` refuses a name two live accounts
+ * answer to, identically to a wrong PIN, because invariant 23 is doing its
+ * job. They hold a perfectly good PIN and cannot get in. `READY` about that
+ * person is the same expensive wrongness one column along, and it is worse
+ * here because the remedy is not theirs: an administrator has to rename one of
+ * them, which is why the state exists on the surface the rename lives on.
+ */
+export type MemberState =
+  | 'READY'
+  | 'INVITED'
+  | 'NOT_INVITED'
+  | 'NEEDS_A_NEW_LINK'
+  | 'NAME_IS_AMBIGUOUS';
 
 /**
  * Which credential lets this person in.
  *
- * `DEVICE` is a live passkey; `PASSWORD` is the `bootstrap.ts` account, which
- * is a real way in and is deliberately not called a device. `NONE` is a slot
- * that holds neither, which is every `INVITED` and `NOT_INVITED` row.
+ * `PIN` is what the served sign-in screen asks for, so it is read first: an
+ * account holding several credentials is described by the one the product
+ * actually offers. `PASSWORD` is the `bootstrap.ts` account, which reaches
+ * `/recovery` and is deliberately not called a device. `DEVICE` is a live
+ * passkey and **no longer reaches any sign-in screen** — it is reported
+ * because the row is real, not because it is a way in. `NONE` is a slot that
+ * holds nothing.
  */
-export type SignsInWith = 'DEVICE' | 'PASSWORD' | 'NONE';
+export type SignsInWith = 'PIN' | 'DEVICE' | 'PASSWORD' | 'NONE';
 
 export interface PersonReading {
   userId: string;
@@ -99,19 +148,18 @@ export interface PeopleReading {
 /**
  * A display name with any address domain removed.
  *
- * `bootstrap.ts` names the first administrator after the address it was created
- * with, so the owner's inbox was the label every member read on this page — and
- * this module's own contract is that no contact detail crosses it. Dropping
- * everything from the `@` keeps the row recognisable to the person it is and
- * leaves nothing anybody can write to.
+ * Kept as the name this module and `connection.ts` already import, and it is
+ * now one line over `domain/personName.ts` rather than a second implementation
+ * of the same redaction. Two copies of a rule about what a person is called
+ * would eventually call one person two things on two screens — which is the
+ * defect that made this necessary, at a smaller scale.
  *
  * It is not a classification and nothing is typed by it: §4's rule against
  * name-matching is about deciding *what a row is*, which `users.kind` now
  * declares. A false positive here shortens a name.
  */
 export function withoutDomain(displayName: string): string {
-  const at = displayName.indexOf('@');
-  return at > 0 ? displayName.slice(0, at) : displayName;
+  return personName({ displayName });
 }
 
 export async function peopleReading(viewerId: string | null): Promise<PeopleReading> {
@@ -124,6 +172,15 @@ export async function peopleReading(viewerId: string | null): Promise<PeopleRead
     (user) => user.kind === 'PERSON' && user.disabledAt !== null,
   ).length;
 
+  /*
+   * Computed once over the same rows, with the same rule the door uses.
+   *
+   * `ambiguousSignInNames` is the door's own normaliser, shared rather than
+   * restated: a reading that folded names differently from the lookup would
+   * eventually call somebody stuck who is not, or miss somebody who is.
+   */
+  const ambiguous = ambiguousSignInNames(all);
+
   const people: PersonReading[] = [];
   for (const user of all) {
     if (user.kind !== 'PERSON') continue;
@@ -131,19 +188,71 @@ export async function peopleReading(viewerId: string | null): Promise<PeopleRead
 
     const live = await countLivePasskeys(user.id);
     /*
-     * A timestamp, never a verifier. `passwordUpdatedAt` is non-null exactly
-     * when this account has had a password set, and it is already on the mapped
-     * view type — so establishing that a password credential exists costs
-     * nothing and reveals nothing about it.
+     * A timestamp, never a verifier. `pinUpdatedAt` and `passwordUpdatedAt` are
+     * non-null exactly when that credential has been set, and both are already
+     * on the mapped view type — so establishing that one exists costs nothing
+     * and reveals nothing about it.
+     *
+     * The order is the order the product offers them: the sign-in screen asks
+     * for a PIN, `/recovery` takes the password, and a device reaches neither.
      */
     const signsInWith: SignsInWith =
-      live > 0 ? 'DEVICE' : user.passwordUpdatedAt !== null ? 'PASSWORD' : 'NONE';
+      user.pinUpdatedAt !== null
+        ? 'PIN'
+        : user.passwordUpdatedAt !== null
+          ? 'PASSWORD'
+          : live > 0
+            ? 'DEVICE'
+            : 'NONE';
 
-    if (signsInWith !== 'NONE') {
+    /*
+     * Named before the credential is looked at, because it outranks it.
+     *
+     * Somebody whose name two live accounts answer to cannot sign in with that
+     * name however good their PIN is, so reporting the credential would be
+     * reporting the half of their situation that is working.
+     *
+     * An account holding an **address** is not stuck: the lookup tries the
+     * address first, and it is unique by index, so they still have a way in.
+     * The state means *this person cannot get in*, and claiming it for
+     * somebody who can would be the other direction's wrongness.
+     */
+    if (user.email === null && ambiguous.has(signInName(user.displayName))) {
+      people.push({
+        userId: user.id,
+        displayName: withoutDomain(user.displayName),
+        state: 'NAME_IS_AMBIGUOUS',
+        signsInWith,
+        isYou: user.id === viewerId,
+        isBrainAdmin: user.isBrainAdmin,
+      });
+      continue;
+    }
+
+    if (signsInWith === 'PIN' || signsInWith === 'PASSWORD') {
       people.push({
         userId: user.id,
         displayName: withoutDomain(user.displayName),
         state: 'READY',
+        signsInWith,
+        isYou: user.id === viewerId,
+        isBrainAdmin: user.isBrainAdmin,
+      });
+      continue;
+    }
+    /*
+     * Enrolled, holding a device, and offered no screen that takes one.
+     *
+     * Not READY, because they cannot get in; not NOT_INVITED, because they
+     * finished. The remedy is a recovery link, which now ends in a PIN, and
+     * naming it is the whole reason this state exists rather than being
+     * rounded into a neighbouring one.
+     */
+    if (signsInWith === 'DEVICE') {
+      people.push({
+        userId: user.id,
+        displayName: withoutDomain(user.displayName),
+        state: 'NEEDS_A_NEW_LINK',
         signsInWith,
         isYou: user.id === viewerId,
         isBrainAdmin: user.isBrainAdmin,

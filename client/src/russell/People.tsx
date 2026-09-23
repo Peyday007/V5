@@ -45,6 +45,7 @@ import { useAsync } from './useAsync.ts';
 import {
   PeopleApi,
   type ConnectionView,
+  type AccountFoundation,
   type PeopleAndCapacity,
   type PersonRow,
   type SurfaceReading,
@@ -69,10 +70,85 @@ const MEMBER_STATE_LABEL: Record<PersonRow['state'], string> = {
   READY: 'Joined',
   INVITED: 'Link sent',
   NOT_INVITED: 'No link yet',
+  // The remedy, rather than the condition. Somebody reading this row has to
+  // know what to press, and the control that does it is the next column.
+  NEEDS_A_NEW_LINK: 'Needs a new link',
+  // The condition, because here the remedy is a *decision* rather than a
+  // button: which of the two people keeps the name is not something a screen
+  // can choose, so it says what is wrong and the control beside it asks.
+  NAME_IS_AMBIGUOUS: 'Cannot sign in — two accounts share this name',
+};
+
+/**
+ * Which credential, in the words a person would use for it.
+ *
+ * `Joined` over a PIN and `Joined` over a password are the same word about two
+ * different facts, and only one of them is the ordinary way in. A device is
+ * named because the row is real and *not* because it is a route — the sign-in
+ * screen does not offer one.
+ */
+const SIGNS_IN_LABEL: Record<PersonRow['signsInWith'], string | null> = {
+  PIN: null,
+  PASSWORD: 'password',
+  DEVICE: 'device only',
+  NONE: null,
 };
 
 
 /* ------------------------------------------------------------------ people */
+
+/**
+ * What is short, for this account, in the order it has to be fixed.
+ *
+ * Every sentence here is the server's. The client chooses no wording, derives
+ * no verdict and has no branch on who is reading — `foundation` is absent from
+ * the payload entirely for a member, so there is nothing to render rather than
+ * something to hide, which is the only version of that distinction a forgotten
+ * `.filter()` cannot undo.
+ *
+ * `NOT_APPLICABLE` is not printed. A dimension this account has not reached is
+ * not a finding, and listing three of them under somebody who has simply not
+ * started is the noise that teaches a reader to stop reading the list.
+ */
+function Foundation({ account }: { account?: AccountFoundation }): JSX.Element | null {
+  if (!account) return null;
+  const short = account.findings.filter((one) => one.verdict === 'BLOCKED');
+  if (short.length === 0) {
+    return <p className="rs-hint">Foundation complete.</p>;
+  }
+  return (
+    <ul className="rs-hint rs-foundation">
+      {short.map((one) => (
+        <li key={one.dimension}>
+          <strong>{FOUNDATION_LABEL[one.dimension] ?? one.dimension}</strong> &middot; {one.because}
+          {one.nextAction ? (
+            <>
+              {' '}
+              <em>{one.nextAction}</em> ({ACTOR_LABEL[one.owner] ?? one.owner})
+            </>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The server names the dimension; this only makes it readable. */
+const FOUNDATION_LABEL: Record<string, string> = {
+  IDENTITY: 'Identity',
+  SIGN_IN: 'Sign-in',
+  CLAUDE_CONNECTION: 'Claude connection',
+  WORKER_ATTRIBUTION: 'Worker',
+  CAPACITY: 'Capacity',
+  RECOVERY: 'Recovery',
+};
+
+const ACTOR_LABEL: Record<string, string> = {
+  MEMBER: 'them',
+  BRAIN_ADMINISTRATOR: 'you',
+  DEPLOYMENT_ADMINISTRATOR: 'deployment',
+  BRAIN: 'Brain, by itself',
+};
 
 /**
  * The invite control.
@@ -142,8 +218,8 @@ function Invite({ onChanged }: { onChanged(): void }): JSX.Element {
         {busy ? 'Making a link…' : 'Make a private link'}
       </button>
       <p className="rs-hint">
-        They register a device when they open it. No email address is asked for and no password is
-        ever created.
+        They choose a six-digit PIN when they open it. No email address is asked for and no
+        password is ever created.
       </p>
       {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
       {issued ? (
@@ -248,6 +324,166 @@ function ConnectorLink({ person }: { person: PersonRow }): JSX.Element {
   );
 }
 
+/**
+ * A fresh link for somebody who cannot get in.
+ *
+ * `NEEDS_A_NEW_LINK` is an escalation, so it needs an answering transition, and
+ * it had one everywhere except where a person could reach it: `issueRecovery`
+ * was a route, `CashApi.recoverMember` was a client function, and **nothing
+ * called either**. That is this repository's own recurring sentence — a
+ * mechanism nothing calls is not a mechanism — and it is the same correction
+ * `ConnectorLink` directly above was written for.
+ *
+ * Recovery retires before it issues. Whatever the person was holding stops
+ * working now rather than when the replacement is used, and every session that
+ * credential opened ends with it: if the reason they cannot get in is that
+ * somebody else has their device, waiting would be the whole defect.
+ *
+ * The link is shown once, and it ends in a PIN.
+ */
+function Recover({
+  person,
+  onChanged,
+  mode,
+}: {
+  person: PersonRow;
+  onChanged(): void;
+  /*
+   * Which operation this is, because they are two facts about the person.
+   *
+   * `RECOVER` retires whatever they are holding first, which is right when a
+   * device may be in the wrong hands. `RELINK` retires nothing, because there
+   * is nothing to retire — and calling that recovery would tell somebody who
+   * has never signed in that their credentials have been taken out of service.
+   */
+  mode: 'RECOVER' | 'RELINK';
+}): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [issued, setIssued] = useState<IssuedEnrollment | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const relink = mode === 'RELINK';
+
+  return (
+    <>
+      <button
+        type="button"
+        className="rs-button-quiet"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setProblem(null);
+          const asked = relink
+            ? CashApi.relinkMember(person.userId)
+            : CashApi.recoverMember(
+                person.userId,
+                'The sign-in screen no longer offers a device.',
+              );
+          asked.then(
+            (answer) => {
+              setIssued(answer.enrollment);
+              setBusy(false);
+              onChanged();
+            },
+            (error: unknown) => {
+              setProblem(describe(error));
+              setBusy(false);
+            },
+          );
+        }}
+      >
+        {busy ? 'Making a link…' : relink ? 'Send them a link' : 'New sign-in link'}
+      </button>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      {issued ? (
+        <div className="rs-ready-link">
+          <p className="rs-item-title">A link for {issued.displayName}</p>
+          <CopyBox
+            label="Send this to them privately"
+            value={`${window.location.origin}/enrol#${issued.token}`}
+          />
+          <p className="rs-hint">
+            Shown once. It works once, stops working on{' '}
+            {new Date(issued.expiresAt).toLocaleString()}, and they choose a six-digit PIN when
+            they open it.
+            {relink ? '' : ' Anything they were holding before has stopped working.'}
+          </p>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Give one of them a name of their own.
+ *
+ * The answering transition for `NAME_IS_AMBIGUOUS`. A member enrolled from a
+ * link holds no address, so their display name is the only identity they can
+ * type — and a name two live accounts answer to is refused at the door, with
+ * the same sentence a wrong PIN gets. Both of them are locked out, and neither
+ * can do anything about it.
+ *
+ * It moves a label and nothing else: the account keeps its role, its
+ * memberships, its PIN, its sessions and everything it owns. Which of the two
+ * is renamed is a decision, so this asks rather than choosing — and the server
+ * refuses a name that would simply move the collision.
+ */
+function Rename({ person, onChanged }: { person: PersonRow; onChanged(): void }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button type="button" className="rs-button-quiet" onClick={() => setOpen(true)}>
+        Give them their own name
+      </button>
+    );
+  }
+  return (
+    <div className="rs-field">
+      <label className="rs-field-label" htmlFor={`rename-${person.userId}`}>
+        A name that tells them apart
+      </label>
+      <input
+        id={`rename-${person.userId}`}
+        className="rs-input"
+        type="text"
+        value={name}
+        placeholder="A surname, or an initial"
+        onChange={(event) => setName(event.target.value)}
+      />
+      <button
+        type="button"
+        className="rs-button-quiet"
+        disabled={busy || name.trim().length < 2}
+        onClick={() => {
+          setBusy(true);
+          setProblem(null);
+          CashApi.renameMember(person.userId, name.trim()).then(
+            () => {
+              setBusy(false);
+              setOpen(false);
+              onChanged();
+            },
+            (error: unknown) => {
+              setProblem(describe(error));
+              setBusy(false);
+            },
+          );
+        }}
+      >
+        {busy ? 'Saving…' : 'Save'}
+      </button>
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      <p className="rs-hint">
+        This changes what they type to sign in, and nothing else — they keep their PIN, their
+        access and everything on their account. Tell them the new name.
+      </p>
+    </div>
+  );
+}
+
 function People({
   page,
   onChanged,
@@ -275,20 +511,34 @@ function People({
             </span>
             <span className="rs-ready-state" data-state={one.state}>
               {MEMBER_STATE_LABEL[one.state]}
-              {/*
-                * How, not only whether.
-                *
-                * `Joined` over a password account and `Joined` over a device
-                * are the same word about two different facts, and the second
-                * is the one a lost-device recovery applies to.
-                */}
-              {one.signsInWith === 'PASSWORD' ? (
-                <span className="rs-hint"> &middot; password</span>
+              {/* How, not only whether. */}
+              {SIGNS_IN_LABEL[one.signsInWith] ? (
+                <span className="rs-hint"> &middot; {SIGNS_IN_LABEL[one.signsInWith]}</span>
               ) : null}
             </span>
             {page.you.isBrainAdmin && one.state === 'READY' ? (
               <ConnectorLink person={one} />
             ) : null}
+            {page.you.isBrainAdmin && one.state === 'NEEDS_A_NEW_LINK' ? (
+              <Recover person={one} onChanged={onChanged} mode="RECOVER" />
+            ) : null}
+            {/*
+              * A slot nobody has filled, and — until now — nothing on this page
+              * could fill it. `Invite somebody` makes a *new row*, so the only
+              * route was a second account under the same name, which §43's
+              * guard now refuses outright. A refusal whose remedy does not
+              * exist is a stop rather than an improvement.
+              */}
+            {page.you.isBrainAdmin &&
+            (one.state === 'NOT_INVITED' || one.state === 'INVITED') ? (
+              <Recover person={one} onChanged={onChanged} mode="RELINK" />
+            ) : null}
+            {page.you.isBrainAdmin && one.state === 'NAME_IS_AMBIGUOUS' ? (
+              <Rename person={one} onChanged={onChanged} />
+            ) : null}
+            <Foundation
+              account={page.foundation?.accounts.find((each) => each.userId === one.userId)}
+            />
           </li>
         ))}
       </ul>

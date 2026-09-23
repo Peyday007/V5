@@ -54,6 +54,15 @@ export interface AcceptedInvitation {
   email: string;
   createdAccount: boolean;
   signInRequired: boolean;
+  /**
+   * The enrollment link for an account this acceptance created, shown once.
+   *
+   * Present only when `createdAccount`, because an address that already had an
+   * account already holds a credential — and handing its enrollment link to
+   * whoever was carrying the invitation would be a second way into somebody
+   * else's account.
+   */
+  enrollment?: { token: string; expiresAt: string };
 }
 
 export type { ChatTurnResult, ProviderStatus, MigrationReport, IngestionReport };
@@ -227,6 +236,14 @@ export interface SessionUser {
   displayName: string;
   isBrainAdmin: boolean;
   mustChangePassword: boolean;
+  /**
+   * Whether this account has a six-digit PIN set.
+   *
+   * A boolean and never the PIN, its length or when it was set. The recovery
+   * screen reads it to say *create* or *replace*; nothing decides access on it,
+   * because the server decides that from the verifier it holds.
+   */
+  hasPin?: boolean;
 }
 
 export interface SessionResponse {
@@ -251,6 +268,22 @@ export const Api = {
 
   login(email: string, password: string): Promise<{ user: SessionUser }> {
     return post<{ user: SessionUser }>('/api/auth/login', { email, password });
+  },
+
+  /**
+   * The ordinary human door: an identity and six digits.
+   *
+   * The identity is an address or a display name — members enrolled with a
+   * link hold no address at all, so an email-only door would have a PIN they
+   * could never present. Which of the two it was is the server's to work out.
+   */
+  signInWithPin(identity: string, pin: string): Promise<{ user: SessionUser }> {
+    return post<{ user: SessionUser }>('/api/auth/pin', { identity, pin });
+  },
+
+  /** Set or replace the signed-in account's own PIN. Never takes an identity. */
+  setPin(pin: string): Promise<{ ok: boolean }> {
+    return post<{ ok: boolean }>('/api/auth/pin/set', { pin });
   },
 
   /*
@@ -278,7 +311,6 @@ export const Api = {
    */
   acceptInvitation(input: {
     token: string;
-    password?: string;
     displayName?: string;
   }): Promise<AcceptedInvitation> {
     return post<AcceptedInvitation>('/api/invitations/accept', input);

@@ -25,16 +25,20 @@ import type {
   FactoryModelClass,
   FactoryRole,
   FactoryWorker,
+  FactoryWorkerAvailability,
   FactoryWorkerKind,
 } from '../../domain/factory.ts';
+import { FACTORY_WORKER_AVAILABILITY } from '../../domain/factory.ts';
 import {
   listWorkers,
   registerWorker,
   recordFactoryEvent,
+  setWorkerAvailability,
   workerLoad,
   type RegisterWorkerInput,
 } from '../../repos/factoryFleet.ts';
 import { factoryNow } from '../../repos/factory.ts';
+import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { executorKinds, probeExecutor } from './executors/index.ts';
 
 /** Which capability each role needs. One table, so a role cannot mean two things. */
@@ -89,6 +93,129 @@ export async function register(input: RegisterWorkerInput): Promise<FactoryWorke
     },
   });
   return worker;
+}
+
+/* ------------------------------------------------------------------------- */
+/* The answering transition                                                   */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Why a person moved a worker's availability.
+ *
+ * A closed set rather than free text, for the reason `step10.ts` already wrote
+ * down about regranting attempts: a caller that can write its own audit trail
+ * is a caller whose audit trail says whatever it wanted. An operator action
+ * with no truthful cause recorded is invariant 3 again.
+ *
+ * There is deliberately no reason meaning *it should be fine now*. Every entry
+ * names something that was actually done or observed, because restoring a
+ * worker resets the failure streak that quarantined it, and doing that on a
+ * hunch is how the same three failures happen again with the record saying
+ * somebody fixed it.
+ */
+export const WORKER_STATE_REASONS = {
+  /** The credential, the executor or the machine it runs on was repaired. */
+  surfaceRepaired: 'SURFACE_REPAIRED',
+  /** The failures were a defect in the factory, and the fix is deployed. */
+  defectFixed: 'DEFECT_FIXED',
+  /** Taken out of rotation deliberately — maintenance, a migration, a spend cap. */
+  withdrawnByOperator: 'WITHDRAWN_BY_OPERATOR',
+  /** Put back after being withdrawn, with nothing else having changed. */
+  returnedToRotation: 'RETURNED_TO_ROTATION',
+  /** Held back on an operator's own reading rather than on the failure counter. */
+  heldByOperator: 'HELD_BY_OPERATOR',
+} as const;
+
+export type WorkerStateReason =
+  (typeof WORKER_STATE_REASONS)[keyof typeof WORKER_STATE_REASONS];
+
+export interface SetAvailabilityOutcome {
+  moved: boolean;
+  worker: FactoryWorker;
+  note: string;
+}
+
+/**
+ * Move one worker between availability states, on an operator's authority.
+ *
+ * The guard, the streak reset and the refusal to touch `rate_limited_until` all
+ * live in `setWorkerAvailability`, where they are one statement. What is here
+ * is the vocabulary, the refusal to act on a reading that has moved, and the
+ * ledger row — because a transition nothing recorded is one nobody can ask
+ * about afterwards, which is the defect three doors along in this same loop.
+ */
+export async function setAvailability(input: {
+  name: string;
+  to: FactoryWorkerAvailability;
+  reason: WorkerStateReason;
+  actorRef: string;
+}): Promise<SetAvailabilityOutcome> {
+  if (!FACTORY_WORKER_AVAILABILITY.includes(input.to)) {
+    throw new RegistryError(
+      `"${input.to}" is not an availability a worker can hold. The set is fixed in code: ` +
+        `${FACTORY_WORKER_AVAILABILITY.join(', ')}.`,
+    );
+  }
+  const worker = (await listWorkers()).find((candidate) => candidate.name === input.name);
+  if (!worker) throw new RegistryError(`No worker is registered as ${input.name}.`);
+
+  const from = worker.availability;
+  if (from === input.to) {
+    // Not a failure and not a move. Said plainly, because an operator who reads
+    // "moved" here would believe a quarantine had been lifted that never was.
+    return {
+      moved: false,
+      worker,
+      note: `${worker.name} is already ${from}, so nothing was written.`,
+    };
+  }
+
+  const moved = await setWorkerAvailability(worker.id, from, input.to);
+  if (!moved) {
+    // The guard is on the state the operator named, so a loss here means the row
+    // changed between the read and the write — another operator, or a third
+    // failure landing in between. Refused rather than retried against whatever
+    // it is now, because the decision was about the state that was read.
+    throw new RegistryError(
+      `${worker.name} was ${from} when this was read and is not any more, so nothing was ` +
+        'changed. Read it again and decide against what it says now.',
+    );
+  }
+
+  await recordFactoryEvent({
+    workerId: worker.id,
+    accountRef: worker.accountRef,
+    kind: FACTORY_EVENT_KINDS.workerStateChanged,
+    evidenceClass: 'MEASURED',
+    detail: {
+      name: worker.name,
+      from,
+      to: input.to,
+      reason: input.reason,
+      // Attribution rather than authentication — §23's column pair. Reaching the
+      // shell is what authenticated this; the actor is whose authority it
+      // carries, and Brain cannot check that it was them.
+      actorRef: input.actorRef,
+      streakReset: from === 'QUARANTINED',
+    },
+  });
+
+  const refreshed =
+    (await listWorkers()).find((candidate) => candidate.id === worker.id) ?? worker;
+  return {
+    moved: true,
+    worker: refreshed,
+    note:
+      `${worker.name} ${from} -> ${input.to} (${input.reason}).` +
+      (from === 'QUARANTINED'
+        ? ' Its failure streak is back to zero, so three more failures would quarantine it' +
+          ' again rather than the next one.'
+        : '') +
+      (refreshed.rateLimitedUntil !== null
+        ? ` It is still deferred by provider backpressure until ${refreshed.rateLimitedUntil},` +
+          ' which is the provider\'s ceiling rather than this decision.'
+        : ''),
+  };
 }
 
 /* ------------------------------------------------------------------------- */

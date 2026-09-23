@@ -55,6 +55,7 @@ import {
   regrantBinAttempts,
   sweepExpiredBinLeases,
 } from '../server/repos/bins.ts';
+import { getWorkItem, regrantWorkAttempts } from '../server/repos/workQueue.ts';
 import { reconcileBins, reopenParkedBin } from '../server/services/bins/service.ts';
 import { evaluateContract, readSurfaceProbe } from '../server/services/bins/contracts.ts';
 import {
@@ -95,6 +96,7 @@ import {
   WORKER_INSTRUCTIONS_VERSION,
 } from '../server/services/bins/workerInstructions.ts';
 import type { BinManifest, WorkerScope } from '../server/domain/types.ts';
+import { workerIdentity } from '../server/services/identity/authenticate.ts';
 
 const SLUG = 'step-10-acceptance';
 const STEP11_SLUG = 'step-11-acceptance';
@@ -837,7 +839,7 @@ async function main(): Promise<void> {
         grantedById: 'step10-harness',
       });
       granted += 1;
-      console.log(`  granted ${worker.name} access to ${SLUG}`);
+      console.log(`  granted ${workerIdentity(worker)} access to ${SLUG}`);
     }
     console.log(`STEP10: OK setup project=${projectId} workers=${granted}`);
     return;
@@ -1825,6 +1827,36 @@ async function main(): Promise<void> {
         'Attempts spent on ordinary progress rather than on failure — the bin completed work ' +
         'items on them, and the budget was sized below what this packet legitimately needs, ' +
         'including one session per audit role. Not spent on the packet failing.',
+      /*
+       * The fourth code, and it exists because the third one's own comment says
+       * it must.
+       *
+       * That comment's rule is that an audit row recording the wrong cause is
+       * worse than one recording none, which cuts both ways: `platform-defect`
+       * names the queue confinement and the plan tool, so it is *false* of a
+       * bin whose attempts went somewhere else, and reaching for it because the
+       * category fits is the mistake it was written against.
+       *
+       * This is that category with a different mechanism under it, measured on
+       * `bin_a063e058e4ee40c5bb08`. A worker researched a fragment, submitted
+       * its claims, and released the bin **without completing its work item** —
+       * the shape §24 already records at the planning stage, arriving one stage
+       * along at research. Brain then held open work nothing could claim, said
+       * so on every arrival (`BIN_ITEM_WITHHELD`), and spent five assignments
+       * on workers that each read the state correctly and reported it. The
+       * reconciliation has since retired the abandoned item and `advancePacket`
+       * queued the verification, so what the bin lacks is a way to deliver work
+       * that now exists.
+       *
+       * `budget-too-small` is the near miss and is not true either: it says the
+       * bin *completed* work items on those attempts. This one completed none.
+       */
+      'nothing-claimable':
+        'Attempts spent on arrivals that found the bin holding open work none of them could ' +
+        'claim, and each reported that rather than failing at it — a work item left leased by ' +
+        'a worker that released without completing it, so no successor item existed yet. The ' +
+        'reconciliation has since retired that item and queued what comes next. Not spent on ' +
+        'the packet failing, and not spent completing anything either.',
     };
     const code = arg(2) ?? 'platform-defect';
     const reason = REASONS[code];
@@ -1840,6 +1872,164 @@ async function main(): Promise<void> {
       `STEP10: OK regrant ${id} raised=${outcome.raised} ` +
         `attempts=${outcome.bin?.attemptCount ?? '—'}/${outcome.bin?.maxAttempts ?? '—'} ` +
         `was=${before.attemptCount}/${before.maxAttempts}`,
+    );
+    return;
+  }
+
+  if (command === 'effect-times') {
+    /*
+     * How long a mutation actually takes, from rows Brain already writes.
+     *
+     * §27 has carried this as an open question across ten deploys: the hosted
+     * gate failed at 5m18s, 5m22s and 5m23s and those turned out to be a
+     * client giving up at 300 seconds, and what lies past that wall was
+     * measured exactly twice, by hand, out of two runs' log timestamps. The
+     * sentence it ends on is that nobody knows what the judge pass costs.
+     *
+     * `idempotency_operations` has known the whole time. `started_at` is
+     * stamped when the effect begins and `completed_at` when it commits, so
+     * the duration of every mutation this Brain has ever performed is two
+     * columns apart, per namespace, already recorded.
+     *
+     * The seam this was written for is one altitude up from a slow pass:
+     * `brain_submit_audit`'s JUDGE branch outran the Cowork connector's
+     * sixty-second tool timeout, so the worker was told its submission failed
+     * while the server committed it — 2026-09-21, `wki_8ec24cf67707419aae39`,
+     * recorded at 10:35:06.165Z against a call that had been abandoned at
+     * about 10:34:30. Whether that is ninety seconds or nine minutes is the
+     * difference between a contract to tighten and a query to find, and until
+     * now the only way to ask was to read a deploy log.
+     *
+     * Slowest first, because the tail is the thing that breaks a client. The
+     * count and the median are printed beside it so that one outlier is not
+     * mistaken for a cost. Read-only, and it names no payload: a namespace, a
+     * state and two timestamps.
+     */
+    const limit = Math.min(200, Math.max(1, Number(arg(0) ?? '20')));
+    const rows = await getDb().all<{
+      namespace: string;
+      state: string;
+      started_at: string | null;
+      completed_at: string | null;
+      work_item_id: string | null;
+    }>(
+      `SELECT namespace, state, started_at, completed_at, work_item_id
+         FROM idempotency_operations
+        WHERE started_at IS NOT NULL AND completed_at IS NOT NULL
+        ORDER BY completed_at DESC
+        LIMIT 2000`,
+    );
+    if (rows.length === 0) {
+      console.log('STEP10: OK effect-times none — no operation has both timestamps.');
+      return;
+    }
+    const timed = rows
+      .map((row) => ({
+        namespace: row.namespace,
+        state: row.state,
+        workItemId: row.work_item_id,
+        completedAt: row.completed_at!,
+        ms: Date.parse(row.completed_at!) - Date.parse(row.started_at!),
+      }))
+      .filter((row) => Number.isFinite(row.ms) && row.ms >= 0);
+
+    const byNamespace = new Map<string, number[]>();
+    for (const row of timed) {
+      const list = byNamespace.get(row.namespace) ?? [];
+      list.push(row.ms);
+      byNamespace.set(row.namespace, list);
+    }
+    console.log(`STEP10: OK effect-times sampled=${timed.length} namespaces=${byNamespace.size}`);
+    console.log('');
+    console.log('  namespace                     n    median      p90       max');
+    for (const [namespace, all] of [...byNamespace].sort((a, b) => b[1].length - a[1].length)) {
+      const sorted = [...all].sort((a, b) => a - b);
+      const at = (q: number): number => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]!;
+      const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+      console.log(
+        `  ${namespace.padEnd(26)} ${String(all.length).padStart(4)}  ` +
+          `${secs(at(0.5)).padStart(8)} ${secs(at(0.9)).padStart(8)} ` +
+          `${secs(sorted[sorted.length - 1]!).padStart(9)}`,
+      );
+    }
+    console.log('');
+    console.log(`  The ${limit} slowest, newest first within ties:`);
+    for (const row of [...timed].sort((a, b) => b.ms - a.ms).slice(0, limit)) {
+      console.log(
+        `    ${(row.ms / 1000).toFixed(1).padStart(8)}s  ${row.namespace.padEnd(24)} ` +
+          `${row.state.padEnd(10)} ${row.workItemId ?? '\u2014'}  ${row.completedAt}`,
+      );
+    }
+    return;
+  }
+
+  if (command === 'regrant-work') {
+    /*
+     * The same thing one object down, and it exists because the ceiling now
+     * binds where it did not.
+     *
+     * `failWork` has always honoured `max_attempts`, so an item a worker
+     * *reports* failed retires correctly. An item whose lease merely expires —
+     * which is what an infrastructure failure looks like from the queue — was
+     * re-offered for ever, charged another attempt each time, and nothing read
+     * the number again. Production held `wki_207ff7c14abf46c19fd8` at 4 of 2
+     * and `wki_7b51a43e958f42f7b5ba` at 5 of 2, both on leases that lapsed
+     * days earlier. `claimWork` carries the clause now, in the candidate read
+     * and in the swap.
+     *
+     * Which means an item can genuinely stop, and an escalation with no
+     * answering transition is stuck rather than waiting. This is it, with
+     * `regrant`'s restrictions verbatim: the ceiling rises, the count and its
+     * history stay, a terminal item is refused, and the reason comes from a
+     * closed set because a free-text one here would be a caller writing its
+     * own audit trail.
+     */
+    const id = arg(0);
+    const to = Number(arg(1) ?? '0');
+    if (!id || !Number.isInteger(to) || to < 1 || to > 100) {
+      console.log('STEP10 REFUSED: pass a work item id and a new ceiling between 1 and 100.');
+      process.exitCode = 1;
+      return;
+    }
+    const REASONS: Record<string, string> = {
+      'dependency-outage':
+        'Attempts spent on a dependency failing rather than on the work failing — a submission ' +
+        'the server committed was reported to the worker as a timeout, so the worker could not ' +
+        'complete its own item and the lease lapsed. The effect is recorded; what was lost was ' +
+        'the reply. Not spent on the item failing.',
+      'budget-too-small':
+        'Attempts spent on ordinary progress rather than on failure — the budget was sized ' +
+        'below what this item legitimately needs. Not spent on the item failing.',
+      'platform-defect':
+        'Attempts spent on a Brain-side defect that left the worker unable to do the work it ' +
+        'was handed, and which has since been corrected. Not spent on the item failing.',
+    };
+    const code = arg(2) ?? 'dependency-outage';
+    const reason = REASONS[code];
+    if (!reason) {
+      console.log(
+        `STEP10 REFUSED: unknown reason code "${code}". One of: ${Object.keys(REASONS).join(', ')}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const before = await getWorkItem(id);
+    if (!before) {
+      console.log('STEP10 REFUSED: no such work item.');
+      process.exitCode = 1;
+      return;
+    }
+    const outcome = await regrantWorkAttempts({
+      workItemId: id,
+      maxAttempts: to,
+      reason,
+      actorType: 'SYSTEM',
+      actorId: 'step10 regrant-work',
+    });
+    console.log(
+      `STEP10: OK regrant-work ${id} raised=${outcome.raised} ` +
+        `attempts=${outcome.item?.attemptCount ?? '\u2014'}/${outcome.item?.maxAttempts ?? '\u2014'} ` +
+        `was=${before.attemptCount}/${before.maxAttempts} state=${outcome.item?.state ?? '\u2014'}`,
     );
     return;
   }
@@ -2152,7 +2342,7 @@ async function main(): Promise<void> {
       const tokens = await listTokensForWorker(worker.id);
       if (tokens.length === 0) continue;
       console.log('');
-      console.log(`  worker ${worker.name} (${worker.id})`);
+      console.log(`  worker ${workerIdentity(worker)} (${worker.id})`);
       for (const token of tokens) {
         const rotated = token.parentTokenId !== null;
         if (token.kind === 'ACCESS') {
@@ -2162,6 +2352,10 @@ async function main(): Promise<void> {
         }
         console.log(
           `    ${token.kind.padEnd(7)} issued ${token.createdAt}  expires ${token.expiresAt}` +
+            // The client id, because a worker behind two connectors is the one
+            // thing this report was blind to and the thing that makes an
+            // attribution ambiguous. It is a public identifier, not a secret.
+            `  client ${token.clientId}` +
             `  used ${token.lastUsedAt ?? 'never'}` +
             `  ${rotated ? `rotated from ${token.parentTokenId}` : 'from an authorization code'}` +
             (token.revokedAt ? `  revoked ${token.revokedAt}` : ''),
@@ -2432,6 +2626,71 @@ async function main(): Promise<void> {
     }
     console.log('');
     console.log(`STEP10: OK trace bin=${bin.id} state=${bin.state}`);
+    return;
+  }
+
+  if (command === 'tick-failures') {
+    /*
+     * What the dispatcher's own ticks have thrown, grouped by what they said.
+     *
+     * `DISPATCH_TICK_FAILED` is written by `startDispatcher`'s catch, which is
+     * the one place a tick can fail without failing anything else — the timer
+     * swallows it and the next tick runs, so a defect here is invisible to
+     * every surface and to every bin. Production carried a cumulative count of
+     * 32 with no way to ask what any of them were, which is a counter rather
+     * than a reading: §23's own distinction, at the dispatcher.
+     *
+     * Grouped by message on purpose. Thirty-two occurrences of one sentence is
+     * one defect that has since been fixed or has not; thirty-two different
+     * sentences is a fleet in trouble. The newest and oldest timestamps are
+     * printed per group because that is what says which it is — a group whose
+     * newest entry predates a known repair is history, and one still arriving
+     * is work.
+     *
+     * Read-only. It writes nothing and names no conversation content.
+     */
+    const rows = await getDb().all<{ reason: string | null; n: number; first_at: string; last_at: string }>(
+      `SELECT reason AS reason, COUNT(*) AS n, MIN(at) AS first_at, MAX(at) AS last_at
+         FROM bin_events
+        WHERE event_type = 'DISPATCH_TICK_FAILED'
+        GROUP BY reason
+        -- By the alias, not the aggregate expression: the conventions in
+        -- CLAUDE.md say an ORDER BY has to be sayable in both dialects, and
+        -- naming the output column is the form that always is.
+        ORDER BY last_at DESC`,
+    );
+    const total = rows.reduce((sum, row) => sum + Number(row.n), 0);
+    if (total === 0) {
+      console.log('STEP10: OK tick-failures none — no dispatcher tick has ever failed on this Brain.');
+      return;
+    }
+    console.log(`STEP10: OK tick-failures total=${total} distinct=${rows.length}`);
+    console.log(`DISPATCH_TICK_FAILED: ${total} in ${rows.length} distinct message(s), newest first.`);
+    console.log('');
+    for (const row of rows) {
+      console.log(`  ${String(row.n).padStart(5)}x  first ${row.first_at}  last ${row.last_at}`);
+      console.log(`         ${row.reason ?? '(no reason recorded)'}`);
+      console.log('');
+    }
+    /*
+     * And the same question for the refusals, which are ordinary and are not
+     * failures. A refusal is not misconduct (§23), so a large number here says
+     * the fleet was busy rather than broken — but *which* refusal it was is the
+     * difference between "at its ceiling" and "no surface serves this family",
+     * and those have opposite remedies.
+     */
+    const refusals = await getDb().all<{ outcome: string | null; n: number; last_at: string }>(
+      `SELECT outcome AS outcome, COUNT(*) AS n, MAX(at) AS last_at
+         FROM bin_events
+        WHERE event_type = 'DISPATCH_UNROUTED'
+        GROUP BY outcome
+        ORDER BY n DESC`,
+    );
+    const unrouted = refusals.reduce((sum, row) => sum + Number(row.n), 0);
+    console.log(`DISPATCH_UNROUTED: ${unrouted} cumulative, by refusal.`);
+    for (const row of refusals) {
+      console.log(`  ${String(row.n).padStart(6)}  ${row.outcome ?? '(none)'}  last ${row.last_at}`);
+    }
     return;
   }
 

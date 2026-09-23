@@ -114,6 +114,62 @@ export async function recordFragmentClaims(input: {
         structuralSubject: claim.structuralSubject ?? null,
         structuralQualifier: claim.structuralQualifier ?? null,
         structuralAmountCents: claim.structuralAmountCents ?? null,
+        // And the labor declaration, whole for the identical reason: a channel
+        // without its basis is a figure nothing can compare, and a rate
+        // without its finding belongs to no task.
+        laborFinding: claim.laborFinding ?? null,
+        laborSubject: claim.laborSubject ?? null,
+        laborQualifier: claim.laborQualifier ?? null,
+        laborRateCents: claim.laborRateCents ?? null,
+        /*
+         * And the capability declaration, for the same reason.
+         *
+         * Eight fields that only mean anything together: a demand signal
+         * without its observation date is one nobody can date, a finding
+         * without its subject names nothing, a capital figure without its
+         * currency is the unknown taken as a favourable assumption, and a
+         * capital requirement without its scenario is a number about a shape
+         * of the business nobody stated.
+         *
+         * **Carrying some of them is the defect §33 records at
+         * `applyValidationAnswers`, and this mapper committed it.** It was
+         * written when a capability declaration was three fields, the other
+         * five were added beside it, and this line was not — so a worker
+         * submitted a correct capital requirement over the wire, the wire door
+         * validated all eight, and five of them were dropped here silently.
+         * Every capital claim then reached the absorption with no scenario, no
+         * basis and no amount, was refused for it, and the refusal named the
+         * worker. Every row read healthy and the whole suite passed, because
+         * nothing else in it submits a capital requirement through this door.
+         */
+        capabilityFinding: claim.capabilityFinding ?? null,
+        capabilitySubject: claim.capabilitySubject ?? null,
+        capabilityObservedOn: claim.capabilityObservedOn ?? null,
+        capabilityQualifier: claim.capabilityQualifier ?? null,
+        capabilityBasis: claim.capabilityBasis ?? null,
+        capabilityAmountLowMinor: claim.capabilityAmountLowMinor ?? null,
+        capabilityAmountHighMinor: claim.capabilityAmountHighMinor ?? null,
+        capabilityCurrency: claim.capabilityCurrency ?? null,
+        /*
+         * And the dealflow declaration, for the reason directly above — which
+         * this mapper then proved by omission.
+         *
+         * The unit suite wrote these fields straight into the claims table and
+         * passed; the walk that submits through `brain_submit_claims` found
+         * every one of them arriving as NULL, because the validator ran, the
+         * tool accepted the claim, the insert had the columns, and *this*
+         * mapper stood between them carrying only what it had been told about.
+         * §33's defect one layer along and with the same signature: a healthy
+         * worker, a healthy submission, a healthy row, and the one column that
+         * decides whether anything is created silently empty.
+         */
+        dealFinding: claim.dealFinding ?? null,
+        dealSubject: claim.dealSubject ?? null,
+        dealEquipment: claim.dealEquipment ?? null,
+        dealJurisdiction: claim.dealJurisdiction ?? null,
+        dealValue: claim.dealValue ?? null,
+        dealAmountCents: claim.dealAmountCents ?? null,
+        dealCurrency: claim.dealCurrency ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though

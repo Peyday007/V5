@@ -472,7 +472,7 @@ describe('accepting an invitation', () => {
     if (!issued.ok) throw new Error('the invitation was refused');
     const token = tokenOf(issued.issued.invitationUrl);
 
-    const refused = await acceptInvitation({ token, password: 'a-generated-test-password-01' });
+    const refused = await acceptInvitation({ token });
     expect(refused.ok).toBe(false);
     if (refused.ok) return;
     expect(refused.reason).toMatch(/Brain administrator/);
@@ -515,7 +515,6 @@ describe('accepting an invitation', () => {
 
     const outcome = await acceptInvitation({
       token: tokenOf(issued.issued.invitationUrl),
-      password: 'a-generated-test-password-03',
       displayName: 'A new collaborator',
       ...({ email: 'somebody-else@example.invalid', isBrainAdmin: true } as object),
     });
@@ -529,6 +528,64 @@ describe('accepting an invitation', () => {
     const made = await getUserByEmail('brand-new@example.invalid');
     // A project invitation confers project membership, never Brain-wide power.
     expect(made!.isBrainAdmin).toBe(false);
+    /*
+     * And the account it made holds no password, which is the property that
+     * makes this journey safe under `passwordDoor.ts`: the door is open for an
+     * account with no working device, so an invitation that chose a password
+     * would have handed an ordinary member exactly the credential they are not
+     * supposed to have. What comes back instead is one enrollment link.
+     */
+    expect(made!.passwordUpdatedAt).toBeNull();
+    expect(outcome.enrollment?.token).toMatch(/^brnv_/);
+  });
+
+  it('will not let an acceptor take a name somebody already signs in by', async () => {
+    /*
+     * The one path where the person choosing a display name is not an
+     * administrator — and since 078 that name is what the door resolves, so an
+     * acceptor typing an existing member's name would lock out both of them.
+     *
+     * §26's *"the acceptor chooses neither who they are nor what they get"*
+     * was written about the address and the role, and was never revisited when
+     * the name stopped being a label. Run against the unguarded version first,
+     * where the account is created under the colliding name.
+     *
+     * The remedy is the address rather than a refusal: an invited person
+     * holding a link they cannot spend is an escalation with no answering
+     * transition, and an awkward name is correctable by the rename.
+     */
+    const issuer = await admin();
+    const sitting = await person('already-answers-to-this', false);
+    const issued = await inviteToProject({
+      principal: issuer,
+      projectId: fixture.project.id,
+      email: 'arrives-second@example.invalid',
+      role: 'MEMBER',
+      origin: ORIGIN,
+    });
+    if (!issued.ok) throw new Error('the invitation was refused');
+
+    const outcome = await acceptInvitation({
+      token: tokenOf(issued.issued.invitationUrl),
+      // Character for character, and in a different case, because the door
+      // folds case and two names differing only in it are one identity.
+      displayName: sitting.displayName.toUpperCase(),
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.createdAccount).toBe(true);
+
+    const { getUserByEmail } = await import('../server/repos/identity.ts');
+    const made = await getUserByEmail('arrives-second@example.invalid');
+    expect(made).not.toBeNull();
+    expect(made!.displayName).toBe('arrives-second@example.invalid');
+
+    // And the person who was already here is still reachable by their name,
+    // which is the half that matters: the collision would have taken them out
+    // too, and they did nothing.
+    const { getPinCredentialByIdentity } = await import('../server/repos/identity.ts');
+    const resolved = await getPinCredentialByIdentity(sitting.displayName);
+    expect(resolved.outcome).toBe('FOUND');
   });
 
   it('records a denial as a category, with no email and no token in it', async () => {

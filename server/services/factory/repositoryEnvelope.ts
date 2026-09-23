@@ -171,6 +171,18 @@ export const REPOSITORY_GRANTS: readonly RepositoryGrant[] = [
        */
       '.github/workflows/**',
       '.github/CANONICAL_BRANCH',
+      /*
+       * And the composite actions those workflows call.
+       *
+       * The same argument one directory along: a guard a workflow `uses:` is a
+       * guard, and a campaign that could edit `await-release` could take a
+       * console command off the wait that keeps it away from a machine being
+       * replaced. It is listed as a directory rather than by name for exactly
+       * the reason above — a new action is not matched by a pattern naming the
+       * old one. (The canonical-branch guard needs no entry: it is a script
+       * *inside* `.github/workflows/`, which is where it was deliberately put.)
+       */
+      '.github/actions/**',
       'fly.toml',
       'Dockerfile',
     ],

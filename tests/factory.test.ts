@@ -50,8 +50,10 @@ import {
   getWorker,
   listFactoryEvents,
   recordFactoryEvent,
+  recordWorkerFailure,
   recordWorkerRateLimit,
   registerWorker,
+  setWorkerAvailability,
   workerLoad,
 } from '../server/repos/factoryFleet.ts';
 import { createUser } from '../server/repos/identity.ts';
@@ -62,7 +64,7 @@ import { gatingFindings, queueRepairs, reconcileRepairs } from '../server/servic
 import { decideIndependence, parseReview } from '../server/services/factory/review.ts';
 import { maxOverlap, computeMetrics } from '../server/services/factory/metrics.ts';
 import { decide, tuneLaneTarget, chooseWorker } from '../server/services/factory/scheduler.ts';
-import { capacity } from '../server/services/factory/registry.ts';
+import { capacity, setAvailability } from '../server/services/factory/registry.ts';
 import { parseWorkerReport } from '../server/services/factory/prompts.ts';
 import { run, gitOrThrow, ensureWorktree, commitAll } from '../server/services/factory/git.ts';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';
@@ -750,6 +752,69 @@ describe('ownership and integration', () => {
     fs.rmSync(worktreePath, { recursive: true, force: true });
   });
 
+  it('rejects a diff that reached a forbidden path, however widely the unit owned', async () => {
+    /*
+     * Ownership of `**` passes the ownership check for every file; the forbidden
+     * list is a separate question on the files that actually moved, and it is
+     * the one that binds.
+     */
+    const changeRequest = await approvedChangeRequest({ mutationScope: ['**'] });
+    const { campaign } = await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: changeRequest.baseSha,
+      laneTarget: 1,
+      laneTargetReason: 'initial',
+    });
+    const { unit } = await ensureUnit({
+      campaignId: campaign.id,
+      unitKey: 'everything',
+      kind: 'IMPLEMENTATION',
+      role: 'IMPLEMENTER',
+      title: 'everything',
+      objective: 'o',
+      acceptance: ['a'],
+      ownedPaths: ['**'],
+      requiredContext: [],
+      verification: [],
+      expectedArtifact: 'a commit',
+      state: 'READY',
+    });
+    const worktreePath = path.join(os.tmpdir(), `factory-wt-forbidden-${Date.now()}`);
+    const branch = 'factory/test/forbidden';
+    await ensureWorktree(repoRoot, { path: worktreePath, branch, baseSha: changeRequest.baseSha });
+    fs.writeFileSync(path.join(worktreePath, 'src', 'one.txt'), 'changed\n');
+    fs.mkdirSync(path.join(worktreePath, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(worktreePath, '.claude', 'settings.json'), '{"permissions":{}}\n');
+    const head = await commitAll(worktreePath, 'touch a forbidden file');
+    const claimed = await claimUnits({ campaignId: campaign.id, workerId: 'w1', unitIds: [unit.id] });
+    await markImplemented(
+      {
+        unitId: unit.id,
+        workerId: 'w1',
+        leaseId: claimed[0]?.leaseId ?? '',
+        leaseGeneration: claimed[0]?.leaseGeneration ?? 0,
+      },
+      {
+        branch,
+        headSha: head ?? '',
+        baseSha: changeRequest.baseSha,
+        worktreePath,
+        workerSummary: 'did the thing',
+        terminalResult: null,
+      },
+    );
+    const fresh = (await listUnits(campaign.id))[0];
+    expect(fresh?.state).toBe('IMPLEMENTED');
+    const result = await integrateUnit({ repoRoot, campaign, changeRequest, unit: fresh ?? unit });
+    expect(result.outcome).toBe('REJECTED');
+    expect(result.rejectedPaths).toEqual(['.claude/settings.json']);
+    const after = await getUnit(unit.id);
+    expect(after?.failureCategory).toBe('OUT_OF_SCOPE_MUTATION');
+    expect(after?.state).toBe('READY');
+    fs.rmSync(worktreePath, { recursive: true, force: true });
+  });
+
   it('merges a diff that stayed inside the unit, and unblocks what waited on it', async () => {
     const changeRequest = await approvedChangeRequest({ mutationScope: ['src/**'] });
     const { campaign } = await ensureCampaign({
@@ -821,6 +886,8 @@ describe('ownership and integration', () => {
     const unit = await getUnit(first.unit.id);
     const result = await integrateUnit({ repoRoot, campaign, changeRequest, unit: unit! });
     expect(result.outcome).toBe('MERGED');
+    // Something ran: `every` over an empty list is true and would pass here too.
+    expect(result.verification.length).toBeGreaterThan(0);
     expect(result.verification.every((entry) => entry.exitCode === 0)).toBe(true);
     expect((await getUnit(first.unit.id))?.state).toBe('INTEGRATED');
     // Integration, not implementation, is what unblocks downstream work.
@@ -1256,6 +1323,217 @@ describe('the registry', () => {
     expect(worker.credentialDigest).toHaveLength(64);
     expect(JSON.stringify(worker)).not.toContain('super-secret-value');
   });
+
+  /*
+   * The quarantine used to be one-way.
+   *
+   * `recordWorkerFailure` writes QUARANTINED at three consecutive failures and
+   * `capacity()` then computes `healthy = availability === 'AVAILABLE' && !limited`,
+   * so the worker has no free slots at all. Nothing wrote AVAILABLE back:
+   * `registerWorker` is ON CONFLICT DO NOTHING, `recordWorkerSuccess` leaves
+   * availability alone and cannot run anyway because a worker with no slots is
+   * never handed work to succeed at, and `patchWorker` — the one function that
+   * could — had no caller in the repository. Three ordinary failures retired a
+   * local-plane worker until somebody ran SQL, which invariant 1 forbids.
+   *
+   * Each of these was run against its own defect first: the streak reset
+   * removed, the `from` guard removed, and `rate_limited_until` cleared along
+   * with the availability.
+   */
+  async function quarantined(name: string) {
+    const { worker } = await registerWorker({
+      name,
+      kind: 'LOCAL_CLI',
+      accountRef: 'a1',
+      model: 'sonnet',
+      capabilities: ['IMPLEMENT'],
+      repositories: ['*'],
+      maxConcurrency: 2,
+    });
+    await recordWorkerFailure(worker.id);
+    await recordWorkerFailure(worker.id);
+    await recordWorkerFailure(worker.id);
+    return worker;
+  }
+
+  const slotFor = async (id: string) =>
+    (await capacity()).slots.find((slot) => slot.workerId === id);
+
+  it('has an answering transition out of a quarantine, and it actually restores capacity', async () => {
+    const worker = await quarantined('three-strikes');
+    expect((await getWorker(worker.id))?.availability).toBe('QUARANTINED');
+    expect((await slotFor(worker.id))?.freeSlots).toBe(0);
+
+    const outcome = await setAvailability({
+      name: 'three-strikes',
+      to: 'AVAILABLE',
+      reason: 'SURFACE_REPAIRED',
+      actorRef: 'usr_operator',
+    });
+
+    expect(outcome.moved).toBe(true);
+    expect((await getWorker(worker.id))?.availability).toBe('AVAILABLE');
+    // The half that makes it a transition rather than a state column that
+    // changed: the worker is capacity again.
+    expect((await slotFor(worker.id))?.freeSlots).toBe(2);
+  });
+
+  it('resets the failure streak, so the next failure is not the third one again', async () => {
+    const worker = await quarantined('cosmetic-restore');
+    await setAvailability({
+      name: 'cosmetic-restore',
+      to: 'AVAILABLE',
+      reason: 'DEFECT_FIXED',
+      actorRef: 'usr_operator',
+    });
+
+    /*
+     * `recordWorkerFailure` increments and then tests `>= 3`. Restored with the
+     * streak still at three, one more failure re-quarantines immediately — so
+     * the transition would exist, report success, and change nothing that lasts.
+     */
+    expect(await recordWorkerFailure(worker.id)).toBe(1);
+    expect((await getWorker(worker.id))?.availability).toBe('AVAILABLE');
+    expect(await recordWorkerFailure(worker.id)).toBe(2);
+    expect((await getWorker(worker.id))?.availability).toBe('AVAILABLE');
+    // And it still quarantines on the third, because the ceiling was not raised.
+    expect(await recordWorkerFailure(worker.id)).toBe(3);
+    expect((await getWorker(worker.id))?.availability).toBe('QUARANTINED');
+  });
+
+  it('never overrules the provider about when it will answer', async () => {
+    const worker = await quarantined('still-deferred');
+    const until = await recordWorkerRateLimit(worker.id, 60_000);
+
+    await setAvailability({
+      name: 'still-deferred',
+      to: 'AVAILABLE',
+      reason: 'SURFACE_REPAIRED',
+      actorRef: 'usr_operator',
+    });
+
+    // §23: a refusal is not misconduct, and it is the provider's ceiling with
+    // the provider's own clock. An operator deciding a worker is available must
+    // not thereby decide the provider will answer.
+    const row = await getWorker(worker.id);
+    expect(row?.availability).toBe('AVAILABLE');
+    expect(row?.rateLimitedUntil).toBe(until);
+    expect((await slotFor(worker.id))?.freeSlots).toBe(0);
+  });
+
+  /*
+   * The guard, pinned where it actually is.
+   *
+   * This was written as two concurrent `setAvailability` calls, with a comment
+   * asserting that both would read QUARANTINED before either wrote — and
+   * nothing that made that true. On SQLite writers are serialized and the two
+   * awaits interleaved so that both reads did land first, so it passed. On
+   * Postgres the round trips are slower and the second read landed *after* the
+   * first write, which makes the second call a legitimate move from the new
+   * state rather than a losing claim: two fulfilled, and a gate failure. **A
+   * test that hopes for a race is a flake**, which is the shape §41 records as
+   * worse than no guard, and it was mine rather than the code's — no
+   * production behaviour was wrong.
+   *
+   * So the race is forced rather than hoped for, one frame down. Both claimants
+   * carry the *same* `from` by construction, so whichever statement lands
+   * second matches nothing whatever the backend's timing does. That is the
+   * compare-and-swap, and `setAvailability`'s throw is this `false` one frame
+   * up — reachable only as a genuine race, which is why it is asserted here and
+   * not above it.
+   */
+  it('refuses a claim against a state that has since moved', async () => {
+    const worker = await quarantined('raced');
+
+    const [one, two] = await Promise.all([
+      setWorkerAvailability(worker.id, 'QUARANTINED', 'AVAILABLE'),
+      setWorkerAvailability(worker.id, 'QUARANTINED', 'PAUSED'),
+    ]);
+
+    // Exactly one, whichever it was. A losing claim is an ordinary outcome.
+    expect([one, two].filter(Boolean)).toHaveLength(1);
+    const after = (await getWorker(worker.id))?.availability;
+    expect(['AVAILABLE', 'PAUSED']).toContain(after);
+  });
+
+  it('re-reads the row rather than trusting the state a caller last saw', async () => {
+    /*
+     * The property that made the concurrent version of the test above wrong,
+     * asserted deliberately: a second *sequential* decision is a second
+     * legitimate move, because the service reads the row itself. An operator
+     * restoring a worker and then pausing it has done two things, and the
+     * ledger says two things happened.
+     */
+    const worker = await quarantined('reread');
+
+    const first = await setAvailability({
+      name: 'reread',
+      to: 'AVAILABLE',
+      reason: 'SURFACE_REPAIRED',
+      actorRef: 'usr_one',
+    });
+    expect(first.moved).toBe(true);
+
+    const second = await setAvailability({
+      name: 'reread',
+      to: 'PAUSED',
+      reason: 'WITHDRAWN_BY_OPERATOR',
+      actorRef: 'usr_two',
+    });
+    expect(second.moved).toBe(true);
+    expect((await getWorker(worker.id))?.availability).toBe('PAUSED');
+
+    const events = await listFactoryEvents(null, { kinds: ['WORKER_STATE_CHANGED'], limit: 20 });
+    expect(events.filter((event) => event.workerId === worker.id)).toHaveLength(2);
+  });
+
+  it('says nothing was written rather than reporting a move that did not happen', async () => {
+    await quarantined('already-there');
+    const outcome = await setAvailability({
+      name: 'already-there',
+      to: 'QUARANTINED',
+      reason: 'HELD_BY_OPERATOR',
+      actorRef: 'usr_operator',
+    });
+    expect(outcome.moved).toBe(false);
+    expect(outcome.note).toMatch(/already QUARANTINED/);
+  });
+
+  it('records what moved, why, and whose authority it carried', async () => {
+    const worker = await quarantined('audited');
+    await setAvailability({
+      name: 'audited',
+      to: 'AVAILABLE',
+      reason: 'DEFECT_FIXED',
+      actorRef: 'usr_operator',
+    });
+
+    const events = await listFactoryEvents(null, { kinds: ['WORKER_STATE_CHANGED'], limit: 20 });
+    const row = events.find((event) => event.workerId === worker.id);
+    expect(row).toBeDefined();
+    expect(row?.detail).toMatchObject({
+      from: 'QUARANTINED',
+      to: 'AVAILABLE',
+      reason: 'DEFECT_FIXED',
+      actorRef: 'usr_operator',
+      streakReset: true,
+    });
+  });
+
+  it('refuses a reason outside the closed set, at the door', async () => {
+    await quarantined('free-text');
+    const source = fs.readFileSync('scripts/factory.ts', 'utf8');
+    const command = source.slice(
+      source.indexOf("case 'set-state': {"),
+      source.indexOf("case 'submit': {"),
+    );
+    // A caller that can write its own audit trail writes whatever it wanted.
+    expect(command).toMatch(/WORKER_STATE_REASONS/);
+    expect(command).toMatch(/--reason is required, and is one of/);
+    // And the command is advertised, because one nobody is told about is one
+    // nobody uses.
+    expect(source.slice(source.lastIndexOf('commands:'))).toMatch(/set-state/);
+  });
 });
 
 describe('approval', () => {
@@ -1308,5 +1586,128 @@ describe('cycles', () => {
     await addDependency(campaign.id, b.unit.id, a.unit.id);
     expect(await findDependencyCycle(campaign.id)).not.toBeNull();
     expect(await listFindings(campaign.id)).toEqual([]);
+  });
+});
+
+/**
+ * Availability has two writers, and a third would make both of them decorative.
+ *
+ * `setWorkerAvailability` is a compare-and-swap that resets the failure streak
+ * and records why; `recordWorkerFailure` writes the quarantine Brain derives
+ * from what actually happened. `patchWorker` used to be able to write the same
+ * column with a bare `UPDATE`, and had no caller anywhere in the repository —
+ * so the guarded transition was a guard for exactly as long as nobody found the
+ * other door. A worker restored through it would have kept its streak at three
+ * and re-quarantined on its very next failure, with nothing on the ledger
+ * saying anybody had done anything.
+ *
+ * This reads the repository rather than exercising a call, for
+ * `operatorConsoleRemoved`'s reason: what must not exist is not something a
+ * passing request can show you.
+ */
+describe('one guarded writer for a worker’s availability', () => {
+  const repo = () => fs.readFileSync('server/repos/factoryFleet.ts', 'utf8');
+
+  it('is written in exactly the two places that are allowed to write it', () => {
+    // Comments first. The paragraph above `WorkerPatch` quotes the very
+    // statement this refuses, so a reader that took the file whole would count
+    // the explanation as a third writer — which is what it did, and is the
+    // third time a guard in this repository has read prose as code.
+    const code = repo()
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+    const writes = code
+      .split('\n')
+      .map((line, index) => ({ line: line.trim(), at: index + 1 }))
+      .filter((one) => /availability\s*=\s*(\?|'[A-Z_]+')/.test(one.line))
+      // The compare-and-swap's own `WHERE … availability = ?` is a read of the
+      // state it is moving from, which is the thing that makes it a guard.
+      .filter((one) => !one.line.startsWith('WHERE'));
+    expect(writes).toHaveLength(2);
+  });
+
+  it('cannot be reached through the configuration patch', () => {
+    const source = repo();
+    const from = source.indexOf('export interface WorkerPatch {');
+    const to = source.indexOf('}', from);
+    if (from === -1 || to === -1) {
+      throw new Error('`server/repos/factoryFleet.ts` has no `WorkerPatch` to read.');
+    }
+    expect(source.slice(from, to)).not.toMatch(/availability/);
+    // And the function body cannot write what the type cannot carry.
+    const body = source.slice(source.indexOf('export async function patchWorker'));
+    expect(body.slice(0, body.indexOf('\n}'))).not.toMatch(/availability/);
+  });
+});
+
+/**
+ * A failed operator command must not render as a green run.
+ *
+ * `factory.yml` ended at a `tee`, and a pipeline's status is its last stage's,
+ * so the step passed whatever the Brain answered. Measured against the deployed
+ * image on 2026-09-22: `factory pull-request`, on a build with no such command,
+ * printed the list of commands that do exist and the run went green. §47
+ * records that shape as worse than a gate that did not run at all, because a
+ * green tick is read as evidence.
+ *
+ * The remedy is the one `deploy.yml` and `step10.yml` already use — a verdict
+ * the script printed, rather than an exit code that had to survive an SSH
+ * session, a shell and a CLI — so this holds the two ends of it together.
+ */
+describe('the factory door reports what actually happened', () => {
+  const workflow = () => fs.readFileSync('.github/workflows/factory.yml', 'utf8');
+  const door = () => fs.readFileSync('scripts/factory.ts', 'utf8');
+
+  const verdictStep = (): string => {
+    const source = workflow();
+    const from = source.indexOf('flyctl ssh console');
+    if (from === -1) {
+      throw new Error('`.github/workflows/factory.yml` no longer runs the factory door.');
+    }
+    return source.slice(from);
+  };
+
+  it('asserts the verdict rather than ending at the pipe', () => {
+    const step = verdictStep();
+    expect(step).toMatch(/grep -q '\^FACTORY: OK'/);
+    // Every other way out is a failure with a reason on it.
+    expect(step).toMatch(/::error::/);
+    expect(step).toMatch(/exit 1/);
+  });
+
+  it('prints the verdict only where nothing failed', () => {
+    const source = door();
+    const from = source.indexOf('if (!process.exitCode)');
+    if (from === -1) {
+      throw new Error('`scripts/factory.ts` prints no verdict a workflow could read.');
+    }
+    expect(source.slice(from, from + 200)).toMatch(/FACTORY: OK/);
+    // An unknown command is the caller getting it wrong, and used to be silent.
+    const usage = source.lastIndexOf('commands: fleet');
+    expect(source.slice(usage)).toMatch(/process\.exitCode = 1/);
+  });
+
+  it('reads a refusal as a refusal and everything else as a crash', () => {
+    /*
+     * The registry declines by throwing — no worker of that name, a state that
+     * is not a state, a compare-and-swap lost to another operator — and
+     * uncaught, each of those reached the operator as a stack trace. That is
+     * the wrong sentence about a decision the factory made deliberately, and
+     * the workflow above cannot tell it from a process that died.
+     *
+     * Only that one class is caught. Dressing an unexpected error as a refusal
+     * would lose the stack that explains it, and would tell an operator the
+     * factory decided something when nothing decided anything.
+     */
+    const source = door();
+    const from = source.lastIndexOf('try {');
+    if (from === -1) {
+      throw new Error('`scripts/factory.ts` does not catch anything at its entry.');
+    }
+    const entry = source.slice(from);
+    expect(entry).toMatch(/error instanceof RegistryError/);
+    expect(entry).toMatch(/FACTORY REFUSED/);
+    // Anything that is not a refusal keeps its stack.
+    expect(entry).toMatch(/throw error/);
   });
 });

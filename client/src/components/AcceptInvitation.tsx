@@ -20,12 +20,22 @@
  * the distinction the server spent effort refusing to make. What it does instead
  * is show that sentence, which already names the remedy.
  *
- * **It never says what will happen; it asks.** Whether a password is needed is
+ * **It never says what will happen; it asks.** Whether an account is needed is
  * the server's answer from rows, carried in the preview, so the form cannot ask
- * a new person for nothing or an existing one for a password they already have.
+ * a new person for nothing or an existing one for a device they already hold.
+ *
+ * **An account it creates holds no password, and never did hold one for long.**
+ * This screen used to ask an invited person to choose one, which was the last
+ * path in the application that could mint a password-backed human — and under
+ * `services/identity/passwordDoor.ts` that password would have *worked*, which
+ * is precisely the credential no member is meant to have. The account is
+ * created credential-less now, and the enrollment link that comes back with
+ * the acceptance is spent here, so the journey still ends with somebody signed
+ * in rather than holding a membership they cannot reach.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Api, ApiError, type AcceptedInvitation, type InvitationPreview } from '../lib/api.ts';
+import { Passkeys } from '../lib/passkeys.ts';
 
 function describe(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -56,8 +66,8 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
 
   const look = useCallback(() => {
     if (token.length === 0) {
@@ -84,23 +94,41 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
 
   useEffect(look, [look]);
 
+  /**
+   * Accept, and — for an account this acceptance creates — register the device
+   * in the same breath.
+   *
+   * The account it makes holds **no credential at all**, so stopping at the
+   * acceptance would leave somebody a member of a project they cannot sign in
+   * to. The enrollment link comes back in the reply, is spent here, and is
+   * never stored: it ends with them signed in, which is why the screen after
+   * this offers to open the Brain rather than to sign in.
+   *
+   * **It is spent on a PIN rather than on a device, and that is a correction
+   * rather than a preference.** This step used to call `Passkeys.enrol`, and
+   * the identical step on the sign-in screen is what locked this Brain's owner
+   * out: WebAuthn answers every refusal with one sentence, and a browser that
+   * refuses cannot be argued with. An acceptance whose last step can be refused
+   * with no alternative is one that leaves somebody holding a membership they
+   * cannot reach.
+   */
   async function submit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
-    if (preview?.accountNeeded && password !== confirm) {
-      setError('Those two passwords are not the same.');
+    if (preview?.accountNeeded && pin !== confirmPin) {
+      setError('Those two PINs are not the same.');
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      setAccepted(
-        await Api.acceptInvitation({
-          token,
-          ...(preview?.accountNeeded ? { password, displayName } : {}),
-        }),
-      );
-      setPassword('');
-      setConfirm('');
+      const outcome = await Api.acceptInvitation({
+        token,
+        ...(preview?.accountNeeded ? { displayName } : {}),
+      });
+      if (outcome.enrollment) {
+        await Passkeys.enrolWithPin(outcome.enrollment.token, pin);
+      }
+      setAccepted(outcome);
     } catch (problem) {
       setError(describe(problem));
     } finally {
@@ -129,11 +157,12 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
           </p>
           <p className="signin__hint">
             {accepted.createdAccount
-              ? `Your account is ${accepted.email}. Sign in with the password you just chose.`
-              : `Sign in as ${accepted.email} to see it.`}
+              ? 'Your device is registered, and it is how you sign in from now on. There is no ' +
+                'password and no address to remember.'
+              : `Sign in with your device to see it.`}
           </p>
           <button type="button" className="btn btn--primary signin__submit" onClick={onAccepted}>
-            SIGN IN
+            {accepted.createdAccount ? 'OPEN THE BRAIN' : 'SIGN IN'}
           </button>
         </div>
       </div>
@@ -196,36 +225,41 @@ export function AcceptInvitation({ onAccepted }: { onAccepted: () => void }): JS
                   onChange={(event) => setDisplayName(event.target.value)}
                   placeholder={preview.invitedEmail}
                 />
-                <label className="signin__label" htmlFor="invite-password">
-                  CHOOSE A PASSWORD
+                <label className="signin__label" htmlFor="invite-pin">
+                  CHOOSE A SIX-DIGIT PIN
                 </label>
                 <input
-                  id="invite-password"
-                  className="signin__input"
+                  id="invite-pin"
+                  className="signin__input signin__input--pin"
                   type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   autoComplete="new-password"
-                  minLength={12}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  maxLength={6}
+                  value={pin}
+                  onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
                   required
                 />
-                <label className="signin__label" htmlFor="invite-confirm">
-                  PASSWORD AGAIN
+                <label className="signin__label" htmlFor="invite-pin-confirm">
+                  CONFIRM PIN
                 </label>
                 <input
-                  id="invite-confirm"
-                  className="signin__input"
+                  id="invite-pin-confirm"
+                  className="signin__input signin__input--pin"
                   type="password"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   autoComplete="new-password"
-                  minLength={12}
-                  value={confirm}
-                  onChange={(event) => setConfirm(event.target.value)}
+                  maxLength={6}
+                  value={confirmPin}
+                  onChange={(event) =>
+                    setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 6))
+                  }
                   required
                 />
                 <p className="signin__hint">
-                  At least 12 characters. Your account will be {preview.invitedEmail} — the
-                  address you were invited at, which is not something this page can change.
-                </p>
+                  Accepting creates your account. Your PIN is what you sign in with — there is no
+                  password to choose and no device to register.                </p>
               </>
             ) : (
               <p className="signin__hint">

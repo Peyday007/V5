@@ -32,6 +32,18 @@ import { listUnits } from '../../repos/factory.ts';
 /** The event vocabulary. One constant, so a reader of the ledger is not guessing. */
 export const FACTORY_EVENT_KINDS = {
   campaignState: 'CAMPAIGN_STATE',
+  /**
+   * A person moved a worker's availability, and why.
+   *
+   * The quarantine at three consecutive failures is written by the factory and
+   * was, until recently, permanent: nothing in the repository wrote `AVAILABLE`
+   * back, so a local-plane worker that failed three times was retired until
+   * somebody ran SQL. The transition that answers it resets the failure streak,
+   * which is a real change to how the next failure is judged — so it is recorded
+   * with the states it moved between, the reason from a closed set, and whose
+   * authority it carried.
+   */
+  workerStateChanged: 'WORKER_STATE_CHANGED',
   unitPlanned: 'UNIT_PLANNED',
   unitReady: 'UNIT_READY',
   unitClaimed: 'UNIT_CLAIMED',
@@ -47,6 +59,31 @@ export const FACTORY_EVENT_KINDS = {
   verificationRan: 'VERIFICATION_RAN',
   integrationMerged: 'INTEGRATION_MERGED',
   integrationRejected: 'INTEGRATION_REJECTED',
+  /**
+   * A completed integration bin was read and its report could not be turned into
+   * rows, and which of the four reasons it was.
+   *
+   * Its own kind rather than an `INTEGRATION_REJECTED` with another discriminator,
+   * because that row means something a reader relies on: *the integration was
+   * judged and it did not land*, and `surfaceBlockedIntegrations` counts it
+   * towards the stage ceiling. These four are the opposite — the ingest never got
+   * as far as judging anything — so counting them there would retire a stage for a
+   * forge outage, and `integrationAlreadyIngested` reading them would turn that
+   * outage into a report nothing ever reads again.
+   *
+   * Written at most once per bin per reason. See `noteIngestRefused`.
+   */
+  integrationNotIngested: 'INTEGRATION_NOT_INGESTED',
+  /**
+   * The same, one stage along: a completed *delivery* bin whose report could not
+   * become a pull-request pointer, and which of the reasons it was.
+   *
+   * Its own kind rather than a field on the one above, because the questions are
+   * asked separately — *why did this not integrate* and *why does this campaign
+   * have no pull request* have different remedies, and a reader narrowing by kind
+   * should not have to know to narrow again.
+   */
+  deliveryNotIngested: 'DELIVERY_NOT_INGESTED',
   integrationConflict: 'INTEGRATION_CONFLICT',
   reviewCompleted: 'REVIEW_COMPLETED',
   findingRecorded: 'FINDING_RECORDED',
@@ -93,6 +130,18 @@ export const FACTORY_EVENT_KINDS = {
    * action with no author answers nothing later.
    */
   stageReauthorized: 'FACTORY_STAGE_REAUTHORIZED',
+  /**
+   * A person raised a unit's attempt ceiling — the answer to
+   * `UNIT_EXHAUSTED_ATTEMPTS`. It raises and never resets, and the reason is a
+   * code from a closed set. See `services/factory/regrant.ts`.
+   */
+  unitAttemptsRegranted: 'UNIT_ATTEMPTS_REGRANTED',
+  /**
+   * A remote tick threw. Written by `tickAllRemoteCampaigns`, at most once an
+   * hour per distinct message, because the loop discards its report and without
+   * a row a campaign whose every tick throws reads as waiting on its last stage.
+   */
+  tickFailed: 'FACTORY_TICK_FAILED',
 } as const;
 
 export interface RoleMetrics {
@@ -170,6 +219,14 @@ export interface CampaignMetrics {
    * maximum of theirs.
    */
   maxConcurrencyByAccountRef: Record<string, number>;
+  /**
+   * Sessions grouped by the account each one recorded, and which workers ran
+   * them. From the session rows — never from a worker's account, which is only
+   * what its first session happened to record; a worker whose later sessions
+   * recorded another account (or UNKNOWN) would otherwise credit them all to
+   * the first.
+   */
+  sessionsByAccountRef: Record<string, { sessions: number; totalDurationMs: number; workerIds: string[] }>;
   concurrencyEvidence: 'MEASURED' | 'UNKNOWN';
   sessions: { total: number; finished: number; failed: number; rateLimited: number; abandoned: number };
   byWorker: WorkerMetrics[];
@@ -433,6 +490,17 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
       sessions.filter((session) => session.role === role.role),
     );
   }
+  const sessionsByAccountRef: CampaignMetrics['sessionsByAccountRef'] = {};
+  for (const session of sessions) {
+    const entry = (sessionsByAccountRef[session.accountRef] ??= {
+      sessions: 0,
+      totalDurationMs: 0,
+      workerIds: [],
+    });
+    entry.sessions += 1;
+    entry.totalDurationMs += session.durationMs ?? 0;
+    if (!entry.workerIds.includes(session.workerId)) entry.workerIds.push(session.workerId);
+  }
   const maxConcurrencyByAccountRef: Record<string, number> = {};
   for (const accountRef of new Set(sessions.map((session) => session.accountRef))) {
     maxConcurrencyByAccountRef[accountRef] = overlapOfSessions(
@@ -491,6 +559,7 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
     repairCycles,
     maxObservedConcurrency: maxOverlap(intervals),
     maxConcurrencyByAccountRef,
+    sessionsByAccountRef,
     concurrencyEvidence: sessions.length > 0 ? 'MEASURED' : 'UNKNOWN',
     sessions: {
       total: sessions.length,

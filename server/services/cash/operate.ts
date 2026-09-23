@@ -68,6 +68,7 @@ import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts'
 import { runValidations, type ValidationProgress } from './validation.ts';
 import { enumeratePossibilities } from './monetization/enumerate.ts';
 import { recordMovements } from './monetization/movement.ts';
+import { recordWorkModelReclassification, type Reclassification } from './reclassify.ts';
 import type { ResearchApplication } from './answers.ts';
 import { actionKey, beginExecution, markReady } from './opportunities.ts';
 import { checkCommercialAuthority } from './authority.ts';
@@ -725,6 +726,8 @@ export async function operate(
   projectId: string,
   now?: string,
 ): Promise<{
+  /** Non-null exactly once per project, the pass that recorded the change. */
+  reclassified: Reclassification | null;
   capabilities: CapabilityReconciliation;
   gaps: DiscoverableGap[];
   research: ResearchApplication;
@@ -737,6 +740,7 @@ export async function operate(
 }> {
   if (!(await getCashMode(projectId))) {
     return {
+      reclassified: null,
       capabilities: { raised: [], settled: [] },
       gaps: [],
       research: { applied: [], unanswered: [] },
@@ -755,6 +759,16 @@ export async function operate(
    * Each pass is idempotent on its own, so a crash between two of them resumes
    * rather than repeating.
    */
+  /*
+   * First, and once ever: say on the record that the work model changed.
+   *
+   * Ahead of everything because it is a *reading* of the portfolio as it stands
+   * before this pass touches anything, and because a person who had been
+   * reading `1 to act on now, 40 waiting` deserves to find out from the history
+   * rather than by noticing. It archives nothing and moves nothing — see
+   * `reclassify.ts`.
+   */
+  const reclassified = await recordWorkModelReclassification(projectId);
   const capabilities = await reconcileCapabilityNeeds(projectId);
   const research = await applyResearchAnswers(projectId);
   const proposed = await proposeCommercialTerms(projectId);
@@ -797,6 +811,7 @@ export async function operate(
    */
   const monetization = await runMonetizationLedger(projectId, now);
   return {
+    reclassified,
     capabilities,
     gaps,
     research,

@@ -57,6 +57,9 @@ import type {
   FactoryWorkUnit,
 } from '../../domain/factory.ts';
 import { createBin, getBin, listBinUnitResults } from '../../repos/bins.ts';
+import type { CreateBinInput } from '../../repos/bins.ts';
+import { manifestProblems } from '../bins/contracts.ts';
+import { FactoryError } from './errors.ts';
 import {
   claimUnits,
   factoryNow,
@@ -69,6 +72,17 @@ import {
 import { recordFactoryEvent, recordIntegration } from '../../repos/factoryFleet.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { matchesGlob } from './integrate.ts';
+import { forbiddenIn, forbiddenPathsFor } from './forbidden.ts';
+
+/**
+ * The forbidden set for a repository the forge addresses.
+ *
+ * Derived here rather than passed in, so that no caller of a verification can
+ * forget to ask — the omission that let a wide glob reach the deploy workflow.
+ */
+function forbiddenForRemote(repository: ForgeRepository): string[] {
+  return forbiddenPathsFor(`https://${repository.host}/${repository.slug}`);
+}
 import {
   compareCommits,
   findPullRequestForBranch,
@@ -332,7 +346,7 @@ export async function createPlanBin(
     'write, commit or push anything at all — this bin is a proposal',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_PLAN',
     title: `Plan: ${changeRequest.objective.slice(0, 80)}`,
@@ -427,7 +441,7 @@ export async function createUnitsBin(
     'open, update or comment on a pull request',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_UNITS',
     title: `Implement ${units.length} unit(s): ${changeRequest.objective.slice(0, 60)}`,
@@ -577,7 +591,7 @@ export async function createIntegrateBin(
       'this bin does not implement',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_INTEGRATE',
     title: `Integrate ${mergeable.length} unit(s): ${changeRequest.objective.slice(0, 60)}`,
@@ -661,7 +675,7 @@ export async function createReviewBin(
     'change, commit or push anything — a reviewer that can edit what it reviews is not a reviewer',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_REVIEW',
     title: `Review round ${round}: ${changeRequest.objective.slice(0, 60)}`,
@@ -774,6 +788,13 @@ export async function verifyUnitReport(
       `${outside.length} file(s) changed outside this unit's declared paths: ` +
         `${outside.slice(0, 10).join(', ')}. The whole report is refused rather than the ` +
         'extra files ignored — a change nobody declared is a change nobody reviewed the scope of.',
+    );
+  }
+  const forbiddenChanged = forbiddenIn(comparison.body.files, forbiddenForRemote(repository));
+  if (forbiddenChanged.length > 0) {
+    problems.push(
+      `${forbiddenChanged.length} file(s) changed that no unit may change in this repository: ` +
+        `${forbiddenChanged.slice(0, 10).join(', ')}. Owning a wide path does not reach them.`,
     );
   }
 
@@ -1085,6 +1106,13 @@ export async function verifyIntegrationReport(
         `paths: ${outside.slice(0, 10).join(', ')}. The whole integration is refused.`,
     );
   }
+  const forbiddenChanged = forbiddenIn(comparison.body.files, forbiddenForRemote(repository));
+  if (forbiddenChanged.length > 0) {
+    problems.push(
+      `${forbiddenChanged.length} file(s) in this integration are ones no unit may change in this ` +
+        `repository: ${forbiddenChanged.slice(0, 10).join(', ')}. The whole integration is refused.`,
+    );
+  }
 
   return { ok: problems.length === 0, problems, files: comparison.body.files, carried };
 }
@@ -1299,7 +1327,7 @@ export async function createDeliverBin(
     'change, commit or push anything at all',
   ];
 
-  return await createBin({
+  return await createFactoryBin({
     projectId: campaign.projectId,
     kind: 'FACTORY_DELIVER',
     title: existing === null
@@ -1459,26 +1487,116 @@ export async function campaignBins(campaignId: string): Promise<Bin[]> {
   return bins;
 }
 
+/**
+ * The bins this pass may decide a stage from, which is not simply the newest
+ * read of the table.
+ *
+ * `runRemoteTick` reads the bins twice: once at the top, so every COMPLETE one
+ * is offered to its ingest, and again afterwards, to decide what the campaign
+ * now needs. Between those two reads a worker can complete a bin — and then the
+ * stage decision is taken against a *newer* world than the ingest was, which is
+ * the one direction that is unsafe. **"This bin is no longer live" becomes true
+ * while "this bin's report has been read" is still false**, so the stage is
+ * offered again for the work the completed bin had in fact just done.
+ *
+ * Production, 2026-09-22, `fcp_189ea30c7ded4e7b9280`, twice in one campaign.
+ * `bin_43915e4f93ca4e3db111` integrated `repair-late-link-never-attested` and
+ * went COMPLETE at 12:28:33.813Z; `bin_0b6cdc2502d54b75b8c1` — titled
+ * *Integrate 1 unit(s)* — was READY at **12:28:35.895Z**, 2.08 seconds later,
+ * for the only unit still IMPLEMENTED, which was the one that bin had just
+ * carried. It was assigned 3.8s after that to the same Cowork session, which
+ * spent **1291 seconds** re-merging a branch that was already merged. Brain
+ * then refused its report twice — *"The report claims to have merged
+ * \"repair-late-link-never-attested\", which is not one of the units this bin
+ * was given"* — because `evaluateFactoryIntegration` re-derives that set from
+ * the units that are IMPLEMENTED *now*, and by 12:48 the unit really was
+ * INTEGRATED. The review stage did the same thing forty minutes earlier in the
+ * same campaign: `bin_c19cb071e0054316b540` ended 12:50:37.416Z and
+ * `bin_5fb255777c7d4997878a` was taken 6.4 seconds later by the same session.
+ *
+ * Every guard held and nothing false was recorded. What it cost was activations
+ * of a fixed subscription allowance, spent looking like progress — §24's
+ * sentence at a stage rather than at a launcher: **a loop that looks like
+ * progress is worse than a stop.**
+ *
+ * The completion's own compensating advance cannot save it, and that is why
+ * this is the seam rather than `advanceFactoryAfter`. `finishBin` ticks the
+ * campaign after recording completion; that tick takes the same
+ * compare-and-swap, so with a pass already in flight it declines and, by its
+ * own comment, leaves the work to "the loop twenty seconds later". The pass
+ * already in flight is the one between its two reads.
+ *
+ * So a bin a stage was still waiting on when this pass offered bins to the
+ * ingest is reported as this pass saw it then — the row it actually read, never
+ * a state composed here. Scoped to `isLiveBin` rather than to *not COMPLETE*,
+ * so this can never carry a `NEEDS_HUMAN` or `FAILED` row forward and invent a
+ * blocker for a bin somebody has already answered. It is **bounded by construction**: on the next pass that bin
+ * *is* COMPLETE at the top, so it is offered to the ingest and nothing is
+ * carried forward, which is what stops it becoming a stage that is never handed
+ * out again.
+ */
+export function binsThisPassMayJudge(offeredToIngest: Bin[], now: Bin[]): Bin[] {
+  const wasLive = new Map(offeredToIngest.filter(isLiveBin).map((bin) => [bin.id, bin]));
+  return now.map((bin) => (bin.state === 'COMPLETE' ? (wasLive.get(bin.id) ?? bin) : bin));
+}
+
+/**
+ * Whether a stage is still waiting on this bin, rather than finished with it.
+ *
+ * One predicate with two readers, for `DISPATCHABLE_SQL`'s reason: the sentence
+ * *a bin a stage is waiting on* had been written out twice within thirty lines,
+ * and the second reader is the one that decides whether a stage may be handed
+ * out again. A copy is how the two come to disagree about a state added later.
+ */
+function isLiveBin(bin: Bin): boolean {
+  return bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'DRAFT';
+}
+
+/**
+ * A factory bin, checked against its own contract before it can be handed out.
+ *
+ * `manifestProblems` says in its own doc comment that it is *"checked before a
+ * bin goes READY"* — and it had no caller anywhere in the repository. A guard
+ * described as running that does not run is the shape this file corrects more
+ * than any other, and it is worse than an absent one: a reader concludes a bin
+ * is validated and stops looking.
+ *
+ * Refusing here is cheap and refusing later is not. Nothing has been fired, no
+ * attempt has been charged and no worker has been activated; the alternative is
+ * `evaluateContract` discovering at completion that no evaluator was ever
+ * registered for this contract, after a session has spent its time on it.
+ *
+ * **The wider condition is reported rather than changed.** `createBin` is
+ * shared by every kernel in Brain — research, cash, design, capability,
+ * Russell — and wiring a refusal into it would be changing all of their
+ * dispatch on the strength of a factory audit, which is exactly the broadening
+ * this campaign is not for. What is closed is the factory's own five
+ * entrances, which are the ones it owns.
+ *
+ * **It throws, and the throw is contained.** `createBin` already throws
+ * `ManifestTooLarge` for the other way a manifest cannot be dispatched, so this
+ * is the established shape rather than a new one; and `tickAllRemoteCampaigns`
+ * catches per campaign, records *the tick threw: …* on that campaign's report
+ * and ticks every other one, while the tick lock is released in a `finally`.
+ * So the worst case is one campaign stalling loudly, every pass, having spent
+ * no fire, no attempt and no activation — which is what a campaign that cannot
+ * compose a valid manifest should do, and is strictly cheaper than the previous
+ * behaviour of creating the bin, firing a worker and refusing it at completion.
+ */
+async function createFactoryBin(input: CreateBinInput): Promise<Bin> {
+  const problems = manifestProblems(input.completionContract, input.manifest);
+  if (problems.length > 0) {
+    throw new FactoryError(
+      `This bin could not be dispatched, so it was not created: ${problems.join(' ')}`,
+      { reason: 'MANIFEST_REFUSED', contract: input.completionContract, problems },
+    );
+  }
+  return await createBin(input);
+}
+
 /** Whether this campaign already has a live bin for a stage, so a tick adds no second one. */
 export function liveBinOfKind(bins: Bin[], kind: string): Bin | null {
-  return (
-    bins.find(
-      (bin) => bin.kind === kind && (bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'DRAFT'),
-    ) ?? null
-  );
-}
-
-/** The repository a campaign works in, or null when its remote is not one we read. */
-export async function repositoryOf(campaign: FactoryCampaign): Promise<ForgeRepository | null> {
-  const changeRequest = await getChangeRequest(campaign.changeRequestId);
-  if (!changeRequest) return null;
-  return parseRemote(changeRequest.repository);
-}
-
-/** Units whose dependencies have landed and which have no live bin yet. */
-export async function readyUnitsFor(campaignId: string): Promise<FactoryWorkUnit[]> {
-  const units = await listUnits(campaignId);
-  return units.filter((unit) => unit.state === 'READY');
+  return bins.find((bin) => bin.kind === kind && isLiveBin(bin)) ?? null;
 }
 
 /**
@@ -1610,20 +1728,32 @@ export async function binIdentity(
  * review-independence decision below, and it is deliberately the recorded
  * lineage rather than a role name: §23's rule, at the factory's boundary.
  */
+/**
+ * What the remote acceptance records as the worker when a finished bin cannot
+ * say who finished it. Named, because the one place that must recognise it is
+ * the tier below, which otherwise reads it as a real and different worker.
+ */
+export const UNKNOWN_WORKER = 'unknown-worker';
+
 export async function implementingSessions(
   campaignId: string,
-): Promise<{ sessions: Set<string>; workers: Set<string> }> {
+): Promise<{ sessions: Set<string>; workers: Set<string>; unknownWorker: boolean }> {
   const { listFactoryEvents } = await import('../../repos/factoryFleet.ts');
   const events = await listFactoryEvents(campaignId, {
     kinds: [FACTORY_EVENT_KINDS.unitImplemented, FACTORY_EVENT_KINDS.integrationMerged],
+    limit: 5000,
   });
   const sessions = new Set<string>();
   const workers = new Set<string>();
+  // Any implementing row whose worker nobody can name. It must not vanish from
+  // the set — that is how an unknown implementer read as "not this reviewer".
+  let unknownWorker = false;
   for (const event of events) {
     if (event.sessionId) sessions.add(event.sessionId);
-    if (event.workerId) workers.add(event.workerId);
+    if (!event.workerId || event.workerId === UNKNOWN_WORKER) unknownWorker = true;
+    else workers.add(event.workerId);
   }
-  return { sessions, workers };
+  return { sessions, workers, unknownWorker };
 }
 
 export interface ReviewLineage {
@@ -1665,7 +1795,7 @@ export async function reviewLineage(
         'established. An audit whose independence cannot be established did not establish it.',
     };
   }
-  const { sessions, workers } = await implementingSessions(campaignId);
+  const { sessions, workers, unknownWorker } = await implementingSessions(campaignId);
   if (sessions.has(reviewer.sessionId)) {
     return {
       ok: false,
@@ -1676,8 +1806,18 @@ export async function reviewLineage(
         'a fleet surface that can read the repository and did not write this work.',
     };
   }
+  /*
+   * Worker separation is a claim about every implementer, so it needs every
+   * implementer's worker. An implementer recorded as unknown could be this very
+   * worker, and treating it as a different one is how production recorded
+   * `WORKER_SEPARATED` on a campaign one worker did end to end.
+   */
   const workerSeparated =
-    reviewer.workerId !== null && !workers.has(reviewer.workerId) && workers.size > 0;
+    reviewer.workerId !== null &&
+    reviewer.workerId !== UNKNOWN_WORKER &&
+    !unknownWorker &&
+    workers.size > 0 &&
+    !workers.has(reviewer.workerId);
   return {
     ok: true,
     independence: workerSeparated ? 'WORKER_SEPARATED' : 'SESSION_SEPARATED',

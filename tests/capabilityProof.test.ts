@@ -28,6 +28,7 @@ import {
   setGapState,
 } from '../server/services/realize/packet.ts';
 import { getFacultyBySlug, listStateEvents, promoteCandidate, putCandidate } from '../server/repos/faculties.ts';
+import { applyRealization } from '../server/services/realize/realized.ts';
 import { validateFacultyDefinition } from '../server/domain/faculties.ts';
 import { registerBlueprint } from '../server/services/capability/ingest.ts';
 
@@ -249,5 +250,90 @@ describe('proving a capability', () => {
 
   it('closes cleanly', async () => {
     await teardown();
+  });
+});
+
+describe('the two readers of one column', () => {
+  /*
+   * `implementationFrom` counts **buildable** gaps closed — how much of what a
+   * packet set out to build has been built. `realized.ts` counts every
+   * requirement served, closed or waived — how much of the faculty exists.
+   * Both are right about their own question and both write
+   * `faculties.implementation_state`, so whichever ran last used to decide what
+   * the registry said.
+   *
+   * Production made it visible on the first packet that had both. Research
+   * Intelligence: fifteen requirements served by live code, one late-found gap
+   * classified MUST_BE_BUILT. `realized` read PARTIAL and the durable tick
+   * applied it; `prove` read ABSENT and `--apply` would have put a faculty
+   * §40 actually built back to having no implementation at all.
+   */
+  beforeEach(async () => {
+    await freshProject();
+  });
+
+  it('will not lower a state a broader reading established', async () => {
+    const { packetId, facultyId } = await packetFor();
+
+    // The production shape: everything served except one thing to build.
+    const gaps = await listGaps(packetId, { states: ['OPEN'] });
+    expect(gaps.length).toBeGreaterThan(1);
+    const [toBuild, ...served] = gaps;
+    for (const gap of served) {
+      await judgeGap({
+        gapId: gap.id,
+        kind: 'EXISTS_AND_LIVE',
+        evidence: 'a live module serves it',
+        componentKey: 'SERVICE_MODULE:server/services/research/packetRunner.ts',
+        derivedBy: 'PERSON',
+      });
+    }
+    await judgeGap({
+      gapId: String(toBuild?.id),
+      kind: 'MUST_BE_BUILT',
+      evidence: 'nothing produces this output',
+      componentKey: null,
+      derivedBy: 'PERSON',
+    });
+
+    // What the broader reader establishes, and what the tick applies.
+    await applyRealization({ packetId, actorType: 'SYSTEM', actorId: 'test' });
+    const after = await getFacultyBySlug('RESEARCH_INTELLIGENCE');
+    expect(after?.implementationState).toBe('PARTIAL');
+
+    // The narrower reader would say ABSENT. It withholds instead.
+    const reading = await readProof(packetId);
+    const move = reading.moves.find((one) => one.dimension === 'IMPLEMENTATION');
+    expect(move).toBeUndefined();
+    const held = reading.withheld.find((one) => one.dimension === 'IMPLEMENTATION');
+    expect(held?.needs).toMatch(/never lower/);
+
+    // And applying it changes nothing, which is the half that actually matters.
+    await applyProof({ packetId, actorType: 'SYSTEM', actorId: 'test' });
+    const stillPartial = await getFacultyBySlug('RESEARCH_INTELLIGENCE');
+    expect(stillPartial?.implementationState).toBe('PARTIAL');
+  });
+
+  it('still raises, because only the lowering half was wrong', async () => {
+    const { packetId } = await packetFor();
+    for (const gap of await listGaps(packetId, { states: ['OPEN'] })) {
+      await judgeGap({
+        gapId: gap.id,
+        kind: 'MUST_BE_BUILT',
+        evidence: 'nothing serves it yet',
+        componentKey: null,
+        derivedBy: 'PERSON',
+      });
+    }
+    const before = await getFacultyBySlug('RESEARCH_INTELLIGENCE');
+    expect(before?.implementationState).toBe('ABSENT');
+
+    for (const gap of await listGaps(packetId, { states: ['OPEN'] })) {
+      await setGapState({ gapId: gap.id, state: 'CLOSED', reason: 'the campaign integrated it' });
+    }
+    const reading = await readProof(packetId);
+    const move = reading.moves.find((one) => one.dimension === 'IMPLEMENTATION');
+    expect(move?.to).not.toBe('ABSENT');
+    expect(['CONNECTED', 'LIVE', 'PARTIAL']).toContain(String(move?.to));
   });
 });

@@ -8,10 +8,14 @@
  */
 import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
 import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
+import { isCapabilityFinding } from '../domain/manufacturing.ts';
 import { isStructuralFinding } from '../domain/industry.ts';
 import { isMonetizationMethod } from '../domain/monetization.ts';
 import type { MonetizationMethod } from '../domain/types.ts';
-import type { StructuralFinding } from '../domain/types.ts';
+import { isLaborFinding } from '../domain/labor.ts';
+import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
+import { isDealFinding } from '../domain/dealflow.ts';
+import type { DealFinding } from '../domain/types.ts';
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
@@ -206,6 +210,27 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     structuralSubject: row.structural_subject,
     structuralQualifier: row.structural_qualifier,
     structuralAmountCents: row.structural_amount_cents,
+    laborFinding: isLaborFinding(row.labor_finding) ? row.labor_finding : null,
+    laborSubject: row.labor_subject,
+    laborQualifier: row.labor_qualifier,
+    laborRateCents: row.labor_rate_cents,
+    capabilityFinding: isCapabilityFinding(row.capability_finding)
+      ? row.capability_finding
+      : null,
+    capabilitySubject: row.capability_subject,
+    capabilityObservedOn: row.capability_observed_on,
+    capabilityQualifier: row.capability_qualifier,
+    capabilityAmountLowMinor: row.capability_amount_low_minor,
+    capabilityAmountHighMinor: row.capability_amount_high_minor,
+    capabilityCurrency: row.capability_currency,
+    capabilityBasis: row.capability_basis,
+    dealFinding: isDealFinding(row.deal_finding) ? row.deal_finding : null,
+    dealSubject: row.deal_subject,
+    dealEquipment: row.deal_equipment,
+    dealJurisdiction: row.deal_jurisdiction,
+    dealValue: row.deal_value,
+    dealAmountCents: row.deal_amount_cents,
+    dealCurrency: row.deal_currency,
     retrievedAt: row.retrieved_at,
     confidence: Number(row.confidence),
     contradictionState: row.contradiction_state as ContradictionState,
@@ -802,6 +827,36 @@ export interface InsertClaimInput {
   structuralQualifier?: string | null;
   /** A published capital figure in minor units, or null for unknown. */
   structuralAmountCents?: number | null;
+  /** What it establishes about who or what produces work of this kind, or null. */
+  laborFinding?: LaborFinding | null;
+  /** Which reason, which channel, or what the source says performs the work. */
+  laborSubject?: string | null;
+  /** The basis a sourcing channel's rate is quoted on. */
+  laborQualifier?: string | null;
+  /** A published rate in minor units, or null for unknown. */
+  laborRateCents?: number | null;
+  capabilityFinding?: string | null;
+  capabilitySubject?: string | null;
+  capabilityObservedOn?: string | null;
+  capabilityQualifier?: string | null;
+  capabilityAmountLowMinor?: number | null;
+  capabilityAmountHighMinor?: number | null;
+  capabilityCurrency?: string | null;
+  capabilityBasis?: string | null;
+  /** What this claim establishes about a cross-border transaction, or null. */
+  dealFinding?: DealFinding | null;
+  /** What that finding names: the organisation, the requirement, the cost line. */
+  dealSubject?: string | null;
+  /** Which class of equipment, as the source writes it. */
+  dealEquipment?: string | null;
+  /** The market a requirement applies in. */
+  dealJurisdiction?: string | null;
+  /** The closed-set value: a compliance layer, a cost component, a structure. */
+  dealValue?: string | null;
+  /** The figure on a cost component, in minor units. */
+  dealAmountCents?: number | null;
+  /** Which currency that figure is in, as the source published it. */
+  dealCurrency?: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState?: ContradictionState;
@@ -841,6 +896,12 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            evidence_locator, evidence_lane, opportunity_signal, monetization_method,
            structural_finding,
            structural_subject, structural_qualifier, structural_amount_cents,
+           labor_finding, labor_subject, labor_qualifier, labor_rate_cents,
+           capability_finding, capability_subject, capability_observed_on,
+           capability_qualifier, capability_amount_low_minor, capability_amount_high_minor,
+           capability_currency, capability_basis,
+           deal_finding, deal_subject, deal_equipment, deal_jurisdiction, deal_value,
+           deal_amount_cents, deal_currency,
            retrieved_at, confidence,
            contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
@@ -848,7 +909,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            geography, timeframe, population, definition, requirement_ids, job_id,
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
@@ -856,6 +918,16 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.monetizationMethod ?? null,
           input.structuralFinding ?? null, input.structuralSubject ?? null,
           input.structuralQualifier ?? null, input.structuralAmountCents ?? null,
+          input.laborFinding ?? null, input.laborSubject ?? null,
+          input.laborQualifier ?? null, input.laborRateCents ?? null,
+          input.capabilityFinding ?? null, input.capabilitySubject ?? null,
+          input.capabilityObservedOn ?? null,
+          input.capabilityQualifier ?? null,
+          input.capabilityAmountLowMinor ?? null, input.capabilityAmountHighMinor ?? null,
+          input.capabilityCurrency ?? null, input.capabilityBasis ?? null,
+          input.dealFinding ?? null, input.dealSubject ?? null, input.dealEquipment ?? null,
+          input.dealJurisdiction ?? null, input.dealValue ?? null,
+          input.dealAmountCents ?? null, input.dealCurrency ?? null,
           input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,
@@ -1044,6 +1116,45 @@ export async function signalledClaims(input: {
  * exists, and absorbing its findings as *new structure* would file the answer
  * to "is this worth doing" as a fresh subject and then decompose that.
  */
+/**
+ * Every citable claim in one project that establishes something about a
+ * cross-border transaction.
+ *
+ * `structuralClaims`' shape, one axis along, and deliberately not the same
+ * query with an `OR` for that function's own reason: the three axes answer
+ * different questions about one claim, a claim may carry several, and joining
+ * them would make each caller walk findings it has nothing to do with.
+ *
+ * It reads `accepted` claims only, so nothing reaches the dealflow tables that
+ * did not clear all seven gate conditions. A buyer, a requirement or a cost
+ * line that failed the gate is not a weaker fact about the trade; it is not a
+ * fact about the trade.
+ */
+export async function dealClaims(input: {
+  projectId: string;
+  orchestrationIds: readonly string[];
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.deal_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 200)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
 export async function structuralClaims(input: {
   projectId: string;
   /**
@@ -1069,6 +1180,87 @@ export async function structuralClaims(input: {
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
         AND c.structural_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
+/**
+ * Every citable claim in one project that establishes something about who or
+ * what produces work of this kind.
+ *
+ * `structuralClaims`' shape, one axis along, and deliberately not the same
+ * query with an `OR`. The three declarations answer three different questions
+ * about one claim — *is this a piece of work*, *is this how the industry is put
+ * together*, *is this who does the work* — and a claim can carry all three.
+ * Joining them would make a caller reading labor findings walk industry
+ * structure it has nothing to do with, and the other way round.
+ */
+export async function laborClaims(input: {
+  projectId: string;
+  /**
+   * The orchestrations worth reading, which is always the ones whose labor
+   * round is still open. Required for `structuralClaims`' reason: an unbounded
+   * oldest-first window fills permanently with claims from rounds that settled
+   * weeks ago, and a bounded scan that cannot make progress is worse than an
+   * unbounded one because it looks like it is working.
+   */
+  orchestrationIds: readonly string[];
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.labor_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 100)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
+/**
+ * The accepted claims that declared a capability finding, for the manufacturing
+ * kernel to file.
+ *
+ * `structuralClaims`' shape and its reasoning, one column along — including why
+ * `orchestrationIds` is required rather than optional. The window is
+ * oldest-first and bounded, so without it every claim belonging to a round that
+ * has already settled sits permanently at the head of it, and once a programme
+ * has run for a while the budget is spent entirely on claims filed weeks ago
+ * while the ones that just arrived are never reached. A bounded scan that
+ * cannot make progress is worse than an unbounded one, because it looks like it
+ * is working.
+ */
+export async function capabilityClaims(input: {
+  projectId: string;
+  orchestrationIds: readonly string[];
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.capability_finding IS NOT NULL
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid

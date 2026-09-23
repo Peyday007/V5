@@ -598,6 +598,18 @@ export interface FactorySession {
   usage: FactoryUsage | null;
   startedAt: string;
   endedAt: string | null;
+  /**
+   * The bin this session was the execution of, on the hosted plane.
+   *
+   * Null for every session the local plane opens, because there is no bin: the
+   * executor is a process this Brain started and timed itself. On the hosted
+   * plane Brain does not run the session, so the only honest record of one is
+   * the assignment episode it can read back from its own `bin_events` — and the
+   * pair below is that episode's identity.
+   */
+  binId: string | null;
+  /** The generation the lease ran under, so a retaken bin is a second session. */
+  leaseGeneration: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -619,6 +631,8 @@ export interface FactorySessionRow {
   usage: string | null;
   started_at: string;
   ended_at: string | null;
+  bin_id: string | null;
+  lease_generation: number | null;
   created_at: string;
   updated_at: string;
 }

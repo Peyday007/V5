@@ -301,7 +301,11 @@ exactly one guarantee:
   — a campaign's `laneTarget`, a worker's declared `maxConcurrency` — is never
   the input to a `throughput` figure; it is shown beside what was actually
   observed, always labelled `UNKNOWN`, and never rounded up to a ceiling
-  nobody has observed.
+  nobody has observed. Per-account figures are grouped from the account each
+  session *recorded*: they used to be summed from workers, whose account was
+  whatever their first session recorded, so production credited three `UNKNOWN`
+  sessions of `fcp_189ea30c7ded4e7b9280` to a named account. A merge by a worker
+  whose sessions span accounts is attributed to none of them (`UNKNOWN`).
 
 - **`recovery`** guarantees that a campaign whose process died mid-unit is not
   a campaign that is stuck. Leases expire, units that were mid-flight become
@@ -423,12 +427,52 @@ set by a tick that then dies, rows cannot.
    is refused at assignment to any session that implemented part of this campaign
    (before the lease, so the refusal costs no attempt), and the verdict is checked
    again before it is stored, because a lease can expire and be retaken. The
-   session identity used for that decision is the *credential the request
-   authenticated with*, never the `session_ref` a worker sends — that field is
-   telemetry and its own tool says so, and a decision taken on it would be a
-   worker declaring itself independent. The tier recorded is the one the lineage
-   supports: `SESSION_SEPARATED` at the floor, `WORKER_SEPARATED` when the fleet
-   supplies it, never rounded up. Unknown lineage is a refusal.
+   session identity used for that decision is the one the worker **reported**,
+   validated against the presenting worker's own rows — and this file said the
+   opposite, so the correction is recorded rather than edited away. It used to
+   say *the credential the request authenticated with, never the `session_ref` a
+   worker sends*. The reasoning was right about a value a claimant supplies and
+   wrong about this one: the MCP credential is issued per **connector**, so
+   every session an account fires presents the same one, and comparing
+   credentials would make every reviewer identical to every implementer and
+   refuse every review for ever. §23 settled the same question the same way.
+   What keeps it honest is that the field is no longer the only source — when a
+   worker omits it, Brain falls back to the session recorded on the dispatch row
+   it sent itself, which is stronger than anything a worker reports, and with
+   neither the floor still fails closed. The account and worker identity still
+   come from Brain's own dispatch row and never from what a worker says about
+   itself. The tier recorded is the one the lineage supports:
+   `SESSION_SEPARATED` at the floor, `WORKER_SEPARATED` when the fleet supplies
+   it, never rounded up. Unknown lineage is a refusal.
+**A completed bin whose report cannot be turned into rows says which of four
+things went wrong.** The integrate ingest has four ways to refuse — a repository
+this Brain cannot address, a report it cannot read, a forge that will not
+confirm what the report claimed, and an acceptance that confirmed it and moved
+no unit — and each used to be a bare `return false` that recorded nothing, so a
+reader watching a campaign make integration bins that never landed had no first
+step and could not tell any of them apart. Each writes one
+`INTEGRATION_NOT_INGESTED` row per `(bin, reason)` carrying the evidence, and
+three properties keep it a record rather than a verdict: every caller still
+returns `false`, so the bin stays un-ingested and the next tick tries again;
+the kind is read by neither `integrationAlreadyIngested` — which would turn one
+forge outage into a report nothing ever reads again — nor
+`surfaceBlockedIntegrations`, which would retire a stage for a condition that
+was never about the work; and it is written **once per reason**, because a
+completed bin is re-read on every tick and a row per pass is a fresh refusal
+every twenty seconds for the life of the campaign.
+
+**The delivery ingest has the same four, and one more.** It had the same defect
+too — `parseRemote` returning null and returning `false` in silence, and three
+more recorded only in the tick report, which lives as long as the process. That
+is the stage whose output is the artifact a person acts on, so what it left was
+a campaign with no pull request and nothing saying why. `DELIVERY_NOT_INGESTED`
+is its own kind, because *why did this not integrate* and *why does this have no
+pull request* are asked separately and have different remedies, and a reader
+narrowing by kind should not have to narrow again. `WORKER_REPORTED_BLOCKED` is
+the fifth reason: a worker that could not push is not a forge that would not
+confirm, and a ledger calling them one thing sends a reader to the wrong place
+half the time. `factory status` prints both kinds.
+
 5. **`FACTORY_DELIVER`** — open or update exactly one pull request, using a
    title and body Brain composed from rows. The worker performs it because the
    credential that may write to the repository lives where the worker runs; it
@@ -687,9 +731,21 @@ decision is cheap and reversible. Each grant also carries `forbiddenPaths`,
 which `validatePlan` applies — a different authority from the contract's
 mutation scope, kept apart so that a contract cannot widen it by asking.
 
-**`V5` is deliberately absent.** The factory lives in it, and a campaign that
-could rewrite the machinery executing it is the one campaign whose failure mode
-is not contained by declining a pull request.
+**`V5` used to be deliberately absent, and the correction is recorded here
+rather than edited out.** The reasoning was real and has not been waved away:
+the factory lives in this repository, so a campaign here can reach the
+machinery executing it, and that is the one failure mode declining a pull
+request does not *by itself* contain. What it was **not** is an operator
+decision — the envelope's own comment said as much at the time — and the owner
+has since named Brain as an intended target, to be improved through isolated
+branches, independent review and the existing controlled integration process.
+
+So the envelope grants `brain`, and what bounds a campaign there is
+`forbiddenPaths` rather than absence: a campaign in Brain may not own what
+authorizes it, what bounds it, or what deploys it. The list, and the four
+things around it that are the actual containment, are in *Brain itself, as a
+target* below. `oakwood-junk-removal` stays retired, which is a different
+decision on a standing operator instruction and is not reopened by this one.
 
 ### Onboarding a repository, and the half of it Brain cannot do
 
@@ -837,14 +893,24 @@ and the chance to try the surface that could have done it. The refusal is
 available one, because its remedy is authorizing and onboarding *that*
 repository.
 
-**The envelope holds one entry and it is a checkout rather than a target.**
-`brain-worker-bootstrap` is what an unattended Routine attaches for its connector
-permissions; there is no authorized target repository, so the factory has a
-proving ground and nowhere to do real work until a person names one. The
-isolation above is therefore proved against a **fixture** repository the envelope
-refuses — which is what it always should have used, since a routing boundary is a
-`worker_routing` row and a manifest and needs no grant at all. A test's
-convenience is never a reason to widen a production authorization, and
+**This paragraph used to say the envelope held one entry and no target at all,
+and that it therefore had "nowhere to do real work until a person names one".
+That was true when it was written and is corrected here rather than edited
+away** — leaving it would have had this file contradict itself, since *Brain
+itself, as a target* below has recorded the grant since the owner made it.
+
+The envelope holds **two**. `brain-worker-bootstrap` is the checkout an
+unattended Routine attaches for its connector permissions, and is not a target.
+`brain` — `Peyday007/V5`, this repository — is a target, granted by the owner
+and bounded by `forbiddenPaths` rather than by absence; the section below is the
+operative account of it. Real work has been done against it: campaign
+`fcp_189ea30c7ded4e7b9280` ran thirteen bins on the hosted plane and produced
+pull request #31, which a person merged.
+
+The isolation above is still proved against a **fixture** repository the
+envelope refuses — which is what it always should have used, since a routing
+boundary is a `worker_routing` row and a manifest and needs no grant at all. A
+test's convenience is never a reason to widen a production authorization, and
 `oakwood-junk-removal` being re-added for exactly that reason is recorded in
 §27.
 
@@ -895,8 +961,28 @@ it on bins.
   handing it out forever — `liveBinOfKind` deliberately ignores a FAILED bin, so
   without the cap a stage would be re-created on the very next tick, and a
   campaign spinning is harder to notice than one that stopped. The campaign goes
-  BLOCKED with the reason and is re-examined every tick, so cancelling the stuck
-  bins or amending the contract starts it moving again.
+  BLOCKED with the reason and is re-examined every tick. The failed bins are
+  counted **from the newest `FACTORY_STAGE_REAUTHORIZED`**, so once what failed
+  the stage is corrected, `factory reauthorize --why stage-corrected` hands it
+  out again and every failed bin keeps its row. (This used to say that
+  cancelling the stuck bins or amending the contract restarted it. Neither
+  could: a FAILED bin is already terminal, an amendment touches no bin, and the
+  count had no baseline, so a re-authorization was re-blocked on the next tick.)
+- **A unit runs out of attempts.** `UNIT_EXHAUSTED_ATTEMPTS` blocks the campaign
+  on both planes, and its answer is `factory regrant-unit --campaign … --unit
+  <key> --to <n> --why <code>` (`services/factory/regrant.ts`): it raises the
+  ceiling, never resets the count or the recorded reason, returns a FAILED unit
+  to READY, and records `UNIT_ATTEMPTS_REGRANTED`. Before it existed the remedy
+  the blocker named could not be taken, and retiring the campaign was the only
+  way past.
+- **A confirmed report Brain cannot record yet.** A units report the forge
+  confirmed and `acceptUnitReport` could not claim is written as `UNIT_REFUSED`
+  (uncharged) and the units stage is held rather than fired again; after five
+  tries on one bin it is refused through `refuseUnit`, which charges the one
+  attempt that bounds it.
+- **A tick that throws.** `tickAllRemoteCampaigns` records `FACTORY_TICK_FAILED`
+  once per distinct message per hour, and `factory status` prints it beside the
+  other refusals — the loop reads nothing else about a failed tick.
 - **A refused unit report costs an attempt.** Locally an attempt is charged when
   a worker is handed the unit, because the process doing the work *is* the
   claim. Remotely the unit row is not claimed until a report comes back and is
@@ -918,6 +1004,55 @@ it on bins.
   will happen to it, and without this that meant a reviewer being asked to judge
   the base commit against a contract nothing had implemented.
 
+### What the hosted plane actually ran, and why nothing could say
+
+`maxObservedConcurrency` is the true maximum overlap of real session intervals,
+swept from `factory_sessions` — and **every writer of that table is on the local
+plane.** `architect.ts`, `dispatch.ts`, `review.ts` and `recovery.ts` each open a
+session because each one *starts* a process it can time. The hosted plane starts
+nothing: Brain fires a Routine and a worker somewhere else does the work. So it
+opened no sessions, and every hosted campaign reported `maxObservedConcurrency:
+0` with `concurrencyEvidence: UNKNOWN` — beside a `byWorker` and a `byRole`
+reading that were empty for the same reason.
+
+**That is not the UNKNOWN rule working.** A ceiling nobody has observed reads
+UNKNOWN and stays UNKNOWN, and that is right. Here Brain observed every one of
+them: it wrote the dispatch intent, recorded the arrival against the Routine it
+had chosen, stamped `BIN_ASSIGNED` when the lease was taken and `BIN_TERMINAL`
+when it ended, and timed the difference. Every fact was already in `bin_events`
+and `bin_dispatch`, and nothing read any of it into the one table the question is
+asked of. A column nothing reads, at the altitude of a whole execution plane.
+
+`services/factory/sessions.ts` is the reading, and four properties are what keep
+it a reading rather than a claim.
+
+- **Nothing in it comes from a worker.** The interval is Brain's own assignment
+  and terminal events. The worker identity is the one Brain leased the bin to.
+  The account comes from the `bin_dispatch` row Brain wrote when it chose the
+  surface, through `dispatchAttributionForLease`, which carries the same
+  one-apart correction `dispatchedSessionForLease` does — a dispatch generation
+  and a lease generation are one apart, and reading one as the other resolves
+  nothing, always. Brain's own record of which session it fired is preferred over
+  the one the worker reported, and the reported value is the fallback rather than
+  the answer.
+- **It is derived on the tick, not hooked to a completion.** So it reaches the
+  episodes already stranded — every hosted campaign this Brain has ever run —
+  survives a tick that died halfway, and cannot be missed by a code path that
+  forgot to call something.
+- **It is idempotent by the episode.** `(bin_id, lease_generation)` is unique, so
+  two ticks reading one finished bin write one row and the loser is an ordinary
+  outcome. A bin assigned twice — a release and a retake, or a takeover — is two
+  sessions rather than one long one, because that is what it was.
+- **It under-counts rather than over-counts.** An assignment Brain has no close
+  event for, which is what a lease that simply expired leaves behind, is left out
+  rather than given an invented end. The overlap reported is therefore a floor,
+  which is the safe direction for a ceiling; a figure that guessed at an ending
+  would be the projection this document refuses to report as throughput.
+
+The account it cannot resolve reads `UNKNOWN` rather than defaulting to the only
+Routine there is, and `model` reads `UNKNOWN` always, because Brain does not
+choose the model on this plane and does not observe it.
+
 ### `COWORK_ROUTINE`, and why the handshake is not an executor
 
 The `COWORK_ROUTINE` executor used to be a refusal that said the unit-level
@@ -935,6 +1070,126 @@ permanent subscription-backed executor *is* the fleet, reached through the
 dispatcher, and the executor's `probe` answers the question that actually
 matters: whether any enabled Routine with a present deployment secret could take
 repository work. A Brain with none reports no capacity rather than claiming some.
+
+### Both of a person's decisions, on the surface they already use
+
+Approving the objective and answering the release are the factory's two
+person-only decisions, and until recently the product surface offered one. A
+campaign that reached `AWAITING_RELEASE` printed *the campaign is finished and
+is waiting for a person to approve its release* and gave that person nothing to
+press; the route existed, was guarded, and was reachable only from a terminal.
+
+The card is on the campaign row now. It prints every key the release was
+requested with — the integration commit, the units integrated, the review
+rounds, the last verdict, the independence achieved, the findings still open —
+so the decision is about something described rather than about a word. It
+offers both answers and takes a reason. The server is guarded on `REQUESTED`,
+so a second press re-stamps nobody's decision and answers `answered: false`.
+
+What is deliberately **not** offered is `deploymentPolicy` on the submission
+form. It is what makes a release arise at all, and only the local plane honours
+it: the hosted loop has no release stage, because a hosted campaign's artifact
+is a pull request and letting the work out is merging that request — which
+Brain cannot do and must not gate. A browser can only pin through the forge, so
+a field there would have been stored and never read. `submitObjective` refuses
+that combination by name instead, before it spends a forge request on it.
+
+### Bringing a quarantined worker back
+
+`npm run factory set-state --worker <name> --to AVAILABLE --reason <code> --admin <email>`.
+
+A worker that fails three times in a row is quarantined, and `capacity()` then
+gives it no free slots — which is right. What was wrong is that nothing could
+undo it: registering under the same name is `ON CONFLICT DO NOTHING`, recording
+a success leaves availability alone and cannot happen anyway to a worker with no
+slots, and the one function that wrote availability back had no caller. On a
+one-worker local plane that reads `ready: false —
+NO_HEALTHY_EXECUTION_SURFACE`, permanently, with hand-written SQL as the only
+remedy.
+
+The reason comes from a closed set — `SURFACE_REPAIRED`, `DEFECT_FIXED`,
+`WITHDRAWN_BY_OPERATOR`, `RETURNED_TO_ROTATION`, `HELD_BY_OPERATOR` — because a
+caller that can write its own audit trail writes whatever it wanted, and there
+is deliberately none meaning *it should be fine now*: restoring a worker resets
+the failure streak that quarantined it, and doing that on a hunch is how the
+same three failures recur with the record saying somebody fixed them.
+
+It is guarded on the state that was read, so two operators produce one move and
+one refusal. It resets the streak only on the way out of quarantine, because
+`recordWorkerFailure` increments then tests `>= 3` and a worker restored with a
+streak of three re-quarantines on its next failure. It never clears
+`rate_limited_until`: that is the provider's ceiling on the provider's clock,
+and an operator deciding a worker is available does not decide that the provider
+will answer.
+
+`--admin` is attribution rather than authentication — resolved against `users`,
+so it says an enabled administrator exists who may authorize this and nothing
+about who typed the command. Reaching the shell is what authenticated it.
+
+Availability has exactly two writers and there must never be a third: this
+transition, and the quarantine inside `recordWorkerFailure`, which is a health
+signal Brain derives from what actually happened. The compare-and-swap that
+makes two operators produce one move is pinned by two concurrent claims
+carrying the **same** state to move from — forced rather than hoped for, because
+a version that raced the service instead passed on SQLite and failed on
+Postgres, where the second read lands after the first write and the second call
+is a legitimate second move rather than a losing claim. `patchWorker` used to be able
+to write the same column with a bare `UPDATE` and had no caller anywhere, so
+the guard above was a guard for exactly as long as nobody found the other door.
+It no longer carries the field. The rest of it — concurrency, capabilities,
+repositories, model — is ordinary configuration and is untouched: what had to
+go was the second writer of a guarded column, not the function around it.
+
+### What a green run means
+
+Every command above is dispatched through `.github/workflows/factory.yml`, and
+until 2026-09-22 a green run there meant nothing at all. The step ended at
+`| tee factory.txt`; a pipeline's status is its last stage's; nothing asserted
+a word about the output. A command that did not exist, a refusal, a database
+that would not answer and a completed read were four identical green ticks.
+
+It was measured rather than reasoned about. `factory pull-request` was
+dispatched at an image that had no such command: it printed the list of the
+commands that do exist, and the run succeeded.
+
+The verdict is now a line the script printed — `FACTORY: OK` — which is the
+same answer `deploy.yml` and `step10.yml` already give, for the reason
+`deploy.yml` states beside its own: an exit code has to survive an SSH session,
+a shell and a CLI, and a printed line does not. It appears only where nothing
+set a failing code, so `fail()`, a `FACTORY REFUSED` refusal and an unknown
+command each leave it absent, and the workflow fails naming which of the three
+happened. *Nothing came back*, *the factory refused this* and *that is not a
+command* send an operator to three different places, so they are three
+messages.
+
+A refusal the registry raises reads as one too. `RegistryError` — no worker of
+that name, a state that is not a state, a compare-and-swap lost to another
+operator — used to reach the operator as a stack trace, which is the wrong
+sentence about a decision the factory made deliberately. It prints `FACTORY
+REFUSED` and exits. Only that one class is caught: dressing an unexpected error
+as a refusal would lose the stack that explains it, and would say the factory
+decided something when nothing decided anything.
+
+### Reading what is being let out
+
+The release card describes the decision. The **artifact** it is a decision
+about is `npm run factory pull-request --campaign <id>`, which prints the
+rendered title and body.
+
+It exists because that body had a route and no caller. On the hosted plane the
+reviewable request is already open on the forge and a person reads it there; on
+the local plane `assemble.ts` renders the body, stores it as a `PR_BODY`
+artifact and **stops**, because opening a request against a remote host is a
+separately authorized step somebody performs outside the factory. The person who
+performs it had nowhere to read what they were opening.
+
+It renders through `pullRequestFor` — the same function the route calls — rather
+than reading back the stored artifact, which is a snapshot taken at assembly.
+Two readers each with their own idea of the body is not hypothetical here: it is
+what `assemble.ts` and `GET /factory/campaigns/:id/pull-request` used to be, and
+they described the same campaign differently until both were pointed at one
+renderer. It publishes nothing, and the guard that says so reads the command's
+own source rather than trusting the sentence.
 
 ### The surface a person uses
 
@@ -1224,6 +1479,18 @@ Two things must keep working and are tested as such: ordinary product code passe
 `requiredContext` may name a forbidden file, because the list refuses
 **ownership** and never reading. A reviewer of a change that has to agree with
 the authorization model has to be able to open it.
+
+**That test used exact paths, and the check it exercised read an owned glob as
+though it were a path.** So a unit owning `**`, `server/**` or `.github/**`
+passed planning — none of those strings is itself inside a forbidden glob — and
+its diff then passed ownership at integration, because nothing after the planner
+read the list at all. `services/factory/forbidden.ts` is both halves now: the
+planner refuses an owned glob that *reaches into* a forbidden one (a stem
+comparison that over-approximates, the right direction for an early refusal),
+and the files that actually moved are refused on both planes — `integrateUnit`
+locally, `verifyUnitReport` and `verifyIntegrationReport` against the forge. The
+second is the binding one, and a verification cannot forget to ask because it
+derives the list from the repository itself.
 
 Everything after that is the pipeline as it already stood: scoped work against
 the project's directory boundary, a diff rejected whole if it reached outside the

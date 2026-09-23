@@ -391,6 +391,43 @@ export async function submitObjective(
     );
   }
 
+  /*
+   * A deployment policy on a campaign nothing can honour is refused rather than
+   * stored and ignored.
+   *
+   * `deploymentPolicy` is what makes the second of a person's two decisions
+   * arise: anything but `NONE` sends a finished campaign to `AWAITING_RELEASE`,
+   * where a person lets the work out. **Only the local plane does that.**
+   * `assembleStage` is its one writer; the hosted loop has no release stage at
+   * all, and that is correct rather than missing — a hosted campaign's artifact
+   * is a pull request, so the person's second act is merging it on the forge,
+   * which §27 states and which Brain deliberately cannot do or gate.
+   *
+   * So a remote submission carrying one used to be accepted, recorded on the
+   * contract, and then silently disregarded for the whole life of the campaign.
+   * That is a control that pretends: a person would have answered a question
+   * about who may let the work out and nothing would ever have asked them. The
+   * refusal names the plane and the remedy, because *why did nothing happen*
+   * is the one thing a silent no-op cannot tell anybody.
+   *
+   * Asked on the same line `execution_mode` is derived from — a submission with
+   * a remote is the hosted one — so there is no second rule about which plane a
+   * campaign is on. And asked *here*, beside the other checks on the
+   * submission's own coherence, because it needs no rows and no network:
+   * spending a forge request to discover that an ask cannot be honoured is
+   * waste, and a refusal that required one would be unreachable wherever the
+   * forge is not.
+   */
+  if (submission.repositoryRemote && (submission.deploymentPolicy ?? 'NONE') !== 'NONE') {
+    throw new ContractError(
+      'A campaign pinned through the forge runs on the hosted plane, which has no release ' +
+        'stage: it stops at a pull request, and letting the work out is merging that request. ' +
+        'Only a campaign pinned from a checkout can ask a person for a release decision, so ' +
+        '`deploymentPolicy` here would be recorded and never read.',
+      { deploymentPolicy: submission.deploymentPolicy, plane: 'REMOTE' },
+    );
+  }
+
   // Remote when the submission names a repository the forge can read; local only
   // when it does not. A Brain with no checkout and no remote is refused with the
   // remedy rather than with a git error, which is what it used to answer.

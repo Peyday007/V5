@@ -82,7 +82,10 @@ import {
   sendProbe,
   submitTrigger,
   verifyConnection,
+  settleConnection,
 } from '../services/capacity/connection.ts';
+import { adoptSurface } from '../services/capacity/adopt.ts';
+import { foundationReading } from '../services/identity/foundation.ts';
 import { decideBrainAdmin } from '../services/identity/policy.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
 
@@ -171,6 +174,19 @@ peopleRouter.get(
        * the client — §24's manifest lesson — so what a member is told to paste
        * and what Brain actually reads are one object.
        */
+      /*
+       * The foundation matrix, for the reader who can act on it.
+       *
+       * Administrator depth, because it is a per-account judgement about other
+       * people and names the remedies only an administrator holds — and it is
+       * *here* rather than only on a terminal because the controls it sends
+       * somebody to (invite, recovery) are on this page already. §26's rule:
+       * a decision a person makes belongs on the surface they already use.
+       *
+       * It reports and changes nothing, so reading this page still performs no
+       * effect.
+       */
+      ...(admin ? { foundation: await foundationReading() } : {}),
       contract: { mcpUrl: mcpUrlFor(originOf(req)), bootstrapRepository: BOOTSTRAP_REPOSITORY },
     };
   }),
@@ -328,6 +344,48 @@ peopleRouter.post(
 );
 
 /**
+ * Record that a surface this Brain already fires is somebody's.
+ *
+ * A Brain administrator's decision, at the level every other change to what a
+ * principal may reach already carries, and a worker principal is refused at
+ * `requirePerson` before the level is even asked.
+ *
+ * It exists because no row could answer the question. Four production Routines
+ * were registered on a terminal before this journey existed, fire every day,
+ * and were attributable to nobody — so the People page told the owner of this
+ * Brain that their Claude account was not connected. `services/identity/
+ * ownership.ts` explains why the approver on an OAuth code is not the answer:
+ * approving a grant is not the same fact as whose capacity it is. So the
+ * evidence is a person saying so, recorded, with the channel it came in by.
+ *
+ * It creates no account, Routine, worker, credential or token, and it cannot
+ * make a connection healthy — that stays `reconcile`'s, from the four-row
+ * chain, on the next read.
+ */
+peopleRouter.post(
+  '/people/:userId/claude/adopt',
+  handler(async (req) => {
+    const principal = requirePerson();
+    await requireBrainAdmin();
+    const body = bodyOf(req);
+    const subject = await getUser(requiredString(req.params['userId'], 'userId'));
+    // Absent and forbidden are one answer, exactly as the revoke route beside
+    // this one has it.
+    if (!subject) throw notFound('No such person.');
+    const outcome = await adoptSurface({
+      userId: subject.id,
+      routineRef: requiredString(body['routineRef'], 'routineRef'),
+      actorUserId: principal.id,
+      // Somebody signed in, on a surface that authenticated them. The terminal
+      // path records `SHELL` instead, and neither assumes the other.
+      channel: 'BROWSER',
+    });
+    if (!outcome.ok) throw unprocessable(outcome.reason);
+    return { connection: outcome.connection, alreadyAdopted: outcome.alreadyAdopted };
+  }),
+);
+
+/**
  * Take somebody else's connection back.
  *
  * A Brain administrator's, at the level every other change to what a principal
@@ -412,9 +470,26 @@ peopleRouter.get(
     const connections = await listConnections();
     return {
       connections: await Promise.all(
-        connections.map(async (one) => ({
+        connections.map(async (stale) => {
+          const user = await getUser(stale.userId);
+          /*
+           * Settled, so an administrator and the member read one lifecycle.
+           *
+           * This list used to report `capacity_connections.state` as written,
+           * while the member's own page reported the state `reconcile` derives
+           * — so a repointed Routine read MISBOUND to the member and
+           * CONFIGURED here, to the only person who can repoint it. A reader
+           * that holds the remedy and is shown the stale half is the worst
+           * shape that defect has.
+           *
+           * A user this connection's member no longer resolves to cannot be
+           * settled (the names are derived from the row), so it is reported as
+           * it stands rather than guessed at.
+           */
+          const one = user ? (await settleConnection(user, stale)).connection : stale;
+          return {
           userId: one.userId,
-          displayName: (await getUser(one.userId))?.displayName ?? one.userId,
+          displayName: user?.displayName ?? one.userId,
           state: one.state,
           secretName: one.secretName,
           triggerRef: one.triggerRef,
@@ -433,7 +508,8 @@ peopleRouter.get(
           revokedAt: one.revokedAt,
           revokedReason: one.revokedReason,
           updatedAt: one.updatedAt,
-        })),
+          };
+        }),
       ),
     };
   }),

@@ -44,6 +44,14 @@ jobs:
           fetch-depth: 0
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      # Wait for a release, rather than racing one.
+      #
+      # Read-only, and still worth waiting for: a reading taken while the
+      # machine is being replaced is a reading of whichever half answered. The
+      # wait is bounded and warns rather than refusing, so it can only ever
+      # improve on racing. See `.github/actions/await-release/action.yml`.
+      - uses: ./.github/actions/await-release
+
       - name: Run the acceptance reporter in the container
         id: report
         env:

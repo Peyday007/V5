@@ -54,7 +54,8 @@ import {
   setUserDisabled,
   setUserPassword,
   setWorkerStatus,
-} from '../repos/identity.ts';
+  renameUser,
+  signInNameTaken,} from '../repos/identity.ts';
 import {
   createInvitation,
   INVITATION_TTL_MS,
@@ -64,6 +65,8 @@ import { listMembershipsForPrincipal } from '../repos/identity.ts';
 import { generateInvitationToken, WeakPasswordError } from '../services/identity/secrets.ts';
 import { currentContext, currentPrincipal } from '../services/identity/context.ts';
 import { recordEvent } from '../repos/events.ts';
+import { looksLikeAddress } from '../domain/personName.ts';
+import { workerIdentity } from '../services/identity/authenticate.ts';
 import {
   badRequest,
   bodyOf,
@@ -77,7 +80,7 @@ import {
   pathId,
   requireProject,
   requiredString,
-} from './helpers.ts';
+  unprocessable,} from './helpers.ts';
 
 export const adminRouter = Router();
 
@@ -175,6 +178,22 @@ adminRouter.post(
     if (await getUserByEmail(email)) {
       throw conflict(`Somebody already uses ${email.toLowerCase()}.`);
     }
+    /*
+     * And the name, for the same reason one door along.
+     *
+     * A guard on one entrance is not a guard. `createMemberSlot` refuses a
+     * name somebody already signs in with because a member holds no address
+     * and the name is all they can type — and an account made here with that
+     * same name takes the *member's* traffic, so the person locked out is the
+     * one who cannot do anything about it. This account would still be
+     * reachable by its address; theirs would not be reachable at all.
+     */
+    if (await signInNameTaken(displayName)) {
+      throw conflict(
+        'Somebody already signs in with that name. Pick one that tells them apart, because ' +
+          'for a member the name is how they sign in.',
+      );
+    }
 
     const who = actor();
     let user;
@@ -254,6 +273,66 @@ adminRouter.post(
       targetType: 'USER',
       targetId: userId,
       metadata: { email: user.email },
+    });
+    return { user: updated };
+  }),
+);
+
+/**
+ * Correct somebody's name.
+ *
+ * The answering transition for an ambiguous sign-in identity, and until it
+ * existed the reading that names one was a diagnosis rather than a remedy:
+ * there was no rename anywhere in this repository, so a collision — creatable
+ * by an ordinary invitation, and most easily by re-inviting somebody whose
+ * first link expired — could not be corrected through any surface at all. §24's
+ * sentence at the sign-in screen, where the person who is stuck is the one the
+ * whole PIN migration exists to let in.
+ *
+ * It is a **label** and nothing else. No role, no membership, no credential,
+ * no session and no PIN moves, which is the difference between correcting
+ * somebody's name and replacing them — and it is why this is safe at ADMIN
+ * rather than needing a decision of its own.
+ *
+ * It refuses a name somebody else already signs in with, through the same
+ * `signInNameTaken` an invitation is refused by, because a rename that could
+ * create the collision would be a second door into the condition this exists
+ * to close. And it refuses an address as a name, through the same
+ * `looksLikeAddress` §44's terminal rename already refuses one by — two
+ * surfaces onto one column have to ask the same questions of it, or the
+ * quieter one becomes the way round the louder one.
+ */
+adminRouter.post(
+  '/users/:userId/display-name',
+  handler(async (req) => {
+    const userId = pathId(req, 'userId');
+    const displayName = requiredString(bodyOf(req)['displayName'], 'displayName').trim();
+    if (displayName.length < 2) throw badRequest('A person needs a name to be shown as.');
+
+    const user = await getUser(userId);
+    if (!user) throw notFound(`No user with id "${userId}".`);
+    if (looksLikeAddress(displayName)) {
+      throw unprocessable(
+        'That is an address rather than a name. A person is called something; the address is ' +
+          'how they are reached.',
+      );
+    }
+    if (await signInNameTaken(displayName, { exceptUserId: userId })) {
+      throw unprocessable(
+        'Somebody already signs in with that name. Pick one that tells them apart, because ' +
+          'the name is how they sign in.',
+      );
+    }
+
+    const updated = await renameUser(userId, displayName);
+    await audit(req, {
+      action: 'RENAME_USER',
+      targetType: 'USER',
+      targetId: userId,
+      // Both ends of the move, because a rename read back afterwards with only
+      // its destination on it cannot be told from an account that always had
+      // that name. Never an address, and never a credential.
+      metadata: { from: user.displayName, to: displayName },
     });
     return { user: updated };
   }),
@@ -426,7 +505,10 @@ adminRouter.post(
       targetType: 'WORKER_CREDENTIAL',
       targetId: issued.credential.id,
       metadata: {
-        worker: worker.name,
+        // Both: the label is the stable identity an audit row should be read
+        // by, and the handle is what was typed, which history keeps.
+        worker: workerIdentity(worker),
+        workerLegacyName: worker.name,
         // The prefix, which identifies the credential without being it.
         prefix: issued.credential.prefix,
         expiresAt,
@@ -546,7 +628,10 @@ adminRouter.post(
       invitation: {
         id: invitation.id,
         workerId,
-        workerName: worker.name,
+        // The neutral identity. An invitation response is read by a person who
+        // is about to approve a connector, and that is the one screen where a
+        // worker named after somebody does the most damage.
+        workerName: workerIdentity(worker),
         projectId,
         expiresAt: invitation.expiresAt,
         ttlMs: INVITATION_TTL_MS,

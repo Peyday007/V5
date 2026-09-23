@@ -35,6 +35,7 @@ import type {
   RussellMessageState,
   RussellVisibility,
 } from '../domain/types.ts';
+import type { ConversationPurpose } from '../domain/types.ts';
 
 function mapConversation(row: RussellConversationRow): RussellConversation {
   return {
@@ -42,6 +43,7 @@ function mapConversation(row: RussellConversationRow): RussellConversation {
     ownerUserId: row.owner_user_id,
     projectId: row.project_id,
     title: row.title,
+    purpose: (row.purpose ?? 'GENERAL') as ConversationPurpose,
     visibility: row.visibility as RussellVisibility,
     attachmentConfidence: row.attachment_confidence,
     attachmentSource: row.attachment_source as AttachmentSource,
@@ -98,22 +100,42 @@ export async function createConversation(input: {
   ownerUserId: string;
   title: string;
   projectId?: string | null;
+  purpose?: ConversationPurpose;
   visibility?: RussellVisibility;
   legacyConversationId?: string | null;
 }): Promise<RussellConversation> {
   const id = newId('rcv');
   const at = nowIso();
+  /*
+   * A project supplied by a caller is a project somebody chose.
+   *
+   * This wrote `'NONE'` unconditionally, which meant every row that arrived
+   * with a `projectId` said, in two columns at once, *attached to this
+   * project* and *nobody attached this*. Migration 082 repairs the rows that
+   * already exist; this is the door that wrote them. `USER` rather than
+   * `AUTOMATIC`, because the router's own attachment goes through
+   * `recordAttachment` and this path is only ever reached by an explicit
+   * choice.
+   *
+   * And the purpose follows from it rather than being a second thing to
+   * remember: a thread opened against a project is a project thread, and one
+   * opened without is general.
+   */
+  const projectId = input.projectId ?? null;
+  const purpose = input.purpose ?? (projectId ? 'PROJECT' : 'GENERAL');
   await getDb().run(
     `INSERT INTO russell_conversations
-       (id, owner_user_id, project_id, title, visibility, attachment_confidence,
+       (id, owner_user_id, project_id, title, purpose, visibility, attachment_confidence,
         attachment_source, grounding, legacy_conversation_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, NULL, 'NONE', '{}', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, '{}', ?, ?, ?)`,
     [
       id,
       input.ownerUserId,
-      input.projectId ?? null,
+      projectId,
       input.title,
+      purpose,
       input.visibility ?? 'PRIVATE',
+      projectId ? 'USER' : 'NONE',
       input.legacyConversationId ?? null,
       at,
       at,
@@ -198,6 +220,19 @@ export async function countVisibleConversationsForProject(
  * caller that updated only the first would leave Russell unable to learn from
  * the correction it had just been given.
  */
+/**
+ * Change what a thread is called.
+ *
+ * One column, and deliberately no `updated_at` bump: `updated_at` is what
+ * `listConversationsForOwner` orders by and what the collections view reads as
+ * "when this thread was last active", so renaming one from its first message
+ * would otherwise move it to the top of a list twice for the same event. The
+ * message that prompted the name has already moved it.
+ */
+export async function renameConversation(id: string, title: string): Promise<void> {
+  await getDb().run('UPDATE russell_conversations SET title = ? WHERE id = ?', [title.trim(), id]);
+}
+
 export async function attachConversation(input: {
   conversationId: string;
   projectId: string | null;
@@ -207,11 +242,39 @@ export async function attachConversation(input: {
   actorUserId?: string | null;
 }): Promise<RussellConversationContext> {
   const at = nowIso();
+  /*
+   * The purpose moves with the attachment, in the same statement.
+   *
+   * Attaching a thread to a project *is* deciding it is a project thread, and
+   * detaching it is deciding it is not — so leaving `purpose` to a second
+   * write would be two readers of one decision, which is how the two columns
+   * came to disagree in the first place. `OPERATIONAL` and `TECHNICAL` are
+   * left alone: those are deliberate choices about what a thread is, and a
+   * router attaching a project to one does not stop it being operations work.
+   *
+   * The *guard* is what has to be in this statement, and it is. Which purpose
+   * an attachment implies is arithmetic over the value being written, so it is
+   * computed here — and it has to be, because a placeholder whose only
+   * occurrence is a nullity test is a shape Postgres cannot type: it has
+   * nothing to infer from and answers `42P18 could not determine data type of
+   * parameter $4`, while SQLite runs it happily. That is the fifth time this
+   * repository has been told something by the second backend and by nothing
+   * else, and the first where a full SQLite suite passed straight over it. In
+   * the `ELSE` arm of a CASE whose other arm is the `purpose` column the same
+   * value resolves to text, which is why the rewrite is safe rather than
+   * merely different. `russellFoundationCloseout` refuses the shape.
+   */
+  const purpose: ConversationPurpose = input.projectId === null ? 'GENERAL' : 'PROJECT';
   await getDb().run(
     `UPDATE russell_conversations
-        SET project_id = ?, attachment_source = ?, attachment_confidence = ?, updated_at = ?
+        SET project_id = ?, attachment_source = ?, attachment_confidence = ?,
+            purpose = CASE
+              WHEN purpose IN ('OPERATIONAL','TECHNICAL') THEN purpose
+              ELSE ?
+            END,
+            updated_at = ?
       WHERE id = ?`,
-    [input.projectId, input.source, input.confidence, at, input.conversationId],
+    [input.projectId, input.source, input.confidence, purpose, at, input.conversationId],
   );
   const id = newId('rcx');
   await getDb().run(

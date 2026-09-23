@@ -369,25 +369,44 @@ function perRoleBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEntry[] 
 }
 
 /**
- * Grouped from `byWorker`, never from a worker's own declared account.
+ * Grouped from the session rows, by the account each one recorded.
  *
- * `metrics.ts` populates `WorkerMetrics.accountRef` from `factory_sessions.account_ref`
- * — the value recorded on the session row at the moment it was opened — so
- * grouping by it here still traces back to session rows rather than to
- * whatever a worker currently claims about itself.
+ * This used to be grouped from `byWorker`, whose account is whatever a worker's
+ * *first* session recorded — so on fcp_189ea30c7ded4e7b9280 three sessions that
+ * recorded UNKNOWN were counted under "Brain Research A", and the block said 13
+ * sessions beside a peak overlap swept from the 10 that really were. Every
+ * figure in one block now comes from one set of rows.
+ *
+ * A first-pass merge is credited to an account only when every session of the
+ * worker that merged it recorded that account. A worker spanning two accounts
+ * leaves the merge unattributable, which is `UNKNOWN` rather than a guess.
  */
 function perAccountRefBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEntry[] {
-  const byAccount = new Map<string, { sessions: number; totalDurationMs: number; firstPassMerged: number }>();
-  for (const worker of metrics.byWorker) {
-    const existing = byAccount.get(worker.accountRef) ?? {
-      sessions: 0,
-      totalDurationMs: 0,
-      firstPassMerged: 0,
-    };
-    existing.sessions += worker.sessions;
-    existing.totalDurationMs += worker.totalDurationMs;
-    existing.firstPassMerged += worker.firstPassMerged;
-    byAccount.set(worker.accountRef, existing);
+  const accountsOfWorker = new Map<string, Set<string>>();
+  for (const [accountRef, entry] of Object.entries(metrics.sessionsByAccountRef)) {
+    for (const workerId of entry.workerIds) {
+      const set = accountsOfWorker.get(workerId) ?? new Set<string>();
+      set.add(accountRef);
+      accountsOfWorker.set(workerId, set);
+    }
+  }
+  const byAccount = new Map<string, { sessions: number; totalDurationMs: number; firstPassMerged: number | null }>();
+  for (const [accountRef, entry] of Object.entries(metrics.sessionsByAccountRef)) {
+    let merged: number | null = 0;
+    for (const workerId of entry.workerIds) {
+      const worker = metrics.byWorker.find((candidate) => candidate.workerId === workerId);
+      if (!worker || worker.firstPassMerged === 0) continue;
+      if ((accountsOfWorker.get(workerId)?.size ?? 0) !== 1) {
+        merged = null;
+        break;
+      }
+      merged += worker.firstPassMerged;
+    }
+    byAccount.set(accountRef, {
+      sessions: entry.sessions,
+      totalDurationMs: entry.totalDurationMs,
+      firstPassMerged: merged,
+    });
   }
 
   return [...byAccount.entries()].map(([accountRef, agg]) => {
@@ -398,7 +417,7 @@ function perAccountRefBreakdown(metrics: CampaignMetrics): ThroughputBreakdownEn
       sessions: num(
         agg.sessions,
         'MEASURED',
-        `sum of factory_sessions rows across workers whose account_ref is ${accountRef}`,
+        `count of factory_sessions rows that recorded account_ref ${accountRef}`,
       ),
       sessionDurations: entryDurationBreakdown(agg.totalDurationMs, agg.sessions, subject),
       unitsMerged: entryUnitsMerged(agg.firstPassMerged, subject),

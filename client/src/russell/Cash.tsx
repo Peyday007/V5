@@ -59,8 +59,26 @@ const DISPOSITION_LABEL: Record<Placement['disposition'], string> = {
   RUN_IN_PARALLEL: 'Run in parallel',
   WAIT_FOR_DEPENDENCY: 'Wait for a named dependency',
   TEST_A_DECISIVE_UNKNOWN: 'Test a decisive unknown',
+  BEING_QUALIFIED: 'Brain is qualifying this',
+  EVIDENCE_ONLY: 'Evidence — not work',
   ARCHIVED: 'Archived',
 };
+
+/**
+ * The dispositions that mean a person has something to do or something to wait
+ * for.
+ *
+ * The client reads this only to choose a heading; the server already decided
+ * which list each piece is in. It is here so a payload from before the split
+ * (a tab open across a deploy) still separates the two rather than showing
+ * every record as work.
+ */
+const WORK_DISPOSITIONS = new Set<Placement['disposition']>([
+  'EXECUTE_NOW',
+  'RUN_IN_PARALLEL',
+  'WAIT_FOR_DEPENDENCY',
+  'TEST_A_DECISIVE_UNKNOWN',
+]);
 
 /** Cents to a readable amount. Presentation only; no arithmetic happens here. */
 function money(cents: number, currency: string): string {
@@ -248,6 +266,7 @@ export function CashView_({
         */}
       <Status page={page} />
       <Decisions page={page} projectId={rootId} onChanged={view.reload} />
+      <YourWork page={page} onChanged={view.reload} />
       <BestOpportunities page={page} onChanged={view.reload} />
       {/*
         * How each of those could actually be monetized, in full.
@@ -959,8 +978,17 @@ function Authority({
     );
   }
 
-  /** Whether there is anything to spend on yet, which decides how loud this is. */
-  const hasWork = view.myCurrentWork.placements.length > 0;
+  /**
+   * Whether there is anything to spend on yet, which decides how loud this is.
+   *
+   * Work, not records. It counted every placement, so forty pieces of market
+   * evidence opened the spending-limit disclosure and made a grant look
+   * overdue — while nothing in the portfolio was qualified and a grant would
+   * have authorized spending on nothing. §29's rule that a status must agree
+   * with what a person can see, at the control that spends money.
+   */
+  const hasWork =
+    view.myCurrentWork.executeNow.length + view.myCurrentWork.waiting.length > 0;
 
   /*
    * Typed in ordinary money, sent in cents.
@@ -1501,8 +1529,17 @@ function Status({ page }: { page: CashPage }): JSX.Element {
           <span>Discovery</span>
         </li>
         <li>
+          {/*
+            * "Evidence", not "Signals".
+            *
+            * `SIGNAL` is what the column is called and it is the right name
+            * for a typed classification; it is the wrong word on a first
+            * screen, where a count of *signals found* reads as a count of
+            * openings. What the tier actually means is in its own summary
+            * sentence — this is evidence, not work — so that is the word.
+            */}
           <strong>{tiers.SIGNAL}</strong>
-          <span>Signals found</span>
+          <span>Evidence found</span>
         </li>
         <li>
           <strong>{tiers.CANDIDATE}</strong>
@@ -1534,14 +1571,14 @@ function Status({ page }: { page: CashPage }): JSX.Element {
       <p className="rs-decision-why">{frontier.roadmap.whatHappensNext}</p>
       {!page.capabilities.mayViewPrivateJob ? (
         <p className="rs-hint">
-          This is the shared frontier: what Brain has found, and how far it has got. A signal is
-          evidence Brain found and is still working out how money would be made from it; it is not
+          This is the shared frontier: what Brain has found, and how far it has got. Evidence is
+          something Brain found and is still working out how money would be made from it; it is not
           work for you. Decisions about an execution job belong to whoever owns that job.
         </p>
       ) : blocking.length === 0 ? (
         <p className="rs-hint">
-          Nothing is waiting on you. A signal is evidence Brain found and is still working out how
-          money would be made from it; it is not work for you.
+          Nothing is waiting on you. Evidence is something Brain found and is still working out
+          how money would be made from it; it is not work for you.
         </p>
       ) : (
         <p className="rs-hint">
@@ -1555,11 +1592,132 @@ function Status({ page }: { page: CashPage }): JSX.Element {
 }
 
 const TIER_LABEL: Record<string, string> = {
-  SIGNAL: 'Signal — evidence, not yet work',
+  SIGNAL: 'Evidence — not yet work',
   CANDIDATE: 'Being qualified',
   QUALIFIED: 'Qualified',
   READY_TO_TEST: 'Ready to test',
 };
+
+/**
+ * What this person actually has to do, and what is genuinely held up.
+ *
+ * ---------------------------------------------------------------------------
+ * What was wrong
+ * ---------------------------------------------------------------------------
+ *
+ * There was no such section. *Your current work* was the heading over the whole
+ * portfolio, so in production it read `1 to act on now, 40 waiting` above a list
+ * of thirty-one market observations — Rev and GoTranscript publishing different
+ * transcription prices, WriterAccess and Verblio publishing different rates,
+ * Adobe Stock and Depositphotos publishing different subscription tiers. Every
+ * one of those is a real, gated, well-sourced finding, and not one of them says
+ * anybody would pay us. Presenting them as a queue asked a person to work on a
+ * market, and forty of them "waiting" made the one genuine item impossible to
+ * find.
+ *
+ * ---------------------------------------------------------------------------
+ * The rule, and where it is applied
+ * ---------------------------------------------------------------------------
+ *
+ * The server decides. `isWorkable` in `services/cash/portfolio.ts` is the one
+ * predicate, `assemble` puts each piece in exactly one list, and this renders
+ * the two lists it is given. The client re-reads the disposition only to choose
+ * between two headings, so a payload from before the split — a tab left open
+ * across a deploy — still separates them rather than showing everything as
+ * work.
+ *
+ * **The aggregate is absent when the work is.** `combinedContributionCents` is
+ * null rather than zero over an empty list, and a null renders as no line at
+ * all: a figure of zero reads as a measurement of an empty portfolio, and the
+ * figure this replaced was the summed difference between other people's
+ * published prices.
+ */
+function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): JSX.Element {
+  const view = page.full;
+  const frontier = page.frontier;
+
+  /*
+   * A member has no private job, so they have no current work — and the
+   * section still renders, saying that, because §36's parity rule is that a
+   * permission decides what is *inside* a section and never which sections
+   * exist. A heading that vanished for one reader would move every section
+   * below it and make the two pages impossible to compare.
+   */
+  if (!view) {
+    return (
+      <section className="rs-card rs-cash-work">
+        <h3>Your current work</h3>
+        <p className="rs-hint">
+          Work belongs to whoever owns an execution job, and none of it is sent to this page.{' '}
+          {frontier.counts.beingQualified} {frontier.counts.beingQualified === 1 ? 'opening is' : 'openings are'}{' '}
+          being qualified; what Brain has found is below.
+        </p>
+      </section>
+    );
+  }
+
+  const work = view.myCurrentWork;
+  const acting = work.executeNow;
+  const held = work.waiting;
+  const qualifying = work.beingQualified ?? [];
+  const evidence = work.evidence ?? [];
+
+  if (acting.length === 0 && held.length === 0) {
+    return (
+      <section className="rs-card rs-cash-work">
+        <h3>Your current work</h3>
+        <p className="rs-hint">
+          Nothing is ready for you to act on, and nothing is waiting on you.
+          {qualifying.length > 0
+            ? ` Brain is qualifying ${qualifying.length} ${qualifying.length === 1 ? 'opening' : 'openings'} — establishing the payer, the price and the exposure before any of them is a decision.`
+            : ''}
+          {evidence.length > 0
+            ? ` ${evidence.length} further ${evidence.length === 1 ? 'record is' : 'records are'} evidence about a market: Brain found ${evidence.length === 1 ? 'it' : 'them'} and cannot yet say how we would be paid from ${evidence.length === 1 ? 'it' : 'them'}.`
+            : ''}
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rs-card rs-cash-work">
+      <h3>Your current work</h3>
+      <p className="rs-item-meta">
+        {acting.length} to act on now, {held.length} waiting.
+        {/* Only where there is work to total. Null is not zero. */}
+        {work.combinedContributionCents !== null && work.combinedContributionCents !== undefined
+          ? ` Combined conservative contribution: ${money(
+              work.combinedContributionCents,
+              view.myCash.position.currency,
+            )} — an arithmetic illustration from quoted prices, not a bank balance.`
+          : ''}
+      </p>
+      <ul className="rs-list">
+        {[...acting, ...held].map((placement) => (
+          <li key={placement.opportunity.id} className="rs-group">
+            <p className="rs-item-title">{placement.opportunity.title}</p>
+            <p className="rs-badge">
+              {WORK_DISPOSITIONS.has(placement.disposition)
+                ? DISPOSITION_LABEL[placement.disposition]
+                : DISPOSITION_LABEL.EVIDENCE_ONLY}
+            </p>
+            <p className="rs-decision-why">{placement.because}</p>
+            {placement.opportunity.nextAction ? (
+              <p className="rs-item-meta">{placement.opportunity.nextAction}</p>
+            ) : null}
+            {page.capabilities.mayActOnJob ? (
+              <Actions
+                placement={placement}
+                allowedActions={view.authority.allowedActions}
+                onChanged={onChanged}
+              />
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 /**
  * The few worth putting in front of somebody, and nothing else.
@@ -1598,10 +1756,11 @@ function BestOpportunities({
       <h3>Best opportunities</h3>
       {best.length === 0 ? (
         <p className="rs-hint">
-          Nothing is qualified yet, and nothing is being padded out to fill this space.{' '}
+          Nothing is qualified yet, and nothing is being padded out with evidence to fill this
+          space.{' '}
           {byTier.CANDIDATE > 0
             ? `${byTier.CANDIDATE} ${byTier.CANDIDATE === 1 ? 'idea has' : 'ideas have'} a capture thesis and ${byTier.CANDIDATE === 1 ? 'is' : 'are'} being qualified.`
-            : `Brain is working out how money would be made from ${byTier.SIGNAL} ${byTier.SIGNAL === 1 ? 'signal' : 'signals'} it has found.`}
+            : `Brain is working out how money would be made from ${byTier.SIGNAL} ${byTier.SIGNAL === 1 ? 'piece' : 'pieces'} of evidence it has found.`}
         </p>
       ) : (
         <>
@@ -1782,7 +1941,7 @@ function Details({ page, onChanged }: { page: CashPage; onChanged(): void }): JS
             sources
           </span>
         </summary>
-        <CurrentWork page={page} onChanged={onChanged} />
+        <Portfolio page={page} onChanged={onChanged} />
       </details>
       <details className="rs-card rs-cash-needs-detail">
         <summary>
@@ -1853,7 +2012,7 @@ function Details({ page, onChanged }: { page: CashPage; onChanged(): void }): JS
   );
 }
 
-function CurrentWork({
+function Portfolio({
   page,
   onChanged,
 }: {
@@ -1886,21 +2045,31 @@ function CurrentWork({
    */
   return (
     <section className="rs-card rs-cash-portfolio-body">
-      <h3>Your current work</h3>
+      {/*
+        * The heading says what this list is, and it used to say the opposite.
+        *
+        * It read *Your current work* over every record in the portfolio —
+        * thirty-one of which were market evidence — with a combined
+        * contribution summed across all of them. A person reading that was
+        * being told that a published price list was theirs to act on and that
+        * the difference between two vendors' prices was money this sprint
+        * would make. Work has its own section now, above; this is the archive
+        * it is drawn from, and it says so.
+        */}
+      <h3>Everything in the portfolio</h3>
       {frontier.opportunities.length === 0 ? (
         <p className="rs-hint">Nothing in the portfolio yet. {frontier.discovery.reason}</p>
       ) : (
         <>
           {view ? (
             <p className="rs-item-meta">
-              {view.myCurrentWork.executeNow.length} to act on now,{' '}
-              {view.myCurrentWork.waiting.length} waiting. Combined conservative contribution of the
-              live pieces:{' '}
-              {money(
-                view.myCurrentWork.combinedContributionCents,
-                view.myCash.position.currency,
-              )}{' '}
-              &mdash; an arithmetic illustration from quoted prices, not a bank balance.
+              {view.myCurrentWork.byTier
+                ? `${view.myCurrentWork.byTier.QUALIFIED + view.myCurrentWork.byTier.READY_TO_TEST} qualified, ` +
+                  `${view.myCurrentWork.byTier.CANDIDATE} being qualified, ` +
+                  `${view.myCurrentWork.byTier.SIGNAL} evidence.`
+                : `${frontier.opportunities.length} records.`}{' '}
+              Everything Brain has found, in rank order, with its claim and its source. Evidence is
+              here because it is worth keeping, not because it is worth doing.
             </p>
           ) : (
             <p className="rs-item-meta">
@@ -2191,7 +2360,25 @@ function Actions({
    */
   const available: { action: string; label: string; asks?: 'REASON' | 'ACTION' }[] = [];
   if (state === 'DISCOVERED' || state === 'EVIDENCE_CARD') {
-    available.push({ action: 'ready', label: 'Mark ready to test' });
+    /*
+     * *Mark ready to test* is offered only where it could succeed.
+     *
+     * `markReady` refuses while a load-bearing field is unknown, and on a
+     * piece that is still evidence every one of them is. So the button was a
+     * control that could never work, on thirty-one records at once — and
+     * §35's rule is the opposite: a control that cannot succeed should not be
+     * offered, because a refusal somebody could not have predicted teaches
+     * them the refusal is arbitrary. Nothing about the server's own check
+     * moved; this stops asking it a question whose answer is already known.
+     *
+     * *Pass on this* stays for every piece. Saying a thing is not worth
+     * keeping is a decision about what to want, and it is available whatever
+     * the evidence says.
+     */
+    const tier = placement.tier?.tier;
+    if (tier === 'QUALIFIED' || tier === 'READY_TO_TEST') {
+      available.push({ action: 'ready', label: 'Mark ready to test' });
+    }
     available.push({ action: 'decline', label: 'Pass on this', asks: 'REASON' });
   }
   if (state === 'READY') {

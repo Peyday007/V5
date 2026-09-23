@@ -42,8 +42,11 @@ separate decision and stays the owner's.
 
 ## 1. The four people
 
-There is no email address and no password in this journey. An address exists to
-recover a password, and there is no password here to recover.
+There is no email address and no password in this journey, and there is none in
+the project-invitation journey either. An address exists to recover a password,
+and there is no password here to recover: an invitation accepted by somebody
+with no Brain account creates a credential-less row and hands back one
+enrollment link, which the screen spends immediately.
 
 ### Inviting somebody
 
@@ -70,6 +73,29 @@ It travels in the URL **fragment** (`/enrol#…`), which is never sent to a serv
 and never written to an access log. That is what makes it safe to put in a
 message and is why the address bar is cleared as soon as the page reads it.
 
+#### The name is how they sign in, so it has to be theirs alone
+
+A member holds no email address — that is deliberate, and it means the name you
+type here is the *only* thing they can put in the sign-in box. So Brain refuses
+a name somebody already signs in with, and says so, rather than making a second
+slot: two live accounts answering to one name lock **both** of those people out,
+with the sign-in screen giving the same answer it gives a wrong PIN.
+
+Give people something that tells them apart — a surname, or an initial. Two
+names differing only in capitals count as one, because a person typing their own
+name cannot be expected to reproduce yours.
+
+If you ever see **Cannot sign in — two accounts share this name** on the People
+list, that is this condition on a Brain old enough to predate the refusal. The
+control beside it — **Give them their own name** — is the fix. It changes what
+that person types to sign in and nothing else: they keep their PIN, their access
+and everything on their account. Tell them the new name afterwards; nothing
+else has to be reissued.
+
+A retired account does not hold its name hostage. Disabling somebody frees the
+name for the next person, because a row nobody can sign into cannot be the
+account somebody is claiming to be.
+
 ### What the person does
 
 Open the link. They see the name it was made for and nothing else — no email, no
@@ -91,20 +117,89 @@ credential that still works is a second door, not a recovery, and if the device
 was lost because somebody else has it, the whole point is that it stops working
 now rather than when the replacement is used. The revoked rows keep their reason.
 
+### If somebody never opened their link
+
+A different fact, and a different button. On **People & capacity** that member
+reads *No link yet* or *Link sent*, and **Send them a link** issues another
+one — the same slot, the same account, a new token, and the stale link
+withdrawn so there is only ever one live way in.
+
+It is not recovery and does not say so, because there is nothing to retire:
+telling somebody who has never signed in that their credentials have been taken
+out of service is alarming and untrue. For the same reason it is **refused** for
+anybody who already has a way in — a PIN, a password or a registered device.
+Those people want a recovery link, and the refusal says so.
+
+Do not invite them again to solve this. That makes a **second account** under
+one name, and since the name is how a member signs in, two rows answering to it
+lock both people out. Brain refuses the second invitation for that reason.
+
 Every enrollment, revocation, recovery and administration step is written to
 `identity_events`, which is append-only and records the enrollment's **id**,
 never its token.
 
 ### Password sign-in
 
-Password sign-in is still on the sign-in screen, below the device button,
-because the owner's own account has one and an account made before this existed
-needs it. A passkey-only account is not reachable by that path at all: it has no
-address and no verifier, so the lookup answers `null` in exactly the way an
-unknown address does.
+**It is gone from the sign-in screen, and gone as a way for a person to sign
+in.** The screen carries one button. There is no address field, no password
+field, no *or with a password*, and no mention of a recovery path — the last of
+those deliberately, because internal recovery machinery on the front door tells
+somebody probing that a second door exists and where it is.
 
-Turning password sign-in off entirely is the owner's decision and needs the
-owner to hold a safe secondary passkey first.
+What decides it is one rule, in `server/services/identity/passwordDoor.ts`, and
+it is derived from rows rather than set anywhere: **a password is accepted only
+from an account that cannot sign in with a device.** Concretely, an account is
+refused its password once it holds a live passkey it has *actually signed in
+with at least once* — registered is not enough, because a credential bound to
+the wrong origin registers perfectly and asserts never, and the safe direction
+to be wrong in is leaving the door somebody came in through open.
+
+Three consequences, which are the whole reason the rule is shaped this way:
+
+* **The owner's own migration needs no step anybody has to remember.** Their
+  account had a password and no device, so the door was open for them; the
+  first time a device signed them in, it shut. "Verify the passkey works before
+  disabling the password" is a derivation rather than a procedure.
+* **A member is never offered one.** A member slot holds no address and no
+  verifier, so there is nothing for a password to be compared against — and
+  once they enrol, the rule shuts the door as well.
+* **The hosted verification identities keep working.** `kind = 'SYSTEM'`,
+  created on every deploy, no device and never one. Nothing in the rule mentions
+  kinds; what keeps them working is that machinery holds no passkey.
+
+### If you are locked out
+
+Two doors, in this order.
+
+**`/recovery`** is an address in the app that nothing links to. It takes an
+address and a password, and it exists for an account that has no working device
+yet. It ends by registering a device rather than by opening the Brain, because
+the point of getting in that way is to stop needing to. Every attempt is
+recorded.
+
+**`BRAIN_BREAK_GLASS`** is the answer when `/recovery` refuses you — which it
+will, once your device has worked once. Set it in the deployment's own secrets
+(`fly secrets set BRAIN_BREAK_GLASS=true`), which re-opens the password door for
+every account that has one, sign in at `/recovery`, register a replacement
+device, and **remove it again**. The boot banner says `BREAK-GLASS IS ARMED`
+every time the machine starts while it is set, so a deployment left armed says
+so rather than quietly keeping a second way in.
+
+It grants no authority of its own: the password still has to be right, the
+throttle still applies, a disabled account is still refused, and the session it
+opens is the short one rather than the thirty-day device session.
+
+### How long you stay signed in
+
+A device session lasts **thirty days**, absolute, and is carried in the cookie's
+`Max-Age` so it survives closing the browser and restarting the machine. It is
+not refreshed on use, because a rolling session never ends. A password session —
+which now only means a break-glass one — is eight hours.
+
+The session is a row the server can end at any moment: signing out revokes it,
+revoking a device revokes the sessions **that device** opened, and issuing a
+recovery link revokes every session that person holds. A disabled account is
+refused on its next request whatever it is carrying.
 
 **So `Joined` on the People page means *holds a live credential*, and the row
 says which.** An earlier reading counted live passkeys only, which reported the
@@ -280,7 +375,46 @@ against the surface that is in the middle of a packet.
 
 ---
 
-## 3. What to check
+## 3. Is this account actually set up?
+
+```
+npm run admin -- people foundation
+```
+
+and, in the browser, **People & capacity**, where the same reading appears
+under each person beside the controls that answer it.
+
+It is one line per account per dimension, and there are six: **identity**,
+**sign-in**, **Claude connection**, **worker attribution**, **capacity** and
+**recovery**. Each is `PASS`, `BLOCKED` or `NOT_APPLICABLE`, and every blocked
+one carries the single next action and who performs it — *them*, *you*, the
+*deployment* administrator, or Brain by itself.
+
+Three things about how to read it.
+
+**`NOT_APPLICABLE` is not a pass.** A member who has not begun a Claude
+connection has no worker to attribute and no capacity to measure. That is a
+different fact from those being fine, and it neither makes the account pass nor
+blocks it.
+
+**`SIGN_IN` is judged by the screen that is served, not by the schema.** An
+account holding only a passkey reads `BLOCKED` even though it holds a real
+credential, because the sign-in screen asks for a PIN and offers no way to
+present a device. The remedy is a recovery link, which ends in setting one.
+
+**Two accounts sharing a display name is an identity failure that presents as a
+credential one.** The PIN lookup resolves a typed name only when exactly one
+row matches, so neither of them can sign in by name, and the refusal — as it
+must — tells them nothing about why.
+
+Below the accounts it names any **surface running under an identity no account
+owns**: a worker registered by hand before the connection journey existed has
+no connection row, so nothing can attribute its sessions to a person. It is
+reported and never acted on. Adopting one or retiring its Routine is your
+decision, because a projection that redistributed live surfaces would lose
+running work.
+
+## 4. What else to check
 
 ```
 fleet show

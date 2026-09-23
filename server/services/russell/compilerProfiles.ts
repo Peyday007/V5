@@ -41,7 +41,15 @@ export type CompilerProfileId =
   | 'MARKET_DISCOVERY'
   | 'COMMERCIAL_VALIDATION'
   | 'INDUSTRY_STRUCTURE'
-  | 'CAPITAL_STRUCTURE';
+  | 'CAPITAL_STRUCTURE'
+  | 'LABOR_ALLOCATION'
+  | 'MACHINE_LADDER'
+  | 'MACHINE_DEMAND'
+  | 'MACHINE_CAPABILITY'
+  | 'MACHINE_CAPITAL'
+  | 'MACHINE_ACQUISITION'
+  | 'DEALFLOW_PARTIES'
+  | 'DEALFLOW_TERMS';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -785,6 +793,882 @@ const CAPITAL_STRUCTURE: CompilerProfile = {
   ],
 };
 
+/**
+ * Who may produce one output, and what obtaining that capability costs.
+ *
+ * The profile whose most valuable lane is the one that can come back empty.
+ * `permission` asks what rule requires a person, and an established *absence*
+ * of such a rule is what lets a role be compressed — so the lane's description
+ * says so, and the completion standard asks for the search rather than for the
+ * conclusion. §14's own standard for a negative, at the question that decides
+ * whether somebody is employed.
+ */
+const LABOR_ALLOCATION: CompilerProfile = {
+  id: 'LABOR_ALLOCATION',
+  fragmentKey: 'labor-allocation',
+  // A rule about who may do this work is jurisdictional, and a question about
+  // two jurisdictions is a question about two rules rather than an
+  // indecipherable one. Described rather than refused, for the reason market
+  // discovery describes: refusing would refuse work the envelope exists to
+  // permit.
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Behind the industry map and ahead of a broad search.
+   *
+   * It is downstream of finding the work — there is nothing to allocate until
+   * something is being delivered — and upstream of looking for more, because
+   * every opening already found is being produced by somebody today.
+   */
+  launchOrdinal: 350,
+  proposedSources: [
+    'a statute, regulation or administrative rule stating who may perform work of this kind',
+    'a licensing board, registrar or professional body’s own published requirements',
+    'a government occupational classification or labour-statistics publication',
+    'a trade association, industry body or trade publication',
+    'a buyer’s own published terms, procurement rules or supplier requirements',
+    'a platform’s or marketplace’s published terms of service',
+    'a published rate card, price list, fee schedule or salary survey',
+    'a marketplace, job board, agency or staffing listing stating a published rate',
+    'a vendor’s or service’s own published pricing page',
+  ],
+  excludedSources: [
+    'a requirement asserted with no source that states it',
+    'a rule quoted without the jurisdiction it applies in',
+    'a vendor claim about its own product used as evidence that the product works',
+    'a rate with no stated basis, or one inferred from a total',
+    'a forecast or projection presented as a current fact',
+  ],
+  lanes: [
+    {
+      id: 'permission',
+      // One regulator stating a rule proves that regulator states it. Demanding
+      // a second publisher for "this board requires a licence" demands
+      // something that does not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What published rules say about who may produce this: a licence, certification, ' +
+        'registration, signature or accountable human review required by a statute, a ' +
+        'regulator, a buyer’s own terms or a platform’s terms, and whether any part must be ' +
+        'performed in person. Declare each with labor_finding set to HUMAN_REQUIREMENT and ' +
+        'labor_subject set to which reason it is. An established absence — you searched the ' +
+        'places such a rule would be published and found none — is a finding here and often ' +
+        'the most valuable one, so name what you searched.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'sourcing',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Where this capability is actually obtained and what a source says it costs: which ' +
+        'channels supply it, in which jurisdictions, at which published rates and on what ' +
+        'basis. Declare each with labor_finding set to SOURCING_CHANNEL, labor_subject set to ' +
+        'the channel, and labor_rate_cents with labor_qualifier only where a source publishes ' +
+        'a figure. A channel with no published rate is still worth recording.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'automation',
+      description:
+        'Whether this work is published anywhere as being done by software rather than by a ' +
+        'person, and what those sources say about how the output was checked and what ' +
+        'remained for a person. Declared as a SOURCING_CHANNEL of SOFTWARE_TOOL or ' +
+        'MANAGED_SERVICE. A vendor’s claim about its own product is conclusive about what the ' +
+        'vendor says and is not evidence that it works.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'total_cost',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'What published sources say about the things that decide total cost rather than ' +
+        'headline rate: supervision burden, turnover, rework and revision rates, timezone and ' +
+        'communication overhead, training time, and any regulatory or data-access restriction ' +
+        'on who may do this work from where. Kept separate from the rate, because "this ' +
+        'channel charges X" and "this is what it actually costs to use" are two claims with ' +
+        'two standards.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source states any rule about who may perform this work, and the places such ' +
+      'a rule would be published were searched and named — which is recorded as an established ' +
+      'absence rather than as a failure.',
+    'Rules can be found but every one of them is quoted without the jurisdiction it applies ' +
+      'in, so nothing establishes anything about anywhere.',
+    'Channels can be described in general but nothing published states a rate for any of them.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which jurisdiction each ` +
+        'requirement is from; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every requirement is declared on its claim with labor_finding set to HUMAN_REQUIREMENT ' +
+      'and labor_subject set to which of the six reasons it is, and every channel with ' +
+      'SOURCING_CHANNEL naming which channel. A rule described in prose and not declared moves ' +
+      'nothing.',
+    'Every requirement says which jurisdiction it applies in. A licensing rule quoted without ' +
+      'one is not a finding about anywhere.',
+    'A rate is read from a source and never produced. Where nothing publishes one, the channel ' +
+      'is recorded with no rate and no basis. Do not estimate, do not convert, and do not ' +
+      'infer a basis from a total.',
+    'An absence is established by a documented search rather than by silence: say which ' +
+      'registers, boards, statutes or terms you looked in and what you did not find. Do not ' +
+      'conclude that no rule exists because you did not encounter one.',
+    'A vendor or platform is conclusive about what it says and is not independent confirmation ' +
+      'that what it says is true. Say which it is for every claim resting on one.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market or jurisdiction it is about. Where that is not ${scope}, ` +
+      'it is reported as being about somewhere else rather than generalized.',
+    'Nothing here contacts, approaches, quotes for or engages anybody. If answering a question ' +
+      'would require doing any of that, it is recorded as unresolved with the reason.',
+  ],
+};
+
+/**
+ * Which classes of machine the sources recognise, and how they relate.
+ *
+ * The shortest of the three manufacturing profiles, because its job is narrow:
+ * it grows the ladder and establishes nothing about whether any rung is worth
+ * anything. Both of its lanes are structural for `INDUSTRY_STRUCTURE`'s reason
+ * — a claim that describes a class without declaring it is invisible however
+ * well sourced it is.
+ */
+const MACHINE_LADDER: CompilerProfile = {
+  id: 'MACHINE_LADDER',
+  fragmentKey: 'machine-ladder',
+  multipleJurisdictions: 'DESCRIBE',
+  /*
+   * Behind the two questions that decide anything.
+   *
+   * A broader ladder with nothing established on it is a longer list of things
+   * nobody has looked at, so widening yields to establishing who is buying and
+   * to closing a capability gap on a category that already has buyers.
+   */
+  launchOrdinal: 350,
+  proposedSources: [
+    'an industry classification system such as NAICS, ISIC, SIC or GICS, and its own ' +
+      'published definitions',
+    'a trade association or industry body that publishes statistics for this kind of machine',
+    'an equipment, vehicle, emissions or airworthiness regulator’s category definitions',
+    'a census, statistical or government publication',
+    'a trade publication covering producers of this kind of machine',
+    'a manufacturer’s own published product range or specification sheet',
+    'a standards body’s published scope or classification',
+  ],
+  excludedSources: [
+    'a class of machine asserted with no source that names it',
+    'a level inferred to make a hierarchy symmetrical',
+    'a claim with no locatable source at all',
+    'a forecast or projection presented as a current fact',
+  ],
+  lanes: [
+    {
+      id: 'inside',
+      // One classification naming a class proves that classification names it.
+      // Demanding a second publisher for "this regulator defines this category"
+      // demands something that does not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'The narrower or more specific classes of machine the sources recognise inside the ' +
+        'subject, as they themselves name them. Each one declared on its claim with ' +
+        'capability_finding set to PRODUCT_CATEGORY and capability_subject set to that ' +
+        'class’s own name — a claim that describes a class without declaring it adds nothing ' +
+        'to the ladder.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'beside',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Different classes of machine the sources name as connected to this one — built by ' +
+        'the same producers, sold or serviced through the same channel, or sharing major ' +
+        'components. Declared as ADJACENT_CATEGORY. This is how the ladder grows sideways ' +
+        'rather than only downwards, which is what lets a capability built in one place be ' +
+        'used in another.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source recognises any narrower class inside the subject — only descriptions ' +
+      'of the subject as a whole.',
+    'The classification systems and the trade sources divide this kind of machine ' +
+      'incompatibly, and that is recorded as unresolved rather than resolved by choosing one.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every class you establish is declared on its claim with capability_finding and ' +
+      'capability_subject. A class described in prose and not declared is invisible to the ' +
+      'ladder, however well sourced it is.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed.',
+    'Every claim carries the URL of the source it came from. A claim submitted without one ' +
+      'is rejected, and a fragment whose claims are mostly rejected is blocked outright. If ' +
+      'you found the source but could not read it, submit the claim with that URL and its ' +
+      'retrieval state, which is recorded as unresolved rather than rejected.',
+    'Nothing is added to make the ladder tidy. A class with three published sub-classes has ' +
+      'three, and a ladder that says so is worth more than a symmetrical one that is partly ' +
+      'guessed.',
+    'Where a classification and a trade source disagree about the division, both are recorded ' +
+      'and the disagreement is named. They are not averaged and one is not silently preferred.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * Who is buying, how product reaches them, and where incumbents fall short.
+ *
+ * The profile the whole kernel is ordered around, and the only one with two
+ * REQUIRED lanes that are both about the *market* rather than about the
+ * machine. That is the brief's core principle as a completion standard:
+ * demand and a route to the buyer together are what pull manufacturing
+ * forward, and a category with buyers and no route is as unenterable as one
+ * with neither.
+ *
+ * Its failure conditions are the half that matters. *Nothing published
+ * establishes that anybody is buying* has to be a returnable answer rather
+ * than an incomplete one, because it is the finding that stops a category
+ * being entered — and a profile that treated it as a gap would push a worker
+ * towards producing an estimate instead.
+ */
+const MACHINE_DEMAND: CompilerProfile = {
+  id: 'MACHINE_DEMAND',
+  fragmentKey: 'machine-demand',
+  multipleJurisdictions: 'DESCRIBE',
+  // First among the manufacturing questions, deliberately. Establishing what a
+  // machine takes to build, for a machine nobody has shown anybody is buying,
+  // is the inversion the brief exists to forbid — and the expensive one.
+  launchOrdinal: 200,
+  proposedSources: [
+    'a trade association or industry body that publishes shipment, registration or sales ' +
+      'statistics',
+    'a government registration, licensing or vehicle-registration dataset',
+    'a census, statistical or government publication',
+    'a public tender, contract award or procurement notice',
+    'a fleet operator’s or public body’s published purchase or budget document',
+    'a regulator’s recall, safety-action or defect database',
+    'a manufacturer’s or dealer’s published price list, rate card or specification sheet',
+    'a trade publication covering producers or buyers of this kind of machine',
+    'a marketplace, auction or classified listing showing prices actually asked or realised',
+  ],
+  excludedSources: [
+    'a market-size estimate presented as evidence that somebody bought something',
+    'a forecast or projection presented as a current fact',
+    'an assertion that a market is large, growing or underserved with no observation behind it',
+    'an observation with no date the source states',
+    'a claim with no locatable source at all',
+  ],
+  lanes: [
+    {
+      id: 'buying',
+      // One published shipment figure proves that publisher observed it.
+      // Demanding a second publisher for "this trade body reported 42,000
+      // units" demands something that does not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Published observations that somebody is actually buying machines of this kind: unit ' +
+        'shipments, registrations, fleet purchases, tenders and contract awards, replacement ' +
+        'cycles, prices actually realised, order backlogs and lead times, installed base. ' +
+        'Each declared with capability_finding set to DEMAND_EVIDENCE, capability_subject set ' +
+        'to the kind of observation it is, and capability_observed_on set to the date the ' +
+        'source observed it. An undated observation is not recorded as a demand signal.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'route',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'How product of this kind actually reaches whoever pays for it — dealer networks, ' +
+        'distributors, direct sale, fleet and contract sale, retail, marketplaces, rental ' +
+        'fleets, OEM supply, aftermarket and parts, service networks. Declared as ' +
+        'DISTRIBUTION_CHANNEL. This is the lane that makes demand actionable rather than ' +
+        'interesting: buyers with no established route to them cannot be sold to.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'shortfall',
+      description:
+        'Where what is on the market today is documented to fall short: recalls and safety ' +
+        'actions, failure modes, service coverage gaps, parts availability, lead times, price ' +
+        'gaps, unmet requirements buyers have stated. Declared as INCUMBENT_WEAKNESS. Not an ' +
+        'opinion that existing products are poor — a documented shortfall with a source.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'economics',
+      evidenceKind: 'GENERALIZED_ECONOMICS',
+      description:
+        'What machines of this kind sell for and what the market is worth, from a price list, ' +
+        'a statistical publication or a stated figure — kept separate from the observations, ' +
+        'because "somebody bought one" and "the market is worth this" are two claims with two ' +
+        'standards, and only the first is evidence that anybody is buying.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source establishes that anybody is buying machines of this kind. This is a ' +
+      'complete answer rather than a gap: it is what stops this category being pursued, and ' +
+      'an estimate produced in its place would defeat the purpose of asking.',
+    'Buyers are established and nothing published establishes how product reaches them.',
+    'Every observation found is undated, so none of them can be told apart from an old one.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every demand observation carries the date the source observed it. One without a date is ' +
+      'reported as undated rather than recorded as a demand signal — an undated buying signal ' +
+      'cannot be told apart from one somebody remembers from years ago.',
+    'A market-size estimate, a growth rate and a forecast are reported as what they are and ' +
+      'never as evidence that somebody bought something.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    'Where nothing published establishes that anybody is buying, that is stated plainly, with ' +
+      'what was searched. It is the answer this question most needs to be able to return.',
+    'Sources that are really one source are counted once, and the duplication is reported — ' +
+      'a manufacturer’s release carried by three trade outlets is one observation.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * What producing takes, what it develops, and what is bought in.
+ *
+ * The one profile whose completion standard is mostly about what *not* to
+ * produce, and every temptation here fails in the same direction — towards a
+ * complete-looking list of what a machine "must obviously" need. A guessed
+ * requirement is worse than a missing one twice over: it makes a category look
+ * harder than it is, and it puts a capability in the ledger that no source
+ * names, which then appears as a gap nothing on the ladder can close.
+ *
+ * It also states, in its own completion criteria, that the research is about
+ * the industry rather than about the organisation commissioning it. Brain
+ * refuses a claim about the latter either way, because no capability_finding
+ * can mark a capability held — but a worker who understands the question writes
+ * better claims than one whose answers are silently discarded.
+ */
+const MACHINE_CAPABILITY: CompilerProfile = {
+  id: 'MACHINE_CAPABILITY',
+  fragmentKey: 'machine-capability',
+  multipleJurisdictions: 'DESCRIBE',
+  // Behind demand and ahead of widening the ladder: it is the question that
+  // closes the gap on a category already established to have buyers.
+  launchOrdinal: 250,
+  proposedSources: [
+    'a regulator’s published approval, certification, homologation or emissions requirement',
+    'a standards body’s published specification or qualification requirement',
+    'a trade association or industry body’s published technical or training material',
+    'a manufacturer’s own published account of how it produces, tests or services',
+    'a supplier’s published component or subsystem specification',
+    'a trade publication covering production, tooling or supply in this industry',
+    'a government occupational or skills classification',
+    'a published teardown, technical analysis or engineering paper',
+  ],
+  excludedSources: [
+    'a capability asserted because it seems obviously necessary, with no source naming it',
+    'a requirement inferred to make a list look complete',
+    'a producer’s marketing claim about its own capability treated as independent confirmation',
+    'a claim with no locatable source at all',
+    'any statement about what the organisation commissioning this research can do',
+  ],
+  lanes: [
+    {
+      id: 'requires',
+      // A regulator's own published requirement is conclusive about what it
+      // requires. Demanding a second publisher for it demands something that
+      // does not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'The engineering, manufacturing, supply, testing, distribution and servicing ' +
+        'capabilities a producer of this kind of machine must have, as published sources name ' +
+        'them. Each declared with capability_finding set to CAPABILITY_REQUIRED and ' +
+        'capability_subject set to the capability, named as shortly as it can be while still ' +
+        'being the same capability wherever it appears.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'develops',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What producing at this level builds up that a producer did not have before. Declared ' +
+        'as CAPABILITY_TAUGHT. This is the lane that makes one class of machine a route to ' +
+        'another rather than an isolated product, so a capability named here should use the ' +
+        'same words as the same capability named anywhere else.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'barrier',
+      description:
+        'What must be certified, approved, homologated, tooled, qualified or reached in scale ' +
+        'before anybody may produce at all. Declared as ENTRY_BARRIER. Kept separate from a ' +
+        'capability because a certification nobody can buy their way past is not a skill to ' +
+        'be acquired, and filing it as one would make an unreachable category look merely ' +
+        'expensive.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'bought_in',
+      description:
+        'Which components and subsystems producers of this kind of machine buy in rather than ' +
+        'make, and who supplies them. Declared as BOUGHT_IN_COMPONENT. Establish what is ' +
+        'bought in; do not recommend making any of it in-house, which is a decision this ' +
+        'research does not make.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'No published source names what producing this kind of machine requires — only ' +
+      'descriptions of the machine itself.',
+    'The only available accounts of what production requires are producers’ own marketing ' +
+      'material, which is conclusive about what it says and is not independent confirmation.',
+    'What must be approved before producing differs by market and no source settles which ' +
+      'applies here; that is recorded as unresolved rather than resolved by choosing one.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every capability, barrier and bought-in component you establish is declared on its claim. ' +
+      'One described in prose and not declared is invisible to the ladder, however well ' +
+      'sourced it is.',
+    'Nothing is added to make the list look complete. A class of machine with four published ' +
+      'requirements has four, and saying so is worth more than a symmetrical list that is ' +
+      'partly guessed — a guessed requirement becomes a gap nothing can close.',
+    'A capability is named the same way wherever it appears, so that two classes of machine ' +
+      'needing the same thing say the same words. A synonym becomes a second capability and ' +
+      'splits the evidence between them.',
+    'A producer’s own account of its production is reported as what that producer says, and ' +
+      'never as independent confirmation that production requires it.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    'Nothing is reported about what the organisation commissioning this research can already ' +
+      'do. That is recorded separately, from a person, and no claim here can establish it.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+
+/**
+ * Who is on each side of a cross-border equipment transaction.
+ *
+ * The completion standard here is unusual and the profile exists to say so: a
+ * named organisation with a published trigger is the whole deliverable, and a
+ * well-reasoned description of *the kind of company that would want this*
+ * answers nothing at all. This trade is full of plausible buyers who do not
+ * exist, so `failureConditions` names finding none as a real and reportable
+ * outcome rather than a failure to try harder.
+ */
+const DEALFLOW_PARTIES: CompilerProfile = {
+  id: 'DEALFLOW_PARTIES',
+  fragmentKey: 'dealflow-parties',
+  // A cross-border market genuinely spans jurisdictions — a supplier in one
+  // country and buyers in four — so refusing a question that names several
+  // would refuse the work this envelope exists to permit.
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the industry map: both give later questions somewhere to point, and
+  // both yield to anything finishing a deal that already exists.
+  launchOrdinal: 310,
+  proposedSources: [
+    'an organisation’s own website, press release or announcement',
+    'a procurement or tender notice, or a government contract award',
+    'a trade association, industry body or trade publication',
+    'an official registry, filing, permit or licence record',
+    'a marketplace, job board, classified or auction listing',
+    'a census, statistical or government publication',
+    'a published price list, rate card or fee schedule',
+    'a manufacturer’s published catalogue, specification or export record',
+  ],
+  excludedSources: [
+    'an organisation named as a likely buyer with nothing published showing the need',
+    'a manufacturer inferred from a directory listing that does not say what it builds',
+    'a trigger inferred from an industry trend rather than from this organisation',
+    'a forecast or projection presented as a current need',
+  ],
+  lanes: [
+    {
+      id: 'buyer_need',
+      // One published tender proves one published tender. Requiring a second
+      // publisher for "this mine advertised for tankers" requires somebody
+      // else to have advertised the same thing.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A named organisation with something published showing it needs this class of ' +
+        'equipment — an expansion, a commissioning, an awarded contract, an ageing fleet, a ' +
+        'regulatory change forcing replacement, a tender or a procurement notice. Declared ' +
+        'on its claim with deal_finding set to BUYER_NEED, deal_subject set to the ' +
+        'organisation’s own name, deal_equipment set to the class, and deal_jurisdiction set ' +
+        'to its country. An organisation described and not declared reaches nothing.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'supplier_capability',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A named manufacturer publishing the capability to build this class for export: the ' +
+        'models, the certifications it publishes, the export markets it says it serves, its ' +
+        'stated minimum order and lead time. Declared with deal_finding set to ' +
+        'SUPPLIER_CAPABILITY and the same three fields.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'decision_path',
+      description:
+        'How a purchase of this size is actually decided at the organisation: the ' +
+        'procurement function, published vendor qualification requirements, whether it goes ' +
+        'through tender, and any individual the organisation itself publishes in that role. ' +
+        'Declared with deal_finding set to DECISION_MAKER and deal_subject set to the ' +
+        'organisation’s name, with no deal_equipment. Never a name inferred from a job ' +
+        'title held somewhere else.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'The class of equipment can be described but no organisation has published a need for ' +
+      'it, which is recorded as no buyer established rather than as a likely buyer.',
+    'Manufacturers can be found but nothing they publish says they export, which is ' +
+      'recorded rather than assumed away.',
+    'Organisations are named in directories with nothing published about what they need or ' +
+      'build, so nothing is declared.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which country each ` +
+        'organisation is in; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every organisation is declared on its claim with deal_finding, deal_subject set to its ' +
+      'own name, deal_equipment set to the class of equipment, and deal_jurisdiction set to ' +
+      'its country. One described in prose and not declared changes nothing.',
+    'Where the question names a class of equipment, that exact string is copied into ' +
+      'deal_equipment. A different wording is a different class and pairs with nothing.',
+    'A buyer rests on something published showing the need, not on the organisation being ' +
+      'the kind that would have one. A plausible buyer is not a finding, and reporting that ' +
+      'none was established is a better answer than naming one.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which country it is about. Where that is not ${scope}, it is ` +
+      'reported as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * What the transaction would actually involve.
+ *
+ * The one profile in this repository whose most valuable answer is a
+ * *documented absence*. A compliance layer nobody has looked at and a layer
+ * somebody searched properly and found empty are opposite facts with opposite
+ * consequences, and the absence of claims says only the first — so
+ * `REQUIREMENT_ABSENCE` has its own lane, and the completion criteria say in
+ * as many words that an unreported empty search leaves the question open.
+ */
+const DEALFLOW_TERMS: CompilerProfile = {
+  id: 'DEALFLOW_TERMS',
+  fragmentKey: 'dealflow-terms',
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the deep dive and the capital question: all three are finishing
+  // work already paid for on something that already exists, and all three
+  // outrank starting another search.
+  launchOrdinal: 130,
+  proposedSources: [
+    'a government regulation, statutory instrument or official standard',
+    'a customs tariff schedule or published duty rate',
+    'a transport, vehicle or roadworthiness authority’s own published rules',
+    'a standards body’s published specification',
+    'a freight, shipping or logistics operator’s published rate or tariff',
+    'an inspection, certification or testing body’s published requirements or fees',
+    'a trade association, industry body or trade publication',
+    'an organisation’s own website, press release or announcement',
+    'a published price list, rate card or fee schedule',
+  ],
+  excludedSources: [
+    'a requirement in one market presented as applying in another',
+    'a rule inferred from a neighbouring country or a regional bloc without a source ' +
+      'saying this market adopts it',
+    'a figure estimated, interpolated or converted between currencies',
+    'a rate produced by turning a published range into a single number',
+    'an absence asserted with no account of where it was searched for',
+  ],
+  lanes: [
+    {
+      id: 'compliance_layer',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'One thing the destination market or the buyer demands of these goods, declared with ' +
+        'deal_finding set to COMPLIANCE_REQUIREMENT, deal_value set to its layer, and ' +
+        'deal_jurisdiction set to the market. The layers are separate questions: a factory ' +
+        'quality certificate is not a product approval, a product approval is not a market ' +
+        'registration, and none of them is the buyer’s own acceptance standard.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'documented_absence',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A layer you searched properly that demands nothing here, declared with deal_finding ' +
+        'set to REQUIREMENT_ABSENCE, the layer in deal_value, and the places you searched ' +
+        'listed in searched_repositories. This is a real finding and often the most useful ' +
+        'one: a layer with no answer at all is treated as unresearched rather than as clear, ' +
+        'so an empty search you do not report leaves the question open.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'landed_cost',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'One published figure for one line of the cost of getting these goods there, or what ' +
+        'the buyer pays today. Declared with deal_finding set to COST_COMPONENT, the line in ' +
+        'deal_value, the amount in deal_amount_cents, the published currency in ' +
+        'deal_currency, and what the figure is per in deal_subject. Report figures as ' +
+        'published: Brain withholds the landed cost when they are on different bases or in ' +
+        'different currencies and says why, which is correct, and a harmonised number would ' +
+        'be one nobody can check.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'commercial_precedent',
+      description:
+        'Evidence that a named commercial structure is actually used in this trade, declared ' +
+        'with deal_finding set to COMMERCIAL_PRECEDENT, the structure in deal_value, and ' +
+        'what the source says it pays — in the source’s own words, including ranges — in ' +
+        'deal_subject. That a structure exists somewhere is not evidence it is used here.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'A requirement can be found for a neighbouring market but nothing published says this ' +
+      'market imposes it, which is recorded as unresolved rather than carried across.',
+    'A layer cannot be searched because the authority publishes nothing reachable, which is ' +
+      'recorded as unresolved naming what was searched — not as a documented absence.',
+    'Figures are published on incompatible bases or in different currencies, so the landed ' +
+      'cost is withheld and the figures are reported as published.',
+    'Intermediary arrangements can be described in general but nothing published shows this ' +
+      'trade using any of them.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'finding is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every requirement is declared with deal_finding set to COMPLIANCE_REQUIREMENT and its ' +
+      'layer in deal_value. Each layer is answered on its own evidence: one layer’s answer ' +
+      'is never carried to another.',
+    'A layer searched properly and found to demand nothing is declared with ' +
+      'REQUIREMENT_ABSENCE and the places searched listed. An empty search that is not ' +
+      'declared leaves the layer unresearched, which blocks the deal.',
+    'A figure is read from a source and never produced. It is reported in the currency and ' +
+      'on the basis the source published, with no conversion, no interpolation and no ' +
+      'reconciliation of incompatible figures into one number.',
+    'A published range stays a range. It is never turned into a single rate.',
+    'A commercial structure is reported as used only where a source about this trade shows ' +
+      'it being used. That one exists in general is not evidence about here.',
+    'Every source carries its URL, who publishes it, and the date it took effect or was ' +
+      'last observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is ` +
+      'reported as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * What entering a class of machine costs.
+ *
+ * The profile whose completion standard is the opposite of every other one
+ * here: **a requirement with no published figure is a successful answer.**
+ * That is stated in the lanes, in the failure conditions and in the completion
+ * criteria, because it is the one thing a worker will assume is wrong. A
+ * profile that treated a blank as a gap would push somebody towards producing
+ * an estimate, and an invented figure at the number that would start a factory
+ * is the worst output this kernel could receive — worse than the blank,
+ * because a blank is visible afterwards and a plausible number is not.
+ *
+ * It is a separate profile from `MACHINE_CAPABILITY` rather than a lane inside
+ * it because `planFitsEnvelope` pins one assignment template per envelope, and
+ * judging *what does entering cost* by *what does producing require* is §25's
+ * Westbrook defect at a compiler: a worker answers correctly and Brain grades
+ * it against the wrong standard.
+ */
+const MACHINE_CAPITAL: CompilerProfile = {
+  id: 'MACHINE_CAPITAL',
+  fragmentKey: 'machine-capital',
+  multipleJurisdictions: 'DESCRIBE',
+  // Behind the capability question. Pricing entry into a category this company
+  // cannot yet produce spends a round on a figure nobody can act on, and the
+  // directive's own sequence agrees: required capital sits under ENTRY.
+  launchOrdinal: 275,
+  proposedSources: [
+    'a regulator\u2019s published fee schedule for approval, certification or homologation',
+    'a machine-tool, equipment or plant supplier\u2019s published price list or specification',
+    'a comparable producer\u2019s own filing, annual report or capital-expenditure disclosure',
+    'a government or development-agency publication on plant investment in this industry',
+    'a trade publication reporting what a facility, line or tooling programme cost',
+    'a published industrial property or lease listing giving a rate',
+    'a standards or testing body\u2019s published charge for qualification or type testing',
+    'a named analyst\u2019s or consultancy\u2019s published estimate, reported as an estimate',
+  ],
+  excludedSources: [
+    'a figure the researcher calculated, scaled or inferred rather than found published',
+    'a figure with no currency stated',
+    'a figure with no date the source states',
+    'a cost from a different class of machine presented as this one\u2019s',
+    'a claim with no locatable source at all',
+  ],
+  lanes: [
+    {
+      id: 'requirement',
+      // One supplier's published price is conclusive about what that supplier
+      // asks. Demanding a second publisher for it demands something that does
+      // not exist.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What a producer of this kind of machine has to fund before selling anything, and ' +
+        'what published sources say each item costs. Each declared with capability_finding ' +
+        'set to CAPITAL_REQUIREMENT, capability_subject set to which requirement it is, ' +
+        'capability_qualifier set to which shape of the business the figure is about, ' +
+        'capability_basis set to what kind of figure it is, and capability_observed_on set to ' +
+        'the date it was true. Where a published figure exists give the range and its ' +
+        'currency; where none does, submit the requirement with no amount at all \u2014 that is a ' +
+        'finding and Brain records it as one.',
+      necessity: 'REQUIRED',
+    },
+    {
+      id: 'scale',
+      description:
+        'The same requirements at a different shape of the business, where sources publish ' +
+        'both \u2014 what the smallest credible entry costs against what production at scale ' +
+        'costs. Declared the same way with a different capability_qualifier. Figures from ' +
+        'different shapes are never added together, so each one says which it is about.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Requirements are established and nothing published gives a figure for any of them. This ' +
+      'is a complete answer rather than a gap: it is recorded, no total is reported, and an ' +
+      'estimate produced in its place would defeat the purpose of asking.',
+    'Every figure found is undated, so none of them can be told apart from one published ' +
+      'before the costs changed.',
+    'Published figures exist only for a different class of machine, and carrying one across ' +
+      'would answer a question nobody asked.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Say which market each ` +
+        'figure is about; nothing about this names one of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'A requirement that is real and that nobody publishes a figure for is submitted with no ' +
+      'amount. It is a finding, not a failure: Brain records the requirement and withholds ' +
+      'any total rather than summing past it.',
+    'Nothing is estimated, scaled from another class of machine, converted between currencies ' +
+      'or calculated to complete a picture. A plausible number here is worse than a blank.',
+    'Every figure carries the currency the source published it in and the date it was true.',
+    'Every figure says which shape of the business it is about, because what the first ' +
+      'credible machine costs and what volume production costs are two facts and adding them ' +
+      'produces a number nobody can act on.',
+    'A published price, a regulator\u2019s fee, a firm\u2019s own disclosure and an analyst\u2019s ' +
+      'estimate are each reported as the kind of figure they are, never as one another.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every finding says which market it is about. Where that is not ${scope}, it is reported ` +
+      'as being about somewhere else rather than generalized.',
+  ],
+};
+
+/**
+ * Which firms hold something a class of machine requires.
+ *
+ * Its completion standard is a **boundary** rather than a quantity, and that
+ * is why it is its own profile. Every other question here is answered better
+ * by finding more; this one is answered wrongly by going one step further than
+ * naming. So the criteria say, twice, that valuing, approaching, pricing and
+ * recommending are outside it \u2014 not because a worker is likely to buy a
+ * company, but because a worker asked "who could we acquire" naturally drifts
+ * into "and here is what it would take", and that sentence in a report is an
+ * unauthorized recommendation with a source list attached.
+ */
+const MACHINE_ACQUISITION: CompilerProfile = {
+  id: 'MACHINE_ACQUISITION',
+  fragmentKey: 'machine-acquisition',
+  multipleJurisdictions: 'DESCRIBE',
+  // Last of the manufacturing questions. It is asked of a category whose
+  // requirements are established and unbridged, so it has nothing to say until
+  // the capability question has been answered.
+  launchOrdinal: 325,
+  proposedSources: [
+    'a company\u2019s own regulatory filing, annual report or prospectus',
+    'a regulator\u2019s published register of approval, certificate or licence holders',
+    'a trade association\u2019s published member or supplier directory',
+    'a trade publication covering producers, suppliers or distributors in this industry',
+    'a public company or business register',
+    'a published supplier, dealer or distributor list',
+    'a published patent assignment or intellectual-property register entry',
+  ],
+  excludedSources: [
+    'a firm named with no source that says what it holds',
+    'a valuation, price or multiple produced by the researcher rather than published',
+    'a recommendation that a firm be approached, pursued or bought',
+    'a claim with no locatable source at all',
+  ],
+  lanes: [
+    {
+      id: 'candidate',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'Firms published sources name as producers, suppliers, distributors or holders of ' +
+        'approvals in this class of machine, and what each one actually holds. Each declared ' +
+        'with capability_finding set to ACQUISITION_CANDIDATE, capability_subject set to the ' +
+        'firm\u2019s own name, and capability_qualifier set to what buying it would contribute.',
+      necessity: 'REQUIRED',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Published sources name no firm holding what this class of machine requires. This is a ' +
+      'complete answer: reporting it is more useful than a list assembled from what seems ' +
+      'likely.',
+    'Firms are named and no source says what any of them actually holds, so nothing can be ' +
+      'said about what buying one would contribute.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Identify, from published sources, ${lowerFirst(question)} Say which market each firm ` +
+        'operates in; nothing about this names one of its own.'
+      : `Identify, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: (scope) => [
+    'Every firm is supported by a quoted source saying what it holds. A firm named with no ' +
+      'source is not reported.',
+    'Nothing is valued, priced or estimated. What a firm would sell for is not established ' +
+      'here and is not guessed.',
+    'Nothing is recommended. Whether to approach, diligence, offer for or buy any of these is ' +
+      'a decision a person makes under a separate authorization that this research neither ' +
+      'carries nor can produce.',
+    'Nobody is contacted, and no information is requested from any firm named.',
+    'Reporting that published sources name no such firm is a complete answer.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+    `Every firm says which market it operates in. Where that is not ${scope}, it is reported ` +
+      'as being somewhere else rather than generalized.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -794,6 +1678,14 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_CASH_VALIDATION_V1: COMMERCIAL_VALIDATION,
   RUSSELL_INDUSTRY_MAP_V1: INDUSTRY_STRUCTURE,
   RUSSELL_CAPITAL_STRUCTURE_V1: CAPITAL_STRUCTURE,
+  RUSSELL_LABOR_ALLOCATION_V1: LABOR_ALLOCATION,
+  RUSSELL_MACHINE_LADDER_V1: MACHINE_LADDER,
+  RUSSELL_MACHINE_DEMAND_V1: MACHINE_DEMAND,
+  RUSSELL_MACHINE_CAPABILITY_V1: MACHINE_CAPABILITY,
+  RUSSELL_MACHINE_CAPITAL_V1: MACHINE_CAPITAL,
+  RUSSELL_MACHINE_ACQUISITION_V1: MACHINE_ACQUISITION,
+  RUSSELL_DEALFLOW_PARTIES_V1: DEALFLOW_PARTIES,
+  RUSSELL_DEALFLOW_TERMS_V1: DEALFLOW_TERMS,
 });
 
 export function profileFor(envelopeId: string): CompilerProfile | null {

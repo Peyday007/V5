@@ -22,9 +22,13 @@ import { russellRouter } from './russell.ts';
 import { factoryRouter } from './factory.ts';
 import { connectRouter } from './connect.ts';
 import { cashRouter } from './cash.ts';
+import { laborRouter } from './labor.ts';
+import { manufacturingRouter } from './manufacturing.ts';
 import { invitationsRouter } from './invitations.ts';
 import { passkeyRouter } from './passkeys.ts';
 import { peopleRouter } from './people.ts';
+import { registerRouter } from './register.ts';
+import { bridgeRouter } from './bridge.ts';
 import { apiNotFound, errorMiddleware } from './helpers.ts';
 
 export function createApiRouter(): Router {
@@ -57,6 +61,19 @@ export function createApiRouter(): Router {
   // project, so these routes are addressed by no project and mount at the root
   // beside the identity ones. Every one of them refuses a worker by type.
   router.use(peopleRouter);
+
+  /*
+   * The work register. Every route inside is `requirePerson` plus the same
+   * `decideProjectAccess` every other door resolves through.
+   */
+  router.use(registerRouter);
+
+  /*
+   * The conversation entrance. `requirePerson` at every route, so a worker is
+   * refused by type; minting a credential additionally refuses a caller that
+   * arrived on one.
+   */
+  router.use(bridgeRouter);
 
   router.use(healthRouter);
   // Audit routes carry their own prefixes (/runs/:id/..., /layers/:id/...),
@@ -91,6 +108,11 @@ export function createApiRouter(): Router {
   // an opportunity, a commitment or a need directly. Before the projects router
   // so its own `/:projectId/...` routes do not swallow them.
   router.use(cashRouter);
+  // The labor kernel (§41). Root-mounted for the same reason and with the same
+  // ordering requirement: its routes carry their own `/projects/:id/labor/...`
+  // prefix and must sit before the projects router.
+  router.use(laborRouter);
+  router.use(manufacturingRouter);
 
   router.use(apiNotFound);
   router.use(errorMiddleware);

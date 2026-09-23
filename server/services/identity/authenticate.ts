@@ -29,16 +29,46 @@ import {
   markCredentialUsed,
   touchSession,
 } from '../../repos/identity.ts';
-import { constantTimeEquals, digestSecret, parseOAuthToken, parseWorkerCredential } from './secrets.ts';
+import {
+  constantTimeEquals,
+  digestSecret,
+  parseBridgeCredential,
+  parseOAuthToken,
+  parseWorkerCredential,
+} from './secrets.ts';
+import { markBridgeCredentialUsed, resolveBridgeCredential } from '../../repos/bridge.ts';
 import { findLiveToken, touchToken } from '../../repos/oauth.ts';
 
 /** The cookie a signed-in person carries. */
 export const SESSION_COOKIE = 'brain_session';
 
-/** Eight hours. Long enough for a working day, short enough that a forgotten
- *  laptop is not an open session next week. Refreshed on use is deliberately
- *  *not* done: a rolling session never ends. */
-export const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+/**
+ * How long a session lives, and why there are two answers.
+ *
+ * Both are **absolute**. Neither is refreshed on use, and that is deliberate
+ * for the reason it has always been: a rolling session never ends, so the only
+ * thing that would eventually close it is somebody remembering to sign out.
+ *
+ * **A device session lasts thirty days.** The credential behind it is a
+ * passkey: bound to this origin, held by a device, and released only after that
+ * device has verified the person — a fingerprint, a face, or the screen lock.
+ * An eight-hour session on top of that asked somebody holding a strong
+ * credential to re-present it twice a day, which is friction that buys nothing:
+ * the session is a row this server can revoke on any request, the account is
+ * re-read on every one of them, and a disabled person is refused mid-sentence.
+ * Thirty days is long enough that ordinary use never reaches it and short
+ * enough that a browser nobody opens again is not an open session next quarter.
+ * It is carried in the cookie's `Max-Age`, so it survives closing the browser —
+ * which is the point — and nothing about it is stored where a script can read
+ * it.
+ *
+ * **A password session lasts eight hours**, unchanged. That door is
+ * break-glass now (see `passwordDoor.ts`): a session opened by somebody using
+ * an emergency credential is not a working session, and the first thing they
+ * are there to do is register a device.
+ */
+export const DEVICE_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const PASSWORD_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 export type AuthOutcome =
   | { ok: true; principal: Principal }
@@ -107,6 +137,19 @@ export function isSecureRequest(req: Request): boolean {
 }
 
 /**
+ * What a worker is called, everywhere a caller can see.
+ *
+ * One function, so the answer cannot differ between two readers — and so the
+ * fallback to the legacy handle exists in exactly one place, for a row written
+ * before migration 074 that somehow escaped its backfill. It is a display
+ * decision and never an authorization one: nothing in this codebase branches on
+ * what a worker is called.
+ */
+export function workerIdentity(worker: { label: string | null; name: string }): string {
+  return worker.label ?? worker.name;
+}
+
+/**
  * A credential in a query string is refused, not accepted.
  *
  * Query strings are logged by proxies, kept in browser history and sent onward
@@ -152,6 +195,10 @@ export async function authenticateRequest(req: Request): Promise<AuthOutcome> {
     // `brnt_` is a token this Brain minted after a human approved a connection.
     // Both resolve to the same WORKER principal.
     if (parseOAuthToken(bearer)) return await authenticateOAuth(bearer);
+    // `brnc_` is the third marker and the only one that resolves to a person.
+    // It is told apart here rather than by trying each in turn, so a worker
+    // credential can never fall through into the person branch or the reverse.
+    if (parseBridgeCredential(bearer)) return await authenticateBridge(bearer);
     return await authenticateWorker(bearer, req);
   }
 
@@ -185,6 +232,60 @@ async function authenticateHuman(secret: string, req: Request): Promise<AuthOutc
       mustChangePassword: user.mustChangePassword,
       credentialId: session.id,
       authMethod: 'SESSION_COOKIE',
+      memberships: await membershipsFor('HUMAN', user.id),
+      requestId: '',
+    },
+  };
+}
+
+/**
+ * A conversation bridge credential.
+ *
+ * **The principal is the person who holds it**, which makes this the one bearer
+ * in this Brain that is not a worker — and the reason that is safe rather than
+ * a hole is that it can be nothing else. There is no column on
+ * `bridge_credentials` naming a worker, so no configuration of it produces a
+ * `WORKER` principal, exactly as §22 arranged the converse for `oauth_tokens`.
+ *
+ * Everything that makes a person's session safe is here too, and read live
+ * rather than baked into the credential: the account is re-read on every
+ * request, a disabled one is refused mid-sentence, and memberships come from
+ * current rows so revoking a project lands on the next call.
+ *
+ * What it deliberately does **not** carry is `isBrainAdmin`. A bridge
+ * credential is a key somebody pasted into a chat client, and a chat client
+ * holding Brain administration would be one prompt away from administering
+ * this Brain. Everything an administrator may do stays behind the cookie, so
+ * losing this credential loses a person's own conversations and nothing else.
+ */
+async function authenticateBridge(presented: string): Promise<AuthOutcome> {
+  const parsed = parseBridgeCredential(presented);
+  if (!parsed) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+
+  // Unknown prefix, wrong secret, revoked and expired are one answer, decided
+  // inside the repository so no caller can build a different refusal out of
+  // them. The differences between them are what somebody probing wants.
+  const credential = await resolveBridgeCredential(parsed.prefix, parsed.secret);
+  if (!credential) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+
+  const user = await getUser(credential.userId);
+  if (!user) return { ok: false, reason: 'INVALID_CREDENTIALS' };
+  if (user.disabled) return { ok: false, reason: 'PRINCIPAL_DISABLED' };
+
+  void markBridgeCredentialUsed(credential.id);
+
+  return {
+    ok: true,
+    principal: {
+      type: 'HUMAN',
+      id: user.id,
+      handle: user.email,
+      displayName: user.displayName,
+      // Deliberately false however the account is configured. See above.
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId: credential.id,
+      authMethod: 'BRIDGE_BEARER',
       memberships: await membershipsFor('HUMAN', user.id),
       requestId: '',
     },
@@ -225,8 +326,12 @@ async function authenticateWorker(presented: string, _req: Request): Promise<Aut
     principal: {
       type: 'WORKER',
       id: worker.id,
-      handle: worker.name,
-      displayName: worker.displayName,
+      // The neutral label, never the legacy handle. `brain_whoami` answers with
+      // this, so a worker that checks in says `worker-03` rather than somebody's
+      // first name — which readers took to be a statement about whose account
+      // had run the session, and never was. See migration 074.
+      handle: workerIdentity(worker),
+      displayName: workerIdentity(worker),
       isBrainAdmin: false,
       mustChangePassword: false,
       credentialId: credential.id,
@@ -269,8 +374,12 @@ async function authenticateOAuth(presented: string): Promise<AuthOutcome> {
     principal: {
       type: 'WORKER',
       id: worker.id,
-      handle: worker.name,
-      displayName: worker.displayName,
+      // The neutral label, never the legacy handle. `brain_whoami` answers with
+      // this, so a worker that checks in says `worker-03` rather than somebody's
+      // first name — which readers took to be a statement about whose account
+      // had run the session, and never was. See migration 074.
+      handle: workerIdentity(worker),
+      displayName: workerIdentity(worker),
       isBrainAdmin: false,
       mustChangePassword: false,
       // The token row, so an audit line points at the grant that can be revoked.

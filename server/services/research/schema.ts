@@ -32,8 +32,14 @@ import {
   LANE_EVIDENCE_KINDS,
   type LaneEvidenceKind,
   type StructuralFinding,
+  type LaborFinding,
+  type CapabilityFinding,
+  type DealFinding,
 } from '../../domain/types.ts';
 import { validateStructural } from '../../domain/industry.ts';
+import { validateLabor } from '../../domain/labor.ts';
+import { validateCapabilityFinding } from '../../domain/manufacturing.ts';
+import { validateDealFinding } from '../../domain/dealflow.ts';
 import {
   booleanField,
   confidenceField,
@@ -526,6 +532,45 @@ export interface ParsedClaim {
   structuralQualifier: string | null;
   /** A capital figure, where a source published one. Null means unknown. */
   structuralAmountCents: number | null;
+  /** What it establishes about who or what produces work of this kind, or null. */
+  laborFinding: LaborFinding | null;
+  /** Which reason, which channel, or what the source says performs the work. */
+  laborSubject: string | null;
+  /** The basis a sourcing channel's rate is quoted on. Null otherwise. */
+  laborQualifier: string | null;
+  /** A published rate, where a source published one. Null means unknown. */
+  laborRateCents: number | null;
+  /** What it establishes about what building a machine takes, or null. */
+  capabilityFinding: CapabilityFinding | null;
+  /** What that finding is about: a name, or a value from that kind's own set. */
+  capabilitySubject: string | null;
+  /**
+   * When the source observed it. A demand signal and a capital figure both
+   * carry one; every other kind carries null.
+   */
+  capabilityObservedOn: string | null;
+  /** The second closed value, where the finding's kind has one. */
+  capabilityQualifier: string | null;
+  /** What kind of figure an amount is. Only a capital requirement has one. */
+  capabilityBasis: string | null;
+  /** The published range in minor units, and what it is priced in. */
+  capabilityAmountLowMinor: number | null;
+  capabilityAmountHighMinor: number | null;
+  capabilityCurrency: string | null;
+  /** What the claim establishes about a cross-border transaction, or null. */
+  dealFinding: DealFinding | null;
+  /** What that finding names: the organisation, the requirement, the cost line. */
+  dealSubject: string | null;
+  /** Which class of equipment, as the source writes it. */
+  dealEquipment: string | null;
+  /** The market a requirement applies in. Read from this field, never prose. */
+  dealJurisdiction: string | null;
+  /** The closed-set value: a compliance layer, a cost component, a structure. */
+  dealValue: string | null;
+  /** The figure on a cost component, in minor units. */
+  dealAmountCents: number | null;
+  /** Which currency that figure is in. Declared, never taken from the sprint. */
+  dealCurrency: string | null;
   /**
    * Whether the worker could actually read the source.
    *
@@ -703,6 +748,63 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
   });
   if (!structural.ok) return structural;
 
+  /*
+   * And what it establishes about who or what produces work of this kind.
+   *
+   * Delegated whole to `validateLabor` for the identical reason, and kept as
+   * its own call rather than folded into the structural one: the two answer
+   * different questions from different vocabularies, and one validator
+   * checking two closed sets is how a refusal stops naming the right thing.
+   */
+  const labor = validateLabor({
+    where,
+    finding: row['laborFinding'],
+    subject: row['laborSubject'],
+    qualifier: row['laborQualifier'],
+    rateCents: row['laborRateCents'],
+  });
+  if (!labor.ok) return labor;
+
+  /*
+   * What this claim establishes about building a machine, if anything.
+   *
+   * Delegated whole to `validateCapabilityFinding` for the reason directly
+   * above: the MCP tool calls the same function, and two readers of one rule
+   * is how they come to disagree.
+   */
+  const capability = validateCapabilityFinding({
+    where,
+    finding: row['capabilityFinding'],
+    subject: row['capabilitySubject'],
+    observedOn: row['capabilityObservedOn'],
+    qualifier: row['capabilityQualifier'],
+    basis: row['capabilityBasis'],
+    amountLowMinor: row['capabilityAmountLowMinor'],
+    amountHighMinor: row['capabilityAmountHighMinor'],
+    currency: row['capabilityCurrency'],
+  });
+  if (!capability.ok) return capability;
+
+  /*
+   * And what this claim establishes about a cross-border transaction.
+   *
+   * Delegated whole for the reason directly above: the MCP tool calls the
+   * same function, and two readers of one rule is how the two doors come to
+   * disagree about what a valid declaration is.
+   */
+  const deal = validateDealFinding({
+    where,
+    finding: row['dealFinding'],
+    subject: row['dealSubject'],
+    equipmentClass: row['dealEquipment'],
+    jurisdiction: row['dealJurisdiction'],
+    value: row['dealValue'],
+    amountCents: row['dealAmountCents'],
+    currency: row['dealCurrency'],
+    searchedRepositories: row['searchedRepositories'],
+  });
+  if (!deal.ok) return deal;
+
   const confidence = confidenceField(row['confidence']);
   if (!confidence.ok) return confidence;
 
@@ -738,6 +840,25 @@ function parseClaim(row: Record<string, unknown>, where: string): ParseResult<Pa
       structuralSubject: structural.value.subject,
       structuralQualifier: structural.value.qualifier,
       structuralAmountCents: structural.value.amountCents,
+      laborFinding: labor.value.finding,
+      laborSubject: labor.value.subject,
+      laborQualifier: labor.value.qualifier,
+      laborRateCents: labor.value.rateCents,
+      capabilityFinding: capability.value.finding,
+      capabilitySubject: capability.value.subject,
+      capabilityObservedOn: capability.value.observedOn,
+      capabilityQualifier: capability.value.qualifier,
+      capabilityBasis: capability.value.basis,
+      capabilityAmountLowMinor: capability.value.amountLowMinor,
+      capabilityAmountHighMinor: capability.value.amountHighMinor,
+      capabilityCurrency: capability.value.currency,
+      dealFinding: deal.value.finding,
+      dealSubject: deal.value.subject,
+      dealEquipment: deal.value.equipmentClass,
+      dealJurisdiction: deal.value.jurisdiction,
+      dealValue: deal.value.value,
+      dealAmountCents: deal.value.amountCents,
+      dealCurrency: deal.value.currency,
       derived: derived.value,
       derivedFrom: derivedFrom.value,
       claimType: claimType.value,

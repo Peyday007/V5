@@ -55,17 +55,18 @@
  *     invitation live**, so it works the moment the account exists.
  *
  * Nothing here widens any authorization rule. It reaches `grantMembership` and
- * `createUser`, which are the same two functions the administrative routes
- * reach, with the same authority required and re-checked.
+ * `createCredentiallessUser`, which are the same two functions the member
+ * journey reaches, with the same authority required and re-checked.
  */
 import {
-  createUser,
+  createCredentiallessUser,
   getUser,
   getUserByEmail,
   grantMembership,
   listMembershipsForPrincipal,
   normalizeEmail,
   recordIdentityEvent,
+  signInNameTaken,
 } from '../../repos/identity.ts';
 import {
   acceptProjectInvitation,
@@ -79,7 +80,7 @@ import {
 import { getProject } from '../../repos/projects.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { generateInvitationToken, parseInvitationToken } from './secrets.ts';
-import { assertUsablePassword, WeakPasswordError } from './secrets.ts';
+import { issueEnrollmentLink } from './enrollment.ts';
 import { decideBrainAdmin, decideProjectAccess } from './policy.ts';
 import { PROJECT_ROLES } from '../../domain/types.ts';
 import type {
@@ -158,6 +159,17 @@ export type AcceptOutcome =
       createdAccount: boolean;
       /** True when they still have to sign in — a new account has no session. */
       signInRequired: boolean;
+      /**
+       * The enrollment link for an account this acceptance just created.
+       *
+       * Shown once, to the person who has this second proved they hold the
+       * invitation, and never stored in a form it can be read back from. It is
+       * here because the account it names has **no credential at all**: an
+       * acceptance that created a row and stopped would have made somebody a
+       * member of a project they cannot sign in to, which is an escalation with
+       * no answering transition at the friendliest possible moment.
+       */
+      enrollment?: { token: string; expiresAt: string };
     }
   | { ok: false; reason: string };
 
@@ -250,8 +262,8 @@ function whatAcceptingWillDo(input: {
   }
   if (input.inviterMayCreateAccount) {
     return (
-      `${email} has no Brain account yet. Opening the link lets them choose a password, which ` +
-      `creates their account and puts them on this project as ${role.toLowerCase()}.`
+      `${email} has no Brain account yet. Opening the link creates their account, puts them ` +
+      `on this project as ${role.toLowerCase()}, and asks them to register a device.`
     );
   }
   return (
@@ -408,7 +420,7 @@ export interface InvitationPreview {
   invitedEmail: string;
   invitedByName: string;
   expiresAt: string;
-  /** True when accepting will have to make the account, so a password is asked. */
+  /** True when accepting will have to make the account, so a device is asked for. */
   accountNeeded: boolean;
   /** False when `accountNeeded` and the inviter cannot authorize creating one. */
   acceptable: boolean;
@@ -539,7 +551,6 @@ async function resolveInvitation(
  */
 export async function acceptInvitation(input: {
   token: unknown;
-  password?: unknown;
   displayName?: unknown;
   /** For the audit only: how the request reached Brain. Never an identity. */
   requestId?: string | null;
@@ -607,20 +618,73 @@ export async function acceptInvitation(input: {
           'invitation will work the moment it exists, and does not need re-sending.',
       };
     }
-    const password = input.password;
-    if (typeof password !== 'string') {
-      return { ok: false, reason: 'Choose a password to finish setting up your account.' };
-    }
-    try {
-      assertUsablePassword(password);
-    } catch (error) {
-      if (error instanceof WeakPasswordError) return { ok: false, reason: error.message };
-      throw error;
-    }
-    const displayName =
+    /*
+     * The name the acceptor chose, unless somebody already answers to it.
+     *
+     * §26 says *"the acceptor chooses neither who they are nor what they
+     * get"*, and that was true of the two things it names — the address and
+     * the role are read from the row, so an acceptance carrying `role: OWNER`
+     * changes nothing. The display name was not one of them, because when that
+     * was written a display name was a **label**.
+     *
+     * Migration 062 made a member address-less and 078 made the typed name the
+     * thing the door resolves, so it is a sign-in credential now and nothing
+     * came back here. An acceptor typing an existing member's name would have
+     * created the collision §46 exists to prevent — from the one path in this
+     * application where the person choosing the name is not the administrator,
+     * and locking out the member they collided with as well as themselves.
+     *
+     * The fallback is the **invitation's own address**, which is theirs by
+     * construction and unique by index, rather than a refusal: an invited
+     * person holding a link they cannot spend is an escalation with no
+     * answering transition, and an awkward name is a great deal cheaper than
+     * not getting in. An administrator can correct it afterwards with the
+     * rename §46 adds — which is the transition that makes this fallback
+     * honest rather than a shrug.
+     *
+     * A chosen name that is taken by *this* invitation's own account cannot
+     * happen here: this branch is only reached when no account exists for the
+     * address yet.
+     */
+    const chosen =
       typeof input.displayName === 'string' && input.displayName.trim().length > 0
         ? input.displayName.trim().slice(0, 120)
         : invitation.invitedEmail;
+    const nameTaken = await signInNameTaken(chosen);
+    const displayName = nameTaken ? invitation.invitedEmail : chosen;
+    if (nameTaken && (await signInNameTaken(displayName))) {
+      /*
+       * Both the chosen name and the address itself resolve to somebody who
+       * can already sign in — which needs another account's *display name* to
+       * be this exact address, since `users.email` is unique. Vanishingly
+       * rare, and the one case where letting the acceptance through would
+       * create the locked door rather than avoid it.
+       *
+       * Refused with the remedy named rather than the reason, in the shape
+       * every other refusal on this path uses. The invitation is deliberately
+       * **not** spent, for the same reason a missing account authority does
+       * not spend it: the link has to keep working once an administrator has
+       * corrected the name.
+       */
+      await recordIdentityEvent({
+        actorType: 'ANONYMOUS',
+        action: 'ACCEPT_PROJECT_INVITATION',
+        targetType: 'PROJECT_INVITATION',
+        targetId: invitation.id,
+        projectId: project.id,
+        result: 'DENIED',
+        reason: 'NAME_UNAVAILABLE',
+        ...(input.requestId ? { requestId: input.requestId } : {}),
+        metadata: { invitationId: invitation.id, category: 'SIGN_IN_NAME_TAKEN' },
+      });
+      return {
+        ok: false,
+        reason:
+          'That name is already how somebody signs in to this Brain. Ask a Brain ' +
+          'administrator to sort the names out — this invitation will work afterwards, ' +
+          'and does not need re-sending.',
+      };
+    }
     /*
      * Two requests holding one link, for an address with no account, both reach
      * here — and `users.email` is unique, so the second `INSERT` fails.
@@ -636,15 +700,27 @@ export async function acceptInvitation(input: {
      * collision if the row it collided with is now there. Anything else rethrows.
      */
     try {
-      invited = await createUser({
-        // The address comes from the **invitation**, so an acceptor cannot make
-        // an account for somebody else by asking.
+      /*
+       * A credential-less row, and an enrollment link beside it.
+       *
+       * This used to take a password from the acceptor and create the account
+       * with it, which was the last path in this application that could mint a
+       * password-backed person. It would have gone on producing accounts whose
+       * password *works* — the door in `passwordDoor.ts` is open precisely for
+       * an account with no working device — so a member invited to a project
+       * would have ended up with exactly the credential no member is supposed
+       * to have.
+       *
+       * Nothing about the invitation's own guarantees moved. The address is
+       * still the invitation's, so an acceptor cannot make an account for
+       * somebody else by asking; Brain administration is still never conferred;
+       * and creating the principal at all is still `decideBrainAdmin`'s to
+       * authorize, read from the inviter's current rows a few lines above.
+       * What changed is which credential the account ends up holding.
+       */
+      invited = await createCredentiallessUser({
         email: invitation.invitedEmail,
         displayName,
-        password,
-        // Never, whoever invited them. Brain-wide administration is not
-        // something a project-scoped invitation may confer.
-        isBrainAdmin: false,
         createdByType: 'HUMAN',
         createdById: inviter.id,
       });
@@ -655,6 +731,14 @@ export async function acceptInvitation(input: {
       invited = raced;
     }
   }
+
+  /*
+   * Narrowed once, here, rather than at each of the five uses below. Every path
+   * into this point either found the account or created it; a null would be a
+   * bug in this function rather than a state to handle, and saying so out loud
+   * is better than five non-null assertions that each look like a shrug.
+   */
+  if (!invited) throw new Error('An acceptance reached the grant with no account.');
 
   const accepted = await acceptProjectInvitation(invitation.id, invited.id);
   if (!accepted) {
@@ -717,6 +801,26 @@ export async function acceptInvitation(input: {
     },
   });
 
+  /*
+   * The link that turns the row just written into an account somebody can use.
+   *
+   * Only when this acceptance created it. An address that already had an
+   * account already holds whatever credential it holds, and handing that person
+   * an enrollment link would be handing out a second way into somebody else's
+   * account to whoever was holding the invitation.
+   *
+   * Issued after the membership rather than before, so a crash between the two
+   * leaves a link nobody was given rather than a member who never got one.
+   */
+  const enrollment = createdAccount
+    ? await issueEnrollmentLink({
+        userId: invited.id,
+        displayName: invited.displayName,
+        kind: 'ENROLLMENT',
+        issuedByUserId: inviter.id,
+      })
+    : null;
+
   return {
     ok: true,
     projectId: project.id,
@@ -732,6 +836,9 @@ export async function acceptInvitation(input: {
     // existing one may already be signed in elsewhere; either way nothing about
     // the acceptor's browser becomes an identity here.
     signInRequired: true,
+    ...(enrollment
+      ? { enrollment: { token: enrollment.token, expiresAt: enrollment.expiresAt } }
+      : {}),
   };
 }
 

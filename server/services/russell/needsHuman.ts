@@ -39,6 +39,7 @@ import {
   withdrawRequest,
 } from '../../repos/russellMissions.ts';
 import { getUser } from '../../repos/identity.ts';
+import { answerAuthorityGap } from '../realize/authority.ts';
 import { getDb } from '../../db/database.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { nowIso } from '../../repos/util.ts';
@@ -555,6 +556,93 @@ export interface ResumeResult {
   settled: boolean;
 }
 
+
+/* ------------------------------------------------------------------------- */
+/* A capability packet's one person-owned question                            */
+/* ------------------------------------------------------------------------- */
+
+/** What `authorityResumeKey` builds, read back here. One string, two readers. */
+const CAPABILITY_AUTHORITY_PREFIX = 'capability-authority:';
+
+/**
+ * Record a person's answer against the gap it was raised for.
+ *
+ * The person is read from `answered_by_user_id` — the principal the route
+ * resolved — and turned back into the email `answerAuthorityGap` resolves
+ * against `users`. That is deliberately not a shortcut past it: the function
+ * re-reads the row, re-checks that the person is an enabled administrator of
+ * this Brain, and refuses if they are not. Authority read at the moment the
+ * effect happens rather than baked into the card when it was written, which is
+ * §17's rule at a new door — somebody who has since lost `ADMIN` closes no gap
+ * through a card they were shown last week.
+ *
+ * The channel is `BROWSER` here and `SHELL` from the terminal, and it is the
+ * one thing the caller states rather than derives, because Brain cannot check a
+ * channel and must never assume the stronger one.
+ */
+async function resumeCapabilityAuthority(request: RussellHumanRequest): Promise<ResumeResult> {
+  const gapId = request.resumeKey.slice(CAPABILITY_AUTHORITY_PREFIX.length);
+  if (!gapId) {
+    return { ok: false, reason: 'the request names no gap', missionId: null, settled: false };
+  }
+  if (!request.answeredByUserId) {
+    return { ok: false, reason: 'the answer records no person', missionId: null, settled: false };
+  }
+  const person = await getUser(request.answeredByUserId);
+  if (!person) {
+    return { ok: false, reason: 'the person who answered is gone', missionId: null, settled: false };
+  }
+  if (!person.email) {
+    return {
+      ok: false,
+      reason: 'the person who answered signs in with a device and has no address to attribute',
+      missionId: null,
+      settled: false,
+    };
+  }
+
+  const granted = request.answeredChoice === 'GRANT_AUTHORITY';
+  const refused = request.answeredChoice === 'REFUSE_AUTHORITY';
+  if (!granted && !refused) {
+    // An answer this version does not implement. Left unsettled rather than
+    // marked resumed, for the same reason the mission branch does it.
+    return {
+      ok: false,
+      reason: `this Brain does not implement the answer "${request.answeredChoice ?? 'none'}"`,
+      missionId: null,
+      settled: false,
+    };
+  }
+
+  try {
+    const outcome = await answerAuthorityGap({
+      gapId,
+      answer: granted ? 'GRANTED' : 'REFUSED',
+      statement:
+        request.answeredReason?.trim() ||
+        (granted
+          ? 'Granted on the Needs You surface, with no further statement recorded.'
+          : 'Refused on the Needs You surface, with no further statement recorded.'),
+      answeredByEmail: person.email,
+      channel: 'BROWSER',
+      executedByRef: `russell_human_request:${request.id}`,
+    });
+    return {
+      ok: outcome.answered,
+      reason: outcome.reason,
+      missionId: null,
+      settled: outcome.answered,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : String(error),
+      missionId: null,
+      settled: false,
+    };
+  }
+}
+
 /**
  * Carry out what a person decided.
  *
@@ -571,6 +659,28 @@ export interface ResumeResult {
 export async function resumeAnsweredRequest(
   request: RussellHumanRequest,
 ): Promise<ResumeResult> {
+  /*
+   * A capability packet's authority question, which is not about a mission.
+   *
+   * It has to be answered *before* the mission check below, and the reason is
+   * the defect this whole module exists to correct. That check returns
+   * `settled: true` for anything with no mission — "the request was not about a
+   * mission" — so a capability card answered by a person would be marked
+   * `RESUMED` having carried out nothing at all, and the gap it was raised for
+   * would still be open. The card would vanish on the next tick, the packet
+   * would raise an identical one, and a person could answer the same question
+   * every day without ever learning that their decision was recorded and
+   * ignored. That is §24's sentence exactly, at a new kind of request.
+   *
+   * It does not reimplement the transition. `answerAuthorityGap` is the same
+   * guarded function `npm run capability -- packet answer` calls: the guard is
+   * on the gap kind in the statement that makes the change, the answer is
+   * attributed to a row in `users` rather than to a name, and a refusal is
+   * `WAIVED` with the refusal recorded rather than a grant.
+   */
+  if (!request.missionId && request.resumeKey.startsWith(CAPABILITY_AUTHORITY_PREFIX)) {
+    return resumeCapabilityAuthority(request);
+  }
   if (!request.missionId) {
     return { ok: true, reason: 'the request was not about a mission', missionId: null, settled: true };
   }
@@ -630,7 +740,35 @@ export async function reopenAnswered(
   request: RussellHumanRequest,
   reason: string,
 ): Promise<boolean> {
-  const mission = request.missionId ? await getMission(request.missionId) : null;
+  /*
+   * A request that is not about a mission keeps its own words and its own
+   * offer, and only gains the reason.
+   *
+   * Everything below this derives the card from a *packet's* shape, which is
+   * the right thing for the request this function was written for and nonsense
+   * for any other: `packetShape` of nothing is `{0, 0, 0}`, `choicesFor` of
+   * that is `[STOP]`, and `stopWords` composes a sentence about an evidence bar
+   * and a repair ladder. A capability packet's authority question would have
+   * come back offering to stop a mission it never had, explaining a research
+   * failure that never happened — §33's *a card must not argue with itself*,
+   * reached by replacing both halves at once with another domain's.
+   *
+   * It is newly reachable rather than newly wrong. `resumeAnsweredRequest`
+   * answered `settled: true` for every request with no mission, so nothing ever
+   * arrived here without one until the capability branch above started
+   * returning a real failure.
+   */
+  if (!request.missionId) {
+    return reopenRequest({
+      requestId: request.id,
+      choices: request.choices,
+      recommendation: reason,
+      authorityNeeded: request.authorityNeeded,
+      whyNotRussell: request.whyNotRussell,
+    });
+  }
+
+  const mission = await getMission(request.missionId);
   const orchestrationId = mission?.orchestrationId ?? null;
   const shape = orchestrationId
     ? await packetShape(orchestrationId)

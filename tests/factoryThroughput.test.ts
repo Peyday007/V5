@@ -28,6 +28,8 @@ function session(over: Partial<FactorySession> = {}): FactorySession {
     model: 'sonnet',
     state: 'FINISHED',
     exitReason: null,
+    binId: null,
+    leaseGeneration: null,
     durationMs: 60_000,
     numTurns: null,
     usage: null,
@@ -332,5 +334,46 @@ describe('throughputReport against real rows', () => {
     } finally {
       await teardown();
     }
+  });
+});
+
+/* ========================================================================= */
+
+describe('the reading has an operator surface', () => {
+  /*
+   * A guard on *exposure*, which is the one thing the suite above cannot see.
+   *
+   * Everything before this drives `computeThroughput` and `throughputReport`
+   * directly and proves they are right. None of it can tell you that the only
+   * way to read the answer was `GET /factory/campaigns/:id/throughput` — a route
+   * no screen called and no command reached, so the one capability whose whole
+   * point is refusing to round a ceiling up could be had only by hand-writing an
+   * HTTP request. §26: a reading an operator takes belongs on a terminal.
+   *
+   * It reads the repository for the same reason `operatorConsoleRemoved` does:
+   * what must exist here is a *way in*, and a passing service call cannot show
+   * you one.
+   */
+  it('is a command on the factory door, and is advertised as one', async () => {
+    const fs = await import('node:fs');
+    const source = fs.readFileSync('scripts/factory.ts', 'utf8');
+    expect(source).toMatch(/case 'throughput': \{/);
+    expect(source).toMatch(/throughputReport\(campaignId\)/);
+    // Advertised, because a command nobody is told about is one nobody uses.
+    expect(source.slice(source.lastIndexOf('commands:'))).toMatch(/throughput/);
+  });
+
+  it('never prints an unmeasured figure as a number', async () => {
+    const fs = await import('node:fs');
+    const source = fs.readFileSync('scripts/factory.ts', 'utf8');
+    const printer = source.slice(source.indexOf("case 'throughput': {"), source.indexOf("case 'release': {"));
+    /*
+     * The half that matters. A `null` value means nobody measured it, and a
+     * printer that fell back to `0` — or to `??` anything numeric — would turn
+     * *we did not measure this* into *this was zero*, which is the figure a
+     * person would quote. The service refuses that; the door must too.
+     */
+    expect(printer).toMatch(/value === null \? 'not measured'/);
+    expect(printer).not.toMatch(/\?\?\s*0\b/);
   });
 });

@@ -179,8 +179,25 @@ export async function listWorkers(): Promise<FactoryWorker[]> {
   return rows.map(mapWorker);
 }
 
+/**
+ * Configuration a worker's registration may be corrected in.
+ *
+ * `availability` is deliberately **not** one of them, and that is the whole of
+ * why this interface has a comment. It used to be, and `patchWorker` had no
+ * caller anywhere in the repository — so the guarded transition beside it was a
+ * guard for exactly as long as nobody found the other door. A bare
+ * `UPDATE … SET availability = ?` skips the compare-and-swap that makes two
+ * operators produce one move, skips the streak reset without which a restored
+ * worker re-quarantines on its very next failure, and writes no
+ * `WORKER_STATE_CHANGED` row, so the change answers nothing later.
+ *
+ * Availability has two writers and there must never be a third:
+ * `setWorkerAvailability`, which is an operator's decision, and the quarantine
+ * inside `recordWorkerFailure`, which is a health signal Brain derives from
+ * what actually happened. `tests/factory.test.ts` reads this file and fails on
+ * any other one.
+ */
 export interface WorkerPatch {
-  availability?: FactoryWorkerAvailability;
   maxConcurrency?: number;
   capabilities?: FactoryCapability[];
   repositories?: string[];
@@ -192,10 +209,6 @@ export interface WorkerPatch {
 export async function patchWorker(id: string, patch: WorkerPatch): Promise<void> {
   const sets: string[] = [];
   const values: SqlParam[] = [];
-  if (patch.availability !== undefined) {
-    sets.push('availability = ?');
-    values.push(patch.availability);
-  }
   if (patch.maxConcurrency !== undefined) {
     sets.push('max_concurrency = ?');
     values.push(patch.maxConcurrency);
@@ -225,6 +238,74 @@ export async function patchWorker(id: string, patch: WorkerPatch): Promise<void>
     `UPDATE factory_workers SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`,
     [...values, factoryNow(), id],
   );
+}
+
+/**
+ * Move a worker's availability, guarded on the state the operator named.
+ *
+ * ---------------------------------------------------------------------------
+ * The quarantine was one-way
+ * ---------------------------------------------------------------------------
+ *
+ * `recordWorkerFailure` writes `QUARANTINED` at three consecutive failures, and
+ * `capacity()` then computes `healthy = availability === 'AVAILABLE' && !limited`
+ * and gives that worker `freeSlots: 0`. Nothing anywhere wrote `AVAILABLE` back:
+ * `registerWorker` is `ON CONFLICT (name) DO NOTHING`, so re-registering under
+ * the same name changes nothing; `recordWorkerSuccess` resets the streak and
+ * deliberately leaves availability alone, and could not run anyway, because a
+ * worker with no slots is never given work to succeed at; and `patchWorker` —
+ * the one function that *could* — had no caller in the repository at all.
+ * `PAUSED` was never written by anything, so it was a state the code read and
+ * nothing could reach.
+ *
+ * Three ordinary failures on a local-plane worker therefore retired it
+ * permanently, repairable only by hand-written SQL, which invariant 1 forbids
+ * outright. §24's sentence at the factory registry, for the seventh time: a
+ * state that says waiting which nobody can resolve is not waiting, it is stuck.
+ * §23 has the answering transition one object along and it is the same shape —
+ * `fleet set-state`, once the operational condition is fixed.
+ *
+ * ---------------------------------------------------------------------------
+ * Three properties, and each of them is load-bearing
+ * ---------------------------------------------------------------------------
+ *
+ * **It is guarded on the state the operator named**, which is
+ * `repointRoutineWorker`'s shape rather than a blind write: two operators acting
+ * on one worker produce one move and an ordinary loser, and an operator acting
+ * on a reading that has since changed is refused rather than clobbering
+ * whatever happened in between.
+ *
+ * **Leaving `QUARANTINED` resets the failure streak, and nothing else does.**
+ * `recordWorkerFailure` increments and then tests `>= 3`, so a worker restored
+ * with its streak still at three re-quarantines on its very next failure — the
+ * transition would exist, would report success, and would change nothing that
+ * lasts. That is §27's `FACTORY_STAGE_REAUTHORIZED` reasoning exactly: the
+ * count is taken from a person saying the operational condition is fixed, so a
+ * condition that was not actually fixed simply quarantines again, three
+ * failures later, rather than immediately.
+ *
+ * **It never touches `rate_limited_until`.** That is a provider's own ceiling
+ * with its own clock, and §23's rule is that a refusal is not misconduct — an
+ * operator deciding a worker is available must not thereby overrule the
+ * provider about when it will answer.
+ */
+export async function setWorkerAvailability(
+  id: string,
+  from: FactoryWorkerAvailability,
+  to: FactoryWorkerAvailability,
+): Promise<boolean> {
+  const at = factoryNow();
+  // Only on the way *out* of quarantine, and in the same statement, so there is
+  // no window in which a worker is available with a streak that re-quarantines
+  // it on the next failure.
+  const streak = from === 'QUARANTINED' && to !== 'QUARANTINED' ? ', consecutive_failures = 0' : '';
+  const result = await getDb().run(
+    `UPDATE factory_workers
+        SET availability = ?, updated_at = ?${streak}
+      WHERE id = ? AND availability = ?`,
+    [to, at, id, from],
+  );
+  return (result.changes ?? 0) > 0;
 }
 
 /**
@@ -312,6 +393,8 @@ export function mapSession(row: FactorySessionRow): FactorySession {
     usage: parseJson<FactoryUsage | null>(row.usage, null),
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    binId: row.bin_id ?? null,
+    leaseGeneration: row.lease_generation ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -356,6 +439,79 @@ export async function openSession(input: OpenSessionInput): Promise<FactorySessi
   return mapSession(row);
 }
 
+/**
+ * Record a session the hosted plane ran, from the episode Brain observed.
+ *
+ * `openSession` is for a session this process *starts*, so it opens RUNNING and
+ * is closed later by whatever was running it. There is nothing running here:
+ * the session happened on somebody else's machine, Brain fired it, leased it a
+ * bin, timed it and wrote all of that down, and this is that record being read
+ * back into the table `metrics.ts` sweeps. So it arrives already finished, with
+ * both ends of its interval, and never transitions.
+ *
+ * **Idempotent by the episode rather than by a flag.** `(bin_id,
+ * lease_generation)` is unique, so a second tick reading the same finished bin
+ * inserts nothing and the loser is an ordinary outcome — the same shape every
+ * claim in this codebase has. It returns whether this call was the one that
+ * recorded it, which is what makes the tick's report a measurement rather than
+ * a count of attempts.
+ */
+export async function recordObservedSession(input: {
+  campaignId: string;
+  unitId: string | null;
+  workerId: string;
+  accountRef: string;
+  attempt: number;
+  role: FactoryRole;
+  externalSessionId: string | null;
+  model: string;
+  state: Exclude<FactorySessionState, 'RUNNING'>;
+  exitReason: string | null;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number | null;
+  binId: string;
+  leaseGeneration: number;
+}): Promise<boolean> {
+  const db = getDb();
+  const id = newId('fss');
+  const at = factoryNow();
+  const result = await db.run(
+    `INSERT INTO factory_sessions (
+       id, campaign_id, unit_id, worker_id, account_ref, attempt, role,
+       external_session_id, model, state, exit_reason, duration_ms, num_turns,
+       usage, started_at, ended_at, bin_id, lease_generation, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)
+     -- The index is partial, so the predicate has to be repeated here: both
+     -- dialects refuse a conflict target that does not name the *whole* index,
+     -- and SQLite's refusal is at prepare time with "does not match any PRIMARY
+     -- KEY or UNIQUE constraint" — which reads like a missing index rather than
+     -- an under-specified target. Found by running it.
+     ON CONFLICT (bin_id, lease_generation) WHERE bin_id IS NOT NULL DO NOTHING`,
+    [
+      id,
+      input.campaignId,
+      input.unitId,
+      input.workerId,
+      input.accountRef,
+      input.attempt,
+      input.role,
+      input.externalSessionId,
+      input.model,
+      input.state,
+      bound(input.exitReason ?? null),
+      input.durationMs,
+      input.startedAt,
+      input.endedAt,
+      input.binId,
+      input.leaseGeneration,
+      at,
+      at,
+    ],
+  );
+  return result.changes === 1;
+}
+
 export interface CloseSessionInput {
   state: Exclude<FactorySessionState, 'RUNNING'>;
   exitReason?: string | null;
@@ -397,14 +553,6 @@ export async function listSessions(campaignId: string): Promise<FactorySession[]
   const rows = await getDb().all<FactorySessionRow>(
     `SELECT * FROM factory_sessions WHERE campaign_id = ? ORDER BY started_at, rowid`,
     [campaignId],
-  );
-  return rows.map(mapSession);
-}
-
-export async function sessionsForUnit(unitId: string): Promise<FactorySession[]> {
-  const rows = await getDb().all<FactorySessionRow>(
-    `SELECT * FROM factory_sessions WHERE unit_id = ? ORDER BY started_at, rowid`,
-    [unitId],
   );
   return rows.map(mapSession);
 }
@@ -819,19 +967,37 @@ export async function recordFactoryEvent(input: FactoryEventInput): Promise<Fact
   return mapEvent(row);
 }
 
+/**
+ * The ledger, in the order it was written.
+ *
+ * `campaignId` is nullable, and `null` means *not scoped to a campaign* rather
+ * than *no campaign*. Not every claim this factory makes belongs to one:
+ * registering a worker and moving its availability are facts about the fleet,
+ * so they are written with `campaign_id` NULL — and while the predicate was an
+ * unconditional `campaign_id = ?`, no argument could ever return them. A row
+ * that no reader can reach is not a ledger entry, which is the sentence this
+ * file has now needed at a column, at a refusal and here.
+ *
+ * `WORKER_REGISTERED` had been in that state since it was first written.
+ */
 export async function listFactoryEvents(
-  campaignId: string,
+  campaignId: string | null,
   options: { kinds?: string[]; limit?: number } = {},
 ): Promise<FactoryEvent[]> {
-  const params: SqlParam[] = [campaignId];
-  let clause = '';
+  const params: SqlParam[] = [];
+  const where: string[] = [];
+  if (campaignId !== null) {
+    where.push('campaign_id = ?');
+    params.push(campaignId);
+  }
   if (options.kinds && options.kinds.length > 0) {
-    clause = ` AND kind IN (${options.kinds.map(() => '?').join(', ')})`;
+    where.push(`kind IN (${options.kinds.map(() => '?').join(', ')})`);
     params.push(...options.kinds);
   }
+  const clause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   const limit = Math.max(1, Math.min(5000, options.limit ?? 2000));
   const rows = await getDb().all<FactoryEventRow>(
-    `SELECT * FROM factory_events WHERE campaign_id = ?${clause}
+    `SELECT * FROM factory_events ${clause}
       ORDER BY at, rowid LIMIT ${limit}`,
     params,
   );

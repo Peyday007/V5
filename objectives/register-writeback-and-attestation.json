@@ -1,0 +1,53 @@
+{
+  "objective": "Close the two gaps the work register leaves a person to fill by hand. First: when a campaign a workstream points at opens a pull request, nothing records that pull request against the workstream — a person has to notice it and link it, so the register says PR_READY only when somebody remembered, and says IN_PROGRESS about work that is actually waiting on a review. Second: the register cannot say `MERGED`, `DEPLOYED` or `VERIFIED_LIVE` about anything without a person typing an attestation, because Brain holds no forge credential and refuses to read a URL as a merge — which is right, and leaves the whole right-hand half of the owner's question 'what actually shipped?' answerable only by hand.",
+  "repository": "https://github.com/Peyday007/V5",
+  "baseBranch": "production",
+  "expectedOutcome": "A workstream pointing at a campaign that has opened a pull request shows that pull request among its readings without anybody linking it, attested by the campaign rather than by a person. And a workstream whose pull request has merged reads MERGED, from evidence Brain recorded when it saw the merge rather than from a sentence somebody typed — with the same refusal as today for anything nobody has attested to.",
+  "nonGoals": [
+    "Giving Brain a forge credential, or having it poll GitHub. The attestation must come from something that already observes the repository on Brain's behalf, and Brain holding no repository credential is a property §27 states and this must not change.",
+    "Storing a state column on workstreams. The state stays derived on the read path; what this adds is evidence for the derivation to read.",
+    "Composing an intent or a purpose for anything. Filing a workstream stays a person's decision.",
+    "Reading a bare URL as a merge. An unattested pull request must still contribute nothing."
+  ],
+  "acceptanceConditions": [
+    {
+      "statement": "A campaign that reaches COMPLETE with a pull request url records a PULL_REQUEST link, attested by the campaign, on every live workstream that points at that campaign — and records exactly one however many times the writeback runs.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A workstream with no campaign, or with a campaign that has no pull request, is untouched: nothing is linked and its derived state does not move.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "A pull request link carrying no attestation still contributes no state, and the existing test asserting that still passes unchanged.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "The merge attestation is recorded from an observation Brain actually made, and the code path that records it names where the observation came from. Nothing in it reads a URL, a title or a branch name as evidence of a merge.",
+      "verification": "npm test",
+      "mandatory": true
+    },
+    {
+      "statement": "Every new behaviour has a test beside it, and at least one of them is run against a neutered version of the guard it covers to confirm it fails first.",
+      "verification": "npm test",
+      "mandatory": true
+    }
+  ],
+  "mutationScope": [
+    "server/services/register/**",
+    "server/services/factory/writeback.ts",
+    "server/repos/register.ts",
+    "tests/workRegister.test.ts",
+    "tests/factoryWriteback.test.ts"
+  ],
+  "verificationCommands": [
+    "npm run typecheck",
+    "npm test"
+  ],
+  "environment": "LOCAL",
+  "riskClass": "LOW",
+  "rollbackRequirement": "Discard the branch. Nothing outside server/services/register, server/services/factory/writeback.ts, server/repos/register.ts and the two named suites is touched, and the register holds no state column to migrate back."
+}

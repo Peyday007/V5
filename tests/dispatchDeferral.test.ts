@@ -467,6 +467,91 @@ describe('a fire nobody answered', () => {
     expect(await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10)).toEqual([]);
   });
 
+  /*
+   * The production shape this read could not see, built the way production
+   * built it: a worker *arrives*, takes the lease, and then its session ends
+   * mid-stage. The bin is `LEASED` rather than `READY` from that moment on,
+   * and an expired lease is claimable work (§19) — so the dispatcher fires
+   * again, correctly, and that second session is the one that never turns up.
+   *
+   * `bin_43915e4f93ca4e3db111` is the row it cost: nineteen hours `LEASED` at
+   * `gen 1` with `attempts 1/2`, a healthy fleet beside it, and a factory
+   * campaign one integration short of its pull request.
+   */
+  async function aDeadWorkersFireThatWentUnanswered(binId: string): Promise<string> {
+    const worker = await createWorker({
+      name: `died-${Math.random().toString(36).slice(2, 8)}`,
+      displayName: 'a worker whose session ended mid-stage',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    expect(await assignNextBin({ workerId: worker.id, projectIds: [projectId] })).toBeTruthy();
+    // The session ends. Nothing releases the bin, so the lease simply lapses.
+    await getDb().run(`UPDATE bins SET lease_expires_at = ? WHERE id = ?`, [
+      new Date(Date.now() - 60_000).toISOString(),
+      binId,
+    ]);
+
+    const leased = (await getBin(binId))!;
+    expect(leased.state).toBe('LEASED');
+    expect(leased.leaseGeneration).toBe(1);
+
+    // The dispatcher's ordinary second fire, at the bin's current generation.
+    expect(await ensureDispatchIntent(leased)).toBe(true);
+    const intent = (await claimDispatchIntent())!;
+    await markDispatchRoutine(intent.id, (await routineId())!);
+    await markDispatchSent(intent.id, {
+      routineRef: 'trig_defer',
+      sessionRef: 'session_never_arrived_either',
+    });
+    await getDb().run(`UPDATE bin_dispatch SET sent_at = ? WHERE id = ?`, [
+      new Date(Date.now() - IN_FLIGHT_WINDOW_MS - 60_000).toISOString(),
+      intent.id,
+    ]);
+    return intent.id;
+  }
+
+  it('is put back for a bin whose worker died, which is claimable and is not READY', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    const intentId = await aDeadWorkersFireThatWentUnanswered(binId);
+
+    // Both doors are shut here for the same reasons they are shut above, and
+    // the bin is every bit as unreachable: the generation only moves when a
+    // worker takes a lease, and nobody is coming to take one.
+    const bin = (await getBin(binId))!;
+    expect(bin.state).toBe('LEASED');
+    expect(await ensureDispatchIntent(bin)).toBe(false);
+    expect(await claimDispatchIntent()).toBeNull();
+
+    const [reopened] = await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10);
+    expect(reopened).toEqual({ dispatchId: intentId, binId, outcome: 'REOPENED' });
+    expect((await claimDispatchIntent())?.id).toBe(intentId);
+
+    // Nothing about the bin moved. The attempt the dead worker spent is still
+    // spent, the generation still names what was handed out, and the takeover
+    // that follows is `assignNextBin`'s ordinary one.
+    const after = (await getBin(binId))!;
+    expect(after.state).toBe('LEASED');
+    expect(after.leaseGeneration).toBe(1);
+    expect(after.attemptCount).toBe(1);
+  });
+
+  it('leaves a lease somebody is still holding exactly alone', async () => {
+    const binId = await aReadyBin();
+    await aFleet();
+    await aDeadWorkersFireThatWentUnanswered(binId);
+    // The distinction this widening turns on, and the only thing separating a
+    // stranded bin from one being worked: whether the lease has run out.
+    await getDb().run(`UPDATE bins SET lease_expires_at = ? WHERE id = ?`, [
+      new Date(Date.now() + 60 * 60_000).toISOString(),
+      binId,
+    ]);
+
+    expect(await reopenNoShowDispatches(IN_FLIGHT_WINDOW_MS, 10)).toEqual([]);
+    expect((await listDispatchesForBin(binId)).some((d) => d.state === 'SENT')).toBe(true);
+  });
+
   it('leaves a bin somebody did arrive for exactly alone', async () => {
     const binId = await aReadyBin();
     await aFleet();

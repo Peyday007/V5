@@ -24,7 +24,6 @@
  * contract, and silently dropping it is how a worker comes to believe it told
  * Brain something it did not.
  */
-import { FactoryError } from './errors.ts';
 
 /** What a unit report may conclude. Matched exactly; there is no closest match. */
 export const FACTORY_REPORT_OUTCOMES = ['IMPLEMENTED', 'BLOCKED'] as const;
@@ -325,13 +324,6 @@ export function parseReviewReport(raw: unknown): Parsed<FactoryReviewReport> {
       findings,
     },
   };
-}
-
-export function reportRefused(errors: string[]): FactoryError {
-  return new FactoryError(`The report was refused: ${errors.join(' ')}`, {
-    reason: 'REPORT_REFUSED',
-    errors,
-  });
 }
 
 /* ------------------------------------------------------------------------- */

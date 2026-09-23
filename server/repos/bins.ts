@@ -30,6 +30,7 @@ import type { SqlParam } from '../db/types.ts';
 import { newId, nowIso, parseJson, retryAtWithin, toJson } from './util.ts';
 import { bindRoutineWorker, getRoutine, recordRoutineCheckIn, recordWorkerSession } from './fleet.ts';
 import { sameProviderSession } from '../domain/sessionRef.ts';
+import { contractLeaseFloorMs } from '../domain/binLease.ts';
 import type { BinConfinement } from './workQueue.ts';
 import type {
   Bin,
@@ -1364,10 +1365,30 @@ export interface AssignedBin {
  * scarce. One predicate, four callers, no copies.
  *
  * One `?`, bound to now.
+ *
+ * **There was a fifth reader, and it wrote `state = 'READY'` too.** The
+ * paragraph above predicted it and the constant did not prevent it, because
+ * `reopenNoShowDispatches` sits in a query that aliases `bins` and a bare
+ * string starting `state =` cannot be dropped into one. So the rule is a
+ * function of the alias now rather than a constant plus a copy, and
+ * `DISPATCHABLE_SQL` is composed from it — which is the only arrangement in
+ * which a sixth reader gets the same sentence for free.
+ *
+ * What that fifth reader cost is in `reopenNoShowDispatches`' own comment:
+ * `bin_43915e4f93ca4e3db111`, a factory integration whose worker's session
+ * ended mid-stage, fired again correctly when the lease lapsed, never answered,
+ * and then sat LEASED for nineteen hours with nothing in the Brain that could
+ * ever fire for it again.
  */
-export const DISPATCHABLE_SQL =
-  "((state = 'READY' OR (state = 'LEASED' AND lease_expires_at <= ?))" +
-  ' AND attempt_count < max_attempts)';
+export function claimableStateSql(prefix: string): string {
+  return (
+    `(${prefix}state = 'READY'` +
+    ` OR (${prefix}state = 'LEASED' AND ${prefix}lease_expires_at <= ?))`
+  );
+}
+
+/** That question plus the attempt budget, for a query with no join. */
+export const DISPATCHABLE_SQL = `(${claimableStateSql('')} AND attempt_count < max_attempts)`;
 
 /**
  * The dispatcher's extra question, on top of `DISPATCHABLE_SQL`.
@@ -1446,9 +1467,30 @@ function familyWhereClause(
   return { sql: `AND (${clauses.join(' OR ')})`, params };
 }
 
+/**
+ * The lease this bin is actually handed, which is never shorter than its own
+ * contract's work.
+ *
+ * A worker chooses `lease_ms` and cannot know what the work costs; the contract
+ * can, because it is the thing that says what must be satisfied. So the floor is
+ * applied to whatever arrives, in both places a lease is written — the
+ * assignment and the heartbeat — because the heartbeat is an *assignment* of
+ * `lease_expires_at` rather than an extension, and is therefore how a worker
+ * shortens its own lease under the work it is about to block on. See
+ * `domain/binLease.ts` for the measurement this is set from.
+ *
+ * A worker asking for more still gets more. The clamp to `MAX_BIN_LEASE_MS`
+ * happens either way, so this can never produce a lease the queue would refuse.
+ */
+function leaseForContract(contract: string, requested?: number): number {
+  const asked = clampBinLeaseMs(requested);
+  const floor = contractLeaseFloorMs(contract);
+  if (floor === null) return asked;
+  return clampBinLeaseMs(Math.max(asked, floor));
+}
+
 export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin | null> {
   const db = getDb();
-  const leaseMs = clampBinLeaseMs(input.leaseMs);
   if (input.projectIds.length === 0) return null;
 
   /*
@@ -1639,6 +1681,7 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
 
       const leaseId = newId('bls');
       const at = binNow();
+      const leaseMs = leaseForContract(row.completion_contract, input.leaseMs);
       const expires = plusMs(at, leaseMs);
       const nextGeneration = row.lease_generation + 1;
       const takeover = row.state === 'LEASED';
@@ -1827,7 +1870,27 @@ export async function heartbeatBin(
   leaseMs?: number,
 ): Promise<{ outcome: BinLeaseOutcome; expiresAt: string | null }> {
   const now = binNow();
-  const expires = plusMs(now, clampBinLeaseMs(leaseMs));
+  /*
+   * The contract's floor applies here too, and this is the place it actually
+   * had to.
+   *
+   * This statement *assigns* `lease_expires_at` rather than extending it, so a
+   * worker that heartbeats asking for less than it asked for at check-in
+   * shortens its own lease — and the only clamp underneath was
+   * `MIN_BIN_LEASE_MS`, thirty seconds. That is how
+   * `bin_43915e4f93ca4e3db111` came to be retired at 08:09:41 having been
+   * taken over at 07:56:35 under a fifteen-minute lease: four renewals, and an
+   * expiry earlier than the takeover's own. The worker was still working; its
+   * next heartbeat is on the events as a stale write.
+   *
+   * One read by primary key, which is what it costs to ask the row what its
+   * work is rather than trusting the caller's number for it.
+   */
+  const row = await getDb().get<{ completion_contract: string }>(
+    `SELECT completion_contract FROM bins WHERE id = ?`,
+    [proof.binId],
+  );
+  const expires = plusMs(now, leaseForContract(row?.completion_contract ?? '', leaseMs));
   const result = await getDb().run(
     `UPDATE bins SET heartbeat_at = ?, lease_expires_at = ?, lease_renewals = lease_renewals + 1,
        updated_at = ? WHERE ${ownershipClause()}`,
@@ -2010,6 +2073,35 @@ export async function recordBinRefusal(proof: BinProof, reason: string): Promise
  * For the reconciliation pass, which decides what to do with a bin that is
  * nonterminal, unleased and out of attempts. Guarded on the generation so it
  * cannot race an assignment that happened a moment ago.
+ *
+ * ---------------------------------------------------------------------------
+ * "Unleased" has to mean *nobody holds it*, and for a long time it meant READY
+ * ---------------------------------------------------------------------------
+ *
+ * The match was `state IN ('READY','DRAFT')`, and §19 is explicit that **an
+ * expired lease is claimable work** — a bin whose holder died is not held, and
+ * every other reader in this file already treats it that way:
+ * `DISPATCHABLE_SQL` offers it, `isDispatchable` offers it, and `reconcileBins`
+ * counts it as healthy *while it still has attempts*.
+ *
+ * So the one state this could not reach was the one it existed for: a bin whose
+ * **final** attempt ended by the lease lapsing rather than by an explicit
+ * release. It is LEASED, its lease is dead, and its budget is spent — refused
+ * by the assigner, refused by the dispatcher, and unreachable by the pass whose
+ * whole job is to turn exactly that into one decision. `reconcileBins` then
+ * read the failed UPDATE as *somebody assigned it between the read and the
+ * write. Ordinary.* and counted it healthy, every tick, for ever.
+ *
+ * That is §24's sentence at yet another altitude, and worse than the usual
+ * shape: there was no state saying a person was needed, so nothing was waiting
+ * and nothing was stuck — the bin simply stopped existing as far as every
+ * surface was concerned.
+ *
+ * The widening is narrow. An expired lease only, compared to the clock in the
+ * statement that makes the change; the fencing generation still guards it, so a
+ * real assignment a moment ago (which advances the generation) matches nothing;
+ * and the lease columns are cleared in the same statement, because a terminal
+ * bin carrying a dead lease id is a row two readers would disagree about.
  */
 export async function terminateUnleasedBin(
   binId: string,
@@ -2019,9 +2111,13 @@ export async function terminateUnleasedBin(
 ): Promise<boolean> {
   const now = binNow();
   const result = await getDb().run(
-    `UPDATE bins SET state = ?, terminal_reason = ?, completed_at = ?, updated_at = ?
-      WHERE id = ? AND lease_generation = ? AND state IN ('READY', 'DRAFT')`,
-    [state, bounded(reason, MAX_REASON_CHARS), now, now, binId, leaseGeneration],
+    `UPDATE bins SET state = ?, terminal_reason = ?, completed_at = ?, updated_at = ?,
+            lease_id = NULL, worker_id = NULL, lease_credential_id = NULL,
+            leased_at = NULL, heartbeat_at = NULL, lease_expires_at = NULL
+      WHERE id = ? AND lease_generation = ?
+        AND (state IN ('READY', 'DRAFT')
+             OR (state = 'LEASED' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?))`,
+    [state, bounded(reason, MAX_REASON_CHARS), now, now, binId, leaseGeneration, now],
   );
   if (result.changes !== 1) return false;
   await recordBinEvent({
@@ -2318,13 +2414,42 @@ export async function ensureDispatchIntent(bin: Bin): Promise<boolean> {
  * one audit role short of a verdict.
  *
  * The remedy is the shape everything else here uses: derive it from rows. A
- * `SENT` intent is a no-show when its bin is **still READY at the very
+ * `SENT` intent is a no-show when its bin is **still claimable at the very
  * generation that intent was created for** — a worker that arrived would have
  * taken a lease and advanced it, so same generation means nothing has been
  * handed out since — and when the fire is older than the in-flight window, so
  * this can never race an activation Brain still believes is running. The window
  * is passed in rather than read here, because `inFlightByRoutine` owns it and
  * two places holding the same number is how they come to disagree.
+ *
+ * **Claimable, not READY, and the correction is recorded rather than quietly
+ * applied.** This asked `b.state = 'READY'`, which is the narrower sentence
+ * the constant above `DISPATCHABLE_SQL` was written to stop being written a
+ * fifth time — and is not the set a worker could be given, because §19's rule
+ * is that an expired lease is claimable work. So the very condition this
+ * function exists for has a second shape, and it is the one that costs more:
+ * a worker that *arrives*, takes the lease, works, and then has its session
+ * end mid-stage leaves the bin `LEASED` rather than `READY`. The lease lapses,
+ * the dispatcher correctly fires again — and if *that* session never arrives,
+ * this read could not see it, so the intent stayed `SENT` at a generation
+ * nothing would ever advance.
+ *
+ * `bin_43915e4f93ca4e3db111` is the row, and it is a worse instance than the
+ * one above because everything about it worked. Fired 14:32:41Z, assigned
+ * 14:33:01Z, thirty-seven heartbeats, then nothing; lease expired 15:07:18Z;
+ * refired 15:07:45Z at a session that never checked in. Nineteen hours later:
+ * `LEASED`, `gen 1`, `attempts 1/2` — an attempt still unspent, a healthy
+ * fleet beside it, and a factory campaign one integration short of its pull
+ * request with nothing in the Brain that could fire for it again.
+ *
+ * Widening it changes nothing about what happens next. The reopened intent
+ * goes back to `PENDING`, and the dispatcher's pre-fire re-read asks
+ * `isDispatchable` again before spending anything — so a bin somebody took in
+ * the meantime is refused there, as it always was. What the arriving worker
+ * does with an expired lease is `assignNextBin`'s ordinary takeover: the
+ * generation advances, the attempt is charged because the previous one
+ * genuinely did not finish, and a late completion from the dead session
+ * matches nothing.
  *
  * Bounded by the intent's own `max_attempts`, which was always there and had
  * nothing that could reach it. At the ceiling the row becomes `ABANDONED` —
@@ -2350,39 +2475,79 @@ export async function reopenNoShowDispatches(
     lease_generation: number;
     attempt_count: number;
     max_attempts: number;
+    bin_attempt_count: number;
+    bin_max_attempts: number;
   }>(
     `SELECT d.id AS id,
             d.bin_id AS bin_id,
             b.project_id AS project_id,
             d.lease_generation AS lease_generation,
             d.attempt_count AS attempt_count,
-            d.max_attempts AS max_attempts
+            d.max_attempts AS max_attempts,
+            b.attempt_count AS bin_attempt_count,
+            b.max_attempts AS bin_max_attempts
        FROM bin_dispatch d
        JOIN bins b ON b.id = d.bin_id
       WHERE d.state = 'SENT'
         AND d.sent_at IS NOT NULL
         AND d.sent_at <= ?
-        AND b.state = 'READY'
+        AND ${claimableStateSql('b.')}
         AND b.lease_generation = d.lease_generation
       ORDER BY d.sent_at, d.rowid
       LIMIT ?`,
-    [before, Math.max(1, limit)] as never[],
+    [before, now, Math.max(1, limit)] as never[],
   );
 
   const out: { dispatchId: string; binId: string; outcome: 'REOPENED' | 'ABANDONED' }[] = [];
   for (const row of rows) {
-    const exhausted = row.attempt_count >= row.max_attempts;
+    /*
+     * Two budgets, and this read only ever asked about one of them.
+     *
+     * The intent's own `attempt_count` bounds how many times Brain will fire
+     * for it. The **bin's** bounds whether there is any work left to fire for
+     * at all — `DISPATCHABLE_SQL` carries `attempt_count < max_attempts`, so a
+     * bin at its ceiling is refused by the assigner and by every one of the
+     * dispatcher's four readers.
+     *
+     * Asking only the first one produced a loop that looked like progress and
+     * was not: a bin whose own attempts were spent, still `READY` because
+     * `reconcileBins` had not yet turned it into a decision, had its unanswered
+     * intent put back to `PENDING` every window, for ever. Nothing was ever
+     * fired — the pre-fire re-read correctly refused it — so the only visible
+     * effect was a `DISPATCH_INTENT` row every thirty minutes on a bin nobody
+     * could be sent for, and an intent that could never reach a terminal state
+     * because the thing that advances its attempt counter is the claim it would
+     * never get.
+     *
+     * Abandoning is strictly better than skipping. A skip leaves the row `SENT`
+     * and the condition invisible; this closes the intent, says which budget
+     * ran out, and leaves `reconcileBins` to turn the bin into the one decision
+     * a person can answer. Every attempt and every event keeps its row.
+     */
+    const dispatchSpent = row.attempt_count >= row.max_attempts;
+    const binSpent = row.bin_attempt_count >= row.bin_max_attempts;
+    const exhausted = dispatchSpent || binSpent;
     const result = await getDb().run(
       exhausted
         ? `UPDATE bin_dispatch SET state = 'ABANDONED', updated_at = ?,
              last_error_kind = 'NO_SHOW',
-             last_error = 'Fired, and no worker ever claimed the bin. Attempts exhausted.'
+             last_error = ?
             WHERE id = ? AND state = 'SENT'`
         : `UPDATE bin_dispatch SET state = 'PENDING', next_attempt_at = ?, updated_at = ?,
              last_error_kind = 'NO_SHOW',
              last_error = 'Fired, and no worker ever claimed the bin before the in-flight window closed.'
             WHERE id = ? AND state = 'SENT'`,
-      (exhausted ? [now, row.id] : [now, now, row.id]) as never[],
+      (exhausted
+        ? [
+            now,
+            binSpent
+              ? 'Fired, and no worker ever claimed the bin. The BIN is out of attempts ' +
+                `(${row.bin_attempt_count}/${row.bin_max_attempts}), so nothing can be sent for ` +
+                'it and reopening this intent would fire at work the assigner already refuses.'
+              : 'Fired, and no worker ever claimed the bin. Attempts exhausted.',
+            row.id,
+          ]
+        : [now, now, row.id]) as never[],
     );
     if (result.changes !== 1) continue;
     await recordBinEvent({
@@ -2391,7 +2556,13 @@ export async function reopenNoShowDispatches(
       projectId: row.project_id,
       leaseGeneration: row.lease_generation,
       outcome: exhausted ? 'ABANDONED' : 'PENDING',
-      measures: { noShow: true, attempt: row.attempt_count, maxAttempts: row.max_attempts },
+      measures: {
+        noShow: true,
+        attempt: row.attempt_count,
+        maxAttempts: row.max_attempts,
+        binAttempt: row.bin_attempt_count,
+        binMaxAttempts: row.bin_max_attempts,
+      },
     });
     out.push({
       dispatchId: row.id,
@@ -2447,6 +2618,67 @@ export async function dispatchedSessionForBin(
     [binId, leaseGeneration],
   );
   return row?.session_ref ?? null;
+}
+
+/**
+ * The session Brain fired for the lease a submission was made under.
+ *
+ * **A dispatch generation and a lease generation are one apart, and reading one
+ * as the other resolves nothing, always.** `assignNextBin` claims with a
+ * compare-and-swap that sets `lease_generation = row.lease_generation + 1`, and
+ * credits the arrival against `row.lease_generation` — the generation *before*
+ * the claim, which is the one the intent carries. So a caller holding a lease,
+ * or a unit result submitted under one, is holding `G + 1` while the dispatch
+ * that produced it sits at `G`.
+ *
+ * Two callers had this wrong in opposite directions, and only a walk found
+ * either. `services/design/judge.ts` asked at the lease's own generation, got
+ * null every time, and refused **every** judged review for "no resolvable
+ * lineage" — a guard that fails closed, so the symptom was a lane that never
+ * worked rather than one that lied. `services/capability/independence.ts` asked
+ * the same way while building the set of sessions an audit must be independent
+ * *of*, and a session missing from that set is a session allowed to audit its
+ * own reading: the same defect failing open, which is the expensive direction.
+ *
+ * So this is a second function rather than an argument, because the two
+ * questions are genuinely different and a boolean would put the choice where
+ * the mistake already was. `dispatchedSessionForBin` stays exactly as it is for
+ * the callers that ask *before* a claim — the admission hook holds the bin at
+ * its pre-claim generation, and it is right.
+ */
+export async function dispatchedSessionForLease(
+  binId: string,
+  leaseGeneration: number,
+): Promise<string | null> {
+  if (!Number.isInteger(leaseGeneration) || leaseGeneration < 1) return null;
+  return dispatchedSessionForBin(binId, leaseGeneration - 1);
+}
+
+/**
+ * The whole of what Brain knows about the fire behind one lease.
+ *
+ * The session and the Routine together, because an attribution assembled from
+ * two reads at two generations is how §23's ledger came to hold `activations:
+ * 124` against a single `{accountId: null}` — the columns were there and
+ * nothing could join them. It carries the same one-apart correction as
+ * `dispatchedSessionForLease` and for the same reason, in one place rather than
+ * at each caller.
+ *
+ * Null when Brain did not fire this generation. That is ordinary rather than
+ * wrong — a scheduled worker arrives without an intent — and a caller that
+ * needs an account must treat it as *we could not tell* rather than as absent.
+ */
+export async function dispatchAttributionForLease(
+  binId: string,
+  leaseGeneration: number,
+): Promise<{ sessionRef: string | null; routineId: string | null } | null> {
+  if (!Number.isInteger(leaseGeneration) || leaseGeneration < 1) return null;
+  const row = await getDb().get<{ session_ref: string | null; routine_id: string | null }>(
+    `SELECT session_ref, routine_id FROM bin_dispatch
+      WHERE bin_id = ? AND lease_generation = ? AND state = 'SENT'`,
+    [binId, leaseGeneration - 1],
+  );
+  return row ? { sessionRef: row.session_ref ?? null, routineId: row.routine_id ?? null } : null;
 }
 
 /**

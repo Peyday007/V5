@@ -124,6 +124,31 @@ export async function countLivePasskeys(userId: string): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
+/**
+ * Live credentials this account has actually signed in with at least once.
+ *
+ * The difference between this and `countLivePasskeys` is the whole of what
+ * closes the password door, so it is worth saying why it is the weaker reading
+ * that is used there. A registered credential is one the browser made and the
+ * server verified; an *asserted* one is a credential this Brain has seen sign
+ * somebody in, from this origin, against a challenge it issued. Only the second
+ * is evidence that the ordinary way in works for this person — and a passkey
+ * bound to an origin that later turns out to be wrong registers perfectly and
+ * asserts never.
+ *
+ * So a password stops being accepted when a device has *worked*, not when one
+ * has been made. Somebody who registers a credential they can never use keeps
+ * the door they came in through, which is the safe direction to be wrong in.
+ */
+export async function countProvenPasskeys(userId: string): Promise<number> {
+  const row = await getDb().get<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM user_passkeys
+      WHERE user_id = ? AND revoked_at IS NULL AND last_used_at IS NOT NULL`,
+    [userId],
+  );
+  return Number(row?.n ?? 0);
+}
+
 export async function notePasskeyUsed(input: { id: string; signCount: number }): Promise<void> {
   await getDb().run('UPDATE user_passkeys SET last_used_at = ?, sign_count = ? WHERE id = ?', [
     nowIso(),
@@ -239,6 +264,26 @@ export async function revokeEnrollment(input: { id: string; reason: string }): P
     [nowIso(), input.reason, input.id],
   );
   return result.changes === 1;
+}
+
+/**
+ * Withdraw every link this person is still holding.
+ *
+ * One statement rather than a read and a loop, so two administrators pressing
+ * at once produce one outcome and the count is what this call actually did.
+ * Spent and already-revoked rows are excluded by the same `WHERE` that makes
+ * a single withdrawal correct.
+ */
+export async function revokeEnrollmentsForUser(
+  userId: string,
+  reason: string,
+): Promise<number> {
+  const result = await getDb().run(
+    `UPDATE member_enrollments SET revoked_at = ?, revoked_reason = ?
+      WHERE user_id = ? AND used_at IS NULL AND revoked_at IS NULL`,
+    [nowIso(), reason, userId],
+  );
+  return result.changes;
 }
 
 /* ----------------------------------------------------------- challenges */

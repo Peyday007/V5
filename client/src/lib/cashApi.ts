@@ -72,6 +72,8 @@ export type CashDisposition =
   | 'RUN_IN_PARALLEL'
   | 'WAIT_FOR_DEPENDENCY'
   | 'TEST_A_DECISIVE_UNKNOWN'
+  | 'BEING_QUALIFIED'
+  | 'EVIDENCE_ONLY'
   | 'ARCHIVED';
 
 export interface CashMode {
@@ -316,7 +318,26 @@ export interface CashView {
     best?: Placement[];
     /** True when `best` holds candidates rather than qualified openings. */
     bestAreNearlyQualified?: boolean;
-    combinedContributionCents: number;
+    /**
+     * The openings Brain is still qualifying, and the evidence it has not yet
+     * found a payer for. Neither is work, and neither is waiting on a person.
+     *
+     * Optional for the ordinary deploy reason: a bundle built after these
+     * existed may briefly hold a payload fetched before they did, and a
+     * missing list has to read as *none of these* rather than throw.
+     */
+    beingQualified?: Placement[];
+    evidence?: Placement[];
+    /**
+     * The conservative contribution of the pieces that are actually work —
+     * and **null** when there are none.
+     *
+     * Null is a real answer here and the reader must render it as one. Zero
+     * over an empty work list is a figure, and a figure reads as a
+     * measurement; this used to total the gaps between other people's
+     * published prices and present the result as what the sprint would earn.
+     */
+    combinedContributionCents: number | null;
     peakFundingCents: number;
     cards: Record<string, { ready: boolean; missing: string[]; summary: string }>;
     provenance: Record<string, CashCardFact[]>;
@@ -445,10 +466,33 @@ export const CashApi = {
   inviteMember: (displayName: string): Promise<{ enrollment: IssuedEnrollment }> =>
     api('/api/members', { method: 'POST', body: JSON.stringify({ displayName }) }),
 
+  /**
+   * Another first link for a slot nobody has filled.
+   *
+   * Not recovery: that retires what somebody is holding, which is right after
+   * a lost device and wrong for a person who has never signed in. The server
+   * refuses this for anybody who already has a way in.
+   */
+  relinkMember: (userId: string): Promise<{ enrollment: IssuedEnrollment }> =>
+    api(`/api/members/${p(userId)}/link`, { method: 'POST' }),
+
   recoverMember: (userId: string, reason: string): Promise<{ enrollment: IssuedEnrollment }> =>
     api(`/api/members/${p(userId)}/recovery`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    }),
+
+  /**
+   * Correct somebody's name, which is what they type to sign in.
+   *
+   * A label and nothing else: no role, no membership, no credential and no
+   * session moves with it. The server refuses a name somebody else already
+   * signs in with, so this cannot move a collision rather than fixing one.
+   */
+  renameMember: (userId: string, displayName: string): Promise<{ user: { id: string } }> =>
+    api(`/api/admin/users/${p(userId)}/display-name`, {
+      method: 'POST',
+      body: JSON.stringify({ displayName }),
     }),
 
   withdrawLink: (enrollmentId: string, reason: string): Promise<{ revoked: boolean }> =>

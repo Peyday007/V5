@@ -34,7 +34,12 @@
   --surface-sunk: #e9edf1;
   --ink: #141c26;
   --ink-soft: #44535f;
-  --ink-faint: #74838f;
+  /* 5.48:1 on --surface, 4.97:1 on --paper, 4.66:1 on --surface-sunk.
+     Raised from #74838f, which measured 3.90 / 3.54 / 3.31 — under the 4.5:1
+     floor on all three, at every size this token is used at. Found by the
+     design kernel's first real run and verified against the computed
+     luminances rather than by eye; see docs/DESIGN-KERNEL.md. */
+  --ink-faint: #5c6b78;
   --rule: #d3dae1;
   --rule-soft: #e3e8ed;
 
@@ -49,6 +54,18 @@
   --ochre: #b4801f;
   --iron: #9c3b2c;
   --slate: #5b6b7c;
+
+  /* The ink companions, for the same reason `--verdigris-ink` has always
+     existed: a colour chosen to be a *surface* is not a colour that can be
+     read as text on one. The design kernel measured `--ochre` as text at
+     3.15:1 on `--paper` and 3.01:1 on its own wash, against a 4.5:1 floor;
+     `--moss` is 4.07:1 on its wash, which fails by less and fails. Both
+     surface tokens are untouched, so every background, border and chip is
+     the colour it was — these are used only where the colour is a word.
+     Measured, not chosen by eye: #8a6011 clears 4.74:1 on the worst light
+     surface and #42704f clears 4.79:1 on its wash. */
+  --moss-ink: #42704f;
+  --ochre-ink: #8a6011;
 
   --moss-wash: #e4ede6;
   --ochre-wash: #f6eedc;
@@ -80,6 +97,13 @@
   --r-2: 8px;
   --r-3: 14px;
 
+  /* The smallest a control may be and still be a target, which WCAG 2.2 puts
+     at 24 CSS pixels. A token rather than a number in three rules, because the
+     design kernel measures against the same figure from
+     `services/design/observe.ts` and two copies of a floor is a floor the two
+     eventually disagree about. */
+  --target-floor: 24px;
+
   /* The rail is a measurement other rules need, so it is a token rather than
      a number repeated in four places. */
   --rail: 232px;
@@ -100,7 +124,7 @@
     --surface-sunk: #111923;
     --ink: #e6ebf0;
     --ink-soft: #a3b1be;
-    --ink-faint: #74838f;
+    --ink-faint: #8b99a5;
     --rule: #2a3744;
     --rule-soft: #1f2a35;
 
@@ -110,6 +134,11 @@
 
     --moss: #7fb08b;
     --ochre: #d9a845;
+    /* Dark mode needs no separate ink: `--ochre` and `--moss` measure 7.03:1
+       and better on every dark surface, so the ink tokens simply resolve to
+       them and one rule serves both themes. */
+    --moss-ink: #7fb08b;
+    --ochre-ink: #d9a845;
     --iron: #d4705e;
     --slate: #8b9bab;
 
@@ -129,7 +158,7 @@
   --surface-sunk: #111923;
   --ink: #e6ebf0;
   --ink-soft: #a3b1be;
-  --ink-faint: #74838f;
+  --ink-faint: #8b99a5;
   --rule: #2a3744;
   --rule-soft: #1f2a35;
   --verdigris: #55b49c;
@@ -137,6 +166,8 @@
   --verdigris-ink: #7fcdb8;
   --moss: #7fb08b;
   --ochre: #d9a845;
+  --moss-ink: #7fb08b;
+  --ochre-ink: #d9a845;
   --iron: #d4705e;
   --slate: #8b9bab;
   --moss-wash: #17281c;
@@ -177,6 +208,90 @@
 
 .rs-shell > * {
   min-width: 0;
+}
+
+/*
+ * Russell's headings belong to Russell, and until this they did not.
+ *
+ * `client/src/main.tsx` imports `styles.css` and this file, globally and in that
+ * order, and `styles.css` is the legacy console's — *dark, dense,
+ * information-first*, by its own first paragraph. It styles bare elements, so
+ * its `h4 { font-size: 12px; color: var(--fg-dim); letter-spacing: 0.06em;
+ * text-transform: uppercase }` applies to **every** h4 in the application,
+ * including the ones on this surface. `--fg-dim` is `#b3c1d1`: a light
+ * grey-blue chosen to sit on a near-black background, painted here on
+ * `--paper` `#f2f4f6`.
+ *
+ * The design kernel measured what that costs. `h4.rs-collection-name` — the
+ * name of each conversation group on Home — rendered at **1.66:1** against a
+ * 4.5:1 floor, in capitals it was never given, with tracking nobody chose. It
+ * had no colour of its own to be wrong: `.rs-collection-name` sets only a font,
+ * and `.rs-view h4` (which does set one) does not reach Home.
+ *
+ * So the repair is the class rather than the instance. Patching that one
+ * selector would have left the next heading somebody adds outside `.rs-view`
+ * with exactly the same defect and no reason to expect it — and the same is
+ * true of every other bare-element rule in a stylesheet written for a different
+ * product. Headings inside the shell take their colour from what contains them
+ * and impose no case or tracking of their own; the class that styles a heading
+ * still decides its size, exactly as before.
+ *
+ * Repairing the headings then found the same leak one element along, which is
+ * why the list is not only headings. `label { font-size: 10.5px;
+ * letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted) }`
+ * put `#7d8ea1` on white — **3.36:1** — inside every scope-choice row on Build,
+ * measured after the heading fix rather than guessed at. Reading the legacy
+ * sheet for every bare-element rule that sets a colour, a case or a tracking
+ * gives exactly this list: `a`, `body`, `code`, `kbd`, `samp`, `legend`,
+ * `select`, `textarea`, `label` and the headings. Links, code and monospace
+ * samples are left out on purpose — this file styles those itself, and
+ * overriding them here would be two rules arguing about one element.
+ *
+ * Only colour, case and tracking are reset. **Size is not**, because size is
+ * what the Russell class that styles an element decides, and resetting it would
+ * change how a dozen screens read to fix how three of them measure.
+ *
+ * It is scoped to `.rs-shell`, so nothing about the legacy console at `/legacy`
+ * changes. That surface is still the one thing some operations only exist on
+ * (§29), and it is not this kernel's to restyle.
+ */
+.rs-shell :is(h1, h2, h3, h4, h5, h6, label, legend, select, textarea) {
+  color: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/*
+ * A button nobody styled is still a control somebody has to hit.
+ *
+ * Same family as the headings above and found the same way. `Build` renders
+ *   <button type="button" onClick={reload}>Try again</button>
+ * with no class, so it inherited nothing from this file, rendered at the
+ * browser default in the browser's own typeface, and measured **21px tall**
+ * against WCAG 2.2's 24px target floor. Not a taste question and not a
+ * borderline one: three pixels, on the control a person presses precisely when
+ * something has already gone wrong for them.
+ *
+ * `:not([class])` is the whole scope, deliberately. Every button this file
+ * already styles keeps exactly what it has; what this reaches is the set of
+ * buttons that were never given an appearance at all, which is the set that
+ * cannot be wrong to give one to. The alternative — styling every button and
+ * unwinding the collisions — would be a restyle of the product on the way to
+ * fixing three pixels.
+ */
+.rs-shell button:not([class]) {
+  min-height: var(--target-floor);
+  padding: 0 var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 var(--step--1) / 1.4 var(--body);
+  cursor: pointer;
+}
+
+.rs-shell button:not([class]):hover {
+  border-color: var(--rule-strong, var(--ink-faint));
 }
 
 .rs-shell-bar {
@@ -880,12 +995,12 @@ button.rs-card:hover {
 
 .rs-pill-good {
   background: var(--moss-wash);
-  color: var(--moss);
+  color: var(--moss-ink);
 }
 
 .rs-pill-watch {
   background: var(--ochre-wash);
-  color: var(--ochre);
+  color: var(--ochre-ink);
 }
 
 .rs-pill-bad {
@@ -990,7 +1105,7 @@ button.rs-card:hover {
 }
 
 .rs-hero-needs.is-needed {
-  color: var(--ochre);
+  color: var(--ochre-ink);
   font-weight: 600;
 }
 
@@ -1981,7 +2096,12 @@ button.rs-card:hover {
 
 .rs-repo-scope-choice {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  /* The label *is* the target: a native radio is 13x13 in every browser and
+     clicking the words is what people do. Measured at 23px, one short of the
+     floor — the kind of finding that only exists because something measured
+     it. */
+  min-height: var(--target-floor);
   gap: var(--gap-2);
   font-size: var(--step--1);
 }
@@ -2594,13 +2714,23 @@ button.rs-card:hover {
   color: var(--ink-faint);
 }
 
+/*
+ * The two PIN boxes a new member fills in, most often on a phone.
+ *
+ * `font: inherit` resolved to the 15px body step, and Safari on iOS zooms the
+ * page to fit for anything under 16px — so the first screen of somebody's
+ * first visit jumped under their thumb, twice, while they were choosing the
+ * credential this Brain now runs on. The size is stated here rather than
+ * inherited, because inheriting is what made it wrong.
+ */
 .rs-enrol-input {
   padding: var(--gap-1);
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
   background: var(--surface);
   color: var(--ink);
-  font: inherit;
+  font-family: inherit;
+  font-size: 16px;
 }
 
 .rs-enrol-go {
@@ -2874,6 +3004,922 @@ details.rs-card > section.rs-card {
 .rs-cash-event-raw > code {
   font-size: var(--step--2);
   overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------------------
+ * The manufacturing programme (§39)
+ *
+ * Laid out with `container-type: inline-size` rather than a viewport media
+ * query, for §29's reason: the element that clips is a column inside a rail,
+ * and a media query asks the viewport. The one horizontal scroll is the rounds
+ * table, which is a table and is allowed to.
+ *
+ * The capability split is the load-bearing piece of layout here. Required and
+ * held sit side by side at width and stack under each other on a phone, because
+ * the *difference* between them is the whole kernel — a person has to be able
+ * to see at a glance that a column is empty.
+ * ------------------------------------------------------------------------ */
+.rs-machines {
+  container-type: inline-size;
+}
+
+.rs-machines-status {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-warn {
+  color: var(--ochre);
+}
+
+.rs-machines-counts {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+}
+
+.rs-machines-decision + .rs-machines-decision {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-machines-decision-what {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-declare {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-machines-declare label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rs-machines-declare textarea,
+.rs-machines-declare select {
+  width: 100%;
+  font: inherit;
+}
+
+.rs-machines-gap {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.rs-machines-category + .rs-machines-category {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-machines-category header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.rs-machines-category h4 {
+  margin: 0;
+}
+
+.rs-machines-verdict {
+  font-size: 0.85em;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* Only ENTER is coloured as an affirmative. Everything else is neutral: a
+ * palette that made "being researched" look like progress and "no demand
+ * found" look like failure would be editorialising a derivation. */
+.rs-machines-verdict-ENTER {
+  color: var(--moss);
+}
+
+.rs-machines-because {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.rs-machines-conditions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.rs-machines-answer {
+  display: inline-block;
+  min-width: 8.5ch;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.rs-machines-MET .rs-machines-answer {
+  color: var(--moss);
+}
+
+/* `not established` is deliberately not styled as a failure. An unknown is a
+ * task, not a refusal — invariant 39, at a colour. */
+.rs-machines-UNKNOWN .rs-machines-answer {
+  opacity: 0.7;
+}
+
+.rs-machines-capsplit {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.rs-machines-capsplit h5 {
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-capsplit ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+@container (min-width: 34rem) {
+  .rs-machines-capsplit {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.rs-machines-caps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rs-machines-held,
+.rs-machines-notheld {
+  display: inline-block;
+  min-width: 7ch;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+}
+
+.rs-machines-held {
+  color: var(--moss);
+}
+
+.rs-machines-notheld {
+  opacity: 0.7;
+}
+
+.rs-machines-open,
+.rs-machines-asks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-machines-purpose {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+/* A table, which is one of the three things allowed to scroll sideways. */
+.rs-machines-rounds {
+  width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.rs-machines-rounds th,
+.rs-machines-rounds td {
+  text-align: left;
+  padding: 0.3rem 0.75rem 0.3rem 0;
+  white-space: nowrap;
+}
+
+/* A barren round is dimmed and never hidden: a market Brain looked at and found
+ * nothing in is a reading of that market. */
+.rs-machines-barren {
+  opacity: 0.65;
+}
+
+/* ---------------------------------------------------------------------------
+ * The rest of the manufacturing programme: the directive, the frontier, what
+ * entering costs, the firms that could supply it, and the questions nobody has
+ * answered.
+ *
+ * Every one of these lays out with `@container` rather than `@media`, for
+ * §29's reason: the clipping that reached production was a column inside a
+ * rail being asked how wide the *viewport* was. `.rs-machines` already
+ * declares `container-type: inline-size`, so the same components are correct
+ * on a phone, on an iPad in either orientation, and inside a drawer, from one
+ * set of rules.
+ *
+ * Nothing here hides an `rs-machines-*` section at any width. The mobile More
+ * menu (§29) is the recorded cost of a stylesheet removing the element a
+ * control lives in: every branch stayed reachable in React and nothing could
+ * see that CSS had taken it off the page.
+ * ------------------------------------------------------------------------ */
+
+.rs-machines-directive {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+}
+
+.rs-machines-directive h4 {
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-digest {
+  opacity: 0.7;
+  /* An identifier, so it wraps rather than widening the card it sits in. */
+  overflow-wrap: anywhere;
+}
+
+.rs-machines-bands ul,
+.rs-machines-criteria,
+.rs-machines-deps {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.rs-machines-ranked {
+  margin: 0;
+  padding-left: 1.4rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.rs-machines-rank-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  /* The name may be long and the separating factor must stay beside it rather
+   * than pushing the card wider than the rail it is in. */
+  min-width: 0;
+}
+
+.rs-machines-sep,
+.rs-machines-contribution {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+/* Two entries Brain cannot tell apart. Dimmed rather than hidden: that the
+ * order between them means nothing is itself a finding. */
+.rs-machines-sep-tied {
+  opacity: 0.55;
+}
+
+.rs-machines-factors ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-machines-capital,
+.rs-machines-evidence {
+  margin-top: 0.75rem;
+}
+
+.rs-machines-capital h5 {
+  margin: 0 0 0.25rem;
+}
+
+.rs-machines-scenario {
+  margin-top: 0.5rem;
+}
+
+.rs-machines-scenario-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.rs-machines-total {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A scenario with an unpriced requirement, and a requirement with no figure.
+ * Both read as words rather than as an absent number, because a blank where a
+ * figure would go is the one thing a reader completes for themselves. */
+.rs-machines-nototal,
+.rs-machines-unpriced {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.rs-machines-figure {
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-machines-requirements,
+.rs-machines-candidates {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.rs-machines-cand-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* A candidate somebody set aside. Kept on the page: deleting it would let the
+ * same firm arrive next round as a fresh discovery. */
+.rs-machines-aside {
+  opacity: 0.6;
+}
+
+.rs-machines-setaside,
+.rs-machines-answerform {
+  margin-top: 0.4rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.rs-machines-setaside label,
+.rs-machines-answerform label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rs-machines-setaside input,
+.rs-machines-answerform textarea {
+  /* Fills its container and never sets it: an input that carried an intrinsic
+   * width is how a form makes the card around it overflow a narrow rail. */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rs-machines-question + .rs-machines-question {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+}
+
+.rs-machines-question header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.rs-machines-question h4,
+.rs-machines-question h5 {
+  margin: 0;
+}
+
+.rs-machines-qstate {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+}
+
+.rs-machines-qstate-OPEN {
+  opacity: 0.8;
+}
+
+.rs-machines-qstate-RESOLVED {
+  color: var(--moss);
+}
+
+.rs-machines-answer {
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--rule);
+}
+
+.rs-machines-trigger {
+  margin-top: 0.5rem;
+}
+
+.rs-machines-unlocks {
+  margin-top: 0.5rem;
+}
+
+.rs-machines-evidence h5 {
+  margin: 0.6rem 0 0.2rem;
+}
+
+.rs-machines-evidence ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* At a wide container the requirements and the candidates sit two across; at a
+ * rail or a phone they stack. The threshold is in `rem` against the
+ * *container*, so an iPad in portrait inside a rail gets the narrow
+ * arrangement and the same iPad full-width gets the wide one — which a
+ * viewport query could not tell apart. */
+@container (min-width: 40rem) {
+  .rs-machines-requirements,
+  .rs-machines-candidates {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.rs-machines-start label,
+.rs-machines-start textarea {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rs-machines-start > button,
+.rs-machines-lifecycle-controls,
+.rs-machines-confirm {
+  margin-top: 0.75rem;
+}
+
+/* The controls wrap rather than widening the card, and stay reachable at every
+ * width: §29 records a stylesheet taking a control off the page while every
+ * branch stayed reachable in React and no test of either half could see it. */
+.rs-machines-lifecycle-controls,
+.rs-machines-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.rs-machines-confirm p {
+  margin: 0;
+  flex-basis: 100%;
+}
+
+/* How far an open round has got. `STALLED` and `NEEDS_A_PERSON` are the two a
+ * reader has to be able to find, so they are the two that are not dimmed —
+ * §24's rule that a pending state which cannot become wrong is not an
+ * explanation, arriving at a colour. */
+.rs-machines-progress {
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.rs-machines-progress-WORKING {
+  color: var(--moss);
+  opacity: 1;
+}
+
+.rs-machines-progress-STALLED,
+.rs-machines-progress-NEEDS_A_PERSON,
+.rs-machines-progress-UNKNOWN {
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+   The work register
+   ---------------------------------------------------------------------------
+
+   Container queries throughout, never a viewport media query. §29 records the
+   defect this avoids: the element that clips is a column inside a rail, and a
+   media query asks the viewport instead — so the same component was right on a
+   phone and wrong in a drawer. Nothing here sets a `min-width` wider than a
+   phone and nothing scrolls sideways.
+   --------------------------------------------------------------------------- */
+
+.rs-register {
+  container-type: inline-size;
+}
+
+.rs-register-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  list-style: none;
+  margin: 0 0 var(--gap-3);
+  padding: 0;
+}
+
+.rs-register-question {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gap-1);
+  padding: var(--gap-1) var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rs-register-question:hover {
+  border-color: var(--ink-faint);
+}
+
+.rs-register-question.is-selected {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.rs-register-question-label {
+  font-size: var(--step--1);
+}
+
+/* The state word carries a colour and the colour is never the only signal:
+   every card prints the state in words and the row that decided it. */
+.rs-workstream-blocked {
+  border-left: 3px solid var(--warn, var(--accent));
+}
+
+.rs-workstream-verified_live,
+.rs-workstream-deployed,
+.rs-workstream-merged,
+.rs-workstream-done {
+  border-left: 3px solid var(--ok, var(--accent));
+}
+
+.rs-evidence {
+  font-size: var(--step--2);
+  color: var(--ink-faint);
+  margin: var(--gap-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.rs-owner-action {
+  margin: var(--gap-2) 0 0;
+}
+
+.rs-next-action {
+  margin: var(--gap-2) 0 0;
+  color: var(--ink-soft, var(--ink-faint));
+}
+
+.rs-blockers {
+  margin: var(--gap-2) 0 0;
+  padding-left: var(--gap-3);
+  font-size: var(--step--1);
+}
+
+.rs-disclosure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--gap-1);
+  margin-top: var(--gap-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.rs-readings {
+  margin-top: var(--gap-2);
+  font-size: var(--step--1);
+}
+
+.rs-reading-kind {
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+
+/* A link whose target is gone reads as gone, rather than quietly as absent. */
+.rs-reading-missing {
+  color: var(--warn, var(--ink));
+}
+
+.rs-register-unknown,
+.rs-register-unfiled {
+  margin-top: var(--gap-4);
+}
+
+.rs-file-one {
+  margin-top: var(--gap-3);
+}
+
+.rs-field {
+  display: block;
+  margin: var(--gap-3) 0;
+}
+
+.rs-field > span,
+.rs-field > legend {
+  display: block;
+  margin-bottom: var(--gap-1);
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+}
+
+.rs-field input,
+.rs-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--gap-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-1);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.rs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  margin-top: var(--gap-3);
+}
+
+/* ------------------------------------------------------------------ labor --
+ * Who does the work, and why.
+ *
+ * The load-bearing piece of layout here is the figures list. §11 asks for four
+ * measurements Brain cannot take, and they are reported rather than omitted —
+ * so *not measured* has to read as a third state beside a number rather than as
+ * a smaller number. It is set in the same type as a value and dimmed, never
+ * coloured as a failure: an unknown is a task, not a refusal, which is
+ * invariant 39 at a colour and the same decision the machines screen already
+ * makes for `not established`.
+ *
+ * Nothing here is coloured as an affirmative either. A palette that made "to
+ * Brain" look like progress and "back to a person" look like failure would be
+ * editorialising a derivation whose whole value is that it reports both.
+ * ------------------------------------------------------------------------ */
+.rs-labor {
+  container-type: inline-size;
+}
+
+.rs-labor-summary {
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.rs-labor-counts {
+  list-style: none;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+}
+
+.rs-labor-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.rs-labor-list > li {
+  min-width: 0;
+}
+
+.rs-labor-list > li + li {
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.rs-labor-list header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+/* A path can be one long unbroken token — a workflow and a task name joined —
+ * and there is no space inside a word to break at. The same rule the foundation
+ * strip needed after the 900px capture. */
+.rs-labor-list header strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.rs-labor-layer,
+.rs-labor-direction,
+.rs-labor-purpose,
+.rs-labor-need-kind,
+.rs-labor-distance,
+.rs-labor-count {
+  font-size: 0.85em;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.rs-labor-output {
+  margin: 0.2rem 0 0.35rem;
+}
+
+.rs-labor-reason {
+  margin: 0 0 0.25rem;
+}
+
+.rs-labor-blockers {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0 0 0 0.9rem;
+  border-left: 2px solid var(--rule-soft);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-labor-blocker-what {
+  margin: 0;
+  font-weight: 600;
+}
+
+/*
+ * A role nothing has checked is the one worth looking at, which is why the
+ * server sorts it first. It is *marked* rather than coloured as wrong: somebody
+ * is entitled to say "we do it this way for now" and have that be true, and §7
+ * asks Brain to keep re-examining it rather than to object to it.
+ */
+.rs-labor-backing-ASSERTED {
+  border-left: 3px solid var(--rule-soft);
+  padding-left: 0.75rem;
+}
+
+.rs-labor-figures {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.rs-labor-figure {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.rs-labor-figure-label {
+  font-weight: 600;
+}
+
+.rs-labor-figure-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-labor-denominator {
+  opacity: 0.75;
+  font-variant-numeric: normal;
+}
+
+/* Not measured, set in the same type as a number so it cannot be skimmed past,
+ * and dimmed rather than coloured, because it is a task and not a refusal. */
+.rs-labor-UNKNOWN .rs-labor-figure-value {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.rs-labor-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rs-labor-table th,
+.rs-labor-table td {
+  text-align: left;
+  padding: 0.35rem 0.75rem 0.35rem 0;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+}
+
+.rs-labor-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.rs-labor-automated {
+  display: block;
+  font-size: 0.85em;
+  font-variant: all-small-caps;
+  letter-spacing: 0.04em;
+  color: var(--moss-ink);
+}
+
+.rs-labor-form {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.rs-labor-form label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rs-labor-form input,
+.rs-labor-form select,
+.rs-labor-form textarea {
+  width: 100%;
+  font: inherit;
+}
+
+.rs-labor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.rs-labor-problem {
+  color: var(--ochre-ink);
+}
+
+/* A control somebody may not use is disabled carrying the server's reason
+ * rather than removed, and the reason is rendered rather than hidden in a
+ * `title` — an explanation only a mouse can reach is no explanation on a
+ * phone, which is where this screen is read after a role is questioned. */
+.rs-labor-locked {
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+/* --------------------------------------------------------------- release --
+ * The second of a person's two factory decisions, where the campaign parks.
+ *
+ * Deliberately not coloured as an alarm. `AWAITING_HUMAN_RELEASE` is a stage
+ * working exactly as designed — the artifact is ready and a person has not
+ * answered — and painting it like the blocker above it would say something had
+ * gone wrong. What it is is a decision waiting, so it reads as one.
+ * ------------------------------------------------------------------------ */
+.rs-build-release {
+  margin-top: var(--gap-3);
+  display: grid;
+  gap: var(--gap-2);
+}
+
+.rs-build-release h5 {
+  margin: 0;
+}
+
+.rs-build-release-evidence {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+/* The evidence keys are the server's own and may grow, so this wraps rather
+ * than truncating: a decision card that hid part of what it was describing
+ * would be asking somebody to approve a thing it declined to show them. */
+.rs-build-release-evidence li {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.rs-build-release label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rs-build-release textarea {
+  width: 100%;
+  font: inherit;
+}
+
+.rs-build-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-2);
+  margin: 0;
 }
 
 /* ---------------------------------------------------------------------------

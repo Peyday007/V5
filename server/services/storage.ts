@@ -18,9 +18,10 @@
  * used to guard paths now guard keys, and they refuse for the same reasons.
  */
 import path from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
 import { PROJECTS_ROOT, DATA_ROOT, toDataRelative } from '../env.ts';
-import { sanitizeFilename } from '../domain/naming.ts';
+
 import { getStorage } from './storage/index.ts';
 import { contentTypeFor, documentKey, safeSegment } from './storage/keys.ts';
 import { activeStorageConfig } from './storage/index.ts';
@@ -210,11 +211,68 @@ export function storageKeyOf(
 
 export async function objectExists(key: string | null | undefined): Promise<boolean> {
   if (!key) return false;
+  const memo = existenceMemo.getStore();
+  if (memo) {
+    const known = memo.get(key);
+    if (known) return await known;
+    const asked = askStore(key);
+    memo.set(key, asked);
+    return await asked;
+  }
+  return await askStore(key);
+}
+
+async function askStore(key: string): Promise<boolean> {
   try {
     return await getStorage().exists(key);
   } catch {
     return false;
   }
+}
+
+/*
+ * One answer per key for the length of one piece of work.
+ *
+ * A recompute asked the store whether each document's bytes exist three times
+ * over — the file-state pass, the dependency refresh and the planner each asked
+ * again — one serial round trip at a time. Locally that is a `stat`; in cloud
+ * mode it is a bucket request, and the hosted verification's JUDGE submission
+ * measured 12m26s over a 415-document archive and more than fifteen minutes
+ * over 431, because the judge path recomputes twice. See
+ * `tests/recomputeStorageCalls.test.ts`.
+ *
+ * The memo lives exactly as long as the function it wraps and is never shared
+ * between two of them, so it is a de-duplication rather than a cache: a later
+ * recompute asks again, and nothing here can make a stale answer outlive the
+ * pass that took it. It stores the pending promise, so two callers asking at
+ * the same moment share one request.
+ */
+const existenceMemo = new AsyncLocalStorage<Map<string, Promise<boolean>>>();
+
+/** Run `work` with existence answers de-duplicated inside it. Nested calls share the outer memo. */
+export async function withExistenceMemo<T>(work: () => Promise<T>): Promise<T> {
+  if (existenceMemo.getStore()) return await work();
+  return await existenceMemo.run(new Map(), work);
+}
+
+/** How many existence questions are in flight at once when a whole set is asked up front. */
+const PREFETCH_CONCURRENCY = 16;
+
+/**
+ * Ask about a set of keys up front, a bounded number at a time, into the
+ * current memo — so the serial checks that follow are answered without a round
+ * trip each. Outside a memo there is nowhere to keep the answers, so it does
+ * nothing rather than asking for nothing.
+ */
+export async function prefetchExistence(keys: Array<string | null | undefined>): Promise<void> {
+  if (!existenceMemo.getStore()) return;
+  const queue = [...new Set(keys.filter((key): key is string => Boolean(key)))];
+  const workers = Array.from({ length: Math.min(PREFETCH_CONCURRENCY, queue.length) }, async () => {
+    for (let key = queue.shift(); key !== undefined; key = queue.shift()) {
+      await objectExists(key);
+    }
+  });
+  await Promise.all(workers);
 }
 
 export async function objectSize(key: string): Promise<number | null> {
@@ -265,7 +323,27 @@ export interface StoreFileInput {
 
 export async function storeFile(input: StoreFileInput): Promise<StoredFile> {
   const store = getStorage();
-  const filename = sanitizeFilename(path.basename(input.filename));
+  /*
+   * An object key, not a filename.
+   *
+   * `sanitizeFilename` answers the *filesystem* question and `safeSegment`
+   * answers the *storage* one, and this line is building a key. §33 already
+   * had to write that sentence once, about this exact pair of functions: the
+   * repair it produced hardened `safeSegment`, and `safeSegment` was reachable
+   * from here only through `documentKey`, on the branch taken when an
+   * `identity` is supplied — which no caller in this repository supplies. So
+   * every stored document took the other branch and a cash packet's report,
+   * whose canonical name carries the em dash §33 put there to stop four
+   * packets burying each other, produced a key the bucket answered 400
+   * InvalidKey to. Locally it worked, because a disk does not mind.
+   *
+   * The extension survives (`.` is inside the class), so the content type and
+   * every reader that looks at one are unaffected; the canonical name on the
+   * row is untouched, because that is the title a person reads and a key is an
+   * address. Two titles that reduce to one leaf are separated by `uniqueKey`
+   * exactly as two identical ones already were.
+   */
+  const filename = safeSegment(path.basename(input.filename), 'document');
 
   const key =
     store.kind === 'local' || !input.identity
@@ -297,9 +375,12 @@ export async function relocateFile(
   filename: string,
 ): Promise<StoredFile> {
   const store = getStorage();
+  // A key, for `storeFile`'s reason. `resolveImport` reaches this with the same
+  // canonical-derived name, so leaving it would keep the identical hole open on
+  // the path a person takes to confirm a parked import.
   const target = await uniqueKey(
     layerPrefix(projectSlug, layerSlug),
-    sanitizeFilename(path.basename(filename)),
+    safeSegment(path.basename(filename), 'document'),
   );
   const meta = await store.move(currentKey, target);
   return {

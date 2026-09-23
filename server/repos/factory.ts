@@ -1448,6 +1448,36 @@ export async function reopenUnit(
 }
 
 /**
+ * Raise a unit's attempt ceiling, and put a unit that ran out back to work.
+ *
+ * The answer to `UNIT_EXHAUSTED_ATTEMPTS`, which had none: its remedy read
+ * "raise its ceiling or replan the work" and nothing in the repository could do
+ * either, so a campaign whose one unit ran out could only be retired whole.
+ * `regrantBinAttempts` is the same decision one object along, and every
+ * restriction is copied from it: it **raises and never resets** — the attempt
+ * count, the failure category and the failure detail all stay exactly as they
+ * were, so the history of why it ran out is still on the row — and it is a
+ * compare-and-swap on the ceiling the caller saw, so two operators answering at
+ * once produce one raise. A unit that is leased, integrated, cancelled or
+ * superseded is not touched: those either have a live owner or are finished.
+ */
+export async function regrantUnitAttempts(input: {
+  unitId: string;
+  maxAttempts: number;
+}): Promise<{ raised: boolean; unit: FactoryWorkUnit | null }> {
+  const result = await getDb().run(
+    `UPDATE factory_work_units
+        SET max_attempts = ?,
+            state = CASE WHEN state = 'FAILED' THEN 'READY' ELSE state END,
+            updated_at = ?
+      WHERE id = ? AND max_attempts < ? AND attempt < ?
+        AND state IN ('FAILED', 'READY', 'IMPLEMENTED', 'BLOCKED')`,
+    [input.maxAttempts, factoryNow(), input.unitId, input.maxAttempts, input.maxAttempts],
+  );
+  return { raised: result.changes === 1, unit: await getUnit(input.unitId) };
+}
+
+/**
  * Charge a READY unit one attempt.
  *
  * The remote plane needs this and the local one does not, and the reason is

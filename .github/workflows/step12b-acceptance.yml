@@ -47,6 +47,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
+      # Wait for a release, rather than racing one.
+      #
+      # Read-only, and still worth waiting for: a reading taken while the
+      # machine is being replaced is a reading of whichever half answered. The
+      # wait is bounded and warns rather than refusing, so it can only ever
+      # improve on racing. See `.github/actions/await-release/action.yml`.
+      - uses: ./.github/actions/await-release
+
       - name: Run the Step 12B reporter in the container
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -45,6 +45,7 @@ import { ensureDiscoveryAuthority, withdrawDiscoveryAuthority } from './discover
 import { opportunitiesForCandidate } from '../../repos/cashPortfolio.ts';
 import { roundForCandidate } from '../../repos/cashDiscovery.ts';
 import { industryRoundForCandidate } from '../../repos/industry.ts';
+import { dealRoundForCandidate } from '../../repos/dealflow.ts';
 import type {
   CashMode,
   CashModeState,
@@ -447,6 +448,23 @@ export async function launchableUnderCashMode(input: {
    * runs on, because none of those is a research launch.
    */
   if (await industryRoundForCandidate(input.candidateId)) return false;
+
+  /*
+   * And a dealflow question, for exactly the same reason and with the same
+   * argument about the ones that look like support work.
+   *
+   * A COMPLIANCE or LANDED_COST round is about a pairing the sprint already
+   * holds, so it reads like finishing something. It is not: it starts a fresh
+   * research packet to learn something the sprint does not know, and a person
+   * who has wound a sprint down has said to stop doing that. Classified by
+   * `deal_rounds` rather than inferred from the absence of another table's
+   * row, which is how the buckets sailed through this guard before
+   * `cash_discovery_rounds` existed.
+   *
+   * What runs on is unchanged: a deal already promoted into the portfolio is
+   * an obligation like any other, and nothing here touches it.
+   */
+  if (await dealRoundForCandidate(input.candidateId)) return false;
 
   const linked = await opportunitiesForCandidate(input.candidateId);
   if (linked.length === 0) return true;

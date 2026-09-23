@@ -28,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'register | sources | advance | read | candidates | faculties | history | scan | model | staleness | packet <sub> | packets | submit | verdicts'
+        description: 'register | sources | advance | reopen | failed | read | candidates | faculties | history | scan | model | staleness | packet <sub> | packets | submit | verdicts'
         required: true
         default: faculties
       args:
@@ -39,7 +39,7 @@ on:
 # Never at the same time as a deploy: the machine is being replaced during one,
 # and a reading that raced a restart would be reporting whichever half answered.
 concurrency:
-  group: deploy-brain
+  group: brain-console-capability
   cancel-in-progress: false
 
 jobs:
@@ -50,6 +50,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Wait for a release, rather than racing one.
+      #
+      # This workflow used to share `deploy-brain` with the deploy and with
+      # every other operator command, which kept it off a machine mid-release
+      # and *also* let it silently cancel a queued deploy — GitHub keeps one
+      # pending run per group and the newest evicts the one that was waiting.
+      # The group is this workflow's own now, so nothing here can evict
+      # anything; this step is the half of the old group that was worth
+      # keeping. See `.github/actions/await-release/action.yml`.
+      - uses: ./.github/actions/await-release
 
       # The inputs reach the shell as *environment variables*, never as `${{ }}`
       # interpolated into the script, and they are parsed rather than evaluated.

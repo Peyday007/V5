@@ -249,6 +249,25 @@ function pipelineOf(opportunities: CashOpportunity[]): RoadmapStage[] {
         'would rule it out. Published sources only; nothing is contacted or spent.',
     },
     {
+      /*
+       * A deep dive parked for a person, counted apart from one being worked
+       * on.
+       *
+       * Folding it into *Being qualified* is what hid the deadlock: in
+       * production both of this Brain's two dive slots were held by missions
+       * stopped at a decision nobody was being shown, and the roadmap
+       * reported them as qualification in progress. A row that says what is
+       * true is also the row that makes the condition visible the next time
+       * it happens.
+       */
+      key: 'VALIDATION_NEEDS_PERSON',
+      label: 'Qualification waiting on you',
+      count: opportunities.filter((one) => one.validationState === 'NEEDS_PERSON').length,
+      note:
+        'The deep dive stopped at a decision only a person can make. It is in Needs you, and ' +
+        'answering it is what restarts it. It is holding no research capacity meanwhile.',
+    },
+    {
       key: 'CARD_READY',
       label: 'Cards complete',
       count: opportunities.filter((one) => one.validationState === 'COMPLETE').length,

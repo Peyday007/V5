@@ -52,6 +52,18 @@ describe('the two files this unit wires', () => {
     expect(source).toMatch(/from ['"]\.\/writeback\.ts['"]/);
   });
 
+  it('the remote loop records a tick that threw, and the forbidden list reaches every diff check', () => {
+    const read = (...parts: string[]): string =>
+      fs.readFileSync(path.join(REPO_ROOT, ...parts), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const loop = read('server', 'services', 'factory', 'remoteLoop.ts');
+    const catchBlock = loop.slice(loop.indexOf('export async function tickAllRemoteCampaigns'));
+    expect(catchBlock.slice(0, catchBlock.indexOf('\n}\n'))).toMatch(/recordTickFailure\(/);
+    // A forbidden path is refused on the files that moved, on both planes.
+    expect(read('server', 'services', 'factory', 'integrate.ts')).toMatch(/forbiddenIn\(/);
+    expect(read('server', 'services', 'factory', 'remote.ts').match(/forbiddenIn\(/g)).toHaveLength(2);
+    expect(read('server', 'services', 'factory', 'planner.ts')).toMatch(/ownershipReachesForbidden\(/);
+  });
+
   it('routes/factory.ts imports projections.ts, throughput.ts and pullRequest.ts', () => {
     const source = fs.readFileSync(
       path.join(REPO_ROOT, 'server', 'routes', 'factory.ts'),
@@ -297,7 +309,16 @@ describe('the briefing, throughput and pull-request routes actually answer, not 
         principal: adminPrincipal(),
         requestId: newRequestId(),
         method: req.method,
-        path: `/api${req.path}`,
+        /*
+       * The path the policy module matches on, which is the one the request
+       * already carries. `req.path` in a middleware registered with no mount
+       * path is the whole path, so prefixing `/api` again yields `/api/api/…`,
+       * which matches no pattern in `services/identity/policy.ts` and falls
+       * silently to the default `READ` — every write in this harness would then
+       * be authorized at the wrong level, and a refusal asserted against one
+       * would be vacuous.
+       */
+      path: req.path,
         remoteAddr: null,
         userAgent: null,
       });

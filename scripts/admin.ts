@@ -25,6 +25,11 @@
  * signed in. A terminal that could mint one would be the console again, with
  * fewer witnesses.
  *
+ *   npm run admin -- people list
+ *   npm run admin -- people foundation
+ *   npm run admin -- people rename <user|email> "A Name" --admin someone@example.com
+ *   npm run admin -- capacity show
+ *   npm run admin -- capacity adopt <user|email> <trig_…> --admin someone@example.com
  *   npm run admin -- workers list
  *   npm run admin -- workers create <name> [display name] --admin someone@example.com
  *   npm run admin -- routing show
@@ -41,6 +46,8 @@
  *   npm run admin -- packets approve <orchestration> --admin someone@example.com
  *   npm run admin -- packets retry-fragment <fragment> --admin someone@example.com
  *   npm run admin -- packets reissue <workItem> --admin someone@example.com
+ *   npm run admin -- packets syntheses <project>
+ *   npm run admin -- packets recover-synthesis <workItem> --admin someone@example.com
  *   npm run admin -- packets independence [project]
  *   npm run admin -- packets scope [project]
  *   npm run admin -- packets reaudit <orchestration> --admin someone@example.com
@@ -82,6 +89,8 @@ import {
   grantMembership,
   listMembershipsForPrincipal,
   listUsers,
+  renameUser,
+  signInNameTaken,
   listWorkers,
   recordIdentityEvent,
   revokeMembership,
@@ -89,6 +98,7 @@ import {
 } from '../server/repos/identity.ts';
 import { createProject, getProject, getProjectBySlug, listProjects } from '../server/repos/projects.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
+import { foundationReading } from '../server/services/identity/foundation.ts';
 import { countLivePasskeys } from '../server/repos/passkeys.ts';
 import { listOrchestrationsByProject, currentFragments } from '../server/repos/research.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
@@ -101,6 +111,15 @@ import {
   repositoryIdOf,
 } from '../server/services/bins/routing.ts';
 import type { Principal, User } from '../server/domain/types.ts';
+import {
+  assessProjectSyntheses,
+  recoverFailedSynthesis,
+} from '../server/services/research/synthesisRecovery.ts';
+import { workerIdentity } from '../server/services/identity/authenticate.ts';
+import { resolveWorkerRef } from '../server/services/identity/workerRef.ts';
+import { refuseAddressAsName } from '../server/domain/personName.ts';
+import { adoptSurface } from '../server/services/capacity/adopt.ts';
+import { listConnections } from '../server/repos/capacityConnections.ts';
 
 function flag(name: string): string | null {
   const argv = process.argv.slice(2);
@@ -184,16 +203,43 @@ async function projectFrom(ref: string) {
   return project;
 }
 
+/**
+ * The one place this script turns what somebody typed into a worker row.
+ *
+ * It resolves through `services/identity/workerRef.ts`, which accepts the two
+ * identifiers `workers list` actually prints — the label and the id — as well
+ * as the `workers.name` handle that used to be the only one. The defect it
+ * closes is small and was expensive: an operator read `worker-05  wkr_…` off
+ * the listing, typed either into `access grant`, and was told **No such
+ * worker** by a refusal that then offered a third spelling the listing had
+ * never shown them.
+ *
+ * So the refusal lists candidates the way the listing does, and for the same
+ * reason the resolver exists at all: a listing and the command that consumes
+ * it must not disagree about what a thing is called.
+ */
 async function workerFrom(ref: string) {
-  const worker = await getWorkerByName(ref);
-  if (!worker) {
-    console.error(`No worker ${ref}. This Brain holds:`);
-    for (const candidate of await listWorkers({ includeArchived: true })) {
-      console.error(`  ${candidate.name}  ${candidate.status}`);
+  const resolved = await resolveWorkerRef(ref);
+  if (resolved.kind === 'FOUND') return resolved.worker;
+
+  if (resolved.kind === 'AMBIGUOUS') {
+    console.error(`"${ref}" names more than one worker:`);
+    for (const candidate of resolved.matches) {
+      console.error(`  ${workerIdentity(candidate).padEnd(12)} ${candidate.id}  ${candidate.name}`);
     }
-    fail('No such worker.');
+    // Refused rather than chosen between: picking either would be a confident
+    // answer to the wrong question, with every row reading healthy.
+    fail('Ambiguous worker reference. Use the id.');
   }
-  return worker;
+
+  console.error(`No worker ${ref}. This Brain holds:`);
+  for (const candidate of await listWorkers({ includeArchived: true })) {
+    console.error(
+      `  ${workerIdentity(candidate).padEnd(12)} ${candidate.id}  ${candidate.status.padEnd(10)} ` +
+        `${candidate.name}`,
+    );
+  }
+  fail('No such worker.');
 }
 
 /** The checkout this command is running from — how it finds the render set. */
@@ -201,6 +247,8 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const HELP = `Usage: npm run admin -- <area> <command> [...] [--admin someone@example.com]
 
+  people    list | foundation | rename <user|email> "<name>"
+  capacity  show | adopt <user|email> <trig_…>
   workers   list | disable <name> | enable <name> | archive <name>
   routing   show | check <worker> <bin>
             set <worker> --families A,B [--repositories o/r,...]
@@ -237,7 +285,7 @@ async function main(): Promise<void> {
         // a dispatch row, a ledger entry — names a worker by id, and a listing you
         // cannot join to those is a listing you have to guess against.
         console.log(
-          `  ${worker.name.padEnd(28)} ${worker.id}  ${worker.status.padEnd(10)} ` +
+          `  ${workerIdentity(worker).padEnd(12)} ${worker.id}  ${worker.status.padEnd(10)} ` +
             `${memberships.length} project(s)`,
         );
       }
@@ -264,7 +312,7 @@ async function main(): Promise<void> {
         const worker = byId.get(row.workerId);
         const families = row.families.length > 0 ? row.families.join(',') : '(none — serves nothing)';
         console.log(
-          `  ${(worker?.name ?? row.workerId).padEnd(28)} ${row.workerId}  families=[${families}] ` +
+          `  ${(worker ? workerIdentity(worker) : row.workerId).padEnd(12)} ${row.workerId}  families=[${families}] ` +
             `repositories=[${row.repositories.join(',')}] ` +
             `capabilities=[${row.capabilities.join(',')}]`,
         );
@@ -279,7 +327,9 @@ async function main(): Promise<void> {
       const implicit = [...byId.values()].filter((w) => !explicit.has(w.id) && w.status === 'ACTIVE');
       if (implicit.length > 0) {
         console.log('  derived (no explicit row — scopes imply the family, never repository work):');
-        for (const worker of implicit) console.log(`      ${worker.name.padEnd(28)} ${worker.id}`);
+        for (const worker of implicit) {
+          console.log(`      ${workerIdentity(worker).padEnd(12)} ${worker.id}`);
+        }
       }
       break;
     }
@@ -300,8 +350,8 @@ async function main(): Promise<void> {
       const principal = {
         type: 'WORKER',
         id: worker.id,
-        handle: worker.name,
-        displayName: worker.name,
+        handle: workerIdentity(worker),
+        displayName: workerIdentity(worker),
         isBrainAdmin: false,
         mustChangePassword: false,
         credentialId: null,
@@ -316,7 +366,7 @@ async function main(): Promise<void> {
       const decision = decideBinRouting({ bin, principal, routing });
       console.log(`  bin        ${bin.id}  ${bin.kind}  ${bin.state}  class=${bin.workloadClass ?? '—'}`);
       console.log(`  family     ${familyOf(bin)}  repository=${repositoryIdOf(bin) ?? '—'}`);
-      console.log(`  worker     ${worker.name}  ${routing.explicit ? 'explicit' : 'derived'} ` +
+      console.log(`  worker     ${workerIdentity(worker)}  ${routing.explicit ? 'explicit' : 'derived'} ` +
         `families=[${routing.families.join(',')}] repositories=[${routing.repositories.join(',')}]`);
       console.log(`  decision   ${decision.ok ? 'WOULD BE HANDED IT' : decision.refusal}`);
       // A refusal names itself; an admission has nothing to explain beyond the
@@ -370,7 +420,7 @@ async function main(): Promise<void> {
         },
       });
       console.log(
-        `  ${worker.name} now serves [${families.join(',') || '(nothing)'}]` +
+        `  ${workerIdentity(worker)} now serves [${families.join(',') || '(nothing)'}]` +
           `${repositories.length > 0 ? ` for [${repositories.join(',')}]` : ''}.`,
       );
       break;
@@ -403,7 +453,7 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
         metadata: { before: before ? before.families : null, after: [], reason },
       });
-      console.log(`  ${worker.name} is retired from active dispatch: it may be handed nothing.`);
+      console.log(`  ${workerIdentity(worker)} is retired from active dispatch: it may be handed nothing.`);
       break;
     }
     case 'routing clear': {
@@ -420,8 +470,8 @@ async function main(): Promise<void> {
       });
       console.log(
         removed
-          ? `  ${worker.name} is back to the derived default: what its scopes imply, and no repository work.`
-          : `  ${worker.name} had no explicit routing scope.`,
+          ? `  ${workerIdentity(worker)} is back to the derived default: what its scopes imply, and no repository work.`
+          : `  ${workerIdentity(worker)} had no explicit routing scope.`,
       );
       break;
     }
@@ -439,7 +489,7 @@ async function main(): Promise<void> {
         targetId: worker.id,
         result: 'SUCCESS',
       });
-      console.log(`  ${worker.name} is now ${status}.`);
+      console.log(`  ${workerIdentity(worker)} is now ${status}.`);
       break;
     }
     case 'workers archive': {
@@ -454,7 +504,7 @@ async function main(): Promise<void> {
         targetId: worker.id,
         result: 'SUCCESS',
       });
-      console.log(`  ${worker.name} is archived. Its rows and its audit history stay.`);
+      console.log(`  ${workerIdentity(worker)} is archived. Its rows and its audit history stay.`);
       break;
     }
     /*
@@ -475,10 +525,17 @@ async function main(): Promise<void> {
         const state = user.disabledAt ? 'DISABLED' : user.isBrainAdmin ? 'ADMIN' : 'MEMBER';
         const passkeys = await countLivePasskeys(user.id);
         // What the page derives `READY` from, printed the same way it derives
-        // it: a device, or a password, or neither. A timestamp is evidence a
-        // password exists and says nothing about it.
+        // it, and in the same order: the PIN the sign-in screen asks for, the
+        // password `/recovery` takes, then a device, which reaches neither. A
+        // timestamp is evidence a credential exists and says nothing about it.
         const signIn =
-          passkeys > 0 ? 'device' : user.passwordUpdatedAt !== null ? 'password' : 'none';
+          user.pinUpdatedAt !== null
+            ? 'pin'
+            : user.passwordUpdatedAt !== null
+              ? 'password'
+              : passkeys > 0
+                ? 'device'
+                : 'none';
         console.log(
           `  ${user.id}  ${user.kind.padEnd(7)} ${state.padEnd(8)} ` +
             `passkeys=${passkeys} signs-in=${signIn.padEnd(8)} ${user.displayName}` +
@@ -488,7 +545,167 @@ async function main(): Promise<void> {
       console.log('');
       console.log('  kind=PERSON is somebody; kind=SYSTEM is machinery proving itself.');
       console.log('  Only PERSON rows, not disabled, reach the People & capacity page.');
-      console.log('  signs-in=none is a slot nobody has filled; device and password both count.');
+      console.log('  signs-in=none is a slot nobody has filled.');
+      console.log('  signs-in=pin and signs-in=password are ways in; the screen asks for a PIN.');
+      console.log('  signs-in=device holds a passkey the sign-in screen no longer offers:');
+      console.log('  that person needs a new link, which People has a control for.');
+      break;
+    }
+    /*
+     * The foundation matrix: every intended human account against every
+     * dimension, with the one next action and who performs it.
+     *
+     * `people list` answers *what does this row hold*; this answers *is this
+     * person set up, and if not what is the single thing that would fix it* —
+     * which is the question the other readings are collectively for and which
+     * none of them could answer alone. It reads and changes nothing.
+     */
+    case 'people foundation': {
+      const reading = await foundationReading();
+      for (const account of reading.accounts) {
+        console.log('');
+        console.log(
+          `  ${account.displayName}${account.isBrainAdmin ? '  (Brain administrator)' : ''}  ` +
+            `— ${account.verdict}`,
+        );
+        for (const finding of account.findings) {
+          console.log(`    ${finding.verdict.padEnd(15)} ${finding.dimension}`);
+          console.log(`      ${finding.because}`);
+          if (finding.nextAction) {
+            console.log(`      -> ${finding.nextAction}  [${finding.owner}]`);
+          }
+        }
+      }
+      console.log('');
+      console.log(
+        `  ${reading.passing} of ${reading.accounts.length} account(s) satisfy every dimension ` +
+          `that applies to them; ${reading.blocked} are short of at least one.`,
+      );
+      console.log('  NOT_APPLICABLE is not PASS: it is a dimension this account has not reached.');
+      if (reading.unattributed.length > 0) {
+        console.log('');
+        console.log(`  ${reading.unattributed.length} surface(s) run under an identity no account owns:`);
+        for (const one of reading.unattributed) {
+          console.log(
+            `    ${one.routineName}  worker=${one.workerLabel ?? one.workerId}` +
+              `${one.enabled ? '  ENABLED' : ''}`,
+          );
+          console.log(`      ${one.because}`);
+          console.log(`      -> ${one.nextAction}`);
+        }
+      } else {
+        console.log('  No surface runs under an identity no account owns.');
+      }
+      break;
+    }
+    /*
+     * Saying what somebody is called.
+     *
+     * The repair for an account whose `display_name` is an address — which the
+     * first administrator's always was, because `bootstrap.ts` had nothing else
+     * to work from. `personName` keeps such a row readable; this is what makes
+     * it unnecessary, and it is the only path in this repository that sets a
+     * person's name after their account exists.
+     *
+     * It changes the name and nothing else: not the address, not the
+     * administration flag, not a membership, not a credential. A person is
+     * still reached, contacted and authenticated exactly as they were.
+     *
+     * On a terminal because reaching the shell is the authentication (§26), and
+     * `--admin` is the attribution, resolved against `users` rather than
+     * trusted — an audit row with no author answers nothing later.
+     */
+    case 'people rename': {
+      const actor = await administrator();
+      const target = rest[0] ?? fail('Name the user id or address to rename.');
+      const name = rest.slice(1).join(' ').trim() || fail('Give the name to show them as.');
+      refuseAddressAsName(name);
+      const user = (await listUsers()).find((one) => one.id === target || one.email === target);
+      if (!user) fail(`No user with id or address ${target}.`);
+      /*
+       * And it must not be a name somebody else already signs in with.
+       *
+       * This is §46's guard, asked here because there are two surfaces onto
+       * one column: this and `POST /api/admin/users/:userId/display-name`. A
+       * member enrolled from a link holds no address, so their display name is
+       * the only thing they can type at the door — and two live accounts
+       * answering to one name lock **both** of them out, with the same
+       * sentence a wrong PIN gets, because invariant 23 is doing its job.
+       *
+       * Without it this command was the way round the route: an administrator
+       * correcting a name on a terminal could create the exact condition the
+       * browser refuses, and the People page would then report two people as
+       * unable to sign in with no record of what did it.
+       */
+      if (await signInNameTaken(name, { exceptUserId: user.id })) {
+        fail(
+          `Somebody else already signs in as "${name}". Pick one that tells them apart — the ` +
+            'name is how a member without an address gets in.',
+        );
+      }
+      const before = user.displayName;
+      await renameUser(user.id, name);
+      await recordIdentityEvent({
+        actorType: 'HUMAN',
+        actorId: actor.id,
+        action: 'RENAME_USER',
+        targetType: 'USER',
+        targetId: user.id,
+        result: 'SUCCESS',
+        // The names, because a rename with no before and after is a change
+        // nobody can check afterwards. Neither is a credential.
+        metadata: { from: before, to: name },
+      });
+      console.log(`  ${user.id} is shown as "${name}" (was "${before}").`);
+      console.log('  The address, the administration flag and every membership are unchanged.');
+      break;
+    }
+    /*
+     * Recording that a surface this Brain already fires is somebody's.
+     *
+     * The repair for the split brain migration 084 describes: four Routines
+     * registered on a terminal long before `capacity_connections` existed,
+     * firing every day, and a People page telling their owner that their
+     * Claude account was not connected because it looked the worker up by a
+     * name Brain would have minted.
+     *
+     * It creates no account, Routine, worker, credential or token, and it
+     * cannot promote a connection to healthy — that stays `reconcile`'s, from
+     * the four-row chain. Every refusal names what to do instead.
+     */
+    case 'capacity adopt': {
+      const actor = await administrator();
+      const who = rest[0] ?? fail('Name the user id or address whose connection this is.');
+      const ref = rest[1] ?? fail('Name the Routine reference (trig_…) being adopted.');
+      const person = (await listUsers()).find((one) => one.id === who || one.email === who);
+      if (!person) fail(`No user with id or address ${who}.`);
+      const outcome = await adoptSurface({
+        userId: person.id,
+        routineRef: ref,
+        actorUserId: actor.id,
+        // Reaching this shell is the authentication; the channel says so rather
+        // than claiming the stronger, browser-authenticated one (§23).
+        channel: 'SHELL',
+      });
+      if (!outcome.ok) fail(outcome.reason);
+      console.log(
+        `  ${person.displayName}: ${outcome.connection.routineName} (${outcome.connection.triggerRef})` +
+          `${outcome.alreadyAdopted ? ' — already recorded, nothing changed' : ''}`,
+      );
+      console.log(`  state ${outcome.connection.state}. Healthy is the four-row chain, read on the next view.`);
+      break;
+    }
+    case 'capacity show': {
+      for (const one of await listConnections()) {
+        const person = (await listUsers()).find((user) => user.id === one.userId);
+        console.log(
+          `  ${one.userId}  ${String(person?.displayName ?? '—').padEnd(24)} ${one.state.padEnd(22)} ` +
+            `routine=${one.routineId ?? '—'} worker=${one.workerId ?? '—'} ref=${one.triggerRef ?? '—'}`,
+        );
+      }
+      console.log('');
+      console.log('  worker=— is a connection whose surface Brain has not been told about.');
+      console.log('  `capacity adopt <user> <trig_…>` is what records one.');
       break;
     }
     case 'projects list': {
@@ -559,9 +776,10 @@ async function main(): Promise<void> {
         targetId: worker.id,
         projectId: null,
         result: 'SUCCESS',
-        metadata: { name: worker.name },
+        // The label is the identity; the handle is what was typed, kept as history.
+        metadata: { name: workerIdentity(worker), legacyName: worker.name },
       });
-      console.log(`  ${worker.id}  ${worker.name}  ${worker.displayName}`);
+      console.log(`  ${worker.id}  ${workerIdentity(worker)}  (legacy handle ${worker.name})`);
       console.log('  It is a member of no project and holds no credential yet.');
       break;
     }
@@ -857,7 +1075,7 @@ async function main(): Promise<void> {
         result: 'SUCCESS',
         metadata: { scopes: [...CONNECTOR_SCOPES].join(','), kind: 'RESEARCH' },
       });
-      console.log(`  ${worker.name} researches for ${project.name}.`);
+      console.log(`  ${workerIdentity(worker)} researches for ${project.name}.`);
       break;
     }
     case 'access revoke': {
@@ -874,7 +1092,7 @@ async function main(): Promise<void> {
         projectId: project.id,
         result: 'SUCCESS',
       });
-      console.log(changed ? `  ${worker.name} no longer reaches ${project.name}.` : '  Nothing to revoke.');
+      console.log(changed ? `  ${workerIdentity(worker)} no longer reaches ${project.name}.` : '  Nothing to revoke.');
       break;
     }
     case 'queue list': {
@@ -1246,6 +1464,47 @@ async function main(): Promise<void> {
       if (!outcome.ok) fail(outcome.detail);
       break;
     }
+    /*
+     * The two halves of the synthesis recovery: read the packet, then act on
+     * one named item.
+     *
+     * A list and a targeted action rather than a sweep, for
+     * `findStrandedVerifications`' reason — a sweep is how a narrow recovery
+     * becomes a general one. Both verdicts come from the same assessment, so
+     * what this prints about a packet is what the action would do to it.
+     */
+    case 'packets syntheses': {
+      const project = await projectFrom(rest[0] ?? fail(`Name a project.`));
+      const rows = await assessProjectSyntheses(project.id);
+      console.log(`SYNTHESES (${rows.length} stopped)`);
+      for (const row of rows) {
+        console.log(
+          `  ${row.workItemId}  ${row.workItemState}  attempts ${row.attempts}` +
+            `  packet ${row.orchestrationId ?? '—'} ${row.packetStatus ?? '—'}`,
+        );
+        console.log(
+          `      claims ${row.citableClaims} citable  document ${row.documentId ?? 'NONE'}` +
+            `  bin ${row.binId ?? '—'} ${row.binState ?? '—'} ${row.binAttempts ?? ''}` +
+            `  mission ${row.missionState ?? '—'}`,
+        );
+        console.log(`      ${row.eligible ? 'ELIGIBLE' : `REFUSED ${row.refusal}`} — ${row.reason}`);
+      }
+      break;
+    }
+
+    case 'packets recover-synthesis': {
+      const actor = await administrator();
+      const id = rest[0] ?? fail('Name a synthesis work item.');
+      const outcome = await recoverFailedSynthesis({
+        workItemId: id,
+        actor: { type: 'HUMAN', id: actor.id },
+        reason: flag('reason') ?? 'Recovered after the filing path was repaired.',
+      });
+      console.log(`  ${JSON.stringify(outcome)}`);
+      if (!outcome.ok) fail(outcome.reason);
+      break;
+    }
+
     case 'packets reissue': {
       const actor = await administrator();
       const id = rest[0] ?? fail('Name a work item.');

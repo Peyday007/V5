@@ -39,7 +39,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: 'submit | approve | status | campaigns | bins | remote-tick | amend | plan | release'
+        description: 'submit | approve | status | events | throughput | pull-request | campaigns | bins | remote-tick | amend | plan | release | set-state | answer-bin | reauthorize | regrant-unit | retire'
         required: true
         default: status
       file:
@@ -54,6 +54,10 @@ on:
         description: '--campaign (an fcp_… id)'
         required: false
         default: ''
+      admin:
+        description: '--admin <email>: the administrator a decision is recorded against.'
+        required: false
+        default: ''
       extra:
         description: 'Any further --flag value pairs, e.g. "--project prj_x --base main"'
         required: false
@@ -61,7 +65,7 @@ on:
 
 # Never at the same time as a deploy: the machine is being replaced during one.
 concurrency:
-  group: deploy-brain
+  group: brain-console-factory
   cancel-in-progress: false
 
 jobs:
@@ -71,6 +75,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Wait for a release, rather than racing one.
+      #
+      # This workflow used to share `deploy-brain` with the deploy and with
+      # every other operator command, which kept it off a machine mid-release
+      # and *also* let it silently cancel a queued deploy — GitHub keeps one
+      # pending run per group and the newest evicts the one that was waiting.
+      # The group is this workflow's own now, so nothing here can evict
+      # anything; this step is the half of the old group that was worth
+      # keeping. See `.github/actions/await-release/action.yml`.
+      - uses: ./.github/actions/await-release
 
       - name: Run
         timeout-minutes: 20
@@ -82,6 +97,7 @@ jobs:
           FACTORY_COMMAND: ${{ inputs.command }}
           FACTORY_FILE: ${{ inputs.file }}
           FACTORY_CR: ${{ inputs.change_request }}
+          FACTORY_ADMIN: ${{ inputs.admin }}
           FACTORY_CAMPAIGN: ${{ inputs.campaign }}
           FACTORY_EXTRA: ${{ inputs.extra }}
         run: |
@@ -107,6 +123,18 @@ jobs:
               exit 1
               ;;
           esac
+          # An address additionally needs @ and +, which is why it is its own
+          # input rather than something to paste into `extra`. `admin.yml`,
+          # `packets.yml` and `routing.yml` each draw the same line for the same
+          # reason: widening the general class to fit an address would widen it
+          # for every other flag too.
+          case "$FACTORY_ADMIN" in
+            '') ;;
+            *[!A-Za-z0-9_.@+-]*)
+              echo "::error::Refusing the administrator address: that is not an address."
+              exit 1
+              ;;
+          esac
           case "$FACTORY_EXTRA" in
             *[!A-Za-z0-9_.:/,\ -]*)
               echo "::error::Refusing the extra flags: the same class, plus spaces, slashes and commas."
@@ -118,7 +146,34 @@ jobs:
           if [ -n "$FACTORY_FILE" ];     then args="$args --file $FACTORY_FILE"; fi
           if [ -n "$FACTORY_CR" ];       then args="$args --change-request $FACTORY_CR"; fi
           if [ -n "$FACTORY_CAMPAIGN" ]; then args="$args --campaign $FACTORY_CAMPAIGN"; fi
+          if [ -n "$FACTORY_ADMIN" ];    then args="$args --admin $FACTORY_ADMIN"; fi
           if [ -n "$FACTORY_EXTRA" ];    then args="$args $FACTORY_EXTRA"; fi
 
           echo "factory $args"
+          set +e
           flyctl ssh console --app "$app" -C "sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
+          set -e
+
+          # The verdict comes from a line the script printed, not from an exit
+          # code that had to survive an SSH session, a shell and a CLI — the
+          # same reasoning `deploy.yml` states beside its hosted verification
+          # and `step10.yml` applies with `STEP10: OK`.
+          #
+          # This step used to end at the `tee` above, and a pipeline's status is
+          # the last stage's, so every run was green whatever happened. Measured
+          # against the deployed image: `factory pull-request` on a build with
+          # no such command printed the usage list and the run succeeded. A
+          # failure rendered as a pass is worse than one that is merely loud.
+          if grep -q '^FACTORY: OK' factory.txt; then
+            exit 0
+          fi
+          if grep -q '^FACTORY REFUSED' factory.txt; then
+            echo "::error::The factory refused this command. The refusal is above."
+            exit 1
+          fi
+          if [ ! -s factory.txt ]; then
+            echo "::error::Nothing came back. If the output above says the SSH connection failed, the Fly token cannot open a console on this app."
+            exit 1
+          fi
+          echo "::error::The command did not complete. Its output is above; an unknown command prints the list of the ones that exist."
+          exit 1

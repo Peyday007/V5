@@ -44,7 +44,7 @@ import {
 } from '../../repos/cashPortfolio.ts';
 import { createCandidate, getCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
-import { citableClaims, getOrchestration } from '../../repos/research.ts';
+import { citableClaims, getOrchestration, listPasses } from '../../repos/research.ts';
 import {
   cardFact,
   cardFactsFor,
@@ -63,6 +63,37 @@ import type { CashOpportunity, OpportunityValidationState } from '../../domain/t
 export const MAX_VALIDATIONS_IN_FLIGHT = 2;
 
 /**
+ * The states that actually occupy one of those slots.
+ *
+ * `NEEDS_PERSON` is deliberately absent, and that absence is the whole repair.
+ * A slot is provider capacity; a dive parked for a person is using none of it,
+ * and counting it made a Brain with two parked missions unable to start a
+ * thirty-ninth dive for ever. What holds a slot is what a worker is working on.
+ */
+const HOLDS_A_SLOT: ReadonlySet<string> = Object.freeze(new Set(['PENDING', 'RUNNING']));
+
+/**
+ * How long a deep dive may go **without a pass finishing** before Brain stops
+ * calling it running.
+ *
+ * Not a bound on how long research may take, and the difference is the whole
+ * of it: a validation packet is a plan, its fragments, a verification, a
+ * synthesis and three separately-sessioned audit roles, each waiting on an
+ * activation, and §27 measures one judge pass alone at nine minutes and
+ * forty-four seconds. A clock started at launch would cancel live work doing
+ * exactly what it should. What is measured is the gap since the last thing a
+ * worker actually finished, so a dive whose passes keep completing is never
+ * reached however long it runs.
+ *
+ * Six hours is longer than the gap between any two completed passes this
+ * Brain has recorded, and short enough that a slot is not lost for a day. A
+ * stalled dive is `BLOCKED` rather than failed, with the gap in the reason, so
+ * it can be asked again inside `MAX_VALIDATION_ROUNDS` rather than written
+ * off — and nothing it produced is destroyed.
+ */
+export const VALIDATION_STALL_MS = 6 * 60 * 60 * 1000;
+
+/**
  * How many bounded deep dives one opening may have, in total.
  *
  * A second one exists because the qualification bar rose after some pieces had
@@ -79,6 +110,155 @@ export const MAX_VALIDATIONS_IN_FLIGHT = 2;
  * answer — the sources do not publish it — and the card says which fields.
  */
 export const MAX_VALIDATION_ROUNDS = 2;
+
+/**
+ * Why a particular opening is not being qualified right now.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is a value rather than a comment
+ * ---------------------------------------------------------------------------
+ *
+ * *Why is nothing being refined* had no answer that was not a guess. Every
+ * surface could say a piece's **state** and none could say what had refused
+ * it, so the only reading available was `passes 0/0` — which is a true
+ * statement about a packet and no statement at all about whether the lifecycle
+ * is stuck, waiting on a person, or working exactly as designed.
+ *
+ * "Nothing is running" and "nothing may run, for these named reasons, read off
+ * these rows" are different facts with different remedies, and the second is
+ * the one somebody can act on. §30's rule at a new reading: an unknown is never
+ * a favourable assumption, and *we did not look* must never read the same as
+ * *we checked*.
+ *
+ * ---------------------------------------------------------------------------
+ * Why the producer derives it rather than the report
+ * ---------------------------------------------------------------------------
+ *
+ * `startValidations` decides this on every tick; a report that re-derived it
+ * would be the *two readers of one fact* defect this repository records more
+ * than any other, and it would be the copy nobody exercises that drifts. So
+ * the loop below is written in terms of this function, and reading it is the
+ * same call the loop makes. A refusal the report prints is therefore the
+ * refusal that actually happened.
+ *
+ * `SLOTS_TAKEN` is deliberately **not** here: it is a fact about the project
+ * rather than about the opening, and it is decided before the loop reaches any
+ * of them. `sprintCanRefine` answers that, and the two are reported side by
+ * side because collapsing them would say a piece was ineligible when what was
+ * missing was capacity.
+ */
+export type DiveRefusal =
+  /** Nothing refuses it; it starts as soon as a slot is free. */
+  | { kind: 'ELIGIBLE' }
+  /** A worker is on it now. This one is holding a slot. */
+  | { kind: 'IN_FLIGHT'; state: OpportunityValidationState }
+  /**
+   * Parked at a decision only a person can make.
+   *
+   * It holds no slot, and a second dive is refused on purpose: answering the
+   * mission's own card resumes the mission that is already there, so starting
+   * another would buy the same answer twice.
+   */
+  | { kind: 'AWAITING_PERSON' }
+  /** Both bounded dives are spent. The honest answer is that the sources do not publish it. */
+  | { kind: 'ROUNDS_SPENT'; rounds: number; cap: number }
+  /** It got there. A qualified piece has nothing left for a dive to ask. */
+  | { kind: 'ALREADY_QUALIFIED'; tier: string }
+  /** Declined, archived or already being executed — the commercial questions are closed. */
+  | { kind: 'NOT_A_QUALIFYING_STATE'; state: string }
+  /** No published signal and no source claim, so there is nothing to quote into a question. */
+  | { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+
+/** One line, for a report or an operator. */
+export function describeDiveRefusal(refusal: DiveRefusal): string {
+  switch (refusal.kind) {
+    case 'ELIGIBLE':
+      return 'eligible — starts as soon as a slot is free';
+    case 'IN_FLIGHT':
+      return `a worker is on it (${refusal.state}), holding a slot`;
+    case 'AWAITING_PERSON':
+      return 'waiting on a person: its mission stopped at a decision only they can make';
+    case 'ROUNDS_SPENT':
+      return `both dives are spent (${refusal.rounds}/${refusal.cap}); the sources do not publish the rest`;
+    case 'ALREADY_QUALIFIED':
+      return `already ${refusal.tier} — a dive has nothing left to ask`;
+    case 'NOT_A_QUALIFYING_STATE':
+      return `state ${refusal.state}: the commercial questions are closed`;
+    case 'NOTHING_PUBLISHED_TO_ASK_ABOUT':
+      return 'no buying signal and no source claim — nothing published to ask about';
+  }
+}
+
+/**
+ * The per-opening half of the decision, in the order the loop applies it.
+ *
+ * Every branch reads a row. Nothing here consults a clock, a count of workers,
+ * or anything a caller supplied.
+ */
+export async function whyNotDiving(opportunity: CashOpportunity): Promise<DiveRefusal> {
+  if (opportunity.validationState !== null) {
+    if (HOLDS_A_SLOT.has(opportunity.validationState)) {
+      return { kind: 'IN_FLIGHT', state: opportunity.validationState };
+    }
+    if (opportunity.validationState === 'NEEDS_PERSON') return { kind: 'AWAITING_PERSON' };
+    if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS) {
+      return {
+        kind: 'ROUNDS_SPENT',
+        rounds: opportunity.validationRounds,
+        cap: MAX_VALIDATION_ROUNDS,
+      };
+    }
+    const tier = await qualifiedTier(opportunity);
+    if (tier === 'QUALIFIED' || tier === 'READY_TO_TEST') {
+      return { kind: 'ALREADY_QUALIFIED', tier };
+    }
+  }
+  if (opportunity.state !== 'DISCOVERED' && opportunity.state !== 'EVIDENCE_CARD') {
+    return { kind: 'NOT_A_QUALIFYING_STATE', state: opportunity.state };
+  }
+  if (!opportunity.buyingSignal && !opportunity.sourceClaimId) {
+    return { kind: 'NOTHING_PUBLISHED_TO_ASK_ABOUT' };
+  }
+  return { kind: 'ELIGIBLE' };
+}
+
+/** The card's own reading of how far this piece has got. */
+async function qualifiedTier(opportunity: CashOpportunity): Promise<string> {
+  const card = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
+  return cashTier({ opportunity, card, readiness: evidenceCard(opportunity).readiness }).tier;
+}
+
+/**
+ * Why the **sprint** cannot start another dive, whatever any opening says.
+ *
+ * Reported beside the per-opening refusals rather than folded into them,
+ * because *this piece is ineligible* and *there is no capacity for any piece*
+ * are different facts with different remedies — and reading the second as the
+ * first is how somebody concludes a healthy sprint is broken.
+ */
+export type SprintRefinementState =
+  | { kind: 'NO_SPRINT' }
+  | { kind: 'WOUND_DOWN'; reason: string }
+  | { kind: 'NO_RESEARCH_AUTHORITY' }
+  | { kind: 'SLOTS_TAKEN'; inFlight: number; cap: number }
+  | { kind: 'READY'; free: number; cap: number };
+
+export async function sprintCanRefine(projectId: string): Promise<SprintRefinementState> {
+  if (!(await getCashMode(projectId))) return { kind: 'NO_SPRINT' };
+  const gate = await discoveryAllowed(projectId);
+  if (!gate.allowed) return { kind: 'WOUND_DOWN', reason: gate.reason ?? 'the sprint is not active' };
+  if (!(await discoveryAuthority(projectId))) return { kind: 'NO_RESEARCH_AUTHORITY' };
+  const all = await listOpportunities({ projectId });
+  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
+  if (inFlight >= MAX_VALIDATIONS_IN_FLIGHT) {
+    return { kind: 'SLOTS_TAKEN', inFlight, cap: MAX_VALIDATIONS_IN_FLIGHT };
+  }
+  return {
+    kind: 'READY',
+    free: MAX_VALIDATIONS_IN_FLIGHT - inFlight,
+    cap: MAX_VALIDATIONS_IN_FLIGHT,
+  };
+}
 
 export interface StartedValidation {
   opportunityId: string;
@@ -165,9 +345,7 @@ export async function startValidations(input: {
   if (!(await discoveryAuthority(input.projectId))) return [];
 
   const all = await listOpportunities({ projectId: input.projectId });
-  const inFlight = all.filter(
-    (one) => one.validationState === 'PENDING' || one.validationState === 'RUNNING',
-  ).length;
+  const inFlight = all.filter((one) => HOLDS_A_SLOT.has(one.validationState ?? '')).length;
   let room = Math.max(0, MAX_VALIDATIONS_IN_FLIGHT - inFlight);
   const limit = Math.max(1, input.limit ?? 2);
 
@@ -181,22 +359,44 @@ export async function startValidations(input: {
    * group arrival order is kept, so which of two never-dived pieces goes first
    * is still a property of when they were found.
    */
+  /*
+   * And inside each group, the ones closest to being a decision first.
+   *
+   * Inside, not across: a re-dive has more answers on it by definition, so one
+   * sort over the whole list would put every second dive ahead of every first
+   * and undo the rule above. `Array.prototype.sort` is stable, so arrival
+   * order still decides between two pieces that have answered the same amount.
+   *
+   * The ordering is a count of rows rather than a judgement: an opening whose
+   * payer and reach are already established needs one more question before a
+   * person can act on it, and a raw market observation needs every question it
+   * has. Spending both slots on the second while the first waits is exactly
+   * what "actionable work sitting behind background work" means here.
+   *
+   * It is a preference and never a ceiling. Nothing is refused because of it,
+   * and a piece at the back still takes a slot the moment one is free.
+   */
   const ordered = [
-    ...all.filter((one) => one.validationState === null),
-    ...all.filter((one) => one.validationState !== null),
+    ...all.filter((one) => one.validationState === null).sort(closestFirst),
+    ...all.filter((one) => one.validationState !== null).sort(closestFirst),
   ];
 
   const out: StartedValidation[] = [];
   for (const opportunity of ordered) {
     if (room <= 0 || out.length >= limit) break;
-    if (opportunity.validationState !== null && !(await mayDiveAgain(opportunity))) continue;
-    // A piece somebody has already declined, archived or finished is not worth
-    // qualifying. DISCOVERED and EVIDENCE_CARD are the two states where the
-    // commercial questions are still open.
-    if (opportunity.state !== 'DISCOVERED' && opportunity.state !== 'EVIDENCE_CARD') continue;
-    // Nothing to quote into the question. An opening with no recorded signal is
-    // one a person entered by hand, and Brain has nothing published to work from.
-    if (!opportunity.buyingSignal && !opportunity.sourceClaimId) continue;
+    /*
+     * One condition, and `refinement-report` reads the same one.
+     *
+     * It used to be three `continue`s written out here: a dive already over,
+     * a state where the commercial questions are closed, and nothing published
+     * to ask about. They are all still applied, in the same order, by
+     * `whyNotDiving` — which exists because a report that re-derived them
+     * would be the *two readers of one fact* defect this repository records
+     * more than any other, and it would be the copy nobody exercises that
+     * drifts. What that report prints is therefore the refusal that actually
+     * happened rather than a second opinion about it.
+     */
+    if ((await whyNotDiving(opportunity)).kind !== 'ELIGIBLE') continue;
 
     const candidate = await createCandidate({
       projectId: input.projectId,
@@ -246,34 +446,30 @@ export async function startValidations(input: {
 }
 
 /**
- * Whether an opening that has already been dived may have one more.
+ * How far along one opening's own card already is, counted from its columns.
  *
- * Three conditions, and none of them is a preference. The dive has to be
- * **over** — a second one started beside a live one is two workers answering
- * the same question with the sprint paying twice. There has to be a **round
- * left**, which is what stops a piece being re-asked for ever. And it has to
- * be genuinely **short of qualified**, read from the card rather than from a
- * state column: a piece that answered everything is finished whatever its
- * round count says.
- *
- * Read in the loop rather than precomputed, because it is asked only of the
- * pieces that already have a terminal dive, and the loop stops at `room`.
+ * The columns `answers.ts` maps card fields onto, plus the two evidence
+ * columns a signal is born with. Nothing here reads prose and nothing here
+ * forms a view about how good any of it is; it is a count of rows, used only
+ * to decide which of two pieces is asked about first.
  */
-async function mayDiveAgain(opportunity: CashOpportunity): Promise<boolean> {
-  if (opportunity.validationState !== 'COMPLETE' && opportunity.validationState !== 'BLOCKED') {
-    return false;
-  }
-  if (opportunity.validationRounds >= MAX_VALIDATION_ROUNDS) return false;
-  const card = cashEngineCard({
-    opportunity,
-    facts: await cardFactsFor(opportunity.id),
-  });
-  const reading = cashTier({
-    opportunity,
-    card,
-    readiness: evidenceCard(opportunity).readiness,
-  });
-  return reading.tier !== 'QUALIFIED' && reading.tier !== 'READY_TO_TEST';
+function closestFirst(a: CashOpportunity, b: CashOpportunity): number {
+  return answeredCount(b) - answeredCount(a);
+}
+
+function answeredCount(one: CashOpportunity): number {
+  const values = [
+    one.payer,
+    one.reachableChannel,
+    one.offerScope,
+    one.acceptanceCondition,
+    one.priceCents,
+    one.deliveryMethod,
+    one.fulfillmentOwner,
+    one.economicsNote,
+    one.peakFundingCents,
+  ];
+  return values.filter((value) => value !== null && value !== undefined && value !== '').length;
 }
 
 /**
@@ -295,7 +491,22 @@ export async function settleValidations(projectId: string): Promise<
   const out: { opportunityId: string; to: OpportunityValidationState }[] = [];
 
   for (const opportunity of await listOpportunities({ projectId })) {
-    if (opportunity.validationState !== 'PENDING' && opportunity.validationState !== 'RUNNING') {
+    /*
+     * `NEEDS_PERSON` is re-read on every tick as well, and that is the half
+     * that makes it a park rather than a dead end.
+     *
+     * A person answering the mission's Needs You card puts it back to
+     * `RUNNING`, and nothing else in this loop would notice: the opening would
+     * sit at `NEEDS_PERSON` while the packet it names finished. So the states
+     * this pass reconciles are every non-terminal one, and the mission below
+     * decides where each goes — which is the same shape `settleValidations`
+     * already had, with the state that was missing from it added.
+     */
+    if (
+      opportunity.validationState !== 'PENDING' &&
+      opportunity.validationState !== 'RUNNING' &&
+      opportunity.validationState !== 'NEEDS_PERSON'
+    ) {
       continue;
     }
     if (!opportunity.candidateId) continue;
@@ -315,17 +526,152 @@ export async function settleValidations(projectId: string): Promise<
       if (candidate.state === 'PARKED') {
         await settle(projectId, opportunity, 'BLOCKED', candidate.reason ?? 'The deep dive was parked.');
         out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
+        continue;
+      }
+      /*
+       * And launched, but no mission ever appeared.
+       *
+       * The stall backstop below cannot see this: it is guarded on
+       * `mission.state === 'RUNNING'`, and here there is no mission at all. So
+       * a dive whose candidate never got judged held a slot with **no bound on
+       * it whatever** — `PENDING` counts against `MAX_VALIDATIONS_IN_FLIGHT`,
+       * and nothing in this function could ever take it back.
+       *
+       * Under ordinary operation the Russell tick judges a candidate within
+       * minutes and it becomes a mission or reaches `PARKED`, which the branch
+       * above answers. This is what happens when that stops: §24's *waiting
+       * nobody can resolve*, at the one state that is also scarce.
+       *
+       * Found by reading production rather than the code. The first causal
+       * reading of a live sprint printed two `PENDING` dives holding both
+       * slots with `candidate=QUEUED mission=— packet=—`, against four parked
+       * dives whose missions had appeared in 5, 19, 31 and 44 minutes. One of
+       * them had been waiting an hour and a half. Nothing was wrong with it
+       * yet, and nothing would ever have been able to say so.
+       *
+       * The same window and the same verdict as a stalled mission, for the
+       * same reason: `BLOCKED` keeps every row, frees the slot, and leaves
+       * `whyNotDiving` free to offer the second round.
+       */
+      const launchedAt = opportunity.validationStartedAt;
+      if (launchedAt && Date.now() - Date.parse(launchedAt) > VALIDATION_STALL_MS) {
+        const hours = Math.floor((Date.now() - Date.parse(launchedAt)) / (60 * 60 * 1000));
+        await settle(
+          projectId,
+          opportunity,
+          'BLOCKED',
+          `The deep dive was launched ${hours} hours ago and no mission has been created for ` +
+            'it, so nothing is researching it. Brain has freed the slot; it can be asked again.',
+        );
+        out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
       }
       continue;
     }
 
-    if (opportunity.validationState === 'PENDING' && mission.state === 'RUNNING') {
+    if (opportunity.validationState !== 'RUNNING' && mission.state === 'RUNNING') {
+      /*
+       * Reached from `PENDING` — the ordinary launch — and from
+       * `NEEDS_PERSON`, which is a person having answered the mission's card.
+       * Both are the same fact: a worker is on it now.
+       */
       await updateOpportunity(opportunity.id, {
         validation_state: 'RUNNING',
+        validation_settled_at: null,
         validation_orchestration_id: mission.orchestrationId,
       });
       out.push({ opportunityId: opportunity.id, to: 'RUNNING' });
       continue;
+    }
+
+    /*
+     * The mission stopped at a decision only a person can make.
+     *
+     * This branch did not exist, and its absence was a deadlock rather than an
+     * untidy state. `NEEDS_HUMAN` is none of `DONE`, `FAILED` or `CANCELLED`,
+     * so the opening stayed `RUNNING` for ever while nothing ran — and because
+     * `RUNNING` counts against `MAX_VALIDATIONS_IN_FLIGHT`, production had
+     * **both** of its two slots held by parked missions. Thirty-eight openings
+     * could never be qualified, and no deep dive could ever start again.
+     *
+     * It is a park with an answering transition rather than a failure: the
+     * mission's own Needs You card is what resolves it, the branch above puts
+     * the opening back to `RUNNING` when somebody does, and `whyNotDiving`
+     * answers `AWAITING_PERSON` meanwhile so the answer is not bought twice.
+     */
+    if (mission.state === 'NEEDS_HUMAN') {
+      if (opportunity.validationState !== 'NEEDS_PERSON') {
+        const packet = mission.orchestrationId
+          ? await getOrchestration(mission.orchestrationId)
+          : null;
+        await settle(
+          projectId,
+          opportunity,
+          'NEEDS_PERSON',
+          packet?.failureReason ??
+            mission.terminalReason ??
+            'The deep dive stopped at a decision only a person can make. Answering it in Needs ' +
+              'you is what restarts it.',
+          mission.orchestrationId,
+        );
+        out.push({ opportunityId: opportunity.id, to: 'NEEDS_PERSON' });
+      }
+      continue;
+    }
+
+    /*
+     * Launched, and nothing has happened since.
+     *
+     * The backstop for what the mission row cannot express, and the condition
+     * is **no progress** rather than elapsed time. That distinction is the
+     * whole of it: a research packet legitimately takes hours — §27 measures a
+     * single judge pass at nine minutes and forty-four seconds, and a
+     * validation packet is a plan, fragments, a verification, a synthesis and
+     * three separately-sessioned audit roles — so a clock started at launch
+     * would cancel live work that is doing exactly what it should. What is
+     * measured instead is the gap since the last thing a worker actually
+     * *finished*, and a dive whose passes keep completing is never reached
+     * here however long it runs.
+     *
+     * `BLOCKED` rather than failed, with the gap in the reason, so
+     * `whyNotDiving` can offer another round instead of writing it off. And
+     * nothing is destroyed: every pass, claim and raw response stays exactly
+     * where it is.
+     */
+    const startedAt = opportunity.validationStartedAt;
+    /*
+     * A **running** mission that has gone quiet, and only that.
+     *
+     * The guard on `RUNNING` is what keeps this from reaching a mission that
+     * has already finished. Without it, a dive whose packet completed
+     * yesterday and whose tick was down overnight would be read here first —
+     * its last pass is older than the window — and settled `BLOCKED`,
+     * throwing away a `COMPLETE` and the card facts `applyValidationAnswers`
+     * would have taken from it. A backstop that can destroy a result is worse
+     * than no backstop.
+     */
+    if (startedAt && mission.state === 'RUNNING') {
+      const passes = mission.orchestrationId ? await listPasses(mission.orchestrationId) : [];
+      const finished = passes
+        .map((pass) => pass.completedAt)
+        .filter((at): at is string => at !== null);
+      // The most recent sign of life, which is the launch itself when a worker
+      // has not finished anything yet.
+      const lastMovedAt = finished.reduce((latest, at) => (at > latest ? at : latest), startedAt);
+      const quiet = Date.now() - Date.parse(lastMovedAt);
+      if (quiet > VALIDATION_STALL_MS) {
+        const hours = Math.floor(quiet / (60 * 60 * 1000));
+        await settle(
+          projectId,
+          opportunity,
+          'BLOCKED',
+          `The deep dive has produced nothing for ${hours} hours` +
+            `${finished.length > 0 ? ` — its last completed pass was ${lastMovedAt}` : ' and no pass has finished at all'}. ` +
+            'Brain has stopped calling it running and freed the slot; it can be asked again.',
+          mission.orchestrationId,
+        );
+        out.push({ opportunityId: opportunity.id, to: 'BLOCKED' });
+        continue;
+      }
     }
 
     if (mission.state === 'DONE') {
@@ -371,6 +717,16 @@ async function settle(
   await recordCashEvent({
     projectId,
     opportunityId: opportunity.id,
+    /*
+     * Two event kinds for five states, and `NEEDS_PERSON` deliberately reports
+     * as the blocked one rather than gaining a third.
+     *
+     * The vocabulary is what the history reads back, and a park is what a
+     * reader of that history most needs to see beside a block — both mean "no
+     * answer arrived and here is why". The `detail` carries the exact state,
+     * so nothing is lost, and adding a kind would have meant a reader that did
+     * not know it showing a blank row.
+     */
     kind: to === 'COMPLETE' ? 'CASH_VALIDATION_COMPLETE' : 'CASH_VALIDATION_BLOCKED',
     actorRef: 'BRAIN',
     summary: why,

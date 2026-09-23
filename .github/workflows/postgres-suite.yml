@@ -63,6 +63,7 @@ on:
       - 'production'
       - 'claude/pensive-bell-dr81a4'
       - 'claude/cash-access-people-capacity-uk7sqa'
+      - 'claude/brain-first-labor-allocation-fyrbtx'
 
 # One at a time, and the newest commit is the one worth the twenty minutes: a
 # push that supersedes the commit a run is verifying makes that run's answer
@@ -117,9 +118,57 @@ jobs:
             "SELECT 1 FROM pg_database WHERE datname = 'brain_test'" | grep -q 1; then
             sudo -u postgres createdb -O "$(whoami)" brain_test
           fi
+          # ---------------------------------------------------------------
+          # The lock table, sized from what the suite actually does
+          # ---------------------------------------------------------------
+          #
+          # `openTestDatabase` gives every test file its own schema and drops it
+          # with `DROP SCHEMA … CASCADE`, which takes **one lock per object** in
+          # a single transaction — every table, index and sequence, plus each
+          # table's toast relation and toast index. Measured on this chain: 851
+          # relations in `pg_class`, and 166 of those are tables, so a single
+          # drop reaches for well over a thousand locks.
+          #
+          # The shared lock table is `max_locks_per_transaction ×
+          # (max_connections + max_prepared_transactions)` entries for the whole
+          # cluster — 64 × 100 = 6400 at the stock settings this runner ships.
+          # `pool: 'forks'` runs several files at once and each live file also
+          # holds locks on the schema it is working in, so a handful of
+          # concurrent drops exhausts it and Postgres answers `53200 out of
+          # shared memory` with this exact setting named in its hint.
+          #
+          # **Measured rather than reasoned, because the attribution mattered.**
+          # One drop was run inside an open transaction and its `pg_locks` rows
+          # counted, per chain: `production` takes **1213** relation locks,
+          # the branch that found this takes **1264**. At 6400 slots that is
+          # `floor(6400/1213) = 5` concurrent drops and `floor(6400/1264) = 5` —
+          # **the same integer**. So this is not one workstream's tables tipping
+          # a threshold; the cluster was already at the edge and the branch that
+          # hit it was simply the one that ran.
+          #
+          # It is not a per-transaction ceiling, so raising it does not let one
+          # transaction misbehave; it sizes the shared table. 1024 leaves room
+          # for the chain to keep growing, which it does every time a workstream
+          # adds a migration — the reason this arrived as a mystery rather than
+          # a warning is that the margin shrinks silently until one more table
+          # crosses it.
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c \
+            "ALTER SYSTEM SET max_locks_per_transaction = 1024"
+          sudo systemctl restart postgresql || sudo pg_ctlcluster "$(pg_lsclusters -h | awk 'NR==1{print $1}')" main restart
+          for attempt in $(seq 1 30); do
+            pg_isready -q && break
+            sleep 1
+          done
+          pg_isready
           # Proof it answers as this user, before twenty minutes are spent finding out.
           psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
             "select 'connected as ' || current_user || ' to ' || current_database()"
+          # And proof the setting took, because a restart that silently did not
+          # reload it would send the next reader back to the same mystery.
+          psql "postgresql:///brain_test?host=/var/run/postgresql&sslmode=disable" -tAc \
+            "select 'lock table: ' || current_setting('max_locks_per_transaction') || ' × (' ||
+                    current_setting('max_connections') || ' + ' ||
+                    current_setting('max_prepared_transactions') || ')'"
 
       - run: npm ci
 

@@ -38,19 +38,48 @@ on:
         required: false
         default: 'manual deploy'
       authorize_gap_orchestration:
-        description: 'Optional: orchestration id to authorize for RECORD_GAPS (one packet, once)'
+        description: 'Optional: orchestration id(s) to authorize for RECORD_GAPS, space or comma separated'
         required: false
         default: ''
       authorize_gap_admin:
         description: 'Optional: administrator email the authorization is recorded against'
         required: false
         default: ''
+      allow_rollback:
+        description: 'Deploy a commit older than the one already released (a deliberate rollback)'
+        required: false
+        default: 'no'
 
 # Two deploys of one app at once is a race whose loser is whichever image
 # finishes second. The second run waits rather than being cancelled: a deploy
 # that has already started changing a machine should be allowed to finish.
+#
+# ---------------------------------------------------------------------------
+# This group holds the deploy and nothing else, and that is the whole point
+# ---------------------------------------------------------------------------
+#
+# It used to be `deploy-brain`, shared by sixteen workflows — every operator
+# command and every read-only report in the repository. The reason was sound:
+# a command must not run against a machine that is being replaced. What the
+# group actually implements is something else, and the difference is what did
+# the damage: GitHub keeps exactly **one pending run per group**, and the
+# newest pending evicts the one that was waiting.
+#
+# So an unrelated dispatch cancelled a queued deploy. Measured: a queued
+# `Deploy` cancelled two seconds after an `Admin` dispatch, `jobs: 0`, never
+# started, nothing red anywhere except a conclusion nobody was watching — and
+# a silently cancelled deployment leaves the branch and the released image
+# disagreeing while every surface looks healthy. It went the other way too:
+# four consecutive `Cash report` dispatches cancelled before any of them ran.
+#
+# A group cannot express priority, so it is not asked to. `Deploy` holds a
+# group nothing else is in, so no dispatch of anything can evict it. Every
+# console workflow holds a group of its own, so no command evicts a different
+# command. And keeping a command off a machine mid-release — the job this
+# group was really doing — is `.github/actions/await-release`, which those
+# workflows run before they open an ssh session.
 concurrency:
-  group: deploy-brain
+  group: brain-release
   cancel-in-progress: false
 
 jobs:
@@ -79,35 +108,22 @@ jobs:
   # be edited by the branch being deployed. This job is the fast, legible half;
   # that setting is the enforcing half, and `docs/DEPLOYMENT.md` says how to set
   # it. Neither is a substitute for the other.
+  #
+  # And read the *timing* honestly too, which is the half that was missing: an
+  # answer taken here is an answer about 04:27, and the image is released at
+  # 05:30. The same question is asked again in the `deploy` job immediately
+  # before `flyctl deploy`, from the same file, because that is the instant it
+  # has to be true. See `.github/workflows/canonical-guard.sh`.
   canonical:
     name: Refuse a branch that is not canonical
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: This ref must be the canonical branch
         run: |
-          set -euo pipefail
-          canonical=$(tr -d '[:space:]' < .github/CANONICAL_BRANCH)
-          echo "canonical branch: $canonical"
-          echo "this ref:         ${{ github.ref_name }}"
-
-          if [ "${{ github.ref_name }}" != "$canonical" ]; then
-            echo "::error::Production deploys only from '$canonical'. This is '${{ github.ref_name }}'. Merge into $canonical and deploy that — a feature branch deploying directly is how an older tree overwrites a newer one."
-            exit 1
-          fi
-
-          # And it must not be behind its own remote. A re-run of an older
-          # dispatch is the same failure wearing the right branch name.
-          git fetch origin "$canonical" --quiet
-          behind=$(git rev-list --count "HEAD..origin/$canonical")
-          if [ "$behind" != "0" ]; then
-            echo "::error::This checkout is $behind commit(s) behind origin/$canonical, so deploying it would roll production back. Re-dispatch against the current tip."
-            exit 1
-          fi
-          echo "on $canonical, and level with origin. Proceeding."
+          .github/workflows/canonical-guard.sh \
+            "${{ github.ref_name }}" "${{ github.sha }}" "before the test gate"
 
   verify:
     needs: canonical
@@ -158,6 +174,10 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     environment: production
+    # Only this job, and only for the release marker below. Every other job
+    # here reads.
+    permissions:
+      contents: write
     env:
       # `secrets` is not one of the contexts an `if:` on a step may read, so
       # whether the optional pre-flight runs is decided here, once, into a
@@ -165,6 +185,12 @@ jobs:
       HAS_DATABASE_URL: ${{ secrets.BRAIN_DATABASE_URL != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The freshness guard below compares commits, so it needs the
+          # history to compare them in, and the release marker to compare
+          # against. A shallow checkout answers "unrelated histories" to
+          # every ancestry question, which is not a refusal and not a pass.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -212,6 +238,81 @@ jobs:
       # The fallback is taken only for a builder failure. A build that fails
       # because the code does not compile must fail here, once, rather than be
       # compiled again somewhere else to fail identically.
+      # -------------------------------------------------------------------
+      # And the question being level with the branch does not answer
+      # -------------------------------------------------------------------
+      #
+      # The step below says this tree is the tip *now*. It does not say this
+      # tree is not **older than what is already running**, which is the thing
+      # that actually hurts: run 283, 2026-09-21, released `c94bef0` at
+      # 01:02:31 and took two merged pull requests off the live Brain.
+      # `deployed/production` is a lightweight tag this workflow moves
+      # after a release succeeds, so it is Brain's own record of what was last
+      # released rather than an inference from a branch. A commit that is a
+      # strict ancestor of it is a rollback, and a rollback is refused unless
+      # somebody asked for one by name.
+      #
+      # It is written in git alone, deliberately. Reading the running revision
+      # out of `flyctl` would be a better source and a worse dependency: an
+      # unverified CLI shape in the one workflow that ships the product is a
+      # way to break every deploy in order to prevent a rare one.
+      - name: Refuse to overwrite a newer production revision
+        env:
+          ALLOW_ROLLBACK: ${{ github.event.inputs.allow_rollback }}
+        run: |
+          set -euo pipefail
+
+          # The release marker. Absent on the first deploy after this landed,
+          # which is an absence rather than a pass: it is reported and the
+          # branch check above is what stands.
+          if git fetch origin --quiet "+refs/tags/deployed/production:refs/tags/deployed/production" 2>/dev/null; then
+            released=$(git rev-parse --verify --quiet "refs/tags/deployed/production^{commit}" || true)
+          else
+            released=""
+          fi
+
+          if [ -z "$released" ]; then
+            echo "No deployed/production marker yet, so there is nothing to compare against."
+            echo "The freshness check below is what stands. Proceeding."
+            exit 0
+          fi
+
+          echo "last released: $released"
+          echo "this tree:     $GITHUB_SHA"
+
+          if [ "$released" = "$GITHUB_SHA" ]; then
+            echo "This is the commit already released. Re-releasing it is a no-op on what is running."
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor "$GITHUB_SHA" "$released"; then
+            if [ "${ALLOW_ROLLBACK:-no}" = "yes" ]; then
+              echo "::warning::$GITHUB_SHA is older than the released $released. Deploying it anyway, because allow_rollback was set."
+              exit 0
+            fi
+            echo "::error::$GITHUB_SHA is an ancestor of the already-released $released, so this deploy would roll production backwards. If that is what you want, re-dispatch with allow_rollback set to yes."
+            exit 1
+          fi
+
+          echo "ahead of what is released. Proceeding."
+
+      # The guard again, here rather than only at the top.
+      #
+      # Everything above this line — the test gate, the install, the
+      # pre-flight — takes long enough that the branch can move underneath it,
+      # and a run that was legitimately the tip when it started is a rollback
+      # if it is not the tip when it ships. Refusing here costs a re-dispatch;
+      # not refusing costs production going backwards, which this repository
+      # has already paid for twice.
+      #
+      # It is the same script the `canonical` job runs. Two copies of this rule
+      # would drift in the direction nobody sees: the early one fails loudly on
+      # every wrong branch, and this one fires only in a race.
+      - name: The ref must still be the canonical tip, now
+        run: |
+          .github/workflows/canonical-guard.sh \
+            "${{ github.ref_name }}" "${{ github.sha }}" "immediately before flyctl deploy"
+
       - name: Deploy
         id: release
         env:
@@ -233,6 +334,23 @@ jobs:
           echo "::warning::The Depot builder never answered. Building on Fly's own remote builder instead."
           flyctl deploy --ha=false --remote-only --depot=false \
             --build-arg BRAIN_REVISION="$GITHUB_SHA"
+
+      # Written after the release rather than before it, because the marker's
+      # whole meaning is "this commit is what is running". A marker moved by a
+      # deploy that then failed would refuse the very re-deploy that fixes it.
+      #
+      # `--force` because the marker moves forward with each release and is not
+      # history; the history is the commits it has pointed at, which are all
+      # still in the branch. It never fails the run: a release that happened is
+      # a fact, and losing the note about it must not be reported as losing the
+      # release.
+      - name: Record what was released
+        if: success()
+        run: |
+          set -euo pipefail
+          git tag -f deployed/production "$GITHUB_SHA"
+          git push -f origin "refs/tags/deployed/production" || \
+            echo "::warning::The release succeeded but the deployed/production marker could not be pushed. The next deploy will fall back to the branch check."
 
       # When a deploy fails, say why here rather than sending somebody to a
       # dashboard.
@@ -331,11 +449,50 @@ jobs:
       # fixtures are created and disabled within the run, and every assertion
       # is still made from outside through the edge.
       #
-      # `continue-on-error` so that a failure here does not skip the secret
-      # removal below; the run is still failed, explicitly, at the end.
+      # **It is not `continue-on-error`, and it used to be.** The argument was
+      # that a failure here must not skip the secret removal below — correct,
+      # and no longer this step's job to arrange: every step that must survive
+      # a failed verification now guards itself with `always() && release ==
+      # success`, which is strictly better because it also survives this step
+      # crashing rather than failing.
+      #
+      # What the flag cost was the one thing a person actually reads. It sets
+      # the step's *conclusion* to `success` while its `outcome` stays
+      # `failure`, so the job summary, the step list and the API all showed a
+      # green tick on a verification that had just failed — and the run had to
+      # be opened, expanded and read to find out otherwise. The verdict below
+      # was always honest about it; nothing above it was.
+      #
+      # **And it is bounded, because nothing else bounds it.** `flyctl ssh
+      # console` keeps a session open with no clock of its own, the step had
+      # none, and the job's is GitHub's six-hour default.
+      #
+      # When that was written every operator workflow shared this run's
+      # concurrency group, so a probe that never returned was not a slow deploy
+      # but every reading, tick and fleet command queued behind it. The group
+      # was split since — each console workflow holds its own — and the cost is
+      # smaller rather than gone: they wait for an in-flight release through
+      # `.github/actions/await-release`, which is bounded at twenty-five
+      # minutes and then warns and proceeds. So an indefinite probe costs every
+      # operator command a twenty-five-minute wait instead of a queue with no
+      # end, which is still a reason to bound it here.
+      #
+      # Forty-five minutes is set from the one number that was measured rather
+      # than from an incident: run 274's post-restart probe ran **22 minutes**
+      # and completed, and the pre-restart probe before it reached the judge
+      # step in about ten. Double the longest observed pass leaves a slow one
+      # room to finish and still stops an indefinite one.
+      #
+      # **No such indefinite probe has actually been observed**, and an earlier
+      # version of this comment said one had — it claimed run 275 sat here for
+      # over an hour. Measured from the run's own timestamps afterwards, that
+      # step had been going **5.3 minutes** when it was cancelled, which is
+      # ordinary. The bound is a precaution with an argument, not a fix with an
+      # incident behind it, and saying otherwise would be inventing the
+      # measurement this file exists to insist on.
       - name: Prove the live Brain is actually shut
         id: hosted
-        continue-on-error: true
+        timeout-minutes: 45
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -473,7 +630,20 @@ jobs:
       # discovered.
       - name: Prove it survived the restart
         id: hosted_after
-        continue-on-error: true
+        # Bounded for the reason the pre-restart probe is, and this is the step
+        # that demonstrated the need.
+        timeout-minutes: 45
+        # `always()` because the step before it may have failed, and this one
+        # answers a different question: the pre-restart pass says what the new
+        # image refuses, this says what survived. A restart nobody checked is
+        # the erosion the restart step's own comment describes.
+        #
+        # It does depend on that pass in one way — `--leave-beacon` is what
+        # `--check-beacon` looks for — so a pre-restart failure early enough to
+        # skip the beacon makes this fail for a *derived* reason. That is why
+        # the verdict prints both files' own failure lines rather than a count:
+        # two red steps with one cause must not read as two causes.
+        if: always() && steps.release.outcome == 'success'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -485,8 +655,10 @@ jobs:
           set -e
           grep -q '^HOSTED-VERIFICATION: PASS' hosted-after-restart.txt
 
-      # Both verification steps are `continue-on-error` so that neither can skip
-      # the secret removal. The run's verdict is decided here instead.
+      # Neither verification step is `continue-on-error` any more: a failed
+      # check reads as failed, and the steps that must still run say so
+      # themselves. The run's verdict is still decided below, and it is still
+      # the only thing that decides it.
       # -------------------------------------------------------------------
       # A one-packet authorization, run from the release pipeline
       # -------------------------------------------------------------------
@@ -502,18 +674,58 @@ jobs:
       # them but the one. Idempotent by the packet's own state: a repeat run
       # reports the authorization that already exists and rewrites neither its
       # author nor its timestamp.
-      - name: Authorize one packet for RECORD_GAPS
-        if: inputs.authorize_gap_orchestration != '' && inputs.authorize_gap_admin != ''
+      #
+      # `always()` for the reason the two steps above it carry one: this is a
+      # decision somebody made about one packet, it is idempotent, and it has
+      # nothing to do with whether the hosted gate passed. Letting a failed
+      # probe skip it silently would be an authorization that looks applied and
+      # is not — which is worse than either outcome on its own.
+      #
+      # **More than one, because a programme parks more than one.** The live
+      # manufacturing programme runs three packets at a time and two of them
+      # were `NEEDS_HUMAN` at once, each holding a concurrency slot no worker
+      # could ever free — so a step that authorizes exactly one packet answers
+      # half a deadlock and leaves the programme stopped. Two full deploys is
+      # the alternative and it restarts a Brain holding leased work twice to
+      # apply two idempotent writes.
+      #
+      # Each id is authorized by its own call and each one's `GAP-POLICY: OK`
+      # is required, so a list where one id is wrong fails the step naming that
+      # id rather than reporting the ones that worked. The ids are validated
+      # against the shape the database uses before anything is sent, because
+      # they are interpolated into a remote command line.
+      - name: Authorize packets for RECORD_GAPS
+        if: >-
+          always() && steps.release.outcome == 'success'
+          && inputs.authorize_gap_orchestration != ''
+          && inputs.authorize_gap_admin != ''
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          GAP_ORCHESTRATIONS: ${{ inputs.authorize_gap_orchestration }}
+          GAP_ADMIN: ${{ inputs.authorize_gap_admin }}
         run: |
           app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
-          set +e
-          flyctl ssh console --app "$app" \
-            -C "sh /app/scripts/authorize-gap-policy.sh --orchestration ${{ inputs.authorize_gap_orchestration }} --admin ${{ inputs.authorize_gap_admin }}" \
-            2>&1 | tee gap-policy.txt
-          set -e
-          grep -q '^GAP-POLICY: OK' gap-policy.txt
+          failed=''
+          for orc in $(echo "$GAP_ORCHESTRATIONS" | tr ',' ' '); do
+            # Exact rather than a prefix glob: `orc_[0-9a-f]*` accepts
+            # `orc_b` and anything after it, which is not a validation.
+            if ! printf '%s' "$orc" | grep -qE '^orc_[0-9a-f]{20}$'; then
+              echo "::error::\"$orc\" is not an orchestration id. Nothing was sent for it."
+              failed="$failed $orc"
+              continue
+            fi
+            echo "--- $orc ---"
+            set +e
+            flyctl ssh console --app "$app" \
+              -C "sh /app/scripts/authorize-gap-policy.sh --orchestration $orc --admin $GAP_ADMIN" \
+              2>&1 | tee "gap-policy-$orc.txt"
+            set -e
+            grep -q '^GAP-POLICY: OK' "gap-policy-$orc.txt" || failed="$failed $orc"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::The gap-policy authorization did not take for:$failed. Read the output above."
+            exit 1
+          fi
 
       # The release is asked about first, and separately.
       #
@@ -536,8 +748,31 @@ jobs:
             echo "::error::No new image was released, so nothing in this commit is live and the app is still serving the previous version. Read the Deploy step; the checks below it were skipped on purpose."
             exit 1
           fi
-          if [ "$before" != "success" ] || [ "$after" != "success" ]; then
-            echo "::error::The hosted verification did not pass. Read the two steps above."
+          # Name the condition, not the step. "Read the two steps above" is
+          # true and sends somebody to scroll through six hundred passing
+          # lines; the verification prints its own verdict line and the
+          # failures beneath it, so those are what this repeats. A verdict that
+          # carries its evidence is the difference between a red run somebody
+          # reads and one somebody re-runs.
+          failing=''
+          for pass in "before the restart:$before:hosted-verification.txt" "after the restart:$after:hosted-after-restart.txt"; do
+            when=${pass%%:*}
+            rest=${pass#*:}
+            outcome=${rest%%:*}
+            file=${rest#*:}
+            [ "$outcome" = 'success' ] && continue
+            failing="$failing${failing:+, }$when"
+            echo "--- $when, from $file ---"
+            if [ ! -s "$file" ]; then
+              echo "(no output was captured: the check did not run, or the console never opened)"
+              continue
+            fi
+            grep '^HOSTED-VERIFICATION' "$file" || echo "(it never printed a verdict line)"
+            grep -E '^ *(FAIL|Hosted verification could not complete)' "$file" | head -20 \
+              || echo "(no FAIL line: read the step for what it did print)"
+          done
+          if [ -n "$failing" ]; then
+            echo "::error::The hosted verification did not pass ($failing). The failing conditions are printed directly above."
             exit 1
           fi
           echo "The live Brain refused everything it should have, twice, either side of a real restart,"

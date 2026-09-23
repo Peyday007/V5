@@ -25,6 +25,16 @@ export type Route =
   | { name: 'NEEDS_YOU' }
   | { name: 'SITES' }
   | { name: 'CASH' }
+  | { name: 'MACHINES' }
+  /**
+   * Who does the work here.
+   *
+   * Its own address rather than a panel inside Cash, for `PEOPLE`'s reason one
+   * question along: the labor map is true of a project's whole way of working
+   * and outlives any sprint, so hanging it off a section meant to be wound down
+   * in a month or two would take it down with one.
+   */
+  | { name: 'LABOR' }
   | { name: 'SEARCH' }
   /**
    * Where an invitation link lands.
@@ -36,6 +46,15 @@ export type Route =
    */
   | { name: 'INVITE' }
   | { name: 'ENROL' }
+  /**
+   * The break-glass door, and the only address in this shell nothing links to.
+   *
+   * Deliberately unlisted rather than hidden: somebody who needs it has been
+   * told it, and putting a way to it on the sign-in screen would make it the
+   * alternative the sign-in screen exists not to offer. See
+   * `components/Recovery.tsx`.
+   */
+  | { name: 'RECOVERY' }
   | { name: 'DEVICES' }
   /**
    * Who has joined, and what can run.
@@ -76,12 +95,18 @@ export function parseRoute(pathname: string): Route {
       return { name: 'SITES' };
     case 'cash':
       return { name: 'CASH' };
+    case 'machines':
+      return { name: 'MACHINES' };
+    case 'labor':
+      return { name: 'LABOR' };
     case 'search':
       return { name: 'SEARCH' };
     case 'invite':
       return { name: 'INVITE' };
     case 'enrol':
       return { name: 'ENROL' };
+    case 'recovery':
+      return { name: 'RECOVERY' };
     case 'devices':
       return { name: 'DEVICES' };
     case 'people':
@@ -115,12 +140,18 @@ export function pathFor(route: Route): string {
       return '/sites';
     case 'CASH':
       return '/cash';
+    case 'MACHINES':
+      return '/machines';
+    case 'LABOR':
+      return '/labor';
     case 'SEARCH':
       return '/search';
     case 'INVITE':
       return '/invite';
     case 'ENROL':
       return '/enrol';
+    case 'RECOVERY':
+      return '/recovery';
     case 'DEVICES':
       return '/devices';
     case 'PEOPLE':

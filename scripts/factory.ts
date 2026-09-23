@@ -31,17 +31,29 @@ import {
 import {
   answerRelease,
   getRelease,
+  listFactoryEvents,
   listFindings,
   listReviews,
   listSessions,
   listWorkers,
 } from '../server/repos/factoryFleet.ts';
 import { amendContract, approveObjective, submitObjective } from '../server/services/factory/contract.ts';
-import { capacity, probeFleet, readiness, register } from '../server/services/factory/registry.ts';
+import {
+  capacity,
+  probeFleet,
+  readiness,
+  register,
+  RegistryError,
+  setAvailability,
+  WORKER_STATE_REASONS,
+  type WorkerStateReason,
+} from '../server/services/factory/registry.ts';
 import { INITIAL_LANE_TARGET } from '../server/services/factory/scheduler.ts';
 import { installPlan, validatePlan } from '../server/services/factory/planner.ts';
 import { runCampaign, tickAllCampaigns, tickCampaign } from '../server/services/factory/loop.ts';
-import { campaignMetrics } from '../server/services/factory/metrics.ts';
+import { campaignMetrics, FACTORY_EVENT_KINDS } from '../server/services/factory/metrics.ts';
+import { throughputReport } from '../server/services/factory/throughput.ts';
+import { pullRequestFor } from '../server/services/factory/pullRequest.ts';
 import type { FactoryCapability, FactoryWorkerKind } from '../server/domain/factory.ts';
 import { campaignSpecFor } from '../server/services/factory/remote.ts';
 import {
@@ -124,6 +136,53 @@ async function main(): Promise<void> {
         maxConcurrency: Number(flagString(flags, 'concurrency') ?? '1'),
       });
       process.stdout.write(`${worker.name} ${worker.id} ${worker.capabilities.join('/')}\n`);
+      break;
+    }
+
+    /*
+     * The answering transition for a quarantined worker.
+     *
+     * `recordWorkerFailure` quarantines at three consecutive failures and
+     * `capacity()` then gives that worker no free slots at all. Nothing wrote
+     * `AVAILABLE` back — `registerWorker` is `ON CONFLICT DO NOTHING`, so
+     * re-registering under the same name changed nothing, and the one function
+     * that could had no caller anywhere — so three ordinary failures retired a
+     * local-plane worker permanently, repairable only by hand-written SQL, which
+     * invariant 1 forbids. §23 has the same transition one object along for the
+     * dispatch fleet; this is it for the factory's own registry.
+     *
+     * A terminal because §26's line is that reaching the shell is the
+     * authentication, and `--admin` is the attribution: resolved against the
+     * database rather than trusted, because an audit row with no author answers
+     * nothing later.
+     */
+    case 'set-state': {
+      const name = flagString(flags, 'worker') ?? fail('--worker is required');
+      const to = (flagString(flags, 'to') ?? fail('--to is required')) as
+        | 'AVAILABLE'
+        | 'PAUSED'
+        | 'QUARANTINED';
+      const reasons = Object.values(WORKER_STATE_REASONS);
+      const reason = flagString(flags, 'reason') as WorkerStateReason | undefined;
+      if (!reason || !reasons.includes(reason)) {
+        fail(`--reason is required, and is one of: ${reasons.join(', ')}`);
+      }
+
+      /*
+       * Whose authority this carries, resolved rather than accepted. It is
+       * attribution and not authentication — §23's column pair — so it says an
+       * enabled administrator exists who may authorize this, and nothing about
+       * who typed the command.
+       */
+      const admin = flagString(flags, 'admin');
+      const users = await listUsers();
+      const actor = admin
+        ? users.find((one) => one.email === admin && one.isBrainAdmin && !one.disabled)
+        : users.find((one) => one.isBrainAdmin && !one.disabled);
+      if (!actor) fail(admin ? `no enabled administrator with that address` : 'no enabled administrator exists');
+
+      const outcome = await setAvailability({ name, to, reason, actorRef: actor.id });
+      process.stdout.write(`${outcome.note}\n`);
       break;
     }
 
@@ -431,23 +490,36 @@ async function main(): Promise<void> {
       break;
     }
 
-    /** Every campaign in a project, newest first, in one line each. */
+    /*
+     * What campaigns exist. Every project unless `--project` narrows it: this
+     * used to take the first project the list returned, so the question an
+     * operator asks first — what is there — was answered for one project and
+     * silently not for the rest.
+     */
     case 'campaigns': {
       const projectFlag = flagString(flags, 'project');
       const projects = await listProjects();
-      const projectId = projectFlag ?? projects[0]?.id ?? fail('no project exists');
-      const campaigns = await listCampaigns(projectId);
-      if (campaigns.length === 0) process.stdout.write('no campaign in this project\n');
-      for (const campaign of campaigns) {
-        const changeRequest = await getChangeRequest(campaign.changeRequestId);
-        process.stdout.write(
-          `${campaign.id} ${campaign.executionMode} ${campaign.state} ` +
-            `${campaign.prRef ?? '(no pull request)'} — ` +
-            `${(changeRequest?.objective ?? '').slice(0, 70)}\n` +
-            `    ${campaign.stageDetail ?? ''}` +
-            `${campaign.blockerKind ? ` [${campaign.blockerKind}]` : ''}\n`,
-        );
+      if (projects.length === 0) fail('no project exists');
+      const scope = projectFlag ? projects.filter((project) => project.id === projectFlag) : projects;
+      if (projectFlag && scope.length === 0) fail(`no project ${projectFlag}`);
+      let total = 0;
+      for (const project of scope) {
+        const campaigns = await listCampaigns(project.id);
+        if (campaigns.length === 0) continue;
+        process.stdout.write(`${project.id} ${project.name}\n`);
+        for (const campaign of campaigns) {
+          total += 1;
+          const changeRequest = await getChangeRequest(campaign.changeRequestId);
+          process.stdout.write(
+            `  ${campaign.id} ${campaign.executionMode} ${campaign.state} ` +
+              `${campaign.prUrl ?? campaign.prRef ?? '(no pull request)'} — ` +
+              `${(changeRequest?.objective ?? '').slice(0, 70)}\n` +
+              `      ${campaign.stageDetail ?? ''}` +
+              `${campaign.blockerKind ? ` [${campaign.blockerKind}]` : ''}\n`,
+          );
+        }
       }
+      if (total === 0) process.stdout.write('no campaign in scope\n');
       break;
     }
 
@@ -491,6 +563,235 @@ async function main(): Promise<void> {
             `${unit.branch ? `        branch ${unit.branch}${unit.headSha ? ` @ ${unit.headSha.slice(0, 12)}` : ''}\n` : ''}`,
         );
       }
+
+      /*
+       * The rows behind the three counts above.
+       *
+       * `reviews 1, findings 1 (0 open, 1 repaired)` is a true sentence that
+       * answers none of the questions somebody reads a review for: what the
+       * verdict was, which commit it was a verdict about, and — the one this
+       * repository cares about most — what independence tier the lineage
+       * actually supported. §27 is explicit that the tier is reported at what
+       * the lineage supports and never rounded up, and an operator who cannot
+       * read it has to take the rounding on trust.
+       *
+       * Likewise `sessions 13, max observed concurrency 1 (MEASURED)`: on the
+       * hosted plane those rows are derived from Brain's own dispatch and lease
+       * events rather than from a process this Brain timed, so the bin and
+       * generation each one names are what make the derivation checkable.
+       *
+       * Read-only, and printed after the units so the existing shape of this
+       * output is unchanged for anything already reading it.
+       */
+      for (const review of reviews) {
+        process.stdout.write(
+          `  REVIEW round ${review.round} ${review.scope} ${review.verdict} ` +
+            `on ${review.reviewedSha.slice(0, 12)} — independence ${review.independence}\n` +
+            `        session ${review.reviewerSessionId ?? '—'}  ${review.createdAt}\n` +
+            `        ${review.summary.slice(0, 400)}\n`,
+        );
+      }
+      for (const finding of findings) {
+        process.stdout.write(
+          `  FINDING ${finding.severity.padEnd(8)} ${finding.state.padEnd(9)} ` +
+            `${finding.findingKey} (${finding.category})\n` +
+            `        ${finding.statement.slice(0, 400)}\n` +
+            `${finding.resolution ? `        resolved: ${finding.resolution.slice(0, 300)}\n` : ''}`,
+        );
+      }
+      /*
+       * The refusals, which are the answer to *why is this campaign not
+       * moving* and had no reader anywhere.
+       *
+       * `factory_events` is written by every stage and, until this, was read
+       * by `campaignMetrics` for aggregates and by `surfaceBlockedIntegrations`
+       * for a ceiling — and by no operator surface at all. So a completed
+       * integration bin whose report Brain refused recorded a row saying
+       * exactly which of four things went wrong, and nobody could see it. A
+       * record nothing can read is the defect the record was written to close,
+       * one layer along.
+       *
+       * These two kinds here rather than the whole ledger, because this command
+       * answers *what is the state of this campaign* — `factory events` prints
+       * the rest.
+       */
+      const refusals = await listFactoryEvents(campaignId, {
+        kinds: [
+          FACTORY_EVENT_KINDS.integrationNotIngested,
+          FACTORY_EVENT_KINDS.integrationRejected,
+          // The delivery stage's own, because *why does this campaign have no
+          // pull request* is exactly the question this command answers, and a
+          // reader who has to know the kind exists in order to ask for it is
+          // reading a ledger with no reader again.
+          FACTORY_EVENT_KINDS.deliveryNotIngested,
+          // A report Brain could not yet record, and a reviewer refused for
+          // lineage: both cost nothing, and both are why a stage is not moving.
+          FACTORY_EVENT_KINDS.unitRefused,
+          // A tick that threw. The loop reads nothing else about it.
+          FACTORY_EVENT_KINDS.tickFailed,
+        ],
+      });
+      for (const event of refusals) {
+        const detail = (event.detail ?? {}) as Record<string, unknown>;
+        process.stdout.write(
+          `  REFUSED ${event.kind.padEnd(26)} ${event.at}\n` +
+            `        ${String(detail['reason'] ?? detail['means'] ?? detail['message'] ?? '').slice(0, 300)}\n` +
+            `${detail['binId'] ? `        bin ${String(detail['binId'])}\n` : ''}` +
+            `${detail['problems'] ? `        ${JSON.stringify(detail['problems']).slice(0, 400)}\n` : ''}` +
+            `${detail['errors'] ? `        ${JSON.stringify(detail['errors']).slice(0, 400)}\n` : ''}`,
+        );
+      }
+      for (const session of sessions) {
+        process.stdout.write(
+          `  SESSION ${session.role.padEnd(11)} ${session.state.padEnd(9)} ` +
+            `${session.externalSessionId ?? '—'}\n` +
+            `        worker ${session.workerId}  account ${session.accountRef}` +
+            `${session.binId ? `  bin ${session.binId} gen ${session.leaseGeneration}` : ''}\n` +
+            `        ${session.startedAt} -> ${session.endedAt ?? '—'}` +
+            `${session.durationMs === null ? '' : `  ${Math.round(session.durationMs / 1000)}s`}` +
+            `${session.exitReason ? `  ${session.exitReason.slice(0, 120)}` : ''}\n`,
+        );
+      }
+      break;
+    }
+
+    /*
+     * What the factory actually managed, with an evidence class on every number.
+     *
+     * `throughputReport` was reachable at `GET /factory/campaigns/:id/throughput`
+     * and from nowhere else: no screen called it and this door had no command for
+     * it, so the one capability whose whole point is *not* rounding a ceiling up
+     * could be read only by hand-writing an HTTP request. §26's rule is that a
+     * reading an operator takes belongs on a terminal, and `status` beside this
+     * already carries the campaign's own rows.
+     *
+     * Every figure is printed with its class and its basis, including the ones
+     * that are `UNKNOWN` — which is the half that matters. A report that dropped
+     * them would read as a campaign with no queue time rather than as a campaign
+     * nobody measured one for, and `value: null` is never rendered as `0`.
+     */
+    /*
+     * The campaign's own ledger, in the order it was written.
+     *
+     * `factory_events` is where every claim this factory makes about what
+     * happened resolves to — and it had no reader on any operator surface:
+     * `campaignMetrics` aggregates it and `surfaceBlockedIntegrations` counts
+     * one slice of it, and neither prints a row. So a stage that refused a
+     * report, a base that drifted, a unit that failed and a bin that was
+     * created were all recorded and none of them could be looked at.
+     *
+     * Everything, oldest first, because a ledger read out of order is a story
+     * rather than a record. `--kind` narrows it; nothing is hidden by default.
+     */
+    case 'events': {
+      /*
+       * Optional, because not every claim belongs to a campaign. Registering a
+       * worker and moving its availability are facts about the fleet, written
+       * with no campaign — and while this required one, they were recorded and
+       * unreadable. `--kind` still narrows either way.
+       */
+      const campaignId = flagString(flags, 'campaign') ?? null;
+      const kind = flagString(flags, 'kind');
+      const events = await listFactoryEvents(campaignId, kind ? { kinds: [kind] } : {});
+      process.stdout.write(
+        `${campaignId ? `campaign ${campaignId}` : 'every campaign and the fleet'} — ` +
+          `${events.length} event(s)\n`,
+      );
+      for (const event of events) {
+        const detail = JSON.stringify(event.detail ?? {});
+        process.stdout.write(
+          `  ${event.at}  ${event.kind.padEnd(26)} ${event.evidenceClass.padEnd(8)}` +
+            `${event.unitId ? ` unit ${event.unitId}` : ''}` +
+            `${event.workerId ? ` worker ${event.workerId}` : ''}\n` +
+            // Bounded rather than truncated silently: a detail that was cut
+            // says so, because a JSON object that ends mid-key reads as
+            // corruption rather than as a limit.
+            `        ${detail.length > 600 ? `${detail.slice(0, 600)}… (${detail.length} chars)` : detail}\n`,
+        );
+      }
+      break;
+    }
+
+    case 'throughput': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const report = await throughputReport(campaignId);
+      const figure = (label: string, one: { value: number | null; evidence: string; basis: string }): string =>
+        `${label.padEnd(26)} ${(one.value === null ? 'not measured' : String(one.value)).padEnd(14)}` +
+        ` ${one.evidence.padEnd(8)} ${one.basis}\n`;
+      const duration = (label: string, one: { total: { value: number | null; evidence: string; basis: string }; samples: { value: number | null; evidence: string; basis: string }; average: { value: number | null; evidence: string; basis: string } }): string =>
+        figure(`${label} total ms`, one.total) +
+        figure(`${label} samples`, one.samples) +
+        figure(`${label} average ms`, one.average);
+
+      process.stdout.write(
+        `campaign ${report.campaignId}\n` +
+          figure('units per hour', report.unitsPerHour) +
+          duration('session duration', report.sessionDurations) +
+          duration('queue time', report.queueTime) +
+          figure('max observed concurrency', report.maxObservedConcurrency) +
+          figure('concurrency observed', report.concurrency.observed) +
+          // Beside it rather than instead of it: a declared lane target is a
+          // projection and is never reported as throughput.
+          figure('concurrency declared', report.concurrency.declared) +
+          figure('ceiling', report.ceiling) +
+          figure('rate-limited sessions', report.rateLimited.sessions) +
+          figure('rate-limited deferred ms', report.rateLimited.deferredMs),
+      );
+      for (const [heading, entries] of [
+        ['per worker', report.perWorker],
+        ['per role', report.perRole],
+        ['per account', report.perAccountRef],
+      ] as const) {
+        if (entries.length === 0) continue;
+        process.stdout.write(`\n${heading}\n`);
+        for (const entry of entries) {
+          process.stdout.write(
+            `  ${entry.id}${entry.accountRef ? ` (${entry.accountRef})` : ''}\n` +
+              `  ${figure('  sessions', entry.sessions)}` +
+              `  ${figure('  units merged', entry.unitsMerged)}` +
+              `  ${figure('  units per hour', entry.unitsPerHour)}` +
+              `  ${figure('  max concurrency', entry.maxObservedConcurrency)}`,
+          );
+        }
+      }
+      break;
+    }
+
+    /*
+     * The reviewable artifact, in the words a person will read.
+     *
+     * `assemble.ts` "produces the branch, the patch and the body and stops", and
+     * on the local plane that body *is* the deliverable: opening the request
+     * against a remote host is a separately authorized step somebody performs
+     * outside the factory, so the body has to be readable by the person who will
+     * perform it. It was reachable at `GET /factory/campaigns/:id/pull-request`
+     * and by nothing else — no client function, no command — which is the same
+     * shape as `throughput` two cases up and the release decision one screen
+     * along: a complete door with nothing that calls it, which this file has now
+     * had to close three times.
+     *
+     * It renders through `pullRequestFor`, which is the function the route calls,
+     * rather than reading the stored `PR_BODY` artifact. That is deliberate and
+     * it is the same argument `assemble.ts` makes about itself: the artifact is a
+     * snapshot taken when the campaign was assembled, and a second reader with
+     * its own idea of the body is how the stored document and the live route came
+     * to disagree about one campaign in the first place. One derivation, three
+     * readers.
+     *
+     * It publishes nothing. There is no outbound call on this path at all.
+     */
+    case 'pull-request': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const rendered = await pullRequestFor(campaignId);
+      if (!rendered) {
+        // Not an empty body. A campaign whose rows do not resolve into a view has
+        // nothing to render, and printing a blank document would read as one.
+        process.stdout.write(
+          `no reviewable artifact: ${campaignId} did not resolve into a campaign view\n`,
+        );
+        break;
+      }
+      process.stdout.write(`${rendered.title}\n\n${rendered.body}\n`);
       break;
     }
 
@@ -613,6 +914,39 @@ async function main(): Promise<void> {
      * condition has *not* been fixed the stage simply blocks again with the same
      * reason. That is the difference between a way out and an override.
      */
+    /*
+     * Give a unit that ran out of attempts more of them — the answer to
+     * `UNIT_EXHAUSTED_ATTEMPTS`, which had none. Raises and never resets; the
+     * reason is a code from a closed set. See `services/factory/regrant.ts`.
+     */
+    case 'regrant-unit': {
+      const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
+      const unitKey = flagString(flags, 'unit') ?? fail('--unit is required: the unit key');
+      const to = Number(flagString(flags, 'to') ?? '0');
+      const code = flagString(flags, 'why') ?? 'work-corrected';
+      const users = await listUsers();
+      const operator = users.find((candidate) => candidate.isBrainAdmin && !candidate.disabled);
+      if (!operator) fail('no administrator exists to attribute this to');
+      const { regrantUnit } = await import('../server/services/factory/regrant.ts');
+      const outcome = await regrantUnit({
+        campaignId,
+        unitKey,
+        maxAttempts: to,
+        reasonCode: code,
+        operator: `operator:${operator!.id}`,
+      });
+      if (!outcome.ok) {
+        process.stdout.write(`FACTORY REFUSED: regrant-unit — ${outcome.reason}\n`);
+        process.exitCode = 1;
+        break;
+      }
+      process.stdout.write(
+        `regranted ${unitKey} on ${campaignId}: ceiling ${outcome.from} -> ${outcome.to}, ` +
+          `now ${outcome.state} (${code}). The next tick decides what is true.\n`,
+      );
+      break;
+    }
+
     case 'reauthorize': {
       const campaignId = flagString(flags, 'campaign') ?? fail('--campaign is required');
       const REASONS: Record<string, string> = {
@@ -622,6 +956,15 @@ async function main(): Promise<void> {
         'surface-restored':
           'The execution surface that could not reach the repository has been restored where the ' +
           'workers run.',
+        /*
+         * The answer to a stage that failed its bins to exhaustion. The failed
+         * bins keep their rows; the count starts again from this row, and if the
+         * condition was not in fact corrected the stage fails its way back to
+         * the same block.
+         */
+        'stage-corrected':
+          'The condition that failed this stage has been corrected — the contract amended or the ' +
+          'surface fixed — so the stage may be handed out again.',
       };
       const code = flagString(flags, 'why') ?? 'repository-granted';
       const reason = REASONS[code];
@@ -758,11 +1101,61 @@ async function main(): Promise<void> {
     default:
       process.stdout.write(
         'commands: fleet, register, submit, approve, amend, plan, run, tick, tick-all,\n' +
-          '  remote-tick, campaigns, bins, status, answer-bin, reauthorize, retire, release\n',
+          '  remote-tick, campaigns, bins, status, events, throughput, pull-request,\n' +
+          '  set-state,\n' +
+          '  answer-bin,\n' +
+          '  reauthorize, regrant-unit, retire, release\n',
       );
+      // An unknown command is the caller getting it wrong, and it used to be
+      // reported as success — see the verdict line below.
+      process.exitCode = 1;
   }
 
   await closeDatabase();
+
+  /**
+   * The verdict, printed rather than left to an exit code.
+   *
+   * `deploy.yml` gives the reason in its own words — *"the verdict comes from a
+   * line the script printed, not from an exit code that had to survive an SSH
+   * session, a shell and a CLI"* — and `step10.sh` has answered `STEP10: OK`
+   * for the same reason since it was written. This door had neither: `factory.yml`
+   * pipes into `tee`, the pipeline's status is `tee`'s, and nothing anywhere
+   * asserted a thing about the output. Measured on 2026-09-22 against the
+   * deployed image: `factory pull-request` on a build with no such command
+   * printed the usage list and the workflow run went **green**.
+   *
+   * A failure that renders as a pass is the one §47 records as worse than a
+   * gate that did not run, because a green tick is read as evidence. So the
+   * line is printed only where nothing set a failing code — `fail()` has
+   * already exited, and a refusal that set one prints `FACTORY REFUSED` instead
+   * — and `factory.yml` greps for it.
+   */
+  if (!process.exitCode) {
+    process.stdout.write('FACTORY: OK\n');
+  }
 }
 
-await main();
+/**
+ * A refusal reads as a refusal, and anything else reads as a crash.
+ *
+ * `RegistryError` is what the registry raises when it declines — no worker of
+ * that name, a state that is not a state, a compare-and-swap lost to another
+ * operator. Uncaught, every one of those reached the operator as a stack
+ * trace, which is the wrong sentence about a decision the factory made
+ * deliberately, and the workflow could not tell it from a process that died.
+ *
+ * Only that one class is caught, because the distinction is the point: *the
+ * factory refused this* and *the command did not complete* send an operator to
+ * two different places, and dressing an unexpected error as a refusal would
+ * lose the stack that explains it.
+ */
+try {
+  await main();
+} catch (error) {
+  if (error instanceof RegistryError) {
+    process.stderr.write(`FACTORY REFUSED: ${error.message}\n`);
+    process.exit(1);
+  }
+  throw error;
+}

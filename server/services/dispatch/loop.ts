@@ -234,9 +234,14 @@ export async function dispatchTick(
    * intent is one row per (bin, generation) and it is `ON CONFLICT DO NOTHING`,
    * so once a fire has been `SENT` there is no second intent to be had at that
    * generation — and the generation only moves when a worker takes a lease. A
-   * session that never arrives therefore leaves the bin READY with nothing that
-   * could ever come for it, which is the exact state the comment at the top of
-   * this file says the design exists to avoid.
+   * session that never arrives therefore leaves the bin with nothing that could
+   * ever come for it, which is the exact state the comment at the top of this
+   * file says the design exists to avoid.
+   *
+   * Claimable rather than READY, which is the same distinction the `for` loop
+   * below already draws in its own comment: the costlier shape is a worker that
+   * *did* arrive and whose session then ended mid-stage, because that bin is
+   * `LEASED` for ever after and this read used to skip it.
    *
    * The window is `IN_FLIGHT_WINDOW_MS` and it is passed rather than re-stated,
    * because `inFlightByRoutine` owns that number: a dispatch stops being

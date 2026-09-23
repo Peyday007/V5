@@ -17,10 +17,15 @@ import type {
   FactoryCampaign,
   FactoryChangeRequest,
   FactoryFinding,
+  FactoryRelease,
   FactoryReview,
   FactoryWorkUnit,
 } from '../../../server/domain/factory.ts';
-import type { CampaignBriefing } from '../../../server/services/factory/projections.ts';
+import type {
+  ActiveWorkItem,
+  CampaignBriefing,
+} from '../../../server/services/factory/projections.ts';
+import type { CampaignMetrics } from '../../../server/services/factory/metrics.ts';
 import type { RepositoryGrant } from '../../../server/services/factory/repositoryEnvelope.ts';
 import type {
   OnboardResult,
@@ -28,10 +33,13 @@ import type {
 } from '../../../server/services/factory/onboard.ts';
 
 export type {
+  ActiveWorkItem,
   CampaignBriefing,
+  CampaignMetrics,
   FactoryCampaign,
   FactoryChangeRequest,
   FactoryFinding,
+  FactoryRelease,
   FactoryReview,
   FactoryWorkUnit,
   OnboardResult,
@@ -74,7 +82,33 @@ export interface CampaignDetail {
   stage: string;
   stageDetail: string | null;
   blocker: { kind: string; detail: string | null; remedy: string } | null;
+  /**
+   * The release this campaign is waiting on, if it is waiting on one.
+   *
+   * The route has always sent it and this type dropped it, which is how the
+   * second of the factory's two person-only decisions came to have a blocker on
+   * the screen and no way to answer it — §35 records what an unchecked fixture
+   * costs, and a type that silently loses a server field is the same defect one
+   * layer along. It carries the evidence the release was requested with, so the
+   * card can say what is being let out rather than asking a person to decide
+   * about something it declines to describe.
+   */
+  decisionWaiting: FactoryRelease | null;
   campaign: FactoryCampaign;
+  /**
+   * The two fields the route has always sent and this type used to drop.
+   *
+   * `decisionWaiting` was the third, and dropping *it* is what left the
+   * factory's second person-only decision with a blocker on the screen and no
+   * way to answer it. These two are informational rather than a control, so
+   * losing them cost a reader rather than a decision — but the defect is the
+   * same one and it is the type, not the screen: a screen chooses what to
+   * render, and a type that silently loses a server field makes the choice
+   * invisible. `tests/factoryHttp.test.ts` holds this interface against the
+   * route's own response keys now, so the next field cannot go the same way.
+   */
+  activeWork: ActiveWorkItem[];
+  metrics: CampaignMetrics;
   units: FactoryWorkUnit[];
   review: FactoryReview | null;
   openFindings: FactoryFinding[];
@@ -139,7 +173,7 @@ export const FactoryApi = {
     }),
 
   /**
-   * The first of a person's two decisions, and the only one this screen offers.
+   * The first of a person's two decisions.
    *
    * It is what makes the objective and its acceptance conditions immutable, and
    * it is what starts the campaign — so the wording beside the button says both,
@@ -148,5 +182,30 @@ export const FactoryApi = {
   approve: (changeRequestId: string): Promise<ApproveResponse> =>
     api(`/api/factory/change-requests/${encodeURIComponent(changeRequestId)}/approve`, {
       method: 'POST',
+    }),
+
+  /**
+   * The second of a person's two decisions, which this module's own header said
+   * existed and no screen offered.
+   *
+   * A campaign that reaches `AWAITING_RELEASE` parks with the blocker
+   * `AWAITING_HUMAN_RELEASE` — *"the reviewable artifact is ready and a person
+   * has not answered"* — and `Build.tsx` rendered exactly that sentence with
+   * nothing beside it to answer with. §24's escalation nobody can resolve, on
+   * the product surface, at the one stage whose entire purpose is to wait for a
+   * person.
+   *
+   * Both answers, because a card that offers one is not a decision. The server
+   * is guarded on `REQUESTED`, so a second press changes nothing rather than
+   * re-stamping somebody else's answer, and `answered` says which it was.
+   */
+  answerRelease: (
+    campaignId: string,
+    decision: 'APPROVED' | 'REFUSED',
+    reason: string,
+  ): Promise<{ answered: boolean; release: FactoryRelease | null }> =>
+    api(`/api/factory/campaigns/${encodeURIComponent(campaignId)}/release`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, reason }),
     }),
 };

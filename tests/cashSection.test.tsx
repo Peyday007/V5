@@ -1716,6 +1716,18 @@ describe('winding down', () => {
 const SECTIONS = [
   'rs-cash-status',
   'rs-cash-decisions',
+  /*
+   * Work, and the section that did not exist.
+   *
+   * *Your current work* used to be a heading inside *Everything Brain has
+   * found*, over the whole portfolio, so in production it read `1 to act on
+   * now, 40 waiting` above forty market observations. It is a section of its
+   * own now — and it is in this list, which is the point: §36's rule is that a
+   * permission decides what is *inside* a section and never which sections
+   * exist, so a member gets it too, saying that work belongs to whoever owns
+   * an execution job.
+   */
+  'rs-cash-work',
   'rs-cash-best',
   /*
    * The possibility ledger, and it is in this list for the reason the list

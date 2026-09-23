@@ -57,6 +57,11 @@ import { getNode } from '../repos/industry.ts';
 import { seedSubject, retireSubject } from '../services/industry/seed.ts';
 import { industryView } from '../services/industry/view.ts';
 import { isIndustryNodeKind } from '../domain/industry.ts';
+import { getDeal } from '../repos/dealflow.ts';
+import { observe, retire, seedParty } from '../services/dealflow/seed.ts';
+import { dealDetail, dealflowView } from '../services/dealflow/view.ts';
+import { isDealObservationKind, isDealPartyKind } from '../domain/dealflow.ts';
+import { DEAL_OBSERVATION_KINDS, DEAL_PARTY_KINDS } from '../domain/types.ts';
 import { INDUSTRY_NODE_KINDS, type IndustryNodeKind } from '../domain/types.ts';
 import {
   ALWAYS_PROHIBITED_COMMERCIAL,
@@ -100,13 +105,6 @@ import {
   resolveOrCreateCashRoot,
 } from '../services/cash/root.ts';
 import { recordCashEvent } from '../repos/cashMode.ts';
-import {
-  CASH_MECHANISMS,
-  CASH_MODE_STATES,
-  CASH_MONEY_KINDS,
-  type CashMoneyKind,
-} from '../domain/types.ts';
-import type { Outcome } from '../services/cash/opportunities.ts';
 import { composeLedger, rankableOf } from '../services/cash/monetization/ledger.ts';
 import {
   composeSurface,
@@ -139,6 +137,13 @@ import {
   type MonetizationMethod,
   type MonetizationStatus,
 } from '../domain/types.ts';
+import {
+  CASH_MECHANISMS,
+  CASH_MODE_STATES,
+  CASH_MONEY_KINDS,
+  type CashMoneyKind,
+} from '../domain/types.ts';
+import type { Outcome } from '../services/cash/opportunities.ts';
 
 export const cashRouter: Router = Router();
 
@@ -1188,6 +1193,166 @@ cashRouter.patch(
         'Brain stops offering it and reads it as a dead end with your reason. Nothing was ' +
         'destroyed: its evidence, its children and every round ever run against it are ' +
         'exactly where they were, which is what stops it arriving again as a fresh discovery.',
+    };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The cross-border industrial dealflow kernel
+ *
+ * Reading it is any project member's: both sides of the map, every deal and
+ * how far it has got, what the kernel is asking and what it would ask next.
+ * Seeding a party, retiring one and recording what an attempt taught are
+ * ADMIN plus `requirePerson`, the same pair the industry map and the
+ * commercial authority both carry — and for the industry map's reason. `SEED`
+ * is the one party origin Brain itself cannot write, because the schema
+ * requires every other origin to carry the claim that established it; a
+ * machine that could name its own counterparties would be deciding who the
+ * market is.
+ *
+ * The level is not asked for here. It comes from `services/identity/policy.ts`
+ * like every other route's, because §17 is explicit: do not write a role check
+ * into a route handler, add to the policy instead. A worker principal is
+ * refused at these by level, at the reads by `requirePerson`, and at all of
+ * them by principal type.
+ *
+ * Seeding spends nothing and starts nothing. It creates a row; the allocator
+ * decides when that party is asked about, the discovery grant decides whether
+ * that may run, and the evidence gate decides what may be claimed.
+ *
+ * Nothing on this surface contacts anybody, quotes anybody or commits
+ * anything. Acting on a deal is a recorded commercial action under the
+ * standing grant, on the routes that already exist for it.
+ * ------------------------------------------------------------------------ */
+
+cashRouter.get(
+  '/projects/:projectId/cash/dealflow',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return dealflowView(project.id);
+  }),
+);
+
+cashRouter.get(
+  '/projects/:projectId/cash/dealflow/:dealId',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const detail = await dealDetail({ projectId: project.id, dealId: pathId(req, 'dealId') });
+    // The same 404 a deal that never existed gives, because a deal id in
+    // somebody else's operation must not be distinguishable from an invented
+    // one — invariant 23, at a foreign key.
+    if (!detail) throw notFound('No deal with that id.');
+    return detail;
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/dealflow/parties',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const kindRaw = requiredString(body['kind'], 'kind');
+    if (!isDealPartyKind(kindRaw)) {
+      // An unknown field refuses the whole thing rather than being dropped:
+      // `proposal.ts`'s rule, at the table that decides who the market is.
+      throw badRequest(
+        `"${kindRaw}" is not a side of a transaction. The set is fixed in code: ` +
+          `${DEAL_PARTY_KINDS.join(', ')}.`,
+      );
+    }
+
+    const result = await seedParty({
+      projectId: project.id,
+      actorRef: principal.id,
+      kind: kindRaw,
+      name: requiredString(body['name'], 'name'),
+      country: optionalString(body['country'], 'country') ?? null,
+      equipmentClass: requiredString(body['equipmentClass'], 'equipmentClass'),
+      note: optionalString(body['note'], 'note') ?? null,
+    });
+
+    return {
+      party: result.party,
+      created: result.created,
+      message: result.created
+        ? `${result.party.name} is on the map. Brain decides when to ask about them; nothing ` +
+          'has been spent, no research has started and nobody has been contacted.'
+        : `${result.party.name} was already on the map for this class, so nothing changed. ` +
+          'How Brain came to know about them is history, and naming them again does not ' +
+          'rewrite it.',
+    };
+  }),
+);
+
+cashRouter.patch(
+  '/projects/:projectId/cash/dealflow/parties/:partyId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const party = await retire({
+      projectId: project.id,
+      actorRef: principal.id,
+      partyId: pathId(req, 'partyId'),
+      reason: requiredString(body['reason'], 'reason'),
+    });
+    if (!party) throw notFound('No party with that id.');
+
+    return {
+      party,
+      message:
+        'Brain stops offering them and reads them as a dead end with your reason. Nothing was ' +
+        'destroyed: their evidence, their deals and every round ever run about them are ' +
+        'exactly where they were, which is what stops them arriving again as a fresh ' +
+        'discovery.',
+    };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/dealflow/observations',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const kindRaw = requiredString(body['kind'], 'kind');
+    if (!isDealObservationKind(kindRaw)) {
+      throw badRequest(
+        `"${kindRaw}" is not a kind of outcome this kernel records. The set is fixed in ` +
+          `code: ${DEAL_OBSERVATION_KINDS.join(', ')}.`,
+      );
+    }
+
+    const dealId = optionalString(body['dealId'], 'dealId') ?? null;
+    if (dealId) {
+      const deal = await getDeal(dealId);
+      if (!deal || deal.projectId !== project.id) throw notFound('No deal with that id.');
+    }
+
+    const observation = await observe({
+      projectId: project.id,
+      actorRef: principal.id,
+      dealId,
+      kind: kindRaw,
+      jurisdiction: optionalString(body['jurisdiction'], 'jurisdiction') ?? null,
+      equipmentClass: optionalString(body['equipmentClass'], 'equipmentClass') ?? null,
+      statement: requiredString(body['statement'], 'statement'),
+    });
+
+    return {
+      observation,
+      message:
+        'Recorded as one observation. Whether several of these amount to a rule is derived ' +
+        'when somebody reads them, with the sample size printed beside it — Brain does not ' +
+        'store a generalization, because a stored rule is one nobody can see the sample ' +
+        'behind. It gates nothing: no deal is refused and no question is skipped because of ' +
+        'it.',
     };
   }),
 );

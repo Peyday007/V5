@@ -53,6 +53,7 @@ import { describePersistence, persistenceConfig } from '../server/config.ts';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ModernMcpClient } from './mcpModernClient.ts';
+import { boundedRequest, type BoundedReply } from './boundedRequest.ts';
 import { closeDatabase, initDatabase } from '../server/db/database.ts';
 import { listBins, terminateUnleasedBin } from '../server/repos/bins.ts';
 import {
@@ -84,6 +85,7 @@ import {
   completeWork,
   enqueueWork,
   getWorkItem,
+  heartbeatWork,
   releaseWork,
 } from '../server/repos/workQueue.ts';
 import { getDb } from '../server/db/database.ts';
@@ -121,6 +123,8 @@ import {
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { readObject, storageKeyOf } from '../server/services/storage.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
+import { listUncertainties } from '../server/repos/researchIntelligence.ts';
+import { researchIntelligenceView } from '../server/services/research/intelligence/view.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import type { Project, WorkerScope } from '../server/domain/types.ts';
 
@@ -235,45 +239,46 @@ async function call(
   if (init.origin) headers['origin'] = init.origin;
 
   /*
-   * An explicit bound with a named failure, because the default one is silent.
+   * An explicit bound with a named failure — and `fetch` could not give one.
    *
-   * This helper passed no `signal`, so every request carried Node's own
-   * default — measured at **300.8 seconds**, throwing `fetch failed` with
-   * cause `UND_ERR_HEADERS_TIMEOUT`. Six deploys have died at the judge audit
-   * step, two of them reporting exactly that at 5m18s and 5m23s, and the
-   * repository recorded the shape as a work item losing a five-minute lease.
-   * It is not: the lease is the server's and this is the client giving up, and
-   * an unattributable `fetch failed` is what let the two readings look alike
-   * for five runs.
+   * This helper grew `signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)` after
+   * six deploys died at the judge audit step, on a comment that named the
+   * mechanism correctly: no bound meant Node's own default, measured at
+   * **300.8 seconds**, thrown as `fetch failed` with cause
+   * `UND_ERR_HEADERS_TIMEOUT`. What that change could not do is *apply*. An
+   * `AbortSignal` and undici's `headersTimeout` are two different bounds, the
+   * second defaults to five minutes, and it is the one that fires — so run 274
+   * gave up 320 seconds after the adversarial pass while reporting, in words,
+   * that it had waited nine hundred.
    *
-   * **This is not a fix for the slowness and must not be read as one.** The
-   * judge pass takes longer than five minutes and nobody knows how much
-   * longer, because nothing has ever waited long enough to find out. The bound
-   * is set where the next occurrence either finishes — and the timestamps say
-   * what it costs — or fails naming the request and the wait, which is a
-   * measurement rather than a mystery. Raising a timeout past a real slowness
-   * is how a slow thing becomes a permanent one nobody looks at.
+   * A bound that does not reach the request it exists for is not a bound, and
+   * one that reports a wait it never performed is a false measurement on top.
+   * `boundedRequest` is `node:https`, where the only clock is this one.
+   *
+   * **This is still not a fix for the slowness and must not be read as one.**
+   * The judge pass takes longer than five minutes and nobody yet knows how
+   * much longer, because until now nothing had actually waited past five. The
+   * bound is set where the next occurrence either finishes — and the
+   * timestamps say what it costs — or fails naming the request and the wait it
+   * really performed.
    */
-  let response: Response;
+  let response: BoundedReply;
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await boundedRequest(`${base}${path}`, {
       method: init.method ?? 'GET',
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      redirect: 'manual',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
   } catch (error) {
-    const cause = (error as { cause?: { code?: string } }).cause?.code;
     throw new Error(
-      `${init.method ?? 'GET'} ${path} did not answer within ` +
-        `${Math.round(REQUEST_TIMEOUT_MS / 1000)}s ` +
-        `(${error instanceof Error ? error.message : String(error)}` +
-        `${cause ? `, ${cause}` : ''}). The request was not refused; nothing answered it.`,
+      `${init.method ?? 'GET'} ${path}: ` +
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        'The request was not refused; nothing answered it.',
       { cause: error },
     );
   }
-  const body = await response.text();
+  const body = response.body;
   let json: unknown = null;
   try {
     json = JSON.parse(body);
@@ -283,7 +288,7 @@ async function call(
   return {
     status: response.status,
     body,
-    cookie: response.headers.get('set-cookie'),
+    cookie: response.headers['set-cookie'] ?? null,
     json,
   };
 }
@@ -711,6 +716,87 @@ async function anonymousIsRefused(fixtures: Fixtures): Promise<void> {
   );
 }
 
+/**
+ * What an unauthenticated person is actually served.
+ *
+ * The rest of this script asks the API questions. This asks the **bundle**,
+ * because both defects it has been written for were screens that no API check
+ * could see.
+ *
+ * The first was a password form under a device button. The second was the
+ * device button with nothing beside it: `/api/auth/passkey/verify` worked
+ * perfectly the whole time, and the owner still could not get in, because
+ * their browser refused the WebAuthn operation and the screen had no second
+ * control. **A door that only one kind of hardware can open is a locked door
+ * to everybody else**, and the API cannot tell you that.
+ *
+ * Read from the served assets rather than from the repository, so what is
+ * asserted is what this deployment hands a browser rather than what the tree it
+ * was built from says. §33 records why that distinction earns its place here.
+ *
+ * It classifies rather than bans. A bundle contains the enrolment and device
+ * screens deliberately, so what is looked for is the sign-in screen's own
+ * words: the PIN it must ask for, and the device sign-in it must not.
+ */
+async function signInSurfaceAsksForAPin(): Promise<void> {
+  console.log('\nThe sign-in screen, as it is served');
+
+  const index = await fetch(`${base}/`, { redirect: 'manual' });
+  const html = await index.text();
+  const sources = [...html.matchAll(/src="([^"]+\.js)"/g)].map((match) => match[1]!);
+  record(
+    'the page names a script to read',
+    sources.length > 0,
+    sources.length > 0 ? sources.join(', ') : 'no module script in the served page',
+  );
+
+  let bundle = '';
+  for (const source of sources) {
+    const asset = await fetch(new URL(source, base).toString(), { redirect: 'manual' });
+    if (asset.ok) bundle += await asset.text();
+  }
+  record('the script itself is served', bundle.length > 0, `${bundle.length} bytes`);
+  if (bundle.length === 0) return;
+
+  for (const phrase of ['SIX-DIGIT PIN', 'YOUR NAME OR EMAIL']) {
+    const present = bundle.includes(phrase);
+    record(
+      `the sign-in screen asks for ${phrase.toLowerCase()}`,
+      present,
+      present ? 'present' : 'the ordinary way in is missing from the served bundle',
+    );
+  }
+
+  const deviceButton = bundle.includes('SIGN IN WITH YOUR DEVICE');
+  record(
+    'the sign-in screen demands no device',
+    !deviceButton,
+    deviceButton
+      ? 'SIGN IN WITH YOUR DEVICE is still being served, so a browser that refuses WebAuthn is still locked out'
+      : 'absent',
+  );
+
+  const passwordAlternative = bundle.includes('OR WITH A PASSWORD');
+  record(
+    'the sign-in screen offers no password beside it',
+    !passwordAlternative,
+    passwordAlternative ? 'the password alternative is still being served' : 'absent',
+  );
+
+  // And the door itself answers, from outside any session. An unknown identity
+  // is refused rather than erroring, which is what says the route is wired.
+  const probe = await call('/api/auth/pin', {
+    method: 'POST',
+    origin: base,
+    body: { identity: 'nobody-at-all@brain.invalid', pin: '000000' },
+  });
+  record(
+    'the PIN door answers an unknown identity with a refusal',
+    probe.status === 401,
+    `${probe.status}`,
+  );
+}
+
 async function humanAuthentication(fixtures: Fixtures): Promise<string> {
   console.log('\nSigning in');
 
@@ -1058,6 +1144,283 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
     'a member cannot grant commercial authority',
     grant.status === 404 || grant.status === 403,
     `${grant.status}`,
+  );
+}
+
+/**
+ * The manufacturing kernel's door, on the released image, creating nothing.
+ *
+ * ---------------------------------------------------------------------------
+ * Why this check does not start a programme
+ * ---------------------------------------------------------------------------
+ *
+ * A release gate that started one would leave a real programme, a real research
+ * grant and a real set of questions behind in the Brain it was verifying —
+ * every deploy, for ever. What is worth proving here is the **boundary**, and
+ * the boundary is provable from refusals: a project you may not see answers
+ * byte-for-byte what a project that does not exist answers, a machine is
+ * refused by principal type at the reads as well as the writes, and the two
+ * person-only writes are refused to it.
+ *
+ * So nothing below is a POST that succeeds. The one thing it reads that *is* a
+ * fact about the release is which routes exist at all — a 404 from
+ * `requireProject` and a 404 from Express having no such route are the same
+ * status, so the 200 from a project the member really may read is the reading
+ * that would notice the router being dropped from the build.
+ *
+ * ---------------------------------------------------------------------------
+ * What the comparison compares, and why it moved
+ * ---------------------------------------------------------------------------
+ *
+ * It used to hold *a project with no programme* against *a project you may not
+ * see*, and those differed: `This project has no manufacturing programme.`
+ * against `No project with that id.` — an oracle in the body, reported on every
+ * deploy, and correctly so. The route's repair was to stop composing the first
+ * sentence at all: a project you may read has no programme is an ordinary
+ * answer rather than a refusal, so it is a 200 with `programme: null`.
+ *
+ * Which leaves the pair this gate should have been comparing all along, and it
+ * is strictly the stronger one: a project that is real and not yours, against
+ * an id that is not a project at all. Those two must be indistinguishable, and
+ * nothing about the first pair ever established that.
+ */
+/**
+ * The labor kernel's door, and the two fields a screen depends on.
+ *
+ * `manufacturingBoundary`'s shape and its reasons, one kernel along, with one
+ * addition that is the point of it: this Brain grew a *product surface* for the
+ * labor map, and the screen is only usable because the read carries
+ * `capabilities` — what a control may be offered for, decided by
+ * `decideProjectAccess` rather than by the browser's one role flag — and
+ * `vocabulary`, the closed sets the route validates against, travelling down so
+ * the form and the validator are one object.
+ *
+ * Asserted here because a component suite proves a screen renders what it was
+ * handed and a service suite proves the service composes it, and neither can
+ * say the deployed Brain serves it. §33 records what that gap costs: a change
+ * that reached every fixture in `tests/` and not the script that runs against
+ * production, so the whole suite passed and the release gate refused its own
+ * packet.
+ */
+async function laborBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nThe labor kernel, as a member and as a machine');
+  if (!cookie) {
+    record('labor boundary', false, 'skipped: there was no session to test with');
+    return;
+  }
+
+  const mine = await call(`/api/projects/${fixtures.scope.id}/labor`, { cookie });
+  expectStatus('a project the member may read answers the labor read', mine.status, 200);
+  const body = (mine.json ?? {}) as Record<string, unknown>;
+
+  // The reading itself: §13's six are composed even on an empty map, and the
+  // summary is the sentence `npm run report:labor` prints.
+  record(
+    'and carries the reading, with its own summary sentence',
+    typeof body['summary'] === 'string' && Array.isArray(body['measurements']),
+    `summary=${String(body['summary']).slice(0, 60)}`,
+  );
+
+  /*
+   * An unknown is never a number. Four of §11's figures cannot be measured, and
+   * the value the server sends for them is `null` — never `0`, which is the
+   * figure somebody would quote in a decision about whether to keep employing
+   * a person.
+   */
+  const figures = (body['measurements'] ?? []) as { value: unknown; evidence: unknown }[];
+  const unknown = figures.filter((one) => one.evidence === 'UNKNOWN');
+  record(
+    'every unmeasured figure carries null rather than zero',
+    unknown.length >= 4 && unknown.every((one) => one.value === null),
+    `${unknown.length} UNKNOWN, values=${JSON.stringify(unknown.map((one) => one.value))}`,
+  );
+
+  /*
+   * The two fields the screen cannot work without, which is what says this
+   * deployment is serving the surface rather than only the kernel underneath
+   * it.
+   */
+  const capabilities = (body['capabilities'] ?? null) as Record<string, unknown> | null;
+  const vocabulary = (body['vocabulary'] ?? null) as Record<string, unknown> | null;
+  record(
+    'the read decides what a control may be offered for',
+    capabilities !== null &&
+      typeof capabilities['mayShapeTheMap'] === 'boolean' &&
+      typeof capabilities['mayRecordWhoProduces'] === 'boolean',
+    JSON.stringify(capabilities)?.slice(0, 120) ?? 'absent',
+  );
+  /*
+   * And says *why not* exactly when there is a why not. Asserted as the
+   * invariant rather than as a value, because whether this member administers
+   * this project is a fact about the fixture rather than about the contract —
+   * §35's rule is that a control somebody may not use is disabled carrying the
+   * server's reason, and a reason present on an allowed control would be as
+   * wrong as one missing from a refused one.
+   */
+  record(
+    'and gives a reason exactly when it withholds one',
+    capabilities !== null &&
+      (capabilities['mayShapeTheMap'] === true
+        ? capabilities['because'] === null
+        : typeof capabilities['because'] === 'string'),
+    `mayShapeTheMap=${String(capabilities?.['mayShapeTheMap'])} because=${String(capabilities?.['because']).slice(0, 60)}`,
+  );
+
+  const layers = (vocabulary?.['productionLayers'] ?? []) as string[];
+  const human = (vocabulary?.['humanLayers'] ?? []) as string[];
+  const reasons = (vocabulary?.['humanReasons'] ?? []) as string[];
+  record(
+    'the closed sets travel down with the reading',
+    layers.length > 0 &&
+      reasons.length > 0 &&
+      human.length > 0 &&
+      human.every((one) => layers.includes(one)) &&
+      human.length < layers.length,
+    `layers=${layers.length} human=${human.length} reasons=${reasons.length}`,
+  );
+
+  // Invariant 23 at this door: forbidden and absent are one body.
+  const invented = await call(`/api/projects/prj_${'0'.repeat(32)}/labor`, { cookie });
+  expectStatus('an id that is not a project answers not-found', invented.status, 404);
+  if (fixtures.holdout) {
+    const theirs = await call(`/api/projects/${fixtures.holdout.id}/labor`, { cookie });
+    expectStatus('and so does a project this member may not see', theirs.status, 404);
+    const same =
+      theirs.status === invented.status &&
+      JSON.stringify(theirs.json) === JSON.stringify(invented.json);
+    record(
+      'forbidden and non-existent are the same body, not just the same status',
+      same,
+      same
+        ? 'byte-identical'
+        : `forbidden=${JSON.stringify(theirs.json)} absent=${JSON.stringify(invented.json)}`,
+    );
+  }
+
+  // A machine is refused at the read, by principal type, which is the half
+  // `requirePerson` adds above the policy module's own level check.
+  const machineReads = await call(`/api/projects/${fixtures.scope.id}/labor`, {
+    bearer: fixtures.credential,
+  });
+  record(
+    'a worker is refused the labor read by principal type',
+    machineReads.status === 404,
+    `status=${machineReads.status}`,
+  );
+}
+
+async function manufacturingBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
+  console.log('\nThe manufacturing kernel, as a member and as a machine');
+  if (!cookie) {
+    record('manufacturing boundary', false, 'skipped: there was no session to test with');
+    return;
+  }
+
+  /*
+   * A project the member genuinely may read, with no programme on it.
+   *
+   * 200 with `programme: null`. That is the reading that says the router is
+   * mounted at all — every other answer at this door is a 404, and Express
+   * gives a 404 to a path it has never heard of.
+   */
+  const mine = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, { cookie });
+  expectStatus('a project the member may read answers the programme read', mine.status, 200);
+  record(
+    'and says there is no programme rather than refusing',
+    mine.json !== null &&
+      typeof mine.json === 'object' &&
+      'programme' in (mine.json as Record<string, unknown>) &&
+      (mine.json as { programme: unknown }).programme === null,
+    JSON.stringify(mine.json)?.slice(0, 120) ?? 'no body',
+  );
+
+  /*
+   * And the pair that has to be indistinguishable: a real project this member
+   * may not see, against an id that is not a project at all.
+   *
+   * Compared rather than asserted, because a status that matches while the
+   * body differs is still an oracle — ask for an id you guessed and the
+   * wording tells you whether it is real.
+   */
+  const invented = await call(`/api/projects/prj_${'0'.repeat(32)}/manufacturing`, { cookie });
+  expectStatus('an id that is not a project answers not-found', invented.status, 404);
+  if (fixtures.holdout) {
+    const theirs = await call(`/api/projects/${fixtures.holdout.id}/manufacturing`, { cookie });
+    expectStatus('and so does a project this member may not see', theirs.status, 404);
+    const same =
+      theirs.status === invented.status &&
+      JSON.stringify(theirs.json) === JSON.stringify(invented.json);
+    record(
+      'forbidden and non-existent are the same body, not just the same status',
+      same,
+      same
+        ? 'byte-identical'
+        : `forbidden=${JSON.stringify(theirs.json)} absent=${JSON.stringify(invented.json)}`,
+    );
+  }
+
+  /*
+   * A machine is refused at the **read**, which is wider than the policy
+   * module's own refusal and is the half `requirePerson` adds.
+   *
+   * The credential used here is the one that authenticates and holds the scope
+   * for this project, so a refusal means *a machine may not do this* rather
+   * than *this credential is dead* — which the check above it has already
+   * established by getting a 200 out of it elsewhere.
+   */
+  const machineReads = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, {
+    bearer: fixtures.credential,
+  });
+  record(
+    'a worker is refused the manufacturing read by principal type',
+    machineReads.status === 404 || machineReads.status === 403,
+    `status=${machineReads.status}`,
+  );
+
+  /*
+   * And the two person-only writes are refused to it as well.
+   *
+   * Neither of these creates anything on success, because neither succeeds:
+   * starting a programme and recording a held capability are both ADMIN plus
+   * `requirePerson`, and a worker is refused by level *and* by type. A 200
+   * from either would mean a machine had just started a programme in the Brain
+   * this gate is verifying, which is exactly the failure worth catching here.
+   */
+  const machineStarts = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, {
+    method: 'POST',
+    bearer: fixtures.credential,
+    body: {
+      objective:
+        'A release gate proving a machine cannot start a programme. If this ever succeeds, ' +
+        'the boundary is gone and this row is the evidence.',
+    },
+  });
+  record(
+    'a worker cannot start a manufacturing programme',
+    machineStarts.status !== 200 && machineStarts.status !== 201,
+    `status=${machineStarts.status}`,
+  );
+
+  const machineHolds = await call(
+    `/api/projects/${fixtures.scope.id}/manufacturing/capabilities`,
+    {
+      method: 'POST',
+      bearer: fixtures.credential,
+      body: { name: 'release gate', note: 'a machine must not be able to record this' },
+    },
+  );
+  record(
+    'a worker cannot record a capability as held',
+    machineHolds.status !== 200 && machineHolds.status !== 201,
+    `status=${machineHolds.status}`,
+  );
+
+  // Nothing was created by any of the above, read back from the Brain itself.
+  const after = await call(`/api/projects/${fixtures.scope.id}/manufacturing`, { cookie });
+  record(
+    'and still no programme exists on that project',
+    after.status === 200 && (after.json as { programme?: unknown } | null)?.programme === null,
+    `status=${after.status} ${JSON.stringify(after.json)?.slice(0, 80) ?? ''}`,
   );
 }
 
@@ -1458,6 +1821,65 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
 
   await worker.call('brain_complete_work', { ...proofOf(verifyClaim), summary: 'gated' });
 
+  /* --- The judgement layer, on the released image ----------------------- */
+  /*
+   * Read from rows rather than asserted about code, and read *here* because
+   * this is the first moment the runner has advanced a real packet on this
+   * server: the questions were seeded when the plan landed and the disposition
+   * moved when the gate answered.
+   *
+   * §33's lesson is the reason it is in this script at all. A change that
+   * reaches every fixture in `tests/` and not the scripted worker is a change
+   * whose release gate cannot see it — which is how a required field reached
+   * production and refused the very packet the gate submits.
+   */
+  {
+    const questions = await listUncertainties(orchestrationId);
+    record(
+      'the packet carries a decision-relevant question per planned fragment',
+      questions.length >= planned.length,
+      `${questions.length} question(s) for ${planned.length} fragment(s)`,
+    );
+    const settled = questions.filter((one) => one.disposition === 'RESOLVED');
+    record(
+      'and the gate answering a fragment settles the question it was asking',
+      settled.length >= 1 && settled.every((one) => one.beliefBasis === 'EVIDENCE'),
+      settled.length >= 1
+        ? `${settled.length} settled on evidence`
+        : `none settled of ${questions.length}`,
+    );
+    record(
+      'every closed question says why it closed, rather than only that it did',
+      questions
+        .filter((one) => one.disposition !== 'OPEN' && one.disposition !== 'INVESTIGATING')
+        .every((one) => (one.dispositionReason ?? '').length > 0),
+      `${questions.filter((one) => one.dispositionReason).length} of ${questions.length} carry a reason`,
+    );
+
+    /*
+     * Reading the mental state performs nothing. Asserted against the queue
+     * rather than stated in a comment, because a projection that enqueued
+     * something would make opening a page a decision.
+     */
+    const before = (await listWorkItems(fixtures.scope.id, { limit: 200 })).length;
+    const orchestration = await getOrchestration(orchestrationId);
+    const view = orchestration ? await researchIntelligenceView(orchestration) : null;
+    const after = (await listWorkItems(fixtures.scope.id, { limit: 200 })).length;
+    record(
+      'reading what Brain thinks it is researching changes nothing',
+      view !== null && before === after,
+      `${before} work item(s) before and ${after} after`,
+    );
+    record(
+      'and reports decisive coverage with its denominator rather than a bare percentage',
+      view !== null && view.sufficiency.decisive.total >= 0 && view.understanding !== null,
+      view
+        ? `${view.sufficiency.decisive.settled}/${view.sufficiency.decisive.total} decisive · ` +
+          `${view.sufficiency.verdict}`
+        : 'no view',
+    );
+  }
+
   /* --- The synthesis, and what it may cite ------------------------------ */
 
   const synthClaim = await claimResearch(fixtures, 'RESEARCH_SYNTHESIZE', orchestrationId);
@@ -1597,7 +2019,10 @@ async function researchChecks(fixtures: Fixtures): Promise<void> {
                 confidence: 0.5,
               },
             };
-    const result = await roleWorker.call('brain_submit_audit', { ...proofOf(auditClaim), ...body });
+    const result = await roleWorker.call('brain_submit_audit', {
+      ...proofOf(auditClaim),
+      ...body,
+    });
     if (result['role'] === role) auditRolesRun += 1;
     if (role !== 'JUDGE') {
       record(
@@ -1744,6 +2169,7 @@ async function claimResearch(
     credentialId,
     scopes: [{ projectId: fixtures.scope.id, scopes: RESEARCH_SCOPES }],
     workTypes: [workType],
+    leaseMs: RESEARCH_LEASE_MS,
   });
   if (!claimed) return null;
 
@@ -1773,6 +2199,35 @@ function proofOf(claimed: { workItemId: string; leaseId: string; leaseGeneration
     lease_generation: claimed.leaseGeneration,
   };
 }
+
+/**
+ * How long a research work item is leased for, and why a beat cannot do this.
+ *
+ * `DEFAULT_LEASE_MS` is five minutes and the judge's `brain_submit_audit` has
+ * been measured at 9m19s, 9m22s and 9m44s, so the lease lapses mid-submission
+ * and the `brain_complete_work` after it is refused `FENCE_LOST`.
+ *
+ * The obvious remedy is a heartbeat, and **it cannot work here** — that is a
+ * measured fact rather than a preference, and it cost two deploys to learn.
+ * Every mutation is fenced by `proveLeaseOwnership`, which is an
+ * `UPDATE work_items SET updated_at = ? WHERE <owned>` **inside the effect's
+ * own transaction** (§20: the fence is at the commit boundary). So the
+ * submission's first act is to write this row and hold the lock on it for the
+ * whole nine minutes. A concurrent beat's `UPDATE … WHERE lease_expires_at >
+ * now()` matches on its own snapshot, so Postgres makes it *block* on that
+ * lock rather than skip; when the lock is finally granted at commit it
+ * re-evaluates against the new row version, finds the lease long expired, and
+ * updates **zero rows**. The beat is not refused loudly — it simply does
+ * nothing, nine minutes late.
+ *
+ * So the lease has to be right when it is taken. That is an estimate made
+ * before the work starts, which is the weaker mechanism in general — but this
+ * caller is a scripted client whose one long call is bounded and measured,
+ * unlike a real worker whose duration nobody knows. An hour is what the two
+ * other claim sites in this file already use; the measured ceiling is a sixth
+ * of it.
+ */
+const RESEARCH_LEASE_MS = 60 * 60 * 1000;
 
 /**
  * Step 12A — Russell, against the deployment.
@@ -2687,6 +3142,11 @@ async function mcpChecks(fixtures: Fixtures): Promise<void> {
     'brain_submit_synthesis',
     'brain_get_audit_brief',
     'brain_submit_audit',
+    // The one door a worker's judgement about the *plan* comes through. Named
+    // here for the same reason as the rest: a count passes when a tool is
+    // renamed, and renaming one the connector already knows is exactly the
+    // change that breaks a live worker and nothing else.
+    'brain_propose_plan_revision',
   ];
   const missingResearch = RESEARCH_TOOL_NAMES.filter((name) => !modernNames.includes(name));
   record(
@@ -3693,6 +4153,38 @@ async function main(): Promise<void> {
    */
   if (!process.env['BRAIN_DATABASE_POOL_SIZE']) process.env['BRAIN_DATABASE_POOL_SIZE'] = '2';
 
+  /**
+   * And a patience to match it, because the sentence above is wrong about the
+   * concurrency and the measurement says by how much.
+   *
+   * "The only concurrency here is the six-way idempotency race" was true when
+   * it was written and is not true now. Deploy 265 and deploy 277 both failed
+   * their post-restart pass on `pg-pool`'s checkout timeout with the counts
+   * read at the instant of failure: `2/2 connection(s) in use, 0 idle, **380**
+   * caller(s) waiting, ceiling 2` and `383 caller(s) waiting, ceiling 2`. That
+   * is a fan-out of the order of the live archive — 399 readable documents on
+   * the same run — queued behind two connections, which is the pool doing
+   * exactly what a pool of two is for.
+   *
+   * Pre-restart the identical section got through it in nineteen seconds; the
+   * tail caller was inside ten and nothing was reported. Post-restart, with a
+   * freshly booted Brain replaying its own ticks against the same pooler, it
+   * was not. So the ten-second wall is what separates the two runs, and a wall
+   * that turns correct serialization into "the database is unreachable" is
+   * answering a different question from the one it was put there for.
+   *
+   * **Raising it fixes nothing about the fan-out**, and it is not claimed to.
+   * The ceiling is deliberately not raised either: two plus the Brain's own
+   * ten is twelve of the Supabase pooler's fifteen session-mode clients, and
+   * spending that budget to shorten a queue would trade a legible timeout for
+   * `EMAXCONNSESSION` on whichever statement happened to be running. What
+   * changes is only that this process, which chose a small pool knowing why,
+   * now also says how long it is willing to wait for it.
+   */
+  if (!process.env['BRAIN_DATABASE_CONNECT_TIMEOUT_MS']) {
+    process.env['BRAIN_DATABASE_CONNECT_TIMEOUT_MS'] = '120000';
+  }
+
   await initDatabase();
   /**
    * The store, opened explicitly.
@@ -3721,9 +4213,14 @@ async function main(): Promise<void> {
     if (phase === 'check' || phase === 'both') await checkFactoryBeacon(phase === 'check');
 
     await anonymousIsRefused(fixtures);
+    await signInSurfaceAsksForAPin();
     const cookie = await humanAuthentication(fixtures);
     await humanAuthorization(fixtures, cookie);
     await sharedCashBoundary(fixtures, cookie);
+    // Before revocation, like the checks below it: the worker refusals mean
+    // "a machine may not do this" only while the credential still works.
+    await manufacturingBoundary(fixtures, cookie);
+    await laborBoundary(fixtures, cookie);
     await workerAuthentication(fixtures);
     await queueChecks(fixtures, cookie);
     await effectChecks(fixtures, fixtures.adminCookie, cookie);

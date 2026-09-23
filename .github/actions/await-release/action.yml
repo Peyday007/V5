@@ -1,0 +1,106 @@
+name: Wait for a release to finish
+description: >
+  Hold a console command until no Deploy run is building or restarting the
+  Brain. Read the long comment in this file before changing it — it is the
+  other half of a concurrency design, and removing it silently re-creates the
+  defect the group split was made to fix.
+
+inputs:
+  timeout-seconds:
+    description: >
+      How long to wait before giving up and running anyway. A stuck deploy must
+      not disable administration for ever, so this is a bound rather than a
+      lock.
+    required: false
+    default: '1500'
+  poll-seconds:
+    description: How often to re-ask.
+    required: false
+    default: '20'
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for any in-flight release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
+        POLL_SECONDS: ${{ inputs.poll-seconds }}
+      run: |
+        set -uo pipefail
+
+        # ------------------------------------------------------------------
+        # Why this exists
+        # ------------------------------------------------------------------
+        #
+        # Sixteen workflows once shared one concurrency group, `deploy-brain`.
+        # The group was doing two jobs at once, and it could only do one of
+        # them properly:
+        #
+        #   * keeping a console command off a machine that is being replaced,
+        #     which is what it was for; and
+        #   * deciding which of two *pending* runs survives, which is what
+        #     GitHub actually implements — exactly one pending run per group,
+        #     and the newest pending evicts the one that was waiting.
+        #
+        # So a `Cash report` dispatch cancelled a queued `Deploy`, and a queued
+        # `Deploy` was cancelled by an `Admin` dispatch two seconds later, with
+        # `jobs: 0` and nothing red anywhere. A silently cancelled deployment
+        # leaves the branch and the released image disagreeing while every
+        # surface looks healthy, which is worse than the read-starvation in the
+        # other direction.
+        #
+        # The two jobs are now done by two mechanisms. `Deploy` holds a group
+        # nothing else is in, so nothing can evict it; every console workflow
+        # holds a group of its own, so no command can evict a different one;
+        # and *this* step is what keeps a command off a machine mid-release.
+        #
+        # ------------------------------------------------------------------
+        # Why it gives up rather than blocking for ever
+        # ------------------------------------------------------------------
+        #
+        # A deploy that hangs must not make the Brain unadministrable. The wait
+        # is therefore bounded, and when it expires the command runs and says
+        # so. That is not a hole: the command's own `flyctl ssh console` fails
+        # loudly with a missing marker if a restart interrupts it, which is the
+        # backstop `closeout-report.yml` already relies on, and in cloud mode
+        # the rows and the documents are not on the machine at all (§18).
+        #
+        # For the same reason an unreadable Actions API is a warning rather
+        # than a refusal: this step can only ever *improve* on what the shared
+        # group gave, and failing closed on a permission change would disable
+        # every operator command at once.
+
+        deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
+        waited=0
+
+        while :; do
+          busy=$(gh api \
+                  "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?per_page=20" \
+                  --jq '[.workflow_runs[] | select(.status == "in_progress" or .status == "queued" or .status == "waiting")] | length' \
+                2>/dev/null) || busy=""
+
+          if [ -z "$busy" ]; then
+            echo "::warning::Could not read the Actions API to see whether a release is running, so this command is not waiting for one. If a deploy is in flight, the ssh session below will fail rather than report half a Brain."
+            exit 0
+          fi
+
+          if [ "$busy" = "0" ]; then
+            if [ "$waited" -gt 0 ]; then
+              echo "No release in flight after waiting ${waited}s. Proceeding."
+            else
+              echo "No release in flight. Proceeding."
+            fi
+            exit 0
+          fi
+
+          if [ "$(date +%s)" -ge "$deadline" ]; then
+            echo "::warning::A Deploy run has been in flight for longer than ${TIMEOUT_SECONDS}s. Running anyway rather than leaving the Brain unadministrable — if that deploy restarts the machine mid-command, this run fails loudly rather than reporting half a Brain."
+            exit 0
+          fi
+
+          echo "$busy Deploy run(s) in flight; waiting ${POLL_SECONDS}s (waited ${waited}s so far)."
+          sleep "$POLL_SECONDS"
+          waited=$(( waited + POLL_SECONDS ))
+        done

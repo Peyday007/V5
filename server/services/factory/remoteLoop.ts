@@ -30,7 +30,12 @@
  * then dies before doing the work it claimed; rows cannot.
  */
 import type { Bin } from '../../domain/types.ts';
-import type { FactoryBlockerKind, FactoryCampaign, FactoryChangeRequest } from '../../domain/factory.ts';
+import type {
+  FactoryBlockerKind,
+  FactoryCampaign,
+  FactoryCampaignState,
+  FactoryChangeRequest,
+} from '../../domain/factory.ts';
 import {
   advanceUnitAttempt,
   claimCampaignTick,
@@ -80,11 +85,15 @@ import {
   remoteBranchFor,
   roundBaseFor,
   verifyDelivery,
+  binsThisPassMayJudge,
   verifyIntegrationReport,
   verifyUnitReport,
+  UNKNOWN_WORKER,
 } from './remote.ts';
 import { parseRemote } from './forge.ts';
+import { requestDesignCycle } from '../design/route.ts';
 import { pullRequestFor } from './pullRequest.ts';
+import { recordObservedSessions } from './sessions.ts';
 
 /** How long a dispatcher may hold a campaign's tick, and how often it renews. */
 const TICK_HEARTBEAT_MS = 15_000;
@@ -106,6 +115,12 @@ export interface RemoteTickReport {
   ingested: string[];
   progress: boolean;
   tickHeld: boolean;
+  /**
+   * Confirmed unit reports this pass could not record yet. While there are any,
+   * the units stage is not handed out again: the completed report is still the
+   * answer, and a second bin would only buy the same work twice.
+   */
+  awaitingRecord: number;
 }
 
 function empty(
@@ -125,6 +140,7 @@ function empty(
     ingested: [],
     progress: false,
     tickHeld: false,
+    awaitingRecord: 0,
   };
 }
 
@@ -271,12 +287,49 @@ async function ingestUnitsBin(
       unit,
       report: unitReport,
       files: verdict.files,
-      workerId: who.workerId ?? 'unknown-worker',
+      workerId: who.workerId ?? UNKNOWN_WORKER,
       sessionId: who.sessionId,
       binId: bin.id,
     });
     if (!accepted.accepted) {
-      report.notes.push(`${key} could not be recorded: ${accepted.reason}`);
+      /*
+       * A report the forge confirmed and Brain could not record.
+       *
+       * This used to be a note and nothing else: no row, no attempt, and the unit
+       * still READY — so the stage below saw a ready unit with no live bin and
+       * fired a fresh activation while the completed report was still perfectly
+       * acceptable, and nothing anywhere said why. The usual cause is transient
+       * (a claim refused because another acceptance briefly holds an overlapping
+       * surface), so the first tries cost nothing: the refusal is recorded, the
+       * stage is held, and the next tick asks again. A cause that persists is
+       * refused through `refuseUnit` after `ACCEPT_RETRIES`, which charges the one
+       * attempt that bounds it — ending, if it keeps happening, at
+       * `UNIT_EXHAUSTED_ATTEMPTS`, whose answer is `factory regrant-unit`.
+       */
+      const tries = await acceptanceRefusals(campaign.id, unit.id, bin.id);
+      if (tries + 1 >= ACCEPT_RETRIES) {
+        await refuseUnit(
+          campaign,
+          unit,
+          'WORKER_ERROR',
+          `Brain could not record this confirmed report after ${ACCEPT_RETRIES} tries: ` +
+            accepted.reason,
+          report,
+          bin.id,
+        );
+        continue;
+      }
+      await recordFactoryEvent({
+        campaignId: campaign.id,
+        unitId: unit.id,
+        sessionId: who.sessionId,
+        workerId: who.workerId,
+        kind: FACTORY_EVENT_KINDS.unitRefused,
+        evidenceClass: 'MEASURED',
+        detail: { stage: 'UNITS', binId: bin.id, unitKey: key, reason: accepted.reason, try: tries + 1 },
+      });
+      report.notes.push(`${key} could not be recorded yet (try ${tries + 1}): ${accepted.reason}`);
+      report.awaitingRecord += 1;
       continue;
     }
     moved += 1;
@@ -425,6 +478,22 @@ async function refuseUnit(
   report.notes.push(`${unit.unitKey} goes back for another attempt: ${category}.`);
 }
 
+/** How many times a confirmed units report may fail to record before it costs an attempt. */
+const ACCEPT_RETRIES = 5;
+
+/** The uncharged recording refusals already written for this bin's report on this unit. */
+async function acceptanceRefusals(campaignId: string, unitId: string, binId: string): Promise<number> {
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.unitRefused],
+    limit: 5000,
+  });
+  return events.filter((event) => {
+    if (event.unitId !== unitId) return false;
+    const detail = (event.detail ?? {}) as { binId?: unknown; stage?: unknown };
+    return detail.binId === binId && detail.stage === 'UNITS';
+  }).length;
+}
+
 /**
  * Has this bin's report for this unit already been acted on, either way?
  *
@@ -474,6 +543,149 @@ async function alreadyActedOn(
  * conflict, or a command that failed on the merged tree — because the thing that
  * needs to change is the work, not the merge.
  */
+/**
+ * Why a completed bin's report could not be turned into rows.
+ *
+ * A closed set, because the discriminator is the whole of it: each member is a
+ * different thing going wrong with a different remedy, and before this each was
+ * one silent `return false` — so the ledger said the same thing about all of
+ * them, which is nothing. A campaign whose repository this Brain cannot parse
+ * needs a person; a worker that completed without a usable report needs the bin
+ * re-run; a forge that would not confirm needs either a push or a look at what
+ * the worker actually did; an acceptance that confirmed and moved nothing is
+ * either a report that merged nothing or units something else had already
+ * moved; and a worker that reported a blocker did not fail at any of those. A
+ * reader who cannot tell them apart has no first step.
+ *
+ * **One set, two seams.** It began as the integrate ingest's and the delivery
+ * ingest turned out to have the same shape, so both draw from it and
+ * `NOT_INGESTED_KIND` decides which kind the row carries. Two unions would
+ * have duplicated the three conditions that are genuinely the same condition,
+ * and the pair that would then drift is the pair nobody re-reads. Not every
+ * member is reachable from both: `NO_UNIT_MOVED` is the integrate ingest's,
+ * and `WORKER_REPORTED_BLOCKED` is delivery's today.
+ *
+ * A `Record` over this union is what keeps the set honest: `INGEST_REFUSAL_NOTES`
+ * below must answer every member, so another condition added at either seam is
+ * a compile error until somebody says what it means.
+ */
+export const INGEST_REFUSALS = {
+  /** `factory_change_requests.repository` is not a remote this Brain can read. */
+  repositoryUnreadable: 'REPOSITORY_UNREADABLE',
+  /** The bin reached COMPLETE and its result is not a readable integration report. */
+  reportUnusable: 'REPORT_UNUSABLE',
+  /** The forge did not confirm the branch, the containment or the declared paths. */
+  forgeDidNotConfirm: 'FORGE_DID_NOT_CONFIRM',
+  /** The forge confirmed it and no unit changed state, so nothing was recorded. */
+  noUnitMoved: 'NO_UNIT_MOVED',
+  /**
+   * The worker reported a blocker rather than a result.
+   *
+   * Not a refusal by Brain, and named separately for exactly that reason: *the
+   * worker could not do it* and *the forge would not confirm what it said* send
+   * a reader to two different places, and a ledger that called them one thing
+   * would send them to the wrong one half the time.
+   */
+  workerReportedBlocked: 'WORKER_REPORTED_BLOCKED',
+} as const;
+
+export type IngestRefusal = (typeof INGEST_REFUSALS)[keyof typeof INGEST_REFUSALS];
+
+/** What each refusal means to somebody reading the ledger, in one sentence. */
+export const INGEST_REFUSAL_NOTES: Record<IngestRefusal, string> = {
+  REPOSITORY_UNREADABLE:
+    "This campaign's repository is not one Brain can address, so nothing here could have been " +
+    'read. A person has to correct the change request.',
+  REPORT_UNUSABLE:
+    'The bin completed and what it submitted is not an integration report Brain can read. ' +
+    'Nothing was judged; the stage is offered again.',
+  FORGE_DID_NOT_CONFIRM:
+    'The repository did not confirm what the report claimed. Nothing was recorded and the stage ' +
+    'is offered again, so a transient answer resolves itself and a standing one needs a look.',
+  NO_UNIT_MOVED:
+    'The forge confirmed the integration and not one unit changed state, so something moved them ' +
+    'between this pass reading them as implemented and writing. `carried` names which.',
+  WORKER_REPORTED_BLOCKED:
+    'The bin completed and the worker reported a blocker rather than a result. The reason is its ' +
+    'own, in `blockedReason`; nothing was recorded here and the stage is offered again.',
+};
+
+/**
+ * Record, once, that a completed integration bin was read and refused.
+ *
+ * Three properties, and every one of them is load-bearing.
+ *
+ * **It changes nothing about what the ingest does.** Every caller still returns
+ * `false`, so the bin stays un-ingested, the stage is not advanced, and the next
+ * tick tries again — which is the right behaviour for the transient half of
+ * these, since a forge that did not answer will answer later, and is what the
+ * stage's own ceiling bounds for the standing half. A row that made the ingest
+ * *succeed* would advance a stage over work that never landed.
+ *
+ * **It is deliberately its own kind, read by neither of the two queries that
+ * would change behaviour.** `integrationAlreadyIngested` would stop the retry, so
+ * one forge outage would turn a completed report into one nothing ever reads
+ * again; `surfaceBlockedIntegrations` counts towards the stage ceiling, so a
+ * forge outage would retire a stage for a condition that was never about the
+ * work. §23's sentence at a new row: a refusal is not misconduct.
+ *
+ * **It is written at most once per (bin, reason), and the bound is the closed set
+ * above.** The comment on `integrationAlreadyIngested` records what the
+ * alternative already cost once: a completed bin is re-read on *every* tick, so a
+ * row per pass is a fresh refusal every twenty seconds for as long as the
+ * campaign lives, and a ledger that grows like that is one nobody reads. By the
+ * reason rather than by the bin, because a bin can genuinely hit two of these in
+ * turn — a forge that recovers and then finds the units already moved — and both
+ * are facts worth having.
+ *
+ * What that costs is stated rather than hidden. A *second* refusal of the same
+ * reason for the same bin, with different problems, is not recorded: the row
+ * carries the first, which is the one that says when this started, and the tick
+ * report carries the current text on every pass. Fingerprinting the problems
+ * instead was the alternative and is worse — a forge reason carrying anything
+ * that varies between calls would write a row every twenty seconds, which is the
+ * defect this bound exists to prevent, arriving through its own key.
+ */
+/**
+ * Which stage could not turn a completed bin into rows.
+ *
+ * Its own kind per stage rather than one kind with a field, because the two are
+ * asked about separately: *why did this campaign not integrate* and *why does it
+ * have no pull request* are different questions with different remedies, and a
+ * reader narrowing by kind should not have to know to filter again.
+ */
+const NOT_INGESTED_KIND: Record<'INTEGRATE' | 'DELIVER', string> = {
+  INTEGRATE: FACTORY_EVENT_KINDS.integrationNotIngested,
+  DELIVER: FACTORY_EVENT_KINDS.deliveryNotIngested,
+};
+
+async function noteIngestRefused(
+  campaign: FactoryCampaign,
+  bin: Bin,
+  stage: 'INTEGRATE' | 'DELIVER',
+  reason: IngestRefusal,
+  detail: Record<string, unknown>,
+): Promise<void> {
+  const kind = NOT_INGESTED_KIND[stage];
+  const events = await listFactoryEvents(campaign.id, { kinds: [kind], limit: 200 });
+  const already = events.some((event) => {
+    const seen = (event.detail ?? {}) as { binId?: unknown; reason?: unknown };
+    return seen.binId === bin.id && seen.reason === reason;
+  });
+  if (already) return;
+  const who = await binIdentity(bin);
+  await recordFactoryEvent({
+    campaignId: campaign.id,
+    sessionId: who.sessionId,
+    workerId: who.workerId,
+    kind,
+    evidenceClass: 'MEASURED',
+    // Spread first, so nothing a caller passes can overwrite the two fields the
+    // idempotency above is keyed on.
+    detail: { ...detail, reason, binId: bin.id, means: INGEST_REFUSAL_NOTES[reason] },
+  });
+}
+
 async function ingestIntegrateBin(
   campaign: FactoryCampaign,
   changeRequest: FactoryChangeRequest,
@@ -483,11 +695,17 @@ async function ingestIntegrateBin(
   const repository = parseRemote(changeRequest.repository);
   if (!repository) {
     report.notes.push(`"${changeRequest.repository}" is not a repository this Brain can read.`);
+    await noteIngestRefused(campaign, bin, 'INTEGRATE', INGEST_REFUSALS.repositoryUnreadable, {
+      repository: changeRequest.repository,
+    });
     return false;
   }
   const parsed = await readIntegrationReport(bin.id);
   if (!parsed.ok) {
     report.notes.push(`The integration bin ${bin.id} completed without a usable report.`);
+    await noteIngestRefused(campaign, bin, 'INTEGRATE', INGEST_REFUSALS.reportUnusable, {
+      errors: parsed.errors.slice(0, 10).map((error) => error.slice(0, 500)),
+    });
     return false;
   }
   const who = await binIdentity(bin);
@@ -595,6 +813,14 @@ async function ingestIntegrateBin(
   );
   if (!verdict.ok) {
     report.notes.push(`the integration was not confirmed by the forge: ${verdict.problems.join(' ')}`);
+    await noteIngestRefused(campaign, bin, 'INTEGRATE', INGEST_REFUSALS.forgeDidNotConfirm, {
+      problems: verdict.problems.slice(0, 10).map((problem) => problem.slice(0, 500)),
+      integrationBranch: parsed.value.integrationBranch,
+      reportedHeadSha: parsed.value.headSha,
+      baseSha: base,
+      units: implemented.map((unit) => unit.unitKey),
+      carried: verdict.carried,
+    });
     return false;
   }
 
@@ -604,12 +830,30 @@ async function ingestIntegrateBin(
     report: parsed.value,
     verdict,
     baseSha: base,
-    workerId: who.workerId ?? 'unknown-worker',
+    workerId: who.workerId ?? UNKNOWN_WORKER,
     sessionId: who.sessionId,
     binId: bin.id,
   });
   if (accepted.integrated.length === 0) {
     report.notes.push('the integration was confirmed but no unit moved; nothing recorded.');
+    await noteIngestRefused(campaign, bin, 'INTEGRATE', INGEST_REFUSALS.noUnitMoved, {
+      reportedHeadSha: parsed.value.headSha,
+      /*
+       * Which units the forge agreed were carried, which is what makes this row
+       * worth having rather than a bare "nothing happened".
+       *
+       * It is never empty when this fires, and that is provable rather than
+       * assumed: the parser refuses an `IMPLEMENTED` report that merged nothing,
+       * and `verdict.ok` means every merge it *did* name cleared the forge — so
+       * `carried` holds all of them. `markIntegrated` is guarded on the unit
+       * still being `IMPLEMENTED`, and this pass filtered on exactly that a few
+       * lines above, so reaching here means something moved these units in
+       * between. That is the one fact this row exists to carry, and without it
+       * the condition is invisible.
+       */
+      carried: verdict.carried,
+      units: implemented.map((unit) => unit.unitKey),
+    });
     return false;
   }
 
@@ -638,6 +882,59 @@ async function ingestIntegrateBin(
   });
 
   await promoteReadyUnits(campaign.id);
+
+  /*
+   * Does this change reach the interface, and which screens?
+   *
+   * Asked here because this is the moment a change is *confirmed by the forge* —
+   * the unit's declared paths are known, the objective is known, and the commit
+   * is known. Asking earlier would be asking about work that had not landed;
+   * asking later would mean nothing asked at all.
+   *
+   * It opens a cycle and does not run one. A render needs a browser and this
+   * machine has none, so the cycle waits for something that does — which is a
+   * state with an answering transition (`npm run design resume`, or the visual
+   * harness) rather than a park. A change with no UI consequence produces no
+   * cycle and a recorded reason, which is most changes and has to stay cheap.
+   *
+   * Its own `try`, and a failure is a note rather than a refusal: a design
+   * classification that threw must not undo an integration the forge has already
+   * confirmed.
+   */
+  try {
+    /*
+     * The paths the integrated units declared they own, not a diff.
+     *
+     * §27 makes a unit's mutation scope a boundary the integration already
+     * verified the diff stayed inside, so it is both authoritative and free —
+     * and reading the diff again here would be a second account of the same
+     * fact, which is the two-readers-disagree shape this repository keeps
+     * correcting.
+     */
+    const byKey = new Map(implemented.map((unit) => [unit.unitKey, unit]));
+    const paths = [
+      ...new Set(
+        accepted.integrated.flatMap((key) => byKey.get(key)?.ownedPaths ?? []),
+      ),
+    ];
+    const routed = await requestDesignCycle({
+      triggerKind: 'UI_IMPACT',
+      triggerRef: campaign.id,
+      changedPaths: paths,
+      description: `${changeRequest.objective} ${changeRequest.expectedOutcome}`,
+      revision: parsed.value.headSha,
+    });
+    report.notes.push(
+      routed.cycle
+        ? `design cycle ${routed.cycle.id} opened for ${routed.impact.surfaces.length} surface(s)`
+        : `no design cycle: ${routed.because}`,
+    );
+  } catch (error) {
+    report.notes.push(
+      `the UI-impact classification could not run: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   report.ingested.push(`integrate:${bin.id}`);
   report.notes.push(
     `${accepted.integrated.length} unit(s) integrated at ${parsed.value.headSha.slice(0, 12)}` +
@@ -662,15 +959,42 @@ async function ingestDeliverBin(
   bin: Bin,
   report: RemoteTickReport,
 ): Promise<boolean> {
+  /*
+   * The same four refusals the integrate ingest has, at the stage whose output
+   * is the artifact a person acts on — and the first of them had no record of
+   * any kind. The other three were `report.notes`, which lives exactly as long
+   * as the process: a campaign with no pull request and no ledger row saying
+   * why is the condition §27 already paid to learn once, one stage along.
+   *
+   * Every caller still returns `false`, so the bin stays un-ingested and the
+   * next tick tries again. Nothing reads `DELIVERY_NOT_INGESTED` to decide
+   * anything, for the reason its sibling is not read either: a forge outage
+   * must not become a delivery nothing ever re-reads.
+   */
   const repository = parseRemote(changeRequest.repository);
-  if (!repository) return false;
+  if (!repository) {
+    report.notes.push(
+      `The delivery bin ${bin.id} cannot be read: ${changeRequest.repository} is not a remote ` +
+        'this Brain can address.',
+    );
+    await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.repositoryUnreadable, {
+      repository: changeRequest.repository,
+    });
+    return false;
+  }
   const parsed = await readDeliveryReport(bin.id);
   if (!parsed.ok) {
     report.notes.push(`The delivery bin ${bin.id} completed without a usable report.`);
+    await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.reportUnusable, {
+      problems: parsed.errors,
+    });
     return false;
   }
   if (parsed.value.outcome === 'BLOCKED') {
     report.notes.push(`the pull request was not delivered: ${parsed.value.blockedReason}`);
+    await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.workerReportedBlocked, {
+      blockedReason: parsed.value.blockedReason,
+    });
     return false;
   }
   const head = campaign.integrationSha ?? campaign.baseSha;
@@ -681,6 +1005,11 @@ async function ingestDeliverBin(
   );
   if (!verdict.ok) {
     report.notes.push(`the pull request was not confirmed: ${verdict.problems.join(' ')}`);
+    await noteIngestRefused(campaign, bin, 'DELIVER', INGEST_REFUSALS.forgeDidNotConfirm, {
+      problems: verdict.problems,
+      headSha: head,
+      pullRequest: pullRequestNumber(campaign),
+    });
     return false;
   }
   if (pullRequestNumber(campaign) === verdict.number && campaign.prUrl === verdict.url) {
@@ -731,11 +1060,27 @@ const MAX_BINS_PER_STAGE = 3;
  * fleet cannot do as specified, and the remedy is a person's: amend the contract,
  * or stop.
  *
- * Neither is terminal. The campaign is BLOCKED and re-examined on the next tick,
- * so cancelling the stuck bins or amending the contract starts it moving again
- * without anybody reaching into a row.
+ * Neither is terminal. The campaign is BLOCKED and re-examined on the next tick.
+ * A bin at `NEEDS_HUMAN` is answered by `factory answer-bin`. Exhaustion is
+ * answered by `factory reauthorize --why stage-corrected`, a person saying the
+ * condition that failed the stage has been corrected — so the failed bins are
+ * counted **from the newest re-authorization**, the same baseline the
+ * surface-block ceiling below uses. Every failed bin keeps its row; what moves
+ * is where the count starts.
+ *
+ * It used to count every failed bin the campaign ever had, and this comment said
+ * that amending the contract or cancelling the stuck bins started it moving
+ * again. Neither could: an amendment touches no bin, a FAILED bin is already
+ * terminal so there is nothing to cancel, and a re-authorization was re-blocked
+ * on the very next tick by the same three rows. The only way out was to retire
+ * the whole campaign — §24's waiting-nobody-can-resolve, with the remedy named
+ * in the sentence that denied it.
  */
-function stalledStage(bins: Bin[], kind: string): { detail: string } | null {
+export function stalledStage(
+  bins: Bin[],
+  kind: string,
+  since: string | null,
+): { detail: string } | null {
   const mine = bins.filter((bin) => bin.kind === kind);
   const waiting = mine.find((bin) => bin.state === 'NEEDS_HUMAN');
   if (waiting) {
@@ -746,17 +1091,36 @@ function stalledStage(bins: Bin[], kind: string): { detail: string } | null {
         'duplicate the work rather than unblock it.',
     };
   }
-  const failed = mine.filter((bin) => bin.state === 'FAILED').length;
+  const failed = mine.filter(
+    (bin) => bin.state === 'FAILED' && (since === null || bin.createdAt > since),
+  ).length;
   if (failed >= MAX_BINS_PER_STAGE) {
     return {
       detail:
-        `${failed} ${kind} bins have failed on this campaign. The fleet cannot do this stage as ` +
-        'specified, so it is not handed out a fourth time. Amending the contract — which may ' +
-        'narrow a scope or add a verification command, and may never change what success is — ' +
-        'or stopping the campaign are the ways out.',
+        `${failed} ${kind} bins have failed on this campaign` +
+        `${since ? ' since it was last re-authorized' : ''}. The fleet cannot do this stage as ` +
+        'specified, so it is not handed out again. Correct what failed it — amend the contract, ' +
+        'which may narrow a scope or add a verification command and may never change what ' +
+        'success is, or fix the surface — and then `factory reauthorize --why stage-corrected`; ' +
+        'or stop the campaign.',
     };
   }
   return null;
+}
+
+/**
+ * When a person last said a stage's blocking condition was corrected, or null.
+ *
+ * Its own read, of the one kind, taking the newest: `listFactoryEvents` returns
+ * the oldest rows first, so a limit shared with other kinds would drop exactly
+ * the row that matters on a long campaign.
+ */
+async function lastReauthorization(campaignId: string): Promise<string | null> {
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.stageReauthorized],
+    limit: 5000,
+  });
+  return events.at(-1)?.at ?? null;
 }
 
 /** Has this integration bin's report already become rows, either way? */
@@ -934,6 +1298,50 @@ async function noteSurfaceBlocker(
   }
 }
 
+/**
+ * Say what is true of a stage that has a live bin, and take a stale blocker off.
+ *
+ * `noteSurfaceBlocker` states the rule directly above this one — a blocker is a
+ * derived annotation beside a truthful state, and the answering transition is free
+ * because the condition stops being true and the next tick takes the sentence
+ * away. `blockStage` is the half that did not obey it: it moves `state` to
+ * BLOCKED, and nothing anywhere moved it back. The paths below that wait for a
+ * worker return without writing a word, so whatever the last block wrote stood
+ * while the stage ran.
+ *
+ * Production, 2026-09-22. `bin_43915e4f93ca4e3db111` was answered at 12:05:06 —
+ * `NEEDS_HUMAN -> READY, generation 2 -> 3` — and a worker was integrating on it
+ * twenty-three minutes later, when `factory status` read
+ * `BLOCKED — integration cannot be handed out again` over a blocker saying the bin
+ * *"is waiting for a person. It has its own answer; until it is given one this
+ * stage is not handed out again"*. It had been given one. **A status that
+ * contradicts the rows underneath it is worse than no status**: it sends a reader
+ * to answer something already answered, and it teaches them to stop believing the
+ * one line that says a campaign is genuinely stuck.
+ *
+ * It writes only over a BLOCKED campaign, so the ordinary path is a no-op and this
+ * can never overwrite a state some other branch established. The surface-cooloff
+ * patch further down already carries `cleared` for this exact reason; what was
+ * missing is the rule applied to the paths that merely wait.
+ */
+async function stageIsLive(
+  campaign: FactoryCampaign,
+  state: FactoryCampaignState,
+  stageDetail: string,
+  report: RemoteTickReport,
+): Promise<void> {
+  if (campaign.state !== 'BLOCKED') return;
+  await patchCampaign(campaign.id, {
+    state,
+    stageDetail,
+    blockerKind: null,
+    blockerDetail: null,
+  });
+  report.state = state;
+  report.stage = stageDetail;
+  report.notes.push(`the blocked stage has a live bin again: ${stageDetail}`);
+}
+
 async function blockStage(
   campaign: FactoryCampaign,
   stage: string,
@@ -971,6 +1379,7 @@ async function runRemoteTick(
     ingested: [],
     progress: false,
     tickHeld: false,
+    awaitingRecord: 0,
   };
 
   /*
@@ -1030,7 +1439,16 @@ async function runRemoteTick(
 
   const fresh = (await getCampaign(campaign.id)) ?? campaign;
   const units = await listUnits(fresh.id);
-  const liveBins = await campaignBins(fresh.id);
+  /*
+   * The bins as *this pass* may judge them, rather than the newest read of the
+   * table. A bin that completed after the ingest loop above had its chance is
+   * reported as that loop saw it, because its report has not been turned into
+   * rows yet and a stage decision taken against it would offer work that the
+   * completed bin has in fact already done. See `binsThisPassMayJudge`, which
+   * carries the production sequence this cost.
+   */
+  const liveBins = binsThisPassMayJudge(bins, await campaignBins(fresh.id));
+  const reauthorizedAt = await lastReauthorization(fresh.id);
 
   /*
    * 1b. Say so when a stage is ready and nobody may be handed it.
@@ -1046,9 +1464,10 @@ async function runRemoteTick(
   if (units.length === 0) {
     if (liveBinOfKind(liveBins, 'FACTORY_PLAN')) {
       report.notes.push('waiting for a worker to take the plan');
+      await stageIsLive(fresh, 'PLANNING', 'waiting for a worker to take the plan', report);
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_PLAN');
+    const stall = stalledStage(liveBins, 'FACTORY_PLAN', reauthorizedAt);
     if (stall) return await blockStage(fresh, 'planning', stall, report);
     const bin = await createPlanBin(fresh, changeRequest);
     report.created.push(`plan:${bin.id}`);
@@ -1075,11 +1494,18 @@ async function runRemoteTick(
   );
 
   if (ready.length > 0) {
-    if (liveBinOfKind(liveBins, 'FACTORY_UNITS')) {
-      report.notes.push(`waiting for a worker on ${ready.length} ready unit(s)`);
+    if (report.awaitingRecord > 0) {
+      const waiting = `${report.awaitingRecord} confirmed unit report(s) not recorded yet; asking again next tick`;
+      report.notes.push(waiting);
+      await stageIsLive(fresh, 'EXECUTING', waiting, report);
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_UNITS');
+    if (liveBinOfKind(liveBins, 'FACTORY_UNITS')) {
+      report.notes.push(`waiting for a worker on ${ready.length} ready unit(s)`);
+      await stageIsLive(fresh, 'EXECUTING', `${ready.length} unit(s) with the fleet`, report);
+      return report;
+    }
+    const stall = stalledStage(liveBins, 'FACTORY_UNITS', reauthorizedAt);
     if (stall) return await blockStage(fresh, 'implementation', stall, report);
     const bin = await createUnitsBin(fresh, changeRequest, ready);
     if (bin) {
@@ -1110,9 +1536,15 @@ async function runRemoteTick(
   if (implemented.length > 0) {
     if (liveBinOfKind(liveBins, 'FACTORY_INTEGRATE')) {
       report.notes.push(`waiting for an integrator on ${implemented.length} unit(s)`);
+      await stageIsLive(
+        fresh,
+        'INTEGRATING',
+        `${implemented.length} unit(s) with an integrator`,
+        report,
+      );
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_INTEGRATE');
+    const stall = stalledStage(liveBins, 'FACTORY_INTEGRATE', reauthorizedAt);
     if (stall) return await blockStage(fresh, 'integration', stall, report);
     const surface = await surfaceBlockedIntegrations(fresh.id);
     if (surface.count >= SURFACE_BLOCK_CEILING) {
@@ -1197,7 +1629,11 @@ async function runRemoteTick(
 
   if (outstanding.length > 0) {
     report.notes.push(`${outstanding.length} unit(s) still in flight`);
-    await patchCampaign(fresh.id, { state: 'EXECUTING', stageDetail: 'units in flight' });
+    await patchCampaign(fresh.id, {
+      state: 'EXECUTING',
+      stageDetail: 'units in flight',
+      ...cleared,
+    });
     return report;
   }
 
@@ -1213,9 +1649,13 @@ async function runRemoteTick(
    *
    * It is BLOCKED with the unit's own recorded reason rather than failed: the
    * work is intact, every attempt kept its row, and the ways out are a person's —
-   * amend the contract, which may narrow a scope or add a verification command
-   * and may never change what success is, or stop. Re-examined every tick, so
-   * either one starts it moving without anybody reaching into a row.
+   * correct what failed it and `factory regrant-unit`, which raises the unit's
+   * ceiling and puts it back to READY, or stop. Re-examined every tick, so the
+   * regrant starts it moving without anybody reaching into a row.
+   *
+   * This used to say that amending the contract started it moving. It could
+   * not: an amendment touches no unit, and nothing moved a FAILED unit back out,
+   * so the only real way past was retiring the whole campaign.
    */
   const failed = units.filter((unit) => unit.state === 'FAILED');
   if (failed.length > 0) {
@@ -1260,9 +1700,10 @@ async function runRemoteTick(
       report.notes.push('the current commit already passed review');
     } else if (liveBinOfKind(liveBins, 'FACTORY_REVIEW')) {
       report.notes.push('waiting for a reviewer');
+      await stageIsLive(fresh, 'REVIEWING', 'waiting for a reviewer', report);
       return report;
-    } else if (stalledStage(liveBins, 'FACTORY_REVIEW')) {
-      const stall = stalledStage(liveBins, 'FACTORY_REVIEW');
+    } else if (stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt)) {
+      const stall = stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt);
       if (stall) return await blockStage(fresh, 'review', stall, report);
     } else if (!alreadyReviewed || latest?.verdict !== 'PASS') {
       const bin = await createReviewBin(fresh, changeRequest, reviewedSha, reviews.length + 1);
@@ -1310,7 +1751,7 @@ async function runRemoteTick(
       report.notes.push(`delivery needs a person: bin ${stuck.id}`);
       return report;
     }
-    const stall = stalledStage(liveBins, 'FACTORY_DELIVER');
+    const stall = stalledStage(liveBins, 'FACTORY_DELIVER', reauthorizedAt);
     if (stall && usable.length === 0) return await blockStage(fresh, 'delivery', stall, report);
     if (usable.length === 0) {
       const deliverable = await pullRequestFor(fresh.id);
@@ -1370,6 +1811,7 @@ async function runRemoteTick(
       await patchCampaign(fresh.id, {
         state: 'ASSEMBLING',
         stageDetail: 'waiting for the pull request',
+        ...cleared,
       });
       return report;
     }
@@ -1429,6 +1871,44 @@ async function noteBin(campaign: FactoryCampaign, bin: Bin, why: string): Promis
  * two dispatchers both deciding a stage is next would create two bins for it, and
  * the loser is refused rather than retried.
  */
+/**
+ * Read this campaign's finished assignment episodes into `factory_sessions`.
+ *
+ * Wrapped so that a sweep which cannot run never stops a tick: what it records
+ * is a *measurement*, and losing a measurement must not lose the work. The
+ * failure is said out loud in the report rather than swallowed, because a
+ * metric that quietly stopped being written is the column nothing reads all
+ * over again.
+ */
+async function sweepSessionsInto(report: RemoteTickReport, campaignId: string): Promise<void> {
+  try {
+    const swept = await recordObservedSessions(campaignId);
+    if (swept.recorded > 0) {
+      report.notes.push(
+        `${swept.recorded} execution session(s) recorded from Brain's own dispatch and lease rows.`,
+      );
+    }
+    if (swept.partialReads > 0) {
+      report.notes.push(
+        `${swept.partialReads} bin(s) have more recorded history than one read returns, so ` +
+          'their session reading is partial and the concurrency figure below them is a floor.',
+      );
+    }
+    if (swept.unclosed > 0) {
+      report.notes.push(
+        `${swept.unclosed} assignment(s) have no close event, so no interval could be read for ` +
+          'them and they are left out of the concurrency measurement rather than guessed at.',
+      );
+    }
+  } catch (error: unknown) {
+    report.notes.push(
+      `The session sweep failed and the campaign was not stopped for it: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
 export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTickReport> {
   const campaign = await getCampaign(campaignId);
   if (!campaign) return empty(campaignId, '', 'UNKNOWN', 'unknown', 'no such campaign');
@@ -1455,7 +1935,22 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
     );
   }
   if (campaign.state === 'CANCELLED') {
-    return empty(campaignId, campaign.projectId, campaign.state, campaign.state, 'cancelled');
+    /*
+     * Still swept. A cancelled campaign's sessions happened, and what stops
+     * being true when it is cancelled is that anything more will happen — not
+     * that Brain fired nobody. Recording them is what makes `npm run factory
+     * remote-tick --campaign …` a usable repair for a campaign whose last
+     * episodes were closed by a process that then died.
+     */
+    const cancelled = empty(
+      campaignId,
+      campaign.projectId,
+      campaign.state,
+      campaign.state,
+      'cancelled',
+    );
+    await sweepSessionsInto(cancelled, campaignId);
+    return cancelled;
   }
 
   const owner = `factory-remote-${process.pid}`;
@@ -1481,6 +1976,14 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
      * that is what the row said a second ago is an operator surface lying about the
      * thing it just did. One re-read, at the one place every path returns through.
      */
+    /*
+     * What this pass's bins actually cost in sessions, recorded after the work
+     * rather than before it, so an episode closed *by* this tick is in the
+     * sweep it belongs to. A campaign reaches COMPLETE inside a tick, and this
+     * is the last thing that tick does, so the final stage's session is
+     * recorded before anything stops looking at the campaign.
+     */
+    await sweepSessionsInto(report, campaignId);
     const after = await getCampaign(campaignId);
     if (after) {
       report.state = after.state;
@@ -1501,18 +2004,58 @@ export async function tickAllRemoteCampaigns(): Promise<RemoteTickReport[]> {
     try {
       reports.push(await tickRemoteCampaign(campaign.id));
     } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       reports.push(
-        empty(
-          campaign.id,
-          campaign.projectId,
-          campaign.state,
-          campaign.state,
-          `the tick threw: ${error instanceof Error ? error.message : String(error)}`,
-        ),
+        empty(campaign.id, campaign.projectId, campaign.state, campaign.state, `the tick threw: ${message}`),
       );
+      /*
+       * And a row, because the report above is read by nobody: the loop keeps
+       * only whether anything was created, and ends in `.catch(() => undefined)`.
+       * A campaign whose tick throws on every pass — a manifest Brain itself
+       * refuses, a statement that fails in one dialect — otherwise goes on
+       * reading as the last stage it reached while nothing happens, which is the
+       * silence this factory keeps correcting. Recording it must not become the
+       * second failure, so it is best-effort.
+       */
+      await recordTickFailure(campaign.id, message).catch(() => undefined);
     }
   }
   return reports;
+}
+
+/** How long one tick-failure message is kept to a single row. */
+const TICK_FAILURE_REPEAT_MS = 60 * 60 * 1000;
+
+/**
+ * Record that a campaign's tick threw — once per distinct message per hour.
+ *
+ * A throw that repeats every twenty seconds would otherwise write four thousand
+ * identical rows a day, and a ledger that noisy is one nobody reads. A different
+ * message is a different fact and is always written; the same one is written
+ * again after an hour, so a failure that is still happening still shows as
+ * current rather than as history.
+ */
+export async function recordTickFailure(campaignId: string, message: string): Promise<boolean> {
+  const bounded = message.slice(0, 800);
+  const events = await listFactoryEvents(campaignId, {
+    kinds: [FACTORY_EVENT_KINDS.tickFailed],
+    limit: 5000,
+  });
+  const last = events.at(-1);
+  if (
+    last &&
+    (last.detail as { message?: unknown }).message === bounded &&
+    Date.now() - Date.parse(last.at) < TICK_FAILURE_REPEAT_MS
+  ) {
+    return false;
+  }
+  await recordFactoryEvent({
+    campaignId,
+    kind: FACTORY_EVENT_KINDS.tickFailed,
+    evidenceClass: 'MEASURED',
+    detail: { message: bounded },
+  });
+  return true;
 }
 
 /* ------------------------------------------------------------------------- */
