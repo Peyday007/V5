@@ -3649,6 +3649,29 @@ remote.
   it would be a guess wearing a matcher. The marker carries the specificity in
   both. Both functions stay pure and report; nothing acts on either string.
 
+  **And the submission itself is what is pinned now, because the two readers
+  it was repaired through are not the whole transaction.** A regression in
+  `tests/packet.test.ts` drives the JUDGE `brain_submit_audit` through the real
+  tool, queue and independence matrix, twice, with twenty-five readable
+  documents added to the layer between: production's tree went **400 → 577
+  statements**, about seven per document, and the repaired one **372 → 372**.
+  Counting the store as well found the half the statement count could not see:
+  **16 → 120 existence checks on both trees**, about four per document per
+  submission, because the brief checks every sibling and each recompute inside
+  the submission re-asked, its memo scoped to that one recompute — in cloud mode
+  a bucket request each, inside the same transaction, on the release whose
+  successor's storage API answered `544 DatabaseTimeout`. The effect runs inside
+  one `withExistenceMemo` now, so the submission asks once per document
+  (**4 → 30** for 26 more). Nothing in it writes an object, so no answer can go
+  stale inside it. That half is still linear in the layer, deliberately — a
+  recompute exists to notice a file that has gone — and is bounded at sixteen
+  in flight.
+
+  **Deploy 323's 1m42s was measured before this third half existed**, so it
+  says what the statement-count repair and the per-recompute memo bought
+  together and nothing about the submission-wide memo, which reaches
+  production with the release that carries this paragraph.
+
   A sentence here used to end *"whatever is actually driving the growth is
   still unmeasured"*, and it survived two rewrites that each measured it — the
   store at 316 and the statement counts at 318. It is corrected rather than
