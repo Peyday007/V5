@@ -356,6 +356,29 @@ const OVERRIDES: Override[] = [
   { pattern: /^\/api\/projects\/[^/]+\/cash\/industries/, method: 'PATCH', level: 'ADMIN' },
 
   // ---------------------------------------------------------------------
+  // The monetization possibility ledger (§42)
+  // ---------------------------------------------------------------------
+  //
+  // **Deliberately no entries, and the absence is the decision.** Reading the
+  // ledger takes the default READ, so every member of the project can see the
+  // whole possibility space; naming a possibility, judging one, merging and
+  // splitting take the default WRITE, so they are work *inside* the operation
+  // rather than decisions about it.
+  //
+  // That is a different answer from the industry map directly above, where
+  // seeding is ADMIN, and the difference is what each one does. Seeding a
+  // subject decides where the sprint *looks*, which is a decision about the
+  // operation. Naming a possibility on a discovery that is already there
+  // spends nothing, starts nothing and creates a row every gate downstream
+  // still decides about — and a judgement is a dated statement with a reason
+  // on it that anybody can revive.
+  //
+  // No entry names a worker scope, so no machine credential reaches any of
+  // these however its membership is configured, and every handler additionally
+  // calls `requirePerson`. A machine that could invalidate a possibility could
+  // quietly narrow the space nobody else is looking at, which is exactly what
+  // §22 keeps a worker out of.
+  // ---------------------------------------------------------------------
   // The labor kernel (§41)
   // ---------------------------------------------------------------------
   //

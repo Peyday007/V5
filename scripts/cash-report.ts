@@ -49,6 +49,8 @@ import { CASH_DISCOVERY_AUTHORITY_NAME } from '../server/services/cash/discovery
 import { cashTier } from '../server/services/cash/tier.ts';
 import { evidenceCard } from '../server/services/cash/card.ts';
 import { cashEngineCard } from '../server/services/cash/engineCard.ts';
+import { composeLedger } from '../server/services/cash/monetization/ledger.ts';
+import { listCommissions } from '../server/repos/monetization.ts';
 import { WORK_ITEM_STATES } from '../server/domain/types.ts';
 import type { WorkItem } from '../server/domain/types.ts';
 import { latestMissionForCandidate, listMissions } from '../server/repos/russellMissions.ts';
@@ -542,6 +544,86 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
     }
   }
 
+  /*
+   * The possibility ledger, and what Brain is asking about it.
+   *
+   * Here rather than in a report of its own for the reason the surface has one
+   * block rather than two: a possibility and the question being asked about it
+   * are one subject, and two readers of it would eventually disagree about what
+   * is happening. It is also the only way to answer the question this loop
+   * exists to make answerable — *is the ledger's evidence coming from anywhere*
+   * — against production rows rather than against a scripted test.
+   *
+   * Read-only, like everything else here: `composeLedger` is a projection that
+   * writes nothing, and the three repository reads below take no lock and move
+   * no state.
+   */
+  const ledger = await composeLedger({ projectId });
+  const commissions = await listCommissions({ projectId });
+  const sourced = ledger.entries.reduce(
+    (count, entry) =>
+      count + entry.answers.filter((one) => one.kind === 'FACT').length,
+    0,
+  );
+  const proposed = ledger.entries.reduce(
+    (count, entry) =>
+      count + entry.answers.filter((one) => one.kind === 'ESTIMATE').length,
+    0,
+  );
+
+  console.log('');
+  console.log(
+    `THE POSSIBILITY LEDGER (${ledger.entries.length}) — ` +
+      `${tally(ledger.entries, (one) => one.status)}`,
+  );
+  console.log(
+    `  answers: ${sourced} from a published source, ${proposed} proposed by Brain`,
+  );
+  for (const entry of ledger.entries.slice(0, 8)) {
+    console.log(
+      `  #${entry.rank} ${trim(entry.path.title, 60)} [${entry.status}]` +
+        ` ${entry.unknowns.length} open`,
+    );
+    if (entry.previousRank !== null) {
+      console.log(
+        `      moved from #${entry.previousRank}${
+          entry.movementReason ? ` — ${trim(entry.movementReason, 60)}` : ''
+        }`,
+      );
+    }
+  }
+
+  const openAsks = commissions.filter((one) => one.state === 'OPEN');
+  console.log('');
+  console.log(
+    `WHAT BRAIN IS ASKING ABOUT IT (${commissions.length} ever, ${openAsks.length} open)` +
+      ` — ${tally(commissions, (one) => one.state)}`,
+  );
+  for (const one of commissions.slice(-12)) {
+    const path = ledger.entries.find((entry) => entry.path.id === one.pathId);
+    console.log(
+      `  ${one.state} ${one.attribute} round ${one.round} — ` +
+        `${trim(path?.path.title ?? one.pathId, 50)}`,
+    );
+    console.log(`      because: ${trim(one.reason, 100)}`);
+    /*
+     * The row, and when it was asked.
+     *
+     * Every line in this report resolves to a row a reader can look up, and
+     * this one did not: it printed the idea it created and never its own id,
+     * nor when it was opened — so a question that had been open for a day and
+     * one opened on this tick were the same line. §45 settles the rule one
+     * kernel along, where a party printed by name with no claim beside it was
+     * the defect the first production reading found.
+     */
+    console.log(
+      `      ${one.id} opened ${one.openedAt}` +
+        `${one.settledAt ? ` settled ${one.settledAt}` : ''}`,
+    );
+    console.log(`      idea: ${one.candidateId}`);
+    if (one.outcome) console.log(`      outcome: ${trim(one.outcome, 100)}`);
+  }
+
   const events = await listCashEvents(projectId);
   console.log('');
   console.log(`HISTORY (${events.length}) — ${tally(events, (one) => one.kind)}`);
@@ -562,7 +644,19 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
       ` validations=${validationsStarted}` +
       ` cards_complete=${cardsComplete}` +
       ` subjects=${map.subjects.length} retired_subjects=${map.retired.length}` +
-      ` capital_decomposed=${map.capital.length}`,
+      ` capital_decomposed=${map.capital.length}` +
+      ` possibilities=${ledger.entries.length}` +
+      ` ledger_sourced=${sourced} ledger_proposed=${proposed}` +
+      ` asked=${commissions.length} asking_now=${openAsks.length}` +
+      ` answered=${commissions.filter((one) => one.state === 'ANSWERED').length}` +
+      ` unresolved=${commissions.filter((one) => one.state === 'UNRESOLVED').length}` +
+      /*
+       * Counted because it can happen. `ABANDONED` became reachable when
+       * `abandonPutAway` got its writer, and a state a row can hold that the
+       * one line an operator reads does not count is how a reader concludes
+       * every question is still being asked.
+       */
+      ` abandoned=${commissions.filter((one) => one.state === 'ABANDONED').length}`,
   );
   return true;
 }

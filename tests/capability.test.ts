@@ -97,6 +97,7 @@ function claim(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     evidenceLocator: '§ 442-d',
     evidenceLane: 'statute',
     opportunitySignal: null,
+    monetizationMethod: null,
     retrievedAt: '2026-01-05',
     confidence: 0.9,
     contradictionState: 'UNCHALLENGED',

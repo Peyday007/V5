@@ -1729,6 +1729,15 @@ const SECTIONS = [
    */
   'rs-cash-work',
   'rs-cash-best',
+  /*
+   * The possibility ledger, and it is in this list for the reason the list
+   * exists. Everything structural in it — which ways of being paid exist on a
+   * discovery, where each stands, where it ranks, which of its questions are
+   * open — is the *same object* the server builds for a member, and the figures
+   * are absent from a member's payload rather than hidden in it. So a
+   * permission changes what is inside the section and never whether it is here.
+   */
+  'rs-cash-monetization',
   'rs-cash-money-row',
   'rs-cash-portfolio',
   'rs-cash-needs-detail',

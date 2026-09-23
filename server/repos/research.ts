@@ -10,6 +10,8 @@ import { parseLanes, serializeLanes } from '../domain/evidenceLanes.ts';
 import { isOpportunitySignal } from '../domain/opportunitySignals.ts';
 import { isCapabilityFinding } from '../domain/manufacturing.ts';
 import { isStructuralFinding } from '../domain/industry.ts';
+import { isMonetizationMethod } from '../domain/monetization.ts';
+import type { MonetizationMethod } from '../domain/types.ts';
 import { isLaborFinding } from '../domain/labor.ts';
 import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
 import { isDealFinding } from '../domain/dealflow.ts';
@@ -199,6 +201,9 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     evidenceLane: row.evidence_lane,
     opportunitySignal: isOpportunitySignal(row.opportunity_signal)
       ? row.opportunity_signal
+      : null,
+    monetizationMethod: isMonetizationMethod(row.monetization_method)
+      ? row.monetization_method
       : null,
     structuralFinding: isStructuralFinding(row.structural_finding)
       ? row.structural_finding
@@ -822,6 +827,8 @@ export interface InsertClaimInput {
   evidenceLane: string | null;
   /** The kind of opening this claim establishes, from the closed set, or null. */
   opportunitySignal?: OpportunitySignal | null;
+  /** How the claim says money would be made from that opening, or null. */
+  monetizationMethod?: MonetizationMethod | null;
   /** The structural fact about an industry it establishes, or null. */
   structuralFinding?: StructuralFinding | null;
   /** What the finding is about: a name, or a value from that kind's own set. */
@@ -910,7 +917,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
       await db.run(
         `INSERT INTO research_claims (id, orchestration_id, fragment_id, pass_id, pass_key, claim,
            source_url, source_title, source_publisher, source_date, evidence_excerpt,
-           evidence_locator, evidence_lane, opportunity_signal, structural_finding,
+           evidence_locator, evidence_lane, opportunity_signal, monetization_method,
+           structural_finding,
            structural_subject, structural_qualifier, structural_amount_cents,
            labor_finding, labor_subject, labor_qualifier, labor_rate_cents,
            capability_finding, capability_subject, capability_observed_on,
@@ -928,11 +936,12 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
           input.opportunitySignal ?? null,
+          input.monetizationMethod ?? null,
           input.structuralFinding ?? null, input.structuralSubject ?? null,
           input.structuralQualifier ?? null, input.structuralAmountCents ?? null,
           input.laborFinding ?? null, input.laborSubject ?? null,
@@ -1052,6 +1061,41 @@ export async function citableClaims(orchestrationId: string): Promise<ResearchCl
  * Ordered oldest first so promotion is deterministic and a bounded pass makes
  * progress through a backlog rather than re-reading its head.
  */
+/**
+ * Accepted claims that named a way of being paid, oldest first.
+ *
+ * `signalledClaims`' shape and its reasons, one column along: citable rather
+ * than accepted-fragment-only, ordered so a bounded pass makes progress through
+ * a backlog rather than re-reading its head, and scoped to the project by the
+ * orchestration rather than by anything the claim says about itself.
+ *
+ * The deep dive's own findings are excluded for `signalledClaims`' reason too:
+ * a validation packet researches one opening that already exists, and a method
+ * it names about that opening is an answer to *this* piece of work rather than
+ * a new possibility beside it.
+ */
+export async function claimedMethods(input: {
+  projectId: string;
+  limit?: number;
+}): Promise<{ claim: ResearchClaim }[]> {
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.monetization_method IS NOT NULL
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+        AND NOT EXISTS (
+          SELECT 1 FROM cash_opportunities v
+           WHERE v.validation_orchestration_id = o.id
+        )
+      ORDER BY c.created_at, c.id
+      LIMIT ?`,
+    [input.projectId, Math.max(1, input.limit ?? 50)],
+  );
+  return rows.map((row) => ({ claim: mapClaim(row) }));
+}
+
 export async function signalledClaims(input: {
   projectId: string;
   limit?: number;

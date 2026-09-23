@@ -1054,6 +1054,23 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
     'engineCards',
     'executionPaths',
     'provenance',
+    /*
+     * And the possibility ledger's own private half.
+     *
+     * The shared projection carries which ways of being paid exist on a
+     * discovery, where each stands, where it ranks and which of its questions
+     * are open **by name** — and not one value of an answer. These four are
+     * what the owner's reading adds: the two structured figures every money
+     * answer carries, the derived margin, and the risks quoted out of answers.
+     * They are matched here for the reason the money keys above are: a figure
+     * nested inside a possibility is the same disclosure as one at the top
+     * level, and a shape assertion naming no field would not have caught the
+     * first version of this projection either.
+     */
+    'amountCents',
+    'margin',
+    'economics',
+    'risks',
   ]) {
     const key = `"${forbidden}":`;
     record(
@@ -1062,6 +1079,24 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
       !raw.includes(key) ? '' : `${key} appeared in the shared body`,
     );
   }
+  /*
+   * The possibility space crossed, in the form it is supposed to cross in.
+   *
+   * A positive reading beside the absences, because "no figure crossed" is
+   * also true of a projection that sent nothing at all — and a member reading
+   * a list of openings with no way to see that one has nine live ways of being
+   * taken and another has one is the defect this ledger exists to fix.
+   */
+  const space = (body?.monetization ?? null) as {
+    total?: number;
+    paths?: { status?: string; openQuestions?: unknown[] }[];
+  } | null;
+  record(
+    'the monetization possibility space crossed, in names and counts',
+    space !== null && typeof space.total === 'number' && Array.isArray(space.paths),
+    space === null ? 'no monetization block' : `${space.total ?? 0} possibilit(ies)`,
+  );
+
   record(
     'whether a commercial grant exists crossed, and nothing about it',
     body?.commercialGrant === 'PRESENT' || body?.commercialGrant === 'ABSENT',

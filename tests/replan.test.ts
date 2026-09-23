@@ -96,6 +96,7 @@ function found(overrides: Partial<ResearchClaim> = {}): ResearchClaim {
     evidenceLocator: 'National estimates table',
     evidenceLane: 'official statistics',
     opportunitySignal: null,
+    monetizationMethod: null,
     retrievedAt: '2025-01-05',
     confidence: 0.8,
     contradictionState: 'UNCHALLENGED',

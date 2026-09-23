@@ -48,6 +48,7 @@ import { findTool } from '../server/mcp/tools.ts';
 import { profileFor } from '../server/services/russell/compilerProfiles.ts';
 import { applyDeclaredLaunchOrdinals } from '../server/services/russell/planning.ts';
 import { OPPORTUNITY_SIGNALS } from '../server/domain/opportunitySignals.ts';
+import { MONETIZATION_METHODS } from '../server/domain/monetization.ts';
 import { listWorkItems } from '../server/repos/workQueue.ts';
 import { tick } from '../server/services/russell/loop.ts';
 import {
@@ -1571,6 +1572,21 @@ describe('the submission contract', () => {
     // The half that makes the omission fatal rather than merely untidy.
     expect(items.additionalProperties).toBe(false);
     expect(items.properties.opportunity_signal.enum).toEqual([...OPPORTUNITY_SIGNALS]);
+
+    /*
+     * And the same guard for the column §39 added beside it.
+     *
+     * `monetization_method` is how a worker names a way of being paid that
+     * Brain's own method table would not have produced — the possibility
+     * ledger's answer to "are there paths I could not see before". It is the
+     * identical shape of column with the identical failure mode, so it is
+     * asserted here rather than in a test of its own: named in the
+     * description, declared in the schema, and enumerated against the closed
+     * set.
+     */
+    expect(tool.description).toContain('monetization_method');
+    expect(declared.has('monetization_method')).toBe(true);
+    expect(items.properties.monetization_method.enum).toEqual([...MONETIZATION_METHODS]);
   });
 
   it('tells a worker about the signal while it is researching, not only at submission', () => {
@@ -1587,6 +1603,16 @@ describe('the submission contract', () => {
     // And it may never read as a bar somebody has to clear to be believed.
     const line = criteria.find((one) => one.includes('opportunity_signal'))!;
     expect(line).toMatch(/lowers\s+no\s+bar/);
+
+    /*
+     * And the possibility ledger's own declaration, in the same place and for
+     * the same reason: a worker decides what it is looking for before it fills
+     * anything in, so an instruction that only appears at submission is at the
+     * wrong end of the job.
+     */
+    const method = criteria.find((one) => one.includes('monetization_method'));
+    expect(method).toBeTruthy();
+    expect(method).toMatch(/lowers\s+no\s+bar/);
   });
 
   it('leaves the public-records profile alone', () => {
@@ -1595,6 +1621,7 @@ describe('the submission contract', () => {
     const profile = profileFor('RUSSELL_PUBLIC_RECORDS_V1')!;
     for (const line of profile.completionCriteria('Michigan')) {
       expect(line).not.toContain('opportunity_signal');
+      expect(line).not.toContain('monetization_method');
     }
   });
 });
