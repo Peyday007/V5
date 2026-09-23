@@ -48,6 +48,21 @@
 CREATE TABLE IF NOT EXISTS monetization_commissions (
   id            TEXT PRIMARY KEY,
   project_id    TEXT NOT NULL REFERENCES projects(id),
+
+  -- Which sprint asked. **Provenance, with no reader, deliberately.**
+  --
+  -- An audit of this table for decorative columns found it written and never
+  -- read, which is normally the finding. It is kept, and the note is the
+  -- repair: `industry_rounds`, `deal_rounds` and `cash_discovery_rounds` each
+  -- carry the identical column and not one of the three reads it either, so
+  -- dropping it here would make this table the odd one out and lose a fact
+  -- nothing else records — which sprint a question belonged to.
+  --
+  -- The tempting reader is "a commission from a previous sprint", and it would
+  -- be a branch that can never fire: `cash_modes` is `ON CONFLICT (project_id)
+  -- DO NOTHING`, so a project has exactly one for its whole life. Inventing an
+  -- unreachable reader to justify a column is the defect this audit is for,
+  -- one level up.
   cash_mode_id  TEXT NOT NULL,
 
   -- The possibility this question is about. A commission cannot exist without

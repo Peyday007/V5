@@ -345,18 +345,45 @@ export function allocateCommissions(input: CommissionInput): CommissionAllocatio
         });
         continue;
       }
-      if (history.length >= MAX_COMMISSION_ROUNDS) {
+      /*
+       * The budget counts askings that were actually researched.
+       *
+       * `round` stays `history.length + 1` — it is a *position*, and it has to
+       * keep climbing or a second asking would collide with the first on
+       * `UNIQUE (project_id, path_id, attribute, round)` and never be inserted.
+       * What must not count is an `ABANDONED` one, because nothing was
+       * researched and nothing refused: the possibility was put away mid-question
+       * (see `abandonPutAway`), and if somebody revives it the attribute deserves
+       * the budget it started with rather than half of it. §23's *a refusal is
+       * not misconduct*, one table along and about the asker rather than the
+       * surface.
+       *
+       * The sentence below says `researched` and now only ever reports rounds
+       * that were — it used to count abandonments and tell a reader the
+       * published sources had been searched twice when they had been searched
+       * once, or not at all.
+       */
+      const researched = history.filter((one) => one.state !== 'ABANDONED');
+      if (researched.length >= MAX_COMMISSION_ROUNDS) {
         declined.push({
           subject: `${entry.path.title} — ${ATTRIBUTE[attribute].label}`,
           why:
-            `it has been researched ${history.length} times and the published sources do not ` +
+            `it has been researched ${researched.length} times and the published sources do not ` +
             'settle it. Asking a third time is the same search again, which is refused rather ' +
             'than repeated — the question stays open and stays visible',
         });
         continue;
       }
       const contradicted = input.contradicted.has(`${entry.path.id}::${attribute}`);
-      const last = history[history.length - 1];
+      /*
+       * The last asking that actually searched, for the same reason the budget
+       * counts those: the cool-off's own justification is that *the same
+       * sources will not have changed*, and an abandonment consulted no
+       * sources at all. A possibility revived the day after it was put away
+       * would otherwise wait a day for a search that never happened.
+       */
+      const researchedHistory = researched;
+      const last = researchedHistory[researchedHistory.length - 1];
       /*
        * The cool-off does not apply to a contradiction, and the reason is the
        * cool-off's own.

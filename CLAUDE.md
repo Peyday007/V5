@@ -10530,6 +10530,64 @@ that would have chosen between them exists.**
   recorded reason is the **rule** that admitted it, as a constant, because the
   owner's sentence quotes the ledger and two of the criteria read money.
 
+- **And then this branch's own new code had the defect it was written to find,
+  which is the only honest place to have found it.** The audit that produced
+  the list above was asked of the shipped ledger; asking the same question of
+  the commissioning loop turned up `ABANDONED` — declared in the schema's CHECK,
+  accepted by `settleCommission`, rendered by `inFlight.ts` with a sentence of
+  its own, and **written by nothing**. A state a person could be shown, that no
+  code path could produce. There is no version of this file's rule that applies
+  to the ledger and not to the thing auditing it.
+
+  The condition is real and reachable four ways, none of which waits for the
+  research to finish: somebody judges a possibility `ARCHIVE`, somebody judges
+  it `INVALIDATE`, it is merged into another, or the discovery underneath it is
+  archived. `abandonPutAway` reads `deriveStatus`'s own answer rather than
+  re-deciding what counts as put away, because a second opinion is how the
+  surface and the loop come to disagree about one path. It is **a positive
+  terminal status or nothing** — a path with no ledger entry is not abandoned,
+  since absence is not evidence and a composition that transiently omitted one
+  would otherwise close live research on a perfectly good possibility. It
+  cancels no mission and files no answer: the claims keep their rows whatever
+  happens to the path, and §5's rule is that a question ceasing to be worth
+  answering is not a reason to destroy the answer.
+
+  **What it frees is the slot, and that is the half that was load-bearing.**
+  Three commissions against archived possibilities held all of
+  `MAX_OPEN_COMMISSIONS` for ever, so no possibility in that project could be
+  researched again — §24's *waiting nobody can resolve* in its worst form,
+  because the person has already said they do not want this. The identical
+  defect is recorded one table along for `MAX_VALIDATIONS_IN_FLIGHT`, and this
+  loop had already been corrected once for parked missions; it was wrong twice
+  at the same bound, for two different reasons, which is what a concurrency
+  ceiling costs when the states that can hold one are not enumerated.
+
+  **Two readers had to move with it or the repair would have cost what it
+  saved.** `MAX_COMMISSION_ROUNDS` counted every prior asking, so an
+  abandonment spent half an attribute's budget and the refusal told a reader
+  the published sources had been searched twice when they had been searched
+  once — §23's *a refusal is not misconduct*, about the asker rather than the
+  surface. And the cool-off, whose entire justification is that *the same
+  sources will not have changed*, was started by an asking that consulted no
+  source at all, so a possibility revived the day after it was put away waited
+  a day for a search that never happened. `round` still climbs on every row,
+  abandonments included, because it is a *position* in
+  `UNIQUE (project_id, path_id, attribute, round)` rather than a count — a
+  budget that reused a number would collide and ask nothing, for ever.
+
+- **`cash_mode_id` is written, never read, and kept — which is the opposite
+  finding and worth saying why.** The same audit flagged it. It stays because
+  `industry_rounds`, `deal_rounds` and `cash_discovery_rounds` each carry the
+  identical column and **not one of the three reads it either**: dropping it
+  here would make this table the odd one out and lose the one record of which
+  sprint asked a question. The tempting reader — *a commission from a previous
+  sprint* — is a branch that can never fire, because `cash_modes` is
+  `ON CONFLICT (project_id) DO NOTHING` and a project has exactly one for its
+  whole life. **Inventing an unreachable reader to justify a column is the
+  defect this audit is for, one level up**, so the repair is the schema comment
+  saying it is provenance, which is what stops the next auditor spending an
+  hour rediscovering it.
+
 ## Repository map
 
 ```

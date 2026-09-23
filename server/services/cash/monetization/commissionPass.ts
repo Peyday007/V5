@@ -150,11 +150,27 @@ export async function runCommissions(input: {
   const mode = await getCashMode(input.projectId);
   if (!mode) return EMPTY;
 
-  const settledOut = await settleFinished({
+  const abandoned = await abandonPutAway({
+    projectId: input.projectId,
+    ledger: input.ledger,
+  });
+
+  const finished = await settleFinished({
     projectId: input.projectId,
     currency: mode.currency,
     ledger: input.ledger,
   });
+  /*
+   * A question closed because the possibility was put away is settled work,
+   * so it travels in the same list a finished run does. Both are "this is no
+   * longer being asked, and here is what came of it", and a reader who had to
+   * look in two places to find out whether anything is still running would
+   * eventually look in one.
+   */
+  const settledOut = {
+    recorded: finished.recorded,
+    settled: [...abandoned, ...finished.settled],
+  };
   const alreadyOpen = (await listCommissions({ projectId: input.projectId, state: 'OPEN' })).length;
 
   /*
@@ -355,6 +371,77 @@ async function openAsks(input: {
  * bar, or reads a claim's prose to decide where it belongs — the destination is
  * `evidence_lane`, which is a column.
  */
+/**
+ * Close a question whose possibility has been put away.
+ *
+ * `ABANDONED` had a reader and no writer. `inFlight.ts` rendered a sentence
+ * for it, the CHECK constraint allowed it, `settleCommission` accepted it —
+ * and nothing in the pass could produce one, so a state a person could be
+ * shown was unreachable by construction. Found by auditing this branch's own
+ * new code against the rule it was written to enforce elsewhere, which is the
+ * only honest place to find it.
+ *
+ * The condition is real and reachable four ways, all of which can happen while
+ * a question about the path is still being asked: somebody judges it
+ * `ARCHIVE`, somebody judges it `INVALIDATE`, it is merged into another
+ * possibility, or the discovery it is a way of monetizing is itself archived
+ * or declined. `deriveStatus` already turns every one of those into `ARCHIVED`
+ * or `INVALIDATED`, so this reads that rather than re-deciding it — a second
+ * opinion about what counts as put away is how the surface and the loop come
+ * to disagree about the same path.
+ *
+ * **It is a positive terminal status or nothing.** A path with no ledger entry
+ * at all is *not* abandoned here: absence is not evidence, and a composition
+ * that transiently omitted an entry would otherwise close live research on a
+ * perfectly good possibility.
+ *
+ * It costs the research nothing it can still deliver and destroys nothing.
+ * The mission is left exactly as it is rather than cancelled — its claims keep
+ * their rows in `research_claims` with full provenance whatever happens to the
+ * path, and §5's rule is that a question ceasing to be worth answering is not
+ * a reason to destroy the answer. What it *does* free is the slot: three
+ * commissions against archived possibilities would otherwise hold all of
+ * `MAX_OPEN_COMMISSIONS` for ever, which is §24's *waiting nobody can resolve*
+ * and the identical defect `MAX_VALIDATIONS_IN_FLIGHT` already records — here
+ * with nobody even able to resolve it, because the person has already said
+ * they do not want this.
+ */
+async function abandonPutAway(input: {
+  projectId: string;
+  ledger: Ledger;
+}): Promise<CommissionPass['settled']> {
+  const open = await listCommissions({ projectId: input.projectId, state: 'OPEN' });
+  if (open.length === 0) return [];
+
+  const status = new Map(
+    input.ledger.entries.map((one) => [
+      one.path.id,
+      { status: one.status, because: one.statusBecause },
+    ]),
+  );
+  const out: CommissionPass['settled'] = [];
+
+  for (const commission of open) {
+    const reading = status.get(commission.pathId);
+    if (!reading) continue;
+    if (reading.status !== 'ARCHIVED' && reading.status !== 'INVALIDATED') continue;
+
+    const outcome =
+      `The possibility was put away while this was being asked, so the answer stopped being ` +
+      `worth having: ${reading.because} The research that had already started keeps every ` +
+      `claim it filed, and if this possibility is revived the question can be asked again.`;
+    const moved = await settleCommission({
+      id: commission.id,
+      state: 'ABANDONED',
+      answered: 0,
+      outcome,
+    });
+    if (!moved) continue;
+    out.push({ commissionId: moved.id, state: moved.state, answered: 0, outcome });
+  }
+  return out;
+}
+
 async function settleFinished(input: {
   projectId: string;
   currency: string;

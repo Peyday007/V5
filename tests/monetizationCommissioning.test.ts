@@ -66,6 +66,7 @@ import {
   recordPathFact,
   settleCommission,
 } from '../server/repos/monetization.ts';
+import { judgePath } from '../server/services/cash/monetization/decisions.ts';
 import { enumeratePossibilities } from '../server/services/cash/monetization/enumerate.ts';
 import { composeLedger, rankableOf } from '../server/services/cash/monetization/ledger.ts';
 import {
@@ -1316,3 +1317,169 @@ function fakeEntry(over: { status: 'ACTIVE' | 'ARCHIVED' | 'UNPROVEN' }): Parame
     edges: [],
   } as unknown as Parameters<typeof rankableOf>[0];
 }
+
+// ---------------------------------------------------------------------------
+
+/**
+ * A question stops when the possibility it was about is put away.
+ *
+ * `ABANDONED` was declared in the schema, accepted by `settleCommission`,
+ * rendered by `inFlight.ts` with a sentence of its own — and written by
+ * nothing. A state a person could be shown, unreachable by construction: the
+ * defect this branch was written to find in the *shipped* ledger, found in its
+ * own new code by auditing it against its own rule.
+ *
+ * The condition is not hypothetical. A possibility can be put away by a
+ * person's ARCHIVE, by a person's INVALIDATE, by being merged into another, or
+ * by the discovery underneath it being archived — and none of those waits for
+ * the research about it to finish.
+ */
+describe('adversarial: a possibility put away while its question is still being asked', () => {
+  it('settles the question ABANDONED, frees the slot, and files nothing', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+
+    const opened = await tick();
+    expect(opened.opened.length).toBeGreaterThan(0);
+    const asked = opened.opened[0]!;
+    const before = await pathFactsFor(asked.pathId);
+
+    const put = await judgePath({
+      projectId,
+      pathId: asked.pathId,
+      judgment: 'ARCHIVE',
+      reason: 'the customer went elsewhere',
+      decidedByUserId: userId,
+    });
+    expect(put.ok).toBe(true);
+
+    const after = await tick();
+
+    const row = (await listCommissions({ projectId })).find((one) => one.id === asked.commissionId);
+    expect(row?.state).toBe('ABANDONED');
+    // Nothing was researched, so nothing may be reported as answered.
+    expect(row?.answered).toBe(0);
+    expect(row?.outcome).toContain('put away');
+    expect(row?.settledAt).not.toBeNull();
+
+    // It is reported as settled work rather than vanishing from the pass.
+    expect(after.settled.map((one) => one.commissionId)).toContain(asked.commissionId);
+
+    // And no answer was invented onto the path on the way out.
+    expect(await pathFactsFor(asked.pathId)).toHaveLength(before.length);
+  });
+
+  it('frees the slot, so three put-away questions cannot stop the loop for ever', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+
+    const opened = await tick();
+    expect(opened.opened.length).toBe(MAX_OPEN_COMMISSIONS);
+
+    for (const one of opened.opened) {
+      const put = await judgePath({
+        projectId,
+        pathId: one.pathId,
+        judgment: 'ARCHIVE',
+        reason: 'not worth pursuing after all',
+        decidedByUserId: userId,
+      });
+      expect(put.ok).toBe(true);
+    }
+
+    const after = await tick();
+    expect(
+      (await listCommissions({ projectId, state: 'ABANDONED' })).length,
+    ).toBe(MAX_OPEN_COMMISSIONS);
+    /*
+     * The whole point: the slots came back in the same pass that abandoned
+     * them, so the loop carries on. Before the repair every one of those
+     * questions stayed OPEN for ever, `holding` stayed at three, and no
+     * possibility in this project could ever be researched again.
+     */
+    expect(after.openNow).toBeGreaterThan(0);
+    expect(after.opened.length).toBeGreaterThan(0);
+  });
+
+  it('leaves a question alone when the ledger simply has no entry for it', async () => {
+    /*
+     * Absence is not evidence, at the one branch where reading it as evidence
+     * would close live research. A composition that transiently omitted an
+     * entry must never abandon the question about it.
+     */
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+    const opened = await tick();
+    const asked = opened.opened[0]!;
+
+    const ledger = await composeLedger({ projectId });
+    const withoutIt = {
+      ...ledger,
+      entries: ledger.entries.filter((one) => one.path.id !== asked.pathId),
+    };
+    await runCommissions({ projectId, ledger: withoutIt });
+
+    const row = (await listCommissions({ projectId })).find((one) => one.id === asked.commissionId);
+    expect(row?.state).toBe('OPEN');
+  });
+
+  it('does not spend the retry budget, so a revived possibility asks with its full one', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+    const opened = await tick();
+    const asked = opened.opened[0]!;
+
+    await judgePath({
+      projectId,
+      pathId: asked.pathId,
+      judgment: 'ARCHIVE',
+      reason: 'put away for now',
+      decidedByUserId: userId,
+    });
+    await tick();
+    expect(
+      (await listCommissions({ projectId })).find((one) => one.id === asked.commissionId)?.state,
+    ).toBe('ABANDONED');
+
+    // Somebody changes their mind. The attribute is still unanswered.
+    const revived = await judgePath({
+      projectId,
+      pathId: asked.pathId,
+      judgment: 'REVIVE',
+      reason: 'the customer came back',
+      decidedByUserId: userId,
+    });
+    expect(revived.ok).toBe(true);
+
+    const ledger = await composeLedger({ projectId });
+    const plan = allocateCommissions({
+      entries: ledger.entries,
+      rankable: ledger.entries.map(rankableOf),
+      commissions: await listCommissions({ projectId }),
+      contradicted: new Set<string>(),
+      slots: MAX_OPEN_COMMISSIONS,
+      now: Date.parse(ledger.readAt),
+    });
+
+    /*
+     * Two things at once, and both were wrong before the repair.
+     *
+     * The abandonment consulted no published source, so it may neither spend
+     * one of the two rounds `MAX_COMMISSION_ROUNDS` allows nor start the
+     * day-long cool-off whose stated justification is that *the same sources
+     * will not have changed*. Either one would have left this attribute
+     * unaskable — the first permanently after one more try, the second for a
+     * day — for a reason that was never about the research.
+     */
+    const askedAgain = plan.asks.some(
+      (one) => one.pathId === asked.pathId && one.attribute === asked.attribute,
+    );
+    const refusedAsResearched = plan.declined.some(
+      (one) =>
+        one.subject.includes(ATTRIBUTE[asked.attribute].label) &&
+        (one.why.includes('has been researched') || one.why.includes('within the last day')),
+    );
+    expect(refusedAsResearched).toBe(false);
+    expect(askedAgain).toBe(true);
+  });
+});
