@@ -650,32 +650,55 @@ describe('the deployable artifact', () => {
 
     /*
      * And the obligation already taken on carries the whole way: a sprint
-     * ending is not a customer's obligation ending. Delivery, collection and
-     * the money all still work.
+     * ending is not a customer's obligation ending. The buyer's agreement,
+     * the delivery, the acceptance, the invoice and the money all still work —
+     * through the commercial journey's routes, because a bare "deliver" or
+     * "collect" is refused until the rows that make it true exist.
      */
-    const delivering = await call('POST', `/api/cash/opportunities/${other}/deliver`, {
-      cookie: admin,
-      body: {},
-    });
-    expect(delivering.status).toBe(200);
-
-    const collected = await call('POST', `/api/cash/opportunities/${other}/collect`, {
+    const bare = await call('POST', `/api/cash/opportunities/${other}/collect`, {
       cookie: admin,
       body: { outcome: 'Paid in full by bank transfer.' },
     });
-    expect(collected.status).toBe(200);
+    expect(bare.status).toBe(422);
 
-    const settled = await call('POST', `/api/projects/${project}/cash/money`, {
+    const offered = await call('POST', `/api/projects/${project}/cash/obligations`, {
       cookie: admin,
       body: {
-        kind: 'SETTLEMENT',
-        amountCents: 60_000,
-        currency: 'USD',
-        verifiedReference: 'smoke-bank-0001',
-        idempotencyKey: 'settlement:smoke-bank-0001',
+        opportunityId: other,
+        buyer: 'The buyer named on the card',
+        scope: 'The agreed scope; nothing beyond it',
+        priceCents: 60_000,
+        acceptanceConditions: ['The buyer confirms the deliverable works'],
+        deliveryPlan: 'Delivered by the operator',
+        deliveryRoute: 'HUMAN',
       },
     });
-    expect(settled.status).toBe(200);
+    expect(offered.status).toBe(200);
+    const obligation = offered.body.obligation.id;
+    const step = async (action: string, body: unknown) =>
+      (await call('POST', `/api/cash/obligations/${obligation}/${action}`, { cookie: admin, body })).status;
+    expect(await step('send', { reference: 'smoke-offer-0001' })).toBe(200);
+    expect(await step('answer', { kind: 'AGREED_TO_BUY', channel: 'email', reference: 'smoke-yes-0001', excerpt: 'Agreed.' })).toBe(200);
+    expect(await step('produce', { productionReference: 'operator' })).toBe(200);
+    expect(
+      await step('deliver', {
+        deliverableReference: 'smoke-delivery-0001',
+        checks: [{ condition: 'The buyer confirms the deliverable works', met: true, evidence: 'test run 1' }],
+      }),
+    ).toBe(200);
+    expect(await step('answer', { kind: 'ACCEPTED_DELIVERY', channel: 'email', reference: 'smoke-ok-0001', excerpt: 'Works.' })).toBe(200);
+    const invoiced = await call('POST', `/api/cash/obligations/${obligation}/invoice`, {
+      cookie: admin,
+      body: { provider: 'bank', providerReference: 'smoke-inv-0001' },
+    });
+    expect(invoiced.status).toBe(200);
+    for (const [to, reference] of [['PAID', 'smoke-pay-0001'], ['SETTLED', 'smoke-bank-0001']]) {
+      const moved = await call('POST', `/api/cash/invoices/${invoiced.body.invoice.id}/state`, {
+        cookie: admin,
+        body: { to, reference },
+      });
+      expect(moved.status).toBe(200);
+    }
 
     const final = await call('GET', `/api/projects/${project}/cash`, { cookie: admin });
     expect(final.body.myCash.position.availableFundsCents).toBe(60_000);
