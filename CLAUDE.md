@@ -5584,12 +5584,39 @@ session stays at eight hours, because a break-glass session is not a working
 session.
 
 **And a revocation has to be able to reach the session it retired.**
-`user_sessions.passkey_id` (migration 088 / pg 079) records which device opened
-one, so revoking a device ends its sessions and leaves the person's other
-devices alone — losing one phone is not a reason to sign in again everywhere —
-while a recovery, where nothing that person holds can be trusted, ends all of
-them. Without that column a retired credential kept working until its session
-expired, which was a rounding error at twelve hours and is not at thirty days.
+`user_sessions.passkey_id` (`073_device_sessions.sql`, pg
+`064_device_sessions.sql`) records which device opened one, so revoking a device
+ends its sessions and leaves the person's other devices alone — losing one phone
+is not a reason to sign in again everywhere — while a recovery, where nothing
+that person holds can be trusted, ends all of them. Without that column a
+retired credential kept working until its session expired, which was a rounding
+error at twelve hours and is not at thirty days.
+
+**That reference said `migration 088 / pg 079` and had since 2026-09-21, and the
+correction is recorded rather than edited away — because what made it wrong is
+the ordinary operation of this repository rather than a typo.** §25's rule is
+that a colliding migration number moves, and on 2026-09-23 two of them did:
+production took `088` / pg `079` for `routine_no_show_boundary` while a
+monetization branch held the same pair. So a reader following this sentence
+today opens a fleet quarantine boundary, finds no `passkey_id` in it, and
+concludes either that the column does not exist or that this file is describing
+some other Brain. **A number is a position in a sequence two workstreams can
+both reach for; a filename is the thing itself**, which is why this now names
+the file.
+
+An earlier draft of this paragraph ended by saying every other migration
+reference in the document was correct. **It was written before anybody
+checked, and checking found a second one**, which is worth more than the
+sentence it replaces: §42's `design_bin_requests (075 / pg 066)` is really
+`081_design_bin_requests.sql` / pg `072`, and the numbers it cited now name the
+manufacturing kernel and the people-and-capacity migration — a reader following
+it lands on a real file about something else entirely, which is the worst of the
+three ways a reference can be wrong. Both are fixed by naming the file. The
+remaining numeric references were then read against the chain one at a time
+rather than assumed: §34's `066`, §32's `078`, §47's `084/075` and §47's
+`085/076` each open the migration the sentence describes. Every one of them is
+still a hostage to the next collision, and the durable answer is to cite the
+filename.
 
 **The screen is what was wrong, so the screen is what is asserted.** Every
 server test passed while the form was there and would have gone on passing if it
@@ -8797,7 +8824,10 @@ nowhere.
   nothing at all, so the digest a review was finally recorded with came from
   reading the table back **at ingest time** — a different question. A capture
   written in between would have been folded in silently, and a judgement about
-  one set would have settled another. `design_bin_requests` (075 / pg 066) is
+  one set would have settled another. `design_bin_requests`
+  (`081_design_bin_requests.sql`, pg `072_design_bin_requests.sql` — it read
+  `075 / pg 066`, which today name the manufacturing kernel and the people-and-
+  capacity migration) is
   the binding, written when the question is asked and compared before the
   answer is believed; §23's audit reopen answers the identical shape the
   identical way. A bin carrying a *render* request is refused by kind rather
