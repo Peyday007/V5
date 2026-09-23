@@ -124,7 +124,7 @@ import { listWorkItems } from '../server/repos/workQueue.ts';
 import { readObject, storageKeyOf } from '../server/services/storage.ts';
 import { startPacket } from '../server/services/research/startPacket.ts';
 import { listUncertainties } from '../server/repos/researchIntelligence.ts';
-import { archiveWorkstream, createWorkstream, getWorkstream, listWorkstreams } from '../server/repos/register.ts';
+import { archiveWorkstream, createWorkstream, getWorkstream } from '../server/repos/register.ts';
 import { researchIntelligenceView } from '../server/services/research/intelligence/view.ts';
 import { approvePlan } from '../server/services/research/packetRunner.ts';
 import type { Project, WorkerScope } from '../server/domain/types.ts';
@@ -142,6 +142,8 @@ const OWNER_EMAIL = 'verification-owner@brain.invalid';
 const WORKER_NAME = 'verification-worker';
 const RESEARCH_WORKER_NAME = 'verification-worker-research';
 const FIXTURE_SLUG = 'verification-scope';
+/** A second verification project the member is never granted: the goals boundary's refusals are proven against it. */
+const FOREIGN_FIXTURE_SLUG = 'verification-scope-foreign';
 const VERIFICATION_LAYER_NAME = 'Verification Layer';
 const VERIFICATION_LAYER_SLUG = 'verification-layer';
 
@@ -464,7 +466,10 @@ async function setUp(): Promise<Fixtures> {
 
   // The project this run must be *refused*. Whichever real project exists —
   // never written to, never read beyond its id, only asked for and denied.
-  const holdout = (await listProjects()).find((project) => project.id !== scope.id) ?? null;
+  // Not the goals boundary's own foreign fixture: every check written against
+  // the holdout was written against a real operation, and that stays true.
+  const holdout =
+    (await listProjects()).find((project) => project.id !== scope.id && project.slug !== FOREIGN_FIXTURE_SLUG) ?? null;
 
   const memberPassword = freshPassword();
   const existing = await getUserByEmail(MEMBER_EMAIL);
@@ -1206,11 +1211,11 @@ async function sharedCashBoundary(fixtures: Fixtures, cookie: string): Promise<v
 /**
  * Goals, as an ordinary member and as a machine (§50).
  *
- * Read against the production goals, not a fixture: the member may read only
- * goals in projects it can read, a goal in any other operation answers the same
- * 404 with the same body as one that does not exist, and a worker credential is
- * refused by type. The administrator's reading is what supplies a real foreign
- * goal to compare with — and a Brain holding none says so rather than passing.
+ * Read against the production Brain with goals this run files itself: the
+ * member reads the goal in its own project and none from any other, a goal in
+ * a project it was never granted answers the same 404 with the same body as one
+ * that does not exist — for a read and for a pause — and a worker credential is
+ * refused by type. Nothing here reads or writes a real person's goal.
  */
 async function goalsBoundary(fixtures: Fixtures, cookie: string): Promise<void> {
   console.log('\nGoals, as a member and as a machine');
@@ -1221,57 +1226,89 @@ async function goalsBoundary(fixtures: Fixtures, cookie: string): Promise<void> 
   const list = await call('/api/projects', { cookie });
   const visible = new Set(((list.json as { projects?: { id: string }[] })?.projects ?? []).map((p) => p.id));
 
-  const mine = await call('/api/goals', { cookie });
-  expectStatus('a member may read the goals briefing', mine.status, 200);
-  const goals = ((mine.json as { goals?: { id: string; projectId: string | null }[] })?.goals ?? []);
-  const stray = goals.filter((one) => one.projectId !== null && !visible.has(one.projectId));
-  record(
-    'and reads no goal from a project it may not read',
-    stray.length === 0,
-    `${goals.length} goal(s) readable, ${stray.length} outside the member's projects`,
-  );
-
   /*
-   * The comparison needs a live goal in a project the member may not read, and
-   * the first version asked the verification administrator for one — who
-   * administers the verification project only, so it never found one and the
-   * byte-identical refusal was skipped on every deploy while reading as a pass.
-   * A vacuous guard reads as coverage (§41). The harness runs inside the
-   * container, so it reads the rows directly; on a Brain with no such goal it
-   * files one in the holdout project and archives it afterwards, keeping the
-   * row (§5).
+   * Two goals this run files and archives, never somebody's real one. The
+   * first version compared against a real production goal and POSTed a pause
+   * on it as the member — refused, so harmless, but a regression in the very
+   * boundary being checked would have paused the owner's actual work from the
+   * release gate. The second version, and the one before it, read `0 goal(s)`
+   * as the member and so never proved a goal the member *may* read is served:
+   * half of the boundary, passing vacuously (§41). So: one goal in the
+   * member's own verification project, which must be readable, and one in a
+   * verification project the member is never granted, which must be refused
+   * exactly as an absent goal is. Both projects are TECHNICAL (§47), neither is
+   * a real operation, and both goals are archived — rows kept (§5) — whatever
+   * the checks decide.
    */
-  let foreign = (await listWorkstreams()).find((one) => one.projectId !== null && !visible.has(one.projectId)) ?? null;
-  let filed: string | null = null;
-  if (!foreign && fixtures.holdout) {
-    foreign = await createWorkstream({
-      projectId: fixtures.holdout.id,
-      title: 'Hosted verification: a goal the member may not read',
-      intent: 'Exists only so the hosted verification can compare a forbidden goal with an absent one.',
-      purpose: 'CAPABILITY',
-      createdByUserId: null,
-    });
-    filed = foreign.id;
-  }
-  if (!foreign) {
-    record('a foreign goal existed to compare with', true, 'this Brain has no project the member may not read; skipped');
-  } else {
-    try {
+  const foreignScope =
+    (await getProjectBySlug(FOREIGN_FIXTURE_SLUG)) ??
+    (await createProject({
+      name: 'Verification scope, not the member\'s',
+      slug: FOREIGN_FIXTURE_SLUG,
+      description:
+        'Created by scripts/verify-hosted.ts. The verification member is never granted it, so ' +
+        'hosted refusals can be proven against a project that exists without touching a real one.',
+      purpose: 'TECHNICAL',
+    }));
+  const own = await createWorkstream({
+    projectId: fixtures.scope.id,
+    title: 'Hosted verification: a goal the member may read',
+    intent: 'Exists only so the hosted verification can prove a readable goal is served.',
+    purpose: 'CAPABILITY',
+    createdByUserId: null,
+  });
+  const foreign = await createWorkstream({
+    projectId: foreignScope.id,
+    title: 'Hosted verification: a goal the member may not read',
+    intent: 'Exists only so the hosted verification can compare a forbidden goal with an absent one.',
+    purpose: 'CAPABILITY',
+    createdByUserId: null,
+  });
+  try {
+    record(
+      'the member is not a member of the foreign verification project',
+      !visible.has(foreignScope.id) && visible.has(fixtures.scope.id),
+      `member reads scope=${visible.has(fixtures.scope.id)}, foreign=${visible.has(foreignScope.id)}`,
+    );
+
+    const mine = await call('/api/goals', { cookie });
+    expectStatus('a member may read the goals briefing', mine.status, 200);
+    const goals = ((mine.json as { goals?: { id: string; projectId: string | null }[] })?.goals ?? []);
+    const stray = goals.filter((one) => one.projectId !== null && !visible.has(one.projectId));
+    record(
+      'and reads no goal from a project it may not read',
+      stray.length === 0 && !goals.some((one) => one.id === foreign.id),
+      `${goals.length} goal(s) readable, ${stray.length} outside the member's projects`,
+    );
+    record(
+      'and does read the goal in its own project',
+      goals.some((one) => one.id === own.id),
+      goals.some((one) => one.id === own.id) ? own.id : `${own.id} missing from ${goals.length} goal(s)`,
+    );
+    const ownDetail = await call(`/api/goals/${own.id}`, { cookie });
+    expectStatus('and may open that goal', ownDetail.status, 200);
+
     const forbidden = await call(`/api/goals/${foreign.id}`, { cookie });
     const absent = await call('/api/goals/wst_00000000000000000000', { cookie });
     expectStatus("another operation's goal is not found", forbidden.status, 404);
     record(
       'and its refusal is byte-identical to a goal that does not exist',
       forbidden.body === absent.body,
-      forbidden.body === absent.body ? 'identical' : 'the bodies differ',
+      forbidden.body === absent.body ? `identical (${foreign.id})` : 'the bodies differ',
     );
     const pause = await call(`/api/goals/${foreign.id}/pause`, { cookie, method: 'POST', body: { reason: 'verification' } });
+    const absentPause = await call('/api/goals/wst_00000000000000000000/pause', { cookie, method: 'POST', body: { reason: 'verification' } });
     expectStatus('and cannot be paused by the member', pause.status, 404);
+    record(
+      'and that refusal is byte-identical too',
+      pause.body === absentPause.body,
+      pause.body === absentPause.body ? 'identical' : 'the bodies differ',
+    );
     const after = await getWorkstream(foreign.id);
-    record('and the refused pause changed nothing', after?.pausedAt === foreign.pausedAt, `pausedAt=${after?.pausedAt ?? 'null'}`);
-    } finally {
-      if (filed) await archiveWorkstream(filed, 'hosted verification finished comparing refusals').catch(() => undefined);
-    }
+    record('and the refused pause changed nothing', after?.pausedAt === null, `pausedAt=${after?.pausedAt ?? 'null'}`);
+  } finally {
+    await archiveWorkstream(own.id, 'hosted verification finished').catch(() => undefined);
+    await archiveWorkstream(foreign.id, 'hosted verification finished').catch(() => undefined);
   }
 
   const machine = await call('/api/goals', { bearer: fixtures.credential });
