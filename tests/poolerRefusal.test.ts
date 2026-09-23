@@ -45,11 +45,16 @@ import { describePoolerRefusal } from '../server/db/adapters/postgres.ts';
  * The checkout timeout exactly as production printed it, and nothing more.
  *
  * Deploy 323's post-restart hosted verification, 2026-09-23 09:13:17Z, after
- * reading 434 documents and handing a worker its assignment; then both
- * console reads dispatched at 09:38:43Z, which is the tell that it is not
- * about the caller. **No `code` is set on this fixture on purpose**: the
- * harness printed the message and no fields, so the code is not established,
- * and a fixture that invented one would be pinning a guess.
+ * reading 434 documents and handing a worker its assignment. **No `code` is
+ * set on this fixture on purpose**: the harness printed the message and no
+ * fields, so the code is not established, and a fixture that invented one
+ * would be pinning a guess.
+ *
+ * The two console reads that failed twenty-five minutes later are *not* this
+ * condition, and an earlier version of this comment said they were. They died
+ * on the boot path with `Connection terminated due to connection timeout` and
+ * no pooler marker, which is `tests/bootHint.test.ts`'s subject. Same
+ * scarcity underneath; different error, different diagnosis.
  */
 function productionCheckoutTimeout(): Error {
   return new Error(

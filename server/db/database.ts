@@ -83,11 +83,19 @@ export async function initDatabase(
 /**
  * Turn the driver's own wording into the change that would fix it.
  *
- * These three account for most first-boot failures, and each has a specific
- * remedy that "could not reach the database" does not convey. Anything else is
- * reported as the driver phrased it rather than guessed at.
+ * Each branch has a specific remedy that "could not reach the database" does
+ * not convey, and they are ordered so the more specific condition wins.
+ * Anything else is reported as the driver phrased it rather than guessed at.
+ *
+ * **Exported so the branches can be asserted directly**, which is the reason
+ * `describePoolExhaustion` and `describePoolerRefusal` are exported from the
+ * adapter beside it: the alternative is driving a real failure of each kind
+ * through `initDatabase`, and the conditions that differ most here — a
+ * refused connection against one that was never handed over — differ by
+ * whether a host happens to answer, which is not something a test can pin
+ * without becoming flaky. Pure, and it reports rather than decides.
  */
-function hintFor(reason: string): string {
+export function hintFor(reason: string): string {
   if (/does not support SSL/i.test(reason)) {
     return (
       ' Brain requires TLS unless the connection string says otherwise, because a managed ' +
@@ -118,6 +126,42 @@ function hintFor(reason: string): string {
   }
   if (/password|authentication|role .* does not exist/i.test(reason)) {
     return ' The host answered, so the address is right and the credentials are not.';
+  }
+  /*
+   * A connection that was never handed over in time, which is **not** an
+   * unreachable host and reads exactly like one.
+   *
+   * The sentence this hint attaches to is *"could not reach <host>"*, and
+   * with no hint the whole message a reader gets is that plus
+   * `Connection terminated due to connection timeout`. Both halves point at
+   * the address and the network. Production, 2026-09-23 09:38:59Z: two
+   * operator reads died with precisely that against a Brain that was serving
+   * `/healthz` in 0.38s and answering `/api/auth/login` from Postgres in 5.2s
+   * — the host was reachable throughout, and what had run out was
+   * connections.
+   *
+   * On a managed session-mode pooler that is the ordinary shape: the limit is
+   * shared with every other client of it, the running app holds its own, and
+   * each `flyctl ssh console` script opens a pool beside them. So this names
+   * the likely condition and the one knob that makes it worse, and it does
+   * **not** assert it — a host that accepts TCP and then stalls produces the
+   * same message, and a hint that ruled that out would be the cries-wolf
+   * failure one category along.
+   *
+   * Last, because every branch above it is a condition this one would
+   * otherwise swallow: a refused connection, an unresolvable name and an
+   * untrusted certificate all say more than "it timed out".
+   */
+  if (/connection timeout|timeout expired|ETIMEDOUT|timeout exceeded when trying to connect/i.test(reason)) {
+    return (
+      ' The address resolved and nothing refused it — what did not happen in time is getting a ' +
+      'connection. Against a managed pooler that usually means every connection it may hand out ' +
+      'is taken: the limit is shared with every other client of it, the running app holds its ' +
+      'own, and each operator script opens a pool beside them. Raising ' +
+      'BRAIN_DATABASE_POOL_SIZE makes that worse rather than better; what clears it is fewer ' +
+      'concurrent clients, or waiting. A host that accepts a connection and then stalls looks ' +
+      'the same from here, so check that the database is healthy before concluding either.'
+    );
   }
   return '';
 }

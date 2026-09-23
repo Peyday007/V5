@@ -122,13 +122,23 @@ export function describePoolExhaustion(reading: PoolReading): string {
  * post-restart hosted verification died on
  * `(ECHECKOUTTIMEOUT) unable to check out connection from the pool after
  * 15000ms in Session mode` after getting as far as reading 434 documents and
- * handing a worker its assignment, and both console reads dispatched
- * twenty-five minutes later failed the same way. Neither diagnosis fired:
- * Brain's own pool had not timed out, so `describePoolExhaustion` was never
- * reached, and the marker is not `EMAXCONNSESSION`, so this function returned
- * null. **A mechanism that does not reach the condition it exists for is not
- * a mechanism**, and what a reader got instead was the driver's bare string —
+ * handing a worker its assignment. Neither diagnosis fired: Brain's own pool
+ * had not timed out, so `describePoolExhaustion` was never reached, and the
+ * marker is not `EMAXCONNSESSION`, so this function returned null. **A
+ * mechanism that does not reach the condition it exists for is not a
+ * mechanism**, and what a reader got instead was the driver's bare string —
  * which is the exact thing §27 added these sentences to stop.
+ *
+ * **An earlier version of this comment said the two console reads dispatched
+ * twenty-five minutes later "failed the same way". They did not, and the
+ * difference is the whole reason one fix here was not enough.** They failed
+ * in `openCloud`'s verification query, before any statement, with
+ * `Connection terminated due to connection timeout` wrapped in *"could not
+ * reach"* — a message carrying no pooler marker at all, which this function
+ * cannot match and should not try to. Their diagnosis is `hintFor` in
+ * `server/db/database.ts`, which had no branch for a timeout either. Same
+ * underlying scarcity, two paths, two sentences; widening only this one would
+ * have left the condition actually seen on the console still unexplained.
  *
  * The two pooler conditions are named apart rather than folded together,
  * because they say different things about where the limit is. `EMAXCONNSESSION`
