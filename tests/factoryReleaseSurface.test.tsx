@@ -45,6 +45,8 @@ import { ensureChangeRequest, approveChangeRequest, ensureCampaign, patchCampaig
 import { requestRelease, getRelease } from '../server/repos/factoryFleet.ts';
 import { attachContext, newRequestId } from '../server/services/identity/context.ts';
 import type { Principal, ProjectMembership, ProjectRole } from '../server/domain/types.ts';
+import { PROJECT_ROLES } from '../server/domain/types.ts';
+import { roleAtLeast } from '../server/services/identity/policy.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', {
   url: 'http://127.0.0.1/',
@@ -384,9 +386,31 @@ describe('the release decision, on the surface a person already uses', () => {
      * one: it is rendered for everybody who can read the campaign, exactly as
      * the approve control beside it is, and the route decides. So the assertion
      * is on the route, from the same session, with the level lowered.
+     *
+     * **The role has to be a real one, and this asserts that before it uses
+     * it.** An earlier version of this test lowered the level to `'READER'`,
+     * which is not a `ProjectRole` at all — `PROJECT_ROLES` is `OWNER`,
+     * `ADMIN`, `MEMBER`, `VIEWER`. The refusal still arrived, so the test
+     * passed, but it arrived through `roleAtLeast`'s unknown-role branch
+     * (`PROJECT_ROLES.indexOf(role) === -1`) rather than through the rank
+     * comparison this test exists to exercise. It proved that an impossible
+     * role is refused, which nothing in production can produce, instead of
+     * that the lowest role a person can actually hold is. That is the vacuous
+     * guard this repository keeps correcting, and it survived because
+     * `tsconfig.json` did not compile `tests/**\/*.tsx`.
+     *
+     * So `VIEWER` is named, and its two load-bearing properties are asserted
+     * rather than assumed: it *is* a real role, and it is nonetheless below
+     * the `MEMBER` that `WRITE` needs. Swap either one and this fails here,
+     * naming the reason, instead of passing for the wrong one.
      */
+    expect(PROJECT_ROLES).toContain('VIEWER');
+    expect(roleAtLeast('VIEWER', 'MEMBER'), 'VIEWER ranks below the MEMBER that WRITE needs').toBe(
+      false,
+    );
+
     brainAdmin = false;
-    role = 'READER';
+    role = 'VIEWER';
     const refused = await fetch(`/api/factory/campaigns/${campaignId}/release`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

@@ -22,6 +22,7 @@ import {
   effectiveTarget,
   getAccountByName,
   getRoutineByRef,
+  unansweredFiresByRoutine,
   sessionsForRoutine,
   listAccounts,
   listRoutines,
@@ -50,7 +51,11 @@ import {
   tryPair,
   type DecidedPair,
 } from '../server/services/dispatch/secretReconcile.ts';
-import { proposeScale, shouldQuarantine } from '../server/services/dispatch/scaler.ts';
+import {
+  NO_SHOW_QUARANTINE_THRESHOLD,
+  proposeScale,
+  shouldQuarantine,
+} from '../server/services/dispatch/scaler.ts';
 import { referenceFleet, REFERENCE_SIZES, simulate } from '../server/services/dispatch/simulate.ts';
 import { activationTrace, workloadProfile } from '../server/services/dispatch/profiles.ts';
 import { getBin, listBins, listDispatchesForBin } from '../server/repos/bins.ts';
@@ -589,6 +594,22 @@ async function main(): Promise<void> {
     if (!routine) return refuse(`no Routine registered as ${ref}.`);
     const changed = await setRoutineState({ routineId: routine.id, from: routine.state, to, reason });
     if (!changed) return refuse(`${ref} moved between the read and the write. Read it again.`);
+    /*
+     * And say what leaving QUARANTINED just did, because it is not obvious and
+     * it is the whole reason the transition works.
+     *
+     * The no-show count is read from an append-only ledger since this surface's
+     * own last arrival, and re-enabling produces no arrival. Without a boundary
+     * the next tick would put it straight back, so leaving QUARANTINED writes
+     * one — and an operator who is not told that will not know what to expect
+     * if the condition was not actually fixed.
+     */
+    if (routine.state === 'QUARANTINED' && to !== 'QUARANTINED') {
+      console.log(
+        `  Unanswered fires before now are forgiven. If the condition is not actually fixed, ` +
+          `${NO_SHOW_QUARANTINE_THRESHOLD} more unanswered fires take it out again.`,
+      );
+    }
     return ok(`set-state routine ${ref} ${routine.state} -> ${to}`);
   }
 
@@ -733,6 +754,21 @@ async function main(): Promise<void> {
     const routines = await listRoutines();
     const snapshot = await fleetSnapshot();
     const fleetPolicy = await currentPolicy('FLEET', null);
+    /*
+     * Unanswered fires, per surface, since that surface last answered.
+     *
+     * Printed instead of `consecutive_no_shows`, which this line used to show
+     * and which cannot express a pool: an arrival clears it for **every**
+     * Routine bound to the same worker, so in a fleet of four Claude accounts
+     * on one Factory identity a dead surface reads 0 because its healthy
+     * siblings keep answering. It is also 1 on every working surface whose
+     * worker is still booting, because it is advanced optimistically on each
+     * successful fire.
+     *
+     * This is the number the dispatcher actually quarantines on, read from the
+     * same function, so the screen and the decision cannot disagree.
+     */
+    const unanswered = await unansweredFiresByRoutine();
 
     console.log('FLEET');
     console.log(`  accounts    ${accounts.length}`);
@@ -815,7 +851,7 @@ async function main(): Promise<void> {
             // operator reading everything except the deciding field guesses.
             `caps=[${routine.capabilities.join(',')}]  ` +
             `secret=${routine.tokenSecretName}  fires=${routine.totalFires} ` +
-            `refusals=${routine.totalRefusals} no-shows=${routine.consecutiveNoShows}` +
+            `refusals=${routine.totalRefusals} unanswered=${unanswered.get(routine.id) ?? 0}` +
             (inFlight ? `  in-flight=${inFlight.routineInFlight}` : '  (not routable)') +
             (routine.retryAt ? `  retry_at=${routine.retryAt}` : ''),
         );
@@ -836,6 +872,15 @@ async function main(): Promise<void> {
          * healthy Routine's last recorded reason is history rather than a
          * condition, and printing it would read as a live problem.
          */
+        if (routine.noShowsForgivenAt && routine.state === 'ENABLED') {
+          /*
+           * Only while it is a live fact. A surface an operator restored is
+           * counting unanswered fires from that instant rather than from its
+           * last arrival, and a reader comparing `unanswered=0` against a fire
+           * count in the hundreds is owed the reason.
+           */
+          console.log(`          restored ${routine.noShowsForgivenAt}; unanswered counts from there`);
+        }
         if (routine.state !== 'ENABLED' && routine.stateReason?.trim()) {
           /*
            * With the row's own timestamp, precisely labelled.
@@ -1100,7 +1145,17 @@ async function probeBin(input: {
       const used = tokens.filter((token) => token.lastUsedAt !== null);
       console.log(`  oauth       ${tokens.length} token(s) minted for this worker, ${used.length} used`);
       console.log(`  fires       ${routine.totalFires} sent, ${routine.totalRefusals} refused`);
-      console.log(`  arrivals    ${routine.consecutiveNoShows} consecutive fire(s) with nobody arriving`);
+      /*
+       * The derived per-surface count, never `consecutive_no_shows`.
+       *
+       * That column is cleared by an arrival on **any** Routine bound to the
+       * same worker, which is exactly what a pool is — so on the one command
+       * whose whole job is to ask whether *this* surface works, it read 0 for a
+       * dead surface whose healthy siblings were answering. It is also 1 on a
+       * working surface whose worker is still booting.
+       */
+      const unansweredHere = (await unansweredFiresByRoutine()).get(routine.id) ?? 0;
+      console.log(`  arrivals    ${unansweredHere} fire(s) since the last arrival with nobody arriving`);
 
       /*
        * The correlation, which is the only thing that proves *this Routine* uses
@@ -1151,7 +1206,7 @@ async function probeBin(input: {
         problems.push('a token exists for this worker but has never been used to call Brain');
       }
       problems.push(...proof.problems);
-      if (routine.totalFires > 0 && routine.consecutiveNoShows >= routine.totalFires) {
+      if (unansweredHere > 0 && routine.totalFires > 0 && unansweredHere >= routine.totalFires) {
         problems.push('every fire to this Routine has gone unanswered');
       }
     }
@@ -1394,6 +1449,10 @@ async function probeBin(input: {
     }
 
     console.log(`POOL  ${report.repository}  as ${report.expectedWorkerName}`);
+    // Two numbers, each labelled as what it counts. A pool of three Routines on
+    // one subscription is not three accounts' capacity, and a line reading
+    // `surfaces 3` alone is how it gets read as one.
+    console.log(`  accounts   ${report.accounts}`);
     console.log(`  surfaces   ${report.surfaces.length}`);
     for (const surface of report.surfaces) {
       console.log('');
@@ -1410,7 +1469,15 @@ async function probeBin(input: {
       );
       console.log(`    fires     ${surface.lastOutcome}`);
       if (surface.chain) {
-        console.log(`    proven    fired ${surface.chain.sentAt ?? 'recorded on the dispatch'}`);
+        /*
+         * The word says which verdict this chain is under. A `STALE` surface
+         * has a genuinely closed chain and printing "proven" over it would put
+         * two answers to one question on one screen — §29's status
+         * contradicting the line above it, which is what teaches a reader to
+         * stop believing the verdict column.
+         */
+        const label = surface.verdict === 'STALE' ? 'was' : 'proven';
+        console.log(`    ${label.padEnd(9)} fired ${surface.chain.sentAt ?? 'recorded on the dispatch'}`);
         console.log(`              arrived ${surface.chain.sessionRef} at ${surface.chain.observedAt}`);
         console.log(`              assigned and completed ${surface.chain.binId}`);
       }
@@ -1433,6 +1500,12 @@ async function probeBin(input: {
           console.log(`  SKIPPED   ${surface.routineName}: reconnect it as ${report.expectedWorkerName} first.`);
           continue;
         }
+        /*
+         * A `STALE` surface is probed exactly like an unproven one, and that is
+         * the whole remedy for the verdict: its chain closed once and Brain's
+         * later evidence disagrees, so the only thing that settles it is a new
+         * fire that either arrives or does not.
+         */
         const routine = await getRoutineByRef(surface.routineRef);
         const worker = routine?.workerId ? await getWorker(routine.workerId) : null;
         const routing = routine?.workerId ? await getWorkerRouting(routine.workerId) : null;
@@ -1500,8 +1573,24 @@ async function probeBin(input: {
     console.log(`  ${proposal.direction}  ${proposal.from} -> ${proposal.to}`);
     console.log(`  ${proposal.reason}`);
     console.log(`  automatic=${proposal.automatic}`);
+    /*
+     * The same per-surface count the dispatcher decides on.
+     *
+     * This passed the Routine row straight in, so it advised on
+     * `consecutive_no_shows` — a column a sibling's arrival clears — while the
+     * tick quarantines on the derived count. Two readers of one question, and
+     * the advice was the one that could not see a dead surface in a pool.
+     *
+     * It remains advice: nothing here changes a state. A surface the tick has
+     * already taken out of routing is not proposed again.
+     */
+    const unanswered = await unansweredFiresByRoutine();
     for (const routine of await listRoutines()) {
-      const verdict = shouldQuarantine(routine);
+      if (routine.state !== 'ENABLED') continue;
+      const verdict = shouldQuarantine({
+        consecutiveNoShows: unanswered.get(routine.id) ?? 0,
+        consecutiveFailures: routine.consecutiveFailures,
+      });
       if (verdict.quarantine) console.log(`  QUARANTINE CANDIDATE ${routine.routineRef}: ${verdict.reason}`);
     }
     return ok(`scale-advice ${proposal.direction} ${proposal.from}->${proposal.to}`);

@@ -591,7 +591,7 @@ function Surface({ surface }: { surface: SurfaceReading }): JSX.Element {
           {surface.detail.routineRef} &middot; secret {surface.detail.secretName}
           {surface.detail.secretPresent ? ' (set)' : ' (not set)'} &middot;{' '}
           {surface.detail.totalFires} fire(s), {surface.detail.totalRefusals} refused,{' '}
-          {surface.detail.consecutiveNoShows} unanswered
+          {surface.detail.unansweredFires} unanswered
           {surface.detail.stateReason ? ` · ${surface.detail.stateReason}` : ''}
         </span>
       ) : null}

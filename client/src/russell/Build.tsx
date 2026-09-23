@@ -217,10 +217,43 @@ function Repositories({
             </div>
             <p className="rs-hint">{repo.description}</p>
             {repo.readiness === 'READY' ? (
+              /*
+               * Accounts, then surfaces, then what has actually run.
+               *
+               * This used to be one sentence — "running on A, B and C" — and a
+               * reader counted three Claude accounts out of it. Three Routines
+               * on one subscription produce exactly that sentence, and §23's
+               * whole account-versus-Routine distinction is that a second
+               * Routine doubles how fast Brain can *start* sessions and changes
+               * nothing about how much that account may *do*. Sizing a fleet on
+               * it is sizing it on a fiction.
+               *
+               * And a Routine registered a minute ago read the same as one with
+               * a completed chain behind it. `proven` is the four-row chain the
+               * server read through the same module `/people` reads, so the two
+               * screens cannot disagree about whether a surface works.
+               */
               <p className="rs-hint">
-                Registered as <code>{repo.workerName}</code>, running on{' '}
-                {repo.surfaces.join(', ')}.
+                Registered as <code>{repo.workerName}</code>, on{' '}
+                {repo.accountsServing === 1 ? '1 Claude account' : `${repo.accountsServing} Claude accounts`}
+                {repo.surfaces.length === repo.accountsServing
+                  ? ''
+                  : ` across ${repo.surfaces.length} surfaces`}
+                .{' '}
+                {repo.provenSurfaces === repo.surfaces.length
+                  ? 'Each has completed work Brain sent it.'
+                  : `${repo.provenSurfaces} of ${repo.surfaces.length} have completed work Brain sent them; the rest are configured rather than proven.`}
               </p>
+            ) : null}
+            {repo.readiness === 'READY' ? (
+              <ul className="rs-repo-surfaces">
+                {repo.surfaces.map((surface) => (
+                  <li key={`${surface.accountName}/${surface.routineName}`}>
+                    {surface.routineName} — {surface.accountName}
+                    {surface.proven ? '' : ' (not yet proven)'}
+                  </li>
+                ))}
+              </ul>
             ) : null}
             {/*
               * Member-contributed Claude accounts this repository may use.

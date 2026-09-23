@@ -2477,10 +2477,16 @@ export async function reopenNoShowDispatches(
     max_attempts: number;
     bin_attempt_count: number;
     bin_max_attempts: number;
+    routine_id: string | null;
+    routine_ref: string | null;
+    workload_class: string | null;
   }>(
     `SELECT d.id AS id,
             d.bin_id AS bin_id,
             b.project_id AS project_id,
+            d.routine_id AS routine_id,
+            d.routine_ref AS routine_ref,
+            b.workload_class AS workload_class,
             d.lease_generation AS lease_generation,
             d.attempt_count AS attempt_count,
             d.max_attempts AS max_attempts,
@@ -2550,11 +2556,51 @@ export async function reopenNoShowDispatches(
         : [now, now, row.id]) as never[],
     );
     if (result.changes !== 1) continue;
+    /*
+     * Which surface did not answer, written at the moment it is established.
+     *
+     * The two events below say a fire went unanswered and said nothing about
+     * *whose* — §23's rule that an activation nobody can attribute is not a
+     * ledger entry, at the row that means an account has stopped working. It
+     * matters here more than it does for a fire, because the fire's own
+     * attribution can be overwritten: `markDispatchRoutine` rewrites
+     * `bin_dispatch.routine_id` when a reopened intent is re-routed to a
+     * different surface, so an attribution read back from the dispatch row
+     * afterwards would credit this no-show to whichever surface came next.
+     * `bin_events` is append-only, so this cannot happen to it.
+     *
+     * `MEASURED`, because Brain fired and then observed, from its own rows,
+     * that nothing arrived before that fire stopped counting as a live
+     * activation. It is a reading rather than an inference.
+     *
+     * Its own event type rather than a flag inside `measures`: the count that
+     * reads it is a SQL aggregate, and a JSON predicate would be written twice
+     * in two dialects — and *why did this surface stop being chosen* is a
+     * different question from *why is this intent pending again*.
+     */
+    if (row.routine_id) {
+      await recordBinEvent({
+        eventType: 'DISPATCH_NO_SHOW',
+        binId: row.bin_id,
+        projectId: row.project_id,
+        leaseGeneration: row.lease_generation,
+        routineRef: row.routine_ref,
+        routineId: row.routine_id,
+        workloadClass: row.workload_class,
+        evidenceClass: 'MEASURED',
+        outcome: exhausted ? 'ABANDONED' : 'PENDING',
+        reason:
+          'Brain fired this surface and no session it started ever claimed the bin before the ' +
+          'in-flight window closed.',
+      });
+    }
     await recordBinEvent({
       eventType: exhausted ? 'DISPATCH_ABANDONED' : 'DISPATCH_INTENT',
       binId: row.bin_id,
       projectId: row.project_id,
       leaseGeneration: row.lease_generation,
+      routineRef: row.routine_ref,
+      routineId: row.routine_id,
       outcome: exhausted ? 'ABANDONED' : 'PENDING',
       measures: {
         noShow: true,
