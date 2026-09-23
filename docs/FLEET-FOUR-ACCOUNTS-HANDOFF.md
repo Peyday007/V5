@@ -988,6 +988,41 @@ offered as though it did. Those four Routines carry `caps=[]`, so they are
 research surfaces, and all nine resolve to one worker identity. §5's middle
 category is unchanged.
 
+#### And the reading that would have narrowed it further could not be taken
+
+The four surfaces say they *cannot authorize*, and the operator's next
+question is which half is broken: a deployment secret that is absent, or a
+Claude connector that no longer answers. `fleet check-secret` is exactly that
+reading — it answers `present` or `absent` per name and, in its own words,
+"never a length, a prefix, a digest or a shape", because a boolean about a
+secret is not a secret.
+
+**It could not be run for more than one name at a time.**
+`scripts/fleet.ts` splits `--secret` on commas and reports per name; the
+workflow that is the only surface able to run it against production refused
+the comma outright — *values are letters, digits, dot, colon, dash and
+underscore* — so the one form the command documents was unreachable. **A rule
+applied by one of two readers**, for the umpteenth time in this repository,
+with the two readers a workflow and the script it wraps, and found by running
+it rather than by reading either.
+
+The fix is one character on one field, and its precedent is two blocks further
+down the same file: the capability list has allowed a comma since it was
+written, on the reasoning that a comma is not a shell metacharacter — it
+cannot split a word, redirect, or begin a command. Nothing else about the
+class moves, so a name that could reach a shell still cannot.
+`tests/fleetWorkflowInputs.test.ts` holds the two files against each other and
+asserts the property rather than the wording: the class must admit what the
+script parses, must still refuse every shell metacharacter, and must admit a
+space only on `extra`, which is a sequence of flag/value pairs by
+construction. It was run against the un-fixed workflow to watch it fail —
+`expected 'A-Za-z0-9_.:-' to contain ','` — before it was trusted to pass.
+
+**The reading itself is still not taken**, and that is stated rather than
+implied: the fix has to reach the deployed workflow before the list form
+works, and which half of those four surfaces is broken is therefore still
+open. It is one dispatch away rather than a research question.
+
 #### One configuration observation, reported and not acted on
 
 The `Caleb` account's four Routines are bound to a **different** worker,

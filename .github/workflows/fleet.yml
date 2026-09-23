@@ -125,7 +125,7 @@ jobs:
           # Routine name with a space is written with an underscore; the command
           # surface turns those back into spaces where a sentence is wanted.
           for value in "$FLEET_COMMAND" "$FLEET_NAME" "$FLEET_ACCOUNT" \
-                       "$FLEET_REF" "$FLEET_SECRET" "$FLEET_SCOPE" "$FLEET_TARGET"; do
+                       "$FLEET_REF" "$FLEET_SCOPE" "$FLEET_TARGET"; do
             case "$value" in
               ''|*[!A-Za-z0-9_.:-]*)
                 if [ -n "$value" ]; then
@@ -135,6 +135,25 @@ jobs:
                 ;;
             esac
           done
+          # A secret name is one value with commas in it, because
+          # `check-secret` takes a list: `scripts/fleet.ts` splits `--secret`
+          # on commas and answers present or absent per name. This guard
+          # refused the comma, so the one form the command documents was
+          # unreachable from the only surface that can run it — a rule
+          # applied by one of two readers, with the two readers a workflow
+          # and the script it wraps. A comma is not a shell metacharacter:
+          # it cannot split a word, redirect, or begin a command, and the
+          # capability list two blocks down has allowed one on that exact
+          # reasoning since it was written. Nothing else about the class
+          # moves, so a name that could reach a shell still cannot.
+          case "$FLEET_SECRET" in
+            ''|*[!A-Za-z0-9_.:,-]*)
+              if [ -n "$FLEET_SECRET" ]; then
+                echo "::error::Refusing the secret name(s): letters, digits, dot, colon, dash, underscore and comma."
+                exit 1
+              fi
+              ;;
+          esac
           # A repository is one value with a slash in it.
           case "$FLEET_REPOSITORY" in
             ''|*[!A-Za-z0-9_./-]*)
