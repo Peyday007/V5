@@ -475,9 +475,14 @@ run measured both halves and adds two points to §27's table:
 | pre-restart | 415 documents | **12m25s**, and it passed 229/229 |
 | post-restart | 431 documents | **over 15m**, the bound |
 
-§8.2 says what to expect from it on this integration's own deploy, and why
-that is not this integration. Nothing here raises that bound, which §27
-forbids by name.
+**And it has since been diagnosed and fixed by the lane that hit it**, which
+this integration then merged and carried into the same deploy. The cause was
+`recomputeProject` asking the document store about each document three times
+per recompute, with the judge path recomputing twice — roughly 2 600 serial
+bucket round trips on a four-hundred-document project. `b4615e62` makes one
+recompute ask once. So this integration's own deploy is the first chance to
+see whether the post-restart half comes back; §8.2 says how that is read
+either way. Nothing here raises the bound, which §27 forbids by name.
 
 **The Postgres half was run in CI rather than locally, deliberately.**
 `postgres-suite.yml` is the repository's own gate, it runs `npm ci` on a clean
@@ -561,21 +566,21 @@ than around a tool.
 2. Stay with it to a terminal verdict. Expect
    `release: success`, `beforeRestart: …`, `afterRestart: …` as three separate
    facts, and read them as three.
-3. **Expect the post-restart half to fail**, on the condition §7.3 records and
-   CLAUDE.md §27 carries: `brain_submit_audit` answering nothing within 900s.
-   That is not this integration and not the release. Deploy 316 hit it on
-   `e37cca06` before this work existed.
+3. **The post-restart half is the open question.** Deploy 316 failed it on
+   `e37cca06` with `brain_submit_audit` answering nothing within 900s; the
+   cause was found and fixed afterwards, and this deploy carries the fix. If
+   it comes back, that is the repair proved on the run that needed it. If it
+   fails again, it is still neither this integration nor the release — read
+   `release`, `beforeRestart` and `afterRestart` as three facts and say which
+   of the three is which.
 4. Prove the image independently of the gate, which is what §27 says to do when
    the gate is the thing that is skipped or stuck. The served bundle is the
    handle, and the before-and-after are already known:
 
-   | | served JS |
-   | --- | --- |
-   | `e37cca06`, live now | `assets/index-DYLLmYzP.js` |
-   | `89b34a9d`, after this deploy | `assets/index-T4sTcb6M.js` |
-
-   The stylesheet is `assets/index-Dzwb3x6t.css` on both, because this
-   integration changes no CSS. `curl -sS https://northline-brain.fly.dev/ |
+   The served bundle before this deploy was `assets/index-DYLLmYzP.js` with
+   `assets/index-Dzwb3x6t.css` beside it. `npm run build` on the integrated
+   tree names what should replace it; compare the two rather than trusting
+   the workflow's own status. `curl -sS https://northline-brain.fly.dev/ |
    grep -oE 'assets/index-[A-Za-z0-9_-]+\.(js|css)'`.
 
 ### 8.3 Then the live reads this lane is owed

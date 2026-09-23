@@ -301,7 +301,11 @@ exactly one guarantee:
   — a campaign's `laneTarget`, a worker's declared `maxConcurrency` — is never
   the input to a `throughput` figure; it is shown beside what was actually
   observed, always labelled `UNKNOWN`, and never rounded up to a ceiling
-  nobody has observed.
+  nobody has observed. Per-account figures are grouped from the account each
+  session *recorded*: they used to be summed from workers, whose account was
+  whatever their first session recorded, so production credited three `UNKNOWN`
+  sessions of `fcp_189ea30c7ded4e7b9280` to a named account. A merge by a worker
+  whose sessions span accounts is attributed to none of them (`UNKNOWN`).
 
 - **`recovery`** guarantees that a campaign whose process died mid-unit is not
   a campaign that is stuck. Leases expire, units that were mid-flight become

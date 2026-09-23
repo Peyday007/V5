@@ -454,7 +454,16 @@ REVIEW round 2 CAMPAIGN PASS        on 95b87eaa12dd — independence SESSION_SEP
       session claude-code-session_01Dj1TRGKdG6v2PFafw1tZKZ  2026-09-22T12:51:13.495Z
 ```
 
-Both tiers are the ones the lineage supports and neither is rounded up (§27).
+This said both tiers were the ones the lineage supports and neither was
+rounded up. **Round 1's was.** Every session on this campaign ran as one worker,
+`wkr_f8e118e87fd141689adc`; the round-1 tier compared the reviewer against the
+implementing rows, and a row the hosted acceptance had recorded with the
+sentinel `unknown-worker` — a finished bin cannot always say who finished it —
+counted as a different worker. The correct tier is `SESSION_SEPARATED`, which
+round 2 recorded. The row keeps what it said, because history is not edited;
+`reviewLineage` no longer credits worker separation past an implementer whose
+worker is unknown, pinned in `tests/factoryExecutionPlane.test.ts`. The floor
+held throughout: the reviewer's session implemented nothing.
 
 ## What the reviews actually found
 

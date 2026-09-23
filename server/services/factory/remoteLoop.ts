@@ -88,6 +88,7 @@ import {
   binsThisPassMayJudge,
   verifyIntegrationReport,
   verifyUnitReport,
+  UNKNOWN_WORKER,
 } from './remote.ts';
 import { parseRemote } from './forge.ts';
 import { requestDesignCycle } from '../design/route.ts';
@@ -286,7 +287,7 @@ async function ingestUnitsBin(
       unit,
       report: unitReport,
       files: verdict.files,
-      workerId: who.workerId ?? 'unknown-worker',
+      workerId: who.workerId ?? UNKNOWN_WORKER,
       sessionId: who.sessionId,
       binId: bin.id,
     });
@@ -829,7 +830,7 @@ async function ingestIntegrateBin(
     report: parsed.value,
     verdict,
     baseSha: base,
-    workerId: who.workerId ?? 'unknown-worker',
+    workerId: who.workerId ?? UNKNOWN_WORKER,
     sessionId: who.sessionId,
     binId: bin.id,
   });

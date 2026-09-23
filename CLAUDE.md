@@ -603,10 +603,12 @@ never a process-local lock.
   gives up at 60. Every number there is a property of whichever client is
   connected, so the contract cannot rest on the operation being quick — and
   making it quick on a guess is what §27 explicitly refuses. What the judge
-  branch actually spends its time on is still **not established**, and a reader
-  starting from `recomputeProject` should know that Cash Mode 1 holds one layer
-  and fourteen documents, so the archive scan is seconds rather than minutes
-  there.
+  branch spends its time on **was established on deploy 316**, and it was
+  `recomputeProject` after all: three serial bucket round trips per document per
+  recompute, which is seconds for Cash Mode 1's fourteen documents and more than
+  fifteen minutes for the verification project's four hundred — see §27. The
+  contract above still stands, because a client's bound is still not Brain's to
+  choose.
 
   **A retry is the answer, and nothing was telling anybody.** The server's own
   instruction block has always said a mutation is idempotent by work item; the
@@ -2562,7 +2564,12 @@ remote.
   recorded is the one the lineage supports and is never rounded up; unknown
   lineage is a refusal. An earlier version of the remote ingest recorded
   `SESSION_SEPARATED` unconditionally, which is a claim rather than a reading —
-  recorded here rather than quietly applied. Two capabilities, `repository` and
+  recorded here rather than quietly applied.
+  The opposite error followed it: an implementer recorded as the sentinel
+  `unknown-worker`, or with no worker at all, was read as a *different* worker,
+  so production recorded `WORKER_SEPARATED` on a campaign one worker did end to
+  end. An unknown implementer is never evidence of separation; the tier now
+  needs every implementer named. Two capabilities, `repository` and
   `repository-write`, exist for exactly this: a reviewer needs to read and run,
   and only the bins that push need a surface that can push, so a one-pushing-
   surface fleet does not make the reviewer the implementer.
@@ -3457,21 +3464,23 @@ remote.
   rather than reporting a number — `release: success`, `beforeRestart: true`,
   `afterRestart: false`, with the image live and serving throughout.
 
-  **And the obvious candidate this section ruled out was the wrong one to rule
-  out alone.** `recordAuditEvidence` is genuinely O(1) here, as recorded. But
-  the judge's brief is built by `auditBriefFor` with `mode: 'SINGLE_DOCUMENT'`,
-  and `buildAuditContext` in that mode reads **every other document in the
-  layer** as `siblings`, one `toArtifact` each, against the document store.
-  `verify-hosted.ts` files its report under a single constant layer name —
-  `VERIFICATION_LAYER_NAME = 'Verification Layer'` — so that layer gains one
-  document per deploy and the sibling read grows with it.
+  **I proposed a different candidate from these same two rows, and it was
+  wrong. The withdrawal is recorded rather than edited away.** Reasoning from
+  the correlation alone, I named the judge's brief: `auditBriefFor` uses
+  `mode: 'SINGLE_DOCUMENT'`, `buildAuditContext` in that mode reads every other
+  document in the layer as `siblings`, and `verify-hosted.ts` files under the
+  single constant `VERIFICATION_LAYER_NAME`, so that layer gains a document per
+  deploy. Every one of those facts is true, and **they are not what the time
+  was spent on.** I recorded it as a lead rather than a cause for exactly this
+  reason, which is the only part of it that held up.
 
-  **That is a lead with two verified facts, not an established cause**, and it
-  is recorded as the former deliberately: nothing here has measured that the
-  sibling read is what the twelve minutes are spent on, and this section's own
-  history is of comfortable half-truths costing the next reader three runs.
-  What a person picking this up now has that the previous nine deploys did not
-  is somewhere specific to instrument first.
+  The cause was established by measurement on the same deploy and is recorded
+  above: `recomputeProject` asking the store about each document three times
+  per recompute, and the judge path recomputing twice. A correlation with the
+  archive is consistent with several mechanisms, and picking the one you can
+  see from the code you happen to be reading is how this section's own history
+  went wrong three runs in a row. **The sibling read stays unmeasured and is
+  not claimed to be free** — it simply is not this.
 
   So the two runs §27 records as `PASS 198/198` did not squeak under the
   300-second wall: they finished in three and four minutes, comfortably inside
@@ -3496,7 +3505,25 @@ remote.
   verification packet files one document, so that pass is O(1) in the archive
   however large the archive gets. Whatever is actually driving the growth is
   somewhere else, and a reader starting from the correlation should not start
-  there. The beat makes the harness
+  there.
+
+  **It was the store, three times per document per recompute, and the
+  correlation became a cause on deploy 316.** That run measured the JUDGE
+  submission at **12m26s over 415 documents** before the restart and **more than
+  fifteen minutes over 431** after it, where the harness gave up; filing the
+  synthesis took 4m44s and then 9m13s. Both mutations end in `recomputeProject`,
+  and one recompute asked the bucket whether each document's bytes exist in the
+  file-state pass, again in the dependency refresh and again in the planner —
+  one serial Supabase listing at a time, inside the recompute's transaction —
+  and the judge path recomputes twice. Roughly 2 600 round trips at a quarter
+  of a second each is the twelve minutes. And the verification's own project
+  *is* the archive that grows, by a filed document or two on every deploy, so
+  each deploy was slower than the last and every later one would have failed at
+  this step. `tests/recomputeStorageCalls.test.ts` counts the calls: three per
+  document before, one after. `objectExists` answers from a memo scoped to one
+  `recomputeProject`, prefetched sixteen at a time before the transaction
+  opens; the memo never outlives the call, so it de-duplicates rather than
+  caches, and a document whose bytes are gone still reads as missing. The beat makes the harness
   survive whichever end of that range it gets; it makes nothing faster, and
   whatever is actually driving the growth is still unmeasured. **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so

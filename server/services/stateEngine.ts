@@ -48,7 +48,7 @@ import {
   documentPresence,
   refreshProjectDependencies,
 } from './dependencies.ts';
-import { objectExists, storageKeyOf} from './storage.ts';
+import { objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from './storage.ts';
 import { writeProjectState } from './runtimeState.ts';
 
 /** Runs that still owe the project something, and therefore shape layer state. */
@@ -725,6 +725,19 @@ let recomputeDepth = 0;
  * snapshot written for the UI.
  */
 export async function recomputeProject(projectId: string): Promise<LayerStateSnapshot[]> {
+  /*
+   * Every document's bytes are asked about once, up front and concurrently,
+   * before the transaction opens — rather than three times each, serially,
+   * while it holds a connection. `withExistenceMemo` is scoped to this call, so
+   * the next recompute asks the store again. See `objectExists`.
+   */
+  return await withExistenceMemo(async () => {
+    await prefetchExistence((await listDocuments(projectId)).map((document) => storageKeyOf(document)));
+    return await recomputeProjectWithin(projectId);
+  });
+}
+
+async function recomputeProjectWithin(projectId: string): Promise<LayerStateSnapshot[]> {
   recomputeDepth += 1;
   try {
     const db = getDb();
