@@ -18,6 +18,7 @@ import type {
   ResearchRun,
   DependencyCheckResult,
   LayerStateSnapshot,
+  ExtractionRun,
 } from '../../domain/types.ts';
 import type { AuditProfile, LayerCriteria } from '../../domain/auditProfile.ts';
 import { getAuditProfile, getLayerCriteria } from '../../domain/auditProfile.ts';
@@ -26,8 +27,8 @@ import { getLayer, listLayers } from '../../repos/layers.ts';
 import { getDocument, listDocumentsByLayer } from '../../repos/documents.ts';
 import { getRun, listRunsByLayer } from '../../repos/runs.ts';
 import { listAuditsByLayer } from '../../repos/audits.ts';
-import { objectExists, storageKeyOf} from '../storage.ts';
-import { getCurrentExtractionRun, listBlocks } from '../../repos/extraction.ts';
+import { objectExists, prefetchExistence, storageKeyOf, withExistenceMemo } from '../storage.ts';
+import { currentExtractionRunsFor, getCurrentExtractionRun, listBlocks } from '../../repos/extraction.ts';
 import { isAuditable } from '../documents/quality.ts';
 import { checkCanonicalNames, checkRunDependencies } from '../dependencies.ts';
 import { computeLayerState } from '../stateEngine.ts';
@@ -140,8 +141,12 @@ export interface ManifestEntry {
  * scraping bytes. A document that is not READY is evidence the auditor does not
  * have, and it says so.
  */
-async function readDocumentText(document: Document, budget: number): Promise<ArtifactContent> {
-  const run = await getCurrentExtractionRun(document.id);
+async function readDocumentText(
+  document: Document,
+  budget: number,
+  options: { run?: ExtractionRun | null; withText?: boolean } = {},
+): Promise<ArtifactContent> {
+  const run = options.run !== undefined ? options.run : await getCurrentExtractionRun(document.id);
   const base = {
     documentId: document.id,
     canonicalName: document.canonicalName,
@@ -194,6 +199,14 @@ async function readDocumentText(document: Document, budget: number): Promise<Art
         `The document could not be read (extraction ${run.status}). The audit cannot judge ` +
           'content it has not seen.',
     };
+  }
+
+  // A sibling is listed by name and availability and nothing else, so its text
+  // is never read: reading every sibling's blocks cost a round trip per document
+  // in the layer for text no prompt ever printed. Availability — the checks
+  // above — is decided exactly as it is for the artifact.
+  if (options.withText === false) {
+    return { ...base, text: '', fullLength: 0, truncated: false, unavailableReason: null };
   }
 
   const blocks = (await listBlocks(run.id)).filter(
@@ -280,14 +293,19 @@ export async function buildAuditContext(input: BuildAuditContextInput): Promise<
   const artifacts = await Promise.all(
     artifactDocuments.map((document) => toArtifact(document, perDocumentBudget)),
   );
-  const siblings =
+  const siblingDocuments =
     input.mode === 'SINGLE_DOCUMENT'
-      ? await Promise.all(
-          layerDocuments
-            .filter((document) => !artifactIds.has(document.id))
-            .map((document) => toArtifact(document, Math.min(8_000, perDocumentBudget))),
-        )
+      ? layerDocuments.filter((document) => !artifactIds.has(document.id))
       : [];
+  const siblingRuns = await currentExtractionRunsFor(siblingDocuments.map((document) => document.id));
+  const siblings = await withExistenceMemo(async () => {
+    await prefetchExistence(siblingDocuments.map((document) => storageKeyOf(document)));
+    return await Promise.all(
+      siblingDocuments.map((document) =>
+        readDocumentText(document, 0, { run: siblingRuns.get(document.id) ?? null, withText: false }),
+      ),
+    );
+  });
 
   const run = input.runId ? await getRun(input.runId) : await sourceRunFor(artifactDocuments);
   const assignmentPrompt = run?.prompt ?? null;
