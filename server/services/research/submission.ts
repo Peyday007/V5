@@ -170,6 +170,26 @@ export async function recordFragmentClaims(input: {
         dealValue: claim.dealValue ?? null,
         dealAmountCents: claim.dealAmountCents ?? null,
         dealCurrency: claim.dealCurrency ?? null,
+        /*
+         * And the puzzle declaration — written here *because* of the paragraph
+         * directly above, rather than discovered the same way a second time.
+         *
+         * §45 records the dealflow axis arriving at the tool, passing the
+         * validator, having its columns in the insert, and landing NULL on
+         * every row because this mapper carried only what it had been told
+         * about. The unit suite could not see it, because a unit suite writes
+         * the columns directly; only a walk that submits over the wire can.
+         * Seven fields, whole, and the walk in
+         * `tests/puzzleIntegrationPass.test.ts` submits through
+         * `brain_submit_claims` for exactly this reason.
+         */
+        puzzleFinding: claim.puzzleFinding ?? null,
+        puzzleSubject: claim.puzzleSubject ?? null,
+        puzzleFormat: claim.puzzleFormat ?? null,
+        puzzleProductClass: claim.puzzleProductClass ?? null,
+        puzzleValue: claim.puzzleValue ?? null,
+        puzzleAmountCents: claim.puzzleAmountCents ?? null,
+        puzzleCurrency: claim.puzzleCurrency ?? null,
         // Carried through rather than defaulted here. This mapper dropped it,
         // so every claim landed RETRIEVED however the worker had marked it —
         // and a claim whose source nobody could open was then judged as though
