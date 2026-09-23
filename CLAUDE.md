@@ -8454,6 +8454,46 @@ one. Saying which of those two it was is the point.
 The reading is also still `GET /api/projects/:id/labor` for any project member
 and `npm run report:labor` on a terminal, unchanged.
 
+**And the surface's own journey test asked a question that had stopped naming
+which element it meant, which refused the whole tree.** Deploy 317 never
+reached `flyctl deploy`: its test gate failed on one assertion in
+`laborSurface`, `Found multiple elements with the text: /human interface/`.
+Recording that a specialist professional produces a task changes two sections
+at once — the role appears on the human-roles list as the reason a person is
+necessary, and the capacity need beside it stops reading *nobody has decided*
+and starts naming that same reason, because `capacityNeeds` carries
+`allocation.necessityReason` the moment a human layer is recorded with nothing
+published about sourcing it. **Both are correct and both are the product**;
+nothing about the screen was wrong.
+
+`waitFor` resolves on its first successful poll, so the unscoped query passed
+only while that poll happened to land in the gap between the two renders, and
+threw the moment a runner was loaded enough for both to be there. **A test that
+hopes for a race is a flake** — §27's sentence, at a screen rather than at a
+compare-and-swap, and here the flake's cost was the whole release rather than
+one red gate. It is scoped to the list it is about. `getAllByText` would also
+have made it pass and is the weaker reading: it is satisfied by the needs
+section alone, which says nothing about the role having reached the map — the
+vacuous guard this section already records, which reads as coverage.
+
+**Two sessions fixed it within forty minutes of each other, and what is worth
+recording is the reconciliation rather than either fix.** Both reached the same
+diagnosis and the same remedy — scope the assertion to the roles section — and
+`41f4373` landed on `production` first, so it is the one that stands and the
+other was dropped rather than merged beside it. §39 records this repository
+taking somebody else's side on the same grounds; two mechanisms for one defect
+is the thing being avoided, and losing an argument is not the cost.
+
+What the dropped version had that this one did not was a settle wait, and it
+earned one thing that is kept: with the settled state forced, the old query
+fails with production's own sentence and a scope pointed at a section that does
+not carry the reason fails with `Unable to find`, so the scope **discriminates**
+rather than merely narrowing. The surviving comment's account of the second
+element was wrong — it named a label the form offered — and it is corrected in
+place with the measurement beside it, because a comment that misnames the other
+match sends the next reader to the wrong section. §33's sentence: the evidence
+was right and the sentence about it was wrong.
+
 **What is true today, said plainly.** The schema, the vocabulary, the one
 validator both doors call, the necessity test, the allocator, the absorption,
 the envelope, the profile, the routes and the tick are built and covered on both
