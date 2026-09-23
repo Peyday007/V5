@@ -1728,20 +1728,32 @@ export async function binIdentity(
  * review-independence decision below, and it is deliberately the recorded
  * lineage rather than a role name: §23's rule, at the factory's boundary.
  */
+/**
+ * What the remote acceptance records as the worker when a finished bin cannot
+ * say who finished it. Named, because the one place that must recognise it is
+ * the tier below, which otherwise reads it as a real and different worker.
+ */
+export const UNKNOWN_WORKER = 'unknown-worker';
+
 export async function implementingSessions(
   campaignId: string,
-): Promise<{ sessions: Set<string>; workers: Set<string> }> {
+): Promise<{ sessions: Set<string>; workers: Set<string>; unknownWorker: boolean }> {
   const { listFactoryEvents } = await import('../../repos/factoryFleet.ts');
   const events = await listFactoryEvents(campaignId, {
     kinds: [FACTORY_EVENT_KINDS.unitImplemented, FACTORY_EVENT_KINDS.integrationMerged],
+    limit: 5000,
   });
   const sessions = new Set<string>();
   const workers = new Set<string>();
+  // Any implementing row whose worker nobody can name. It must not vanish from
+  // the set — that is how an unknown implementer read as "not this reviewer".
+  let unknownWorker = false;
   for (const event of events) {
     if (event.sessionId) sessions.add(event.sessionId);
-    if (event.workerId) workers.add(event.workerId);
+    if (!event.workerId || event.workerId === UNKNOWN_WORKER) unknownWorker = true;
+    else workers.add(event.workerId);
   }
-  return { sessions, workers };
+  return { sessions, workers, unknownWorker };
 }
 
 export interface ReviewLineage {
@@ -1783,7 +1795,7 @@ export async function reviewLineage(
         'established. An audit whose independence cannot be established did not establish it.',
     };
   }
-  const { sessions, workers } = await implementingSessions(campaignId);
+  const { sessions, workers, unknownWorker } = await implementingSessions(campaignId);
   if (sessions.has(reviewer.sessionId)) {
     return {
       ok: false,
@@ -1794,8 +1806,18 @@ export async function reviewLineage(
         'a fleet surface that can read the repository and did not write this work.',
     };
   }
+  /*
+   * Worker separation is a claim about every implementer, so it needs every
+   * implementer's worker. An implementer recorded as unknown could be this very
+   * worker, and treating it as a different one is how production recorded
+   * `WORKER_SEPARATED` on a campaign one worker did end to end.
+   */
   const workerSeparated =
-    reviewer.workerId !== null && !workers.has(reviewer.workerId) && workers.size > 0;
+    reviewer.workerId !== null &&
+    reviewer.workerId !== UNKNOWN_WORKER &&
+    !unknownWorker &&
+    workers.size > 0 &&
+    !workers.has(reviewer.workerId);
   return {
     ok: true,
     independence: workerSeparated ? 'WORKER_SEPARATED' : 'SESSION_SEPARATED',

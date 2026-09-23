@@ -1407,6 +1407,42 @@ describe('a reviewer is independent by lineage, or it is refused', () => {
     expect(stronger.ok).toBe(true);
     expect(stronger.independence).toBe('WORKER_SEPARATED');
   });
+
+  /*
+   * The production row this pins: `fcp_189ea30c7ded4e7b9280`'s round-1 review is
+   * recorded WORKER_SEPARATED although every session on that campaign ran as one
+   * worker. A finished bin cannot always say who finished it, so the hosted
+   * acceptance recorded the implementer as the sentinel `unknown-worker` — and
+   * the tier then compared the reviewer against a worker that does not exist
+   * and found them different. An implementer nobody can name is not a different
+   * worker; it is an unknown, and an unknown never rounds a tier up.
+   */
+  it('does not claim worker separation from an implementer whose worker is unknown', async () => {
+    await recordFactoryEvent({
+      campaignId,
+      kind: 'UNIT_IMPLEMENTED',
+      evidenceClass: 'MEASURED',
+      sessionId: 'cred-session-C',
+      workerId: 'unknown-worker',
+      detail: { unitKey: 'v' },
+    });
+    const sentinel = await reviewLineage(campaignId, { sessionId: 'cred-session-B', workerId: 'wkr-two' });
+    expect(sentinel.ok).toBe(true);
+    expect(sentinel.independence).toBe('SESSION_SEPARATED');
+  });
+
+  it('does not claim worker separation past an implementing row that recorded no worker', async () => {
+    await recordFactoryEvent({
+      campaignId,
+      kind: 'INTEGRATION_MERGED',
+      evidenceClass: 'MEASURED',
+      sessionId: 'cred-session-D',
+      workerId: null,
+      detail: { unitKey: 'u' },
+    });
+    const unnamed = await reviewLineage(campaignId, { sessionId: 'cred-session-B', workerId: 'wkr-two' });
+    expect(unnamed.independence).toBe('SESSION_SEPARATED');
+  });
 });
 
 /* ========================================================================= */

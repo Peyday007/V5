@@ -2455,7 +2455,12 @@ remote.
   recorded is the one the lineage supports and is never rounded up; unknown
   lineage is a refusal. An earlier version of the remote ingest recorded
   `SESSION_SEPARATED` unconditionally, which is a claim rather than a reading —
-  recorded here rather than quietly applied. Two capabilities, `repository` and
+  recorded here rather than quietly applied.
+  The opposite error followed it: an implementer recorded as the sentinel
+  `unknown-worker`, or with no worker at all, was read as a *different* worker,
+  so production recorded `WORKER_SEPARATED` on a campaign one worker did end to
+  end. An unknown implementer is never evidence of separation; the tier now
+  needs every implementer named. Two capabilities, `repository` and
   `repository-write`, exist for exactly this: a reviewer needs to read and run,
   and only the bins that push need a surface that can push, so a one-pushing-
   surface fleet does not make the reviewer the implementer.
