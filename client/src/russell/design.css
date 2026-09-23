@@ -4070,3 +4070,37 @@ details.rs-card > section.rs-card {
   margin-bottom: var(--rs-space-2);
   overflow-wrap: anywhere;
 }
+
+/* The commercial path inside "Your current work": the four answers, the money
+   kept apart figure by figure, the decisions, and the controls that record what
+   a person did or a buyer said. Stacks at any width; nothing here sets a width. */
+.rs-cash-commercial {
+  margin-top: var(--space-4, 1rem);
+  border-top: 1px solid var(--rule, currentColor);
+  padding-top: var(--space-3, 0.75rem);
+}
+.rs-cash-commercial h5 {
+  margin: var(--space-3, 0.75rem) 0 var(--space-1, 0.25rem);
+}
+.rs-cash-commercial-money {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.25rem 1rem;
+  margin: var(--space-2, 0.5rem) 0;
+}
+.rs-cash-commercial-money dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rs-cash-commercial form,
+.rs-cash-commercial-obligation {
+  display: grid;
+  gap: var(--space-2, 0.5rem);
+  margin-top: var(--space-2, 0.5rem);
+}
+.rs-cash-commercial input,
+.rs-cash-commercial select {
+  width: 100%;
+  box-sizing: border-box;
+}

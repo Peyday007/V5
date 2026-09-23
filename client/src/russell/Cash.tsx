@@ -26,6 +26,7 @@
  */
 import { useState } from 'react';
 import { useAsync } from './useAsync.ts';
+import { CommercialPath } from './CommercialPath.tsx';
 import { cashPage, modeState, type CashPage } from './cashPage.ts';
 import {
   CashApi,
@@ -266,7 +267,7 @@ export function CashView_({
         */}
       <Status page={page} />
       <Decisions page={page} projectId={rootId} onChanged={view.reload} />
-      <YourWork page={page} onChanged={view.reload} />
+      <YourWork page={page} projectId={rootId} onChanged={view.reload} />
       <BestOpportunities page={page} onChanged={view.reload} />
       {/*
         * How each of those could actually be monetized, in full.
@@ -1632,7 +1633,15 @@ const TIER_LABEL: Record<string, string> = {
  * figure this replaced was the summed difference between other people's
  * published prices.
  */
-function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): JSX.Element {
+function YourWork({
+  page,
+  projectId,
+  onChanged,
+}: {
+  page: CashPage;
+  projectId?: string | null;
+  onChanged(): void;
+}): JSX.Element {
   const view = page.full;
   const frontier = page.frontier;
 
@@ -1675,6 +1684,7 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
             ? ` ${evidence.length} further ${evidence.length === 1 ? 'record is' : 'records are'} evidence about a market: Brain found ${evidence.length === 1 ? 'it' : 'them'} and cannot yet say how we would be paid from ${evidence.length === 1 ? 'it' : 'them'}.`
             : ''}
         </p>
+        {projectId ? <CommercialPath projectId={projectId} /> : null}
       </section>
     );
   }
@@ -1715,6 +1725,7 @@ function YourWork({ page, onChanged }: { page: CashPage; onChanged(): void }): J
           </li>
         ))}
       </ul>
+      {projectId ? <CommercialPath projectId={projectId} /> : null}
     </section>
   );
 }
@@ -2384,10 +2395,13 @@ function Actions({
   if (state === 'READY') {
     available.push({ action: 'execute', label: 'Record the first move', asks: 'ACTION' });
   }
-  if (state === 'EXECUTING') available.push({ action: 'deliver', label: 'Delivering' });
-  if (state === 'EXECUTING' || state === 'DELIVERING') {
-    available.push({ action: 'collect', label: 'Money is in' });
-  }
+  /*
+   * There is deliberately no "Delivering" or "Money is in" button any more.
+   * Both were bare transitions, and the second let a sent offer or a promise
+   * read as collected cash. Those moves now follow from recorded rows — an
+   * obligation in production, a settlement in the account — through the
+   * commercial path below, and the server refuses the bare move.
+   */
   if (available.length === 0) return null;
 
   const asks = available.find((entry) => entry.action === asking)?.asks ?? null;

@@ -11386,6 +11386,92 @@ that would have chosen between them exists.**
   along, which is why §32 names its file: **a number is a position two
   workstreams can both reach for; a filename is the thing itself.**
 
+## 50. A sent offer is not a sale, and a button is not a settlement.
+
+Cash Mode could find an opening, qualify it, record an authorized action and
+keep an append-only ledger. Between `READY` and `COLLECTED` it held nothing:
+`advance(... 'COLLECTED')` wrote *"The money is in and the delivery is done"*
+on a button press, with no buyer, no agreed scope, no acceptance and no
+settlement behind it, and the Cash page offered that button as **Money is in**.
+That is the exact point a promising opportunity stopped being real work, and it
+is also the one control in this Brain that could turn a sent offer into a sale
+and a promise into cash.
+
+The commercial journey (`server/services/cash/commerce/`,
+`server/repos/cashCommerce.ts`, `server/domain/commerce.ts`, migration
+`092_commercial_journey.sql` / pg `083_commercial_journey.sql`) is that path as
+rows. It is an entrance to machinery that already existed: every external
+effect is a `cash_actions` row under the standing commercial grant, every money
+figure is a `cash_money_entries` row, and nothing here is a second authority, a
+second ledger or a second queue.
+
+- **Five records, each making one sentence checkable.** A demand test (*we are
+  testing whether anybody will buy this*), a contact (*we asked this person*,
+  pointing at its `CONTACT_BUYER` action), a response (*this person said this,
+  and here is where*), an obligation (*we owe this buyer this scope for this
+  price*) and an invoice (*we asked to be paid, and the provider says ...*).
+- **The distinctions the owner named are members of closed sets, not
+  conventions.** `INTEREST` and `AGREED_TO_BUY` are two response kinds and
+  nothing counts one as the other. An agreement is `PIPELINE_AGREED` and moves
+  no cash figure. `PAYMENT_PROMISED` is a note. `PAID` is a verified
+  `CUSTOMER_PAYMENT`; only `SETTLED` writes a `SETTLEMENT`, recorded **gross**
+  with the provider's fee as a `COST` beside it — recording the net figure *and*
+  the fee would take the fee out of the account twice, which is the arithmetic
+  `money.ts` exists to refuse.
+- **`advance` is gated on the rows now.** `DELIVERING` needs an obligation a
+  buyer agreed to that is in production or beyond; `COLLECTED` needs a
+  `SETTLEMENT` against the opening. The bare **Delivering** and **Money is in**
+  buttons are gone. With the gate satisfied, a real buyer carries the opening
+  from any live state: the card gates *starting to pursue* an opening on Brain's
+  initiative, and a closed, settled obligation beside an opening still reading
+  `DISCOVERED` would be the portfolio contradicting the ledger. What the buyer
+  agreed fills the card's **blanks only**, from their recorded words.
+- **Delivered work is checked against the buyer's own terms before it goes
+  out.** Every acceptance condition needs a check, met, with evidence, or the
+  delivery is refused naming which. Only the buyer's `ACCEPTED_DELIVERY` makes
+  delivered work accepted; a revision request is its own transition and is
+  counted.
+- **Selection refuses to invent the three things a test cannot be formed
+  without.** `select.ts` needs a recorded buyer, route and offer; without them
+  it selects nothing and names the decisive gap on the closest opening.
+  Lexicographic over rows with the separating criterion printed, and a
+  published request from a buyer outranks somebody else's price list — the
+  signal orders the *search* for a first sale and changes no tier.
+- **Brain prepares; a grant and a person act.** The tick prepares one demand
+  test for the selected opening from recorded facts, with a stop rule, a
+  contact limit, a spend limit of zero and a drafted message, and contacts
+  nobody. `AWAITING_AUTHORITY` is derived, never stored. Brain holds no
+  messaging capability (`SEND_A_MESSAGE` reads MISSING), so every contact is
+  performed and confirmed by a person, and the record says so.
+- **One opening, one member.** A partial unique index allows one live test per
+  opening, and a test, an offer or an agreement is refused while another member
+  holds a live job, test or obligation on it.
+- **The verdict is arithmetic over the test's own declared thresholds**, so it
+  cannot be fitted to the result afterwards.
+- **Winding down stops new tests and nothing else.** Obligations, invoices and
+  settlements move in every state, and the briefing lists what continues.
+- **One briefing, three readers.** `commercialBriefing` answers *what are we
+  doing to make money, what has actually happened, what is blocked, what
+  should happen next* in that order, keeps pipeline, invoiced-unpaid, customer
+  payments, paid-not-settled, available funds, costs and contribution apart,
+  and lists only the decisions that need the owner's authority — each with the
+  action, recipient, amount, scope, consequence and what is already prepared.
+  The Cash page renders it, `cash-report` prints it, and every Russell turn on
+  a Cash project carries it in the bin a worker reads, so Russell answers the
+  question from live records rather than from the transcript.
+
+**What production held when this was built, read on 2026-09-23 from the
+serving revision `222f8fd`:** Cash Mode 1 ACTIVE in USD; forty openings, all
+`SIGNAL`, none with a payer recorded; **no commercial grant**; no money entry.
+So the honest outcome on the live sprint is that no demand test can be formed
+without inventing a buyer or a route, the decisive gap is Brain's own research
+(who pays and how to reach them on the closest buyer-demand opening), and no
+decision is owed by the owner yet. The first owner decision appears the moment
+a test is prepared: a `CONTACT_BUYER` grant, with the recipients, the zero
+spend, the scope and the consequence already written on it. **None of this is
+deployed until the branch reaches `production`**, and no buyer has been
+contacted, no offer sent and nothing invoiced or collected.
+
 ## Repository map
 
 ```
@@ -11447,6 +11533,7 @@ server/
     capacityConnections.ts  one member's Claude connection, as rows rather than a conversation
     manufacturing.ts  the ladder, the capability ledger, and the one write research cannot reach
     cashCardFacts.ts  where each answer on a card came from, and what kind it is
+    cashCommerce.ts   demand tests, contacts, replies, obligations, invoices
     labor.ts          workflows, tasks, who produces each, and what has been asked
     monetization.ts   the possibility ledger; nothing in it is ever deleted
   services/
@@ -11587,6 +11674,13 @@ server/
         commissionPass.ts  asking it through the machinery that already exists, and filing the answer
         inFlight.ts     what is being researched, derived rather than stored
       readiness.ts      four people and four surfaces, counted from rows
+      commerce/
+        select.ts       which opening is closest to a sale, and its decisive gap
+        demand.ts       a bounded demand test, its contacts, replies and verdict
+        obligation.ts   what we owe a buyer, from offer to accepted delivery
+        payment.ts      the invoice, and the provider's paid and settled
+        briefing.ts     the four answers and the owner's decisions, from rows
+        tick.ts         conclude tests, prepare one; never contacts anybody
     design/
       surfaces.ts       what can be looked at, and what each screen is about
       renderRuntime.ts  whether this machine can render the product, discovered

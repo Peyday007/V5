@@ -60,7 +60,9 @@ import {
   type ValidatedProposal,
 } from './proposal.ts';
 import { getDb } from '../../db/database.ts';
-import { parseJson } from '../../repos/util.ts';
+import { nowIso, parseJson } from '../../repos/util.ts';
+import { getCashMode } from '../../repos/cashMode.ts';
+import { commercialBriefing } from '../cash/commerce/briefing.ts';
 import { answerFast, noFastLane } from '../conversation/fastLane.ts';
 import { standingInstructions } from '../conversation/review.ts';
 import type { ChatAdapter } from '../conversation/adapter.ts';
@@ -368,6 +370,7 @@ async function createTurnBin(input: {
           input: [
             await transcriptFor(input.conversationId),
             openIdeas.rendered,
+            await commercialContextFor(projectId),
           ]
             .filter(Boolean)
             .join('\n\n'),
@@ -806,6 +809,32 @@ async function openIdeasFor(
       ...rows.map((row) => `- ${row.id}: ${row.title}`),
     ].join('\n'),
   };
+}
+
+/**
+ * The live commercial state, when this project runs Cash Mode.
+ *
+ * "What are we doing to make money, what has actually happened, what is
+ * blocked, and what should happen next?" has one answer and it is derived from
+ * rows by `commerce/briefing.ts` — the same derivation the Cash page and the
+ * operator report read. Handing the worker that text is what lets Russell
+ * answer the question from live records instead of from the transcript, and
+ * it is labelled as Brain's reading so a worker does not mistake it for
+ * something the person said. It carries no credential and no other project.
+ */
+async function commercialContextFor(projectId: string): Promise<string> {
+  if (!(await getCashMode(projectId))) return '';
+  try {
+    const briefing = await commercialBriefing({ projectId, now: nowIso() });
+    return [
+      "Brain's live commercial records for this project (derived from rows at the moment this turn was opened;",
+      'answer questions about making money, blockers, next steps and decisions from this, and never report',
+      'pipeline as revenue, a sent offer as a sale, delivered work as accepted, or a promise as collected cash):',
+      briefing.text,
+    ].join('\n');
+  } catch {
+    return '';
+  }
 }
 
 async function transcriptFor(conversationId: string): Promise<string> {

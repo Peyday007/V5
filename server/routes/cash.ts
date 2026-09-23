@@ -101,6 +101,34 @@ import {
   settleSpend,
 } from '../services/cash/opportunities.ts';
 import { closeNeed, raiseNeed } from '../services/cash/needs.ts';
+import { commercialBriefing } from '../services/cash/commerce/briefing.ts';
+import {
+  prepareDemandTest,
+  readTest,
+  recordBuyerResponse,
+  recordTestContact,
+  withdrawTest,
+} from '../services/cash/commerce/demand.ts';
+import {
+  cancelObligation,
+  deliver,
+  prepareOffer,
+  recordAgreement,
+  recordObligationAnswer,
+  sendOffer,
+  startProduction,
+  type QualityCheck,
+  type Terms,
+} from '../services/cash/commerce/obligation.ts';
+import { issueInvoice, recordInvoiceState } from '../services/cash/commerce/payment.ts';
+import {
+  getDemandTest,
+  getInvoice,
+  getObligation,
+  listDemandTests,
+  listInvoices,
+  listObligations,
+} from '../repos/cashCommerce.ts';
 import { cashView } from '../services/cash/view.ts';
 import { cashCapabilities, decideCashRead } from '../services/cash/access.ts';
 import { sharedCashView } from '../services/cash/shared.ts';
@@ -2026,5 +2054,285 @@ cashRouter.post(
     }
 
     throw badRequest('"action" is MERGE, UNMERGE, SPLIT or LINK.');
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The commercial journey: demand tests, responses, obligations, invoices
+ *
+ * Every write here is work *inside* an operation, so it takes the default WRITE
+ * level and `requirePerson`; none names a worker scope. Each object is resolved
+ * through `resolveInProject`, so an id from another operation is the same 404 a
+ * missing one gives. The external effects — asking a buyer, sending an offer,
+ * issuing an invoice, accepting a payment — are refused by the services
+ * without the standing commercial authority covering them.
+ * ------------------------------------------------------------------------ */
+
+function commerceTaken<T>(outcome: { ok: true; value: T; message: string } | { ok: false; reason: string }) {
+  if (!outcome.ok) throw unprocessable(outcome.reason);
+  return outcome;
+}
+
+cashRouter.get(
+  '/projects/:projectId/cash/commercial',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const now = new Date().toISOString();
+    const [briefing, tests, obligations, invoices] = await Promise.all([
+      commercialBriefing({ projectId: project.id, now }),
+      listDemandTests(project.id),
+      listObligations({ projectId: project.id }),
+      listInvoices({ projectId: project.id }),
+    ]);
+    const reads = [];
+    for (const test of tests) reads.push(await readTest(test));
+    return {
+      briefing,
+      tests: reads.map((one) => ({ ...one.test, counts: one.counts, responses: one.responses, pendingVerdict: one.pending })),
+      obligations,
+      invoices,
+    };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/demand-tests',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const opportunity = await requireOpportunity(requiredString(body['opportunityId'], 'opportunityId'));
+    if (opportunity.projectId !== project.id) throw notFound('No opportunity with that id.');
+    const outcome = commerceTaken(
+      await prepareDemandTest({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        ownerUserId: principal.id,
+        preparedBy: 'PERSON',
+        actorRef: principal.id,
+        audience: optionalString(body['audience'], 'audience'),
+        channel: optionalString(body['channel'], 'channel'),
+        offer: optionalString(body['offer'], 'offer'),
+        priceCents: optionalInteger(body['priceCents'], 'priceCents', { min: 1 }),
+        maxContacts: optionalInteger(body['maxContacts'], 'maxContacts', { min: 1 }),
+        maxSpendCents: optionalInteger(body['maxSpendCents'], 'maxSpendCents', { min: 0 }),
+        windowDays: optionalInteger(body['windowDays'], 'windowDays', { min: 1 }),
+        continueIfAgreed: optionalInteger(body['continueIfAgreed'], 'continueIfAgreed', { min: 1 }),
+        changeIfInterested: optionalInteger(body['changeIfInterested'], 'changeIfInterested', { min: 1 }),
+        stopAfterContacts: optionalInteger(body['stopAfterContacts'], 'stopAfterContacts', { min: 1 }),
+        basis: requiredString(body['basis'], 'basis'),
+      }),
+    );
+    return { test: outcome.value, message: outcome.message };
+  }),
+);
+
+cashRouter.post(
+  '/cash/demand-tests/:testId/:action',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const test = await resolveInProject(await getDemandTest(pathId(req, 'testId')), 'No demand test with that id.');
+    const body = bodyOf(req);
+    const action = pathId(req, 'action');
+    if (action === 'contact') {
+      const outcome = commerceTaken(
+        await recordTestContact({
+          testId: test.id,
+          projectId: test.projectId,
+          recipient: requiredString(body['recipient'], 'recipient'),
+          reference: requiredString(body['reference'], 'reference'),
+          sentAt: optionalString(body['sentAt'], 'sentAt'),
+          actorRef: principal.id,
+        }),
+      );
+      return { ...outcome.value, message: outcome.message };
+    }
+    if (action === 'withdraw') {
+      const outcome = commerceTaken(
+        await withdrawTest({
+          testId: test.id,
+          projectId: test.projectId,
+          reason: requiredString(body['reason'], 'reason'),
+          actorRef: principal.id,
+        }),
+      );
+      return { test: outcome.value, message: outcome.message };
+    }
+    throw notFound('No such route.');
+  }),
+);
+
+function termsFrom(body: Record<string, unknown>): Terms {
+  return {
+    buyer: requiredString(body['buyer'], 'buyer'),
+    scope: requiredString(body['scope'], 'scope'),
+    priceCents: optionalInteger(body['priceCents'], 'priceCents', { min: 1 }) ?? 0,
+    acceptanceConditions: optionalStringArray(body['acceptanceConditions'], 'acceptanceConditions') ?? [],
+    deliveryPlan: requiredString(body['deliveryPlan'], 'deliveryPlan'),
+    deliveryRoute: requiredString(body['deliveryRoute'], 'deliveryRoute'),
+    requiredResources: optionalStringArray(body['requiredResources'], 'requiredResources') ?? [],
+  };
+}
+
+cashRouter.post(
+  '/projects/:projectId/cash/responses',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const opportunity = await requireOpportunity(requiredString(body['opportunityId'], 'opportunityId'));
+    if (opportunity.projectId !== project.id) throw notFound('No opportunity with that id.');
+    const testId = optionalString(body['testId'], 'testId') ?? null;
+    if (testId) await resolveInProject(await getDemandTest(testId), 'No demand test with that id.');
+    const recorded = commerceTaken(
+      await recordBuyerResponse({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        testId,
+        respondent: requiredString(body['respondent'], 'respondent'),
+        kind: requiredString(body['kind'], 'kind'),
+        channel: requiredString(body['channel'], 'channel'),
+        reference: requiredString(body['reference'], 'reference'),
+        excerpt: requiredString(body['excerpt'], 'excerpt'),
+        receivedAt: optionalString(body['receivedAt'], 'receivedAt'),
+        actorRef: principal.id,
+      }),
+    );
+    /*
+     * An agreement becomes an obligation in the same request when its terms
+     * came with it, so the buyer's yes and what they said yes to are recorded
+     * together. Without terms the response stands on its own and the agreement
+     * can be completed afterwards.
+     */
+    if (recorded.value.kind === 'AGREED_TO_BUY' && body['terms'] && typeof body['terms'] === 'object') {
+      const agreed = commerceTaken(
+        await recordAgreement({
+          projectId: project.id,
+          responseId: recorded.value.id,
+          ownerUserId: principal.id,
+          terms: termsFrom(body['terms'] as Record<string, unknown>),
+          actorRef: principal.id,
+        }),
+      );
+      return { response: recorded.value, obligation: agreed.value, message: agreed.message };
+    }
+    return { response: recorded.value, message: recorded.message };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/obligations',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+    const opportunity = await requireOpportunity(requiredString(body['opportunityId'], 'opportunityId'));
+    if (opportunity.projectId !== project.id) throw notFound('No opportunity with that id.');
+    const outcome = commerceTaken(
+      await prepareOffer({
+        projectId: project.id,
+        opportunityId: opportunity.id,
+        ownerUserId: principal.id,
+        testId: optionalString(body['testId'], 'testId') ?? null,
+        terms: termsFrom(body),
+        actorRef: principal.id,
+      }),
+    );
+    return { obligation: outcome.value, message: outcome.message };
+  }),
+);
+
+cashRouter.post(
+  '/cash/obligations/:obligationId/:action',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const obligation = await resolveInProject(
+      await getObligation(pathId(req, 'obligationId')),
+      'No obligation with that id.',
+    );
+    const body = bodyOf(req);
+    const base = { obligationId: obligation.id, projectId: obligation.projectId, actorRef: principal.id };
+    switch (pathId(req, 'action')) {
+      case 'send': {
+        const outcome = commerceTaken(await sendOffer({ ...base, reference: requiredString(body['reference'], 'reference') }));
+        return { obligation: outcome.value, message: outcome.message };
+      }
+      case 'produce': {
+        const outcome = commerceTaken(
+          await startProduction({ ...base, productionReference: requiredString(body['productionReference'], 'productionReference') }),
+        );
+        return { obligation: outcome.value, message: outcome.message };
+      }
+      case 'deliver': {
+        const raw = Array.isArray(body['checks']) ? (body['checks'] as unknown[]) : [];
+        const checks: QualityCheck[] = raw.map((one) => {
+          const item = (one ?? {}) as Record<string, unknown>;
+          return {
+            condition: typeof item['condition'] === 'string' ? item['condition'] : '',
+            met: item['met'] === true,
+            evidence: typeof item['evidence'] === 'string' ? item['evidence'] : '',
+          };
+        });
+        const outcome = commerceTaken(
+          await deliver({ ...base, deliverableReference: requiredString(body['deliverableReference'], 'deliverableReference'), checks }),
+        );
+        return { obligation: outcome.value, message: outcome.message };
+      }
+      case 'answer': {
+        const outcome = commerceTaken(
+          await recordObligationAnswer({
+            ...base,
+            kind: requiredString(body['kind'], 'kind'),
+            channel: requiredString(body['channel'], 'channel'),
+            reference: requiredString(body['reference'], 'reference'),
+            excerpt: requiredString(body['excerpt'], 'excerpt'),
+            receivedAt: optionalString(body['receivedAt'], 'receivedAt'),
+          }),
+        );
+        return { obligation: outcome.value, message: outcome.message };
+      }
+      case 'cancel': {
+        const outcome = commerceTaken(await cancelObligation({ ...base, reason: requiredString(body['reason'], 'reason') }));
+        return { obligation: outcome.value, message: outcome.message };
+      }
+      case 'invoice': {
+        const amountCents = optionalInteger(body['amountCents'], 'amountCents', { min: 1 });
+        const outcome = commerceTaken(
+          await issueInvoice({
+            ...base,
+            amountCents: amountCents ?? obligation.priceCents,
+            provider: requiredString(body['provider'], 'provider'),
+            providerReference: requiredString(body['providerReference'], 'providerReference'),
+            dueAt: optionalString(body['dueAt'], 'dueAt') ?? null,
+          }),
+        );
+        return { invoice: outcome.value, message: outcome.message };
+      }
+      default:
+        throw notFound('No such route.');
+    }
+  }),
+);
+
+cashRouter.post(
+  '/cash/invoices/:invoiceId/state',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const invoice = await resolveInProject(await getInvoice(pathId(req, 'invoiceId')), 'No invoice with that id.');
+    const body = bodyOf(req);
+    const outcome = commerceTaken(
+      await recordInvoiceState({
+        invoiceId: invoice.id,
+        projectId: invoice.projectId,
+        to: requiredString(body['to'], 'to'),
+        reference: optionalString(body['reference'], 'reference') ?? null,
+        settledAmountCents: optionalInteger(body['settledAmountCents'], 'settledAmountCents', { min: 1 }) ?? null,
+        fundsAvailableAt: optionalString(body['fundsAvailableAt'], 'fundsAvailableAt') ?? null,
+        reason: optionalString(body['reason'], 'reason') ?? null,
+        actorRef: principal.id,
+      }),
+    );
+    return { invoice: outcome.value, message: outcome.message };
   }),
 );

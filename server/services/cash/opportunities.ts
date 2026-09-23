@@ -41,7 +41,8 @@ import { countActions, recordAction } from '../../repos/cashActions.ts';
 import { cardFact, cardFactsFor, mayReplace, recordCardFact } from '../../repos/cashCardFacts.ts';
 import { getDb } from '../../db/database.ts';
 import { serializeCash } from '../../repos/cashLock.ts';
-import { recordMoney } from '../../repos/cashLedger.ts';
+import { recordMoney, totalsByKind } from '../../repos/cashLedger.ts';
+import { listObligations } from '../../repos/cashCommerce.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   COMMERCIAL_ACTIONS,
@@ -626,7 +627,21 @@ export function actionKey(opportunityId: string, action: string, occurrence: str
   return `action:${opportunityId}:${action}:${occurrence}`;
 }
 
-/** Delivery has begun, or the money is in. Neither costs anything to record. */
+/**
+ * Delivery has begun, or the money is in — and each needs the rows that say so.
+ *
+ * This was a bare transition, and it was the exact point a promising
+ * opportunity stopped being real work: "The money is in and the delivery is
+ * done" could be written on a button press with no buyer, no agreed scope, no
+ * acceptance and no settlement behind it. So a sent offer could read as a sale
+ * and a payment promise as cash, which are the two confusions the commercial
+ * journey exists to refuse.
+ *
+ * `DELIVERING` now needs an obligation a buyer agreed to that is in production
+ * or beyond. `COLLECTED` needs a `SETTLEMENT` entry against this opportunity —
+ * funds that reached the account, with the reference that shows it. A customer
+ * payment still in flight is not collected, and neither is a promise.
+ */
 export async function advance(input: {
   opportunityId: string;
   to: 'DELIVERING' | 'COLLECTED';
@@ -635,7 +650,44 @@ export async function advance(input: {
 }): Promise<Outcome<CashOpportunity>> {
   const opportunity = await getOpportunity(input.opportunityId);
   if (!opportunity) return refuse('No opportunity with that id.');
-  const from = input.to === 'DELIVERING' ? (['EXECUTING'] as const) : (['EXECUTING', 'DELIVERING'] as const);
+  if (input.to === 'DELIVERING') {
+    const producing = await listObligations({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      states: ['IN_PRODUCTION', 'DELIVERED', 'REVISION_REQUESTED', 'ACCEPTED', 'CLOSED'],
+    });
+    if (producing.length === 0) {
+      return refuse(
+        'Nothing is being delivered: no buyer has an agreed obligation in production on this ' +
+          'opening. Record the agreement and start production, and this follows from it.',
+      );
+    }
+  } else {
+    const totals = await totalsByKind({
+      projectId: opportunity.projectId,
+      opportunityId: opportunity.id,
+      currency: opportunity.currency,
+    });
+    if (Number(totals['SETTLEMENT'] ?? 0) <= 0) {
+      return refuse(
+        'Nothing has settled against this opening, so the money is not in. A sent offer, an ' +
+          'agreement, an invoice, a promise and a payment still in flight are all recorded as ' +
+          'what they are; collected needs funds that reached the account.',
+      );
+    }
+  }
+  /*
+   * With the gate above satisfied, a real buyer's agreement carries the piece
+   * whatever its research card says. The card gates *starting to pursue* an
+   * opening on Brain's own initiative; an obligation somebody agreed to and a
+   * settlement in the account are stronger evidence than any card, and leaving
+   * the opening at DISCOVERED beside a closed, paid obligation would be the
+   * portfolio contradicting the ledger.
+   */
+  const from =
+    input.to === 'DELIVERING'
+      ? (['DISCOVERED', 'EVIDENCE_CARD', 'READY', 'EXECUTING'] as const)
+      : (['DISCOVERED', 'EVIDENCE_CARD', 'READY', 'EXECUTING', 'DELIVERING'] as const);
   const moved = await transitionOpportunity({
     id: opportunity.id,
     from: [...from],

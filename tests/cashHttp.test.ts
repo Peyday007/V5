@@ -224,6 +224,13 @@ describe('who can reach any of this', () => {
     { method: 'GET', route: `${CASH()}/dealflow` },
     { method: 'POST', route: `${CASH()}/dealflow/parties` },
     { method: 'POST', route: `${CASH()}/dealflow/observations` },
+    // The commercial journey's door: reading the path, preparing a test,
+    // recording a reply and preparing an offer. Work inside an operation, so
+    // a member's — and never a machine's.
+    { method: 'GET', route: `${CASH()}/commercial` },
+    { method: 'POST', route: `${CASH()}/demand-tests` },
+    { method: 'POST', route: `${CASH()}/responses` },
+    { method: 'POST', route: `${CASH()}/obligations` },
   ];
 
   it('refuses an anonymous caller everywhere', async () => {
@@ -955,12 +962,13 @@ describe('one account’s whole journey', () => {
     });
     expect(captured.status).toBe(422);
 
-    // And the piece already running still collects and still settles.
-    const collected = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
+    // And the piece already running still settles and still collects — in
+    // that order, because "collected" is refused until funds have settled.
+    const early = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
       cookie: adminCookie,
       body: { outcome: 'Delivered and paid.' },
     });
-    expect(collected.status).toBe(200);
+    expect(early.status).toBe(422);
 
     const settled = await call('POST', `${CASH()}/money`, {
       cookie: adminCookie,
@@ -973,6 +981,12 @@ describe('one account’s whole journey', () => {
       },
     });
     expect(settled.status).toBe(200);
+
+    const collected = await call('POST', `/api/cash/opportunities/${opportunityId}/collect`, {
+      cookie: adminCookie,
+      body: { outcome: 'Delivered and paid.' },
+    });
+    expect(collected.status).toBe(200);
 
     const view = await call<{ myCash: { position: { availableFundsCents: number } } }>(
       'GET',
@@ -1043,5 +1057,41 @@ describe('one account’s whole journey', () => {
       body: { reason: 'Trying it on.' },
     });
     expect(result.status).toBe(404);
+  });
+});
+
+describe('the commercial path door', () => {
+  it('gives a non-member the same answer as a project that does not exist', async () => {
+    const real = await call('GET', `${CASH()}/commercial`, { cookie: outsiderCookie });
+    const invented = await call('GET', '/api/projects/prj_does_not_exist/cash/commercial', {
+      cookie: outsiderCookie,
+    });
+    expect(real.status).toBe(404);
+    expect(real.text).toBe(invented.text);
+  });
+
+  it('lets a project member read the four answers, from live rows', async () => {
+    const read = await call<{ briefing: { text: string; sprint: unknown } }>('GET', `${CASH()}/commercial`, {
+      cookie: memberCookie,
+    });
+    expect(read.status).toBe(200);
+    expect(read.body.briefing.text).toContain('WHAT WE ARE DOING TO MAKE MONEY');
+    expect(read.body.briefing.text).toContain('DECISIONS THAT NEED YOUR AUTHORITY');
+  });
+
+  it('refuses a reply with nowhere it can be read, before anything is written', async () => {
+    const view = await call<{ myCurrentWork: { placements: { opportunity: { id: string } }[] } }>(
+      'GET',
+      CASH(),
+      { cookie: adminCookie },
+    );
+    const opportunityId = view.body.myCurrentWork.placements[0]!.opportunity.id;
+    const reply = await call<{ error: string }>('POST', `${CASH()}/responses`, {
+      cookie: memberCookie,
+      body: { opportunityId, respondent: 'someone', kind: 'AGREED_TO_BUY', channel: 'phone', reference: '', excerpt: 'yes' },
+    });
+    expect(reply.status).toBe(400);
+    const after = await call<{ briefing: { happened: unknown[] } }>('GET', `${CASH()}/commercial`, { cookie: adminCookie });
+    expect(JSON.stringify(after.body.briefing.happened)).not.toContain('someone');
   });
 });

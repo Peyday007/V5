@@ -51,6 +51,7 @@ import {
 import { raiseNeed } from '../server/services/cash/needs.ts';
 import { openDiscovery } from '../server/services/cash/discovery.ts';
 import { recordMoneyEvent } from '../server/services/cash/opportunities.ts';
+import { walkToCollected } from './helpers/commerce.ts';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 
@@ -430,8 +431,9 @@ describe('winding down stops new discovery and nothing else', () => {
     expect(await launchableUnderCashMode({ candidateId: support.id, mode: wound })).toBe(true);
 
     // And it stays true once the money is in but the record is still open.
-    await advance({ opportunityId: captured.value.id, to: 'DELIVERING', actorRef: userId });
-    await advance({ opportunityId: captured.value.id, to: 'COLLECTED', actorRef: userId });
+    // Through the real journey: `advance` refuses a bare move to either state.
+    await walkToCollected({ projectId, opportunityId: captured.value.id, userId });
+    expect((await getOpportunity(captured.value.id))?.state).toBe('COLLECTED');
     expect(
       await launchableUnderCashMode({ candidateId: support.id, mode: await getCashMode(projectId) }),
     ).toBe(true);

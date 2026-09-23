@@ -1163,6 +1163,8 @@ describe('the operating pass as the tick calls it', () => {
         // `operate` returns is the contract every reader is written against.
         commissions: { opened: [], recorded: [], settled: [], declined: [], openNow: 0 },
       },
+      // And the commercial journey concludes nothing and prepares nothing.
+      commerce: { concluded: 0, prepared: null, notPrepared: 'No sprint.' },
     });
   });
 });

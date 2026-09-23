@@ -935,43 +935,64 @@ describe('one sprint, from activation to money in and winding down', () => {
     expect(finished.continuationNote).toBeTruthy();
 
     /* ------------------------------------------------------------------ *
-     * 9. Delivery, then money. Only a settlement is cash.
+     * 9. The obligation, the delivery and the money — through the commercial
+     *    journey's own routes. A bare "deliver" and a bare "collect" are both
+     *    refused now: delivery needs an obligation the buyer agreed to, and
+     *    collected needs a settlement in the account. Only a settlement is cash.
      * ------------------------------------------------------------------ */
     await withCashRoutes(async (call) => {
-      expect((await call('POST', `/cash/opportunities/${piece.id}/deliver`, {})).status).toBe(200);
-      expect(
-        (
-          await call('POST', `/projects/${projectId}/cash/money`, {
-            kind: 'CUSTOMER_PAYMENT',
-            amountCents: 120_000,
-            currency: 'USD',
-            verifiedReference: 'stripe-pi-88412',
-            idempotencyKey: `payment:${piece.id}`,
-          })
-        ).status,
-      ).toBe(200);
-    });
+      expect((await call('POST', `/cash/opportunities/${piece.id}/deliver`, {})).status).toBe(422);
+      expect((await call('POST', `/cash/opportunities/${piece.id}/collect`, {})).status).toBe(422);
 
-    const earned = await cashView({ projectId });
-    // Earned, and not yet usable: two events about the same money and only the
-    // second one is cash.
-    expect(earned.myCash.position.customerPaymentsCents).toBe(120_000);
-    expect(earned.myCash.position.availableFundsCents).toBe(0);
-
-    await withCashRoutes(async (call) => {
+      const offered = await call('POST', `/projects/${projectId}/cash/obligations`, {
+        opportunityId: piece.id,
+        buyer: 'The contracting officer named on the notice',
+        scope: 'The deliverable the notice describes; excludes anything it does not',
+        priceCents: 120_000,
+        acceptanceConditions: ['The officer confirms receipt of the deliverable'],
+        deliveryPlan: 'Prepared by the operator and sent through the notice channel',
+        deliveryRoute: 'HUMAN',
+      });
+      expect(offered.status).toBe(200);
+      const obligation = offered.body.obligation.id as string;
+      const step = (action: string, body: unknown) =>
+        call('POST', `/cash/obligations/${obligation}/${action}`, body);
+      expect((await step('send', { reference: 'notice-2026-441-offer' })).status).toBe(200);
       expect(
-        (
-          await call('POST', `/projects/${projectId}/cash/money`, {
-            kind: 'SETTLEMENT',
-            amountCents: 120_000,
-            currency: 'USD',
-            verifiedReference: 'bank-ref-88412',
-            idempotencyKey: `settlement:${piece.id}`,
-          })
-        ).status,
+        (await step('answer', { kind: 'AGREED_TO_BUY', channel: 'notice', reference: 'notice-2026-441-award', excerpt: 'Awarded at the quoted price.' })).status,
       ).toBe(200);
-      expect((await call('POST', `/cash/opportunities/${piece.id}/collect`, {})).status).toBe(200);
+      expect((await step('produce', { productionReference: 'operator: drafting' })).status).toBe(200);
+      expect(
+        (await step('deliver', {
+          deliverableReference: 'notice-2026-441-delivery',
+          checks: [{ condition: 'The officer confirms receipt of the deliverable', met: true, evidence: 'receipt email 441-r' }],
+        })).status,
+      ).toBe(200);
+      expect(
+        (await step('answer', { kind: 'ACCEPTED_DELIVERY', channel: 'notice', reference: 'notice-2026-441-accept', excerpt: 'Accepted.' })).status,
+      ).toBe(200);
+      const invoiced = await step('invoice', { provider: 'stripe', providerReference: 'in_88412' });
+      expect(invoiced.status).toBe(200);
+      const paid = await call('POST', `/cash/invoices/${invoiced.body.invoice.id}/state`, {
+        to: 'PAID',
+        reference: 'stripe-pi-88412',
+      });
+      expect(paid.status).toBe(200);
+
+      const earned = await cashView({ projectId });
+      // Earned, and not yet usable: two events about the same money and only the
+      // second one is cash.
+      expect(earned.myCash.position.customerPaymentsCents).toBe(120_000);
+      expect(earned.myCash.position.availableFundsCents).toBe(0);
+      expect((await call('POST', `/cash/opportunities/${piece.id}/collect`, {})).status).toBe(422);
+
+      const settled = await call('POST', `/cash/invoices/${invoiced.body.invoice.id}/state`, {
+        to: 'SETTLED',
+        reference: 'bank-ref-88412',
+      });
+      expect(settled.status).toBe(200);
     });
+    expect((await getOpportunity(piece.id))!.state).toBe('COLLECTED');
 
     const collected = await cashView({ projectId });
     expect(collected.myCash.position.availableFundsCents).toBe(120_000);

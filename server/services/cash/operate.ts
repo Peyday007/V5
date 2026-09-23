@@ -46,6 +46,7 @@
  * an attempt, or stops unrelated work. An open need is a valid execution state
  * and Brain carries on around it, which is exactly what the plan means.
  */
+import { operateCommerce, type CommercePass } from './commerce/tick.ts';
 import {
   getOpportunity,
   listNeeds,
@@ -739,6 +740,7 @@ export async function operate(
   validations: ValidationProgress;
   authority: AuthorityAdvance;
   monetization: MonetizationPass;
+  commerce: CommercePass;
 }> {
   if (!(await getCashMode(projectId))) {
     return {
@@ -759,6 +761,7 @@ export async function operate(
         evaluated: 0,
         commissions: { opened: [], recorded: [], settled: [], declined: [], openNow: 0 },
       },
+      commerce: { concluded: 0, prepared: null, notPrepared: 'No sprint.' },
     };
   }
   /*
@@ -819,6 +822,13 @@ export async function operate(
    * attempt, starts work or spends anything.
    */
   const monetization = await runMonetizationLedger(projectId, now);
+  /*
+   * And the commercial journey: conclude the demand tests whose own thresholds
+   * now give a verdict, and prepare one for the opening closest to a sale when
+   * it can be formed from recorded facts alone. It contacts nobody, spends
+   * nothing and records no money — see `commerce/tick.ts`.
+   */
+  const commerce = await operateCommerce(projectId, now);
   return {
     reclassified,
     capabilities,
@@ -830,6 +840,7 @@ export async function operate(
     validations,
     authority,
     monetization,
+    commerce,
   };
 }
 
@@ -882,3 +893,4 @@ async function runMonetizationLedger(
 }
 
 export type { CashOpportunity };
+export type { CommercePass };

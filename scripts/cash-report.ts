@@ -38,6 +38,7 @@ import { dealflowView } from '../server/services/dealflow/view.ts';
 import { listProjects } from '../server/repos/projects.ts';
 import { getCashMode, listCashEvents } from '../server/repos/cashMode.ts';
 import { listOpportunities } from '../server/repos/cashPortfolio.ts';
+import { commercialBriefing } from '../server/services/cash/commerce/briefing.ts';
 import { cardFactsFor } from '../server/repos/cashCardFacts.ts';
 import { liveAuthority } from '../server/repos/cashAuthority.ts';
 import { listGoals } from '../server/repos/russellAuthority.ts';
@@ -624,6 +625,22 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
     if (one.outcome) console.log(`      outcome: ${trim(one.outcome, 100)}`);
   }
 
+  /*
+   * The commercial path, as the same briefing Russell and the Cash page read:
+   * what is being sold, what happened, what is blocked, what is next, and the
+   * decisions that need the owner. Printed rather than recomposed, so this
+   * report cannot disagree with the screen about one sprint.
+   */
+  const briefing = await commercialBriefing({ projectId, now: new Date().toISOString() });
+  console.log('');
+  console.log(briefing.text);
+  if (briefing.selection.closestId) {
+    console.log(
+      `  closest opening: ${briefing.selection.closestId} — ${briefing.selection.closestTitle ?? ''}` +
+        ` (selected=${briefing.selection.selectedId ?? 'none'}; ${briefing.selection.because})`,
+    );
+  }
+
   const events = await listCashEvents(projectId);
   console.log('');
   console.log(`HISTORY (${events.length}) — ${tally(events, (one) => one.kind)}`);
@@ -633,6 +650,7 @@ async function reportProject(projectId: string, projectName: string): Promise<bo
     `CASH-REPORT: ${projectId} state=${mode.state}` +
       ` research_grant=${discovery ? 'ACTIVE' : 'ABSENT'}` +
       ` commercial_grant=${commercial ? 'PRESENT' : 'ABSENT'}` +
+      ` selling=${briefing.doing.length} blocked=${briefing.blocked.length} owner_decisions=${briefing.decisions.length}` +
       ` ideas=${candidates.length}` +
       ` rounds=${roadmap.rounds.total}` +
       ` queued=${shape.byState['QUEUED'] ?? 0} leased=${shape.byState['LEASED'] ?? 0}` +
