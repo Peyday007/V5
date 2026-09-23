@@ -1024,6 +1024,22 @@ operator is the reading and the one thing only they can do about somebody
 else's incident — watch it, and escalate it to Supabase if it does not clear.
 §8.7 is the cost of each retry while it has not.
 
+### 8.6.1 It came back, and what came back is the whole tree
+
+Deploy 327, on **`67089909`** — the fleet integration, both diagnosis fixes,
+the deploy classifier and the other lanes' work merged in. Production
+answered `503` for the last time at 11:44:31 and **`200 in 12.31s` at
+11:45:25**, then 0.15s steadily. The second outage ran 10:42:30 → 11:45:25:
+**sixty-three minutes**, all of it the upstream condition and none of it
+recoverable faster than a full `Deploy`, which is §8.7.
+
+**Two retries were spent on it — deploys 325 and 327 — and the boot is a coin
+toss while that incident is open.** Counted from the Brain's own log rather
+than from impressions: refused at 09:59:18 and 10:06:03, booted at 10:38:48,
+refused at 10:51:04 after the restart, booted at 11:45:25. **Three refusals
+and two successes**, on images whose pre-restart verification passes every
+time it gets to run.
+
 ### 8.7 The recovery floor is forty minutes, and that is a gap rather than a fact of life
 
 Worth recording because this incident measured it. **There is no supported
