@@ -1483,7 +1483,78 @@ because `deploy.yml` is the only workflow that restarts anything. It was
 proposed rather than built, because adding a remote restart path to production
 during an incident is the change least likely to be reviewed properly.
 
-### 10.3 What was deliberately not done
+### 10.3 Two defects in how this lane checked its own gates
+
+Both were mine, both were found by looking again rather than by anything
+failing, and the second is the reason the first mattered.
+
+**A run query by SHA answers about the wrong workflow.**
+`/actions/runs?head_sha=…` returns *every* workflow that ran on a commit,
+newest first, so reading `workflow_runs[0]` answers about whichever was
+dispatched last. Three times in this session that was the **Fleet** operator
+run — dispatched seconds earlier to take a reading — and each time I reported
+its `success` as the Postgres suite's. Filtered by `name`, those three
+Postgres runs read `cancelled`. Every gate claim in §7.4 was re-taken with the
+filter, which is why it names run 384 on `67089909` and no later SHA.
+
+**And the runs genuinely were cancelled, for a reason worth knowing.**
+`postgres-suite.yml` carries `concurrency: postgres-suite-${{ github.ref }}`
+with `cancel-in-progress: true`, which is correct — you want the newest commit
+gated rather than an old one. The consequence is that **a burst of pushes to
+`production` means no Postgres run on that ref ever finishes**, and this lane
+pushed eight times in an hour. Every SHA after `67089909` shows a cancelled
+run, and the honest reading is that the code gate is `67089909`'s — which is
+sound, because every push after it changed documentation only.
+
+The remedy is the group's own shape: it is keyed on the **ref**, so gating a
+tree on its own branch cannot be evicted by anything happening on
+`production`. That is how the one code-bearing change left in this lane — the
+`fleet.yml` input class and its test — was gated: `postgres-suite.yml`
+dispatched on `integration/fleet-four-accounts`, at the exact SHA, in a
+concurrency group nothing else writes to.
+
+**Neither of these weakened a gate and neither is a reason to relax one.** The
+first was a reader reporting the wrong row; the second is a CI policy behaving
+exactly as designed, met by asking it somewhere it is not contended.
+
+### 10.4 One test this lane's gate found, which is open and is not this lane's
+
+`tests/puzzleIntegrationPass.test.ts` — §48's kernel — failed the full local
+SQLite gate on this branch with `expected 2 to be greater than or equal to 20`.
+It is recorded here because this lane's gate is what surfaced it, and it is
+recorded as **open** because what is established falls well short of a cause.
+
+What is established, by measurement rather than by argument:
+
+* **This branch cannot reach it.** Over the deployed image the whole delta is
+  three files — `.github/workflows/fleet.yml`, this document, and one new test.
+  No server code at all, which `git diff --name-only` says rather than a
+  reading of the commits.
+* **It passes in isolation on production's tip**, in a detached worktree at
+  that commit: four tests, 5.81s.
+* **It passes in isolation on this branch**: four tests, 5.69s.
+* **It passes in CI on Postgres.** `postgres-suite.yml` run **384** on
+  `67089909`, which contains that test, at 219 files and 4746 tests.
+
+So it fails only under a full local SQLite run on this machine. The bound it
+hit is a **count rather than a clock**, which rules out the obvious
+explanation: `GENERATION_BUDGET` is 25, the test sets up one system so the
+share is the whole of it, word search declares `catalogCeiling: null` so the
+target does not bind, and `want` was therefore 25 against a ceiling of 75
+attempts. Two were made, so seventy-three were lost to duplicates or to
+validation.
+
+**Which of those it was is not established, and no remedy is proposed.** The
+generator's own `blocked` sentence names one candidate exactly — *a master
+whose parameter space is smaller than the batch asked for rather than a
+fault* — and cross-worker interference is another, and this lane has measured
+neither. §27 records what a remedy for a condition nobody established costs,
+and §41 records that a guard written against a guess reads as coverage. What
+the next person needs is the reproduction above and the two facts that bound
+it: it is not the tree, because CI and both isolated runs pass, and it is not
+timing, because the budget is counted.
+
+### 10.4 What was deliberately not done
 
 Four things, each because doing them would have been worse than the problem:
 
