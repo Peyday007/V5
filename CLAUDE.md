@@ -3567,6 +3567,39 @@ remote.
   `beforeRestart: true`, `afterRestart: false`, with the image live and
   serving throughout and the served bundle checked independently of the gate.
 
+  **And that condition reached no diagnosis at all, which is this section's
+  own most-recorded defect arriving at the sentences it wrote to prevent it.**
+  §27 built `describePoolExhaustion` for the two conditions `pg-pool`
+  collapses and `describePoolerRefusal` for the pooler refusing a new client,
+  *"so the next occurrence turns into a number instead of a seventh
+  anecdote"*. Neither fired here. Brain's own pool had not timed out, so the
+  first was never reached; the marker is `ECHECKOUTTIMEOUT` rather than
+  `EMAXCONNSESSION`, so the second returned null. What a reader got was the
+  driver's bare string — and then both console reads dispatched twenty-five
+  minutes later failed identically, which is the tell that it is not about the
+  caller. **A mechanism that does not reach the condition it exists for is not
+  a mechanism**, for the eighth time in this file.
+
+  The two pooler conditions are named apart rather than folded together,
+  because they say different things about where the limit is.
+  `EMAXCONNSESSION` is *too many clients of the pooler*, refused outright.
+  `ECHECKOUTTIMEOUT` is the pooler accepting the client and then failing to
+  get **it** a database connection inside its own timeout — so the binding
+  number is the pooler's upstream pool or the database's own capacity, and a
+  database that has simply gone slow produces it too. Sending a reader to
+  count clients when the database is the thing that is unwell is the
+  cries-wolf failure one category along. What they agree on is the half that
+  matters, and it is the opposite of the other two: **raising
+  `BRAIN_DATABASE_POOL_SIZE` makes both worse.**
+
+  **The codes are matched differently, and that is a statement about the
+  evidence rather than a loosening.** `EMAXCONNSESSION` keeps its
+  code-and-marker pair because `XX000` alone is generic. `ECHECKOUTTIMEOUT`
+  was observed through a harness that printed the message and no fields, so
+  its code is **not established and is not required** — asserting `XX000` for
+  it would be a guess wearing a matcher. The marker carries the specificity in
+  both. Both functions stay pure and report; nothing acts on either string.
+
   A sentence here used to end *"whatever is actually driving the growth is
   still unmeasured"*, and it survived two rewrites that each measured it — the
   store at 316 and the statement counts at 318. It is corrected rather than
