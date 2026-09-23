@@ -196,6 +196,24 @@ and is refused the other byte-identically to an id that does not exist, and
 archives both in a `finally`. The guard in `tests/goalsHttp.test.ts` reads the
 harness and fails on the previous version (`expected 1 to be 2`).
 
+## Operator reads between deploys: a slow database, first misread as a wrapper
+
+From 21:38Z every `factory events` read failed on a pooler connection
+timeout, while a one-client goals read at 22:06Z succeeded. `factory.sh` was the
+only wrapper defaulting to two pooler clients against §39's rule of one, so
+`40afc79` corrected it and made the guard assert the value. **That was right
+about the rule and wrong as a diagnosis**: the next factory read failed with
+one client too, and the goals read at 22:17Z then failed with
+`(EAUTHQUERY) auth_query secret check timed out` — the pooler checking a
+credential by querying the database, and the database not answering in time.
+The condition was the database, intermittently, and the interleaving was
+chance. `/healthz` answered in 0.2s throughout, because it touches no database.
+
+It also showed that the one error naming the database as slow was the one
+Brain printed no diagnosis for: neither `describePoolerRefusal` nor the boot
+hint recognised `EAUTHQUERY`. Both do now, and say the database rather than the
+password or the client count.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
