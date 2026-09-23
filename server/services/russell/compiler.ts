@@ -245,6 +245,47 @@ async function envelopeIdFor(
     return 'RUSSELL_MACHINE_CAPABILITY_V1';
   }
 
+  /*
+   * A question about one way of being paid is decided by the commission that
+   * asked it — and that outranks a project's declared default.
+   *
+   * `monetization_commissions` is the exact statement: *this candidate is
+   * asking this attribute about this possibility*, written by Brain when the
+   * question was opened. `ENVELOPE_BY_PROJECT` is a **default** for a project
+   * whose research is one kind of question. A specific statement outranks a
+   * default, which is `jurisdiction.ts`'s rule — a row outranks prose — one
+   * level up.
+   *
+   * **It is above the slug map because a test found it below one.** With the
+   * order the other way round, a sprint running on a project that declares an
+   * envelope compiles *"what would whoever runs this have to be able to do?"*
+   * as a Michigan public-records question, which a worker would then research
+   * correctly and answer about something else entirely. Every row around it
+   * reads healthy; the specification is the thing that is wrong. That is §25's
+   * Westbrook defect exactly, and nothing below the compiler could catch it,
+   * because the gate judges evidence against the scope and the scope is what
+   * went wrong.
+   *
+   * **The three branches below this one have the identical exposure and are
+   * deliberately not moved here.** `industryRoundForCandidate`,
+   * `dealRoundForCandidate` and `opportunityForOwnCandidate` all sit after the
+   * slug map, so a sprint on a project with a declared envelope compiles their
+   * questions the same wrong way. It is reachable — §33 records activating a
+   * sprint on the seeded project as a real configuration — and it is three
+   * other workstreams' dispatch, with no coverage here for what moving them
+   * would change. Recorded rather than fixed quietly, which is the honest half
+   * of finding somebody else's defect while fixing your own.
+   *
+   * It widens nothing. `RUSSELL_MONETIZATION_ATTRIBUTE_V1` takes its source
+   * classes and its forbidden actions verbatim from the discovery envelope;
+   * what differs is the assignment template, because asking a market a broad
+   * question and asking one possibility what its payment terms are must not be
+   * judged by the same completion standard.
+   */
+  if (await commissionForCandidate(candidate.id)) {
+    return 'RUSSELL_MONETIZATION_ATTRIBUTE_V1';
+  }
+
   const declared = ENVELOPE_BY_PROJECT[project.slug];
   if (declared) return declared;
 
@@ -284,26 +325,6 @@ async function envelopeIdFor(
     }
     if (kernel.purpose === 'CAPITAL') return 'RUSSELL_CAPITAL_STRUCTURE_V1';
   }
-
-  /*
-   * A question about one way of being paid is decided by the commission that
-   * asked it.
-   *
-   * `monetization_commissions` is the exact statement — this candidate is
-   * asking this attribute about this possibility — written by Brain when the
-   * question was opened. Read before the deep dive's own check for the kernel
-   * rounds' reason: a commission creates its own candidate, and nothing should
-   * have to reason about whether that candidate could also look like an
-   * opportunity's own.
-   *
-   * It widens nothing. `RUSSELL_MONETIZATION_ATTRIBUTE_V1` takes its source
-   * classes and its forbidden actions verbatim from the discovery envelope;
-   * what differs is the assignment template, because asking a market a broad
-   * question and asking one possibility what its payment terms are must not be
-   * judged by the same completion standard.
-   */
-  const commission = await commissionForCandidate(candidate.id);
-  if (commission) return 'RUSSELL_MONETIZATION_ATTRIBUTE_V1';
 
   /*
    * A dealflow question is decided the same way, by the round that asked it.

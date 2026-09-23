@@ -49,7 +49,9 @@ import {
 import { listLayers } from '../server/repos/layers.ts';
 import { createRun } from '../server/repos/runs.ts';
 import { createFragments, createOrchestration, insertClaims } from '../server/repos/research.ts';
-import { createCandidate } from '../server/repos/russellCandidates.ts';
+import { createCandidate, getCandidate } from '../server/repos/russellCandidates.ts';
+import { getProject } from '../server/repos/projects.ts';
+import { compileMission } from '../server/services/russell/compiler.ts';
 import { launchMission, transitionMission } from '../server/repos/russellMissions.ts';
 import {
   commissionForCandidate,
@@ -365,6 +367,75 @@ describe('the whole causal chain, from a discovery to a rank that moved', () => 
     expect((await listCommissions({ projectId, state: 'OPEN' })).length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+describe('it enters the machinery that already exists, rather than beside it', () => {
+  it('compiles under the monetization envelope, chosen from Brain\'s own row', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+    const asked = (await tick()).opened[0]!;
+
+    const candidate = (await getCandidate(asked.candidateId))!;
+    const project = (await getProject(projectId))!;
+    const compiled = await compileMission({
+      candidate,
+      project,
+      archive: { claimsConsidered: 0, contradicting: [] },
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+
+    /*
+     * The envelope is resolved from `monetization_commissions`, not from the
+     * candidate's prose and not from the project's declared default — which is
+     * what makes this an entrance to the existing dispatch rather than a
+     * parallel one.
+     */
+    expect(compiled.mission.envelopeId).toBe('RUSSELL_MONETIZATION_ATTRIBUTE_V1');
+    expect(compiled.mission.fragments).toHaveLength(1);
+
+    const fragment = compiled.mission.fragments[0]!;
+    // The lanes a worker may answer under are the ledger's own attribute keys,
+    // which is what makes an answer land as a lookup rather than a reading.
+    expect(fragment.requiredEvidence.map((one) => one.id).sort()).toEqual(
+      [...MONETIZATION_ATTRIBUTES].sort(),
+    );
+    // None of them is REQUIRED: "the published sources do not settle this" is a
+    // complete answer and must not fail the fragment.
+    expect(fragment.requiredEvidence.every((one) => one.necessity === 'CONDITIONAL')).toBe(true);
+    // The attribute being asked is in the question a worker actually reads.
+    expect(fragment.question).toContain(asked.attribute);
+  });
+
+  it('is judged by the plan validator the same way every other packet is', async () => {
+    await discovery('PAID_TASK_OR_CONTRACT', 'A published request for transcription.');
+    await enumeratePossibilities(projectId);
+    const asked = (await tick()).opened[0]!;
+    const candidate = (await getCandidate(asked.candidateId))!;
+    const project = (await getProject(projectId))!;
+    const compiled = await compileMission({
+      candidate,
+      project,
+      archive: { claimsConsidered: 0, contradicting: [] },
+    });
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+
+    const envelope = getApprovalEnvelope('RUSSELL_MONETIZATION_ATTRIBUTE_V1')!;
+    // One fragment, which is what the envelope pins: this assignment asks
+    // exactly one thing, so a plan that decomposed it would be answering a
+    // different question from the one that was commissioned.
+    expect(envelope.maxFragments).toBe(1);
+    // Every source class the profile proposes survives the envelope's filter,
+    // so a compiled plan is never left with nothing it may read.
+    expect(fragmentSources(compiled.mission.fragments[0]!).length).toBeGreaterThan(0);
+  });
+});
+
+function fragmentSources(fragment: { acceptableSourceTypes: string[] }): string[] {
+  return fragment.acceptableSourceTypes;
+}
 
 // ---------------------------------------------------------------------------
 
