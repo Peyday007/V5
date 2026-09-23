@@ -5,25 +5,34 @@ with the Software Factory closeout lane, on the question *can Brain use four
 separate real Claude accounts as one coherent Factory execution fleet, safely,
 observably and recoverably.*
 
-**What it is not.** It is not a deployment, not a production reading, and not a
-claim that four accounts have been commissioned. Nothing in this lane was
-deployed and nothing here advanced `production`. Where a thing has not happened,
-this file says so rather than rounding it up.
+**What it is not.** It is not a claim that four accounts have been
+commissioned. No four-account Factory pool exists. Where a thing has not
+happened, this file says so rather than rounding it up.
 
-**Branch.** `claude/fleet-four-accounts`, cut from `origin/production` at
-`f727b143`. Eight commits, listed under *What changed* below.
+**This file was a lane handoff and is now the integration record.** The lane
+finished, the integration lane merged it into the production candidate, and
+both halves are kept here rather than split across two documents that would
+disagree. Predictions that have since been measured are replaced by the
+measurement, and §7 is the integration's own record.
 
-**Merge-readiness is measured rather than asserted**, and re-measured on
-2026-09-23 rather than carried forward from when this file was written.
-`origin/production` is still `f727b143`, so the base is unmoved and this branch
-has not diverged from it. Against the Factory closeout lane at `9262bbd0`, a
-trial `git merge-tree` reports **no conflict**; the merged tree was materialized
-in a scratch worktree and its cross-lane suites run there — `factoryPool`,
-`factoryOnboarding`, `factoryReleaseSurface`, `buildRepositories`,
-`peopleAndCapacity`, `peopleSection`, `deploymentOwnership`: **188 passed,
-exit 0**. One typecheck error survives the merge, it belongs to the other lane,
-and §6 says exactly what it is and why it is not repaired here. No migration
-collision, no workflow edit, no deployment change.
+---
+
+## 0. The integrated state, in SHAs
+
+| | SHA | What it is |
+| --- | --- | --- |
+| Fleet lane | `e8a34b00` | `claude/fleet-four-accounts`, cut at `f727b143`, eight commits, preserved unchanged |
+| Factory closeout | `e37cca06` | reached `production` before this integration and deployed there; the lane branch `claude/factory-core-completion-ri3kqj` sits at the same commit |
+| Merge | `bb6d538d` | the fleet lane merged into `e37cca06`, no conflict |
+| Fixture repair | `3a63fad4` | the `'READER'` correction §7 records |
+
+**An earlier version of this paragraph said `origin/production` was
+`f727b143`.** That was true when the lane measured it and was false by the
+time the integration ran: production had advanced twenty-two commits of
+Factory closeout work and been deployed. The correction is recorded rather
+than edited away, because the lane's merge-readiness reading was taken
+against the older snapshot and a reader needs to know which tree each number
+describes. The integration re-measured everything against the current tip.
 
 ---
 
@@ -186,7 +195,9 @@ required field since it was added.
 | `6fd3ef7d` | three findings from re-reading the diff: a guard keyed on prose, a quarantine the tick never announced, and the record in CLAUDE.md §23 |
 | `76e54d4b` | accounts counted by identity rather than by display name — and the vacuous first test for it, replaced |
 | `90397070` | the measured run numbers recorded in this handoff |
-| *(this one)* | merge-readiness re-measured against the closeout lane, and the prediction in §6 replaced by the reading |
+| `e8a34b00` | merge-readiness measured against the closeout lane, and the prediction in §6 replaced by the reading — **the lane's tip** |
+| `bb6d538d` | *(integration)* the lane merged into `production` at `e37cca06` |
+| `3a63fad4` | *(integration)* the `'READER'` fixture corrected, with the mutation that proves it was vacuous |
 
 **Schema.** One additive column on `fleet_routines`, on both chains, numbered
 `088` (SQLite) and `079` (Postgres). Nothing is dropped, rewritten or
@@ -195,7 +206,9 @@ what it did before.
 
 **Not touched.** No workflow, no `fly.toml`, no `Dockerfile`, no deployment
 branch policy, no identity or policy module, no approval envelope, no queue
-primitive, no lease, no fencing generation, no Factory stage machinery.
+primitive, no lease, no fencing generation, no Factory stage machinery. The
+integration added one test-fixture correction and this document, and changed no
+production code of its own.
 
 ---
 
@@ -224,8 +237,17 @@ printing it). Both fail naming exactly what is missing.
 `3ccb623d`, and **4459 passed / 208 files / 44 skipped / exit 0** at
 `d732882d`. Fleet, pool and arrival suites green on **PostgreSQL 16.13** as well
 as SQLite (120 tests, then 112 after the index). `npm run typecheck` clean at
-every commit. Whoever picks this up should still re-run both before merging,
-which is ordinary practice rather than a caveat about this tree.
+every commit.
+
+Those are the *lane's* runs, on the lane's own base. They are kept because the
+test-discipline story is what they belong to, and they are **not** the
+integrated commit's evidence — §7.2 is.
+
+**A third guard was exercised against its own defect during the
+integration**, and it is the one this section's own argument predicted: the
+corrected release fixture was run against a live authorization regression, and
+the version it replaced passed 6 of 6 while the corrected one failed. §7.1
+carries the measurement.
 
 ---
 
@@ -265,10 +287,10 @@ lane, including the fourth verdict.
 
 ### AWAITING FINAL INTEGRATION AND PRODUCTION DEPLOYMENT
 
-* This branch is unmerged and undeployed. `origin/production` is `f727b143`,
-  re-verified on 2026-09-23 rather than carried forward — the base has not
-  moved since this branch was cut, and the Factory closeout lane's work is on
-  `claude/software-factory-progress-ir4qqz`, unmerged as well.
+* **Done.** An earlier version of this bullet said the branch was unmerged and
+  undeployed and that `origin/production` was `f727b143`. Both were true when
+  written; production has since advanced to `e37cca06` and this lane is merged
+  into it. §0 carries the SHAs and §7 the gate evidence.
 * No four-account Factory pool has been commissioned in production. The three
   research accounts in `docs/FLEET-12-ACTIVATION-EVIDENCE.md` are a different
   worker identity and a different workload family.
@@ -280,86 +302,186 @@ lane, including the fourth verdict.
 
 ---
 
-## 6. For the integration lane: overlaps, and one thing deliberately left
+## 6. The overlaps, as the integration actually found them
 
-**Overlaps with the Factory closeout lane**, read from that branch's own diff
-against `production` at `9262bbd0` rather than assumed:
+Read against `production` at `e37cca06` — the current tip — rather than against
+the `9262bbd0` snapshot the lane measured.
 
-* **No migration collision.** The closeout branch touches no file under
-  `server/db/` at all; this one takes the frontier, `088` / pg `079`.
-* **`CLAUDE.md`** — both branches edit it. The closeout lane's additions are in
-  §27 (the factory); this lane's are at the end of §23 (the fleet). Different
-  regions of a very large file, so a textual conflict is possible and a semantic
-  one is not.
-* **`client/src/russell/Build.tsx`** — both branches edit it. The closeout
-  lane adds the release-decision card; this lane changes the repository card's
-  surface sentence. Different components in one file.
-* **`server/services/factory/onboard.ts`** is this lane's alone.
-* **One consequence, predicted here and since measured.** This lane brought
-  `tests/**/*.tsx` into `tsconfig.json`, and the closeout branch adds a
-  component suite (`tests/factoryReleaseSurface.test.tsx`) that had therefore
-  never been compiled. An earlier version of this bullet said that if the merge
-  reported errors there, the guard would be doing its job. It reported exactly
-  one, and it is the guard doing its job:
-
-  ```
-  tests/factoryReleaseSurface.test.tsx(389,5): error TS2322:
-    Type '"READER"' is not assignable to type '"OWNER" | "ADMIN" | "MEMBER" | "VIEWER"'.
-  ```
-
-  **What it is, stated no more strongly than the evidence allows.** It is *not*
-  an authorization gap. The test lowers the caller's level and asserts the
-  release route answers 404, and it genuinely does — but `roleAtLeast` denies
-  `'READER'` through `PROJECT_ROLES.indexOf(role) === -1`, the unknown-role
-  branch, rather than through the rank comparison the test means to exercise.
-  `WRITE` needs `MEMBER`, so a real `VIEWER` is refused too, and the
-  conclusion holds. What is weaker than it claims is the reason it holds: the
-  guard passes for a role that could never exist rather than for the lowest one
-  that can. That is this repository's own vacuous-guard pattern, and it is
-  exactly what a typecheck over fixtures is for.
-
-  **The remedy is one word, and it is verified rather than proposed.** With
-  `role = 'VIEWER'` applied in the scratch worktree, the merged tree
-  typechecks clean and that suite's five tests still pass — so the assertion
-  survives, now reaching the rank comparison.
-
-  **It is deliberately not repaired on this branch.** The file is the closeout
-  lane's, created by its own commit for its own work, and it is under that
-  lane's active ownership; editing it here would be repairing another lane's
-  defect and would put a conflict into the one file they are still working in.
-  It is recorded so the integration conversation can apply it in one edit and
-  know what it is applying.
+* **No migration collision.** Production's chains end at `087` / pg `078`; this
+  adds `088` / pg `079`. Production added no migration at all in the
+  twenty-two commits between `f727b143` and `e37cca06`.
+* **`CLAUDE.md`** — both lanes edit it. Merged: **78 insertions, 0 deletions**
+  against production, so the fleet lane's §23 additions land and nothing the
+  closeout lane wrote is lost. Checked as a diff rather than trusted to the
+  merge.
+* **`client/src/russell/Build.tsx`** — both lanes edit it. Merged: **35
+  insertions, 2 deletions**. The closeout lane's release-decision card is
+  intact; the two deleted lines are exactly the old
+  `repo.surfaces.join(', ')` sentence the fleet lane replaces, which is the one
+  intended deletion and matches `onboard.ts` widening `surfaces` from names to
+  surfaces.
+* **`server/services/factory/onboard.ts`** is the fleet lane's alone.
+* **Nothing else overlapped.** Forty-six files changed on production's side,
+  twenty-seven on the lane's, and the intersection is the two above.
 
 **One observation reported rather than acted on.** `docs/FACTORY.md` says of the
 *factory worker registry* — `factoryFleet.ts`, the local-plane executor
 registry, which is a different object from `fleet_routines` — that "genuine
 failures and no-shows move a worker toward quarantine". That registry has a
 failure streak and **no no-show concept at all**. It may be loose wording rather
-than a defect, it belongs to the closeout lane's subsystem, and correcting a
-sentence about another module's behaviour on a guess would be worse than leaving
-it. It is recorded here so somebody can settle it from the code.
+than a defect, and correcting a sentence about another module's behaviour on a
+guess would be worse than leaving it. It is recorded here so somebody can settle
+it from the code.
 
-**What to run before merging.** The one-word correction above first —
-`tests/factoryReleaseSurface.test.tsx:389`, `'READER'` to `'VIEWER'` — because
-without it the merged tree does not typecheck, and then `npm run typecheck`,
-`npm test`, and the fleet suites against Postgres:
+---
+
+## 7. The integration, and the defect it was owed
+
+### 7.1 The vacuous guard, measured rather than characterized
+
+The fleet lane brought `tests/**/*.tsx` into `tsconfig.json`. That is what made
+the typecheck read `tests/factoryReleaseSurface.test.tsx` for the first time,
+and it reported exactly one error:
 
 ```
-BRAIN_TEST_DATABASE_URL=postgresql://... npx vitest run \
-  tests/factoryPool.test.ts tests/fleet.test.ts tests/arrivalCredit.test.ts
+tests/factoryReleaseSurface.test.tsx(389,5): error TS2322:
+  Type '"READER"' is not assignable to type '"OWNER" | "ADMIN" | "MEMBER" | "VIEWER"'.
 ```
 
-**What to do after deploying**, in order, and none of it is optional if the
-four-account claim is to mean anything:
+**It is not an authorization gap, and the integration says so as plainly as it
+says the rest.** The route requires `WRITE`, `WRITE` requires `MEMBER`, and a
+real `VIEWER` is refused. Production was never exposed.
 
-1. `fleet verify-pool --repository Peyday007/V5` — read `accounts` and
-   `surfaces` as two numbers.
-2. `fleet verify-pool --repository Peyday007/V5 --probe`, then again with no
-   `--probe` once the probes have been answered. Every surface PROVEN, or the
-   pool is not proven.
-3. Leave it running and re-read `fleet show`. `unanswered=` on a healthy surface
-   should sit at 0; a surface that stops answering should reach the threshold
-   and quarantine itself with the provider's own reason on the row.
-4. Restore it with `fleet set-state --kind routine --ref trig_… --to ENABLED
-   --reason …` and confirm it stays enabled across two ticks. That is §2.6,
-   proved against a real surface rather than a fixture.
+**What it is, is a guard that passed for a role nothing can hold — and that is
+a reading rather than a characterization.** `PROJECT_ROLES` is `OWNER`,
+`ADMIN`, `MEMBER`, `VIEWER`, so `roleAtLeast` denied `'READER'` through
+`PROJECT_ROLES.indexOf(role) === -1`, the unknown-role branch, rather than
+through the rank comparison the test exists to exercise. The integration
+measured what that cost by mutating `MINIMUM_ROLE.WRITE` from `MEMBER` to
+`VIEWER` — a real authorization regression that would let any project viewer
+approve a release:
+
+| fixture | against that regression |
+| --- | --- |
+| `role = 'READER'` (as it stood) | **6 of 6 passed** — blind to it |
+| `role = 'VIEWER'` (corrected) | **failed**, `expected 200 to be 404` |
+
+The old form could not have caught the defect it was written to catch, because
+the unknown-role branch denies whatever the ranks say.
+
+**The repair does not merely satisfy the compiler.** `VIEWER` is named, and the
+two properties that make it the right role are asserted rather than assumed: it
+is in `PROJECT_ROLES`, and it still ranks below the `MEMBER` that `WRITE`
+needs. Change either and the test fails there, naming the reason. The type
+coverage that surfaced it is kept: `tests/**/*.tsx` stays in `tsconfig.json`,
+and narrowing it to make the error go away was never on the table.
+
+### 7.2 What the first tick after deploy can do, established before deploying
+
+One thing in this lane *acts* on production rows rather than only reporting
+them: the dispatch tick now quarantines a surface whose fires go unanswered.
+So the question an integrator has to answer before pushing is whether the
+first tick could quarantine a healthy fleet out of history.
+
+**It cannot, and that is a reading rather than a reassurance.**
+`unansweredFiresByRoutine` counts `bin_events` rows of type
+`DISPATCH_NO_SHOW` with a non-null `routine_id`. Production has **none**:
+`grep` over the released tree finds zero occurrences of that string in
+`server/`, because production's `reopenNoShowDispatches` only ever set
+`last_error_kind = 'NO_SHOW'` on the dispatch row and wrote no event at all.
+The event, its attribution and its one writer all arrive with this lane.
+
+So every surface's count starts at zero on the first tick, and a quarantine
+needs `NO_SHOW_QUARANTINE_THRESHOLD` fires that Brain sends *after* this
+deploy and that nobody answers. The migration is additive, the counter is
+derived from an append-only ledger rather than backfilled, and deleting every
+`DISPATCH_NO_SHOW` row would return the fleet to exactly what it does today.
+
+§8 checks this against the live fleet rather than leaving it as an argument.
+
+### 7.3 What the integrated SHA was gated on
+
+Every figure below is from a run on the integrated tree itself. No green run
+from either source branch is reused as evidence for the integrated commit.
+
+**Running the Postgres half is worth one note, because getting it wrong looks
+like a code failure.** `postgres-suite.yml` connects as the OS user over the
+socket by peer authentication, and the `pg` driver infers that user from the
+environment. In a shell where `USER` and `LOGNAME` are unset — a container
+running as root is the ordinary case — it infers nothing and every test in the
+run fails with `no PostgreSQL user name specified in startup packet`, which
+reads exactly like a broken repository layer and is not one. Name the user in
+the URL:
+
+```
+BRAIN_TEST_DATABASE_URL='postgresql://<user>@/brain_test?host=/var/run/postgresql&sslmode=disable' npm test
+```
+
+The cluster also needs `max_locks_per_transaction = 1024`, for the reason
+`postgres-suite.yml` measures out in its own comments: the suite gives each
+file its own schema and `DROP SCHEMA … CASCADE` takes one lock per object.
+
+| Gate | Tree | Result |
+| --- | --- | --- |
+| `npm run typecheck` | `3a63fad4` | clean, with `tests/**/*.tsx` compiled |
+| `npm test` (SQLite) | `3a63fad4` | **4520 passed**, 44 skipped, 210 files passed / 1 skipped, exit 0 |
+| `npm test` (PostgreSQL 16.13) | `3a63fad4` | see the CI row below and the local note beneath it |
+| `npm run build` | `3a63fad4` | clean, `index-T4sTcb6M.js` |
+| Cross-lane suites | `3a63fad4` | **189 passed**, exit 0 — `factoryPool`, `factoryOnboarding`, `factoryReleaseSurface`, `buildRepositories`, `peopleAndCapacity`, `peopleSection`, `deploymentOwnership` |
+
+The cross-lane set is the one the lane measured at **188** in a scratch merge
+against the older snapshot; it is 189 here because production's newer commits
+added a test to `factoryReleaseSurface`. Both numbers are what they are rather
+than reconciled.
+
+**One condition this integration inherited rather than caused, and it will
+affect every deploy from here.** The Factory closeout lane's own release, run
+316 on `e37cca06`, finished **before** this integration existed:
+`release: success`, `beforeRestart: true`, `afterRestart: false`. The
+post-restart verification failed at
+
+```
+tools/call (brain_submit_audit): nothing answered within 900s.
+The request was not refused; nothing answered it.
+```
+
+which is CLAUDE.md §27's long-running open reading — the judge pass growing
+with the archive — now past the fifteen-minute bound §27 itself added. That
+run measured both halves and adds two points to §27's table:
+
+| half | archive | ADVERSARIAL → verdict |
+| --- | --- | --- |
+| pre-restart | 415 documents | **12m25s**, and it passed 229/229 |
+| post-restart | 431 documents | **over 15m**, the bound |
+
+§8 records what this integration's own deploy did against the same condition.
+Nothing here raises that bound, which §27 forbids by name.
+
+**The Postgres half is gated in CI on the exact released SHA.**
+`postgres-suite.yml` carries a push trigger on `production`, so advancing the
+canonical branch runs the whole suite against PostgreSQL on the commit that
+deploys — which is a stronger answer than a local run on a tree one
+documentation commit behind it. A local full Postgres run was started on
+`3a63fad4` as corroboration; the fleet, pool and arrival suites had already
+gone green there (**120 tests**, 69 + 51, PostgreSQL 16.13), which is the part
+of the suite this lane's migration and derived counter actually touch.
+
+<!-- CI-EVIDENCE -->
+
+### 7.4 What is proven where
+
+**Proven in code and tests** — schema on both chains, the router, project and
+worker isolation, the capacity proofs, quarantine and its answering transition,
+the identity and authentication checks, the Build and operator surfaces, the
+migrations, the documentation.
+
+**Proven in production** — that the deployed image serves this machinery and
+that it tells the truth about an uncommissioned pool. See §8.
+
+**Not proven, and not claimed** — that four real Claude accounts run as one
+Factory fleet. No such pool has been commissioned. The quarantine has never
+fired against a real dead surface and `STALE` has never been printed about a
+real revoked connector. The engine passing its tests says nothing about
+whether the fleet behaves this way, which is the separation Step 3 drew and
+which this integration does not get to waive.
+

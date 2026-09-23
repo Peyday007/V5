@@ -2454,6 +2454,37 @@ winning.
   by name, beside the other checks on a submission's own coherence — it needs
   no rows and no network, and a refusal that required a forge request would be
   unreachable exactly where somebody would hit it.
+
+  **And the suite that guards that surface passed for a role nothing can hold,
+  which only the other lane's typecheck could see.** The release control's own
+  seam test lowered the caller's level to `'READER'` and asserted the route
+  answers 404. It does — but `PROJECT_ROLES` is `OWNER`, `ADMIN`, `MEMBER`,
+  `VIEWER`, so `roleAtLeast` denied it through
+  `PROJECT_ROLES.indexOf(role) === -1`, the **unknown-role** branch, rather
+  than through the rank comparison the test exists to exercise. Production was
+  never exposed: the route needs `WRITE`, `WRITE` needs `MEMBER`, and a real
+  `VIEWER` is refused.
+
+  **Vacuous is measured here rather than characterized**, because §41 already
+  records that a vacuous guard is worse than none and this is what worse looks
+  like. With `MINIMUM_ROLE.WRITE` lowered from `MEMBER` to `VIEWER` — a real
+  authorization regression that would let any project viewer approve a release
+  — the fixture as it stood passed **6 of 6**. The corrected one fails on the
+  same mutation with `expected 200 to be 404`. It could not have caught the
+  defect it was written to catch, because the unknown-role branch denies
+  whatever the ranks say.
+
+  It survived because `tsconfig.json` did not compile `tests/**/*.tsx`, so the
+  one suite in this repository that could have said `'READER'` is not a role
+  was never asked. The fleet lane brought those files into the typecheck for
+  its own reasons (§23) and this fell out of the merge — **found by widening
+  what gets compiled, which no amount of reading either file would have done**,
+  and the second thing that widening turned up after the nine uncompiled
+  component suites it was written for. The remedy names `VIEWER` and asserts
+  the two properties that make it right — that it is in `PROJECT_ROLES`, and
+  that it still ranks below `MEMBER` — so the next person to reach for a
+  plausible-sounding role fails here, naming the reason, instead of passing for
+  the wrong one.
 - **Every escalation has an answering transition.** `BLOCKED` names an
   operational fact from a closed vocabulary and a remedy somebody can apply, and
   a blocked campaign is re-examined on the next tick rather than retired.
@@ -3413,6 +3444,34 @@ remote.
   | 274 | 396 documents | ≥5m20s — the client gave up, so this is a floor |
   | `41f8741` | 397 documents | **9m22s** |
   | 277 | 399 documents | **9m44s** |
+  | 316 pre-restart | 415 documents | **12m25s** — and it passed, 229/229 |
+  | 316 post-restart | 431 documents | **over 15m** — the bound, unanswered |
+
+  **The last two rows were measured after this table was written, and they
+  change what it means.** Deploy 316 timed both of its halves against two
+  different archive sizes on one image, which is the cleanest pair here: the
+  correlation holds within a single run, and the series is now monotone in
+  archive size across seven points. More importantly, **the fifteen-minute
+  bound this section added is itself exceeded**. `brain_submit_audit` answered
+  nothing within 900s, so the post-restart gate now fails on a healthy release
+  rather than reporting a number — `release: success`, `beforeRestart: true`,
+  `afterRestart: false`, with the image live and serving throughout.
+
+  **And the obvious candidate this section ruled out was the wrong one to rule
+  out alone.** `recordAuditEvidence` is genuinely O(1) here, as recorded. But
+  the judge's brief is built by `auditBriefFor` with `mode: 'SINGLE_DOCUMENT'`,
+  and `buildAuditContext` in that mode reads **every other document in the
+  layer** as `siblings`, one `toArtifact` each, against the document store.
+  `verify-hosted.ts` files its report under a single constant layer name —
+  `VERIFICATION_LAYER_NAME = 'Verification Layer'` — so that layer gains one
+  document per deploy and the sibling read grows with it.
+
+  **That is a lead with two verified facts, not an established cause**, and it
+  is recorded as the former deliberately: nothing here has measured that the
+  sibling read is what the twelve minutes are spent on, and this section's own
+  history is of comfortable half-truths costing the next reader three runs.
+  What a person picking this up now has that the previous nine deploys did not
+  is somewhere specific to instrument first.
 
   So the two runs §27 records as `PASS 198/198` did not squeak under the
   300-second wall: they finished in three and four minutes, comfortably inside
