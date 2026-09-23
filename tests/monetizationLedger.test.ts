@@ -30,7 +30,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
-import { createUser } from '../server/repos/identity.ts';
+import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
+import { findTool } from '../server/mcp/tools.ts';
+import { enqueueWork } from '../server/repos/workQueue.ts';
+import { listClaimsForFragment } from '../server/repos/research.ts';
+import { validateMonetizationMethod } from '../server/domain/monetization.ts';
+import type { Principal, WorkerScope } from '../server/domain/types.ts';
 import { activate } from '../server/services/cash/lifecycle.ts';
 import {
   createOpportunity,
@@ -46,6 +51,7 @@ import {
 } from '../server/repos/research.ts';
 import {
   getPath,
+  listEdges,
   listPaths,
   pathFactsFor,
   recordPathFact,
@@ -1142,5 +1148,273 @@ describe('composing the ledger is a projection', () => {
       snapshots: await count('monetization_rank_snapshots'),
       events: await count('cash_events'),
     }).toEqual(before);
+  });
+});
+
+/* ==========================================================================
+ * The declaration a worker makes, over the wire it actually makes it on
+ *
+ * The test directly above forces `monetization_method` onto a claim row with
+ * raw SQL, which is why it could pass while the column was unreachable from
+ * every door a worker can knock on. §45 records the same signature twice — a
+ * declaration reaching the tool and not the mapper, and a field named in a
+ * tool's prose and absent from its schema — and both times what was passing
+ * was a suite that wrote the column directly.
+ *
+ * This puts it through both doors instead, and the halves are deliberately
+ * separate: one rule, two callers, and each caller has to be shown to call it.
+ * ========================================================================== */
+describe('a method declared over the wire reaches the row', () => {
+  it('carries it from brain_submit_claims through the mapper to research_claims', async () => {
+    const worker = await createWorker({
+      name: `method-worker-${Math.random().toString(36).slice(2, 8)}`,
+      displayName: 'A worker that read a source',
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    const scopes: WorkerScope[] = [
+      'project:read',
+      'research:read',
+      'research:write',
+      'claims:write',
+      'queue:read',
+      'queue:claim',
+      'queue:heartbeat',
+      'queue:complete',
+    ];
+    const membership = await grantMembership({
+      projectId,
+      principalType: 'WORKER',
+      principalId: worker.id,
+      role: 'MEMBER',
+      scopes,
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    const principal = {
+      type: 'WORKER',
+      id: worker.id,
+      handle: worker.name,
+      displayName: worker.displayName,
+      isBrainAdmin: false,
+      mustChangePassword: false,
+      credentialId: 'cred_method_wire',
+      authMethod: 'WORKER_BEARER',
+      memberships: [membership],
+      requestId: 'req_method_wire',
+    } as unknown as Principal;
+
+    const call = async (name: string, args: Record<string, unknown>) => {
+      const found = findTool(name);
+      if (!found) throw new Error(`no such tool: ${name}`);
+      const outcome = await found.run(args, {
+        principal,
+        requestId: `req_${Math.random().toString(36).slice(2)}`,
+      });
+      return outcome.value as Record<string, any>;
+    };
+
+    const layer = (await listLayers(projectId))[0]!;
+    const run = await createRun({
+      projectId,
+      layerId: layer.id,
+      runType: 'FOUNDATION',
+      status: 'PLANNED',
+      provider: 'WORKER',
+      prompt: 'what the published sources say',
+    });
+    const orchestration = await createOrchestration({
+      projectId,
+      layerId: layer.id,
+      runId: run.id,
+      title: 'What the published sources say',
+      assignment: 'the published listings that answer it',
+      provider: 'WORKER',
+      autoApprove: false,
+    });
+    const [fragment] = await createFragments([
+      {
+        orchestrationId: orchestration.id,
+        projectId,
+        layerId: layer.id,
+        fragmentIndex: 0,
+        fragmentKey: 'market-opening',
+        question: 'What do the published sources say?',
+        geography: 'United States',
+        requiredEvidence: [
+          { id: 'demand_signal', description: 'the published listing', necessity: 'REQUIRED' },
+        ],
+        acceptableSourceTypes: ['a marketplace, job board, classified or auction listing'],
+        excludedSourceTypes: ['a claim with no locatable source at all'],
+        completionCriteria: ['a quoted published listing with its date'],
+        minIndependentSources: 1,
+        maxRepairs: 2,
+        dependsOn: [],
+        attempt: 1,
+      },
+    ] as unknown as Parameters<typeof createFragments>[0]);
+
+    /*
+     * QUEUED, because `brain_submit_claims` refuses a fragment that is not
+     * taking claims — one fragment, one ledger. A fixture that left it PLANNED
+     * would be testing a shape production never submits against.
+     */
+    await getDb().run("UPDATE research_fragments SET status = 'QUEUED' WHERE id = ?", [
+      fragment!.id,
+    ]);
+    await enqueueWork({
+      projectId,
+      workType: 'RESEARCH_FRAGMENT',
+      requiredScopes: ['claims:write'],
+      orchestrationId: orchestration.id,
+      fragmentId: fragment!.id,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+      payload: {},
+    });
+    const claimed = (
+      await call('brain_claim_work', {
+        project_id: projectId,
+        work_types: ['RESEARCH_FRAGMENT'],
+        limit: 1,
+      })
+    )['claimed'][0];
+
+    const submitted = await call('brain_submit_claims', {
+      work_item_id: claimed.workItemId,
+      lease_id: claimed.leaseId,
+      lease_generation: claimed.leaseGeneration,
+      claims: [
+        {
+          claim: 'The county pays a franchisee to run the whole intake.',
+          claim_type: 'SOURCED_FACT',
+          source_url: 'https://example.com/franchise',
+          source_title: 'A published notice',
+          source_publisher: 'A county',
+          source_date: '2026-09-15',
+          evidence_excerpt: 'the county pays a franchisee',
+          evidence_locator: 'the notice body',
+          evidence_lane: 'demand_signal',
+          retrieved_at: '2026-09-15',
+          confidence: 0.9,
+          primary_source: true,
+          opportunity_signal: 'ACTIVE_BUYER_DEMAND',
+          monetization_method: 'FRANCHISE',
+        },
+      ],
+    });
+    expect(submitted['recorded']).toBe(1);
+
+    /*
+     * The row, not the reply. The reply is composed from what the tool parsed,
+     * so it would have said FRANCHISE either way — the defect lived between
+     * the parse and the insert, and only the stored claim can see it.
+     */
+    const stored = await listClaimsForFragment(fragment!.id);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.opportunitySignal).toBe('ACTIVE_BUYER_DEMAND');
+    expect(stored[0]!.monetizationMethod).toBe('FRANCHISE');
+  });
+
+  it('refuses a method with no opening beside it, at the provider door too', () => {
+    /*
+     * The wire door had this rule as a private function; the provider door had
+     * no rule and no field. Both call `validateMonetizationMethod` now, so the
+     * refusal is asserted where a second copy would have drifted.
+     */
+    const withoutSignal = validateMonetizationMethod({
+      where: 'claims[0]',
+      method: 'FRANCHISE',
+      hasSignal: false,
+    });
+    expect(withoutSignal.ok).toBe(false);
+    expect(withoutSignal.ok ? '' : withoutSignal.error).toContain('opportunity_signal');
+
+    const notAMethod = validateMonetizationMethod({
+      where: 'claims[0]',
+      method: 'SELLING_THINGS',
+      hasSignal: true,
+    });
+    expect(notAMethod.ok).toBe(false);
+
+    // And absent is the ordinary case: almost every claim carries none.
+    expect(validateMonetizationMethod({ where: 'claims[0]', method: null, hasSignal: false }))
+      .toEqual({ ok: true, value: null });
+  });
+});
+
+describe('a judgement says who, and through which door', () => {
+  it('renders both, because they are two facts and one of them defaults to the weaker', async () => {
+    /*
+     * §23 settled this at `audit_reopens` and gave the reason: `decided_by_id`
+     * is whose authority a decision carries and `channel` is how the call got
+     * in, Brain cannot check a channel, so it defaults to the unverifiable
+     * value — and **every reader prints both**.
+     *
+     * The per-path panel's own doc comment promised to render "who recorded a
+     * judgement and through which channel" and rendered neither: `channel` was
+     * on the wire and in the client's own type and dropped at the last hop,
+     * and `decidedById` was on the wire and not declared at all. §27 records
+     * the identical shape at `decisionWaiting` — a type losing a server field,
+     * so nothing at either end could see it.
+     *
+     * Read rather than rendered, for `operatorConsoleRemoved`'s reason: what
+     * has to be true of a file is not something a passing request can show.
+     */
+    const repo = await readFile('server/repos/monetization.ts', 'utf8');
+    expect(repo).toContain('decidedById: row.decided_by_id');
+    expect(repo).toContain('channel: row.channel');
+
+    const api = await readFile('client/src/lib/cashApi.ts', 'utf8');
+    expect(api).toContain('decidedById: string | null;');
+
+    const panel = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    const rendering = panel.slice(panel.indexOf('What anybody recorded about it'));
+    expect(rendering.slice(0, 2000)).toContain('one.decidedById');
+    expect(rendering.slice(0, 2000)).toContain('one.channel');
+  });
+
+  it('carries the author of a recorded relation too, which nothing read either', async () => {
+    /*
+     * The same finding one table along. `decided_by_id` on
+     * `monetization_path_edges` is written from the authenticated principal by
+     * a live route; `entry.edges` flattens derived and recorded rows together
+     * and `risksFor` reads only the rationale, so the author reached nothing.
+     *
+     * The repair is a reader rather than a comment, because unlike
+     * `cash_mode_id` — kept as provenance, since the only reader anybody could
+     * write cannot fire — a reader here is obvious and one already existed for
+     * the identical fact on a judgement.
+     */
+    await discovery('SUPPLY_DEMAND_MISMATCH', 'A published demand nobody has connected.');
+    await enumeratePossibilities(projectId);
+    const paths = await listPaths({ projectId });
+    const from = paths[0]!;
+    const to = paths.find((one) => one.id !== from.id)!;
+
+    const linked = await linkPaths({
+      projectId,
+      fromPathId: from.id,
+      toPathId: to.id,
+      kind: 'REQUIRES',
+      rationale: 'This buyer will not talk to anybody who has not been introduced.',
+      decidedByUserId: userId,
+    });
+    expect(linked.ok).toBe(true);
+
+    const recorded = (await listEdges(projectId)).find(
+      (edge) => edge.fromPathId === from.id && edge.toPathId === to.id,
+    )!;
+    expect(recorded.source).toBe('PERSON');
+    expect(recorded.decidedById).toBe(userId);
+
+    // And it reaches the surface that shows one possibility whole.
+    const route = await readFile('server/routes/cash.ts', 'utf8');
+    const detail = route.slice(route.indexOf("'/cash/monetization/paths/:pathId',"));
+    expect(detail.slice(0, 4000)).toContain('decidedById: edge.decidedById');
+
+    const panel = await readFile('client/src/russell/Cash.tsx', 'utf8');
+    const rendering = panel.slice(panel.indexOf('how it relates to the others'));
+    expect(rendering.slice(0, 1200)).toContain('one.decidedById');
   });
 });

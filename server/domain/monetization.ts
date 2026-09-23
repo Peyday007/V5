@@ -576,6 +576,57 @@ export function isMonetizationMethod(value: unknown): value is MonetizationMetho
   );
 }
 
+export type MethodCheck =
+  | { ok: true; value: MonetizationMethod | null }
+  | { ok: false; error: string };
+
+/**
+ * The monetization declaration on one submitted claim, for both doors.
+ *
+ * Here rather than in either of them, and that is the whole point: the wire
+ * door and the provider door both have to apply this rule or it is not a rule,
+ * and this one was a private function inside `server/mcp/researchTools.ts`
+ * while `ParsedClaim` did not carry the field at all. A rule applied by one of
+ * two readers is worse than none, and `validateStructural` two modules along
+ * says so in its own comment — which is the shape this was copied from and
+ * then not finished.
+ *
+ * Two conditions, and the second is the one with a reading behind it. The
+ * method is matched exactly against the closed set, because a method that is
+ * really a feeling costs a ledger entry that ranks against real ones. And it
+ * is **refused without an `opportunity_signal` on the same claim**: a way of
+ * being paid has to say what it is a way of being paid for, and the opening
+ * that claim establishes is the only unambiguous anchor. Reading the subject
+ * out of the claim's prose is the guess §25 records the cost of, at the field
+ * that decides what a possibility is about.
+ */
+export function validateMonetizationMethod(input: {
+  where: string;
+  method: unknown;
+  hasSignal: boolean;
+}): MethodCheck {
+  const { where, method } = input;
+  if (method === undefined || method === null || method === '') return { ok: true, value: null };
+  if (!isMonetizationMethod(method)) {
+    return {
+      ok: false,
+      error:
+        `${where}: monetization_method must be one of ${MONETIZATION_METHODS.join(', ')}, ` +
+        'or omitted.',
+    };
+  }
+  if (!input.hasSignal) {
+    return {
+      ok: false,
+      error:
+        `${where}: monetization_method needs an opportunity_signal on the same claim. A way of ` +
+        'being paid has to say what it is a way of being paid for, and the opening this claim ' +
+        'establishes is the only thing that says so.',
+    };
+  }
+  return { ok: true, value: method };
+}
+
 /* --------------------------------------------------------------------------
  * What every path has to answer
  * ------------------------------------------------------------------------ */

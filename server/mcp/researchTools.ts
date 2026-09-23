@@ -98,9 +98,9 @@ import { assignmentFor } from '../services/research/assignment.ts';
 import { explainLaneProblems, laneProblems } from '../services/research/lanes.ts';
 import { isLaneId, laneIdFrom, LANE_NECESSITIES } from '../domain/evidenceLanes.ts';
 import {
-  isMonetizationMethod,
   METHOD,
   MONETIZATION_METHODS,
+  validateMonetizationMethod,
 } from '../domain/monetization.ts';
 import type { MonetizationMethod } from '../domain/types.ts';
 import {
@@ -1135,22 +1135,13 @@ function optionalMethod(
   signal: OpportunitySignal | null,
   where: string,
 ): MonetizationMethod | null {
-  const raw = row['monetization_method'];
-  if (raw === undefined || raw === null || raw === '') return null;
-  if (!isMonetizationMethod(raw)) {
-    throw invalidInput(
-      `${where}: monetization_method must be one of ${MONETIZATION_METHODS.join(', ')}, ` +
-        'or omitted.',
-    );
-  }
-  if (signal === null) {
-    throw invalidInput(
-      `${where}: monetization_method needs an opportunity_signal on the same claim. A way of ` +
-        'being paid has to say what it is a way of being paid for, and the opening this claim ' +
-        'establishes is the only thing that says so.',
-    );
-  }
-  return raw;
+  const checked = validateMonetizationMethod({
+    where,
+    method: row['monetization_method'],
+    hasSignal: signal !== null,
+  });
+  if (!checked.ok) throw invalidInput(checked.error);
+  return checked.value;
 }
 
 /**

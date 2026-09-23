@@ -3628,7 +3628,56 @@ function PathDetail({ pathId }: { pathId: string }): JSX.Element {
                 {state.detail.judgments.map((one, index) => (
                   <li key={index}>
                     {one.judgment.toLowerCase()} &mdash; {one.reason}
-                    <span className="rs-hint"> ({one.createdAt})</span>
+                    {/*
+                     * Who, and how the call got in, because those are two facts
+                     * and §23 settled that they are recorded in two columns for
+                     * exactly that reason: `decided_by_id` is whose authority
+                     * this carries, and `channel` is the door it came through,
+                     * which defaults to the weaker unverifiable value because
+                     * Brain cannot check one. This module's own comment above
+                     * already promised to render both and rendered neither —
+                     * the field was on the wire, in this file's own type, and
+                     * dropped at the last hop, which is §27's `decisionWaiting`
+                     * at a smaller scale.
+                     */}
+                    <span className="rs-hint">
+                      {' '}
+                      ({one.createdAt}
+                      {one.decidedById ? `, by ${one.decidedById}` : ''},{' '}
+                      {one.channel === 'BROWSER_SESSION'
+                        ? 'in a browser session'
+                        : 'through a terminal inside the deployment'}
+                      )
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {/*
+            * Recorded relations only, which is what this list is for.
+            *
+            * The derived graph is already what the risks and the chains are
+            * built out of; what had no reader anywhere was the *recorded*
+            * edge's author — written from the authenticated principal by a
+            * live route and printed by nothing. A relation somebody recorded
+            * is a statement about this situation rather than about shapes of
+            * transaction, and who made it is half of what makes it that.
+            */}
+          {state.detail.relations.length > 0 ? (
+            <>
+              <h5>What anybody recorded about how it relates to the others</h5>
+              <ul>
+                {state.detail.relations.map((one, index) => (
+                  <li key={index}>
+                    {one.kind.toLowerCase().replace(/_/g, ' ')} &mdash; {one.rationale}
+                    <span className="rs-hint">
+                      {' '}
+                      ({one.createdAt}
+                      {one.decidedById ? `, by ${one.decidedById}` : ''}
+                      {one.sourceClaimId ? `, claim ${one.sourceClaimId}` : ''})
+                    </span>
                   </li>
                 ))}
               </ul>

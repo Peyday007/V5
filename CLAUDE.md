@@ -10966,6 +10966,59 @@ that would have chosen between them exists.**
   saying it is provenance, which is what stops the next auditor spending an
   hour rediscovering it.
 
+- **The one declaration a worker can make about this ledger reached the tool,
+  passed its validator, had its column in the insert, and landed NULL — which
+  is §45's defect committed while writing a section about mechanisms that are
+  declared and unreachable.** `brain_submit_claims` declares
+  `monetization_method` in its schema and refuses it without an
+  `opportunity_signal` beside it; `research_claims` has the column;
+  `insertClaims` carries it. `recordFragmentClaims` stands between them and
+  carried only the fields it had been told about, so every method a worker
+  declared over the wire was accepted and dropped. `enumerate.ts` is its only
+  reader, so what that cost is the **one path origin a worker can produce**:
+  `EVIDENCED`, a possibility the method table would not have enumerated, which
+  is §20's *are there paths I could not see before* — silently impossible while
+  the surface went on reporting the enumerated ones as the whole space.
+
+  **Nothing could see it, and the reason is the same one three times.** The
+  mapper's own comments record the capability axis losing five of eight fields
+  and the dealflow axis losing all seven, each found by a walk rather than by a
+  test, because a unit suite writes the column directly. Both monetization
+  suites did exactly that — one with `insertClaims`, one with a raw `UPDATE
+  research_claims SET monetization_method` — so both passed over it. It was
+  found by reading this mapper against the tool, which is the only thing that
+  had not been tried.
+
+  **The rule now has one home and two callers, which is the half that lasts.**
+  `validateMonetizationMethod` is in `domain/monetization.ts` beside
+  `validateStructural`, whose own comment says the provider path calls it too;
+  the MCP tool had a private copy and `ParsedClaim` had no field at all, so the
+  provider door had no rule rather than a different one. A rule applied by one
+  of two readers is worse than none, for the fifth time in this file.
+
+- **Two attribution columns were written from the authenticated principal and
+  read by nothing, and one of them had this section's own promise standing over
+  it.** §23 settled the rule at `audit_reopens` and gave the reason:
+  `decided_by_id` is whose authority a decision carries, `authority_channel` is
+  how the call got in, Brain cannot check a channel so it defaults to the
+  weaker unverifiable value — and **every reader prints both**. The per-path
+  panel's doc comment says in as many words that it exists to render "who
+  recorded a judgement and through which channel"; twenty lines below it, the
+  list printed the verdict, the reason and the timestamp. `channel` was on the
+  wire *and in the client's own type* and dropped at the last hop, which is
+  §27's `decisionWaiting` at a smaller scale; `decidedById` was on the wire and
+  not declared at all, so nothing at either end could see it.
+
+  The same fact one table along was worse, because there the reader did not
+  exist: `monetization_path_edges.decided_by_id` is written by a live route
+  from the principal, and `risksFor` reads a recorded edge for its rationale
+  alone — so a relation *somebody recorded about this situation* was presented
+  with no author, which is half of what distinguishes it from a structural
+  consequence the method table derived. It has a reader now rather than a
+  comment, and the difference from `cash_mode_id` is the whole test: there the
+  only reader anybody could write cannot fire, and here one already existed for
+  the identical fact on a judgement.
+
 - **This pair moved three times, and the third move is what says the rule is
   about position rather than about being first.** It was written at `088` /
   pg `079`, moved to `089` / pg `080` when the four-account fleet lane landed

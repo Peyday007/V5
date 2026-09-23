@@ -133,6 +133,7 @@ import {
   commissionsFor,
   getPath,
   judgmentsFor,
+  listEdges,
   pathFactsFor,
   snapshotsFor,
 } from '../repos/monetization.ts';
@@ -1789,6 +1790,32 @@ cashRouter.get(
       facts: await pathFactsFor(path.id),
       /** Every judgement anybody recorded, oldest first. Never deleted. */
       judgments: await judgmentsFor(path.id),
+      /*
+       * And every relation somebody recorded about it, with whose statement it
+       * is.
+       *
+       * `entry.edges` is the derived graph plus the recorded rows flattened
+       * together, and `risksFor` reads it for its sentences — so a recorded
+       * edge's `decided_by_id` was written from the authenticated principal by
+       * a live route and read by nothing at all, which is the same audit
+       * finding as the judgement's channel one table along. A relation a
+       * person recorded is a statement about this situation rather than about
+       * shapes of transaction (§21's `source` column), and the person is half
+       * of what makes it that. Recorded rows only: a derived edge has no
+       * author, and inventing a line saying so would be the opposite mistake.
+       */
+      relations: (await listEdges(path.projectId))
+        .filter((edge) => edge.fromPathId === path.id || edge.toPathId === path.id)
+        .map((edge) => ({
+          fromPathId: edge.fromPathId,
+          toPathId: edge.toPathId,
+          kind: edge.kind,
+          rationale: edge.rationale,
+          source: edge.source,
+          sourceClaimId: edge.sourceClaimId,
+          decidedById: edge.decidedById,
+          createdAt: edge.createdAt,
+        })),
       /** Every question Brain has asked about it, and what came of each. */
       questions: await commissionsFor(path.id),
     };

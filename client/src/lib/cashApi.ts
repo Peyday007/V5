@@ -593,7 +593,25 @@ export const CashApi = {
       uncertainty: string | null;
       updatedAt: string;
     }[];
-    judgments: { judgment: string; reason: string; channel: string; createdAt: string }[];
+    judgments: {
+      judgment: string;
+      reason: string;
+      /** Whose authority it carries. Never the same fact as the channel. */
+      decidedById: string | null;
+      channel: string;
+      createdAt: string;
+    }[];
+    /** Relations somebody recorded, with whose statement each one is. */
+    relations: {
+      fromPathId: string;
+      toPathId: string;
+      kind: string;
+      rationale: string;
+      source: string;
+      sourceClaimId: string | null;
+      decidedById: string | null;
+      createdAt: string;
+    }[];
     questions: {
       id: string;
       attribute: string;
