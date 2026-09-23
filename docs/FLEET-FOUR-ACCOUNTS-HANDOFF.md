@@ -1045,4 +1045,22 @@ thing arrives because the page is already there"*. The decision about whether
 this Brain should have a guarded restart operation belongs to the owner, made
 when it is cheap rather than when something is down.
 
+**A second change would have prevented today's outage outright, and it is
+deliberately proposed rather than made.** The boot asks the document store
+once. A bounded retry with backoff — three attempts, say, and then the same
+refusal with the same reason — would turn a transient upstream blip into a
+slower boot instead of a dead machine, and it would have absorbed both of
+today's failures: the store answered normally at 10:38 and again whenever the
+unauthenticated probe was taken.
+
+It is **not** made here, and the argument against is stronger than the
+convenience. §18 is one of this file's most emphatic controls and its whole
+content is that the boot fails loudly rather than tolerates. A retry does not
+contradict its text — *"a bucket that does not answer"* after three attempts
+is still a bucket that does not answer — but it is a change to a deliberate
+refusal's behaviour, and the moment to make that change is not while
+somebody is under pressure to get production back. That is exactly when a
+small tolerance looks like a good idea and exactly when it should not be
+decided. It is the owner's call, and the evidence for it is this section.
+
 <!-- FACTORY-READS -->
