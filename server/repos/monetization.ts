@@ -868,3 +868,34 @@ export async function commissionForCandidate(
   );
   return rows[0] ? mapCommission(rows[0]) : null;
 }
+
+/**
+ * Which recorded answers rest on a claim that has since been contradicted.
+ *
+ * One join rather than a read per fact. The durable tick asks this every pass
+ * for every project running a sprint, and the loop it replaces was `getClaim`
+ * once per `EVIDENCE` answer — which is a query per row of a table that grows
+ * with the ledger, on a path that runs every thirty seconds. §48's own
+ * enumeration made the same mistake and issued seven hundred no-op inserts a
+ * tick before it was measured.
+ *
+ * It reads `contradiction_state` and interprets nothing about what the
+ * contradiction says: that column is written by `brain_report_contradiction`
+ * and is a row, not a reading.
+ *
+ * Returns `pathId::attribute` keys, which is the shape the allocator compares
+ * against — built here rather than by the caller so the two cannot disagree
+ * about how a key is spelled.
+ */
+export async function contradictedPathAnswers(projectId: string): Promise<Set<string>> {
+  const rows = await getDb().all<{ path_id: string; attribute: string }>(
+    `SELECT f.path_id AS path_id, f.attribute AS attribute
+       FROM monetization_path_facts f
+       JOIN research_claims c ON c.id = f.claim_id
+      WHERE f.project_id = ?
+        AND f.kind = 'EVIDENCE'
+        AND c.contradiction_state <> 'UNCHALLENGED'`,
+    [projectId],
+  );
+  return new Set(rows.map((row) => `${row.path_id}::${row.attribute}`));
+}

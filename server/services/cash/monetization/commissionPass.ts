@@ -30,15 +30,15 @@
 import { getCashMode, recordCashEvent } from '../../../repos/cashMode.ts';
 import { createCandidate } from '../../../repos/russellCandidates.ts';
 import { latestMissionForCandidate, listMissions } from '../../../repos/russellMissions.ts';
-import { citableClaims, getClaim } from '../../../repos/research.ts';
+import { citableClaims } from '../../../repos/research.ts';
 import { mayReplace } from '../../../repos/cashCardFacts.ts';
 import {
   commissionsFor,
+  contradictedPathAnswers,
   listCommissions,
   openCommission,
   openCommissionsByCandidate,
   pathFact,
-  pathFactsForProject,
   recordPathFact,
   settleCommission,
 } from '../../../repos/monetization.ts';
@@ -226,7 +226,7 @@ export async function runCommissions(input: {
     entries: input.ledger.entries,
     rankable: input.ledger.entries.map(rankableOf),
     commissions,
-    contradicted: await contradictedAnswers(input.projectId),
+    contradicted: await contradictedPathAnswers(input.projectId),
     slots: Math.max(0, MAX_OPEN_COMMISSIONS - holding),
     now: Date.parse(input.now ?? input.ledger.readAt),
   });
@@ -244,27 +244,6 @@ export async function runCommissions(input: {
     declined: plan.declined,
     openNow: openNow + opened.length,
   };
-}
-
-/**
- * Which recorded answers rest on a claim that has since been contradicted.
- *
- * A row, never a reading: `contradiction_state` is written by
- * `brain_report_contradiction` and nothing here interprets what the
- * contradiction says. The answer stays exactly where it is — §17's rule that
- * new evidence never silently overwrites old — and the attribute becomes worth
- * asking about again so that both can stand.
- */
-async function contradictedAnswers(projectId: string): Promise<ReadonlySet<string>> {
-  const out = new Set<string>();
-  for (const fact of await pathFactsForProject(projectId)) {
-    if (fact.kind !== 'EVIDENCE' || !fact.claimId) continue;
-    const claim = await getClaim(fact.claimId);
-    if (claim && claim.contradictionState !== 'UNCHALLENGED') {
-      out.add(`${fact.pathId}::${fact.attribute}`);
-    }
-  }
-  return out;
 }
 
 /**
