@@ -87,6 +87,48 @@ refusal is a blocker, and for this refusal the remedy names the Routines that
 would serve the project, their state and recorded reason, and what brings them
 back.
 
+## Deploy 330: the blocker names its remedy, and a restart resumed everything
+
+Deploy 330 released `a136d2a`, restarted the machine, and passed its hosted
+verification on both sides of the restart. The first `goals show` afterwards,
+from the released container:
+
+```
+SERVING_REVISION a136d2a0ef2ef9e73550b63fa04f6b3416171866
+BRIEFING 4 active goal(s) · 2 decision(s) wait on you.
+GOAL wst_c6cf9b5b6e8e458ba5b2  ACTIVE
+  bin    bin_c7e1132d0cb54b25ad22 READY priority=8 attempts=0/5 dispatch=PENDING(NO_SURFACE_SERVES_THIS_PROJECT)
+  next   [OPERATOR] Every Routine that serves this project is out of routing — Brain Research A,
+         Brain Research 1-B, 1-C, 1-D, Airyn 2-A…2-D (QUARANTINED: 3 consecutive fired sessions
+         never checked in …); V2 (QUARANTINED …). … reconnect it there, then lift the quarantine
+         (npm run fleet -- set-state --kind routine --to ENABLED). The bin fires on the next tick
+         after that, with nothing else to press.
+GOALS: OK goals=4 unfiled=78
+```
+
+Across the restart nothing was re-entered: the four goals, their holds and
+their ranks were re-derived from rows on the first tick, and the priority
+history continued (the Depositphotos goal's `2 → 1` at 18:10:44Z is the tick
+reacting to the dump-truck goal becoming unworkable, with no command issued).
+No trigger reference and no secret name appears anywhere in the reading.
+
+## What that reading still got wrong, and was fixed (`8c52df0`)
+
+1. **It asked the owner to merge PR #31, which merged on 2026-09-22 at
+   14:12:44Z** (forge: `merged: true, merged_by: Peyday007`). The merge
+   observer is called from `recordCampaignOutcome`, and
+   `listCampaignsPendingOutcome` says which finished campaigns still need it —
+   but only the *local* `tickAllCampaigns` read that list. The tick production
+   runs, `tickAllRemoteCampaigns`, visited live campaigns only, so a finished
+   remote campaign was never offered back and the observer ran for nobody. It
+   is offered now; the regression drives the hosted tick and was run against
+   the unfixed loop to watch it fail (`expected [] to have a length of 1`).
+2. **The blocker sentence argued with its own remedy.** It printed the
+   dispatcher's text about a missing membership beside a remedy about
+   quarantined surfaces, and aged it `0h` because the intent is re-stamped
+   every tick. Where every serving Routine is out of routing it now says so,
+   aged from when the last one went out.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain

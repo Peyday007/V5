@@ -23,7 +23,7 @@ import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
 import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
-import { createAccount, createRoutine, setRoutineState } from '../server/repos/fleet.ts';
+import { createAccount, createRoutine, listRoutines, setRoutineState } from '../server/repos/fleet.ts';
 import {
   assignNextBin,
   countDispatches,
@@ -487,6 +487,15 @@ describe('a queued bin the dispatcher cannot route is a blocker, not a queue', (
     expect(remedy).toMatch(/reconnect it there/);
     expect(remedy).not.toMatch(/trig_/);
     expect(remedy).not.toMatch(/SOME_SECRET/);
+    // The dispatcher's own sentence is about a missing membership, and the
+    // membership is right there: the blocker must say what is actually true,
+    // and must not argue with the remedy printed beneath it.
+    const text = view.blockers[0]!.text;
+    expect(text).toMatch(/every one is out of routing/);
+    expect(text).not.toMatch(/access grant|live membership/);
+    // Aged from when the surface went out, not from the intent's last re-check.
+    const quarantined = (await listRoutines()).find((one) => one.id === routine.id)!;
+    expect(view.blockers[0]!.since).toBe(quarantined.updatedAt);
   });
 
   it('calls a full fleet a capacity wait, which resolves by itself', async () => {
