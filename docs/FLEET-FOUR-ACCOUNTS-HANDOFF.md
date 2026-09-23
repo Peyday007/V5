@@ -263,12 +263,26 @@ lane, including the fourth verdict.
 
 ## 6. For the integration lane: overlaps, and one thing deliberately left
 
-**Overlaps with the Factory closeout lane.** `server/services/factory/onboard.ts`
-and `client/src/russell/Build.tsx` are touched here, for the account-counting
-repair in §2.3. The closeout lane's branch (`9262bbd0`) touches neither. Both
-lanes touch `docs/FACTORY.md`'s neighbourhood but not the same paragraphs, and
-neither adds a migration that collides: the closeout branch adds none, and this
-one takes the frontier `088` / pg `079`.
+**Overlaps with the Factory closeout lane**, read from that branch's own diff
+against `production` at `9262bbd0` rather than assumed:
+
+* **No migration collision.** The closeout branch touches no file under
+  `server/db/` at all; this one takes the frontier, `088` / pg `079`.
+* **`CLAUDE.md`** — both branches edit it. The closeout lane's additions are in
+  §27 (the factory); this lane's are at the end of §23 (the fleet). Different
+  regions of a very large file, so a textual conflict is possible and a semantic
+  one is not.
+* **`client/src/russell/Build.tsx`** — both branches edit it. The closeout
+  lane adds the release-decision card; this lane changes the repository card's
+  surface sentence. Different components in one file.
+* **`server/services/factory/onboard.ts`** is this lane's alone.
+* **One consequence worth expecting.** This lane brought `tests/**/*.tsx` into
+  `tsconfig.json`, and the closeout branch adds a new component suite
+  (`tests/factoryReleaseSurface.test.tsx`) that has therefore never been
+  compiled. Merging the two makes the typecheck read it for the first time. If
+  it reports errors there, that is the guard doing its job on a fixture nobody
+  had checked — the same condition this lane found in two existing fixtures —
+  and not a regression introduced by either branch.
 
 **One observation reported rather than acted on.** `docs/FACTORY.md` says of the
 *factory worker registry* — `factoryFleet.ts`, the local-plane executor

@@ -1220,8 +1220,20 @@ async function main(): Promise<void> {
     const result = await dispatchTick({ burst });
     console.log(
       `STEP10: OK tick superseded=${result.superseded} intents=${result.intentsCreated} ` +
-        `fired=${result.fired} failed=${result.failed} configured=${!result.skippedNotConfigured}`,
+        `fired=${result.fired} failed=${result.failed} ` +
+        `reopened=${result.reopenedNoShows} abandoned=${result.abandonedNoShows} ` +
+        `configured=${!result.skippedNotConfigured}`,
     );
+    /*
+     * Named rather than counted, because this is the most consequential thing
+     * a tick can do: it takes a Claude account's surface out of the fleet. An
+     * operator running a tick by hand and getting no word of it has been given
+     * no signal at all — and the durable record is on the Routine's own row,
+     * where `fleet show` prints it with the provider's reason.
+     */
+    for (const routineId of result.quarantinedForNoShow) {
+      console.log(`  QUARANTINED ${routineId}: fires went unanswered. \`fleet set-state\` restores it.`);
+    }
     return;
   }
 

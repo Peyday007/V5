@@ -1412,6 +1412,84 @@ now credited from the dispatch row that produced the worker, never from anything
 the worker says about itself, and a takeover of an expired lease credits nothing
 because that session genuinely did not finish.
 
+**That repair was right and the counter it repaired still cannot describe a
+pool, which is the correction below rather than a reversal of it.**
+`recordWorkerArrival` clears `consecutive_no_shows` for **every Routine bound to
+the same worker** — its own comment says so and calls the imprecision exact
+where the binding is one-to-one. A Factory pool is precisely the arrangement
+where it is not: several Claude accounts, one logical worker. So one dead
+account's counter is reset by its healthy siblings and it is fired at for ever,
+an activation each time out of a fixed subscription allowance, with every row
+reading healthy. The same column reads 1 on a *working* surface whose worker is
+still booting, because it is advanced optimistically on each successful fire.
+Six surfaces were printing it — the Fleet page, People, `who`, `fleet show`,
+`verify-surface` and `scale-advice`, the last of which also *advised* on it —
+and every one of them under-reported exactly the condition an operator looks
+for.
+
+- **The per-surface fact was already being established and thrown away.**
+  `reopenNoShowDispatches` decides, exactly, that a fire produced no arrival: a
+  dispatch that reached `SENT`, aged past the window in which it still counts as
+  a live activation, and whose bin was still claimable at the very generation
+  that fire named. The event it wrote named **no surface at all**, so the ledger
+  recorded that a fire went unanswered and nothing about whose — §23's own
+  sentence, at the row that means an account has stopped working. It writes
+  `DISPATCH_NO_SHOW` with the Routine now, at the moment the fact is
+  established, and on `bin_events` because that table is append-only: a reopened
+  intent's `routine_id` is rewritten when it is re-routed, so a count read back
+  from the dispatch row would credit one account's no-show to the next account
+  that tried.
+- **`shouldQuarantine` has stated this rule since Step 11 and nothing called
+  it.** Its one caller was `fleet scale-advice`, which prints a line, so no
+  surface has ever been taken out of routing for not answering. **A mechanism
+  nothing calls is not a mechanism**, and wiring it up as it stood would not
+  have helped, because its input was the column above. `unansweredFiresByRoutine`
+  is the per-surface count instead, and the dispatch tick is its caller.
+- **The transition that answers it needed a boundary, or it answered nothing.**
+  The count reads an append-only ledger since the surface's own last arrival;
+  re-enabling produces no arrival; an arrival needs a fire; Brain does not fire a
+  quarantined surface. So `fleet set-state --to ENABLED` returned `true` and the
+  next tick re-quarantined on the identical rows, for ever, with the connector
+  genuinely repaired — §27's *exists, reports success, changes nothing that
+  lasts*, at a second registry. `no_shows_forgiven_at` is written in the
+  statement that makes the state change, only on the way **out** of QUARANTINED
+  so quarantining cannot erase its own evidence, and it forgives nothing beyond
+  itself: a condition somebody said was fixed and was not takes the surface out
+  again three unanswered fires later rather than immediately.
+- **A proof is evidence about a moment, not a certificate.** `judgeSurface`
+  cleared every problem on a closed chain, which is right about the proof's own
+  complaints and wrong about the standing facts beside them — an **archived**
+  bound worker and a Factory identity whose routing row also serves research
+  both read `PROVEN` with no problems at all, and `judgePool` reports problems
+  only for a surface it has already decided is not proven. A pool holding an
+  identity that cannot authenticate answered `ok: true`. Standing facts are kept
+  apart now, and `STALE` is the fourth verdict for a chain Brain's own later
+  evidence contradicts — **not a timer**, because Brain cannot see a connector
+  revoked inside somebody's Claude account and an invented expiry would be a
+  freshness policy nobody measured.
+- **Its first derivation would have cried wolf over a rate limit**, and the
+  correction is recorded rather than quietly applied: comparing
+  `last_fired_at` against the newest arrival is wrong because
+  `claimRoutineFireSlot` advances that column when it takes the slot, *before*
+  the HTTP call. A refused fire advances it exactly as a delivered one does.
+  **A refusal is not misconduct**, broken by the check written to catch a dead
+  surface — so the fact is read from the ledger, where only a dispatch that
+  reached `SENT` can produce one.
+- **And an account count is not a surface count, on the one command whose job
+  is to report the pool.** `verify-pool` printed `surfaces 3` and nothing else,
+  so three Routines on one subscription read as three accounts; the Build card
+  said *"running on Factory Brain A, B and C"* from a list of display names and
+  read the same for a Routine registered a minute ago as for one with a
+  completed chain behind it. Both report two numbers now, each labelled as what
+  it counts, and which surfaces have actually run.
+
+`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **None of it has
+a production reading**: no four-account Factory pool has been commissioned, so
+the quarantine has never fired against a real dead surface and `STALE` has never
+been printed about a real revoked connector. The engine passing its tests says
+nothing about whether the fleet behaves this way, which is the separation Step 3
+drew and which this does not get to waive.
+
 ## 24. Russell is a way in, not a second brain.
 
 Step 12A (`server/services/russell/`, `client/src/russell/`,

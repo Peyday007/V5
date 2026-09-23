@@ -376,10 +376,20 @@ function judgeSurface(
    * verdict has answered. A closed chain answers `proof.problems` — and only
    * `proof.problems`, which is the whole correction above.
    */
+  /*
+   * A closed chain answers the proof's own complaints and only those — which
+   * is the whole correction above — *unless* the chain was closed beside a
+   * foreign arrival, which is a fault the chain does not answer at all.
+   *
+   * Decided on `foreignWorkerIds`, which is structured, rather than by
+   * matching words in the sentence `proveSurface` composed. A guard keyed on
+   * prose stops guarding the day somebody rewords the message, and does it
+   * silently.
+   */
+  const answered = proof.chain !== null && proof.foreignWorkerIds.length === 0;
   const problems = [
     ...standing,
-    ...(proof.chain ? [] : proof.problems),
-    ...(proof.foreignWorkerIds.length > 0 ? proof.problems.filter((p) => p.includes('different worker')) : []),
+    ...(answered ? [] : proof.problems),
     ...(contradiction ? [contradiction] : []),
   ].filter((problem, index, all) => all.indexOf(problem) === index);
 
