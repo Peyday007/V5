@@ -490,23 +490,36 @@ async function main(): Promise<void> {
       break;
     }
 
-    /** Every campaign in a project, newest first, in one line each. */
+    /*
+     * What campaigns exist. Every project unless `--project` narrows it: this
+     * used to take the first project the list returned, so the question an
+     * operator asks first — what is there — was answered for one project and
+     * silently not for the rest.
+     */
     case 'campaigns': {
       const projectFlag = flagString(flags, 'project');
       const projects = await listProjects();
-      const projectId = projectFlag ?? projects[0]?.id ?? fail('no project exists');
-      const campaigns = await listCampaigns(projectId);
-      if (campaigns.length === 0) process.stdout.write('no campaign in this project\n');
-      for (const campaign of campaigns) {
-        const changeRequest = await getChangeRequest(campaign.changeRequestId);
-        process.stdout.write(
-          `${campaign.id} ${campaign.executionMode} ${campaign.state} ` +
-            `${campaign.prRef ?? '(no pull request)'} — ` +
-            `${(changeRequest?.objective ?? '').slice(0, 70)}\n` +
-            `    ${campaign.stageDetail ?? ''}` +
-            `${campaign.blockerKind ? ` [${campaign.blockerKind}]` : ''}\n`,
-        );
+      if (projects.length === 0) fail('no project exists');
+      const scope = projectFlag ? projects.filter((project) => project.id === projectFlag) : projects;
+      if (projectFlag && scope.length === 0) fail(`no project ${projectFlag}`);
+      let total = 0;
+      for (const project of scope) {
+        const campaigns = await listCampaigns(project.id);
+        if (campaigns.length === 0) continue;
+        process.stdout.write(`${project.id} ${project.name}\n`);
+        for (const campaign of campaigns) {
+          total += 1;
+          const changeRequest = await getChangeRequest(campaign.changeRequestId);
+          process.stdout.write(
+            `  ${campaign.id} ${campaign.executionMode} ${campaign.state} ` +
+              `${campaign.prUrl ?? campaign.prRef ?? '(no pull request)'} — ` +
+              `${(changeRequest?.objective ?? '').slice(0, 70)}\n` +
+              `      ${campaign.stageDetail ?? ''}` +
+              `${campaign.blockerKind ? ` [${campaign.blockerKind}]` : ''}\n`,
+          );
+        }
       }
+      if (total === 0) process.stdout.write('no campaign in scope\n');
       break;
     }
 
