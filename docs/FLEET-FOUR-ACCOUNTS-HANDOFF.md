@@ -171,6 +171,9 @@ required field since it was added.
 | `3ccb623d` | Standing facts kept apart from the proof; `STALE`; the Build card counts accounts; `SurfaceReading.proven`; `tests/**/*.tsx` into the typecheck |
 | `6ba3fa2c` | `DISPATCH_NO_SHOW` attribution; `unansweredFiresByRoutine`; the tick quarantines on it; six screens corrected; `verify-pool` reads the one definition |
 | `d732882d` | `no_shows_forgiven_at` (088 / pg 079); accounts and surfaces as two numbers; the runbook and the evidence log updated |
+| `57267ee0` | this handoff; `idx_worker_sessions_routine`, the index the new reading needs |
+| `6fd3ef7d` | three findings from re-reading the diff: a guard keyed on prose, a quarantine the tick never announced, and the record in CLAUDE.md §23 |
+| `76e54d4b` | accounts counted by identity rather than by display name — and the vacuous first test for it, replaced |
 
 **Schema.** One additive column on `fleet_routines`, on both chains, numbered
 `088` (SQLite) and `079` (Postgres). Nothing is dropped, rewritten or
@@ -204,12 +207,12 @@ vacuous: the typecheck-coverage guard (with `tests/**/*.tsx` removed from
 `tsconfig.json`), and the misleading-counter guard (with `Fleet.tsx` reverted to
 printing it). Both fail naming exactly what is missing.
 
-**Runs.** Full SQLite suite green before this lane's second and third commits
-(4455 passed / 208 files / exit 0 at `3ccb623d`). Fleet, pool and arrival
-suites green on **PostgreSQL 16.13** as well as SQLite (120 tests). A full
-SQLite run at `d732882d` was in flight when this file was written; whoever picks
-this up should re-run `npm test` and `npm run typecheck` before merging, which
-is ordinary practice rather than a caveat about this tree.
+**Runs.** Full SQLite suite green twice: **4455 passed / 208 files / exit 0** at
+`3ccb623d`, and **4459 passed / 208 files / 44 skipped / exit 0** at
+`d732882d`. Fleet, pool and arrival suites green on **PostgreSQL 16.13** as well
+as SQLite (120 tests, then 112 after the index). `npm run typecheck` clean at
+every commit. Whoever picks this up should still re-run both before merging,
+which is ordinary practice rather than a caveat about this tree.
 
 ---
 
