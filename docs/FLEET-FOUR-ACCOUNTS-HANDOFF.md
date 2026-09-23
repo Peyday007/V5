@@ -26,20 +26,24 @@ measurement, and §7 is the integration's own record.
 | Merge | `bb6d538d` | the fleet lane merged into `e37cca06`, no conflict |
 | Fixture repair | `3a63fad4` | the `'READER'` correction §7 records |
 | Integrated tip | `ba5c0b2f` | `integration/fleet-four-accounts`, after reconciling against production four times |
-| **Production** | **`08d6a787`** | **contains `ba5c0b2f`**, live and serving; the release that proved the integration live end to end is deploy 327 on `67089909` — see §8.7 |
+| **Deployed image** | **`67089909`** | **contains `ba5c0b2f`**, released and verified both sides of a restart by deploy 327, and live — §8.7 quotes that run's own acceptance artifact |
 
-**`production` has been advanced to it, and the integration is deployed.**
+**`production` has been advanced past it, and the integration is deployed.**
 `ba5c0b2f` is an ancestor of every tip production has had since — checked with
 `git merge-base --is-ancestor` at each one, and confirmed file by file and
-symbol by symbol at the tip rather than inferred from the ancestry. §8 is the
-record of the release and the live reads rather than a plan for them.
+symbol by symbol at the current tip rather than inferred from the ancestry. §8
+is the record of the release and the live reads rather than a plan for them.
 
-**An earlier version of this row named `901a42db` and deploy 323.** That was
-true when it was written and production has moved four times since, so it is
-corrected here rather than edited away: deploy 323's own reading is §8.2, it
-passed before its restart and failed after it, and the run that passed both
-sides is 327. A SHA table that named a superseded tip would send a reader to
-verify the integration against a tree production no longer serves.
+**This row names the deployed image rather than `production`'s tip, and the
+change is deliberate.** Two earlier versions named a tip — `901a42db` with
+deploy 323, then `08d6a787` — and both went stale within hours, the first
+while pointing at a run that passed before its restart and failed after it.
+`production` is a moving ref and a document cannot track one; **the deployed
+image is a fact that only changes when somebody deploys**, and every tip since
+`67089909` has changed documentation only, which §7.4 establishes as an empty
+diff over the shipped paths rather than as a reading of commit subjects. A
+reader who wants the current tip should ask git; a reader who wants to know
+what is *running* wants this row.
 
 **An earlier version of this paragraph said `origin/production` was
 `f727b143`.** That was true when the lane measured it and was false by the
