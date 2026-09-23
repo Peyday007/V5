@@ -929,7 +929,14 @@ retry once the upstream answers, which is what was done.
 passed, `flyctl deploy` **succeeded**, and `Record what was released` ran.
 Production answered `503` for the last time at 10:38:13 and `200 in 4.61s` at
 **10:38:48** — the cold-start tail §20 describes — then 0.25s, 0.16s, 0.16s.
-The outage ran from about 10:03 to 10:38:48, call it thirty-six minutes.
+
+**The outage is dated from the machine rather than from when I first looked.**
+It began at **09:58:55**, when the machine pulled the first new image and the
+old process went away, and the Brain refused to boot twenty-three seconds
+later; it ended at **10:38:48**. That is **thirty-nine and a half minutes**.
+An earlier version of this paragraph said "about 10:03", which was the first
+probe I happened to take — a reading of my own attention rather than of the
+event, and four minutes short.
 
 The served bundle is `assets/index-T4sTcb6M.js` with `index-Dzwb3x6t.css`,
 **unchanged**, which was the prediction rather than a surprise:
