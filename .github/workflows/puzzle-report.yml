@@ -1,0 +1,72 @@
+# Reading the puzzle kernel's authoritative rows, without a terminal.
+#
+# `cash-report.yml` answers "where is this sprint" and this answers the
+# question the puzzle kernel adds underneath it: what has been made, what
+# passed its own checks, what became a product, what the trade is known to
+# want, and what every monetization route is still missing.
+#
+# It exists for the reason §45 records about the reports beside it. A reading
+# nobody can take is not a reading, and the script had no door: `npm run
+# report:puzzle` needs a checkout and a database, and the rows that matter are
+# the deployed Brain's. Committing the script without the workflow leaves the
+# one place the answer lives reachable only from a machine nobody has.
+#
+# It is read-only: it opens the database, prints, and closes. No deploy, no
+# restart, no migration, no write, and no generation — a report that made a
+# puzzle in order to report on one would be changing the thing it measures.
+name: Puzzle report
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Optional project id (prj_...). Omit to report every project running a kernel.'
+        required: false
+        default: ''
+      puzzle:
+        description: 'Optional puzzle id (pzi_...) to re-render from its stored seed and check it still reproduces.'
+        required: false
+        default: ''
+
+# Its own group, because a group two workflows share is one where the newer
+# dispatch silently cancels the older — §47 measured three such evictions in
+# ninety minutes. `deploymentOwnership` refuses a duplicate.
+concurrency:
+  group: brain-console-puzzle-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Read the kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # Wait for a release rather than racing one: during a deploy the machine
+      # is being replaced, and a report that raced it would be reporting
+      # whichever half answered. Bounded and fails open — see the action.
+      - uses: ./.github/actions/await-release
+
+      - name: Report
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          app=$(grep -m1 '^app = ' fly.toml | cut -d'"' -f2)
+          args=""
+          if [ -n "${{ inputs.project }}" ]; then
+            args="$args --project ${{ inputs.project }}"
+          fi
+          if [ -n "${{ inputs.puzzle }}" ]; then
+            args="$args --puzzle ${{ inputs.puzzle }}"
+          fi
+          set +e
+          flyctl ssh console --app "$app" \
+            -C "sh /app/scripts/puzzle-report.sh $args" \
+            2>&1 | tee puzzle-report.txt
+          set -e
+          # The marker is the backstop: `flyctl ssh console` exits 0 whether the
+          # script finished or a restart cut the session off part way, so a
+          # report with no terminal line is one nobody may read as complete.
+          grep -q '^PUZZLE-REPORT: OK' puzzle-report.txt

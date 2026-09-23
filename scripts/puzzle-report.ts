@@ -76,11 +76,13 @@ async function main(): Promise<void> {
 
   if (wanted.length === 0) {
     console.log(only ? `No project with id ${only}.` : 'No projects.');
+    console.log('PUZZLE-REPORT: OK kernels=0');
     return;
   }
 
   if (puzzleId) {
     await printOnePuzzle(puzzleId);
+    console.log('PUZZLE-REPORT: OK puzzle=' + puzzleId);
     return;
   }
 
@@ -97,9 +99,21 @@ async function main(): Promise<void> {
     print(project.id, project.name, view);
   }
 
+  /*
+   * The line the workflow greps for, on every path that reached the end.
+   *
+   * It is what tells a caller the difference between a report that found
+   * nothing and a session a restart cut off half way — `flyctl ssh console`
+   * exits 0 either way, so without a terminal marker the second reads as the
+   * first. Zero kernels is not a failure: most projects hold none, and saying
+   * so is the answer.
+   */
   if (printed === 0) {
     console.log('No project is running a puzzle kernel.');
+    console.log('PUZZLE-REPORT: OK kernels=0');
+    return;
   }
+  console.log(`PUZZLE-REPORT: OK kernels=${printed}`);
 }
 
 async function printOnePuzzle(instanceId: string): Promise<void> {
@@ -325,6 +339,7 @@ function print(projectId: string, name: string, view: Awaited<ReturnType<typeof 
 main()
   .catch((error: unknown) => {
     const refusal = describePoolerRefusal(error);
+    console.error('PUZZLE-REPORT: FAILED');
     console.error(refusal ?? (error instanceof Error ? error.message : String(error)));
     process.exitCode = 1;
   })
