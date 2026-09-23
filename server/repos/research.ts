@@ -15,7 +15,8 @@ import type { MonetizationMethod } from '../domain/types.ts';
 import { isLaborFinding } from '../domain/labor.ts';
 import type { LaborFinding, StructuralFinding } from '../domain/types.ts';
 import { isDealFinding } from '../domain/dealflow.ts';
-import type { DealFinding } from '../domain/types.ts';
+import { isPuzzleFinding, isPuzzleProductClass } from '../domain/puzzle.ts';
+import type { DealFinding, PuzzleFinding, PuzzleProductClass } from '../domain/types.ts';
 import type { OpportunitySignal } from '../domain/types.ts';
 import type { EvidenceLane } from '../domain/types.ts';
 import { getDb } from '../db/database.ts';
@@ -231,6 +232,15 @@ function mapClaim(row: ResearchClaimRow): ResearchClaim {
     dealValue: row.deal_value,
     dealAmountCents: row.deal_amount_cents,
     dealCurrency: row.deal_currency,
+    puzzleFinding: isPuzzleFinding(row.puzzle_finding) ? row.puzzle_finding : null,
+    puzzleSubject: row.puzzle_subject,
+    puzzleFormat: row.puzzle_format,
+    puzzleProductClass: isPuzzleProductClass(row.puzzle_product_class)
+      ? row.puzzle_product_class
+      : null,
+    puzzleValue: row.puzzle_value,
+    puzzleAmountCents: row.puzzle_amount_cents,
+    puzzleCurrency: row.puzzle_currency,
     retrievedAt: row.retrieved_at,
     confidence: Number(row.confidence),
     contradictionState: row.contradiction_state as ContradictionState,
@@ -857,6 +867,20 @@ export interface InsertClaimInput {
   dealAmountCents?: number | null;
   /** Which currency that figure is in, as the source published it. */
   dealCurrency?: string | null;
+  /** What this claim establishes about the puzzle trade, or null. */
+  puzzleFinding?: PuzzleFinding | null;
+  /** What that finding names: the buyer, the channel, the supplier, the cost line. */
+  puzzleSubject?: string | null;
+  /** Which kind of puzzle, as the source writes it. */
+  puzzleFormat?: string | null;
+  /** Which kind of product a figure is about. Required on both economic findings. */
+  puzzleProductClass?: PuzzleProductClass | null;
+  /** The closed-set value: a revenue line, a cost line, or a kind of rights rule. */
+  puzzleValue?: string | null;
+  /** The figure, in minor units. A published zero is a figure and is stored as 0. */
+  puzzleAmountCents?: number | null;
+  /** Which currency that figure is in, as the source published it. */
+  puzzleCurrency?: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState?: ContradictionState;
@@ -902,6 +926,8 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            capability_currency, capability_basis,
            deal_finding, deal_subject, deal_equipment, deal_jurisdiction, deal_value,
            deal_amount_cents, deal_currency,
+           puzzle_finding, puzzle_subject, puzzle_format, puzzle_product_class,
+           puzzle_value, puzzle_amount_cents, puzzle_currency,
            retrieved_at, confidence,
            contradiction_state,
            contradiction_note, validation_state, validation_detail, sourced, derived, derived_from,
@@ -910,7 +936,7 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
            content_hash, retrieval_state, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [id, input.orchestrationId, input.fragmentId, input.passId, input.passKey, input.claim,
           input.sourceUrl, input.sourceTitle, input.sourcePublisher, input.sourceDate,
           input.evidenceExcerpt, input.evidenceLocator, input.evidenceLane,
@@ -928,6 +954,10 @@ export async function insertClaims(inputs: InsertClaimInput[]): Promise<Research
           input.dealFinding ?? null, input.dealSubject ?? null, input.dealEquipment ?? null,
           input.dealJurisdiction ?? null, input.dealValue ?? null,
           input.dealAmountCents ?? null, input.dealCurrency ?? null,
+          input.puzzleFinding ?? null, input.puzzleSubject ?? null,
+          input.puzzleFormat ?? null, input.puzzleProductClass ?? null,
+          input.puzzleValue ?? null, input.puzzleAmountCents ?? null,
+          input.puzzleCurrency ?? null,
           input.retrievedAt,
           input.confidence,
           input.contradictionState ?? 'UNCHALLENGED', input.contradictionNote ?? null,
@@ -1143,6 +1173,43 @@ export async function dealClaims(input: {
        JOIN research_orchestrations o ON o.id = c.orchestration_id
       WHERE o.project_id = ? AND c.accepted = 1
         AND c.deal_finding IS NOT NULL
+        AND c.orchestration_id IN (${holes})
+        AND f.status IN ('ACCEPTED', 'BLOCKED')
+      ORDER BY c.created_at, c.rowid
+      LIMIT ?`,
+    [input.projectId, ...input.orchestrationIds, Math.max(1, input.limit ?? 200)],
+  );
+  return rows.map((row) => {
+    const claim = mapClaim(row);
+    return { claim, orchestrationId: claim.orchestrationId, fragmentId: claim.fragmentId };
+  });
+}
+
+/**
+ * The accepted claims carrying a puzzle declaration, for the rounds still open.
+ *
+ * `dealClaims`' shape exactly, one axis along, and it is a fourth function
+ * rather than a parameter on one of the others for a reason worth stating: the
+ * column each selects on is what decides which table its caller writes into,
+ * so a shared query taking a column name would be a caller choosing where its
+ * own findings land. The orchestration ids are required for
+ * `structuralClaims`' recorded reason — an unbounded oldest-first window over
+ * a sprint that has run for a while spends its whole budget on claims filed
+ * weeks ago and never reaches the ones that just arrived.
+ */
+export async function puzzleClaims(input: {
+  projectId: string;
+  orchestrationIds: readonly string[];
+  limit?: number;
+}): Promise<{ claim: ResearchClaim; orchestrationId: string; fragmentId: string | null }[]> {
+  if (input.orchestrationIds.length === 0) return [];
+  const holes = input.orchestrationIds.map(() => '?').join(', ');
+  const rows = await getDb().all<ResearchClaimRow>(
+    `SELECT c.* FROM research_claims c
+       JOIN research_fragments f ON f.id = c.fragment_id
+       JOIN research_orchestrations o ON o.id = c.orchestration_id
+      WHERE o.project_id = ? AND c.accepted = 1
+        AND c.puzzle_finding IS NOT NULL
         AND c.orchestration_id IN (${holes})
         AND f.status IN ('ACCEPTED', 'BLOCKED')
       ORDER BY c.created_at, c.rowid

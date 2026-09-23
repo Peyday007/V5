@@ -155,7 +155,11 @@ jobs:
                 *) echo "::error::A packet ref is an orc_ id."; exit 1 ;;
               esac
               cmd="sh /app/scripts/packet-report.sh --orchestration $ref"
-              marker='^PACKET-REPORT'
+              # `: OK` rather than the bare prefix, which `PACKET-REPORT:
+              # FAILED` also matched — the script prints that on stderr and
+              # this step merges stderr into the file it greps, so the check
+              # went green on the one outcome it exists to catch.
+              marker='^PACKET-REPORT: OK'
               ;;
             # ----------------------------------------------------------------
             # The factory's own reads.

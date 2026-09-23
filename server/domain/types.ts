@@ -2173,6 +2173,13 @@ export interface ResearchClaimRow {
   deal_value: string | null;
   deal_amount_cents: number | null;
   deal_currency: string | null;
+  puzzle_finding: string | null;
+  puzzle_subject: string | null;
+  puzzle_format: string | null;
+  puzzle_product_class: string | null;
+  puzzle_value: string | null;
+  puzzle_amount_cents: number | null;
+  puzzle_currency: string | null;
   retrieved_at: string | null;
   confidence: number;
   contradiction_state: string;
@@ -3478,6 +3485,42 @@ export interface ResearchClaim {
    * calls, at the number that decides a deal. Brain never converts.
    */
   dealCurrency: string | null;
+  /**
+   * What this claim establishes about the puzzle trade, if anything.
+   *
+   * The fourth declaration axis, and its own column for the reason the third
+   * has one: *is this a piece of work*, *is this how the industry is put
+   * together*, *what does this say about a transaction between two parties*,
+   * and *what does this say about who buys puzzle content, how it reaches
+   * them, and what it costs to make*. Four questions, four columns, because a
+   * column with two masters is invariant 31.
+   */
+  puzzleFinding: PuzzleFinding | null;
+  /** What the finding names: the buyer, the channel, the supplier, the cost line. */
+  puzzleSubject: string | null;
+  /**
+   * Which kind of puzzle, as the source writes it.
+   *
+   * Its own field for `dealEquipment`'s reason: two spellings of one format
+   * are visibly two formats rather than silently one, and a question naming a
+   * format verbatim can be declared back unchanged.
+   */
+  puzzleFormat: string | null;
+  /**
+   * Which kind of product a figure is about.
+   *
+   * Required on both economic findings and refused everywhere else, because it
+   * is what a figure is judged against: a downloadable PDF with no freight
+   * line is completely costed and a boxed game with no freight line is one
+   * whose largest variable cost nobody has established.
+   */
+  puzzleProductClass: PuzzleProductClass | null;
+  /** The closed-set value: a revenue line, a cost line, a kind of rights rule. */
+  puzzleValue: string | null;
+  /** The figure on an economic finding, in minor units. Required there. */
+  puzzleAmountCents: number | null;
+  /** The currency that figure is published in. Brain never converts one. */
+  puzzleCurrency: string | null;
   retrievedAt: string | null;
   confidence: number;
   contradictionState: ContradictionState;
@@ -9478,6 +9521,251 @@ export interface MonetizationPathRow {
   updated_at: string;
 }
 
+/* ==========================================================================
+ * THE PUZZLE PRODUCTS AND PRODUCTION KERNEL
+ *
+ * Four businesses wearing one set of rows: a content system that generates and
+ * checks puzzles, a catalog of reusable systems and the rights in them, a
+ * publishing and licensing operation that compiles those into products, and a
+ * production question about whether any of it is worth making physically.
+ *
+ * The vocabularies below are the closed sets a worker declares against and a
+ * lookup resolves. `domain/puzzle.ts` holds what each one means and where it
+ * lands; nothing anywhere reads a sentence to decide.
+ * ========================================================================== */
+
+/**
+ * What a claim establishes about the puzzle trade.
+ *
+ * Seven kinds, and `PRICE_POINT` against `PRODUCTION_COST` is the distinction
+ * the whole economics of this kernel turns on. They take disjoint halves of
+ * one vocabulary, so a worker that declared a print cost as a price point is
+ * refused rather than adding a cost to the revenue side — the one error here
+ * that makes a product look profitable instead of merely unknown.
+ */
+export const PUZZLE_FINDINGS = [
+  /** A kind of puzzle that exists as a commercial product, named as the trade names it. */
+  'FORMAT_EVIDENCE',
+  /** A named organisation or publication that has published a need for puzzle content. */
+  'DEMAND_SIGNAL',
+  /** A published route by which puzzle products reach buyers, with its terms. */
+  'CHANNEL',
+  /** A named supplier that actually produces puzzle products. */
+  'PRODUCTION_ROUTE',
+  /** A published figure for what somebody is paid. */
+  'PRICE_POINT',
+  /** A published figure for one line of what producing or delivering it costs. */
+  'PRODUCTION_COST',
+  /** A published rule bearing on what may lawfully be made, listed or sold. */
+  'RIGHTS_CONSTRAINT',
+] as const;
+export type PuzzleFinding = (typeof PUZZLE_FINDINGS)[number];
+
+/**
+ * The revenue half of the economics vocabulary.
+ *
+ * `RETAIL_PRICE` is here and is deliberately **not** treated as receipts
+ * anywhere downstream. A hundred-puzzle book at a dollar is a shelf price, and
+ * what its publisher receives from it is a different number by a factor nobody
+ * can guess from the outside. Keeping both and refusing to compute a
+ * contribution from the second is what makes that distinction survive the trip
+ * from a source to a screen.
+ */
+export const PUZZLE_REVENUE_COMPONENTS = [
+  'NET_RECEIPT_PER_UNIT',
+  'RETAIL_PRICE',
+  'LICENSE_FEE',
+  'SYNDICATION_RATE',
+  'SUBSCRIPTION_PRICE',
+  'CUSTOM_WORK_FEE',
+] as const;
+export type PuzzleRevenueComponent = (typeof PUZZLE_REVENUE_COMPONENTS)[number];
+
+/** The cost half. `SETUP_COST` is per run and the rest of the physical lines are per unit. */
+export const PUZZLE_COST_COMPONENTS = [
+  'EDITORIAL_COST',
+  'SETUP_COST',
+  'UNIT_PRINT_COST',
+  'PACKAGING_COST',
+  'FREIGHT_PER_UNIT',
+  'FULFILMENT_PER_UNIT',
+  'CHANNEL_FEE',
+  'RETURNS_ALLOWANCE',
+  'PLATFORM_FEE',
+  'RIGHTS_COST',
+] as const;
+export type PuzzleCostComponent = (typeof PUZZLE_COST_COMPONENTS)[number];
+
+export const PUZZLE_ECONOMIC_COMPONENTS = [
+  ...PUZZLE_REVENUE_COMPONENTS,
+  ...PUZZLE_COST_COMPONENTS,
+] as const;
+export type PuzzleEconomicComponent = PuzzleRevenueComponent | PuzzleCostComponent;
+
+/** What kind of rule a rights constraint is, which decides who can answer it. */
+export const PUZZLE_RIGHTS_CONSTRAINTS = [
+  'COPYRIGHT',
+  'TRADEMARK',
+  'PLATFORM_RULE',
+  'SAFETY_STANDARD',
+  'ACCESSIBILITY_RULE',
+  'CONTRACT_TERM',
+] as const;
+export type PuzzleRightsConstraint = (typeof PUZZLE_RIGHTS_CONSTRAINTS)[number];
+
+/**
+ * What kind of thing a product is.
+ *
+ * Not a format and not a channel: a crossword can be a download, a book, a
+ * daily feed or a licence, and the four have entirely different cost
+ * structures. It is what `loadBearingFor` is keyed on, which is what lets a
+ * digital contribution be reported while a physical one with no freight figure
+ * is withheld.
+ */
+export const PUZZLE_PRODUCT_CLASSES = [
+  'DIGITAL_DOWNLOAD',
+  'INTERACTIVE',
+  'RECURRING_FEED',
+  'LICENSE',
+  'PRINT_BOOK',
+  'CARD_OR_BOXED',
+  'SERVICE',
+] as const;
+export type PuzzleProductClass = (typeof PUZZLE_PRODUCT_CLASSES)[number];
+
+/** Whether a route reaches buyers or makes the thing. Two different questions. */
+export const PUZZLE_ROUTE_KINDS = ['CHANNEL', 'PRODUCTION'] as const;
+export type PuzzleRouteKind = (typeof PUZZLE_ROUTE_KINDS)[number];
+
+/**
+ * The dimensions on which two products may honestly differ.
+ *
+ * What is **not** here is the point. There is no COVER, no TITLE, no PAGE_ORDER
+ * and no BRANDING, so a reskin has nowhere to be declared as a difference and
+ * `qualify` reads it as what it is. The operator's brief asks for ten systems
+ * producing fifty outputs; this set is what stops that being fifty covers.
+ *
+ * `PUZZLE_CONTENT` is the one dimension nobody declares: it is measured from
+ * the instances two products actually share, because that is the one claim a
+ * compiler could make falsely and the rows can answer for themselves.
+ */
+export const PUZZLE_SKU_DIMENSIONS = [
+  'PUZZLE_CONTENT',
+  'MECHANIC',
+  'AUDIENCE',
+  'DIFFICULTY',
+  'FORMAT',
+  'USE_OCCASION',
+  'LANGUAGE',
+  'BUYER',
+  'CHANNEL',
+] as const;
+export type PuzzleSkuDimension = (typeof PUZZLE_SKU_DIMENSIONS)[number];
+
+export const PUZZLE_DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD', 'EXPERT'] as const;
+export type PuzzleDifficulty = (typeof PUZZLE_DIFFICULTIES)[number];
+
+/**
+ * Whether an instance has been proved.
+ *
+ * `PENDING` exists for the window between a row being written and the
+ * validator running, and nothing may be compiled from one. There is no
+ * `WARNING` tier: a puzzle with one word missing is a puzzle somebody cannot
+ * finish, and what a warning tier buys is the ability to ship something known
+ * to be broken.
+ */
+export const PUZZLE_VALIDATION_STATES = ['PENDING', 'VALID', 'INVALID'] as const;
+export type PuzzleValidationState = (typeof PUZZLE_VALIDATION_STATES)[number];
+
+/** A format or a master is a person's or it came from a claim. */
+export const PUZZLE_ORIGINS = ['SEED', 'DISCOVERED'] as const;
+export type PuzzleOrigin = (typeof PUZZLE_ORIGINS)[number];
+
+/**
+ * How far this repository has got with one format.
+ *
+ * Ten rungs, derived on the read path and stored nowhere — `tier.ts`'s
+ * argument, at a second ladder. Three of them are unreachable by construction
+ * rather than by policy: GENERATABLE needs an entry in the format registry,
+ * VALIDATABLE needs one that has actually passed, and REVENUE_PROVEN needs a
+ * settled row in the money ledger. A rung above what the code can do cannot be
+ * claimed, because what would claim it is an absence in a file somebody reads.
+ */
+export const PUZZLE_MATURITY_RUNGS = [
+  'DISCOVERED',
+  'RESEARCHED',
+  'GENERATABLE',
+  'VALIDATABLE',
+  'PRODUCTIZABLE',
+  'SELLABLE',
+  'REVENUE_PROVEN',
+  'REPEATABLE',
+  'SCALABLE',
+  'PRODUCTION_OWNED',
+] as const;
+export type PuzzleMaturityRung = (typeof PUZZLE_MATURITY_RUNGS)[number];
+
+export const PUZZLE_ROUND_PURPOSES = [
+  /** Which puzzle formats exist as commercial products at all. */
+  'SEED_FORMATS',
+  /** Who publishes a need for this format. */
+  'DEMAND',
+  /** How it reaches them, and on what terms. */
+  'CHANNEL',
+  /** Who physically makes it, and what their minimum is. */
+  'PRODUCTION',
+  /** What the money actually is, receipts and costs, for one product class. */
+  'ECONOMICS',
+  /** What may not be done: copyright, trademark, platform, safety. */
+  'RIGHTS',
+] as const;
+export type PuzzleRoundPurpose = (typeof PUZZLE_ROUND_PURPOSES)[number];
+
+export const PUZZLE_ROUND_STATES = ['OPEN', 'SETTLED'] as const;
+export type PuzzleRoundState = (typeof PUZZLE_ROUND_STATES)[number];
+
+/**
+ * What actually happened, recorded by whoever it happened to.
+ *
+ * The one kind of fact in this kernel no source publishes. `HUMAN_EDIT_PASSED`
+ * and `PLAYTEST_RESULT` are here because they are the only things that can
+ * move a format requiring human editing to SELLABLE — there is no flag
+ * anywhere that does it instead.
+ */
+export const PUZZLE_OBSERVATION_KINDS = [
+  'SUBMISSION_ACCEPTED',
+  'SUBMISSION_REJECTED',
+  'SALE',
+  'NO_SALE',
+  'CUSTOMER_COMPLAINT',
+  'DEFECT_FOUND',
+  'CHANNEL_TERMS_CHANGED',
+  'PRODUCTION_RESULT',
+  'ROUTE_REJECTED',
+  'HUMAN_EDIT_PASSED',
+  'HUMAN_EDIT_FAILED',
+  'PLAYTEST_RESULT',
+] as const;
+export type PuzzleObservationKind = (typeof PUZZLE_OBSERVATION_KINDS)[number];
+
+/* ----------------------------------------------------------------------
+ * Rows and views
+ * -------------------------------------------------------------------- */
+
+export interface PuzzleFormatRow {
+  id: string;
+  project_id: string;
+  name: string;
+  format_key: string;
+  note: string | null;
+  origin: string;
+  source_claim_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MonetizationPath {
   id: string;
   projectId: string;
@@ -9519,6 +9807,34 @@ export interface MonetizationPathFactRow {
   assumptions: string | null;
   uncertainty: string | null;
   decided_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PuzzleFormatEntry {
+  id: string;
+  projectId: string;
+  /** As the sources write it. The first spelling seen wins, and it is shown. */
+  name: string;
+  formatKey: string;
+  note: string | null;
+  origin: PuzzleOrigin;
+  sourceClaimId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleMasterRow {
+  id: string;
+  project_id: string;
+  title: string;
+  format_key: string;
+  corpus_id: string;
+  parameters: string;
+  difficulty: string;
+  generator_version: string;
   created_at: string;
   updated_at: string;
 }
@@ -9628,7 +9944,7 @@ export interface MonetizationRankSnapshot {
 /* --------------------------------------------------------------------------
  * What Brain asked about a possibility, and why it asked it then
  *
- * §48's ledger says which questions are open on every way a discovery could be
+ * §49's ledger says which questions are open on every way a discovery could be
  * paid for. A commission is the record of one of them actually being asked: a
  * `(path, attribute, round)` with the reason it was chosen recorded at the
  * moment it was chosen, over a ledger that has since moved.
@@ -9708,4 +10024,292 @@ export interface MonetizationCommission {
   outcome: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A reusable puzzle system: what makes the puzzles rather than a puzzle.
+ *
+ * `generator_version` is on the row because a fix to a generator produces
+ * different output from the same seed, and instances made before and after it
+ * are not interchangeable. §5 at a column: a repair is a new version, never an
+ * edit of what the old one made.
+ */
+export interface PuzzleMaster {
+  id: string;
+  projectId: string;
+  title: string;
+  formatKey: string;
+  corpusId: string;
+  /** The generator's own parameters, as given. Each format refuses what it does not know. */
+  parameters: Readonly<Record<string, string | number>>;
+  difficulty: PuzzleDifficulty;
+  generatorVersion: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleInstanceRow {
+  id: string;
+  project_id: string;
+  master_id: string;
+  seed: string;
+  content_hash: string;
+  canonical_hash: string | null;
+  validation_state: string;
+  measured_difficulty: string | null;
+  checks: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * One puzzle, stored as the specification that makes it.
+ *
+ * There is no grid in this row and that is the design: the puzzle, its
+ * solution and its answer key are all rendered from the master's parameters
+ * and this seed, together, every time — so there is no copy anywhere that a
+ * later change could make disagree with its own answers. What is stored is the
+ * hash of what was rendered, which is what makes the claim checkable.
+ */
+export interface PuzzleInstance {
+  id: string;
+  projectId: string;
+  masterId: string;
+  seed: string;
+  contentHash: string;
+  /** Format-specific sameness, for duplicate detection. Null until validated. */
+  canonicalHash: string | null;
+  validationState: PuzzleValidationState;
+  /** What the validator measured by solving. Never what the generator intended. */
+  measuredDifficulty: PuzzleDifficulty | null;
+  checks: readonly { name: string; ok: boolean; detail: string }[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleProductRow {
+  id: string;
+  project_id: string;
+  master_id: string;
+  title: string;
+  product_class: string;
+  audience: string | null;
+  use_occasion: string | null;
+  language: string;
+  difficulty: string | null;
+  channel: string | null;
+  buyer: string | null;
+  instance_count: number;
+  opportunity_id: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One compilation of a master into something somebody could be sold. */
+export interface PuzzleProduct {
+  id: string;
+  projectId: string;
+  masterId: string;
+  title: string;
+  productClass: PuzzleProductClass;
+  audience: string | null;
+  useOccasion: string | null;
+  language: string;
+  difficulty: PuzzleDifficulty | null;
+  channel: string | null;
+  buyer: string | null;
+  instanceCount: number;
+  /** Set once, by a compare-and-swap, when the product becomes portfolio work. */
+  opportunityId: string | null;
+  retiredAt: string | null;
+  retiredReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PuzzleProductInstanceRow {
+  product_id: string;
+  instance_id: string;
+  position: number;
+}
+
+export interface PuzzleDemandRow {
+  id: string;
+  project_id: string;
+  format_key: string;
+  buyer: string;
+  buyer_key: string;
+  statement: string;
+  publisher: string | null;
+  observed_on: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface PuzzleDemand {
+  id: string;
+  projectId: string;
+  formatKey: string;
+  buyer: string;
+  buyerKey: string;
+  statement: string;
+  publisher: string | null;
+  /**
+   * The date the source observed it.
+   *
+   * Nullable in the schema and load-bearing in the reading: §30's rule is that
+   * an undated buying signal cannot be told apart from one somebody remembers
+   * from years ago, so a demand row with no date is reported as undated rather
+   * than counted as current.
+   */
+  observedOn: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface PuzzleRouteRow {
+  id: string;
+  project_id: string;
+  kind: string;
+  format_key: string;
+  name: string;
+  name_key: string;
+  terms: string;
+  publisher: string | null;
+  observed_on: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface PuzzleRoute {
+  id: string;
+  projectId: string;
+  kind: PuzzleRouteKind;
+  formatKey: string;
+  name: string;
+  nameKey: string;
+  /** What the source said the terms are. Evidence, not a field anything computes on. */
+  terms: string;
+  publisher: string | null;
+  observedOn: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface PuzzleEconomicRow {
+  id: string;
+  project_id: string;
+  format_key: string;
+  product_class: string;
+  component: string;
+  amount_cents: number;
+  currency: string;
+  basis_note: string;
+  publisher: string | null;
+  observed_on: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface PuzzleEconomic {
+  id: string;
+  projectId: string;
+  formatKey: string;
+  productClass: PuzzleProductClass;
+  component: PuzzleEconomicComponent;
+  amountCents: number;
+  currency: string;
+  /** What the figure is per, in the source's own words. */
+  basisNote: string;
+  publisher: string | null;
+  observedOn: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface PuzzleConstraintRow {
+  id: string;
+  project_id: string;
+  kind: string;
+  subject: string;
+  statement: string;
+  authority: string | null;
+  source_claim_id: string;
+  created_at: string;
+}
+
+export interface PuzzleConstraint {
+  id: string;
+  projectId: string;
+  kind: PuzzleRightsConstraint;
+  subject: string;
+  statement: string;
+  authority: string | null;
+  sourceClaimId: string;
+  createdAt: string;
+}
+
+export interface PuzzleRoundRow {
+  id: string;
+  project_id: string;
+  cash_mode_id: string;
+  purpose: string;
+  format_key: string | null;
+  product_class: string | null;
+  candidate_id: string;
+  round: number;
+  state: string;
+  found: number | null;
+  created_at: string;
+  settled_at: string | null;
+}
+
+export interface PuzzleRound {
+  id: string;
+  projectId: string;
+  cashModeId: string;
+  purpose: PuzzleRoundPurpose;
+  formatKey: string | null;
+  productClass: PuzzleProductClass | null;
+  candidateId: string;
+  round: number;
+  state: PuzzleRoundState;
+  /**
+   * What the round established, counted when it settled.
+   *
+   * Null while OPEN rather than zero, because zero is a finding and a default
+   * is not — §33's defect, where a projection published a column's default as
+   * a measurement and a working sprint read as having found nothing.
+   */
+  found: number | null;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+export interface PuzzleObservationRow {
+  id: string;
+  project_id: string;
+  kind: string;
+  format_key: string | null;
+  product_id: string | null;
+  monetization_route: string | null;
+  statement: string;
+  recorded_by: string;
+  created_at: string;
+}
+
+export interface PuzzleObservation {
+  id: string;
+  projectId: string;
+  kind: PuzzleObservationKind;
+  formatKey: string | null;
+  productId: string | null;
+  /** Which ledger route this was about, where it was about one. */
+  monetizationRoute: string | null;
+  statement: string;
+  /** A person, or BRAIN reading its own rows. `lessons` counts them apart. */
+  recordedBy: string;
+  createdAt: string;
 }

@@ -31,6 +31,7 @@
     "report:refinement": "tsx scripts/refinement-report.ts",
     "verify:closeout": "tsx scripts/closeout-verify.ts",
     "report:labor": "tsx scripts/labor-report.ts",
+    "report:puzzle": "tsx scripts/puzzle-report.ts",
     "verify:capability": "tsx scripts/verify-research-capability.ts",
     "step12a:acceptance": "tsx --env-file-if-exists=.env scripts/step12a-acceptance.ts",
     "factory": "tsx --env-file-if-exists=.env scripts/factory.ts",

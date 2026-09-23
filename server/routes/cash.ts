@@ -61,6 +61,13 @@ import { getDeal } from '../repos/dealflow.ts';
 import { observe, retire, seedParty } from '../services/dealflow/seed.ts';
 import { dealDetail, dealflowView } from '../services/dealflow/view.ts';
 import { isDealObservationKind, isDealPartyKind } from '../domain/dealflow.ts';
+import { getPuzzleInstance, getPuzzleProduct } from '../repos/puzzle.ts';
+import { defineMaster, observe as observePuzzle, retireFormat, seedFormat } from '../services/puzzle/seed.ts';
+import { puzzleView } from '../services/puzzle/view.ts';
+import { renderInstance } from '../services/puzzle/generate.ts';
+import { formatFor } from '../services/puzzle/formats/index.ts';
+import { isPuzzleDifficulty, isPuzzleObservationKind } from '../domain/puzzle.ts';
+import { PUZZLE_DIFFICULTIES, PUZZLE_OBSERVATION_KINDS } from '../domain/types.ts';
 import { DEAL_OBSERVATION_KINDS, DEAL_PARTY_KINDS } from '../domain/types.ts';
 import { INDUSTRY_NODE_KINDS, type IndustryNodeKind } from '../domain/types.ts';
 import {
@@ -1359,6 +1366,257 @@ cashRouter.post(
         'store a generalization, because a stored rule is one nobody can see the sample ' +
         'behind. It gates nothing: no deal is refused and no question is skipped because of ' +
         'it.',
+    };
+  }),
+);
+
+/* --------------------------------------------------------------------------
+ * The puzzle products and production kernel
+ *
+ * Reading is any project member's, the same as every other kernel here.
+ * Writing is four things and every one of them is a decision no research can
+ * make: naming a kind of puzzle, setting up a system to generate it, recording
+ * what actually happened when something was attempted, and turning a
+ * monetization route down.
+ *
+ * Nothing on this surface contacts anybody, submits anything, lists anything
+ * or commits anything. Acting on a product is a recorded commercial action
+ * under the standing grant, on the routes that already exist for it — and
+ * `requirePerson` refuses a worker principal at every one of these by type,
+ * because a machine that could set up its own puzzle systems and then record
+ * that they sold would be writing its own evidence.
+ * ------------------------------------------------------------------------ */
+
+cashRouter.get(
+  '/projects/:projectId/cash/puzzles',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    return puzzleView(project.id);
+  }),
+);
+
+cashRouter.get(
+  '/projects/:projectId/cash/puzzles/instances/:instanceId',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const instance = await getPuzzleInstance(pathId(req, 'instanceId'));
+    // The same 404 a puzzle that never existed gives, because an id in
+    // somebody else's operation must not be distinguishable from an invented
+    // one — invariant 23, at a foreign key.
+    if (!instance || instance.projectId !== project.id) {
+      throw notFound('No puzzle with that id.');
+    }
+
+    /*
+     * Rendered rather than read back, which is the whole of "the
+     * specification is the storage": the grid, the solution and the answer key
+     * are produced together from the master and the seed every time they are
+     * wanted, so there is no copy of any of them for a later change to make
+     * disagree with the other two.
+     *
+     * `reproduced` is the check that says so. A false there means the
+     * generator has changed underneath a stored row, which is exactly what
+     * `generator_version` exists to prevent and exactly what somebody needs to
+     * be told if it happens anyway.
+     */
+    const rendered = await renderInstance(instance);
+    if ('error' in rendered) {
+      return {
+        instance,
+        artifact: null,
+        reproduced: false,
+        message: `This puzzle could not be re-rendered: ${rendered.error}`,
+      };
+    }
+    return {
+      instance,
+      artifact: rendered.artifact,
+      reproduced: rendered.reproduced,
+      message: rendered.reproduced
+        ? 'Rendered from its specification, and it hashes to what was recorded when it was ' +
+          'validated.'
+        : 'Rendered from its specification, and it does NOT hash to what was recorded. The ' +
+          'generator has changed underneath this row, so what is shown is not what was ' +
+          'checked. A repair is a new generator version and a new system, never an edit here.',
+    };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/puzzles/formats',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const result = await seedFormat({
+      projectId: project.id,
+      actorRef: principal.id,
+      name: requiredString(body['name'], 'name'),
+      note: optionalString(body['note'], 'note') ?? null,
+    });
+
+    const implementation = formatFor(result.format.formatKey);
+    return {
+      format: result.format,
+      created: result.created,
+      /*
+       * Whether this repository can actually make one, said at the moment it
+       * is named rather than discovered when nothing ever gets generated.
+       */
+      generates: implementation?.render != null,
+      validates: implementation != null,
+      message: result.created
+        ? `${result.format.name} is on the map. ` +
+          (implementation?.render
+            ? 'Brain can generate and check this one, so a system for it is set up on the next ' +
+              'tick and nothing further is needed from you.'
+            : implementation
+              ? 'Brain can check this one and cannot write one: its content is editorial work ' +
+                'with no correctness criterion, so there is a validator and deliberately no ' +
+                'generator.'
+              : 'Nothing here generates or checks it yet, so Brain will research who buys it ' +
+                'and leave the making to a code change somebody reviews. That is the honest ' +
+                'order: whether a generator is worth writing depends on whether anybody pays ' +
+                'for the output.')
+        : `${result.format.name} was already on the map, so nothing changed. How Brain came to ` +
+          'know about it is history, and naming it again does not rewrite it.',
+    };
+  }),
+);
+
+cashRouter.patch(
+  '/projects/:projectId/cash/puzzles/formats/:formatId',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const format = await retireFormat({
+      projectId: project.id,
+      actorRef: principal.id,
+      formatId: pathId(req, 'formatId'),
+      reason: requiredString(body['reason'], 'reason'),
+    });
+    if (!format) throw notFound('No format with that id.');
+
+    return {
+      format,
+      message:
+        'Brain stops asking about it and reads it as a dead end with your reason. Nothing was ' +
+        'destroyed: its systems, every puzzle they made, every product compiled from them and ' +
+        'every round ever run about it are exactly where they were, which is what stops it ' +
+        'arriving again as a fresh discovery.',
+    };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/puzzles/systems',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const difficultyRaw = optionalString(body['difficulty'], 'difficulty') ?? 'MEDIUM';
+    if (!isPuzzleDifficulty(difficultyRaw)) {
+      throw badRequest(
+        `"${difficultyRaw}" is not a difficulty band. The set is fixed in code: ` +
+          `${PUZZLE_DIFFICULTIES.join(', ')}.`,
+      );
+    }
+
+    /*
+     * The parameters travel as given and each format refuses the ones it does
+     * not implement. A parameter nobody implements is a refusal rather than a
+     * field silently ignored, because a silently ignored one produces a system
+     * that makes something nobody asked for.
+     */
+    const parameters: Record<string, string | number> = {};
+    const raw = body['parameters'];
+    if (raw !== undefined) {
+      if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+        throw badRequest('"parameters" must be an object of names to values.');
+      }
+      for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+          throw badRequest(`parameters.${key} must be a string or a number.`);
+        }
+        parameters[key] = value;
+      }
+    }
+
+    const result = await defineMaster({
+      projectId: project.id,
+      actorRef: principal.id,
+      title: requiredString(body['title'], 'title'),
+      formatName: requiredString(body['format'], 'format'),
+      corpusId: requiredString(body['corpusId'], 'corpusId'),
+      difficulty: difficultyRaw,
+      parameters,
+    });
+    if ('refused' in result) throw unprocessable(result.refused);
+
+    return {
+      master: result.master,
+      message:
+        `${result.master.title} is set up. Puzzles are made on the tick, and every one of them ` +
+        'is checked from its printed form before it is recorded — nothing that fails is ' +
+        'stored as usable, and a batch whose failures cross a third stops rather than drawing ' +
+        'seeds until enough happen to pass.',
+    };
+  }),
+);
+
+cashRouter.post(
+  '/projects/:projectId/cash/puzzles/observations',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const body = bodyOf(req);
+
+    const kindRaw = requiredString(body['kind'], 'kind');
+    if (!isPuzzleObservationKind(kindRaw)) {
+      throw badRequest(
+        `"${kindRaw}" is not a kind of outcome this kernel records. The set is fixed in ` +
+          `code: ${PUZZLE_OBSERVATION_KINDS.join(', ')}.`,
+      );
+    }
+
+    const productId = optionalString(body['productId'], 'productId') ?? null;
+    if (productId) {
+      const product = await getPuzzleProduct(productId);
+      if (!product || product.projectId !== project.id) {
+        throw notFound('No product with that id.');
+      }
+    }
+
+    const result = await observePuzzle({
+      projectId: project.id,
+      actorRef: principal.id,
+      kind: kindRaw,
+      formatName: optionalString(body['format'], 'format') ?? null,
+      productId,
+      monetizationRoute: optionalString(body['route'], 'route') ?? null,
+      statement: requiredString(body['statement'], 'statement'),
+    });
+    if ('refused' in result) throw unprocessable(result.refused);
+
+    return {
+      observation: result.observation,
+      message:
+        kindRaw === 'HUMAN_EDIT_PASSED'
+          ? 'Recorded. This is the one thing that can move a format to SELLABLE: there is no ' +
+            'flag anywhere that stands in for a person having read what the machine made.'
+          : kindRaw === 'ROUTE_REJECTED'
+            ? 'Recorded. The route stays in the ledger with your reason rather than ' +
+              'disappearing, which is what stops it being proposed again next week.'
+            : 'Recorded as one observation. Whether several amount to a rule is derived when ' +
+              'somebody reads them, with the sample size printed beside it — Brain stores no ' +
+              'generalization, because a stored rule is one nobody can see the sample behind. ' +
+              'It gates nothing: no product is refused and no question is skipped because of it.',
     };
   }),
 );

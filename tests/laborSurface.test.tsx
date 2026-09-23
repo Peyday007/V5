@@ -353,9 +353,9 @@ describe('the Labor screen, over the real route', () => {
       expect(screen.getByText(/Recording that a person produces this engages nobody/)).toBeTruthy(),
     );
 
-    // And the role is now on the map with what backs it — which is `PERSON`
-    // rather than `RESEARCH`, because somebody answered the question and no
-    // published source did.
+    // And the role is now on the map with what backs it — which is
+    // `ASSERTED` rather than `PERSON`: somebody recorded who produces the
+    // task, and nothing answered the question of why a person is necessary.
     // Scoped to the roles section, because the same words are also the label
     // of the reason the form offered, and whether that form is still open when
     // the map re-renders is timing: an unscoped query found both on the
@@ -366,9 +366,38 @@ describe('the Labor screen, over the real route', () => {
       expect(roles).toBeTruthy();
       expect(within(roles!).getByText(/human interface/)).toBeTruthy();
     });
+
+    /*
+     * And the correction their fix leaves behind, which is the half of mine
+     * that does not overlap.
+     *
+     * Two sessions found this race independently; the one on `production`
+     * ships, which is this repository's own rule about a number that landed
+     * first. What it preserves is the comment three lines up, and that comment
+     * has never been true: it claims the backing is `PERSON` "because somebody
+     * answered the question", and no assertion here has ever read the backing
+     * — `/human interface/` did not, and `not.toBe('RESEARCH')` below is
+     * satisfied by `ASSERTED` and `PERSON` alike.
+     *
+     * It is `ASSERTED`, and the product is right. Recording *who produces* a
+     * task writes an allocation, not a `labor_necessity_answers` row, and
+     * `HUMAN_INTERFACE` is one of the reasons `questionAnsweredBy` settles
+     * nothing for. So a person has said a person is necessary and nothing
+     * backs that, which is exactly the distinction the field exists to keep.
+     *
+     * An assertion weak enough to pass either way is what let the comment
+     * beside it drift, so this reads the sentence the screen actually renders.
+     */
+    const role = within(
+      document.querySelector('.rs-labor-roles') as HTMLElement,
+    ).getByText(/Necessary because of/);
+    expect(role.textContent).toMatch(/human interface/);
+    expect(role.textContent).toMatch(/nothing — the reason is asserted/);
     const withRole = await laborView(projectId);
     expect(withRole.humanDependencies).toHaveLength(1);
-    expect(withRole.humanDependencies[0]?.backing).not.toBe('RESEARCH');
+    // Pinned exactly rather than as "not RESEARCH", which ASSERTED and PERSON
+    // both satisfy: the value that is true here is the one worth guarding.
+    expect(withRole.humanDependencies[0]?.backing).toBe('ASSERTED');
 
     /* --- and then moving it to Brain -------------------------------------- */
     const again = await waitForButton(/Record who produces/);

@@ -52,7 +52,9 @@ export type CompilerProfileId =
   | 'MACHINE_CAPITAL'
   | 'MACHINE_ACQUISITION'
   | 'DEALFLOW_PARTIES'
-  | 'DEALFLOW_TERMS';
+  | 'DEALFLOW_TERMS'
+  | 'PUZZLE_MARKET'
+  | 'PUZZLE_TERMS';
 
 export interface CompilerProfile {
   id: CompilerProfileId;
@@ -1788,6 +1790,222 @@ const MONETIZATION_ATTRIBUTE: CompilerProfile = {
   ],
 };
 
+/**
+ * Who buys puzzle content, and how it reaches them.
+ *
+ * The half of the puzzle kernel whose deliverable is a **name**: a publication
+ * that has published submission terms, a marketplace with a stated share, a
+ * printer with a stated minimum. Its own profile rather than sharing the
+ * terms one, for `RUSSELL_CASH_VALIDATION_V1`'s reason — `planFitsEnvelope`
+ * pins one assignment template per envelope, and a question whose deliverable
+ * is a name judged against a completion standard written for a figure is
+ * §25's Westbrook defect at a compiler.
+ *
+ * The excluded sources are the failure this subject actually has. The puzzle
+ * trade is full of blog posts about how to sell puzzle books, and almost none
+ * of them is a publisher saying what it pays.
+ */
+const PUZZLE_MARKET: CompilerProfile = {
+  id: 'PUZZLE_MARKET',
+  fragmentKey: 'puzzle-market',
+  // A puzzle market genuinely spans countries — a syndicate in one, a
+  // marketplace serving several — so refusing a question naming more than one
+  // would refuse the work this envelope exists to permit.
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the industry map and dealflow parties: all three give later
+  // questions somewhere to point, and all three yield to anything finishing
+  // work already paid for.
+  launchOrdinal: 320,
+  proposedSources: [
+    'a publication’s own submission guidelines, contributor terms or rate card',
+    'a marketplace, platform or retailer’s own published seller terms and fee schedule',
+    'a syndicate or content agency’s own published rates and rights terms',
+    'a printer, print-on-demand service or manufacturer’s own published pricing and minimums',
+    'a tender, procurement notice or published call for content',
+    'a job, commission or freelance listing naming what it pays',
+    'a trade association, industry body or trade publication',
+    'a published catalogue, ISBN record or bibliographic listing',
+  ],
+  excludedSources: [
+    'an article about how to sell puzzles that names no buyer and no rate',
+    'a publication named as a likely market with nothing published about submissions',
+    'a rate somebody reports being paid, with no published schedule behind it',
+    'a marketplace’s marketing page where its own fee schedule exists and was not read',
+    'a forecast of what the puzzle market will be worth, presented as a buyer',
+  ],
+  lanes: [
+    {
+      id: 'puzzle_buyer',
+      // One publication's published submission terms prove that publication's
+      // submission terms. Requiring a second publisher for it would require
+      // somebody else to have published the same page.
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A named organisation or publication that has published a need for puzzle content or ' +
+        'puzzle products — submission guidelines, a contributor call, a tender, a commission ' +
+        'listing, or a stated gap it wants filled. Declared on its claim with puzzle_finding ' +
+        'set to DEMAND_SIGNAL, puzzle_subject set to the organisation’s own name, and ' +
+        'puzzle_format set to the format. An organisation described in prose and not declared ' +
+        'reaches nothing.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'puzzle_channel',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'A published route by which puzzle products actually reach buyers, with its terms in ' +
+        'the claim itself: the share it takes, what rights it requires, its minimums, and how ' +
+        'and when it pays. Declared with puzzle_finding set to CHANNEL.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'puzzle_format_evidence',
+      description:
+        'A kind of puzzle that exists as a commercial product, named as the trade names it, ' +
+        'with who publishes or sells it in the claim. Declared with puzzle_finding set to ' +
+        'FORMAT_EVIDENCE. This is how the universe grows: a format nobody has heard of that ' +
+        'somebody is visibly selling is worth more here than another observation about ' +
+        'crosswords.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'The format can be described and no organisation has published a need for it, which is ' +
+      'recorded as no buyer established rather than as a likely buyer.',
+    'Marketplaces exist and none of them publishes its terms, which is recorded rather than ' +
+      'filled in from what such a marketplace usually charges.',
+    'Every source found is an article about the trade rather than a party in it, so nothing ' +
+      'is declared.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Name the organisations and ` +
+        'say where each publishes what it does; nothing about this names a market of its own.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: () => [
+    'Every organisation is declared on its claim with puzzle_finding, puzzle_subject set to ' +
+      'its own name, and puzzle_format set to the format. One described in prose and not ' +
+      'declared changes nothing.',
+    'Where the question names a format, that exact string is copied into puzzle_format. A ' +
+      'different wording is a different format and joins with nothing.',
+    'A buyer rests on something that organisation published, not on it being the kind of ' +
+      'publication that would buy puzzles. A plausible buyer is not a finding, and reporting ' +
+      'that none was established is a better answer than naming one.',
+    'A channel carries its actual terms — the share, the rights, the minimums, how it pays — ' +
+      'in the claim, because a route whose terms nobody stated cannot be compared to another.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+  ],
+};
+
+/**
+ * What the money and the rules actually are.
+ *
+ * The half whose deliverable is a **figure or a rule**, and whose most
+ * dangerous answer is a plausible one. The excluded sources say so directly: a
+ * retail price presented as receipts is the single mistake that makes this
+ * whole kernel's arithmetic wrong, and it is an easy one to make because the
+ * shelf price is the number that is easy to find.
+ */
+const PUZZLE_TERMS: CompilerProfile = {
+  id: 'PUZZLE_TERMS',
+  fragmentKey: 'puzzle-terms',
+  multipleJurisdictions: 'DESCRIBE',
+  // Beside the deep dive, the capital question and dealflow terms: all of them
+  // finish work already paid for on something that already exists.
+  launchOrdinal: 140,
+  proposedSources: [
+    'a printer or print-on-demand service’s own published price calculator or rate card',
+    'a marketplace, retailer or distributor’s own published fee schedule and terms',
+    'a publisher’s own published royalty schedule or contributor rates',
+    'a freight or fulfilment operator’s own published rates',
+    'a standards body, safety regulator or platform’s own published rules',
+    'an intellectual-property office’s register, or a published court or tribunal decision',
+    'a trade association, industry body or trade publication',
+    'a published accounts filing, annual report or investor disclosure',
+  ],
+  excludedSources: [
+    'a retail or shelf price presented as what the publisher receives',
+    'a royalty or margin figure inferred from a retail price and an assumed share',
+    'a figure estimated, interpolated or converted between currencies',
+    'a rate produced by turning a published range into a single number',
+    'a cost from one product class presented as applying to another',
+    'a legal position asserted with no instrument, register entry or decision behind it',
+  ],
+  lanes: [
+    {
+      id: 'puzzle_receipts',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'What somebody is actually paid, declared with puzzle_finding set to PRICE_POINT and ' +
+        'puzzle_value naming which kind. NET_RECEIPT_PER_UNIT is what the publisher receives ' +
+        'and RETAIL_PRICE is what a shopper pays — report whichever the source states, under ' +
+        'its own name, and never the second under the first. They differ by the retailer’s ' +
+        'share, the distributor’s, returns and markdowns, and that difference is most of the ' +
+        'margin.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'puzzle_costs',
+      evidenceKind: 'SPECIFIC_INSTANCE',
+      description:
+        'One published line of what producing or delivering it costs, declared with ' +
+        'puzzle_finding set to PRODUCTION_COST, puzzle_value naming the line, the figure in ' +
+        'puzzle_amount_cents and its currency in puzzle_currency. Say what the figure is per ' +
+        '— one copy, one run, one shipment — in puzzle_subject, because a figure whose basis ' +
+        'nobody stated cannot be added to another. A published zero is a figure.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'puzzle_production',
+      description:
+        'A named supplier that actually produces this: a printer, a print-on-demand service, ' +
+        'a card or board manufacturer, a fulfilment house. What it makes, its stated minimum ' +
+        'and its lead time, declared with puzzle_finding set to PRODUCTION_ROUTE.',
+      necessity: 'CONDITIONAL',
+    },
+    {
+      id: 'puzzle_rights',
+      description:
+        'A published rule bearing on what may lawfully be made, listed or sold — a copyright ' +
+        'or trademark position on a format or a name, a marketplace’s own listing rules, a ' +
+        'toy or product safety standard, an accessibility requirement, or a rights term a ' +
+        'buyer imposes. Declared with puzzle_finding set to RIGHTS_CONSTRAINT and ' +
+        'puzzle_value naming which kind, with no puzzle_format: a rule of this sort applies ' +
+        'across formats and filing it under one hides it from every other.',
+      necessity: 'CONDITIONAL',
+    },
+  ],
+  expectedClaimTypes: ['SOURCED_FACT', 'QUOTATION', 'NEGATIVE_EXISTENCE'],
+  failureConditions: [
+    'Retail prices are everywhere and nothing states what the publisher receives, which is ' +
+      'reported as such — the contribution is then withheld rather than computed from the ' +
+      'shelf price, and that is the correct outcome rather than a failure of the research.',
+    'Printers publish calculators rather than rate cards, so a figure exists only for a ' +
+      'specification nobody has chosen. Reported with the specification it was read at.',
+    'A trademark or platform position cannot be established from a published instrument or ' +
+      'register entry, which is recorded as unestablished rather than as permitted.',
+  ],
+  objective: ({ question, scope, from }) =>
+    from === 'ENVELOPE'
+      ? `Establish, from published sources, ${lowerFirst(question)} Report every figure as the ` +
+        'source published it, in the currency it published it in.'
+      : `Establish, from published sources about ${scope}, ${lowerFirst(question)}`,
+  completionCriteria: () => [
+    'Every figure is declared with puzzle_finding, puzzle_value naming the line, ' +
+      'puzzle_product_class naming the kind of product it is about, the amount in ' +
+      'puzzle_amount_cents and the currency in puzzle_currency. A figure described in prose ' +
+      'and not declared reaches no arithmetic.',
+    'A receipt and a retail price are never conflated. If only a retail price is published, ' +
+      'declare it as RETAIL_PRICE and say plainly that net receipts were not established.',
+    'Figures are reported as published: no currency conversion, no reconciling two bases into ' +
+      'one number, and no turning a published range into a single rate.',
+    'Every source carries its URL, who publishes it, and the date it was published or last ' +
+      'observed, and every claim carries the URL of the source it came from.',
+  ],
+};
+
 const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_PUBLIC_RECORDS_V1: PUBLIC_RECORDS,
   RUSSELL_STATE_LICENSING_V1: PUBLIC_RECORDS,
@@ -1806,6 +2024,8 @@ const BY_ENVELOPE: Readonly<Record<string, CompilerProfile>> = Object.freeze({
   RUSSELL_MACHINE_ACQUISITION_V1: MACHINE_ACQUISITION,
   RUSSELL_DEALFLOW_PARTIES_V1: DEALFLOW_PARTIES,
   RUSSELL_DEALFLOW_TERMS_V1: DEALFLOW_TERMS,
+  RUSSELL_PUZZLE_MARKET_V1: PUZZLE_MARKET,
+  RUSSELL_PUZZLE_TERMS_V1: PUZZLE_TERMS,
 });
 
 export function profileFor(envelopeId: string): CompilerProfile | null {

@@ -1143,11 +1143,30 @@ describe('a parameter Postgres cannot type', () => {
      */
     expect(files.length).toBeGreaterThan(200);
 
+    /*
+     * Comments are stripped before the shape is looked for.
+     *
+     * The fourth time a guard in this repository has read prose as code: §33
+     * records a mobile-layout check failing on a comment explaining why
+     * `type="number"` is wrong, and the correction there was the same one.
+     * It arrived here the moment somebody documented *why* a statement avoids
+     * this shape — a sentence containing the words it warns about, in a file
+     * that had done the right thing.
+     *
+     * Rewording the comment was the other option and is the worse one. A guard
+     * that forces the code it protects to stop explaining itself is teaching
+     * the next reader to write a quieter version of the same mistake, and this
+     * file's own header is four paragraphs about a shape that is invisible
+     * without an explanation. The strip is deliberately crude — a `//` or a
+     * `*` opening a line — because what it has to survive is prose, and a
+     * statement is never written with its opening quote inside a comment.
+     */
     const offenders: string[] = [];
     for (const file of files) {
       const lines = (await readFile(file, 'utf8')).split('\n');
       lines.forEach((line, index) => {
-        if (UNTYPED_NULL_TEST.test(line)) offenders.push(`${file}:${index + 1}  ${line.trim()}`);
+        const code = line.replace(/^\s*(?:\/\/|\/?\*+\/?).*$/, '').replace(/\/\/.*$/, '');
+        if (UNTYPED_NULL_TEST.test(code)) offenders.push(`${file}:${index + 1}  ${line.trim()}`);
       });
     }
     expect(offenders).toEqual([]);

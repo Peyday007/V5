@@ -571,6 +571,90 @@ anything anywhere; making any commitment on anybody's behalf; quoting, offering 
 negotiating. This is read-only research into what is already published, and every action
 beyond reading needs a separate commercial authorization from a person.`;
 
+/**
+ * Who buys puzzle content and how it reaches them.
+ *
+ * The deliverable is a name and a set of terms. The failure this subject has
+ * is unusually specific and the template says so: the puzzle trade is full of
+ * writing *about* selling puzzles, and almost none of it is a publisher saying
+ * what it pays. A beautifully reasoned description of the kind of publication
+ * that would buy this answers nothing.
+ */
+export const PUZZLE_MARKET_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Scope: {JURISDICTION}. Say where each organisation publishes and which market it serves, where
+the source says so.
+
+Evidence standard: a named organisation, from a published source identified by its URL and by
+who publishes it, carrying the date it was published or last observed. A buyer is established
+by something that organisation itself published — submission guidelines, a contributor call, a
+rate card, a tender, a commission listing. A channel is established by that platform's own
+terms page, not by an article describing it. An article about how to sell puzzles, however
+detailed, establishes nothing about any particular buyer.
+
+Completion standard: every organisation you establish is declared on its own claim with
+puzzle_finding, puzzle_subject set to its own name, and puzzle_format set to the format. An
+organisation described in prose and not declared reaches nothing. Where the assignment names a
+format, copy that string verbatim into puzzle_format: a different wording is a different format
+and joins with nothing. A channel carries its actual terms — the share it takes, the rights it
+requires, its minimums, how and when it pays — in the claim itself. A plausible buyer nobody
+has published about is not a finding, and saying so is a better answer than naming one.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or a
+paid API; submitting, pitching, listing or uploading anything anywhere; registering an account;
+placing an advertisement; publishing anything; making any commitment on anybody's behalf;
+quoting, offering or negotiating. This is read-only research into what is already published,
+and every action beyond reading needs a separate commercial authorization from a person.`;
+
+/**
+ * What the money and the rules actually are.
+ *
+ * Separate from the market template because the completion standard is the
+ * opposite shape, and because the single most dangerous answer in this whole
+ * kernel lives here: a retail price reported as receipts. The template names
+ * that specifically rather than relying on a general instruction about
+ * accuracy, because it is the mistake a careful worker makes — the shelf price
+ * is the number that is easy to find.
+ */
+export const PUZZLE_TERMS_ASSIGNMENT_TEMPLATE = `Establish, from published sources, the answer to this question:
+
+{QUESTION}
+
+Scope: {JURISDICTION}. A price, a fee and a rule are each about one market and one product.
+Say which.
+
+Evidence standard: a published price calculator, rate card, fee schedule, royalty schedule,
+terms page, standard, register entry or filing, identified by its URL and by who publishes it,
+carrying the date it took effect or was last observed. A figure is read from a source and never
+produced: report it as published, in the currency it was published in, and say what it is per —
+one copy, one run, one shipment.
+
+THE ONE DISTINCTION THIS QUESTION TURNS ON: a retail price is what a shopper pays and a net
+receipt is what the publisher actually gets. They differ by the retailer's share, the
+distributor's share, returns and markdowns, and that difference is most of the margin. Declare a
+shelf price as RETAIL_PRICE and a receipt as NET_RECEIPT_PER_UNIT, never the first under the
+second, and never a receipt derived by applying an assumed share to a shelf price. If only a
+retail price is published, say plainly that net receipts were not established: Brain will
+withhold the contribution rather than compute it, and that is the correct outcome.
+
+Completion standard: every figure is declared on its own claim with puzzle_finding set to
+PRICE_POINT or PRODUCTION_COST, puzzle_value naming the line, puzzle_product_class naming the
+kind of product it is about, puzzle_amount_cents carrying the amount in minor units, and
+puzzle_currency carrying the currency as published. A published zero is a figure and is declared
+as 0. Do not convert currencies, do not reconcile figures on different bases into a single
+number, and do not turn a published range into a single rate. Every rule about what may be made,
+listed or sold is declared with puzzle_finding set to RIGHTS_CONSTRAINT and puzzle_value naming
+which kind, with no puzzle_format.
+
+Out of scope: contacting any person or organisation; buying access, data, a subscription or a
+paid API; requesting a quote; registering an account; obtaining, applying or paying for any
+certification, approval or registration; submitting, listing, uploading or publishing anything
+anywhere; placing an advertisement; making any commitment on anybody's behalf; quoting, offering
+or negotiating. This is read-only research into what is already published, and every action
+beyond reading needs a separate commercial authorization from a person.`;
+
 export const INDUSTRY_MAP_ASSIGNMENT_TEMPLATE = `Establish, from published sources, how this part of the economy is actually put together:
 
 {QUESTION}
@@ -1411,6 +1495,71 @@ export const APPROVAL_ENVELOPES: Readonly<Record<string, ApprovalEnvelope>> = Ob
       'customs and agreeing a commission are commercial actions a person grants separately, ' +
       'and never this envelope.',
     assignmentTemplate: DEALFLOW_TERMS_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  /**
+   * The puzzle kernel's two questions.
+   *
+   * Two rather than one for `RUSSELL_CASH_VALIDATION_V1`'s reason:
+   * `planFitsEnvelope` pins one assignment template per envelope, and a packet
+   * has to be judged against the rules for the question it is actually asking.
+   * Establishing who buys puzzle content is a question whose deliverable is a
+   * name; establishing what it earns is one whose deliverable is a figure, and
+   * whose most dangerous answer is a plausible one.
+   *
+   * **They authorize no effect that discovery did not already authorize.**
+   * Both take their source classes and their prohibitions verbatim from the
+   * cash discovery envelope, so nothing about this kernel authorizes an effect
+   * the sprint's own grant did not — which is nothing at all beyond reading.
+   * In particular nothing here authorizes submitting a puzzle anywhere,
+   * registering an account with a marketplace, requesting a quote from a
+   * printer, or listing, uploading or publishing anything. Every one of those
+   * is a `COMMERCIAL_ACTION` a person grants separately.
+   */
+  RUSSELL_PUZZLE_MARKET_V1: Object.freeze({
+    id: 'RUSSELL_PUZZLE_MARKET_V1',
+    authorization:
+      'The operator authorized standing read-only discovery research inside a Cash Mode ' +
+      'project when they started it: published sources only, across any industry, business ' +
+      'model or market, with no spending, no paid API or purchased data, no contact with any ' +
+      'person or organisation, no advertising, no publishing and no external effect of any ' +
+      'kind. This envelope is that authorization applied to establishing which kinds of puzzle ' +
+      'sell, which organisations have published a need for puzzle content or products, and by ' +
+      'what published routes those reach buyers. Submitting to any of them, registering with ' +
+      'any of them or listing anything anywhere is a commercial action a person grants ' +
+      'separately, and never this envelope.',
+    assignmentTemplate: PUZZLE_MARKET_ASSIGNMENT_TEMPLATE,
+    jurisdiction: 'the market this question names',
+    maxFragments: null,
+    geography: /\S/,
+    forbiddenScope: /(?!)/,
+    allowedSourceTypes: CASH_SOURCE_TYPES,
+    sourceRule: CASH_SOURCE_RULE,
+    forbiddenActions: CASH_FORBIDDEN_ACTIONS,
+    minIndependentSourcesFloor: 1,
+  } satisfies ApprovalEnvelope),
+
+  RUSSELL_PUZZLE_TERMS_V1: Object.freeze({
+    id: 'RUSSELL_PUZZLE_TERMS_V1',
+    authorization:
+      'The operator authorized standing read-only research inside a Cash Mode project when ' +
+      'they started it: published sources only, with no spending, no paid API or purchased ' +
+      'data, no contact with any person or organisation, no advertising, no publishing and no ' +
+      'external effect of any kind. This envelope is that authorization applied to ' +
+      'establishing what puzzle work is paid, what producing and delivering it costs, who ' +
+      'physically makes it, and what rules bear on what may lawfully be made, listed or sold. ' +
+      'It authorizes reading about those and never doing any of them: requesting a quote, ' +
+      'registering an account, obtaining a certification and listing anything anywhere are ' +
+      'commercial actions a person grants separately, and never this envelope.',
+    assignmentTemplate: PUZZLE_TERMS_ASSIGNMENT_TEMPLATE,
     jurisdiction: 'the market this question names',
     maxFragments: null,
     geography: /\S/,

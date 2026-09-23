@@ -5,7 +5,7 @@
  * What was wrong, and why a ledger alone could not fix it
  * ---------------------------------------------------------------------------
  *
- * §48 built a ledger that preserves every way a discovery could be paid for,
+ * §49 built a ledger that preserves every way a discovery could be paid for,
  * ranks them lexicographically so it can say exactly why one is above another,
  * and prints under each one the questions still open and the task that would
  * answer each. It could ask none of them. An audit of the shipped ledger found
@@ -130,7 +130,7 @@ const WORTH_ASKING: ReadonlySet<MonetizationStatus> = Object.freeze(
  *
  * "Paths near the top" is the instruction, and near has to be a number
  * somewhere. It is deliberately wider than the five the surface shows, because
- * §48's own rule is that the top five are a *view* of the space and never the
+ * §49's own rule is that the top five are a *view* of the space and never the
  * space: a question that would move number nine into number four is exactly
  * the question worth asking, and a window of five could never ask it.
  *

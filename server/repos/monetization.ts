@@ -875,7 +875,7 @@ export async function commissionForCandidate(
  * One join rather than a read per fact. The durable tick asks this every pass
  * for every project running a sprint, and the loop it replaces was `getClaim`
  * once per `EVIDENCE` answer — which is a query per row of a table that grows
- * with the ledger, on a path that runs every thirty seconds. §48's own
+ * with the ledger, on a path that runs every thirty seconds. §49's own
  * enumeration made the same mistake and issued seven hundred no-op inserts a
  * tick before it was measured.
  *

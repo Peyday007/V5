@@ -5,7 +5,7 @@
  * What it is written from
  * ---------------------------------------------------------------------------
  *
- * §48 shipped a ledger that preserved every way a discovery could be paid for
+ * §49 shipped a ledger that preserved every way a discovery could be paid for
  * and could ask none of the questions it printed. An audit of it found that
  * **two of the thirteen attributes had a production writer**, both
  * `RECOMMENDATION`; `kind = 'EVIDENCE'` and `claim_id` had never been written

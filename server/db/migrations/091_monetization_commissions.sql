@@ -1,7 +1,7 @@
 -- ---------------------------------------------------------------------------
 -- WHAT BRAIN ASKED, ABOUT WHICH POSSIBILITY, AND WHY IT ASKED IT THEN
 --
--- §48 built a ledger that preserves every way a discovery could be paid for,
+-- §49 built a ledger that preserves every way a discovery could be paid for,
 -- ranks them, and says for each one exactly which questions are still open.
 -- It could not ask any of them. Every unanswered attribute sat on the surface
 -- with the task that would answer it printed underneath, waiting for somebody

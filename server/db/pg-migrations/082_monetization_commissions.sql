@@ -1,4 +1,4 @@
--- The Postgres half of SQLite migration 090. See that file for why the unique
+-- The Postgres half of SQLite migration 091. See that file for why the unique
 -- index is the whole concurrency design, why `round` is inside the key rather
 -- than beside it, and why `answered` is NULL while a commission is open rather
 -- than 0.
