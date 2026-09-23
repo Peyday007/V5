@@ -75,10 +75,18 @@ import {
   resolveToken,
 } from './fire.ts';
 import { fleetSnapshot, IN_FLIGHT_WINDOW_MS } from './candidates.ts';
+import { shouldQuarantine } from './scaler.ts';
 import { routeBin } from './router.ts';
 import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator } from './router.ts';
 import { markDispatchRoutine } from '../../repos/bins.ts';
-import { claimRoutineFireSlot, recordAccountRefusal, recordRoutineFire, setRoutineState } from '../../repos/fleet.ts';
+import {
+  claimRoutineFireSlot,
+  getRoutine,
+  recordAccountRefusal,
+  recordRoutineFire,
+  setRoutineState,
+  unansweredFiresByRoutine,
+} from '../../repos/fleet.ts';
 
 /*
  * How a routing refusal is classified now lives in `router.ts`, beside the union
@@ -141,6 +149,8 @@ export interface TickResult {
   /** Fires nobody answered, put back in the queue or given up on. */
   reopenedNoShows: number;
   abandonedNoShows: number;
+  /** Surfaces taken out of routing this tick for not answering their fires. */
+  quarantinedForNoShow: string[];
   intentsCreated: number;
   fired: number;
   failed: number;
@@ -172,6 +182,7 @@ export async function dispatchTick(
     rearmed: 0,
     reopenedNoShows: 0,
     abandonedNoShows: 0,
+    quarantinedForNoShow: [],
     intentsCreated: 0,
     fired: 0,
     failed: 0,
@@ -252,6 +263,50 @@ export async function dispatchTick(
   for (const entry of reopened) {
     if (entry.outcome === 'REOPENED') result.reopenedNoShows += 1;
     else result.abandonedNoShows += 1;
+  }
+
+  /*
+   * And a surface that has stopped answering stops being chosen.
+   *
+   * `shouldQuarantine` has stated this fleet's rule since Step 11 — repeated
+   * no-shows take a surface out of routing, because a session that starts and
+   * never arrives is a permission or connector fault that will repeat for ever
+   * at one activation each — and its only caller in the repository was
+   * `fleet scale-advice`, which prints a line. **A mechanism nothing calls is
+   * not a mechanism**, and no surface has ever been quarantined for not
+   * answering.
+   *
+   * Wiring it up as it stood would not have helped, and that is the half only a
+   * pool shows: its input was `fleet_routines.consecutive_no_shows`, which an
+   * arrival clears for every Routine bound to the same worker. A Factory pool
+   * is exactly that arrangement, so one dead account's counter is reset by its
+   * healthy siblings and it is fired at for ever. `unansweredFiresByRoutine`
+   * is the per-surface fact instead, derived from the ledger rows the reopen
+   * above has just written.
+   *
+   * Only no-shows are decided here. A fire the provider *refused* for a reason
+   * that is not a rate limit is quarantined immediately, at the fire, further
+   * down this function — so `consecutiveFailures` is deliberately passed as
+   * zero rather than re-deciding a question that branch has already answered.
+   *
+   * The answering transition is `fleet set-state`, and it is reachable without
+   * touching the database — §24's rule that an escalation needs one.
+   */
+  const unanswered = await unansweredFiresByRoutine();
+  for (const [routineId, count] of unanswered) {
+    const verdict = shouldQuarantine({ consecutiveNoShows: count, consecutiveFailures: 0 });
+    if (!verdict.quarantine) continue;
+    const routine = await getRoutine(routineId);
+    // Guarded on the state that was read, so two ticks produce one move and the
+    // loser is an ordinary outcome rather than an error.
+    if (!routine || routine.state !== 'ENABLED') continue;
+    const moved = await setRoutineState({
+      routineId,
+      from: 'ENABLED',
+      to: 'QUARANTINED',
+      reason: verdict.reason,
+    });
+    if (moved) result.quarantinedForNoShow.push(routineId);
   }
 
   // Ensure intent for everything a worker could be given — which is not the

@@ -67,11 +67,47 @@ export interface PoolSurfaceInput {
   accountTarget: number | null;
   /** Arrivals attributed to this Routine, newest first. */
   sessions: readonly WorkerSession[];
+  /**
+   * Fires Brain made at this surface that nobody answered, since it last
+   * answered.
+   *
+   * `unansweredFiresByRoutine`, rather than a comparison of `last_fired_at`
+   * against the newest arrival — which is what this read the first time and was
+   * wrong, because `claimRoutineFireSlot` advances `last_fired_at` at the
+   * moment the slot is taken, *before* the HTTP call. A fire the provider then
+   * rate-limited advances it too, so that comparison called a proof stale over
+   * a busy account: §23's "a refusal is not misconduct", broken by the very
+   * check written to catch a dead surface. A `DISPATCH_NO_SHOW` row exists only
+   * for a dispatch that actually reached `SENT`, so a refusal cannot produce
+   * one.
+   *
+   * It is also the number the dispatcher quarantines on, read from the same
+   * function, so the report and the routing decision cannot come to disagree
+   * about whether a surface answered. They differ in what they do about it —
+   * one says re-probe at the first, the other removes it from routing at the
+   * threshold — and never in the fact.
+   */
+  unansweredFires: number;
   bins: ReadonlyMap<string, Bin | null>;
   dispatches: ReadonlyMap<string, readonly BinDispatch[]>;
 }
 
-export type PoolVerdict = 'PROVEN' | 'UNPROVEN' | 'FAULT';
+/**
+ * What this pool knows about one surface.
+ *
+ * `STALE` is the third answer and it exists because the other two could not
+ * express the condition this module is most likely to meet in production: a
+ * surface that **was** proven and has since stopped working. Without it, a
+ * chain closed in August certified a connector somebody revoked in September,
+ * for ever — §23's own rule that a perfect configured block over an empty
+ * observed one is a refusal, one step along, where the observed block is real
+ * and simply out of date.
+ *
+ * It is deliberately not `FAULT`: nothing here says the surface is wrong, only
+ * that Brain's later evidence disagrees with its proof, and the remedy is a
+ * re-probe rather than a repair.
+ */
+export type PoolVerdict = 'PROVEN' | 'UNPROVEN' | 'STALE' | 'FAULT';
 
 export interface PoolSurface {
   routineId: string;
@@ -111,6 +147,18 @@ export interface PoolReport {
   expectedWorkerName: string;
   repository: string;
   surfaces: PoolSurface[];
+  /**
+   * Distinct Claude accounts behind those surfaces, and never their count.
+   *
+   * §23's distinction is that an account holds a subscription allowance and a
+   * Routine is a fire surface: a second Routine on one account doubles how fast
+   * Brain can *start* sessions and changes nothing about how much that account
+   * may *do*. This command reported `surfaces 3` and nothing else, so a pool of
+   * three Routines on one subscription read exactly like three accounts — on
+   * the one command whose whole job is to report the pool. Two numbers,
+   * each labelled as what it counts.
+   */
+  accounts: number;
   /** True only when every expected surface closed its own chain. */
   ok: boolean;
   /** One sentence per thing that stops this being a pool. */
@@ -162,7 +210,23 @@ export function judgePool(input: PoolInput): PoolReport {
         'no pool to verify. Onboard the repository and register one Routine per Claude account.',
     );
   }
+  const accounts = new Set(input.surfaces.map((surface) => surface.account.id)).size;
   const notes: string[] = [];
+  if (accounts > 0 && accounts < surfaces.length) {
+    /*
+     * Said rather than refused. Several Routines on one subscription is a
+     * legitimate and sometimes deliberate arrangement — it is how Brain starts
+     * sessions faster on one account — and it is not the capacity a reader
+     * counting surface names would take it for. On the green run, because that
+     * is the only run where somebody could read the surface count as an
+     * account count.
+     */
+    notes.push(
+      `${surfaces.length} surfaces run on ${accounts === 1 ? 'one Claude account' : `${accounts} Claude accounts`}. ` +
+        'A second Routine on an account starts sessions faster and adds no allowance, so this is ' +
+        `${accounts === 1 ? 'one subscription' : `${accounts} subscriptions`} of capacity rather than ${surfaces.length}.`,
+    );
+  }
   if (surfaces.length === 1) {
     /*
      * Said rather than counted as a failure. One surface is a working Factory
@@ -190,6 +254,7 @@ export function judgePool(input: PoolInput): PoolReport {
     expectedWorkerName: input.expectedWorker.name,
     repository: input.repository,
     surfaces,
+    accounts,
     // Every expected surface, or none of it. A pool with one member unproven is
     // a pool that will hand work to something nothing has ever run on.
     ok: surfaces.length > 0 && surfaces.every((surface) => surface.verdict === 'PROVEN'),
@@ -204,20 +269,43 @@ function judgeSurface(
   repository: string,
   now: string,
 ): PoolSurface {
-  const problems: string[] = [];
+  /*
+   * Two kinds of sentence, kept in two lists, because only one of them is
+   * answered by a proof.
+   *
+   * `standing` is what is true of this surface **now**: who it is bound to,
+   * whether that identity still exists, and whether it is separated from
+   * research. `proof.problems` is about whether a chain ever closed.
+   *
+   * They used to be one list, and the closing line of this function was
+   * `if (verdict === 'PROVEN') problems.length = 0` — so a surface whose worker
+   * had since been archived, or whose routing row had since been widened to
+   * serve research, answered `PROVEN` with **no problems at all**, and
+   * `judgePool` below reported nothing because it only spoke about surfaces it
+   * had already decided were not proven. A pool containing an archived identity
+   * read `VERIFIED`. A proof is evidence about a past fire; it is not a
+   * certificate over facts that have changed since, and the clearing line was
+   * treating it as one.
+   */
+  const standing: string[] = [];
   const ineligible: string[] = [];
 
   const boundWorker = input.worker?.name ?? null;
   const authenticatesAsExpected = input.routine.workerId === expected.id;
   if (!input.routine.workerId) {
-    problems.push('bound to no worker, so nothing about its identity can be verified');
+    standing.push('bound to no worker, so nothing about its identity can be verified');
   } else if (!authenticatesAsExpected) {
-    problems.push(
+    standing.push(
       `bound to ${boundWorker ?? input.routine.workerId} rather than ${expected.name} — ` +
         'a pool is one logical worker on several surfaces, and this one is a different identity',
     );
   }
-  if (input.worker?.archived) problems.push('the bound worker is archived');
+  if (input.worker?.archived) {
+    standing.push(
+      'the bound worker is archived, so no session can authenticate as it however well this ' +
+        'surface ran before',
+    );
+  }
 
   // Eligibility, in the same order and from the same rows the fire router uses,
   // so this reports what would actually happen rather than a second opinion.
@@ -245,7 +333,7 @@ function judgeSurface(
      */
     const alsoServes = input.routing.families.filter((family) => family !== 'FACTORY');
     if (alsoServes.length > 0) {
-      problems.push(
+      standing.push(
         `its worker also serves [${alsoServes.join(',')}] — a Factory identity must not be handed research work`,
       );
     }
@@ -269,12 +357,41 @@ function judgeSurface(
     dispatches: input.dispatches,
   });
   // A foreign arrival is a fault rather than a missing proof, and it is reported
-  // even when the chain happens to be closed by some other session.
-  const fault = proof.foreignWorkerIds.length > 0 || !authenticatesAsExpected;
-  problems.push(...proof.problems.filter((problem) => !problems.includes(problem)));
+  // even when the chain happens to be closed by some other session. So is any
+  // standing fact above: an archived identity or a Factory surface that also
+  // serves research is wrong *now*, and a past proof cannot answer it.
+  const fault = proof.foreignWorkerIds.length > 0 || standing.length > 0;
+  const contradiction = proof.chain ? contradicts(input, proof.chain) : null;
 
-  const verdict: PoolVerdict = fault ? 'FAULT' : proof.chain ? 'PROVEN' : 'UNPROVEN';
-  if (verdict === 'PROVEN') problems.length = 0;
+  const verdict: PoolVerdict = fault
+    ? 'FAULT'
+    : !proof.chain
+      ? 'UNPROVEN'
+      : contradiction
+        ? 'STALE'
+        : 'PROVEN';
+
+  /*
+   * What a reader is owed, per verdict, with nothing carried over that the
+   * verdict has answered. A closed chain answers `proof.problems` — and only
+   * `proof.problems`, which is the whole correction above.
+   */
+  /*
+   * A closed chain answers the proof's own complaints and only those — which
+   * is the whole correction above — *unless* the chain was closed beside a
+   * foreign arrival, which is a fault the chain does not answer at all.
+   *
+   * Decided on `foreignWorkerIds`, which is structured, rather than by
+   * matching words in the sentence `proveSurface` composed. A guard keyed on
+   * prose stops guarding the day somebody rewords the message, and does it
+   * silently.
+   */
+  const answered = proof.chain !== null && proof.foreignWorkerIds.length === 0;
+  const problems = [
+    ...standing,
+    ...(answered ? [] : proof.problems),
+    ...(contradiction ? [contradiction] : []),
+  ].filter((problem, index, all) => all.indexOf(problem) === index);
 
   return {
     routineId: input.routine.id,
@@ -293,6 +410,87 @@ function judgeSurface(
     verdict,
     problems,
   };
+}
+
+/**
+ * Has Brain's own later evidence contradicted this proof?
+ *
+ * ---------------------------------------------------------------------------
+ * Why this is not a timer
+ * ---------------------------------------------------------------------------
+ *
+ * The obvious remedy for a certificate that never expires is an expiry, and it
+ * is the wrong one here. Brain cannot see a connector revoked inside somebody's
+ * Claude account, a subscription lapsing or a Routine deleted in a console it
+ * has no access to — so a proof "good for thirty days" would be a freshness
+ * policy nobody measured, which is the shape §31 refuses when it declines to
+ * derive a horizon for a finding. A surface fired at twice a day and working
+ * perfectly would go stale on a clock; one that broke an hour after its proof
+ * would stay green for the rest of the month. The number would be answering a
+ * question nobody asked.
+ *
+ * What Brain *can* read is what it did next. Both conditions below are rows it
+ * wrote itself, and neither introduces a constant:
+ *
+ *   1. **A fire since the proof that is over and produced nothing.**
+ *      `unansweredFiresByRoutine`, which counts the `DISPATCH_NO_SHOW` rows
+ *      `reopenNoShowDispatches` writes — a dispatch that reached `SENT`, aged
+ *      past the window in which it still counts as a live activation, and whose
+ *      bin was still claimable at the very generation that fire named.
+ *
+ *      Read from that one function rather than derived here, for two reasons.
+ *      It is the number the dispatcher quarantines on, so the report and the
+ *      routing decision cannot disagree about whether a surface answered. And
+ *      the obvious derivation is wrong: comparing `fleet_routines.last_fired_at`
+ *      against the newest arrival — which this did first — calls a proof stale
+ *      over a **rate limit**, because `claimRoutineFireSlot` advances that
+ *      column when it takes the slot, before the HTTP call, so a refused fire
+ *      advances it too. §23's "a refusal is not misconduct", broken by the
+ *      check written to catch a dead surface.
+ *
+ *   2. **A fire that failed for a reason that was not a rate limit.**
+ *      `consecutive_failures` is reset to zero by every successful fire and is
+ *      deliberately left alone by a rate limit (§23: a refusal is not
+ *      misconduct), so a non-zero value means the newest fire attempt failed on
+ *      something about *this surface* — an unauthorized token, a deleted or
+ *      paused Routine — and no successful fire has happened since. The proving
+ *      fire succeeded, so those failures are necessarily after it. A failed
+ *      fire is a completed event rather than an in-flight one, so there is no
+ *      window to wait out and `> 0` is exact rather than a threshold.
+ *
+ * ---------------------------------------------------------------------------
+ * And why `consecutive_no_shows` is deliberately not read
+ * ---------------------------------------------------------------------------
+ *
+ * It looks like the natural signal and it is the one a reader will reach for.
+ * `recordRoutineFire` advances it on **every successful fire**, so its ordinary
+ * value on a healthy surface whose worker is still booting is 1 — reading `> 0`
+ * as staleness would call every actively-working surface stale, which is the
+ * warning that cries wolf this repository records as worse than no warning. And
+ * `recordWorkerArrival` clears it for every Routine bound to the same worker,
+ * which is exactly the arrangement a Factory pool is, so in a pool it is not a
+ * per-surface fact at all. Its own repository comment says as much: the column
+ * is really "fires awaiting an arrival". Condition 1 asks the same question
+ * from rows that are per-surface and exact.
+ */
+function contradicts(input: PoolSurfaceInput, chain: SurfaceChain): string | null {
+  if (input.routine.consecutiveFailures > 0) {
+    return (
+      `this surface was proven at ${chain.observedAt}, and ${input.routine.consecutiveFailures} ` +
+      'fire(s) since then failed for a reason that was not a rate limit, with no successful fire ' +
+      'after them. The proof describes a surface that has stopped answering — re-run with --probe.'
+    );
+  }
+
+  if (input.unansweredFires > 0) {
+    return (
+      `this surface was proven at ${chain.observedAt}, and ${input.unansweredFires} fire(s) since ` +
+      'then produced no arrival before they stopped counting as live activations. The most recent ' +
+      'evidence about this surface is that it did not answer — re-run with --probe.'
+    );
+  }
+
+  return null;
 }
 
 /**
@@ -356,8 +554,14 @@ export async function readFactoryPool(input: {
   const { getWorkerByName, getWorker, getWorkerRouting, listMembershipsForPrincipal } = await import(
     '../../repos/identity.ts'
   );
-  const { listAccounts, listRoutines, currentPolicy, effectiveTarget, sessionsForRoutine } =
-    await import('../../repos/fleet.ts');
+  const {
+    listAccounts,
+    listRoutines,
+    currentPolicy,
+    effectiveTarget,
+    sessionsForRoutine,
+    unansweredFiresByRoutine,
+  } = await import('../../repos/fleet.ts');
   const { getBin, listDispatchesForBin } = await import('../../repos/bins.ts');
   const { inFlightByRoutine } = await import('./candidates.ts');
   const { resolveToken } = await import('./fire.ts');
@@ -372,10 +576,11 @@ export async function readFactoryPool(input: {
 
   const now = input.now ?? new Date();
   const nowIso = now.toISOString();
-  const [accounts, routines, perRoutine] = await Promise.all([
+  const [accounts, routines, perRoutine, unanswered] = await Promise.all([
     listAccounts(),
     listRoutines(),
     inFlightByRoutine(now.getTime()),
+    unansweredFiresByRoutine(),
   ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
 
@@ -417,6 +622,7 @@ export async function readFactoryPool(input: {
     ]);
 
     const sessions = await sessionsForRoutine(routine.id, 20);
+    const unansweredFires = unanswered.get(routine.id) ?? 0;
     const bins = new Map<string, Bin | null>();
     const dispatches = new Map<string, readonly BinDispatch[]>();
     for (const session of sessions) {
@@ -446,6 +652,7 @@ export async function readFactoryPool(input: {
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
       accountTarget: accountPolicy ? effectiveTarget(accountPolicy, nowIso).target : null,
       sessions,
+      unansweredFires,
       bins,
       dispatches,
     });

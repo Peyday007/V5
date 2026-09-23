@@ -1414,6 +1414,84 @@ now credited from the dispatch row that produced the worker, never from anything
 the worker says about itself, and a takeover of an expired lease credits nothing
 because that session genuinely did not finish.
 
+**That repair was right and the counter it repaired still cannot describe a
+pool, which is the correction below rather than a reversal of it.**
+`recordWorkerArrival` clears `consecutive_no_shows` for **every Routine bound to
+the same worker** — its own comment says so and calls the imprecision exact
+where the binding is one-to-one. A Factory pool is precisely the arrangement
+where it is not: several Claude accounts, one logical worker. So one dead
+account's counter is reset by its healthy siblings and it is fired at for ever,
+an activation each time out of a fixed subscription allowance, with every row
+reading healthy. The same column reads 1 on a *working* surface whose worker is
+still booting, because it is advanced optimistically on each successful fire.
+Six surfaces were printing it — the Fleet page, People, `who`, `fleet show`,
+`verify-surface` and `scale-advice`, the last of which also *advised* on it —
+and every one of them under-reported exactly the condition an operator looks
+for.
+
+- **The per-surface fact was already being established and thrown away.**
+  `reopenNoShowDispatches` decides, exactly, that a fire produced no arrival: a
+  dispatch that reached `SENT`, aged past the window in which it still counts as
+  a live activation, and whose bin was still claimable at the very generation
+  that fire named. The event it wrote named **no surface at all**, so the ledger
+  recorded that a fire went unanswered and nothing about whose — §23's own
+  sentence, at the row that means an account has stopped working. It writes
+  `DISPATCH_NO_SHOW` with the Routine now, at the moment the fact is
+  established, and on `bin_events` because that table is append-only: a reopened
+  intent's `routine_id` is rewritten when it is re-routed, so a count read back
+  from the dispatch row would credit one account's no-show to the next account
+  that tried.
+- **`shouldQuarantine` has stated this rule since Step 11 and nothing called
+  it.** Its one caller was `fleet scale-advice`, which prints a line, so no
+  surface has ever been taken out of routing for not answering. **A mechanism
+  nothing calls is not a mechanism**, and wiring it up as it stood would not
+  have helped, because its input was the column above. `unansweredFiresByRoutine`
+  is the per-surface count instead, and the dispatch tick is its caller.
+- **The transition that answers it needed a boundary, or it answered nothing.**
+  The count reads an append-only ledger since the surface's own last arrival;
+  re-enabling produces no arrival; an arrival needs a fire; Brain does not fire a
+  quarantined surface. So `fleet set-state --to ENABLED` returned `true` and the
+  next tick re-quarantined on the identical rows, for ever, with the connector
+  genuinely repaired — §27's *exists, reports success, changes nothing that
+  lasts*, at a second registry. `no_shows_forgiven_at` is written in the
+  statement that makes the state change, only on the way **out** of QUARANTINED
+  so quarantining cannot erase its own evidence, and it forgives nothing beyond
+  itself: a condition somebody said was fixed and was not takes the surface out
+  again three unanswered fires later rather than immediately.
+- **A proof is evidence about a moment, not a certificate.** `judgeSurface`
+  cleared every problem on a closed chain, which is right about the proof's own
+  complaints and wrong about the standing facts beside them — an **archived**
+  bound worker and a Factory identity whose routing row also serves research
+  both read `PROVEN` with no problems at all, and `judgePool` reports problems
+  only for a surface it has already decided is not proven. A pool holding an
+  identity that cannot authenticate answered `ok: true`. Standing facts are kept
+  apart now, and `STALE` is the fourth verdict for a chain Brain's own later
+  evidence contradicts — **not a timer**, because Brain cannot see a connector
+  revoked inside somebody's Claude account and an invented expiry would be a
+  freshness policy nobody measured.
+- **Its first derivation would have cried wolf over a rate limit**, and the
+  correction is recorded rather than quietly applied: comparing
+  `last_fired_at` against the newest arrival is wrong because
+  `claimRoutineFireSlot` advances that column when it takes the slot, *before*
+  the HTTP call. A refused fire advances it exactly as a delivered one does.
+  **A refusal is not misconduct**, broken by the check written to catch a dead
+  surface — so the fact is read from the ledger, where only a dispatch that
+  reached `SENT` can produce one.
+- **And an account count is not a surface count, on the one command whose job
+  is to report the pool.** `verify-pool` printed `surfaces 3` and nothing else,
+  so three Routines on one subscription read as three accounts; the Build card
+  said *"running on Factory Brain A, B and C"* from a list of display names and
+  read the same for a Routine registered a minute ago as for one with a
+  completed chain behind it. Both report two numbers now, each labelled as what
+  it counts, and which surfaces have actually run.
+
+`docs/FLEET-FOUR-ACCOUNTS-HANDOFF.md` records the whole lane. **None of it has
+a production reading**: no four-account Factory pool has been commissioned, so
+the quarantine has never fired against a real dead surface and `STALE` has never
+been printed about a real revoked connector. The engine passing its tests says
+nothing about whether the fleet behaves this way, which is the separation Step 3
+drew and which this does not get to waive.
+
 ## 24. Russell is a way in, not a second brain.
 
 Step 12A (`server/services/russell/`, `client/src/russell/`,
@@ -2378,6 +2456,37 @@ winning.
   by name, beside the other checks on a submission's own coherence — it needs
   no rows and no network, and a refusal that required a forge request would be
   unreachable exactly where somebody would hit it.
+
+  **And the suite that guards that surface passed for a role nothing can hold,
+  which only the other lane's typecheck could see.** The release control's own
+  seam test lowered the caller's level to `'READER'` and asserted the route
+  answers 404. It does — but `PROJECT_ROLES` is `OWNER`, `ADMIN`, `MEMBER`,
+  `VIEWER`, so `roleAtLeast` denied it through
+  `PROJECT_ROLES.indexOf(role) === -1`, the **unknown-role** branch, rather
+  than through the rank comparison the test exists to exercise. Production was
+  never exposed: the route needs `WRITE`, `WRITE` needs `MEMBER`, and a real
+  `VIEWER` is refused.
+
+  **Vacuous is measured here rather than characterized**, because §41 already
+  records that a vacuous guard is worse than none and this is what worse looks
+  like. With `MINIMUM_ROLE.WRITE` lowered from `MEMBER` to `VIEWER` — a real
+  authorization regression that would let any project viewer approve a release
+  — the fixture as it stood passed **6 of 6**. The corrected one fails on the
+  same mutation with `expected 200 to be 404`. It could not have caught the
+  defect it was written to catch, because the unknown-role branch denies
+  whatever the ranks say.
+
+  It survived because `tsconfig.json` did not compile `tests/**/*.tsx`, so the
+  one suite in this repository that could have said `'READER'` is not a role
+  was never asked. The fleet lane brought those files into the typecheck for
+  its own reasons (§23) and this fell out of the merge — **found by widening
+  what gets compiled, which no amount of reading either file would have done**,
+  and the second thing that widening turned up after the nine uncompiled
+  component suites it was written for. The remedy names `VIEWER` and asserts
+  the two properties that make it right — that it is in `PROJECT_ROLES`, and
+  that it still ranks below `MEMBER` — so the next person to reach for a
+  plausible-sounding role fails here, naming the reason, instead of passing for
+  the wrong one.
 - **Every escalation has an answering transition.** `BLOCKED` names an
   operational fact from a closed vocabulary and a remedy somebody can apply, and
   a blocked campaign is re-examined on the next tick rather than retired.
@@ -3342,6 +3451,36 @@ remote.
   | 274 | 396 documents | ≥5m20s — the client gave up, so this is a floor |
   | `41f8741` | 397 documents | **9m22s** |
   | 277 | 399 documents | **9m44s** |
+  | 316 pre-restart | 415 documents | **12m25s** — and it passed, 229/229 |
+  | 316 post-restart | 431 documents | **over 15m** — the bound, unanswered |
+
+  **The last two rows were measured after this table was written, and they
+  change what it means.** Deploy 316 timed both of its halves against two
+  different archive sizes on one image, which is the cleanest pair here: the
+  correlation holds within a single run, and the series is now monotone in
+  archive size across seven points. More importantly, **the fifteen-minute
+  bound this section added is itself exceeded**. `brain_submit_audit` answered
+  nothing within 900s, so the post-restart gate now fails on a healthy release
+  rather than reporting a number — `release: success`, `beforeRestart: true`,
+  `afterRestart: false`, with the image live and serving throughout.
+
+  **I proposed a different candidate from these same two rows, and it was
+  wrong. The withdrawal is recorded rather than edited away.** Reasoning from
+  the correlation alone, I named the judge's brief: `auditBriefFor` uses
+  `mode: 'SINGLE_DOCUMENT'`, `buildAuditContext` in that mode reads every other
+  document in the layer as `siblings`, and `verify-hosted.ts` files under the
+  single constant `VERIFICATION_LAYER_NAME`, so that layer gains a document per
+  deploy. Every one of those facts is true, and **they are not what the time
+  was spent on.** I recorded it as a lead rather than a cause for exactly this
+  reason, which is the only part of it that held up.
+
+  The cause was established by measurement on the same deploy and is recorded
+  above: `recomputeProject` asking the store about each document three times
+  per recompute, and the judge path recomputing twice. A correlation with the
+  archive is consistent with several mechanisms, and picking the one you can
+  see from the code you happen to be reading is how this section's own history
+  went wrong three runs in a row. **The sibling read stays unmeasured and is
+  not claimed to be free** — it simply is not this.
 
   So the two runs §27 records as `PASS 198/198` did not squeak under the
   300-second wall: they finished in three and four minutes, comfortably inside

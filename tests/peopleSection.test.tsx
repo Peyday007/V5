@@ -53,6 +53,7 @@ const CONNECTION: ConnectionView = {
     triggerRef: null,
     accountId: null,
     routineId: null,
+    workerId: null,
     state: 'CONNECTOR_AUTHORIZED',
     failureReason: null,
     probeBinId: null,

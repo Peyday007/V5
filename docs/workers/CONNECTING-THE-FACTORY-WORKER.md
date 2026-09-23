@@ -578,6 +578,7 @@ It is read-only, it spends nothing, and it prints one block per surface:
 
 ```
 POOL  peyday007/v5  as factory-brain
+  accounts   3
   surfaces   3
 
   PROVEN   Factory_surface_1  (Brain Research A)
@@ -599,16 +600,36 @@ POOL  peyday007/v5  as factory-brain
     PROBLEM   no fire to this Routine has ever produced an authenticated arrival
 ```
 
-Three verdicts, and they mean three different things:
+**Two numbers, because they are two facts.** `accounts` is how many Claude
+subscriptions are behind those surfaces; `surfaces` is how many Routines Brain
+can fire. A second Routine on one account starts sessions faster and adds no
+allowance, so three surfaces on one subscription is one subscription of
+capacity — and the report says so out loud rather than leaving the surface count
+to be read as an account count.
+
+Four verdicts, and they mean four different things:
 
 * **PROVEN** — the four-row chain exists for this surface: Brain fired it, a
   session arrived and was attributed to `factory-brain` *from that dispatch row*,
   it was handed a bin, and the bin reached `COMPLETE`.
 * **UNPROVEN** — nothing is wrong, nothing has happened. Probe it.
-* **FAULT** — a session arrived on this surface under a **different** worker.
-  That is the connector selection, and it is not fixed by probing again: change
-  the Routine's connectors in Cowork first. `verify-pool --probe` deliberately
+* **STALE** — the chain exists and Brain's own later evidence contradicts it:
+  a fire since that arrival that produced nothing before it stopped counting as
+  a live activation, or a fire that failed for a reason that was not a rate
+  limit. A proof is evidence about the moment it was taken, not a certificate;
+  this is the surface that *was* working. Probe it — `--probe` treats it exactly
+  like an unproven one, because the only thing that settles it is a new fire
+  that either arrives or does not.
+* **FAULT** — a session arrived on this surface under a **different** worker,
+  or a fact about the surface *now* contradicts its proof: its bound worker has
+  been archived, or its routing row has been widened to serve research as well
+  as FACTORY. None of those is fixed by probing again — change the Routine's
+  connectors in Cowork, or correct the row. `verify-pool --probe` deliberately
   skips a faulted surface rather than spending an activation to re-learn it.
+
+**A busy account is not a stale one.** A rate limit advances the retry point and
+leaves the failure streak alone, so a surface the provider asked Brain to wait
+on stays PROVEN and simply reads a cooldown.
 
 **It refuses unless every surface is PROVEN**, and it also refuses when a
 Routine declares a repository capability but is bound to some *other* worker —

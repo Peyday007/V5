@@ -876,7 +876,7 @@ never existed in this Brain.
 | Per-Routine ceiling | `∞` (research Routines declare none) | router output |
 | Fires in the session window | **+41** (08:41:41Z → 12:56:24Z: A 327→328, 1-B 35→48, 1-C 36→49, 1-D 35→49) | counter delta |
 | Refusals in the session window | **2**, both Caleb (`3-C` 08:52:52Z, `3-D` 08:53:32Z). `3-A`/`3-B`'s pair was written at 02:03/02:05Z, before this window; account 1's `refusals=2` is older still and unchanged across both readings | row |
-| No-shows | **one event**, on `bin_5922df8c521a421cb9de`'s 11:03:24Z fire, reopened at 11:33:33Z and completed. Every `fleet show` row reads `no-shows=0` because that counter is *consecutive* and resets on the next arrival — the two facts agree | row |
+| No-shows | **one event**, on `bin_5922df8c521a421cb9de`'s 11:03:24Z fire, reopened at 11:33:33Z and completed. Every `fleet show` row reads `no-shows=0` because that counter is *consecutive* and resets on the next arrival — the two facts agree. **See the note below: they agreed here by luck.** | row |
 | Remaining queue depth | 28 claimable items across `cash-mode-1/3/4`; `cash-mode-2` drained | queue read 12:30Z |
 | Deployed commit | `ca6c3eb` | [run 35440403377](https://github.com/Peyday007/V5/actions/runs/35440403377) |
 | Fleet state at the last reading | 2 of 4 in flight (1-C, 1-D), 1-B and A free | `fleet show` 12:56:24Z |
@@ -1746,3 +1746,30 @@ measured on both accounts. Fleet concurrency is **8 measured against a policy
 target of 12** — the policy is not the constraint, the surface count is. The
 remaining four are Airyn's and are blocked on one worker identity only she can
 mint (Phase 16).
+
+---
+
+## A later correction to one reading in this log, recorded rather than applied
+
+The **No-shows** row above is a true account of what was seen and its
+explanation was right about that day and wrong as a general rule. It reasoned
+that `no-shows=0` on every `fleet show` row agreed with the one real no-show
+because the counter is consecutive and resets on the next arrival. It does reset
+on the next arrival — and `recordWorkerArrival` resets it on **every Routine
+bound to the same worker**, which is exactly the arrangement this log describes:
+twelve Routines across three accounts, all on one research identity.
+
+So the two facts agreed here by luck. The fire that went unanswered was
+followed by an arrival on the same surface, which is the case where the counter
+happens to be right. Had that surface been genuinely dead, any one of its eleven
+healthy siblings answering would have written `no-shows=0` over it, and every
+reading in this log would have shown a fleet with nothing wrong.
+
+`fleet_routines.consecutive_no_shows` is no longer printed by any surface. What
+`fleet show`, the Fleet page, the People page, `who`, `verify-surface` and
+`scale-advice` report now is a per-surface count derived from the
+`DISPATCH_NO_SHOW` rows `reopenNoShowDispatches` writes, since that surface's own
+last arrival — and it is what the dispatcher quarantines on, so the screen and
+the decision cannot disagree. Nothing in this log is edited: the readings above
+are what those commands printed on 2026-09-19, and this is what has been learned
+about one of them since.

@@ -160,7 +160,7 @@ export function FleetCentre({ projectId }: { projectId: string | null }): JSX.El
                   <p className="rs-ref rs-at-technical">
                     {surface.routineRef ?? surface.routineId} · {surface.routineId} · worker{' '}
                     {surface.workerId} · {surface.consecutiveFailures} failures,{' '}
-                    {surface.consecutiveNoShows} no-shows
+                    {surface.unansweredFires} unanswered
                   </p>
                 ) : null}
               </article>
