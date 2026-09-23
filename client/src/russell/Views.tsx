@@ -12,6 +12,8 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { Constellation } from './Constellation.tsx';
 import { Register } from './Register.tsx';
+import { DecisionCard, Goals } from './Goals.tsx';
+import { GoalsApi } from '../lib/goalsApi.ts';
 import { Frontier } from './Frontier.tsx';
 import { Maps } from './Maps.tsx';
 import { freshnessLabel, humanWhen, listState, priorityTone, readingState } from './present.ts';
@@ -206,6 +208,13 @@ export function WorkView({ projectId }: { projectId: string | null }): JSX.Eleme
        * usually needed: a new answer belongs inside the surface somebody
        * already opens.
        */}
+      {/*
+       * Goals lead, then the register, then one project's missions — widest
+       * first. A goal is what the work is *for*; the register is every piece
+       * of it; the missions are one project's research. Someone coming back
+       * asks the first question before the others.
+       */}
+      <Goals />
       <Register projectId={projectId} />
     <Panel title="Work" state={state} onRetry={query.reload}>
       {groups.map((group) => (
@@ -2059,7 +2068,19 @@ export function NeedsYouView({
    */
   const listEmpty = state.phase === 'EMPTY';
   const grantOutstanding = authority.data ? authority.data.grant === null : null;
-  const nothingWaiting = listEmpty && software.length === 0 && grantOutstanding === false;
+  /*
+   * A goal's decisions that are not already a request card above: approving a
+   * change request, releasing a campaign, merging a pull request. Each arrives
+   * with its answers, what each causes, what waits on it and what Brain does
+   * afterwards — composed on the server, rendered here. A goal decision that
+   * *is* a request is answered by the request card itself, so it is not shown
+   * twice. A goals read that failed is no decisions rather than a withheld
+   * page: the requests above are the authority on this surface.
+   */
+  const goals = useAsync(() => GoalsApi.briefing(), []);
+  const goalDecisions = (goals.data?.briefing.decisions ?? []).filter((one) => one.kind !== 'HUMAN_REQUEST');
+  const nothingWaiting =
+    listEmpty && software.length === 0 && grantOutstanding === false && goalDecisions.length === 0;
 
   return (
     <Panel
@@ -2106,6 +2127,15 @@ export function NeedsYouView({
           onAnswered?.();
         }}
       />
+      {goalDecisions.length ? (
+        <ul className="rs-list rs-goal-decisions" aria-label="Decisions your goals are waiting on">
+          {goalDecisions.map((decision) => (
+            <li key={decision.id}>
+              <DecisionCard decision={decision} goalTitle={decision.goalTitle} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <SoftwareDecisions
         software={software}
         repositories={repositories}
