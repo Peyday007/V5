@@ -205,7 +205,7 @@ jobs:
               ;;
             deliverables)
               # Every deliverable, its versions, checks, review and delivery;
-              # --verify re-reads each stored file and opens it (§50). With a
+              # --verify re-reads each stored file and opens it (§51). With a
               # ref (dlv_…), just that one.
               cmd="sh /app/scripts/deliverable-report.sh --verify"
               [ -n "$project" ] && cmd="$cmd --project $project"

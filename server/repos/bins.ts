@@ -157,6 +157,8 @@ export function mapBin(row: BinRow): Bin {
     attemptCount: row.attempt_count,
     maxAttempts: row.max_attempts,
     dispatchNotBefore: row.dispatch_not_before ?? null,
+    heldByWorkstreamId: row.held_by_workstream_id ?? null,
+    heldReason: row.held_reason ?? null,
     leaseGeneration: row.lease_generation,
     leaseId: row.lease_id,
     workerId: row.worker_id,
@@ -1381,9 +1383,13 @@ export interface AssignedBin {
  * ever fire for it again.
  */
 export function claimableStateSql(prefix: string): string {
+  // A bin held by a goal somebody paused, cancelled or made wait is not
+  // claimable work, however expired its lease — and the hold is asked here,
+  // in the one predicate every reader composes, because a hold asked by one of
+  // five readers is a hold four of them walk straight past.
   return (
-    `(${prefix}state = 'READY'` +
-    ` OR (${prefix}state = 'LEASED' AND ${prefix}lease_expires_at <= ?))`
+    `(${prefix}held_by_workstream_id IS NULL AND (${prefix}state = 'READY'` +
+    ` OR (${prefix}state = 'LEASED' AND ${prefix}lease_expires_at <= ?)))`
   );
 }
 
@@ -1412,6 +1418,8 @@ export function isDispatchable(bin: Bin, now: string = binNow()): boolean {
   // The fire backoff, asked of the dispatcher's own readers only. See
   // `FIREABLE_SQL`.
   if (bin.dispatchNotBefore !== null && bin.dispatchNotBefore > now) return false;
+  // Held by a goal: see `claimableStateSql`.
+  if (bin.heldByWorkstreamId !== null) return false;
   // Out of attempts is out of work. A bin the assigner will refuse must not
   // earn an activation: firing at it spends the routine's limited budget to
   // start a worker that will be handed nothing. `reconcileBins` is what turns

@@ -52,6 +52,11 @@ export interface LinkReading {
   evidence: string;
   /** Present for a link whose truth is outside Brain. */
   attested?: { by: string; at: string };
+  /**
+   * When the row behind this link last moved, read from that row, so a blocker
+   * can say how long it has stood. Absent where the row keeps no such time.
+   */
+  since?: string | null;
 }
 
 function unreadable(link: WorkstreamLink, why: string): LinkReading {
@@ -152,6 +157,7 @@ async function readCampaign(link: WorkstreamLink): Promise<LinkReading> {
       ? `${campaign.blockerKind}: ${campaign.blockerDetail ?? 'no detail recorded'}`
       : null,
     evidence: `factory_campaigns.state = ${campaign.state}`,
+    since: campaign.updatedAt,
   };
 }
 
@@ -203,6 +209,7 @@ async function readMission(link: WorkstreamLink): Promise<LinkReading> {
     missing: false,
     blocker: mission.state === 'NEEDS_HUMAN' ? 'the mission is waiting on a decision' : null,
     evidence: `russell_missions.state = ${mission.state}`,
+    since: mission.updatedAt,
   };
 }
 
@@ -218,6 +225,7 @@ async function readCandidate(link: WorkstreamLink): Promise<LinkReading> {
     missing: false,
     blocker: candidate.state === 'PARKED' ? (candidate.reason ?? 'parked') : null,
     evidence: `russell_candidates.state = ${candidate.state}`,
+    since: candidate.updatedAt,
   };
 }
 
@@ -241,6 +249,8 @@ async function readPacket(link: WorkstreamLink): Promise<LinkReading> {
     missing: false,
     blocker: state === 'BLOCKED' ? (packet.failureReason ?? packet.cancelReason ?? packet.status) : null,
     evidence: `research_orchestrations.status = ${packet.status}`,
+    since:
+      packet.completedAt ?? packet.failedAt ?? packet.cancelledAt ?? packet.heartbeatAt ?? packet.queuedAt,
   };
 }
 

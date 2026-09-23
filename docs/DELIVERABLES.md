@@ -1,6 +1,6 @@
 # Deliverables: from a Russell request to a file a person can open
 
-§50 of `CLAUDE.md` holds the rules. This is how the journey actually runs, what
+§51 of `CLAUDE.md` holds the rules. This is how the journey actually runs, what
 each piece is, and how to read it back from production.
 
 ## The journey
@@ -55,7 +55,7 @@ REQUEST_DELIVERABLE { revisionOf, correction } → REVISION build → v(n+1)
 
 | Piece | File |
 |---|---|
-| Schema (both chains) | `server/db/migrations/092_deliverables.sql`, `server/db/pg-migrations/083_deliverables.sql` |
+| Schema (both chains) | `server/db/migrations/093_deliverables.sql`, `server/db/pg-migrations/084_deliverables.sql` |
 | Types | `server/domain/deliverables.ts` |
 | Rows, CAS moves, versions, findings | `server/repos/deliverables.ts` |
 | The content contract | `server/services/deliverables/content.ts` |

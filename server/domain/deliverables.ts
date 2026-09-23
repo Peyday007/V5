@@ -1,6 +1,6 @@
 /**
- * What a deliverable is, in types. The reasoning is §50 of CLAUDE.md and the
- * header of `092_deliverables.sql`.
+ * What a deliverable is, in types. The reasoning is §51 of CLAUDE.md and the
+ * header of `093_deliverables.sql`.
  */
 
 export const DELIVERABLE_KINDS = ['WRITTEN', 'STRUCTURED'] as const;

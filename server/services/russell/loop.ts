@@ -154,9 +154,16 @@ export const RUSSELL_TICK_MS = 30_000;
 import { advanceSources } from '../capability/extraction.ts';
 import { runDesignKernel } from '../design/kernel.ts';
 import { advanceCapabilityPackets } from '../realize/advance.ts';
+import { advanceGoals, type GoalTickReport } from '../goals/tick.ts';
 import { scanIfStale } from '../selfmodel/refresh.ts';
 
 export interface TickReport {
+  /**
+   * What the goal tick did to the work goals own: holds placed and released,
+   * bins re-prioritized, positions that moved. Optional because a tick that
+   * could not read the goals leaves it out rather than reporting zeros.
+   */
+  goals?: GoalTickReport;
   ran: boolean;
   /** Why it did not run, when it did not. An ordinary outcome, not an error. */
   skipped: string | null;
@@ -168,7 +175,7 @@ export interface TickReport {
   probed: string[];
   /** Turn bins whose proposal was applied and whose pending turn now reads. */
   answered: string[];
-  /** Deliverables moved a step toward a file this tick (§50). */
+  /** Deliverables moved a step toward a file this tick (§51). */
   deliverables: { opened: string[]; ingested: string[]; delivered: string[]; needsPerson: string[] };
   /**
    * Missions retired because they ran on a specification this build no longer
@@ -1025,6 +1032,23 @@ export async function tick(owner: string): Promise<TickReport> {
       }
     } catch {
       /* a packet that could not be walked is left exactly as it was */
+    }
+
+    /*
+     * And every goal a person has set, fleet-wide.
+     *
+     * Beside the other reconciliations for their reason: derived from rows,
+     * idempotent by them, and it reaches whatever is already stranded. This is
+     * what makes a pause mean something and a resume need no button — a paused
+     * goal's bins are held here and released here once it is resumed, and a
+     * goal that waits on another is released the first pass after the other
+     * completes. Swallowed for `advanceSources`' reason: a goal that could not
+     * be read must never stop Russell writing back a mission.
+     */
+    try {
+      report.goals = await advanceGoals();
+    } catch {
+      /* goals that could not be read are left exactly as they were */
     }
 
     /*

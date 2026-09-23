@@ -63,7 +63,7 @@ export const PROPOSAL_ACTIONS = [
    *
    * Its whole effect is a `deliverables` row in the conversation's project.
    * Brain carries it to a file from there, from the project's own evidence,
-   * and delivers the file back into this conversation. See §50.
+   * and delivers the file back into this conversation. See §51.
    */
   'REQUEST_DELIVERABLE',
 ] as const;
