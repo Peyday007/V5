@@ -1035,6 +1035,16 @@ category is unchanged.
 of them is bound to `wkr_1cdd82cfb2a54faf8edd`.** The four still eligible are
 Caleb's, on a different worker; `Factory surface 1` is on a third.
 
+**Eight of the nine are no-shows and the ninth is not**, which the counts say
+rather than the state column. `V2` reads `unanswered=0`, so it cannot have
+crossed a threshold of three: it is §29's `AUTH: 403 routines are not
+available for this organization`, quarantined at a subscription lapse and
+never re-enabled. **I first wrote this as nine independent counts and it is
+eight**; the correction is recorded rather than edited away, because reading a
+state column as evidence of the mechanism that wrote it is precisely the
+mistake `unanswered` was introduced to make impossible, and the number that
+disproves it was in the same line of output.
+
 **The staggered crossing is the evidence, and it is stronger than the
 12:15 reading rather than a retraction of it.** At 12:15 four crossed while
 five same-worker siblings stayed enabled with three of them holding work —
@@ -1045,10 +1055,10 @@ reachable: any one arrival would have cleared all nine at 12:15, and the later
 five would never have crossed at all.
 
 **What it establishes about the fleet is a worker rather than a surface**, and
-saying so is the point. Nine surfaces failing independently, each on its own
+saying so is the point. Eight surfaces failing independently, each on its own
 count, against one bound worker identity, is a reading that the *identity* has
-stopped answering fires — not nine separate surface faults. The remedy is
-therefore not `fleet set-state` on nine rows: that is §10.5's own rule, that
+stopped answering fires — not eight separate surface faults. The remedy is
+therefore not `fleet set-state` on the eight: that is §10.5's own rule, that
 re-enabling a surface nobody has fixed puts it back three unanswered fires
 from where it started, at one activation each. **Nothing here was re-enabled**,
 and the diagnosis of *why* that worker stopped answering is an operator's, not
@@ -1687,10 +1697,11 @@ by deleting the last bullet's own note that it was added afterwards:
   fifth. `fleet set-state --to ENABLED` is their answering transition and it
   exists precisely so they can come back — but the transition is for *once the
   surface is fixed*, which is what their own recorded reason says, and nobody
-  has fixed anything. Re-enabling them would put them back three unanswered
-  fires from where they are, at one activation each, which is the behaviour
-  §23 describes when it says `no_shows_forgiven_at` forgives nothing beyond
-  itself. The fleet reading `4 eligible now` against `16 considered` is the
+  has fixed anything. Re-enabling the **eight** that are no-shows would put
+  each back three unanswered fires from where it is, at one activation each,
+  which is the behaviour §23 describes when it says `no_shows_forgiven_at`
+  forgives nothing beyond itself; the ninth, `V2`, is §29's `AUTH 403` and
+  needs the entitlement fixed rather than the state flipped. The fleet reading `4 eligible now` against `16 considered` is the
   mechanism protecting a fixed subscription allowance rather than a fault to
   be cleared, and clearing a quarantine to make a number look better is the
   one thing this whole lane exists to stop.
