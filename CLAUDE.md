@@ -3453,6 +3453,7 @@ remote.
   | 277 | 399 documents | **9m44s** |
   | 316 pre-restart | 415 documents | **12m25s** — and it passed, 229/229 |
   | 316 post-restart | 431 documents | **over 15m** — the bound, unanswered |
+  | **323, the repaired image** | **434 documents** | **1m42s** |
 
   **The last two rows were measured after this table was written, and they
   change what it means.** Deploy 316 timed both of its halves against two
@@ -3523,9 +3524,33 @@ remote.
   document before, one after. `objectExists` answers from a memo scoped to one
   `recomputeProject`, prefetched sixteen at a time before the transaction
   opens; the memo never outlives the call, so it de-duplicates rather than
-  caches, and a document whose bytes are gone still reads as missing. The beat makes the harness
-  survive whichever end of that range it gets; it makes nothing faster, and
-  whatever is actually driving the growth is still unmeasured. **The queue was right and
+  caches, and a document whose bytes are gone still reads as missing.
+
+  **The repair is proved in production, and the last row of that table is the
+  proof.** Deploy 323 carried it, and the JUDGE submission on the released
+  image ran **1m42s over 434 documents** — 08:52:40 to 08:54:22 — against
+  316's 12m25s over 415. A larger archive and a seventh of the time, which is
+  the shape a fixed-cost-per-document repair produces and a coincidence does
+  not. It is recorded here rather than left as a prediction because this
+  section spent nine deploys refusing to call a correlation a cause, and the
+  same standard applies to calling a fix a fix.
+
+  **That run still failed its post-restart half, and it is a different
+  condition — reading it as this one would undo the measurement above.** It
+  answered `(ECHECKOUTTIMEOUT) unable to check out connection from the pool
+  after 15000ms in Session mode` on an ordinary `SELECT` against
+  `research_fragments`, which is the pooler paragraph further down this
+  section rather than the judge pass at all: `release: success`,
+  `beforeRestart: true`, `afterRestart: false`, with the image live and
+  serving throughout and the bundle checked independently of the gate.
+
+  A sentence here used to end *"whatever is actually driving the growth is
+  still unmeasured"*, and it was welded onto a paragraph that had just
+  measured it. It is corrected rather than deleted, because it dates from
+  before the cause was established and a reader who believed it would start
+  the investigation over. What still holds of it is the honest half: **the
+  beat makes the harness survive whichever end of that range it gets, and it
+  makes nothing faster.** **The queue was right and
   the harness was wrong.** An at-least-once queue expires a lease precisely so
   that a worker which stopped working cannot hold work for ever, and a worker
   still working says so by beating — which is what every other long-running
