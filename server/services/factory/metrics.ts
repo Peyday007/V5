@@ -219,6 +219,14 @@ export interface CampaignMetrics {
    * maximum of theirs.
    */
   maxConcurrencyByAccountRef: Record<string, number>;
+  /**
+   * Sessions grouped by the account each one recorded, and which workers ran
+   * them. From the session rows — never from a worker's account, which is only
+   * what its first session happened to record; a worker whose later sessions
+   * recorded another account (or UNKNOWN) would otherwise credit them all to
+   * the first.
+   */
+  sessionsByAccountRef: Record<string, { sessions: number; totalDurationMs: number; workerIds: string[] }>;
   concurrencyEvidence: 'MEASURED' | 'UNKNOWN';
   sessions: { total: number; finished: number; failed: number; rateLimited: number; abandoned: number };
   byWorker: WorkerMetrics[];
@@ -482,6 +490,17 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
       sessions.filter((session) => session.role === role.role),
     );
   }
+  const sessionsByAccountRef: CampaignMetrics['sessionsByAccountRef'] = {};
+  for (const session of sessions) {
+    const entry = (sessionsByAccountRef[session.accountRef] ??= {
+      sessions: 0,
+      totalDurationMs: 0,
+      workerIds: [],
+    });
+    entry.sessions += 1;
+    entry.totalDurationMs += session.durationMs ?? 0;
+    if (!entry.workerIds.includes(session.workerId)) entry.workerIds.push(session.workerId);
+  }
   const maxConcurrencyByAccountRef: Record<string, number> = {};
   for (const accountRef of new Set(sessions.map((session) => session.accountRef))) {
     maxConcurrencyByAccountRef[accountRef] = overlapOfSessions(
@@ -540,6 +559,7 @@ export function computeMetrics(input: MetricsInput): CampaignMetrics {
     repairCycles,
     maxObservedConcurrency: maxOverlap(intervals),
     maxConcurrencyByAccountRef,
+    sessionsByAccountRef,
     concurrencyEvidence: sessions.length > 0 ? 'MEASURED' : 'UNKNOWN',
     sessions: {
       total: sessions.length,

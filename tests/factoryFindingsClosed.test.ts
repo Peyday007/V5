@@ -449,3 +449,64 @@ describe('a finished campaign does not keep its checkouts forever', () => {
     expect(remaining).not.toContain(path.resolve(worktree));
   });
 });
+
+describe('a session is counted under the account it recorded, not the one its worker first had', () => {
+  /*
+   * The production reading this pins: fcp_189ea30c7ded4e7b9280's throughput
+   * said account "Brain Research A" had 13 sessions and a peak overlap of 1,
+   * while its one worker peaked at 2. Three of those sessions recorded account
+   * UNKNOWN, and the per-account block summed its workers — whose account was
+   * whatever their *first* session recorded — so the three were attributed to
+   * an account nothing had shown they ran under, while the overlap beside it
+   * was swept from the sessions themselves. Two readings of one block, on two
+   * different sets of rows.
+   */
+  it('keeps an UNKNOWN session out of a named account, and every figure in one block on one set of rows', async () => {
+    const changeRequest = await makeApprovedRequest('findings-account-attribution');
+    const campaign = await makeCampaign(changeRequest);
+    const { getDb } = await import('../server/db/database.ts');
+    const windows = [
+      { account: 'acct-1', start: '2026-01-01T10:00:00.000Z', end: '2026-01-01T10:30:00.000Z' },
+      { account: 'UNKNOWN', start: '2026-01-01T10:10:00.000Z', end: '2026-01-01T10:20:00.000Z' },
+      { account: 'acct-1', start: '2026-01-01T12:00:00.000Z', end: '2026-01-01T12:10:00.000Z' },
+    ];
+    for (const window of windows) {
+      const session = await openSession({
+        campaignId: campaign.id,
+        unitId: null,
+        workerId: 'w1',
+        accountRef: window.account,
+        attempt: 0,
+        role: 'IMPLEMENTER',
+        model: 'test-model',
+      });
+      await closeSession(session.id, { state: 'FINISHED', exitReason: 'done' });
+      await getDb().run(`UPDATE factory_sessions SET started_at = ?, ended_at = ?, duration_ms = ? WHERE id = ?`, [
+        window.start,
+        window.end,
+        Date.parse(window.end) - Date.parse(window.start),
+        session.id,
+      ]);
+    }
+
+    const report = await throughputReport(campaign.id);
+    const named = report.perAccountRef.find((entry) => entry.id === 'acct-1');
+    const unknown = report.perAccountRef.find((entry) => entry.id === 'UNKNOWN');
+    expect(named?.sessions.value).toBe(2);
+    expect(unknown?.sessions.value).toBe(1);
+    // It merged nothing, so nothing is attributed, and zero is the true count.
+    expect(named?.unitsMerged.value).toBe(0);
+
+    // Had it merged a unit, a worker spanning two accounts could credit neither.
+    const { campaignMetrics } = await import('../server/services/factory/metrics.ts');
+    const { computeThroughput } = await import('../server/services/factory/throughput.ts');
+    const metrics = await campaignMetrics(campaign.id);
+    metrics.byWorker.find((worker) => worker.workerId === 'w1')!.firstPassMerged = 1;
+    const credited = computeThroughput(metrics).perAccountRef.find((entry) => entry.id === 'acct-1');
+    expect(credited?.unitsMerged.value).toBeNull();
+    expect(credited?.unitsMerged.evidence).toBe('UNKNOWN');
+    // And the worker still overlaps itself, across both.
+    expect(report.perWorker.find((entry) => entry.id === 'w1')?.maxObservedConcurrency.value).toBe(2);
+    expect(named?.maxObservedConcurrency.value).toBe(1);
+  });
+});
