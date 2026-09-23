@@ -479,6 +479,30 @@ is never recorded as an answer: *no published rate card was found* in the
 expected-revenue field would read to every reader, and to the ranking, as an
 established answer.
 
+A question whose possibility is put away **while it is still being asked**
+settles `ABANDONED` instead — somebody judged the path `ARCHIVE` or
+`INVALIDATE`, it was merged into another, or the discovery underneath it was
+archived. `abandonPutAway` reads `deriveStatus`'s own answer rather than
+deciding again what counts as put away, and it requires a *positive* terminal
+status: a path missing from the ledger is left alone, because absence is not
+evidence and a composition that transiently omitted an entry would otherwise
+close live research.
+
+Two things about it are decisions rather than details. **Settling comes first**,
+so a run that finished and produced gated claims before the path was archived is
+recorded as the question it answered rather than as one abandoned — two records
+of two different events, and the order is the whole difference between them.
+And an abandonment **spends nothing**: it does not count against
+`MAX_COMMISSION_ROUNDS` and does not start the cool-off, because neither a round
+nor a day's wait was earned by a search that never happened. `round` still
+climbs on every row, abandonments included, because it is a position in
+`UNIQUE (project_id, path_id, attribute, round)` rather than a count — a budget
+that reused a number would collide and ask nothing, for ever.
+
+What it frees is the slot. Three questions against archived possibilities would
+otherwise hold all of `MAX_OPEN_COMMISSIONS` for ever, so nothing in that
+project could be researched again.
+
 ### The destination is a column, never a reading
 
 A claim answers an attribute because its `evidence_lane` **is** that attribute —
