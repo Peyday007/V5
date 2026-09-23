@@ -1015,11 +1015,26 @@ secret is not a secret.
 **It could not be run for more than one name at a time.**
 `scripts/fleet.ts` splits `--secret` on commas and reports per name; the
 workflow that is the only surface able to run it against production refused
-the comma outright — *values are letters, digits, dot, colon, dash and
-underscore* — so the one form the command documents was unreachable. **A rule
-applied by one of two readers**, for the umpteenth time in this repository,
-with the two readers a workflow and the script it wraps, and found by running
-it rather than by reading either.
+the comma outright, so the one form the command documents was unreachable.
+**A rule applied by one of two readers**, for the umpteenth time in this
+repository, with the two readers a workflow and the script it wraps, and
+found by running it rather than by reading either.
+
+**It has a production reading rather than only a code reading**, which is
+what makes it a defect rather than a proposal. Fleet operator run **288**,
+dispatched against `production` at a tip whose `fleet.yml` predates the fix,
+was handed a list of the eight research surfaces' secret *names* and ended
+before `flyctl` was reached at all:
+
+```
+##[error]Refusing '…': values are letters, digits, dot, colon, dash and underscore.
+##[error]Process completed with exit code 1.
+```
+
+The refused value is elided here deliberately. It was a list of eight
+deployment-secret **names** and no value of any kind — `check-secret` cannot
+print one and the guard refused before anything ran — and names still do not
+belong in an evidence document when the error message alone is the evidence.
 
 The fix is one character on one field, and its precedent is two blocks further
 down the same file: the capability list has allowed a comma since it was
@@ -1577,7 +1592,9 @@ reproduction, not a patch from a lane that does not own the kernel.
 
 ### 10.5 What was deliberately not done
 
-Four things, each because doing them would have been worse than the problem:
+Five things, each because doing them would have been worse than the problem.
+The opening said four over a list of five, which is corrected here rather than
+by deleting the last bullet's own note that it was added afterwards:
 
 * **The parallel lane was not merged.** Taking a live lane's work onto
   `production` out from under the session that owns it is the cross-lane
