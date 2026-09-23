@@ -59,6 +59,31 @@ export interface RecordedAction {
  * same key cannot both come away believing they performed it.
  */
 export async function recordAction(input: NewCashAction): Promise<RecordedAction> {
+  /*
+   * Brain performed it only if a provider said so (§51).
+   *
+   * `advanceWithinAuthority` once recorded `CONTACT_BUYER` as performed by
+   * Brain with nothing behind it, and every reader then believed a buyer had
+   * been contacted. The guard sits here, in the only writer, rather than in any
+   * caller, so no route or service can reach the old transition again: a
+   * `BRAIN` row must name a provider identifier that a CONFIRMED external
+   * action on this same opening, for this same commercial act, carries. A
+   * person recording what they did themselves is `PERSON` and says so.
+   */
+  if (input.performedBy === 'BRAIN') {
+    const evidence = await getDb().get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM external_actions
+        WHERE project_id = ? AND opportunity_id = ? AND commercial_action = ?
+          AND state = 'CONFIRMED' AND provider_ref IS NOT NULL AND provider_ref = ?`,
+      [input.projectId, input.opportunityId, input.action, input.reference ?? ''],
+    );
+    if (Number(evidence?.n ?? 0) === 0) {
+      throw new Error(
+        `Refusing to record ${input.action} as performed by Brain: no provider-confirmed external ` +
+          'action on this opening carries that reference.',
+      );
+    }
+  }
   const id = newId('cac');
   const at = nowIso();
   const params: SqlParam[] = [

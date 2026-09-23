@@ -324,6 +324,7 @@ function present(reading: ConnectionReading) {
     mode: reading.latest?.mode ?? null,
     connectedAt: reading.connection.createdAt,
     revokedAt: reading.connection.revokedAt,
+    revokedReason: reading.connection.revokedReason,
   };
 }
 

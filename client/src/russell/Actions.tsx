@@ -46,6 +46,7 @@ interface ConnectionSummary {
   mode: string | null;
   connectedAt: string;
   revokedAt: string | null;
+  revokedReason: string | null;
 }
 
 interface ProviderEntry {
@@ -78,9 +79,22 @@ interface Action {
   readbackState: string | null;
   readbackDetail: string | null;
   readbackAt: string | null;
+  readbackFinal: boolean;
+  attempts: number;
+  nextAttemptAt: string | null;
+  resolvedBy: string | null;
+  returnedAt: string | null;
   createdAt: string;
   opportunityId: string | null;
   conversationId: string | null;
+}
+
+interface ActionEvent {
+  id: string;
+  actionId: string | null;
+  kind: string;
+  summary: string;
+  createdAt: string;
 }
 
 interface ExternalView {
@@ -88,6 +102,7 @@ interface ExternalView {
   providers: ProviderEntry[];
   capabilities: Capability[];
   actions: Action[];
+  history: ActionEvent[];
   can: { administer: boolean; approve: boolean; prepare: boolean };
 }
 
@@ -111,6 +126,7 @@ export function ActionsView({ projectId }: { projectId: string | null }): JSX.El
       <Connections view={view} reload={query.reload} />
       <Prepare view={view} reload={query.reload} />
       <History actions={view.actions.filter((one) => one.state !== 'AWAITING_APPROVAL')} view={view} reload={query.reload} />
+      <Record events={view.history} />
     </div>
   );
 }
@@ -251,6 +267,7 @@ function Connections({ view, reload }: { view: ExternalView; reload(): void }): 
                   {current.sender ? ` · sends as ${current.sender}` : ''}
                   {current.selfDestination ? ` · your own address ${current.selfDestination}` : ''}
                   {current.lastCheckedAt ? ` · last checked ${current.lastCheckedAt}` : ''}
+                  {current.mode ? ` · the provider reports ${current.mode} mode` : ''}
                 </p>
                 <div className="rs-row">
                   <button
@@ -280,6 +297,12 @@ function Connections({ view, reload }: { view: ExternalView; reload(): void }): 
               </>
             ) : (
               <>
+                {revoked ? (
+                  <p className="rs-item-meta">
+                    Revoked {revoked.revokedAt}: {revoked.revokedReason ?? 'no reason recorded'}. Reconnecting makes a
+                    new connection that must be checked before anything reads it as available.
+                  </p>
+                ) : null}
                 <ol className="rs-item-meta">
                   {entry.setup.map((line) => (
                     <li key={line}>{line}</li>
@@ -417,6 +440,45 @@ function Prepare({ view, reload }: { view: ExternalView; reload(): void }): JSX.
   );
 }
 
+/**
+ * What each state establishes, and no more. CONFIRMED means the provider
+ * accepted the request; whether it produced the effect is the read-back beside
+ * it, never this chip.
+ */
+const STATE_WORDS: Record<string, string> = {
+  AWAITING_APPROVAL: 'waiting for approval',
+  APPROVED: 'approved, not sent yet',
+  SENDING: 'sending',
+  CONFIRMED: 'accepted by the provider',
+  REFUSED: 'refused by the provider',
+  FAILED: 'not sent',
+  UNCERTAIN: 'outcome unknown',
+  CANCELLED: 'cancelled',
+};
+
+/** The append-only record: every step each action and connection went through. */
+function Record({ events }: { events: ActionEvent[] }): JSX.Element {
+  return (
+    <section className="rs-card rs-actions-record">
+      <h3>Record</h3>
+      {events.length === 0 ? (
+        <p className="rs-item-meta">Nothing has been recorded yet.</p>
+      ) : (
+        <ul className="rs-list">
+          {events.map((event) => (
+            <li key={event.id} className="rs-item">
+              <p className="rs-item-meta">
+                {event.createdAt} · {event.kind.replace(/^EXTERNAL_/, '').toLowerCase().replace(/_/g, ' ')}
+              </p>
+              <p>{event.summary}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function History({ actions, view, reload }: { actions: Action[]; view: ExternalView; reload(): void }): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const base = `/api/projects/${view.project.id}/external/actions`;
@@ -430,14 +492,22 @@ function History({ actions, view, reload }: { actions: Action[]; view: ExternalV
           {actions.map((action) => (
             <li key={action.id} className="rs-item">
               <p>
-                <span className="rs-chip">{action.state.toLowerCase()}</span> {action.expectedEffect}
+                <span className="rs-chip">{STATE_WORDS[action.state] ?? action.state.toLowerCase()}</span> Asked for: {action.expectedEffect}
               </p>
               {action.providerRef ? (
                 <p className="rs-item-meta">
                   Provider’s identifier: <code>{action.providerRef}</code>
                   {action.readbackState ? ` · read back: ${action.readbackState} — ${action.readbackDetail}` : ''}
+                  {action.readbackState ? (action.readbackFinal ? ' (final)' : ' (may still change)') : ''}
                 </p>
               ) : null}
+              <p className="rs-item-meta">
+                {action.approvedAt ? `Approved ${action.approvedAt}. ` : ''}
+                {action.attempts > 0 ? `${action.attempts} send attempt(s). ` : ''}
+                {action.state === 'APPROVED' && action.nextAttemptAt ? `Next attempt at ${action.nextAttemptAt}. ` : ''}
+                {action.resolvedBy ? 'Resolved by a person. ' : ''}
+                {action.returnedAt ? 'The result was posted where it was asked for.' : ''}
+              </p>
               {action.outcomeDetail ? <p className="rs-item-meta">{action.outcomeDetail}</p> : null}
               <div className="rs-row">
                 {action.state === 'CONFIRMED' ? (

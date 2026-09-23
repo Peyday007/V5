@@ -423,6 +423,39 @@ describe('an external provider that can neither de-duplicate nor be asked', () =
     expect(sendCount(OPAQUE)).toBe(1);
   });
 
+  it('does not resend after an executor died having sent it, and stops at uncertain', async () => {
+    /*
+     * The crash window: the attempt reached SENT and the process died before
+     * any outcome was written. Recovery must see that attempt even though an
+     * opaque adapter has no provider key — it once could not, and resent.
+     */
+    const key = nextKey();
+    let died = 0;
+    const dying = {
+      ...opaqueAdapter,
+      send: () => {
+        died += 1;
+        return new Promise<never>(() => undefined);
+      },
+    };
+    void runExternalEffect({
+      adapter: dying,
+      namespace: { ...NS, name: opaqueAdapter.namespace, retention: 'PERMANENT' },
+      projectId, key, businessId: 'biz-crash', payload: { note: 'x' },
+      principalType: 'HUMAN', principalId: 'usr_one',
+    });
+    for (let i = 0; i < 200 && died === 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(died).toBe(1);
+    await getDb().run(
+      "UPDATE idempotency_operations SET recover_after = ? WHERE namespace = ? AND state = 'RESERVED'",
+      [new Date(0).toISOString(), opaqueAdapter.namespace],
+    );
+    setFault(OPAQUE, 'NONE');
+    const before = sendCount(OPAQUE);
+    expect((await run(key, 'biz-crash')).status).toBe('UNCERTAIN');
+    expect(sendCount(OPAQUE)).toBe(before);
+  });
+
   it('is never handed a provider key it cannot use', async () => {
     await run(nextKey(), 'biz-7');
     const operations = await getDb().all<{ id: string }>(

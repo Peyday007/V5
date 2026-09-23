@@ -461,3 +461,31 @@ export async function listExternalEvents(
     createdAt: row.created_at,
   }));
 }
+
+/**
+ * Hand an abandoned send back to Step 6's recovery, and nothing more.
+ *
+ * An executor that dies after an attempt reached SENT and before its outcome
+ * was written leaves the operation RESERVED with no `recover_after`, which
+ * `reserveOperation` reads as in progress for ever — so the action would say
+ * "sending" indefinitely and nothing would ever ask the provider. Setting
+ * `recover_after` is the whole intervention: the engine then decides, from the
+ * attempt rows and the adapter's class, whether that is a keyed resend, a
+ * question to the provider, or UNCERTAIN. Guarded on the operation still
+ * being RESERVED, still unclaimed, and untouched for longer than any live
+ * provider call can take, so a send in flight is never taken from under it.
+ */
+export async function releaseAbandonedOperation(input: {
+  actionId: string;
+  untouchedSince: string;
+  at: string;
+}): Promise<boolean> {
+  const result = await getDb().run(
+    `UPDATE idempotency_operations
+        SET recover_after = ?, updated_at = ?
+      WHERE correlation_id = ? AND state = 'RESERVED' AND recover_after IS NULL
+        AND updated_at < ?`,
+    [input.at, input.at, input.actionId, input.untouchedSince],
+  );
+  return result.changes > 0;
+}

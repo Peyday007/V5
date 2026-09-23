@@ -50,6 +50,7 @@ import {
   moveAction,
   recordExternalEvent,
   recordReadback,
+  releaseAbandonedOperation,
 } from '../../repos/externalActions.ts';
 import { recordEvent } from '../../repos/events.ts';
 import { addMessage, getConversation } from '../../repos/russellConversations.ts';
@@ -90,6 +91,9 @@ export const MAX_NOTIFICATIONS_PER_DAY = 30;
 
 /** A SENDING row older than this belongs to an executor that died. */
 const SENDING_STALE_MS = 5 * 60_000;
+
+/** Stop well short of the provider's window, not at its edge. */
+const KEY_WINDOW_MARGIN_MS = 2 * 3600_000;
 
 const EMAIL = /^[^\s@<>"',;]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,24}$/;
 
@@ -508,6 +512,32 @@ export async function executeAction(actionId: string, now = new Date()): Promise
     return { actionId, state: 'FAILED', detail: ready.reason };
   }
 
+  /*
+   * A repeat is safe only while the provider still remembers the key. Resend
+   * and Stripe de-duplicate for about a day; an action that first left longer
+   * ago than that and is being tried again — a restart after a long outage, a
+   * stale SENDING row found late — would be a second email or a second invoice
+   * wearing the first one's key. It stops at UNCERTAIN for a person instead.
+   */
+  const window = driverFor(ready.connection.provider).keyWindowMs;
+  if (window !== null) {
+    const first = await firstSentAt(action.id);
+    if (first && now.getTime() - Date.parse(first) > window - KEY_WINDOW_MARGIN_MS) {
+      await moveAction({
+        id: action.id,
+        from: ['APPROVED', 'SENDING'],
+        to: 'UNCERTAIN',
+        patch: {
+          outcome_detail:
+            'An earlier attempt left Brain long enough ago that the provider may have forgotten its key, ' +
+            'so repeating it could be a second effect. It will not be resent automatically.',
+        },
+      });
+      await returnResult(action.id);
+      return { actionId, state: 'UNCERTAIN', detail: 'Outside the provider’s key window.' };
+    }
+  }
+
   if (action.state === 'APPROVED') {
     const claimed = await moveAction({
       id: action.id,
@@ -516,6 +546,14 @@ export async function executeAction(actionId: string, now = new Date()): Promise
       patch: { attempts: action.attempts + 1 },
     });
     if (!claimed) return { actionId, state: 'LOST_RACE', detail: 'Another executor took it.' };
+  }
+
+  if (staleSending) {
+    await releaseAbandonedOperation({
+      actionId: action.id,
+      untouchedSince: new Date(now.getTime() - SENDING_STALE_MS).toISOString(),
+      at: new Date().toISOString(),
+    });
   }
 
   const secret = readSecret(ready.connection);
@@ -675,6 +713,15 @@ export async function reaskUncertain(actionId: string): Promise<boolean> {
   return true;
 }
 
+/** When the first attempt at this action left Brain, if one did. */
+async function firstSentAt(actionId: string): Promise<string | null> {
+  const row = await getDb().get<{ at: string | null }>(
+    "SELECT MIN(started_at) AS at FROM effect_attempts WHERE request_id = ? AND phase <> 'INTENT'",
+    [actionId],
+  );
+  return row?.at ?? null;
+}
+
 /** Whether any attempt at this action reached the provider. */
 async function anythingSent(actionId: string): Promise<boolean> {
   const row = await getDb().get<{ n: number }>(
@@ -709,6 +756,13 @@ export async function readBack(actionId: string): Promise<string | null> {
   }
   const previous = action.readbackState;
   await recordReadback({ id: action.id, state: answer.state, detail: answer.detail, final: answer.final });
+
+  // Asked on every read-back rather than only when the state moved: each entry
+  // is keyed, so a second pass writes nothing, and a pass whose entry was
+  // refused (no sprint yet, no ACCEPT_PAYMENT grant) is retried next time
+  // instead of being lost behind an unchanged state.
+  await recordLedgerFacts(action, connection, answer);
+
   if (previous === answer.state) return null;
 
   await recordExternalEvent({
@@ -720,50 +774,80 @@ export async function readBack(actionId: string): Promise<string | null> {
     detail: { from: previous, to: answer.state },
   });
 
-  // Money reaches the ledger only from a live provider, against an opening,
-  // with the provider's own reference — test money is not money.
-  if (answer.money && action.opportunityId && action.currency) {
-    const live = (await readConnection(connection)).state === 'HEALTHY';
-    const mode = await getCashMode(action.projectId);
-    if (live && mode && mode.currency === action.currency && answer.money.paidCents) {
-      if (answer.state === 'PAYMENT_MADE' || answer.state === 'FUNDS_SETTLED') {
-        await recordMoneyEvent({
-          projectId: action.projectId,
-          opportunityId: action.opportunityId,
-          kind: 'CUSTOMER_PAYMENT',
-          amountCents: answer.money.paidCents,
-          currency: action.currency,
-          verifiedReference: action.providerRef,
-          idempotencyKey: `external:${action.id}:payment`,
-          actorRef: SYSTEM_ACTOR,
-          note: 'Read back from the invoice Brain issued.',
-        });
-      }
-      if (answer.state === 'FUNDS_SETTLED' && answer.money.reference) {
-        await recordMoneyEvent({
-          projectId: action.projectId,
-          opportunityId: action.opportunityId,
-          kind: 'SETTLEMENT',
-          amountCents: answer.money.paidCents,
-          currency: action.currency,
-          verifiedReference: answer.money.reference,
-          idempotencyKey: `external:${action.id}:settlement`,
-          actorRef: SYSTEM_ACTOR,
-          note: 'Funds available in the provider balance, read back.',
-        });
-      }
-    }
-  }
   if (action.returnedAt) await announce(action.id, `Update: ${answer.detail}`);
   return answer.state;
+}
+
+/**
+ * Turn a read-back into ledger entries, and only what it establishes.
+ *
+ * Three separate facts, three separate rows: a payment succeeded
+ * (`CUSTOMER_PAYMENT`), the funds became available (`SETTLEMENT`, gross, with
+ * the balance transaction as its reference), and what the provider kept
+ * (`COST`, the fee, so that available funds come out at the net). An issued
+ * invoice and an attempted payment write nothing: neither moved money.
+ *
+ * Test money is not money, and that is decided twice: the connection must read
+ * HEALTHY (a live key the provider answered for), and the provider must say the
+ * object itself is live. Either alone can be wrong — a test invoice read back
+ * after the secret was rotated to a live key is the case that needs both.
+ */
+async function recordLedgerFacts(
+  action: ExternalAction,
+  connection: ExternalConnection,
+  answer: { state: string; money?: import('./drivers.ts').Readback['money'] },
+): Promise<string[]> {
+  const written: string[] = [];
+  const money = answer.money;
+  if (!money || !action.opportunityId || !action.currency || !action.providerRef) return written;
+  if (!money.livemode) return written;
+  if ((await readConnection(connection)).state !== 'HEALTHY') return written;
+  const mode = await getCashMode(action.projectId);
+  if (!mode || mode.currency !== action.currency) return written;
+  const paid = money.paidCents ?? 0;
+  if (paid <= 0) return written;
+
+  const entries: Array<{ kind: 'CUSTOMER_PAYMENT' | 'SETTLEMENT' | 'COST'; amount: number; reference: string; key: string; note: string }> = [];
+  if (answer.state === 'PAYMENT_MADE' || answer.state === 'FUNDS_SETTLED') {
+    entries.push({ kind: 'CUSTOMER_PAYMENT', amount: paid, reference: action.providerRef, key: `external:${action.id}:payment`, note: 'Payment read back from the invoice Brain issued.' });
+  }
+  if (answer.state === 'FUNDS_SETTLED' && money.reference) {
+    entries.push({ kind: 'SETTLEMENT', amount: paid, reference: money.reference, key: `external:${action.id}:settlement`, note: 'Funds available in the provider balance, read back.' });
+    if (money.feeCents && money.feeCents > 0) {
+      entries.push({ kind: 'COST', amount: money.feeCents, reference: money.reference, key: `external:${action.id}:fee`, note: `The provider's processing fee; ${money.netCents ?? paid - money.feeCents} reached the balance.` });
+    }
+  }
+  for (const entry of entries) {
+    const result = await recordMoneyEvent({
+      projectId: action.projectId,
+      opportunityId: action.opportunityId,
+      kind: entry.kind,
+      amountCents: entry.amount,
+      currency: action.currency,
+      verifiedReference: entry.reference,
+      idempotencyKey: entry.key,
+      actorRef: SYSTEM_ACTOR,
+      note: entry.note,
+    });
+    if (result.ok) written.push(entry.kind);
+  }
+  return written;
 }
 
 function resultSentence(action: ExternalAction): string {
   switch (action.state) {
     case 'CONFIRMED':
+      /*
+       * Accepted, and what reading it back established — two sentences. The
+       * expected effect is what was *asked for*; quoting it after "Done" once
+       * said an email "is delivered" when the provider had only accepted it.
+       */
       return (
-        `Done: ${action.expectedEffect.replace(/\.$/, '')}. The provider's own identifier is ${action.providerRef}` +
-        (action.readbackState ? `, and reading it back says ${action.readbackState}: ${action.readbackDetail}` : '.')
+        `The provider accepted it and returned its own identifier, ${action.providerRef}. ` +
+        (action.readbackState
+          ? `Reading it back says ${action.readbackState}: ${action.readbackDetail}`
+          : 'Nothing has been read back yet, so what it produced is not established.') +
+        ` (What was asked for: ${action.expectedEffect})`
       );
     case 'REFUSED':
       return `Not done: ${action.outcomeDetail ?? 'the provider refused it'}. Nothing was sent.`;

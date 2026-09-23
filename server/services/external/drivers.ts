@@ -54,7 +54,16 @@ export interface Readback {
   money?: {
     paidCents: number | null;
     settled: boolean;
+    /** The balance transaction's id: what makes a settlement verifiable. */
     reference: string | null;
+    /** What the provider kept, and what reached the balance. Null until known. */
+    feeCents?: number | null;
+    netCents?: number | null;
+    /**
+     * Whether the provider says this object is real money. A test-mode
+     * invoice is never a ledger fact, whatever the connection reads.
+     */
+    livemode: boolean;
   };
 }
 
@@ -68,6 +77,12 @@ export interface ProviderDriver {
   does: string;
   /** What the deployment secret must hold, described without an example value. */
   secretShape: string;
+  /**
+   * How long the provider honours an idempotency key, or null when the send is
+   * reconciled by asking rather than by a key. Past it, repeating the same key
+   * is a second effect, so Brain stops at UNCERTAIN instead of resending.
+   */
+  keyWindowMs: number | null;
   /** The steps a person takes, in order. */
   setup: readonly string[];
   check(secret: string): Promise<HealthReading>;
@@ -160,6 +175,24 @@ async function ntfyPoll(secret: string, since: string): Promise<NtfyMessage[] | 
     .filter((one) => one.event === 'message');
 }
 
+/**
+ * The identifier names an object this action did not make.
+ *
+ * Reachable when a person resolves an UNCERTAIN send as having happened and
+ * supplies an identifier: that is a claim, and the read-back is what tests it.
+ * Every send tags its object with this action's business tag (or, for email,
+ * is addressed to this action's recipient), so an object without it is some
+ * other message, email or invoice — and reading its state, let alone its money,
+ * onto this action would be recording somebody else's effect as this one.
+ */
+function notThisAction(what: string, ref: string | null): Readback {
+  return {
+    state: 'NOT_THIS_ACTION',
+    detail: `The ${what} ${ref ?? ''} exists but was not made by this action, so nothing about it is recorded here.`,
+    final: true,
+  };
+}
+
 export const NTFY_DRIVER: ProviderDriver = {
   provider: 'NTFY',
   capabilities: ['NOTIFY_OWNER'],
@@ -176,6 +209,8 @@ export const NTFY_DRIVER: ProviderDriver = {
     'Set that topic as the deployment secret named below (flyctl secrets set NAME=topic). It is never typed into Brain.',
     'Press Check. Brain reads the server’s health; the first message it sends is read back from the topic to prove delivery.',
   ],
+  // Reconciled by reading the topic, never by a key.
+  keyWindowMs: null,
   async check(secret) {
     const parsed = parseNtfy(secret);
     if (!parsed) {
@@ -287,6 +322,9 @@ export const NTFY_DRIVER: ProviderDriver = {
       return { state: 'UNREADABLE', detail: 'The topic could not be read back just now.', final: false };
     }
     const found = messages.find((one) => one.id === action.providerRef);
+    if (found && !found.tags?.includes(businessTag(action.id))) {
+      return notThisAction('ntfy message', action.providerRef);
+    }
     if (found) {
       return {
         state: 'PUBLISHED',
@@ -331,6 +369,8 @@ export const RESEND_DRIVER: ProviderDriver = {
     'Enter the From address on that domain, and your own address as the self-test destination.',
     'Press Check. Brain calls Resend with the key and records what it answered.',
   ],
+  // Resend de-duplicates an Idempotency-Key for 24 hours.
+  keyWindowMs: 24 * 3600_000,
   async check(secret) {
     if (!/^re_[A-Za-z0-9_]{8,}$/.test(secret.trim())) {
       return { ok: false, mode: null, detail: 'The secret does not have the shape of a Resend API key.' };
@@ -423,15 +463,48 @@ export const RESEND_DRIVER: ProviderDriver = {
     if (reply.status !== 200) {
       return { state: 'UNREADABLE', detail: `Resend answered HTTP ${reply.status} when asked.`, final: false };
     }
-    const last = String((reply.json as { last_event?: string } | null)?.last_event ?? 'unknown');
-    const final = ['delivered', 'bounced', 'complained', 'failed'].includes(last);
-    return {
-      state: last.toUpperCase(),
-      detail: `Resend reports the email's last event as "${last}".`,
-      final,
-    };
+    const email = reply.json as { last_event?: string; to?: string[] | string } | null;
+    const to = (Array.isArray(email?.to) ? email!.to : [email?.to ?? '']).map((one) => String(one).toLowerCase());
+    if (!to.includes(action.destination.toLowerCase())) return notThisAction('Resend email', action.providerRef);
+    return resendReading(String(email?.last_event ?? 'unknown'));
   },
 };
+
+/**
+ * What Resend's last event establishes, in Brain's words.
+ *
+ * The one distinction this exists for: Resend accepting an email is not the
+ * email arriving. `sent` means Resend handed it to the receiving server's
+ * queue and nothing more, so it reads ACCEPTED — never DELIVERED. Only
+ * `delivered` (or an event that implies it: opened, clicked, complained) is a
+ * delivery, and an event this reader does not know is reported verbatim as
+ * unknown rather than rounded to either.
+ */
+export function resendReading(last: string): Readback {
+  switch (last) {
+    case 'queued':
+    case 'scheduled':
+    case 'sent':
+      return { state: 'ACCEPTED', detail: `Resend accepted it ("${last}"); it has not reported a delivery.`, final: false };
+    case 'delivery_delayed':
+      return { state: 'DELAYED', detail: 'Resend reports the delivery is delayed; it has not arrived yet.', final: false };
+    case 'delivered':
+      return { state: 'DELIVERED', detail: 'Resend reports the receiving server accepted delivery.', final: true };
+    case 'opened':
+    case 'clicked':
+      return { state: 'DELIVERED', detail: `Delivered, and Resend has since seen it ${last}.`, final: true };
+    case 'complained':
+      return { state: 'COMPLAINED', detail: 'Delivered, and the recipient marked it as spam.', final: true };
+    case 'bounced':
+      return { state: 'BOUNCED', detail: 'The receiving server refused it: not delivered.', final: true };
+    case 'failed':
+      return { state: 'FAILED', detail: 'Resend reports it failed: not delivered.', final: true };
+    case 'canceled':
+      return { state: 'CANCELED', detail: 'Cancelled on Resend before it was sent.', final: true };
+    default:
+      return { state: 'UNKNOWN_EVENT', detail: `Resend reported "${last}", which this reader does not interpret; not treated as delivered.`, final: false };
+  }
+}
 
 /* ------------------------------------------------------------------------- */
 /* Stripe                                                                     */
@@ -496,6 +569,8 @@ export const STRIPE_DRIVER: ProviderDriver = {
     'Issue a test invoice to your own address, pay it with Stripe’s test card, and watch Brain read back issued → paid → settled.',
     'Only then replace the secret with the live key; nothing else changes, and the check runs again.',
   ],
+  // Stripe prunes an idempotency key after at least 24 hours.
+  keyWindowMs: 24 * 3600_000,
   async check(secret) {
     const shape = stripeMode(secret);
     if (!shape) return { ok: false, mode: null, detail: 'The secret does not have the shape of a Stripe key.' };
@@ -607,14 +682,32 @@ export const STRIPE_DRIVER: ProviderDriver = {
       status?: string;
       amount_paid?: number;
       amount_due?: number;
+      attempted?: boolean;
+      attempt_count?: number;
       paid_out_of_band?: boolean;
       livemode?: boolean;
-      charge?: { balance_transaction?: { id?: string; status?: string } | null } | null;
+      charge?: { balance_transaction?: { id?: string; status?: string; fee?: number; net?: number } | null } | null;
+      metadata?: Record<string, string>;
     };
-    const mode = invoice.livemode ? '' : ' (test mode)';
+    if (invoice.metadata?.['brain'] !== businessTag(action.id)) return notThisAction('Stripe invoice', action.providerRef);
+    const livemode = invoice.livemode === true;
+    const mode = livemode ? '' : ' (test mode)';
     switch (invoice.status) {
       case 'open':
-        return { state: 'ISSUED', detail: `Issued and awaiting payment of ${invoice.amount_due} minor units${mode}.`, final: false, money: { paidCents: null, settled: false, reference: null } };
+        /*
+         * Issued and unpaid, and — separately — whether anybody has tried to
+         * pay it. A declined card is an attempt, not a payment: it moves no
+         * money and must never read as one.
+         */
+        if (invoice.attempted) {
+          return {
+            state: 'PAYMENT_ATTEMPTED',
+            detail: `Issued; a payment was attempted ${invoice.attempt_count ?? 1} time(s) and has not succeeded, ${invoice.amount_due} minor units still due${mode}.`,
+            final: false,
+            money: { paidCents: null, settled: false, reference: null, livemode },
+          };
+        }
+        return { state: 'ISSUED', detail: `Issued and awaiting payment of ${invoice.amount_due} minor units${mode}.`, final: false, money: { paidCents: null, settled: false, reference: null, livemode } };
       case 'draft':
         return { state: 'DRAFT', detail: `Still a draft on Stripe${mode}; it has not been issued.`, final: false };
       case 'void':
@@ -627,18 +720,21 @@ export const STRIPE_DRIVER: ProviderDriver = {
             state: 'PAID_OUTSIDE_STRIPE',
             detail: `Marked paid outside Stripe${mode}: no funds passed through it, so nothing settles here.`,
             final: true,
-            money: { paidCents: invoice.amount_paid ?? null, settled: false, reference: null },
+            money: { paidCents: invoice.amount_paid ?? null, settled: false, reference: null, livemode },
           };
         }
         const txn = invoice.charge?.balance_transaction ?? null;
         const settled = txn?.status === 'available';
+        const feeCents = typeof txn?.fee === 'number' ? txn.fee : null;
+        const netCents = typeof txn?.net === 'number' ? txn.net : null;
+        const split = feeCents !== null && netCents !== null ? ` Stripe kept ${feeCents} and ${netCents} reached the balance.` : '';
         return {
           state: settled ? 'FUNDS_SETTLED' : 'PAYMENT_MADE',
-          detail: settled
+          detail: (settled
             ? `Paid, and the funds are available in the Stripe balance${mode}.`
-            : `Paid; the funds are ${txn?.status ?? 'not yet'} available in the Stripe balance${mode}.`,
+            : `Paid; the funds are ${txn?.status ?? 'not yet'} available in the Stripe balance${mode}.`) + split,
           final: settled,
-          money: { paidCents: invoice.amount_paid ?? null, settled, reference: txn?.id ?? null },
+          money: { paidCents: invoice.amount_paid ?? null, settled, reference: txn?.id ?? null, feeCents, netCents, livemode },
         };
       }
       default:

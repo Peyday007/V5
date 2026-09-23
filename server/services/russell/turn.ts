@@ -1035,6 +1035,28 @@ export async function applyTurn(binId: string): Promise<ApplyTurnResult> {
 }
 
 /**
+ * An external action a turn proposed and Brain would not prepare.
+ *
+ * Said in the conversation by the server rather than left to the worker's
+ * prose, because the worker wrote its answer before Brain decided — and a
+ * reply saying "I've set that up" above a refusal nobody can see is the
+ * status contradicting the control.
+ */
+async function declineExternal(
+  conversationId: string,
+  reason: string,
+  need: string | null,
+): Promise<{ produced: Record<string, unknown>; candidateId: null }> {
+  await addMessage({
+    conversationId,
+    role: 'SYSTEM',
+    content: `Not prepared, and nothing was sent: ${reason}${need ? ` ${need}` : ''}`,
+    metadata: { externalDeclined: true },
+  });
+  return { produced: { externalDeclined: reason, externalNeed: need }, candidateId: null };
+}
+
+/**
  * The sentence a person gets when Russell will not do what was proposed.
  *
  * One per action, naming the route that does work, because a refusal with no
@@ -1319,16 +1341,32 @@ async function applyValidated(input: {
        * refusal naming what is missing, which the person is shown.
        */
       if (!conversation.projectId) {
-        return {
-          produced: { externalDeclined: 'This conversation is not about a project, and an external action belongs to one.' },
-          candidateId: null,
-        };
+        return await declineExternal(conversationId, 'This conversation is not about a project, and an external action belongs to one.', null);
       }
       if (!decideProjectAccess(owner, conversation.projectId, 'WRITE').allowed) {
-        return {
-          produced: { externalDeclined: 'The person this conversation belongs to cannot act on its project.' },
-          candidateId: null,
-        };
+        return await declineExternal(conversationId, 'The person this conversation belongs to cannot act on its project.', null);
+      }
+      /*
+       * The recipient is the person's, never the model's. "Never invent an
+       * address" is an instruction; this is the control: an email address a
+       * worker proposes must appear in something the person themselves wrote
+       * in this conversation, or nothing is prepared. The approval card would
+       * show an invented address too — but an approver skimming a plausible
+       * address is exactly the reader that check should not depend on.
+       */
+      if (proposal.external.kind === 'SEND_EMAIL') {
+        const wanted = (proposal.external.destination ?? '').trim().toLowerCase();
+        const said = (await listTurns(conversationId))
+          .filter((message) => message.role === 'USER')
+          .some((message) => message.content.toLowerCase().includes(wanted));
+        if (!wanted || !said) {
+          return await declineExternal(
+            conversationId,
+            'That address does not appear in anything you wrote in this conversation, so Brain ' +
+              'will not prepare an email to it. Give the address yourself.',
+            null,
+          );
+        }
       }
       const prepared = await prepareAction({
         projectId: conversation.projectId,
@@ -1339,16 +1377,15 @@ async function applyValidated(input: {
         requestedByType: 'WORKER',
         requestedBy: `russell-turn:${conversationId}`,
       });
+      if (!prepared.ok) return await declineExternal(conversationId, prepared.reason, prepared.need);
       return {
-        produced: prepared.ok
-          ? {
-              externalActionId: prepared.action.id,
-              externalState: prepared.action.state,
-              externalOutcome: prepared.action.approvalRequired
-                ? 'Prepared and waiting for your approval on External actions. Nothing has been sent.'
-                : 'Queued to your own phone; the result will be posted here.',
-            }
-          : { externalDeclined: prepared.reason, externalNeed: prepared.need },
+        produced: {
+          externalActionId: prepared.action.id,
+          externalState: prepared.action.state,
+          externalOutcome: prepared.action.approvalRequired
+            ? 'Prepared and waiting for your approval on External actions. Nothing has been sent.'
+            : 'Queued to your own phone; the result will be posted here.',
+        },
         candidateId: null,
       };
     }

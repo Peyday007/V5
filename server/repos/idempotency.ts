@@ -563,9 +563,18 @@ export async function closeAttempt(
 
 /** The last attempt that reached a provider, for reconciliation. */
 export async function latestSentAttempt(operationId: string): Promise<EffectAttempt | null> {
+  /*
+   * "Sent" is the phase, not the key. Only an EXTERNAL_IDEMPOTENT adapter is
+   * ever given a provider key, so filtering on `provider_key IS NOT NULL` made
+   * every reconcilable and opaque attempt invisible here — and a recovery that
+   * cannot see the attempt concludes that nothing was sent and sends again,
+   * which is the one outcome those two classes exist to prevent. Found by the
+   * external-actions crash test: a ntfy message accepted before the executor
+   * died was published a second time on restart.
+   */
   const row = await getDb().get<EffectAttemptRow>(
     `SELECT * FROM effect_attempts
-      WHERE operation_id = ? AND provider_key IS NOT NULL
+      WHERE operation_id = ? AND phase <> 'INTENT'
       ORDER BY attempt_number DESC LIMIT 1`,
     [operationId],
   );

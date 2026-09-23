@@ -171,14 +171,15 @@ describe('sending, receipts and read-back', () => {
     await ntfyConnected();
     const conversation = await createConversation({ ownerUserId: userId, title: 'Test', projectId });
     let published = 0;
+    let tags: string[] = [];
     handler = (url, init) => {
       if (init.method === 'POST') {
         published += 1;
-        const body = JSON.parse(String(init.body)) as { tags: string[] };
-        return json({ id: 'ntfy-msg-1', time: 1_700_000_000, event: 'message', topic: TOPIC, tags: body.tags });
+        tags = (JSON.parse(String(init.body)) as { tags: string[] }).tags;
+        return json({ id: 'ntfy-msg-1', time: 1_700_000_000, event: 'message', topic: TOPIC, tags });
       }
       if (url.includes('/json?poll=1')) {
-        return new Response(JSON.stringify({ id: 'ntfy-msg-1', time: 1_700_000_000, event: 'message' }) + '\n');
+        return new Response(JSON.stringify({ id: 'ntfy-msg-1', time: 1_700_000_000, event: 'message', tags }) + '\n');
       }
       return json({ healthy: true });
     };
@@ -300,7 +301,7 @@ describe('a third party is reached only with authority and a person’s approval
         keys.push(new Headers(init.headers).get('idempotency-key') ?? '');
         return sends === 1 ? json({ name: 'rate_limit_exceeded' }, 429) : json({ id: 'email-123' });
       }
-      if (url.endsWith('/emails/email-123')) return json({ id: 'email-123', last_event: 'delivered' });
+      if (url.endsWith('/emails/email-123')) return json({ id: 'email-123', to: ['buyer@example.test'], last_event: 'delivered' });
       return json({ data: [{ status: 'verified' }] });
     };
     const prepared = await prepareAction({ projectId, kind: 'SEND_EMAIL', destination: 'buyer@example.test', content: { subject: 'Offer', body: 'Hello' }, requestedByType: 'HUMAN', requestedBy: userId });
@@ -366,19 +367,23 @@ describe('an invoice: issued, paid and settled are three facts', () => {
     deploy(connection.secretName, 'sk_test_abcdefghijklmnop');
     let invoiceStatus = 'open';
     let txnStatus = 'pending';
+    let brainTag = '';
     const keys: string[] = [];
     handler = (url, init) => {
       const key = new Headers(init.headers).get('idempotency-key');
       if (key) keys.push(key);
       if (url.endsWith('/balance')) return json({ livemode: false });
       if (url.endsWith('/customers')) return json({ id: 'cus_1' });
-      if (url.endsWith('/invoices')) return json({ id: 'in_1' });
+      if (url.endsWith('/invoices')) {
+        brainTag = new URLSearchParams(String(init.body)).get('metadata[brain]') ?? '';
+        return json({ id: 'in_1' });
+      }
       if (url.endsWith('/invoiceitems')) return json({ id: 'ii_1' });
       if (url.endsWith('/finalize')) return json({ id: 'in_1', status: 'open' });
       if (url.endsWith('/send')) return json({ id: 'in_1', status: 'open', number: 'A-0001', livemode: false });
       if (url.includes('/invoices/in_1?')) {
         return json({
-          id: 'in_1', status: invoiceStatus, amount_due: 2500, amount_paid: invoiceStatus === 'paid' ? 2500 : 0, livemode: false,
+          id: 'in_1', status: invoiceStatus, amount_due: 2500, amount_paid: invoiceStatus === 'paid' ? 2500 : 0, livemode: false, metadata: { brain: brainTag },
           charge: invoiceStatus === 'paid' ? { balance_transaction: { id: 'txn_1', status: txnStatus } } : null,
         });
       }
