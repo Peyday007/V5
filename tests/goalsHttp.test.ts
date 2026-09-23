@@ -190,3 +190,37 @@ describe('the goals door', () => {
     expect(cycle.body.error).toMatch(/wait on each other/);
   });
 });
+
+/*
+ * The hosted verification is the only thing that proves this boundary against
+ * production, and its first version skipped the comparison on every deploy:
+ * it asked the verification administrator for a foreign goal, and that
+ * administrator only administers the verification project. A skipped
+ * comparison read as a pass. Nothing in the suite runs the harness, so the
+ * guard reads it.
+ */
+describe('the hosted verification of the goals boundary', () => {
+  it('is called, proves both halves against goals it files itself, and never touches a real one', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync(new URL('../scripts/verify-hosted.ts', import.meta.url), 'utf8');
+    expect(source).toMatch(/await goalsBoundary\(/);
+    const start = source.indexOf('async function goalsBoundary');
+    expect(start).toBeGreaterThan(-1);
+    const body = source.slice(start, source.indexOf('\nasync function ', start + 10));
+    // Both goals are the harness's own, in two verification projects.
+    expect(body.match(/createWorkstream\(/g)?.length).toBe(2);
+    expect(body).toMatch(/FOREIGN_FIXTURE_SLUG/);
+    expect(body).toMatch(/purpose: 'TECHNICAL'/);
+    // The readable half is asserted, not only the refusal.
+    expect(body).toMatch(/does read the goal in its own project/);
+    expect(body).toMatch(/byte-identical/);
+    // Never a real goal chosen from the rows, and never the administrator who
+    // could not see one.
+    expect(body).not.toMatch(/listWorkstreams\(/);
+    expect(body).not.toMatch(/adminCookie/);
+    // No branch that skips the comparison and records a pass.
+    expect(body).not.toMatch(/skipped'/);
+    // Archived in a finally, so a failing check still leaves no live goal.
+    expect(body).toMatch(/finally \{[\s\S]*archiveWorkstream\(own\.id[\s\S]*archiveWorkstream\(foreign\.id/);
+  });
+});

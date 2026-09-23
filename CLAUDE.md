@@ -11452,6 +11452,29 @@ repair, and the shape is the register's (§43) carried one level up.
   described**, and a dependency that would close a cycle is refused, because
   two goals each waiting on the other would hold each other's work for ever.
 
+- **A finished campaign was offered back by one of two ticks, so a merged PR
+  asked to be merged.** `listCampaignsPendingOutcome` names the campaigns whose
+  outcome still needs attesting or a merge observing, and only the local
+  `tickAllCampaigns` read it; production runs `tickAllRemoteCampaigns`, which
+  visited live campaigns only. PR #31 merged on 2026-09-22 and its goal put
+  *"Read and merge PR #31"* in Needs You until the hosted tick read the same
+  list — observed at 20:04:09Z seconds after the release carrying it. A rule
+  applied by one of two runners, for the fourth time in this file.
+- **A blocker's sentence must agree with its remedy and its age.** The
+  dispatcher's refusal text named a missing membership beside a remedy about
+  quarantined Routines, aged `0h` because the intent is re-stamped every tick.
+  Where every serving Routine is out of routing the goal says so, aged from the
+  latest time one went out.
+- **The release gate's privacy check was vacuous twice, and then acted on a
+  real person's goal.** It first skipped the foreign comparison while printing
+  PASS (the verification administrator could see no foreign goal); then it
+  compared against a live production goal, POSTing a refused pause at it, while
+  its positive half read *0 goals* — which a route refusing everyone also
+  prints. The harness now files both goals itself, proves the member reads and
+  opens its own, is refused the other byte-identically to an absent id, and
+  archives both. **A gate must never depend on a refusal holding in order not
+  to change a person's work.** `tests/goalsHttp.test.ts` reads the harness.
+
 `npm run goals` and the `Goals` workflow are the terminal and production doors;
 `file --from <row>` files real recorded work with that row's own words as the
 intent and composes nothing.

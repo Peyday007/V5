@@ -129,6 +129,91 @@ No trigger reference and no secret name appears anywhere in the reading.
    every tick. Where every serving Routine is out of routing it now says so,
    aged from when the last one went out.
 
+## Deploy 331: the privacy boundary, read from production — and one check that did nothing
+
+Deploy 331 released the goals boundary check and passed `238/238` before the
+restart and `257/257` after it. In the released Brain, both times:
+
+```
+Goals, as a member and as a machine
+  PASS  a member may read the goals briefing — 200
+  PASS  and reads no goal from a project it may not read — 0 goal(s) readable, 0 outside the member's projects
+  PASS  a foreign goal existed to compare with — no goal sits outside the member's projects; skipped
+  PASS  a worker credential is refused the goals — status 404
+```
+
+The third line is a skipped comparison that reads as a pass. It asked the
+verification administrator for a goal outside the member's projects, and that
+administrator administers only the verification project, so it could never
+find one — while four real goals sat in Deal Dispatch and Cash Mode 1. Recorded
+rather than rounded up: on deploy 331 the member was shown to read nothing it
+should not, and a worker was refused, but the *byte-identical refusal* of a real
+foreign goal was not exercised. The harness now takes a live foreign goal from
+the rows (filing and archiving one in the holdout only when none exists), also
+checks that the refused pause moved nothing, and a guard reads the harness and
+fails on the old version.
+
+## Deploy 332: the merge was observed, and the restart window cost the second half
+
+Deploy 332 released `3c1ca73` (carrying `8c52df0`). Seconds after release the
+hosted tick offered the finished campaign back to the writeback, and the PR #31
+goal read:
+
+```
+GOAL wst_9241ac4d679f433aa6d2  COMPLETE
+  link   PULL_REQUEST merged=true attested by pull-request-merge-observation at 2026-09-23T20:04:09.790Z
+```
+
+The pre-restart verification passed `238/238`. The post-restart half failed on
+`GET /api/projects/…/cash: socket hang up` directly after `flyctl` reported
+*failed to wait for health checks to pass: context deadline exceeded* — the
+restart window §20 records, not a regression: `Record what was released` was
+`success`, and deploy 333 re-ran both halves on a later tree.
+
+## Deploy 333: the comparison ran, and was still half vacuous
+
+Deploy 333 released `12ae65e` and passed `241/241` before the restart and
+`260/260` after. Both sides printed a real byte-identical refusal of a foreign
+goal and a refused pause that moved nothing. The merge observation, the COMPLETE
+goal and the quarantine blocker (aged from 13:59:13Z, not `0h`) all survived the
+restart, read afterwards from the released container.
+
+Reading that log found two more things wrong with the check itself:
+
+1. **The positive half proved nothing.** *"0 goal(s) readable"* is what a member
+   who can read nothing at all would print, so the check could not tell a
+   correct boundary from a route that refuses everyone.
+2. **It acted on a real person's goal.** The foreign goal it compared against
+   was a live production goal, and the refused-pause check POSTed a pause at it
+   as the member. The refusal held, so nothing moved — but a release gate that
+   depends on a refusal holding in order not to change a person's work is
+   testing the boundary with the thing it protects.
+
+`97b4d6f` files both goals itself — one in the member's own verification
+project, one in a dedicated `verification-scope-foreign` TECHNICAL project the
+member is shown not to belong to — asserts the member reads and opens its own
+and is refused the other byte-identically to an id that does not exist, and
+archives both in a `finally`. The guard in `tests/goalsHttp.test.ts` reads the
+harness and fails on the previous version (`expected 1 to be 2`).
+
+## Operator reads between deploys: a slow database, first misread as a wrapper
+
+From 21:38Z every `factory events` read failed on a pooler connection
+timeout, while a one-client goals read at 22:06Z succeeded. `factory.sh` was the
+only wrapper defaulting to two pooler clients against §39's rule of one, so
+`40afc79` corrected it and made the guard assert the value. **That was right
+about the rule and wrong as a diagnosis**: the next factory read failed with
+one client too, and the goals read at 22:17Z then failed with
+`(EAUTHQUERY) auth_query secret check timed out` — the pooler checking a
+credential by querying the database, and the database not answering in time.
+The condition was the database, intermittently, and the interleaving was
+chance. `/healthz` answered in 0.2s throughout, because it touches no database.
+
+It also showed that the one error naming the database as slow was the one
+Brain printed no diagnosis for: neither `describePoolerRefusal` nor the boot
+hint recognised `EAUTHQUERY`. Both do now, and say the database rather than the
+password or the client count.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
