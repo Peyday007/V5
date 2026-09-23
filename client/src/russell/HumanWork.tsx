@@ -99,6 +99,8 @@ function OrderCard({
       ))}
       {view.obligations ? <p className="rs-item-meta">Money: {view.obligations.sentence}</p> : null}
       {view.timing.overdue.length ? <p className="rs-item-meta">Late: {view.timing.overdue.join('; ')}.</p> : null}
+      {view.closed ? <p className="rs-item-meta">{view.closed}</p> : null}
+      {view.timing.approvedAt ? <p className="rs-item-meta">Authorized {view.timing.approvedAt}.</p> : null}
       <ul className="rs-milestones">
         {view.conditions.map((condition) => (
           <li key={condition.key} className={condition.verdict === 'MET' ? 'rs-milestone-done' : 'rs-milestone-open'}>
@@ -119,6 +121,15 @@ function OrderCard({
           {view.candidates.map(({ candidate, qualification }) => (
             <li key={candidate.id}>
               {qualification.summary} {qualification.reliability.sentence}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {view.setAside.length ? (
+        <ul className="rs-milestones">
+          {view.setAside.map((one) => (
+            <li key={`${one.displayName}-${one.at}`} className="rs-item-meta">
+              Set aside: {one.displayName}{one.reason ? ` — ${one.reason}` : ''}
             </li>
           ))}
         </ul>

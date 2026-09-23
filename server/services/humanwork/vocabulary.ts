@@ -7,6 +7,7 @@
  * dropped field is the one outcome a caller cannot recover from, because it
  * is reported as success.
  */
+import { FOUNDATION_DIMENSIONS } from '../identity/foundation.ts';
 import {
   ACCEPTANCE_CHECKS,
   COMPETENCE_BASES,
@@ -84,6 +85,14 @@ export function acceptanceConditions(value: unknown): Checked<AcceptanceConditio
         return {
           ok: false,
           reason: `acceptance[${index}] is checked against an account's foundation, so it must name the userId and the dimension.`,
+        };
+      }
+      if (!(FOUNDATION_DIMENSIONS as readonly string[]).includes(dimension)) {
+        // A dimension the foundation does not read would never be MET, and the
+        // order would wait for ever on a word nobody checks.
+        return {
+          ok: false,
+          reason: `acceptance[${index}].dimension must be one of ${FOUNDATION_DIMENSIONS.join(', ')}.`,
         };
       }
       condition.userId = userId;

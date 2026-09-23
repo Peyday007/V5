@@ -81,7 +81,17 @@ export interface HumanWorkOrderView {
   conditions: ConditionReading[];
   obligations: Obligations | null;
   /** Measured, from the rows' own timestamps; null where the stage was not reached. */
-  timing: { engagedAt: string | null; acceptedAt: string | null; hoursEngagedToAccepted: number | null; overdue: string[] };
+  timing: {
+    approvedAt: string | null;
+    engagedAt: string | null;
+    acceptedAt: string | null;
+    hoursEngagedToAccepted: number | null;
+    overdue: string[];
+  };
+  /** Possibilities somebody set aside, kept visible with the reason rather than dropped. */
+  setAside: { displayName: string; reason: string | null; at: string }[];
+  /** Why a closed order closed, in the words recorded when it did; null while open. */
+  closed: string | null;
   events: HumanWorkEvent[];
 }
 
@@ -114,6 +124,13 @@ export async function orderView(order: HumanWorkOrder, options: { now?: string }
   let stage: HumanWorkStage;
   let nextAction: HumanWorkOrderView['nextAction'] = null;
   const name = candidate?.displayName ?? 'they';
+  const personName = async (ref: string | null): Promise<string> => {
+    if (!ref) return 'somebody';
+    if (ref === 'BRAIN') return 'Brain';
+    return (await getUser(ref))?.displayName ?? 'a person no longer on this Brain';
+  };
+  const attestedBy = engagement?.engagedAttestedBy ? await personName(engagement.engagedAttestedBy) : null;
+  const invitedBy = engagement?.invitedBy ? await personName(engagement.invitedBy) : null;
 
   if (order.state === 'ACCEPTED') {
     stage = 'ACCEPTED';
@@ -203,9 +220,12 @@ export async function orderView(order: HumanWorkOrder, options: { now?: string }
     : engagement.engagedEvidence === 'ACCEPTED_IN_BRAIN'
       ? `${name} accepted in Brain at ${engagement.engagedAt}.`
       : engagement.engagedEvidence === 'ATTESTED_BY_COORDINATOR'
-        ? `A coordinator attested that ${name} accepted, at ${engagement.engagedAt}; they did not accept in Brain themselves.`
+        ? `${attestedBy ?? 'A coordinator'} attested that ${name} accepted, at ${engagement.engagedAt}; they did not accept in Brain themselves.`
         : engagement.state === 'INVITED'
-          ? `${name} has been asked (${engagement.invitationChannel}) and has not answered. An unanswered ask is not an agreement.`
+          ? `${name} has been asked by ${invitedBy ?? 'somebody'} (${engagement.invitationChannel}` +
+            `${engagement.invitationReference ? `, reference ${engagement.invitationReference}` : ''}` +
+            `${engagement.invitedAt ? `, at ${engagement.invitedAt}` : ''}) and has not answered. ` +
+            'An unanswered ask is not an agreement.'
           : `${name} has not been asked yet.`;
 
   const cost = engagement
@@ -254,11 +274,20 @@ export async function orderView(order: HumanWorkOrder, options: { now?: string }
     conditions,
     obligations,
     timing: {
+      approvedAt: engagement?.approvedAt ?? null,
       engagedAt: engagement?.engagedAt ?? null,
       acceptedAt: engagement?.completedAt ?? null,
       hoursEngagedToAccepted: hoursBetween(engagement?.engagedAt ?? null, engagement?.completedAt ?? null),
       overdue,
     },
+    setAside: candidates
+      .filter((one) => one.setAsideAt)
+      .map((one) => ({ displayName: one.displayName, reason: one.setAsideReason, at: one.setAsideAt! })),
+    closed:
+      order.state === 'OPEN'
+        ? null
+        : `${order.state === 'ACCEPTED' ? 'Accepted' : 'Stopped'}${order.closedAt ? ` ${order.closedAt}` : ''}` +
+          `${order.closeReason ? `: ${order.closeReason}` : '.'}`,
     events,
   };
 }
@@ -328,7 +357,7 @@ export async function assignmentView(engagement: HumanWorkEngagement, userId: st
   const coordinator = order.coordinatorUserId ? await getUser(order.coordinatorUserId) : null;
   const events = await listHumanWorkEvents(order.id);
   const deliverables = await listDeliverables(engagement.id);
-  const visible = new Set(['INVITATION_SENT', 'WORKER_ACCEPTED', 'WORKER_DECLINED', 'ACKNOWLEDGED', 'MILESTONE', 'QUESTION', 'ANSWER', 'CHANGE_REQUESTED', 'HANDOFF', 'ACCESS_GRANTED', 'ACCESS_REVOKED', 'DELIVERABLE_SUBMITTED', 'REPAIR_REQUESTED', 'CONDITION_REVIEWED', 'RESULT_ACCEPTED', 'PAYMENT_RECORDED']);
+  const visible = new Set(['INVITATION_SENT', 'WORKER_ACCEPTED', 'WORKER_DECLINED', 'ACKNOWLEDGED', 'MILESTONE', 'QUESTION', 'ANSWER', 'CHANGE_REQUESTED', 'HANDOFF', 'ACCESS_GRANTED', 'ACCESS_REVOKED', 'DELIVERABLE_SUBMITTED', 'REPAIR_REQUESTED', 'CONDITION_REVIEWED', 'RESULT_ACCEPTED', 'PAYMENT_RECORDED', 'DEADLINE_PASSED']);
   return {
     engagementId: engagement.id,
     state: engagement.state,

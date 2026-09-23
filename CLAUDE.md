@@ -11505,6 +11505,15 @@ adding a candidate or preparing terms; those are the routes and
 `npm run humanwork -- connect-capacity`, the reviewed recipe for the task that
 exists today.
 
+**A member who holds a passkey and no PIN cannot receive the work, and that is
+the PIN migration's boundary rather than this kernel's defect.** The served
+sign-in screen asks for six digits only (`SignIn.tsx` records why), so such an
+account is `SIGN_IN BLOCKED`, the work order says so as a blocker for a Brain
+administrator, and the remedy is the existing recovery link, which ends in a
+PIN. `tests/humanWork.test.ts` walks that remedy on a passkey-only member and
+asserts the blocker clears and the assignment reaches them; nothing here
+re-opens device sign-in, which is a decision about the front door.
+
 ## Repository map
 
 ```

@@ -31,9 +31,13 @@ import { runHumanWorkTick } from '../server/services/humanwork/kernel.ts';
 import { reviewCondition } from '../server/services/humanwork/deliver.ts';
 import { connectClaudeCapacity } from '../server/services/humanwork/recipes.ts';
 import { orderView } from '../server/services/humanwork/view.ts';
-import { getEngagement, getOrder, listOrders } from '../server/repos/humanWork.ts';
+import { getEngagement, getOrder, listCandidates, listOrders } from '../server/repos/humanWork.ts';
 import { createAuthority } from '../server/repos/cashAuthority.ts';
 import { ALWAYS_PROHIBITED_COMMERCIAL, COMMERCIAL_ACTIONS } from '../server/services/cash/authority.ts';
+import { createCredentiallessUser, getPinCredentialByIdentity } from '../server/repos/identity.ts';
+import { addPasskey, countLivePasskeys } from '../server/repos/passkeys.ts';
+import { completeEnrollmentWithPin, issueRecovery } from '../server/services/identity/enrollment.ts';
+import { hashPin, pinMatches } from '../server/services/identity/pin.ts';
 import type { Principal, ProjectMembership, ProjectRole } from '../server/domain/types.ts';
 
 interface Person {
@@ -243,6 +247,12 @@ describe('step 1 — a person is necessary, and for exactly what', () => {
       taskId, title: 'x', work: 'y', deliverables: ['z'], acceptance: [],
     });
     expect(noStandard.status).toBe(422);
+    const misspelt = await as(owner, 'POST', `/projects/${projectId}/human-work/orders`, {
+      taskId, title: 'x', work: 'y', deliverables: ['z'],
+      acceptance: [{ key: 'c', statement: 's', check: 'ACCOUNT_FOUNDATION', userId: assignee.id, dimension: 'CLAUDE_CONECTION' }],
+    });
+    expect(misspelt.status).toBe(422);
+    expect(misspelt.body.error).toMatch(/CLAUDE_CONNECTION/);
     const byMember = await as(coordinator, 'POST', `/projects/${projectId}/human-work/orders`, {
       taskId, title: 'x', work: 'y', deliverables: ['z'], acceptance: REVIEWED,
     });
@@ -267,10 +277,19 @@ describe('steps 2 to 5 — the whole journey with a team member', () => {
     });
     expect(claimedSkill.status).toBe(200);
     const candidateId = claimedSkill.body.candidate.id;
+    // A possibility put aside stays on the record with its reason.
+    const spare = await as(coordinator, 'POST', `/projects/${projectId}/human-work/orders/${order.id}/candidates`, {
+      relationship: 'TEAM_MEMBER', userId: coordinator.id, competence: [{ statement: 'Could do it', basis: 'BRAIN_RECORD', ref: 'member' }],
+      quoteCents: 0, quoteSource: 'INTERNAL_NO_CHARGE',
+    });
+    expect(spare.status).toBe(200);
+    expect((await as(coordinator, 'POST', `/projects/${projectId}/human-work/candidates/${spare.body.candidate.id}/set-aside`, { reason: 'Coordinating, not doing' })).status).toBe(200);
 
     let view = await as(coordinator, 'GET', `/projects/${projectId}/human-work`);
     let one = view.body.orders[0];
     expect(one.stage).toBe('QUALIFYING');
+    expect(one.candidates).toHaveLength(1);
+    expect(one.setAside).toEqual([expect.objectContaining({ reason: 'Coordinating, not doing' })]);
     // A claimed skill is written down and never counted as proof.
     expect(one.candidates[0].qualification.evidenced).toBe(1);
     expect(one.candidates[0].qualification.claimedOnly).toBe(1);
@@ -429,10 +448,13 @@ describe('outside the team, and money', () => {
     expect((await getEngagement(engagementId))!.state).toBe('APPROVED');
 
     expect((await as(coordinator, 'POST', `/projects/${projectId}/human-work/engagements/${engagementId}/invitation-sent`, { channel: 'email', reference: 'sent 10:02' })).status).toBe(200);
+    const asked = (await as(owner, 'GET', `/projects/${projectId}/human-work`)).body.orders.find((one: any) => one.order.id === order.id);
+    expect(asked.agreement).toMatch(/asked by coord \S+ \(email, reference sent 10:02, at .*\) and has not answered/);
     expect((await as(coordinator, 'POST', `/projects/${projectId}/human-work/engagements/${engagementId}/attest-acceptance`, { evidence: '' })).status).toBe(400);
     expect((await as(coordinator, 'POST', `/projects/${projectId}/human-work/engagements/${engagementId}/attest-acceptance`, { evidence: 'Signed quote returned 10:40' })).status).toBe(200);
     const after = (await as(owner, 'GET', `/projects/${projectId}/human-work`)).body.orders.find((one: any) => one.order.id === order.id);
-    expect(after.agreement).toMatch(/attested .* did not accept in Brain themselves/);
+    expect(after.agreement).toMatch(/^coord \S+ attested .* did not accept in Brain themselves/);
+    expect(after.timing.approvedAt).toBeTruthy();
 
     // A payment without a reference, or above what was approved, is refused.
     expect((await as(owner, 'POST', `/projects/${projectId}/human-work/engagements/${engagementId}/costs`, { kind: 'PAID', amountCents: 20_000, idempotencyKey: 'p1' })).status).toBe(422);
@@ -442,6 +464,8 @@ describe('outside the team, and money', () => {
     // Cancelling keeps what is owed.
     expect((await as(owner, 'POST', `/projects/${projectId}/human-work/orders/${order.id}/cancel`, { reason: 'Moved on' })).status).toBe(200);
     expect((await getOrder(order.id))!.state).toBe('CANCELLED');
+    const stopped = (await as(owner, 'GET', `/projects/${projectId}/human-work`)).body.orders.find((one: any) => one.order.id === order.id);
+    expect(stopped.closed).toMatch(/^Stopped .*: Moved on$/);
   });
 
   it('never bypasses a standing commercial authority that covers the action', async () => {
@@ -508,6 +532,106 @@ describe('the Claude-capacity recipe', () => {
     const view = await orderView((await getOrder(first.value.order.id))!);
     expect(view.stage).toBe('AWAITING_AUTHORIZATION');
     expect(view.headline).toMatch(/waiting on your decision/);
+  });
+});
+
+describe('a member who holds a device and no PIN', () => {
+  /*
+   * The production shape: Airyn enrolled a passkey before the PIN migration,
+   * holds no PIN, and the served sign-in screen asks only for a PIN. The work
+   * order must say so, name the administrator's remedy, and stop saying so the
+   * moment the remedy is applied — with the remedy itself walked, not assumed.
+   */
+  it('is reported as unable to receive the work, and the recovery link is the whole remedy', async () => {
+    const member = await createCredentiallessUser({
+      email: null,
+      displayName: `Airyn ${Math.random().toString(36).slice(2, 6)}`,
+      createdByType: 'SYSTEM',
+      createdById: 'test',
+    });
+    await addPasskey({
+      userId: member.id,
+      credentialId: `cred_${member.id}`,
+      publicKey: 'pk',
+      algorithm: -7,
+      signCount: 0,
+      label: 'phone',
+      originKind: 'ENROLLMENT',
+    });
+    expect(await countLivePasskeys(member.id)).toBe(1);
+
+    const started = await connectClaudeCapacity({ projectId, memberUserId: member.id, actorRef: owner.id });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    // Recorded as a known uncertainty before anybody decides.
+    expect((await listCandidates(started.value.order.id))[0]!.uncertainties.join(' ')).toMatch(/cannot currently sign in/);
+    const approved = await answerCard(started.value.decision!.id, owner, 'APPROVE_ENGAGEMENT');
+    expect(approved.settled).toBe(true);
+    expect((await getEngagement(started.value.engagement!.id))!.state).toBe('INVITED');
+
+    let view = await orderView((await getOrder(started.value.order.id))!);
+    const blocker = view.blockers.find((one) => /cannot sign in/.test(one.statement));
+    expect(blocker?.who).toBe('BRAIN_ADMINISTRATOR');
+    expect(blocker?.statement).toMatch(/holds a passkey and no PIN/);
+    expect(blocker?.remedy).toMatch(/recovery link/);
+
+    // The remedy, as an administrator applies it and the member redeems it.
+    const link = await issueRecovery({ userId: member.id, reason: 'no PIN after the PIN migration', issuedByUserId: owner.id });
+    const redeemed = await completeEnrollmentWithPin({ token: link.token, pinVerifier: await hashPin('482915') });
+    expect(redeemed.ok).toBe(true);
+
+    const lookup = await getPinCredentialByIdentity(member.displayName);
+    expect(lookup.outcome).toBe('FOUND');
+    if (lookup.outcome === 'FOUND') expect(await pinMatches('482915', lookup.verifier!)).toBe(true);
+
+    view = await orderView((await getOrder(started.value.order.id))!);
+    expect(view.blockers.some((one) => /cannot sign in/.test(one.statement))).toBe(false);
+    // The assignment reaches them now, and nothing about the order moved to get there.
+    speaking = { name: 'airyn', id: member.id, role: null };
+    const mine = await as(speaking, 'GET', '/assignments');
+    expect(mine.body.assignments).toHaveLength(1);
+    expect((await getEngagement(started.value.engagement!.id))!.state).toBe('INVITED');
+  });
+});
+
+describe('coordination fields that are easy to leave unread', () => {
+  it('designates a coordinator, records access both ways, and notes a missed date once', async () => {
+    const started = await connectClaudeCapacity({
+      projectId, memberUserId: assignee.id, actorRef: owner.id, dueBy: '2026-01-02',
+    });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const orderId = started.value.order.id;
+    const engagementId = started.value.engagement!.id;
+
+    // A coordinator is an ADMIN's choice, and has to be somebody on the project.
+    expect((await as(coordinator, 'POST', `/projects/${projectId}/human-work/orders/${orderId}/coordinator`, { userId: coordinator.id })).status).toBe(404);
+    expect((await as(owner, 'POST', `/projects/${projectId}/human-work/orders/${orderId}/coordinator`, { userId: assignee.id })).status).toBe(422);
+    expect((await as(owner, 'POST', `/projects/${projectId}/human-work/orders/${orderId}/coordinator`, { userId: coordinator.id })).status).toBe(200);
+    expect((await getOrder(orderId))!.coordinatorUserId).toBe(coordinator.id);
+
+    await answerCard(started.value.decision!.id, owner, 'APPROVE_ENGAGEMENT');
+    const offered = await as(assignee, 'GET', `/assignments/${engagementId}`);
+    expect(offered.body.coordinator).toMatch(/coord/);
+    expect((await as(assignee, 'POST', `/assignments/${engagementId}/answer`, { accept: true })).status).toBe(200);
+
+    // Access is the coordinator's to record, in both directions, and the assignee sees both.
+    for (const kind of ['ACCESS_GRANTED', 'ACCESS_REVOKED']) {
+      const recorded = await as(coordinator, 'POST', `/projects/${projectId}/human-work/engagements/${engagementId}/updates`, { kind, text: `${kind} for the connector page` });
+      expect(recorded.status).toBe(200);
+    }
+    // A missed date is written down once, however many ticks see it.
+    const first = await runHumanWorkTick({ now: '2026-02-01T00:00:00.000Z' });
+    const second = await runHumanWorkTick({ now: '2026-02-02T00:00:00.000Z' });
+    expect(first.overdue).toHaveLength(1);
+    expect(second.overdue).toHaveLength(0);
+
+    const brief = (await as(assignee, 'GET', `/assignments/${engagementId}`)).body;
+    const kinds = brief.updates.map((one: any) => one.kind);
+    expect(kinds).toEqual(expect.arrayContaining(['ACCESS_GRANTED', 'ACCESS_REVOKED', 'DEADLINE_PASSED']));
+    expect(kinds.filter((one: string) => one === 'DEADLINE_PASSED')).toHaveLength(1);
+    const view = await orderView((await getOrder(orderId))!, { now: '2026-02-02T00:00:00.000Z' });
+    expect(view.timing.overdue.join(' ')).toMatch(/was due 2026-01-02/);
   });
 });
 

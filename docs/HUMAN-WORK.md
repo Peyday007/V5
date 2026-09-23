@@ -103,3 +103,13 @@ itself is already a Needs You request.
 Opening orders, adding candidates and preparing terms from a browser are the
 routes under `/api/projects/:id/human-work/…`; the screen renders and acts on
 existing work but does not yet have forms for those three.
+
+## A member who cannot sign in
+
+An assignment reaches a team member on their own Home page, so a member whose
+`SIGN_IN` foundation dimension is `BLOCKED` cannot receive it. The order reports
+that as a blocker for a Brain administrator, quoting the foundation's own
+remedy. For an account holding a passkey and no PIN — the shape the PIN
+migration left behind — that remedy is a recovery link from People & capacity;
+redeeming it sets a PIN, the blocker clears on the next read, and the
+assignment is there. Issuing and sending that link is a person's action.
