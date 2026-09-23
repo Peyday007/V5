@@ -20,6 +20,17 @@
  * let anyone enumerate other people's threads by watching which id changed the
  * status code.
  */
+import {
+  closeObjective,
+  ensureObjective,
+  getObjective,
+  listObjectives,
+  type Objective,
+} from '../repos/objectives.ts';
+import { composeBrief } from '../services/decision/brief.ts';
+import { getCashMode } from '../repos/cashMode.ts';
+import { advanceObjective } from '../services/decision/act.ts';
+import { decideProjectAccess } from '../services/identity/policy.ts';
 import { Router } from 'express';
 import {
   DESIGN_DECISIONS,
@@ -155,6 +166,7 @@ import {
   requireLayerOfProject,
   requirePerson,
   requireProject,
+  authorizeProject,
   unprocessable,
 } from './helpers.ts';
 import { getProjectBySlug } from '../repos/projects.ts';
@@ -280,6 +292,19 @@ russellRouter.get(
        * person to decide something they did not raise.
        */
       clarification: await softwareClarificationFor(conversation.id),
+      /*
+       * The objectives asked about in this thread, each as its **live** brief.
+       *
+       * Derived on this read rather than copied from the message that first
+       * answered, so a step that has since finished, a grant that has since
+       * been set or an opening that has since closed shows here without
+       * anybody asking again. Only for a project this person may still read.
+       */
+      objectives: await Promise.all(
+        (await listObjectives({ conversationId: conversation.id }))
+          .filter((one) => decideProjectAccess(currentPrincipal(), one.projectId, 'READ').allowed)
+          .map(async (one) => (await composeBrief(one)).brief),
+      ),
     };
   }),
 );
@@ -2093,5 +2118,104 @@ russellRouter.post(
       throw conflict('That finding is not in the shared pool, so it has no horizon to set.');
     }
     return { finding: updated };
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Objectives and their decision briefs
+// ---------------------------------------------------------------------------
+//
+// A brief is a projection (`services/decision/brief.ts`): reading one writes
+// nothing. It is a person's surface — a worker is refused by type — and it is
+// addressed through the objective's own project, so a caller who may not read
+// that project gets the same 404 a missing objective gives.
+
+async function requireObjective(objectiveId: string): Promise<Objective> {
+  const objective = await getObjective(objectiveId);
+  if (!objective) throw notFound('No objective with that id.');
+  // Same body for absent and forbidden: the project's refusal is replaced by
+  // this one so an objective id cannot be used to learn which projects exist.
+  try {
+    await authorizeProject(objective.projectId, 'objective');
+  } catch {
+    throw notFound('No objective with that id.');
+  }
+  return objective;
+}
+
+russellRouter.get(
+  '/projects/:projectId/objectives',
+  handler(async (req) => {
+    requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const objectives = await listObjectives({ projectId: project.id });
+    return {
+      objectives: await Promise.all(objectives.map(async (one) => (await composeBrief(one)).brief)),
+    };
+  }),
+);
+
+/**
+ * Adopt the objective this project already records, and decide about it.
+ *
+ * The only objective a route can open without a conversation is one somebody
+ * already wrote down — a Cash sprint's. An objective in a person's own words is
+ * opened by saying it to Russell, where it is recorded against the message.
+ */
+russellRouter.post(
+  '/projects/:projectId/objectives',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const project = await requireProject(pathId(req, 'projectId'));
+    const mode = await getCashMode(project.id);
+    if (!mode || !mode.objective.trim()) {
+      throw unprocessable(
+        'This project records no objective to adopt. Tell Russell what you are trying to achieve in a conversation about it.',
+      );
+    }
+    const { objective } = await ensureObjective({
+      projectId: project.id,
+      statement: mode.objective.trim(),
+      sourceKind: 'CASH_MODE',
+      sourceRef: mode.id,
+      conversationId: null,
+      createdByUserId: principal.id,
+    });
+    const advanced = await advanceObjective(objective.id, { announce: false });
+    return { brief: advanced?.brief ?? (await composeBrief(objective)).brief };
+  }),
+);
+
+russellRouter.get(
+  '/objectives/:objectiveId',
+  handler(async (req) => {
+    requirePerson();
+    const objective = await requireObjective(pathId(req, 'objectiveId'));
+    return { brief: (await composeBrief(objective)).brief };
+  }),
+);
+
+/** Re-decide now, and take the step if a grant covers it. The tick does the same. */
+russellRouter.post(
+  '/objectives/:objectiveId/advance',
+  handler(async (req) => {
+    requirePerson();
+    const objective = await requireObjective(pathId(req, 'objectiveId'));
+    const advanced = await advanceObjective(objective.id);
+    if (!advanced) throw conflict('That objective is closed, so there is nothing to advance.');
+    return { brief: advanced.brief, took: advanced.took, changed: advanced.changed };
+  }),
+);
+
+/** A person saying this objective is finished with. Keeps every row. */
+russellRouter.post(
+  '/objectives/:objectiveId/close',
+  handler(async (req) => {
+    const principal = requirePerson();
+    const objective = await requireObjective(pathId(req, 'objectiveId'));
+    const reason = requiredString(bodyOf(req)['reason'], 'reason');
+    const closed = await closeObjective({ id: objective.id, reason, userId: principal.id });
+    if (!closed) throw conflict('That objective is already closed.');
+    return { closed: true };
   }),
 );

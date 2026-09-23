@@ -4070,3 +4070,91 @@ details.rs-card > section.rs-card {
   margin-bottom: var(--rs-space-2);
   overflow-wrap: anywhere;
 }
+
+/* ---------------------------------------------------------------------------
+ * The decision brief (services/decision). Tokens only, so both themes hold.
+ * ------------------------------------------------------------------------- */
+.rs-objective {
+  border: 1px solid var(--rule, currentColor);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.rs-objective-label {
+  font-size: 0.8rem;
+  margin: 0;
+}
+.rs-objective-statement {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+.rs-objective-headline {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.rs-objective-reasons,
+.rs-objective-needs ul,
+.rs-objective-watch ul,
+.rs-objective-alternatives ul,
+.rs-objective-rejected ul,
+.rs-objective-economics {
+  margin: 0;
+  padding-left: 1.2em;
+  overflow-wrap: anywhere;
+}
+.rs-objective-step {
+  border-left: 3px solid var(--verdigris, currentColor);
+  padding-left: 10px;
+}
+.rs-objective-step p {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.rs-objective-step-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.rs-objective-needs h4,
+.rs-objective-watch h4 {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+}
+.rs-objective-tests {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.rs-objective-tests th,
+.rs-objective-tests td {
+  text-align: left;
+  vertical-align: top;
+  padding: 3px 6px 3px 0;
+  overflow-wrap: anywhere;
+}
+.rs-objective-kind,
+.rs-objective-basis,
+.rs-objective-ref {
+  font-size: 0.85em;
+}
+.rs-objective-foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.rs-home-objectives ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.rs-home-objectives p {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}

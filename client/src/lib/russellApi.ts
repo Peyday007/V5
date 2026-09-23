@@ -10,6 +10,7 @@
  * rest of the client does it: the two halves cannot drift, and nothing from the
  * server is bundled.
  */
+import type { DecisionBrief } from '../../../server/services/decision/brief.ts';
 import { api } from './api.ts';
 import type {
   CandidatePriority,
@@ -126,6 +127,13 @@ export interface ThreadResponse {
    * would eventually paraphrase it wrongly.
    */
   clarification: SoftwareClarification | null;
+  /**
+   * The objectives asked about in this thread, each as its live decision brief.
+   *
+   * Derived on the read path, so a step that finished or a grant that was set
+   * since the question was asked shows here without asking again.
+   */
+  objectives: DecisionBrief[];
 }
 
 export interface TurnResponse {
@@ -243,6 +251,14 @@ export const RussellApi = {
       method: 'POST',
       body: JSON.stringify({ title, projectId: projectId ?? null }),
     }),
+
+  objectives: (projectId: string): Promise<{ objectives: DecisionBrief[] }> =>
+    api(`/api/russell/projects/${encodeURIComponent(projectId)}/objectives`),
+
+  advanceObjective: (
+    objectiveId: string,
+  ): Promise<{ brief: DecisionBrief; changed: boolean }> =>
+    api(`/api/russell/objectives/${encodeURIComponent(objectiveId)}/advance`, { method: 'POST' }),
 
   thread: (conversationId: string): Promise<ThreadResponse> =>
     api(`/api/russell/conversations/${encodeURIComponent(conversationId)}`),

@@ -33,6 +33,7 @@
  * never self-authorizes; a refusal is stored as a refusal rather than thrown
  * away, so a person can see that Russell was asked something it would not do.
  */
+import { answerDecisionTurn } from '../decision/entrance.ts';
 import { createBin, getBin, listBinUnitResults } from '../../repos/bins.ts';
 import { getUser, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import {
@@ -253,6 +254,35 @@ export async function beginTurn(input: {
       // object would tell the caller a settled turn is still pending, and an
       // interface that showed a spinner over an answer it already had would be
       // wrong in exactly the way this design exists to avoid.
+      pendingMessage: (await getMessage(pendingMessage.id)) ?? pendingMessage,
+      binId: null,
+      attachedProjectId,
+    };
+  }
+
+  /*
+   * The decision lane, before the fast lane and the fleet.
+   *
+   * "What can we actually do?" is answered from rows, not from a model: the
+   * objective is resolved from records, every candidate path is put to the
+   * same tests, and the brief and its first step are derived in this request
+   * (`services/decision`). So it needs no fleet activation and it is the same
+   * answer whether a worker is connected or not. A message that is not asking
+   * for a decision falls through unchanged.
+   */
+  const decision = await answerDecisionTurn({
+    projectId,
+    conversationId: conversation.id,
+    userMessageId: userMessage.id,
+    pendingMessageId: pendingMessage.id,
+    userId: input.principal.id,
+    content,
+  });
+  if (decision) {
+    return {
+      ok: true,
+      reason: decision.asked ? 'asked what the objective is' : 'answered with a decision brief',
+      userMessage,
       pendingMessage: (await getMessage(pendingMessage.id)) ?? pendingMessage,
       binId: null,
       attachedProjectId,

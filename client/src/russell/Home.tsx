@@ -101,6 +101,7 @@ export function RussellHome({
     <div className="rs-column rs-home">
       {connection}
       <Hero view={view} />
+      <Objectives projectId={projectId} onOpenThread={onOpenThread} />
       <Maturity view={view} />
       <Changes view={view} />
       <WhyThisMatters projectId={projectId} />
@@ -479,3 +480,53 @@ function Thread({
 }
 
 export type { HomeView };
+
+
+/**
+ * What each objective on this project is waiting on, in one line each.
+ *
+ * The same live brief the conversation shows, so Home and the thread cannot
+ * give two answers about one objective. It links to the conversation the
+ * objective was asked in, where the whole brief is; it renders nothing when
+ * no objective is open, because an empty box on Home is noise.
+ */
+function Objectives({
+  projectId,
+  onOpenThread,
+}: {
+  projectId: string | null;
+  onOpenThread(conversationId: string): void;
+}): JSX.Element | null {
+  const objectives = useAsync(
+    () => (projectId ? RussellApi.objectives(projectId) : Promise.resolve({ objectives: [] })),
+    [projectId],
+  );
+  const briefs = objectives.data?.objectives ?? [];
+  if (briefs.length === 0) return null;
+  return (
+    <section className="rs-card rs-home-objectives" aria-label="Objectives and what they are waiting on">
+      <h2>What Brain recommends</h2>
+      <ul>
+        {briefs.map((brief) => (
+          <li key={brief.objective.id} data-verdict={brief.verdict}>
+            <p className="rs-objective-statement">{brief.objective.statement}</p>
+            <p className="rs-objective-headline">{brief.headline}</p>
+            {brief.currentStep ? (
+              <p className="rs-objective-step-detail">
+                Next step ({brief.currentStep.status.replace(/_/g, ' ').toLowerCase()}): {brief.currentStep.step.description}
+              </p>
+            ) : null}
+            {brief.needsPerson.length > 0 ? (
+              <p className="rs-objective-needs-line">Needs you: {brief.needsPerson[0]}</p>
+            ) : null}
+            {brief.objective.conversationId ? (
+              <button type="button" onClick={() => onOpenThread(brief.objective.conversationId!)}>
+                Open the full brief
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

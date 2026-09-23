@@ -11386,6 +11386,74 @@ that would have chosen between them exists.**
   along, which is why §32 names its file: **a number is a position two
   workstreams can both reach for; a filename is the thing itself.**
 
+## 50. A question about what to do is answered with a decision, not a report.
+
+Brain held every part of an answer to *"what can we actually do?"* — the openings,
+their cards, every way of being paid for each, the capability readings, the
+grants, the queue — and no row said what the person was trying to achieve, so the
+answer had to be assembled by hand. Research went where a column count pointed:
+production's two deep-dive slots went to whichever opening had the most fields
+filled, while 40 openings and 802 possibilities all read SIGNAL or BLOCKED and
+nothing proposed a move. `services/decision/` (`docs/DECISION.md`) is the missing
+connection, and it is an entrance to machinery that already existed rather than a
+second set of rules.
+
+- **An objective is a row; a decision is a derivation.** `russell_objectives`
+  stores the intent and nothing about progress — adopted from what a project
+  already records (a Cash sprint's own objective) or stated in the person's own
+  words. The candidate paths, their tests, the recommendation and the next step
+  are re-derived from rows on every read (§43's rule). `russell_objective_steps`
+  points at the work a decision became; its state is the state of the thing it
+  points at. `russell_objective_decisions` is append-only and records the one
+  thing no derivation recovers: that a recommendation used to be something else,
+  and what changed it.
+- **A transaction type is not an executable opportunity.** Every path is put to
+  eight tests (demand, reach, production, delivery, cost, time, capacity,
+  authority), each answered by the machinery that owns the answer — the engine
+  card, the monetization ledger, `readCapability`, `cashPosition`, the grants.
+  An opening qualifies only when **Cash's own standard** says so (tier at least
+  QUALIFIED and the card ready to test, exactly what `markReady` requires); every
+  question that standard still has open is mapped onto the test it bears on, so
+  the brief and the Cash page cannot disagree about what is an opportunity.
+- **Rejected only on evidence.** NOT_MET backed by a sourced fact, a measured row
+  or a person's decision rejects a path, with the row that decided it; NOT_MET
+  resting on an estimate does not (invariant 47). A missing grant or integration
+  is `NEEDS_PERSON` — a boundary, never a rejection.
+- **Research serves the pending choice, and stops.** The only research proposed
+  is the first open test on the leading path — the one question whose answer can
+  change the recommendation. Nothing on a rejected path is researched; nothing is
+  researched once a path qualifies; and a path whose bounded deep dives are spent
+  has no research step, so the honest outcome is STOP rather than a third search.
+  The research itself is the existing deep dive, **steered** to go first
+  (`steeredOpenings`, read by `startValidations` — a preference, never a ceiling).
+- **No probability and no score.** The order is lexicographic over counts of
+  readings, so *why does this rank lower* is the first rule two paths differ on.
+- **A step becomes work only inside a grant somebody already set.** A deep dive
+  runs under the sprint's research grant; an idea is judged and launched by the
+  loop under the standing grant. A commercial action and a software change are
+  **prepared, never performed**: recorded with the exact boundary a person owns
+  and where they decide it. Steps are taken only while the objective's owner
+  holds WRITE on the project, re-read on every pass.
+- **The result returns without anybody pasting it back.** The tick's objective
+  pass re-derives each live brief; when the recommendation changes, a row is
+  appended and Russell says so in the conversation the objective was asked in.
+  The thread payload and Home carry the **live** brief, so the status and the
+  next step are visible where the person asked, without joining screens.
+- **Asking is recognised narrowly and answered in the request.** `asksForDecision`
+  is deterministic on the person's own words and fails toward *missing* a request.
+  The brief is derived from rows, so it needs no fleet activation and no model;
+  when no objective is recorded anywhere, Brain asks the one question it cannot
+  answer — what the person is trying to achieve — and takes the reply.
+
+**What is true today, said plainly.** The journey is proven in tests against the
+production code path, on both backends, from a question in a conversation to a
+recommendation, a steered deep dive, and the deep dive's answers changing the
+recommendation and being reported back. `scripts/decision-report.ts` composes the
+brief for a live sprint's recorded objective without writing anything. **It has not
+run in production**, because that needs this change deployed; until it has, the
+engine passing its tests says nothing about the answer on live rows — the
+separation Step 3 drew.
+
 ## Repository map
 
 ```
@@ -11421,6 +11489,7 @@ server/
     monetization.ts     every shape of transaction, what it needs and what it leaves
     labor.ts            what a labor finding means, and the one validator both doors call
     dealflow.ts         what a claim establishes about a transaction, and where it lands
+    decision.ts         eight tests, four kinds of evidence, and the one pure decide()
     auditProfile.ts     per-project audit criteria (Deal Dispatch G1-G14 + layers)
   repos/                data access, one module per entity
     design.ts           surfaces, captures, findings, patterns, corrections, gaps
@@ -11438,6 +11507,7 @@ server/
     sharedFindings.ts the promotion record behind one shared Brain; pointers, never knowledge
     researchIntelligence.ts  the judgement above the engine: what to learn, and what changed it
     register.ts       workstreams, what they point at, and what happened to them
+    objectives.ts     what somebody is trying to do, the work it became, what Brain recommended
     bridge.ts         a person's bearer, a transcript exactly as it arrived, and its receipts
     dealflow.ts       both sides of a transaction, and everything hard between them
     puzzle.ts         the universe, the systems, the puzzles, the products, the trade
@@ -11539,6 +11609,12 @@ server/
     storageHealth.ts    how much room is left, measured rather than guessed
     knowledge/
       shared.ts         what crosses between projects, and what may never
+    decision/
+      context.ts        what Brain can establish about an objective before asking anyone
+      paths.ts          every candidate path, put to the same eight tests by their owners
+      brief.ts          the decision brief, derived and never stored
+      act.ts            a step becomes work inside an existing grant; a change is reported back
+      entrance.ts       "what can we actually do?", recognised narrowly and answered in the request
     register/
       resolve.ts        what the row behind a link says right now, or that it is gone
       view.ts           the six answers, derived on the read path and stored nowhere
@@ -11806,6 +11882,7 @@ client/                 React UI
   src/russell/People.tsx     who has joined, my Claude connection, and usable capacity
   src/russell/ClaudeConnection.tsx  one connection screen, for every account, with no role in it
   src/russell/Register.tsx  the six answers, and the one form Brain may not fill in
+  src/russell/ObjectiveBrief.tsx  the live decision brief, beside the conversation it was asked in
   src/russell/Devices.tsx    your own passkeys, and nobody else's
   src/components/Enrol.tsx   where an enrollment link lands, before the sign-in gate
   src/components/SignIn.tsx  one button; no address, no password, no alternative
@@ -11830,6 +11907,8 @@ scripts/
   refinement-report.ts      where every deep dive spent its time, stage by stage
   labor-report.ts           §13's six readings, and the four figures nothing measures
   labor-report.sh           the same, inside the deployed container, naming the revision serving it
+  decision-report.ts        the brief for every recorded objective; a sprint's, composed without adopting it
+  decision-report.sh        the same, inside the deployed container, on one connection
   puzzle-report.ts          what was made, proved, sold and learned; one puzzle re-rendered
   puzzle-report.sh          the same, inside the deployed container, on one connection
                             (reached by .github/workflows/puzzle-report.yml, which
@@ -11880,6 +11959,8 @@ tests/                  Vitest suites
   factoryPool.test.ts        one Factory worker, three accounts, and the failover between them
   sharedKnowledge.test.ts    one finding, two operations, and the wall between them
   workRegister.test.ts       no stored state, no source that ships, no URL that merges
+  decisionJourney.test.ts    a question, a brief, a steered deep dive, a changed recommendation
+  decisionHttp.test.ts       the brief in the thread payload, and one body for two refusals
   conversationBridge.test.ts exact bytes, real order, kept edits, and a replay that says so
   bridgeHttp.test.ts         the door: a worker refused by type, and one body for two refusals
   intakeToResult.test.ts     a transcript from outside, to a pull request, and back out

@@ -36,6 +36,7 @@
  * refused, because that is a `COMMERCIAL_ACTION` under a grant a person makes
  * separately.
  */
+import { steeredOpenings } from '../../repos/objectives.ts';
 import { getCashMode, recordCashEvent } from '../../repos/cashMode.ts';
 import {
   getOpportunity,
@@ -376,9 +377,25 @@ export async function startValidations(input: {
    * It is a preference and never a ceiling. Nothing is refused because of it,
    * and a piece at the back still takes a slot the moment one is free.
    */
-  const ordered = [
+  const byClosest = [
     ...all.filter((one) => one.validationState === null).sort(closestFirst),
     ...all.filter((one) => one.validationState !== null).sort(closestFirst),
+  ];
+  /*
+   * And ahead of all of it, the openings a live objective is waiting on.
+   *
+   * `services/decision` decides which unknown would change what Brain
+   * recommends for an objective, and when that unknown is an opening's
+   * commercial questions, this is the dive that answers it. Without this the
+   * slots went to whichever opening had the most columns filled, which is
+   * research that does not serve any pending choice. It is a preference and
+   * never a ceiling: the slot bound, `whyNotDiving` and the grant are all
+   * applied exactly as before, and nothing is refused because of it.
+   */
+  const steered = new Set(await steeredOpenings(input.projectId));
+  const ordered = [
+    ...byClosest.filter((one) => steered.has(one.id)),
+    ...byClosest.filter((one) => !steered.has(one.id)),
   ];
 
   const out: StartedValidation[] = [];

@@ -23,6 +23,7 @@ import type {
   SoftwareRequestView,
 } from '../../../server/services/russell/software.ts';
 import { turnLabel } from './present.ts';
+import { ObjectiveBrief } from './ObjectiveBrief.tsx';
 import { useAsync } from './useAsync.ts';
 import { ApiError } from '../lib/api.ts';
 
@@ -201,6 +202,9 @@ export function Conversation({
           />
         ))}
       </ol>
+      {(thread.data?.objectives ?? []).map((brief) => (
+        <ObjectiveBrief key={brief.objective.id} brief={brief} onChanged={() => thread.reload()} />
+      ))}
       <SoftwareTrail software={thread.data?.software ?? []} />
       <Clarification clarification={thread.data?.clarification ?? null} />
       <div ref={bottom} />

@@ -51,6 +51,7 @@
  * Hitting a bound preserves the remaining candidates for the next cycle. It
  * never drops them, and it never consumes a whole tick in one pass.
  */
+import { advanceObjectives } from '../decision/act.ts';
 import {
   claimCycle,
   completeCycle,
@@ -401,6 +402,8 @@ export interface TickReport {
    * something `listInquiries` already answers per project.
    */
   lensInquiries: { dispatched: number; settled: number };
+  /** Objectives whose decision took a step or changed, and was reported back. */
+  objectives: { objectiveId: string; verdict: string; stepId: string | null; changed: boolean }[];
   /**
    * Each active sprint's discovery step: buckets opened, openings filed.
    *
@@ -626,6 +629,7 @@ const EMPTY: TickReport = {
   renewedReservations: [],
   frontier: [],
   lensInquiries: { dispatched: 0, settled: 0 },
+  objectives: [],
   cashDiscovery: [],
   industryKernel: [],
   laborKernel: [],
@@ -713,6 +717,7 @@ export async function tick(owner: string): Promise<TickReport> {
     },
     },
     lensInquiries: { dispatched: 0, settled: 0 },
+  objectives: [],
     cashDiscovery: [],
     industryKernel: [],
     laborKernel: [],
@@ -1719,6 +1724,29 @@ export async function tick(owner: string): Promise<TickReport> {
       } catch {
         /* an inquiry whose bin could not be read stays RUNNING */
       }
+    }
+
+    /*
+     * 1e-v. Re-decide every live objective, and carry the result back.
+     *
+     * After the per-project passes above, so a deep dive that settled, a
+     * card that was answered or an opening that closed on this tick is what
+     * the decision reads. `services/decision/act.ts` re-derives the brief,
+     * takes its step only inside a grant somebody already set, and posts to
+     * the objective's conversation when the recommendation changed — which is
+     * how a result reaches Russell without anybody pasting it back in.
+     */
+    try {
+      for (const one of await advanceObjectives()) {
+        report.objectives.push({
+          objectiveId: one.objectiveId,
+          verdict: one.brief.verdict,
+          stepId: one.took?.id ?? null,
+          changed: one.changed,
+        });
+      }
+    } catch {
+      /* an objective pass that could not run leaves every row as it was */
     }
 
     /*
