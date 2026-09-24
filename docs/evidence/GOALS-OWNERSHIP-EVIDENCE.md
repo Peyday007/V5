@@ -314,6 +314,22 @@ restart and nobody pressing anything. The two outages before the boot retry
 (another session's `3a3bd1e`) ran during the outage and correctly released
 nothing, because its health check could not pass against the same 544.
 
+## Deploy 339: refused at the health check while Supabase refused connections
+
+Deploy 339 (`93cd734`, which carries the route escape catch) passed its test gate.
+`flyctl deploy` then failed (`Record what was released: skipped`), so nothing in
+it was released by that run. The boot log says why. At 03:30:48, still on the
+337 image, the pool was full (`10/10 connection(s) in use, 3 caller(s)
+waiting`). After the machine was replaced at 03:36:56, Supabase's storage API
+answered `544 DatabaseTimeout` and then `429 too_many_connections`, and the
+pooler itself stopped handing out connections (`Connection terminated due to
+connection timeout` at 03:41:35). The boot retry did what §18 asks: it served
+the error and asked again at 30, 60, 120 and 240 seconds. The health check could
+not pass inside flyctl's window, so the release was refused. This is
+infrastructure, not this commit. Deploy 341 (`caba2b2`, another session's fix
+for stacked Russell ticks holding pool connections) contains `93cd734` and is
+the next attempt to release it.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
