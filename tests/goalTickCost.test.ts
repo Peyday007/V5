@@ -15,8 +15,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
-import { createUser } from '../server/repos/identity.ts';
-import { createBin } from '../server/repos/bins.ts';
+import { createUser, createWorker, grantMembership, setWorkerStatus } from '../server/repos/identity.ts';
+import { createBin, ensureDispatchIntent, listDispatchesForBin, markDispatchFailed } from '../server/repos/bins.ts';
+import { createAccount, createRoutine } from '../server/repos/fleet.ts';
+import { fleetSnapshot } from '../server/services/dispatch/candidates.ts';
 import { archiveWorkstream, createWorkstream, linkWorkstream, listWorkstreamEvents } from '../server/repos/register.ts';
 import { getBin } from '../server/repos/bins.ts';
 import { pause } from '../server/services/goals/decide.ts';
@@ -134,5 +136,48 @@ describe('a goals tick', () => {
     expect(report.released).toContainEqual({ binId: bin.id, goalId: goal.id, why: 'the goal is archived' });
     const events = await listWorkstreamEvents(goal.id, 20);
     expect(events.some((one) => one.kind === 'GOAL_WORK_RELEASED')).toBe(true);
+  });
+
+  it('reads the fleet once per tick, however many goals are blocked on it', async () => {
+    /*
+     * A blocked bin's remedy asks the router (fleetSnapshot), which is dozens
+     * of statements. Asked per bin per goal per tick, the first release that
+     * did so made every goals tick scale with the number of blocked bins —
+     * while production's research fleet was quarantined and many were.
+     */
+    // Bound to a worker holding the project, as production's are, so the
+    // remedy reaches the router's question rather than returning early — and
+    // that worker disabled, so the surfaces are out of routing.
+    const worker = await createWorker({ name: `tick-worker-${Math.random().toString(36).slice(2, 8)}`, displayName: 'Worker', createdByType: 'SYSTEM', createdById: 'test' });
+    await grantMembership({ projectId, principalType: 'WORKER', principalId: worker.id, role: null, scopes: ['queue:read', 'queue:claim'], grantedByType: 'SYSTEM', grantedById: 'test' });
+    await setWorkerStatus(worker.id, 'DISABLED');
+    for (let i = 0; i < 6; i += 1) {
+      const account = await createAccount({ name: `tick-acct-${i}-${Math.random().toString(36).slice(2, 6)}` });
+      await createRoutine({
+        accountId: account.id,
+        routineRef: `trig_tick_${i}_${Math.random().toString(36).slice(2, 8)}`,
+        name: `Tick surface ${i}`,
+        tokenSecretName: `TICK_SECRET_${i}`,
+        workerId: worker.id,
+      });
+      process.env[`TICK_SECRET_${i}`] = 'present-for-test';
+    }
+    const snapshotCost = await statementsDuring(() => fleetSnapshot());
+    expect(snapshotCost).toBeGreaterThan(8);
+
+    async function blockedGoal(title: string): Promise<void> {
+      const { bin } = await goalWithWork(title);
+      await ensureDispatchIntent((await getBin(bin.id))!);
+      const intent = (await listDispatchesForBin(bin.id))[0]!;
+      await markDispatchFailed(intent.id, { kind: 'NO_SURFACE_SERVES_THIS_PROJECT', message: 'none', refundAttempt: true });
+    }
+    await blockedGoal('Blocked 0');
+    await advanceGoals();
+    const one = await statementsDuring(() => advanceGoals());
+    for (let i = 1; i < 5; i += 1) await blockedGoal(`Blocked ${i}`);
+    await advanceGoals();
+    const five = await statementsDuring(() => advanceGoals());
+    // Four more blocked goals may cost their own rows, and not a fleet read each.
+    expect((five - one) / 4).toBeLessThan(snapshotCost);
   });
 });
