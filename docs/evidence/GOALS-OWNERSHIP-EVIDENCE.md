@@ -411,7 +411,37 @@ The two failures come from two different tools, at two different points in the
 packet, with two different durations, on a day when Supabase has answered 544
 and 429 for hours. Nothing is concluded from that alone: the
 `[mcp] tool call failed` lines carrying the underlying errors were requested
-through the Logs workflow, and the classification below waits for them.
+through the Logs workflow (run 28), and this is what they say:
+
+- **`brain_submit_synthesis`: infrastructure.** `StorageConfigurationError: The
+  document store refused a listing (HTTP 429) too_many_connections`, raised in
+  `storeFile` → `uniqueKey` → `exists` while the report was being filed.
+  Supabase Storage refused the request. §18's rule is working: nothing fell back,
+  nothing recorded half a filing, and the tool returned its request id.
+- **`brain_propose_fragments`: cause unreadable.** The log buffer no longer
+  reaches 07:15Z, so its line is gone. It is **not** classified as
+  infrastructure by analogy; what is established is only that it ran 4m45s
+  during the same degraded window, alongside the boot step below.
+
+The same logs show two things that are not these failures:
+
+- **An application defect, now fixed.** At 07:54:14 and 07:56:03 there were two
+  `[brain] an unhandled rejection reached the process` lines, both
+  `Connection terminated due to connection timeout` at `extendCampaignTick`. The
+  factory's tick heartbeat was `void extendCampaignTick(...)` inside a
+  `setInterval`, so a pool timeout had nowhere to go. §18's backstop kept the
+  process serving; without it, Node 22 would have exited. The fix gives every
+  promise fired from a timer its own catch: both campaign heartbeats and the
+  local plane's unit heartbeat, which had the same shape.
+  `tests/campaignTickHeartbeat.test.ts` refuses the class across `server/`, and
+  it finds all three sites on the unfixed tree.
+- **Where the post-listen boot spent its time.** `resume worker-driven packets`
+  took **1933.0s** (32 minutes), `rebuild derived state` 911.9s (it failed on a
+  pool timeout and was caught), re-drive dispatch 17.1s, repair launches 7.8s,
+  and queue unread 6.0s. All of it ran after the port opened, which is what
+  `1f99be1` was for. It also ran against the same pool the verification was
+  using, on a degraded database. That is recorded as a reading. It is not
+  established as the cause of `brain_propose_fragments`.
 
 ## What is still blocked, and on whom
 

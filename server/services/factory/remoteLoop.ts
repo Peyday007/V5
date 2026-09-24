@@ -1993,7 +1993,11 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
     return held;
   }
   const keep = setInterval(() => {
-    void extendCampaignTick(campaignId, owner, claim.generation);
+    void extendCampaignTick(campaignId, owner, claim.generation).catch((error: unknown) => {
+      // A missed beat is harmless — the lease is guarded on owner and generation —
+      // and an escaped rejection is how Node exits (§18). Deploy 344 did both.
+      console.error(`[factory] campaign tick heartbeat failed for ${campaignId}; the tick carries on:`, error);
+    });
   }, TICK_HEARTBEAT_MS);
   try {
     const report = await runRemoteTick(campaign, changeRequest);

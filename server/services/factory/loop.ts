@@ -227,7 +227,11 @@ export async function tickCampaign(
   // live dispatcher and a second one joins in — two dispatchers dispatching past
   // the lane target and racing each other into the integration branch.
   const keepTick = setInterval(() => {
-    void extendCampaignTick(campaignId, owner, claim.generation);
+    void extendCampaignTick(campaignId, owner, claim.generation).catch((error: unknown) => {
+      // A missed beat is harmless — the lease is guarded on owner and generation —
+      // and an escaped rejection is how Node exits (§18). Deploy 344 did both.
+      console.error(`[factory] campaign tick heartbeat failed for ${campaignId}; the tick carries on:`, error);
+    });
   }, CAMPAIGN_TICK_HEARTBEAT_MS);
   try {
     return await runTick(campaignId, options);
