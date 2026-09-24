@@ -443,6 +443,48 @@ The same logs show two things that are not these failures:
   using, on a degraded database. That is recorded as a reading. It is not
   established as the cause of `brain_propose_fragments`.
 
+## Deploy 345: released; the verification ran into Storage 544, and found a real defect
+
+Run 35977673363 on `e126121`, which carries the timer-promise catch. **`release:
+success`.** Before the restart, the harness passed everything from identity
+through the research gate, then stopped on two conditions:
+
+- **`brain_submit_synthesis` (`req_kFklh2zf9WVQ`) was infrastructure.** Brain's own log
+  reads `StorageConfigurationError: The document store refused a listing (HTTP
+  544)`, `DatabaseTimeout`, in `storeFile` → `uniqueKey` → `exists`. Supabase
+  Storage's own database timed out.
+- **`an administrator can inspect operations — 500`** took 2m11s. The log buffer
+  starts at 09:23Z, so its line is gone and the cause is **unread**. The route is
+  bounded to 500 rows and ordered on `created_at`. There is no
+  `(project_id, created_at)` index, so it sorts the project's whole history, but
+  that is not established as the cause.
+
+After the restart, the harness **could not start**. Its own `initStorage` died on
+`The document store could not be checked (HTTP 544)`. The Brain itself rebooted
+into the same 544 at 09:31:51, served the error page, and was replaced by the
+Brain at 09:32:32 when the proof held. `bootRetry.ts` did exactly its job.
+
+**One defect was found beside them, and it is an application defect.** At 09:26:55
+and 09:38:57, `could not resume packet … canceling statement due to statement
+timeout` fired in `auditRoundFor`:
+
+    SELECT created_at, payload FROM project_events
+     WHERE event_type IN ($1, $2) ORDER BY created_at DESC, seq DESC LIMIT 50
+
+That statement scans every project's events, which is the timeout. It also
+filters to one orchestration *after* the `LIMIT`. So once fifty round events
+happened anywhere in the Brain after a packet's own boundary, that packet read
+as having **no round at all**: `since: null`, and every audit pass counted as
+current. This is the wrong answer about which round a packet is in, and it is
+silent. It is scoped to the orchestration's own project now, with no limit; both
+writers already record that project. `tests/auditRoundScope.test.ts` fails on the
+old query with `expected null to be '2026-09-24T09:00:00.000Z'`.
+
+The timer-promise fix leaves nothing to see here, which is the point: no
+`an unhandled rejection reached the process` line appears in the captured
+buffer (09:23–09:39Z). `resume worker-driven packets` took 345.7s this boot, and
+this time it failed on a pool timeout that was caught, and the Brain served on.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
