@@ -258,6 +258,21 @@ export async function capacityReading(
 
     let health: SurfaceHealth;
     let because: string | undefined;
+    /*
+     * The order is the router's, and each branch is a condition `routeBin`
+     * refuses on — so `eligibleNow` is what the dispatcher could actually fire.
+     *
+     * It used to reach the two eligible branches on *being a snapshot
+     * candidate*, and `fleetSnapshot` puts every Routine with a deployed secret
+     * in its candidate list whatever its state: filtering is the router's job,
+     * not the snapshot's. So a QUARANTINED or DRAINING surface, one whose
+     * provider had just asked Brain to wait, and one bound to no worker all
+     * read `CONFIGURING` or `HEALTHY` — counted as "eligible now" beside a
+     * dispatcher that would fire none of them. State, then the unbound worker
+     * (which serves no project, so `routeBin` can never select it), then the
+     * provider's cooldown, are all asked before eligibility is claimed.
+     */
+    const outOfRouting = routine.state !== 'ENABLED' || owner.state !== 'ENABLED';
     if (routine.state === 'RETIRED' || owner.state === 'RETIRED') {
       health = 'UNAVAILABLE';
       because = routine.stateReason ?? 'kept for its history and out of active dispatch';
@@ -266,6 +281,17 @@ export async function capacityReading(
       because =
         'its trigger credential is not in this deployment yet, so Brain will not spend a fire ' +
         'finding that out. A Brain administrator sets it and nothing else here has to be redone.';
+    } else if (outOfRouting) {
+      health = 'UNAVAILABLE';
+      because =
+        (routine.state !== 'ENABLED' ? routine.stateReason : owner.stateReason) ??
+        `it is ${routine.state.toLowerCase()} and its account is ${owner.state.toLowerCase()}, so it is out of routing.`;
+    } else if (routine.workerId === null) {
+      health = 'UNAVAILABLE';
+      because = 'it is registered to no worker identity, so nothing could be handed to it.';
+    } else if (rateLimited(routine, owner, now)) {
+      health = 'WAITING';
+      because = 'the provider asked Brain to wait before firing this again; it resumes by itself.';
     } else if (eligible && chain.proven) {
       health = 'HEALTHY';
     } else if (eligible) {
@@ -273,12 +299,6 @@ export async function capacityReading(
       because =
         'Brain would fire this now, and no session it fired has yet arrived and finished a ' +
         'piece of work here — so it is configured rather than proven.';
-    } else if (rateLimited(routine, owner, now)) {
-      health = 'WAITING';
-      because = 'the provider asked Brain to wait before firing this again.';
-    } else if (routine.workerId === null) {
-      health = 'UNAVAILABLE';
-      because = 'it is registered to no worker identity, so nothing could be handed to it.';
     } else {
       health = 'UNAVAILABLE';
       because =

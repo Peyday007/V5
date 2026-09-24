@@ -210,6 +210,81 @@ never the repository the work happens in.
 
 ---
 
+## A friend's "Your Claude connection" is not a Factory account
+
+**Read this before asking anybody to connect their account for the Factory.**
+Every member of this Brain has a page — **People & capacity → Your Claude
+connection** — and finishing it produces a *research* surface: a personal
+`research-…` worker, a membership on the shared frontier, and one Routine Brain
+fires for research and general work. **Nothing about it puts that Claude account
+in the `factory-brain` pool**, and nothing in Brain counts it as Factory
+capacity: its worker has no `worker_routing` row naming `FACTORY` or
+`peyday007/v5`, so the router refuses it for Factory work with
+`NO_SURFACE_SERVES_THIS_FAMILY` whatever its capability tags say, the Build card
+does not list it, and `verify-pool` does not count it. The page says so itself.
+
+A friend's account joins the Factory pool only through **steps 3 to 7 below,
+done in that friend's own Claude account**:
+
+| | Their research connection | Their Factory surface |
+|---|---|---|
+| Who starts it | the friend, on their own page | the owner, with this runbook |
+| Connector | their own, at `/mcp` | a second one named `Factory Brain`, at `/mcp/factory` |
+| Brain worker approved | `research-…` (theirs) | `factory-brain` (the one shared identity) |
+| Routine | research, bootstrap attached | `Factory_surface_N`, **`Peyday007/V5` attached** |
+| Trigger secret | their `BRAIN_ROUTINE_TOKEN_…` | a new `BRAIN_ROUTINE_TOKEN_FACTORY_N`, never reused |
+| Registered and bound by | the connection journey | an administrator: `register-account`, `register-routine`, `bind-worker` |
+| Proven by | the page's self-test | `verify-surface --ref trig_… --probe` (pinned) |
+
+**What the friend does and what the owner does.** The friend, signed in to
+Claude in their own account, adds the `Factory Brain` connector (step 3) —
+approving `factory-brain` on Brain's consent screen from an invitation the owner
+issued — and creates the Routine (step 4). The friend sends the owner the
+Routine's `trig_…` id and, privately, its bearer. The owner sets the deployment
+secret (step 5), registers and binds the surface (step 6) and runs the pinned
+proof (step 7). **Nobody needs access to anybody else's Claude account**, and
+the friend never opens Fly.
+
+**Which repositories this reaches.** One: `Peyday007/V5`, the only real target
+in the envelope. A friend's Factory surface does not let anybody run Factory
+work against a repository of their own choosing — a new target is a reviewed
+change to `repositoryEnvelope.ts`, its own onboarding, and in practice its own
+worker (§27: one connector, one worker, one repository).
+
+**And submitting work is separate again.** A person invited onto a project that
+has `brain` onboarded — as `MEMBER` or above — can submit, approve and follow
+their own request on **Build**, and the request records them as its submitter
+and approver. That needs no Claude connection at all: *who asks* and *which
+account runs it* are different rows, and neither is ever inferred from the
+other.
+
+---
+
+## What "Ready to execute" means on Build
+
+Build reads each repository's readiness from **the dispatcher's own decision**:
+for every Routine bound to `factory-brain`, it asks `routeBin` — over the same
+`fleetSnapshot` the dispatch tick reads — whether it would fire a
+`FACTORY_UNITS` bin for this repository in this project, pinned to that surface.
+So the card agrees with routing about the project, the family, the repository,
+both capabilities, the account and Routine state, the provider's cooldown and
+the deployment secret, and it cannot be satisfied by anything the dispatcher is
+not.
+
+| Card | Meaning | What to do |
+|---|---|---|
+| **No worker registered** | this project has not onboarded the repository, or its worker lost the project, the repository or a capability | step 1 (onboarding repairs it) |
+| **Registered — waiting for a surface** | no Routine is configured for `factory-brain` | steps 2 to 7 |
+| **No Factory surface can take work** | Routines are configured and the dispatcher would fire none: a secret not deployed, a missing `repository-write`, a surface or account taken out of routing | the reason printed beside each surface |
+| **Waiting for capacity** | a surface is usable and busy: a provider cooldown, a target reached, a paused fleet | nothing — it resumes by itself |
+| **Ready to execute** | the dispatcher would fire at least one surface now | nothing; work runs |
+
+**Proven is reported beside this and never instead of it.** A surface that
+completed work last week and has since been quarantined reads *has completed
+work* and *will not be fired*, and it adds nothing to the account count.
+
+---
+
 ## 1. Onboard `brain`, in Russell
 
 Brain → **Build** → **Repositories**. Two repositories are authorized, and the

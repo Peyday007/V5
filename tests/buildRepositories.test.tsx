@@ -69,7 +69,10 @@ function grant(over: Partial<RepositoryOnboarding> = {}): RepositoryOnboarding {
     routedRepositories: [],
     surfaces: [],
     accountsServing: 0,
+    eligibleSurfaces: 0,
     provenSurfaces: 0,
+    summary:
+      'No Factory worker is registered for this repository in this project, so nothing can execute work here.',
     contributedSurfaces: [],
     connectorPath: '/mcp/factory',
     boundary: null,
@@ -220,13 +223,29 @@ describe('the Build card says what is connected and what is missing', () => {
               routedFamilies: ['FACTORY'],
               routedRepositories: ['Peyday007/brain-worker-bootstrap'],
               surfaces: [
-                { routineName: 'V1 factory', accountName: 'primary', proven: true },
+                {
+                  routineName: 'V1 factory',
+                  accountName: 'primary',
+                  state: 'ENABLED',
+                  dispatch: 'ELIGIBLE',
+                  dispatchReason: 'Brain would fire this surface for this work now.',
+                  proven: true,
+                },
                 // A second Routine on the **same** subscription. Two surfaces,
                 // one account's allowance, and the card must not add them up.
-                { routineName: 'V1 factory spare', accountName: 'primary', proven: false },
+                {
+                  routineName: 'V1 factory spare',
+                  accountName: 'primary',
+                  state: 'ENABLED',
+                  dispatch: 'ELIGIBLE',
+                  dispatchReason: 'Brain would fire this surface for this work now.',
+                  proven: false,
+                },
               ],
               accountsServing: 1,
+              eligibleSurfaces: 2,
               provenSurfaces: 1,
+              summary: 'The dispatcher would fire 2 of 2 configured Factory surfaces for this repository now.',
               readiness: 'READY',
               remaining: [],
               waiting: 0,
@@ -250,13 +269,12 @@ describe('the Build card says what is connected and what is missing', () => {
      * differ, and neither is presented as the other.
      */
     const text = card().textContent ?? '';
-    expect(text).toContain('1 Claude account');
-    expect(text).toContain('across 2 surfaces');
+    expect(text).toContain('2 of 2 configured surfaces can take work now, on 1 Claude account');
     expect(text).not.toContain('2 Claude accounts');
 
     // And registered is not proven. One of these two has completed work Brain
     // sent it; the card says which, rather than implying both have.
-    expect(text).toContain('1 of 2 have completed work');
+    expect(text).toContain('1 has completed work');
     const surfaces = [...card().querySelectorAll('.rs-repo-surfaces li')].map(
       (li) => li.textContent ?? '',
     );
@@ -267,6 +285,66 @@ describe('the Build card says what is connected and what is missing', () => {
     // The runtime defect a compiler cannot catch: an array of objects joined
     // into a sentence renders as this, and every type in the chain is correct.
     expect(text).not.toContain('[object Object]');
+  });
+});
+
+describe('a configured surface the dispatcher will not fire is not ready', () => {
+  /*
+   * The defect: an enabled Routine bound to the worker read "Ready to execute"
+   * while its trigger token was not deployed. The server now asks the router,
+   * and this pins what the screen does with that answer — the label, every
+   * surface's own reason, no "issue a new invitation" that would rotate a
+   * working connector to fix a missing secret, and the picker saying the same.
+   */
+  const BLOCKED = grant({
+    workerId: 'wrk_1',
+    scopesCorrect: true,
+    routedFamilies: ['FACTORY'],
+    routedRepositories: ['Peyday007/brain-worker-bootstrap'],
+    surfaces: [
+      {
+        routineName: 'Factory_surface_1',
+        accountName: 'primary',
+        state: 'ENABLED',
+        dispatch: 'UNUSABLE',
+        dispatchReason:
+          'Its trigger token is not deployed: this deployment has no secret named BRAIN_ROUTINE_TOKEN_FACTORY_1.',
+        proven: true,
+      },
+    ],
+    accountsServing: 0,
+    eligibleSurfaces: 0,
+    provenSurfaces: 1,
+    readiness: 'NO_USABLE_SURFACE',
+    summary:
+      '1 Factory surface is configured and the dispatcher would fire none of them, so nothing can execute work here.',
+    remaining: ['Factory_surface_1: Its trigger token is not deployed.'],
+    boundary: { scopeKind: 'WHOLE_REPOSITORY', directories: [], sentence: 'the whole repository' },
+  });
+
+  it('says no surface can take work, and why, on the card', async () => {
+    base({ [REPOSITORIES]: { body: { repositories: [BLOCKED] } } });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    const text = card().textContent ?? '';
+    expect(within(card()).getByText('No Factory surface can take work')).toBeTruthy();
+    expect(text).not.toContain('Ready to execute');
+    expect(text).toContain('BRAIN_ROUTINE_TOKEN_FACTORY_1');
+    expect(text).toContain('0 of 1 configured surface can take work now');
+    // A past proof is shown as history, never as capacity.
+    expect(text).toContain('has completed work');
+    expect(within(card()).queryByRole('button', { name: /invitation|Onboard/ })).toBeNull();
+  });
+
+  it('says the same in the repository picker', async () => {
+    base({ [REPOSITORIES]: { body: { repositories: [BLOCKED] } } });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    const option = [...document.querySelectorAll('.rs-build-submit option')].map((o) => o.textContent ?? '');
+    expect(option[0]).toContain('no factory surface can take work');
+    expect(document.querySelector('.rs-build-not-ready')?.textContent).toContain(
+      'the dispatcher would fire none',
+    );
   });
 });
 
@@ -326,18 +404,27 @@ describe('the boundary is asked, never defaulted', () => {
       [REPOSITORIES]: {
         body: {
           repositories: [
-            {
-              ...grant(),
+            grant({
               readiness: 'READY',
-              surfaces: [{ routineName: 'V1 factory', accountName: 'primary', proven: true }],
+              surfaces: [
+                {
+                  routineName: 'V1 factory',
+                  accountName: 'primary',
+                  state: 'ENABLED',
+                  dispatch: 'ELIGIBLE',
+                  dispatchReason: 'Brain would fire this surface for this work now.',
+                  proven: true,
+                },
+              ],
               accountsServing: 1,
+              eligibleSurfaces: 1,
               provenSurfaces: 1,
               boundary: {
                 scopeKind: 'DIRECTORIES',
                 directories: ['sites/v4'],
                 sentence: 'sites/v4/',
               },
-            },
+            }),
           ],
         },
       },

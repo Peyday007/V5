@@ -143,6 +143,7 @@ export function mapChangeRequest(row: FactoryChangeRequestRow): FactoryChangeReq
     externalSpendPolicy: 'PROHIBITED',
     rollbackRequirement: row.rollback_requirement,
     verificationCommands: parseJson<string[]>(row.verification_commands, []),
+    submittedByUserId: row.submitted_by_user_id ?? null,
     approvedByUserId: row.approved_by_user_id,
     approvedVia: row.approved_via as FactoryChangeRequest['approvedVia'],
     authorityId: row.authority_id,
@@ -282,6 +283,8 @@ export interface CreateChangeRequestInput {
   deploymentPolicy: FactoryDeploymentPolicy;
   rollbackRequirement: string;
   verificationCommands: string[];
+  /** The authenticated person submitting it, when there is one. */
+  submittedByUserId?: string | null;
 }
 
 /**
@@ -304,9 +307,9 @@ export async function ensureChangeRequest(
        id, project_id, submission_key, contract_version, objective, expected_outcome,
        non_goals, acceptance_conditions, repository, repository_root, base_branch, base_sha,
        environment, risk_class, mutation_scope, deployment_policy, external_spend_policy,
-       rollback_requirement, verification_commands, approved_by_user_id, approved_via,
-       authority_id, approved_at, state, created_at, updated_at)
-     VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROHIBITED', ?, ?,
+       rollback_requirement, verification_commands, submitted_by_user_id, approved_by_user_id,
+       approved_via, authority_id, approved_at, state, created_at, updated_at)
+     VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROHIBITED', ?, ?, ?,
              NULL, NULL, NULL, NULL, 'DRAFT', ?, ?)
      ON CONFLICT (project_id, submission_key) DO NOTHING`,
     [
@@ -327,6 +330,7 @@ export async function ensureChangeRequest(
       input.deploymentPolicy,
       input.rollbackRequirement,
       toJson(input.verificationCommands),
+      input.submittedByUserId ?? null,
       at,
       at,
     ],

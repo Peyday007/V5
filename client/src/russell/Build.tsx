@@ -216,44 +216,51 @@ function Repositories({
               <span className="rs-repo-readiness">{READINESS[repo.readiness]}</span>
             </div>
             <p className="rs-hint">{repo.description}</p>
-            {repo.readiness === 'READY' ? (
+            {/*
+              * The server's own sentence first: which readiness this is and why,
+              * composed once so the card and the picker below cannot disagree.
+              */}
+            <p className="rs-hint rs-repo-summary">{repo.summary}</p>
+            {repo.surfaces.length > 0 ? (
               /*
-               * Accounts, then surfaces, then what has actually run.
+               * Accounts, then surfaces, then what each one would actually do.
                *
-               * This used to be one sentence — "running on A, B and C" — and a
-               * reader counted three Claude accounts out of it. Three Routines
-               * on one subscription produce exactly that sentence, and §23's
-               * whole account-versus-Routine distinction is that a second
-               * Routine doubles how fast Brain can *start* sessions and changes
-               * nothing about how much that account may *do*. Sizing a fleet on
-               * it is sizing it on a fiction.
-               *
-               * And a Routine registered a minute ago read the same as one with
-               * a completed chain behind it. `proven` is the four-row chain the
-               * server read through the same module `/people` reads, so the two
-               * screens cannot disagree about whether a surface works.
+               * This used to render only on READY, and READY used to mean "an
+               * enabled Routine is bound" — so a surface with no deployed secret,
+               * or no repository-write, read *Ready to execute* while the
+               * dispatcher would fire none of it. Every configured surface is
+               * listed now with the dispatcher's own decision about it, and
+               * whether it has ever completed work is a separate fact beside it:
+               * a proof is history, and a surface taken out of routing since
+               * counts for nothing here however well it ran.
                */
-              <p className="rs-hint">
-                Registered as <code>{repo.workerName}</code>, on{' '}
-                {repo.accountsServing === 1 ? '1 Claude account' : `${repo.accountsServing} Claude accounts`}
-                {repo.surfaces.length === repo.accountsServing
-                  ? ''
-                  : ` across ${repo.surfaces.length} surfaces`}
-                .{' '}
-                {repo.provenSurfaces === repo.surfaces.length
-                  ? 'Each has completed work Brain sent it.'
-                  : `${repo.provenSurfaces} of ${repo.surfaces.length} have completed work Brain sent them; the rest are configured rather than proven.`}
-              </p>
-            ) : null}
-            {repo.readiness === 'READY' ? (
-              <ul className="rs-repo-surfaces">
-                {repo.surfaces.map((surface) => (
-                  <li key={`${surface.accountName}/${surface.routineName}`}>
-                    {surface.routineName} — {surface.accountName}
-                    {surface.proven ? '' : ' (not yet proven)'}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <p className="rs-hint">
+                  Registered as <code>{repo.workerName}</code>.{' '}
+                  {repo.eligibleSurfaces} of {repo.surfaces.length} configured{' '}
+                  {repo.surfaces.length === 1 ? 'surface' : 'surfaces'} can take work now, on{' '}
+                  {repo.accountsServing === 1
+                    ? '1 Claude account'
+                    : `${repo.accountsServing} Claude accounts`}
+                  ; {repo.provenSurfaces} {repo.provenSurfaces === 1 ? 'has' : 'have'} completed work
+                  Brain sent {repo.provenSurfaces === 1 ? 'it' : 'them'}.
+                </p>
+                <ul className="rs-repo-surfaces">
+                  {repo.surfaces.map((surface) => (
+                    <li
+                      key={`${surface.accountName}/${surface.routineName}`}
+                      className={`rs-repo-surface rs-repo-surface-${surface.dispatch.toLowerCase()}`}
+                    >
+                      {surface.routineName} — {surface.accountName} —{' '}
+                      <strong>{DISPATCH[surface.dispatch]}</strong>
+                      {surface.proven ? ' (has completed work)' : ' (not yet proven)'}
+                      {surface.dispatch === 'ELIGIBLE' ? null : (
+                        <span className="rs-hint"> {surface.dispatchReason}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
             ) : null}
             {/*
               * Member-contributed Claude accounts this repository may use.
@@ -316,7 +323,13 @@ function Repositories({
                 This project may change <strong>{repo.boundary.sentence}</strong>.
               </p>
             ) : null}
-            {repo.readiness !== 'READY' ? (
+            {/*
+              * Onboarding is the remedy for exactly two readinesses. A surface
+              * that is configured and refused, or merely busy, is not answered by
+              * a new invitation — offering one would rotate a working connector's
+              * link to fix a missing secret or a cooldown.
+              */}
+            {repo.readiness === 'NOT_ONBOARDED' || repo.readiness === 'AWAITING_SURFACE' ? (
               <div className="rs-repo-scope">
                 {/*
                   * The one question here that has a wrong answer, asked rather
@@ -428,7 +441,15 @@ function Repositories({
 const READINESS: Record<RepositoryOnboarding['readiness'], string> = {
   NOT_ONBOARDED: 'No worker registered',
   AWAITING_SURFACE: 'Registered — waiting for a surface',
+  NO_USABLE_SURFACE: 'No Factory surface can take work',
+  WAITING_FOR_CAPACITY: 'Waiting for capacity',
   READY: 'Ready to execute',
+};
+
+const DISPATCH: Record<RepositoryOnboarding['surfaces'][number]['dispatch'], string> = {
+  ELIGIBLE: 'can take work now',
+  WAITING: 'waiting for capacity',
+  UNUSABLE: 'will not be fired',
 };
 
 /**
@@ -521,7 +542,7 @@ function Submit({
             {repositories.map((grant) => (
               <option key={grant.grantId} value={grant.remote}>
                 {grant.remote.replace('https://github.com/', '')}
-                {grant.readiness === 'READY' ? '' : ' — not ready to execute'}
+                {grant.readiness === 'READY' ? '' : ` — ${READINESS[grant.readiness].toLowerCase()}`}
               </option>
             ))}
           </select>
@@ -530,6 +551,18 @@ function Submit({
           {repositories.find((grant) => grant.remote === repository)?.description ??
             'Pick the repository this objective is about.'}
         </p>
+        {/*
+          * What executing here would actually meet, in the server's own words.
+          * A submission is still accepted when nothing can execute it — the work
+          * waits and resumes by itself — but a person should know that before
+          * they write the objective rather than after the campaign stalls.
+          */}
+        {(() => {
+          const chosen = repositories.find((grant) => grant.remote === repository);
+          return chosen && chosen.readiness !== 'READY' ? (
+            <p className="rs-hint rs-build-not-ready">{chosen.summary}</p>
+          ) : null;
+        })()}
 
         <label>
           <span>The objective</span>

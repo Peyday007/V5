@@ -152,7 +152,7 @@ async function campaignFor(campaignId: string, level: 'READ' | 'WRITE') {
 factoryRouter.post(
   '/projects/:projectId/factory/change-requests',
   handler(async (req, res) => {
-    requirePerson();
+    const principal = requirePerson();
     const projectId = pathId(req, 'projectId');
     await projectForFactory(projectId, 'write');
 
@@ -213,6 +213,9 @@ factoryRouter.post(
         FACTORY_DEPLOYMENT_POLICIES,
         'deploymentPolicy',
       ),
+      // From the authenticated person and from no field: attribution a caller
+      // could supply would be a caller writing its own audit trail.
+      submittedByUserId: principal.id,
     }).catch((error: unknown) => {
       if (error instanceof ContractError) throw unprocessable(error.message, error.detail);
       throw error;

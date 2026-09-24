@@ -3260,6 +3260,51 @@ remote.
   counts, from rows, **how much work is already waiting on this repository**,
   which is the one thing that makes a setup task worth doing today: the work
   resumes by itself and nothing has to be submitted again.
+- **`READY` meant "an enabled Routine is bound", and the dispatcher meant
+  something else. The correction is recorded rather than quietly applied.**
+  Build read *Ready to execute* over a Routine whose trigger token was not
+  deployed, one declaring no `repository-write`, and one whose account was
+  quarantined — the dispatcher refuses every one, so a person could submit an
+  objective against a repository nothing would ever fire for. §24's *waiting
+  nobody can resolve*, wearing the one green label on the page. The remedy is
+  not a better copy of the routing rules in Build, because a copy is the
+  *two readers of one fact* defect this file records more than any other:
+  `services/dispatch/surfaceEligibility.ts` pins a `FACTORY_UNITS`-shaped
+  probe to each surface and asks `routeBin` itself, over the same
+  `fleetSnapshot` the tick reads, and the admission half asks
+  `decideBinRouting` over the worker's own rows. So there are five answers now
+  — `NOT_ONBOARDED`, `AWAITING_SURFACE`, `NO_USABLE_SURFACE`,
+  `WAITING_FOR_CAPACITY`, `READY` — and the middle two are apart because their
+  remedies are opposite: a missing secret is an operator's write, and a
+  cooldown or a reached target resolves by itself and must never send somebody
+  to re-register a surface that works (§23: *a refusal is not misconduct*).
+  **Proof is reported beside readiness and never instead of it** — a surface
+  that completed work and has since been quarantined reads both facts and
+  counts for nothing as capacity.
+
+  **The same fork was in two more readers, and fixing one would have left the
+  other two disagreeing with it.** `capacityReading` called a surface eligible
+  on being a snapshot candidate, and `fleetSnapshot` puts every Routine with a
+  deployed secret in that list whatever its state — filtering is the router's
+  job — so `/people`'s *eligible now* counted quarantined, draining, cooling
+  and unbound surfaces. And `verify-pool` carried its own copy of the routing
+  rules, calling a surface at its target ineligible where the router calls it
+  waiting. Both read the router's order now, and the pool reads
+  `surfaceEligibility` outright. `tests/factoryReadinessRouting.test.ts` holds
+  the card against `routeBin` over a real units bin in every scenario, and was
+  run against the unfixed code to watch twelve of its assertions fail.
+
+  **And "Your Claude connection" is research capacity, which the page now
+  says.** It creates a member's personal `research-…` worker, and nothing
+  about it — routing, the card, the pool — counts it as a Factory account; a
+  Factory surface is a second connector, Routine, secret, registration and
+  pinned proof in that member's own Claude account. Submitting is separate
+  again: a project `MEMBER` can submit, approve and follow a Factory request,
+  and `factory_change_requests.submitted_by_user_id` (`093_change_request_submitter.sql`,
+  pg `084_change_request_submitter.sql`) records who asked, from the
+  authenticated principal and never from a field — the change request had
+  recorded its approver and not its author, so in a shared project nobody's
+  request was readable as theirs.
 - **A rendered card is not a passing service test.** Pressing the button reloads
   the list, the reload counted as loading, and loading unmounted the section —
   taking the invitation *shown once* down with it. Every server test passed: the

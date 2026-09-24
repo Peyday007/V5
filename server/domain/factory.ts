@@ -259,6 +259,12 @@ export interface FactoryChangeRequest {
   externalSpendPolicy: 'PROHIBITED';
   rollbackRequirement: string;
   verificationCommands: string[];
+  /**
+   * The person who submitted this ask, from the authenticated principal.
+   * Attribution only — it authorizes nothing. Null for a row written before it
+   * was recorded, and for a request Brain compiled for itself.
+   */
+  submittedByUserId: string | null;
   approvedByUserId: string | null;
   approvedVia: FactoryApprovalRoute | null;
   authorityId: string | null;
@@ -301,6 +307,7 @@ export interface FactoryChangeRequestRow {
   external_spend_policy: string;
   rollback_requirement: string;
   verification_commands: string;
+  submitted_by_user_id: string | null;
   approved_by_user_id: string | null;
   approved_via: string | null;
   authority_id: string | null;

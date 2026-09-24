@@ -681,6 +681,7 @@ export async function authorizeSoftwareRequest(input: {
       mutationScope: requested,
       acceptanceConditions: input.acceptanceConditions ?? [],
       submissionKey: request.submissionKey,
+      submittedByUserId: input.userId,
     });
 
     /*

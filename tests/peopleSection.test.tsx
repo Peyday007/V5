@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PeopleAndCapacityView } from '../client/src/russell/People.tsx';
 import { CashSection } from '../client/src/russell/Cash.tsx';
 import type { ConnectionView, PersonRow } from '../client/src/lib/peopleApi.ts';
+import { CONNECTION_SCOPE } from '../server/services/capacity/connection.ts';
 
 interface Reply {
   status?: number;
@@ -163,6 +164,7 @@ const CONNECTION: ConnectionView = {
       disabledReason: 'This connection has not been taken back, so there is nothing to restore.',
     },
   ],
+  scope: CONNECTION_SCOPE,
   troubleshooting: [
     {
       symptom: 'A self-test was sent and nothing came back.',
@@ -492,6 +494,22 @@ describe('the default view answers four questions', () => {
     expect(
       screen.getAllByText(/Create the Routine in Claude and paste its trigger id/).length,
     ).toBeGreaterThan(0);
+  });
+
+  it('says this is research capacity and never a Factory account', async () => {
+    /*
+     * The friend journey's most misreadable step. A member who finishes this
+     * page has connected a personal research worker; the Factory pool is a
+     * separate connector, Routine, secret, registration and proof. The page
+     * says so in the server's words, for everybody.
+     */
+    await mountPeople();
+    await waitFor(() => expect(screen.getByText('Your Claude connection')).toBeTruthy());
+    const scope = document.querySelector('.rs-connection-scope')?.textContent ?? '';
+    expect(scope).toContain('research capacity');
+    expect(scope).toContain('does not add your account to the Software Factory');
+    expect(scope).toContain('/mcp/factory');
+    expect(scope).toContain('CONNECTING-THE-FACTORY-WORKER.md');
   });
 
   it('keeps retired surfaces collapsed rather than deleted', async () => {
