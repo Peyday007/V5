@@ -420,3 +420,104 @@ describe('a pooled Factory worker is still four accounts', () => {
     expect(await sessionsForRoutine(friend1!.routineId)).toHaveLength(0);
   });
 });
+
+/*
+ * The acceptance the sequential cases above cannot give: all four people at
+ * once. Two dispatch ticks race over eight ready bins — two Brain instances, or
+ * one tick and a completion's compensating advance — and then all four
+ * sessions arrive in the same instant. Only the provider edge is simulated.
+ */
+describe('four accounts at once', () => {
+  it('fires each bin once, hands each bin to one session, and credits nobody else', async () => {
+    const { dispatchTick } = await import('../server/services/dispatch/loop.ts');
+    const { listDispatchesForBin } = await import('../server/repos/bins.ts');
+    const people = await fourPeople();
+    const bins: Bin[] = [];
+    for (let i = 0; i < 8; i += 1) bins.push(await researchBin(`Concurrent question ${i}`));
+
+    const realFetch = globalThis.fetch;
+    const firedSessions = new Map<string, string[]>();
+    let n = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const ref = /\/routines\/([^/]+)\/fire/.exec(String(input))?.[1] ?? String(input);
+      n += 1;
+      const session = `cse_${ref}_${n}`;
+      firedSessions.set(ref, [...(firedSessions.get(ref) ?? []), session]);
+      return new Response(JSON.stringify({ claude_code_session_id: session }), { status: 200 });
+    }) as typeof globalThis.fetch;
+    try {
+      await Promise.all([
+        dispatchTick({ burst: 8, projectIds: [project.id] }),
+        dispatchTick({ burst: 8, projectIds: [project.id] }),
+      ]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+
+    // No bin was fired twice at one generation, whichever tick got there.
+    for (const bin of bins) {
+      const sent = (await listDispatchesForBin(bin.id)).filter(
+        (one) => one.leaseGeneration === bin.leaseGeneration && one.state === 'SENT',
+      );
+      expect(sent.length).toBeLessThanOrEqual(1);
+    }
+    const totalFires = [...firedSessions.values()].reduce((sum, list) => sum + list.length, 0);
+    // Every account was reached in the first burst. The losing tick used to
+    // route its whole burst at the surface whose slot it had just lost, and
+    // fired nothing at all (three fires over four idle accounts).
+    expect(firedSessions.size).toBe(4);
+    expect(totalFires).toBeLessThanOrEqual(bins.length);
+
+    // All four sessions arrive together, each carrying the session its own
+    // Routine was fired with.
+    const refFor = new Map<string, string>();
+    for (const one of people) refFor.set(one.person, (await getRoutine(one.routineId))!.routineRef);
+    const arriving = people.filter((one) => (firedSessions.get(refFor.get(one.person)!) ?? []).length > 0);
+    expect(arriving.length).toBeGreaterThanOrEqual(2);
+    const assigned = await Promise.all(
+      arriving.map((one) =>
+        assignNextBin({
+          workerId: one.workerId,
+          projectIds: [project.id],
+          credentialId: `cred_concurrent_${one.person}`,
+          sessionRef: firedSessions.get(refFor.get(one.person)!)![0]!,
+        }),
+      ),
+    );
+    const handed = assigned.map((one) => one?.bin.id).filter((id): id is string => Boolean(id));
+    expect(handed).toHaveLength(arriving.length);
+    expect(new Set(handed).size).toBe(handed.length);
+
+    // Whatever bin each was handed, a session is recorded against its own
+    // person's Routine and account, or against nobody — never another's.
+    for (const one of arriving) {
+      const session = await getWorkerSession(`cred_concurrent_${one.person}`);
+      if (session === null) continue;
+      expect(session.workerId).toBe(one.workerId);
+      expect(session.routineId).toBe(one.routineId);
+      expect(session.accountId).toBe(one.accountId);
+    }
+    for (const one of people) {
+      for (const recorded of await sessionsForRoutine(one.routineId)) {
+        expect(recorded.workerId).toBe(one.workerId);
+      }
+    }
+
+    // And all four finish at once, each on its own lease.
+    const outcomes = await Promise.all(
+      assigned.map((one, i) =>
+        finishBin(
+          {
+            binId: one!.bin.id,
+            leaseId: one!.leaseId,
+            leaseGeneration: one!.leaseGeneration,
+            workerId: arriving[i]!.workerId,
+          },
+          { state: 'COMPLETE', reason: 'answered concurrently' },
+        ),
+      ),
+    );
+    expect(outcomes.every((one) => one === 'OK')).toBe(true);
+    for (const id of handed) expect((await getBin(id))!.state).toBe('COMPLETE');
+  });
+});

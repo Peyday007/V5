@@ -497,6 +497,24 @@ export async function dispatchTick(
           retryAfterMs: 5_000,
         });
         result.deferred += 1;
+        /*
+         * And stop routing the rest of this burst against the generation it
+         * just lost. The snapshot is read once per tick, so without this every
+         * later intent in the burst chose the same surface from the same stale
+         * row and lost the same race — measured with two ticks over eight
+         * bins and four idle accounts: the losing tick deferred all five of
+         * its intents and fired none. The winner has just fired this surface,
+         * so it carries one more activation than this snapshot knew about.
+         */
+        const lost = snapshot.candidates.find((c) => c.routine.id === decision.routine.id);
+        const current = lost ? await getRoutine(lost.routine.id) : null;
+        if (lost && current) {
+          lost.routine = { ...lost.routine, fireGeneration: current.fireGeneration, lastFiredAt: current.lastFiredAt };
+          lost.routineInFlight += 1;
+          for (const sibling of snapshot.candidates) {
+            if (sibling.account.id === decision.account.id) sibling.accountInFlight += 1;
+          }
+        }
         continue;
       }
 
