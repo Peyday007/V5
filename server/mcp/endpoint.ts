@@ -32,6 +32,7 @@ import {
   parseError,
 } from './protocol.ts';
 import { idOf, looksModern, validateModernRequest } from './validate.ts';
+import { answerEscapedFailure } from '../routes/escape.ts';
 
 export const MCP_PATH = '/mcp';
 
@@ -280,7 +281,7 @@ export function mcpRouter(): Router {
   });
 
   router.post('/', parseBody, bodyErrorHandler, (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
+    (async (): Promise<void> => {
       // Origin before authentication: a rebinding attempt should not get to
       // present a credential and learn whether it was any good.
       if (!originIsAcceptable(req)) {
@@ -414,7 +415,7 @@ export function mcpRouter(): Router {
           errorResponse(idOf(body), new McpProtocolError(INTERNAL_ERROR, 500, 'That request could not be served.')),
         );
       }
-    })();
+    })().catch(answerEscapedFailure(res, 'mcp'));
   });
 
   return router;

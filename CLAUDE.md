@@ -503,6 +503,19 @@ worth having if it is honest about which it is doing.
   then replaces the error page with the Brain on the same port. That is asking
   the real thing again, which §18 never forbade; falling back is what it
   forbids, and nothing here serves anything the proof did not establish.
+  **Its first production reading was deploy 337**: the machine rebooted into a
+  bucket answering 544, and the log shows attempts 1 to 4 at 30, 60, 120 and
+  240 seconds with the error served throughout.
+- **A slow query is one request failing, and for a while it was the process.**
+  Express 4 does not await a handler, so fourteen route bodies ran as
+  `void (async …)()` with nowhere for a rejection to go, and Node 22 exits on
+  an unhandled rejection. Deploy 337, 02:25:29Z: the pool timed out inside
+  `POST /oauth/token`, and the Brain exited with code 1 mid-verification. Every
+  such body now ends in `.catch(answerEscapedFailure(res, …))`
+  (`routes/escape.ts`: `503`, nothing named). A logging `unhandledRejection`
+  backstop keeps the process serving if one is missed.
+  `tests/escapedRouteFailure.test.ts` refuses `void (async` under
+  `server/routes` and `server/mcp`.
 - Secrets are server-side. The connection string and the service-role key appear
   in the Postgres connection and one `Authorization` header, and nowhere else —
   not in a log line, not in an API response, not in the frontend bundle. A
@@ -11978,6 +11991,7 @@ server/
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
+    escape.ts           what a request answers when an error escapes its handler
     auth.ts             sign in, sign out, change a password
     admin.ts            people, workers, credentials, membership, the identity audit
     access.ts           the optional shared-token outer layer (not the security model)

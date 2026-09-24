@@ -266,6 +266,54 @@ was wrong: the puzzle batch judged its defect rate after four attempts, and two
 unlucky word searches in a row stopped a healthy generator. The fix, a
 twelve-attempt sample floor, is recorded in CLAUDE.md §48.
 
+## Deploy 337: released, then a route error ended the process — and the boot retry's first reading
+
+Deploy 337 (`2673fc4`) passed its test gate and released at 02:00:08Z
+(`Record what was released: success`). The pre-restart verification passed
+(`hosted verification: success`). The post-restart half reached the audit
+roles (PRIMARY at 02:18:08, ADVERSARIAL at 02:21:44) and ended at 02:25:29 with
+`HOSTED-VERIFICATION: FAIL could-not-complete` / `brain_complete_work: no
+result` and an ssh session closed with no exit status. That is not the
+`ECHECKOUTTIMEOUT` shape at the harness connect.
+
+The live log, read with `Logs` run 23, says what actually happened, and it is
+an application defect rather than noise. At 02:25:29 the Brain's own pool was
+exhausted (`10/10 connection(s) in use, 0 idle, 11 caller(s) waiting`), the
+timeout was thrown inside `POST /oauth/token` (`getClientByClientId`, routes/
+oauth.ts:709), that handler was a `void (async …)()` with nothing to catch its
+rejection, and Node 22 ended the process: `Main child exited normally with code:
+1`, `reboot: Restarting system`. That exit is what killed the harness's ssh
+session. One slow query in one request took every other request down.
+
+The machine rebooted into Supabase's storage API answering `544
+DatabaseTimeout`, and the boot retry shipped in this release did exactly what it
+is for, observed in production for the first time: *Serving the migration
+error*, then *Boot proof attempt 1 failed; asking again in 30s*, attempts 2, 3
+and 4 at 60s, 120s and 240s, with nothing but the error served and no fallback.
+Before this release that machine would have stayed at 503 until somebody
+redeployed.
+
+The fix is in the next commit: every fire-and-forget async body under
+`server/routes` and `server/mcp` (fourteen of them) now ends in
+`.catch(answerEscapedFailure(res, …))`, which answers `503
+{"error":"temporarily_unavailable"}` and logs. The process also gets an
+`unhandledRejection` backstop that logs and keeps serving.
+`tests/escapedRouteFailure.test.ts` drives the real token route over a socket
+with a throwing database. Against the old code the request hung for 30s and the
+rejection escaped. It also refuses `void (async` anywhere in those directories.
+
+### The outage that ended by itself
+
+`Logs` run 25 shows how the reboot ended. At 02:51:19Z the machine logged *The
+cloud answered. Replacing the error page with the Brain.*. At 02:53:53 it
+logged *Brain is running* (schema 83, migrations up to date). The health check
+was passing at 02:54:21, and `/healthz` answered 200 in 0.34s from outside.
+The outage ran from 02:25:29 to 02:54:21, and it ended with no deploy, no
+restart and nobody pressing anything. The two outages before the boot retry
+(deploys 324 and 334) each lasted until somebody redeployed. Deploy 338
+(another session's `3a3bd1e`) ran during the outage and correctly released
+nothing, because its health check could not pass against the same 544.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain

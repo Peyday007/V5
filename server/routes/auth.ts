@@ -85,6 +85,7 @@ import { currentContext, currentPrincipal } from '../services/identity/context.t
 import { personName } from '../domain/personName.ts';
 import { activeDatabaseConfig } from '../db/database.ts';
 import { HttpError, badRequest, bodyOf, handler, requiredString } from './helpers.ts';
+import { answerEscapedFailure } from './escape.ts';
 
 export const authRouter = Router();
 
@@ -253,7 +254,7 @@ authRouter.get(
 );
 
 authRouter.post('/auth/login', (req: Request, res: Response) => {
-  void (async (): Promise<void> => {
+  (async (): Promise<void> => {
     try {
       const body = bodyOf(req);
       const email = requiredString(body['email'], 'email').toLowerCase();
@@ -363,7 +364,7 @@ authRouter.post('/auth/login', (req: Request, res: Response) => {
       // Fail closed: an error inside authentication is a refusal, not a pass.
       res.status(503).json({ error: 'Sign-in is unavailable right now.' });
     }
-  })();
+  })().catch(answerEscapedFailure(res, 'auth'));
 });
 
 authRouter.post(
@@ -514,7 +515,7 @@ authRouter.post(
  * long a person should stay signed in to their own Brain is not.
  */
 authRouter.post('/auth/pin', (req: Request, res: Response) => {
-  void (async (): Promise<void> => {
+  (async (): Promise<void> => {
     try {
       const body = bodyOf(req);
       const identity = requiredString(body['identity'], 'identity');
@@ -675,7 +676,7 @@ authRouter.post('/auth/pin', (req: Request, res: Response) => {
       // Fail closed: an error inside authentication is a refusal, not a pass.
       res.status(503).json({ error: 'Sign-in is unavailable right now.' });
     }
-  })();
+  })().catch(answerEscapedFailure(res, 'auth'));
 });
 
 /**
