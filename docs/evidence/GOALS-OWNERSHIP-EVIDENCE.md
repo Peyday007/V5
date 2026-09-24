@@ -342,6 +342,37 @@ flyctl gave up. That is a boot-ordering defect, not this commit's.
 `45f338c` (another session: open the port first, recompute after it) fixes it
 and is in Deploy 342, which also contains `93cd734`.
 
+## Deploy 342: the recompute was not the whole gap
+
+Run 35956355757 on `45f338c`, which moved the recompute behind the listen.
+`release: failure`, both verification halves `skipped`, and the image serving
+throughout was the one that became healthy at 04:34:35. The boot log from the
+new machine:
+
+    04:58:59  health check failing (machine started)
+    04:59:10  The document store could not be checked (HTTP 544) — DatabaseTimeout
+    04:59:50  The cloud answered. Replacing the error page with the Brain.
+    05:00:01  Design kernel: 8 surface(s), 7 pattern(s), 10 declared capability(ies).
+    05:04:12  flyctl gives up; no "Brain is running." line ever printed
+
+The boot retry did its job in forty seconds. What held the port for the next
+four minutes was not the recompute, which no longer ran before `listen`. It was
+the work between the design kernel and the port: advancing every pending packet,
+re-driving every dispatchable bin, repairing launches and queueing unread
+documents. All of those are passes over rows, and none is needed to answer
+`/healthz`.
+
+**Deploy 341 had the same shape and I read it wrong.** That boot went from
+04:19:01 to 04:34:26, and I blamed the recompute alone. The recompute was part
+of it. 342 shows the rest was still there once the recompute had moved.
+
+The fix is on the branch: every re-derivation step now runs after the port opens,
+in the same order as before. Each step is timed (`boot: <step> took Ns`), and a
+failing step is logged rather than stopping the others. A line saying how long
+after the cloud answered the port opened is printed too, so the next slow boot
+names its step rather than leaving a gap between two log lines.
+`tests/bootRetry.test.ts` fails against `45f338c`'s order.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
