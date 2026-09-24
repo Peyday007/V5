@@ -314,6 +314,75 @@ restart and nobody pressing anything. The two outages before the boot retry
 (another session's `3a3bd1e`) ran during the outage and correctly released
 nothing, because its health check could not pass against the same 544.
 
+## Deploy 339: refused at the health check while Supabase refused connections
+
+Deploy 339 (`93cd734`, which carries the route escape catch) passed its test gate.
+`flyctl deploy` then failed (`Record what was released: skipped`), so nothing in
+it was released by that run. The boot log says why. At 03:30:48, still on the
+337 image, the pool was full (`10/10 connection(s) in use, 3 caller(s)
+waiting`). After the machine was replaced at 03:36:56, Supabase's storage API
+answered `544 DatabaseTimeout` and then `429 too_many_connections`, and the
+pooler itself stopped handing out connections (`Connection terminated due to
+connection timeout` at 03:41:35). The boot retry did what §18 asks: it served
+the error and asked again at 30, 60, 120 and 240 seconds. The health check could
+not pass inside flyctl's window, so the release was refused. This is
+infrastructure, not this commit. Deploy 341 (`caba2b2`, another session's fix
+for stacked Russell ticks holding pool connections) contains `93cd734` and is
+the next attempt to release it.
+
+## Deploy 341: the proof held and the port was still closed
+
+Deploy 341 (`caba2b2`, which contains `93cd734`) also ended with
+`release: failure`, so neither run released anything. This time the boot retry
+got through: at 04:18:56 the machine logged *The cloud answered. Replacing the
+error page with the Brain.* But `continueBoot` recomputed every project,
+asking the store about every document, before it opened the port. Supabase
+Storage was still slow, so the proxy kept reporting no healthy instance until
+flyctl gave up. That is a boot-ordering defect, not this commit's.
+`45f338c` (another session: open the port first, recompute after it) fixes it
+and is in Deploy 342, which also contains `93cd734`.
+
+## Deploy 342: the recompute was not the whole gap
+
+Run 35956355757 on `45f338c`, which moved the recompute behind the listen.
+`release: failure`, both verification halves `skipped`, and the image serving
+throughout was the one that became healthy at 04:34:35. The boot log from the
+new machine:
+
+    04:58:59  health check failing (machine started)
+    04:59:10  The document store could not be checked (HTTP 544) — DatabaseTimeout
+    04:59:50  The cloud answered. Replacing the error page with the Brain.
+    05:00:01  Design kernel: 8 surface(s), 7 pattern(s), 10 declared capability(ies).
+    05:04:12  flyctl gives up; no "Brain is running." line ever printed
+
+The boot retry did its job in forty seconds. What held the port for the next
+four minutes was not the recompute, which no longer ran before `listen`. It was
+the work between the design kernel and the port: advancing every pending packet,
+re-driving every dispatchable bin, repairing launches and queueing unread
+documents. All of those are passes over rows, and none is needed to answer
+`/healthz`.
+
+**Deploy 341 had the same shape and I read it wrong.** That boot went from
+04:19:01 to 04:34:26, and I blamed the recompute alone. The recompute was part
+of it. 342 shows the rest was still there once the recompute had moved.
+
+The fix is on the branch: every re-derivation step now runs after the port opens,
+in the same order as before. Each step is timed (`boot: <step> took Ns`), and a
+failing step is logged rather than stopping the others. A line saying how long
+after the cloud answered the port opened is printed too, so the next slow boot
+names its step rather than leaving a gap between two log lines.
+`tests/bootRetry.test.ts` fails against `45f338c`'s order.
+
+## Deploy 343: the same gap, on another session's tree
+
+Run 35960856346 on `f84d306`: `release: failure`, both halves `skipped`. The
+new machine served the 544/429 error from 06:01:17, the boot retry's second
+attempt held at **06:02:17**, the design kernel seeded at 06:02:24, and there
+was no `Brain is running.` line when flyctl gave up at about 06:06. That is
+342's shape again: the proof took a minute and the port stayed closed for four
+more. `1f99be1` is what removes that wait, and it is what is being deployed
+next.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain

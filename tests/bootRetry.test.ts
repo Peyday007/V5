@@ -100,6 +100,34 @@ describe('a boot whose cloud proof failed asks again', () => {
     expect(recompute).toBeGreaterThan(0);
     expect(listen).toBeLessThan(recompute);
     // And it does not hold the boot: the pass is started, not awaited.
-    expect(boot.slice(listen)).toMatch(/void \(async \(\) => \{\s*for \(const project of await listProjects\(\)\)/);
+    expect(boot.slice(listen)).toMatch(/void \(async \(\) => \{/);
+  });
+
+  it('opens the port before re-deriving work from rows, which deploy 342 waited on', () => {
+    // 2026-09-24: the proof held at 04:59:50, the design kernel seeded at
+    // 05:00:01, and the port was still closed at 05:04:12 when flyctl gave up.
+    const source = readFileSync(new URL('../server/index.ts', import.meta.url), 'utf8').replace(
+      /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
+      '',
+    );
+    const boot = source.slice(source.indexOf('async function continueBoot'));
+    const listen = boot.indexOf('.listen(PORT');
+    for (const step of [
+      'resumePulledPackets',
+      'recoverDispatchAtBoot',
+      'repairLaunches',
+      'queueUnreadDocuments',
+      'startRussell(',
+      'startDispatcher(',
+    ]) {
+      const at = boot.indexOf(step);
+      expect({ step, after: at > listen }).toEqual({ step, after: true });
+    }
+    // What a request needs stays before it: the account a person signs in with,
+    // and a half-read document marked as such before anything can read it.
+    for (const step of ['bootstrapFirstAdmin', 'recoverInterruptedExtractions', 'seedIfEmpty']) {
+      const at = boot.indexOf(step);
+      expect({ step, before: at > 0 && at < listen }).toEqual({ step, before: true });
+    }
   });
 });

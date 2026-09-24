@@ -510,6 +510,15 @@ worth having if it is honest about which it is doing.
   **Its first production reading was deploy 337**: the machine rebooted into a
   bucket answering 544, and the log shows attempts 1 to 4 at 30, 60, 120 and
   240 seconds with the error served throughout.
+- **A proof that holds is not a port that opens.** Deploys 341 and 342 both
+  passed the cloud proof and then held the port closed while the boot
+  re-derived work from rows: first the recompute, then (in 342, after the
+  recompute had moved) every pending packet, every dispatchable bin and every
+  launch. Each of these is slow on a degraded database, and none is needed to
+  answer a request. So everything that re-derives runs after `listen`, in its
+  original order, each step timed and caught. Before `listen` there is now only
+  what a request depends on: the seed, a half-read document marked as such,
+  and the account a person signs in with.
 - **A slow query is one request failing, and for a while it was the process.**
   Express 4 does not await a handler, so fourteen route bodies ran as
   `void (async …)()` with nowhere for a rejection to go, and Node 22 exits on
