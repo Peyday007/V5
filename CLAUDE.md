@@ -1570,6 +1570,39 @@ for each hold their own connector, and that shape is where these live.
   credited either. Unknown stays uncredited, because an attribution that cannot
   be established reads as absent.
 
+**Walking the whole hosted Factory path for several people at once found seven
+more, and the first is the same sentence at six more readers.** A goal's
+blocker, Who and Home's capacity line, a member's contributed capacity, the
+Build card's READY, the cowork executor probe and the self-model each answered
+*can this surface run work* from a Routine's state column; they now read
+`routingRefusalByRoutine` in `candidates.ts`, which is `surfaceIneligibility`
+plus the two refusals only a Routine row can have — a missing secret, an
+unregistered account. **One predicate, and a reader that re-derives it is the
+defect.** The other six, each reproduced and each regression seen to fail:
+
+- **A tick that lost a fire slot kept losing it.** The snapshot is read once, so
+  every later intent in the burst chose the same surface from the same stale
+  row: two ticks over eight bins and four idle accounts, and the losing tick
+  fired none of its five. The lost surface is re-read and counted as carrying
+  the winner's activation.
+- **A review lease stored only the session the worker reported**, while
+  admission fell back to the one Brain fired — so a reviewer that omitted
+  `session_ref` was admitted, did the work, and was refused at ingest; the
+  COMPLETE bin was never counted, and a fresh review bin was fired every tick.
+  The lease records the resolved session, and a refused review spends the
+  stage like a failure.
+- **An empty check-in ticked every campaign in the Brain** inside one worker's
+  MCP call, and a completion fired the whole fleet's queue. Both are scoped to
+  the caller's project; the loop does the rest.
+- **Two people asking for one change shared one card**, in the first person's
+  thread. One card per thread now, authorized onto one change request.
+- **A registered fleet with every secret missing fell back to the environment
+  Routine**, firing any bin with no router at all. Empty means no Routine row.
+- **Two live campaigns could continue one pull request's branch.** A second
+  opens its own.
+
+`docs/FLEET-FOUR-ACCOUNT-ACCEPTANCE.md` §1a is the record.
+
 ## 24. Russell is a way in, not a second brain.
 
 Step 12A (`server/services/russell/`, `client/src/russell/`,
