@@ -519,6 +519,42 @@ anywhere in the captured window (10:45–11:08Z), where 345 had two. There is no
 unhandled rejection either. `resume worker-driven packets` took 1271.8s on this
 boot, and it ran after the port opened.
 
+## Deploy 347: released, and the whole acceptance chain passed either side of a real restart
+
+Run 35993156347 on `a349b71`, which carries the timer-promise catch, the
+audit-round scoping and the operations index. **Every step succeeded, and the
+verdict was a pass.**
+
+    boot: opening the port 1.4s after the cloud answered
+    Migrations      applied 1 (85 operations_list_index)
+    HOSTED-VERIFICATION: PASS 245/245      (before the restart)
+    HOSTED-VERIFICATION: PASS 264/264      (after it)
+
+`an administrator can inspect operations` answered **200** in both halves, after
+three consecutive deploys at 500. The index was the cause, and the reading
+proves it.
+
+**The goals privacy check is non-vacuous, and it passed in both halves.** The
+harness files a goal in a project the member belongs to and another in one they
+do not. It then asserts all of the following as that member:
+
+- the briefing reads one goal, and none from outside the member's projects;
+- the member can open their own goal (`wst_4e10800928b2455988da` before the
+  restart, `wst_c9a0d27800f94443a0d3` after);
+- the other operation's goal is `404`, byte-identical to an id that does not
+  exist;
+- a worker credential is refused the goals routes altogether.
+
+The positive half is what makes the negative one mean something: a route that
+refused everybody would fail it.
+
+The chain is therefore done in production. It covers goals with priority, pause,
+resume and cancel on the durable tick; Needs You holding only a person's
+decisions; the briefing; and the privacy boundary, verified from the wrong side
+of it. The four application defects the degraded-Supabase deploys exposed are
+fixed with regressions, and the infrastructure failures are named as such
+rather than patched around.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
