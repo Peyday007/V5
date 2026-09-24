@@ -46,6 +46,7 @@ import {
   type AccessLevel,
 } from '../services/identity/policy.ts';
 import { recordIdentityEvent } from '../repos/identity.ts';
+import { answerEscapedFailure } from './escape.ts';
 
 /** Never let these reach an id, a header or a filename. */
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
@@ -131,7 +132,7 @@ export function handler(fn: RouteHandler): RequestHandler {
     // construction, whatever the middleware in front of it did.
     const context = contextFromRequest(req);
     const run = (): void => {
-      void (async (): Promise<void> => {
+      (async (): Promise<void> => {
         try {
           const payload: unknown = await fn(req, res, next);
           if (payload === undefined || res.headersSent) return;
@@ -139,7 +140,7 @@ export function handler(fn: RouteHandler): RequestHandler {
         } catch (error) {
           next(error);
         }
-      })();
+      })().catch(answerEscapedFailure(res, 'route'));
     };
     if (context) runInRequestContext(context, run);
     else run();

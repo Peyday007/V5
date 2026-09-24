@@ -65,6 +65,7 @@ import type { Principal, Worker, WorkerInvitation } from '../domain/types.ts';
 import { MCP_PATHS } from '../mcp/endpoint.ts';
 import { card, esc, page } from './pages.ts';
 import { workerIdentity } from '../services/identity/authenticate.ts';
+import { answerEscapedFailure } from './escape.ts';
 
 export const OAUTH_BASE = '/oauth';
 
@@ -279,7 +280,7 @@ export function oauthRouter(): Router {
    * administrator. The row confers no access; the approval does.
    */
   router.post('/register', (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
+    (async (): Promise<void> => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const rawUris = body['redirect_uris'];
       const redirectUris = Array.isArray(rawUris)
@@ -345,7 +346,7 @@ export function oauthRouter(): Router {
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
       });
-    })();
+    })().catch(answerEscapedFailure(res, 'oauth'));
   });
 
   /* -- Authorize --------------------------------------------------------- */
@@ -362,7 +363,7 @@ export function oauthRouter(): Router {
    * when a connection is actually authorized, and nowhere else.
    */
   router.get('/invite/:token', (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
+    (async (): Promise<void> => {
       const parsed = parseInvitationToken(req.params['token'] ?? '');
       const invitation = parsed ? await findLiveInvitation(parsed.prefix, parsed.secret) : null;
       const worker = invitation ? await getWorker(invitation.workerId) : null;
@@ -418,11 +419,11 @@ export function oauthRouter(): Router {
              a fresh link rather than reusing this one.</p>`),
         ),
       );
-    })();
+    })().catch(answerEscapedFailure(res, 'oauth'));
   });
 
   router.get('/authorize', (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
+    (async (): Promise<void> => {
       const params = readAuthorizeParams(req.query as Record<string, unknown>);
       if ('error' in params) {
         errorPage(res, 400, 'This connection request is not valid', params.error);
@@ -478,7 +479,7 @@ export function oauthRouter(): Router {
       }
 
       res.type('html').send(signInPage(req, params, client.clientName, null));
-    })();
+    })().catch(answerEscapedFailure(res, 'oauth'));
   });
 
   /*
@@ -502,7 +503,7 @@ export function oauthRouter(): Router {
   /* -- Approve ----------------------------------------------------------- */
 
   router.post('/authorize/approve', (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
+    (async (): Promise<void> => {
       if (!originIsSameSite(req)) {
         errorPage(res, 403, 'Blocked', 'That form was not submitted from this site.');
         return;
@@ -686,13 +687,13 @@ export function oauthRouter(): Router {
       location.searchParams.set('code', code.plaintext);
       if (params.state) location.searchParams.set('state', params.state);
       res.redirect(302, location.toString());
-    })();
+    })().catch(answerEscapedFailure(res, 'oauth'));
   });
 
   /* -- Token ------------------------------------------------------------- */
 
   router.post('/token', (req: Request, res: Response) => {
-    void (async (): Promise<void> => {
+    (async (): Promise<void> => {
       const body = (req.body ?? {}) as Record<string, unknown>;
       const str = (name: string): string | null => {
         const value = body[name];
@@ -803,7 +804,7 @@ export function oauthRouter(): Router {
       }
 
       res.status(400).json({ error: 'unsupported_grant_type' });
-    })();
+    })().catch(answerEscapedFailure(res, 'oauth'));
   });
 
   return router;

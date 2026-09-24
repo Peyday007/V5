@@ -780,16 +780,6 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
   const unread = await queueUnreadDocuments();
   if (unread > 0) console.log(`  reading ${unread} document(s) in the background`);
 
-  // Derived state is rebuilt before the first request rather than lazily, so a
-  // file deleted or added while the server was down is already accounted for.
-  for (const project of await listProjects()) {
-    await recomputeProject(project.id);
-    await writeProjectState(project.id);
-  }
-  // One runtime file, so it describes the project the app opens on.
-  const primary = await getDefaultProject();
-  if (primary) await writeProjectState(primary.id);
-
   // The first administrator, if this Brain has never had one. Runs before the
   // port opens, so an installation that cannot be signed into says so in the
   // boot log rather than at the first person who tries.
@@ -804,6 +794,48 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
   const server = buildApp(gate).listen(PORT, () => logBanner(migrations, gate, identity));
   server.on('error', onListenError);
   installShutdown(server);
+
+  /*
+   * Derived state is rebuilt at boot, so a file deleted or added while the
+   * server was down is accounted for — and it is rebuilt *after* the port
+   * opens, not before it.
+   *
+   * It used to gate the port. A recompute asks the document store about every
+   * document in every project, and on 2026-09-24 Supabase Storage was degraded:
+   * the database answered at 04:18:56, the boot then sat in this loop behind a
+   * closed port, and the Brain served 503 for another quarter of an hour with
+   * nothing wrong on its side. Every route that reads derived state already
+   * recomputes the rows it needs (§6), and in cloud mode the runtime file is
+   * not written at all (§18), so opening first costs a stale reading for the
+   * length of this pass and nothing else. One project's failure is logged and
+   * does not stop the rest.
+   */
+  void (async () => {
+    for (const project of await listProjects()) {
+      try {
+        await recomputeProject(project.id);
+        await writeProjectState(project.id);
+      } catch (error) {
+        console.error(`[brain] boot recompute of ${project.id} failed; serving on:`, error);
+      }
+    }
+    // One runtime file, so it describes the project the app opens on.
+    const primary = await getDefaultProject();
+    if (primary) await writeProjectState(primary.id);
+  })().catch((error: unknown) => {
+    console.error('[brain] the boot recompute pass could not run; serving on:', error);
+  });
 }
+
+// A rejection nothing caught is one request's failure, not the Brain's. Node 22
+// ends the process on one, and on 2026-09-24 that turned a pool timeout inside
+// one OAuth request into an exit mid-deploy and a reboot into a 544. Every
+// route catches its own now (routes/escape.ts); this is the backstop, and it
+// logs loudly rather than swallowing, because a rejection reaching it is a
+// missing catch somebody should add.
+process.on('unhandledRejection', (reason) => {
+  // eslint-disable-next-line no-console
+  console.error('[brain] an unhandled rejection reached the process; serving on:', reason);
+});
 
 await main();
