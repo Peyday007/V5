@@ -53,7 +53,13 @@ import {
   registerClient,
   revokeTokenChain,
 } from '../repos/oauth.ts';
-import { getWorker, listWorkers, listMembershipsForPrincipal, recordIdentityEvent } from '../repos/identity.ts';
+import {
+  getWorker,
+  getWorkerRouting,
+  listWorkers,
+  listMembershipsForPrincipal,
+  recordIdentityEvent,
+} from '../repos/identity.ts';
 import { getProject } from '../repos/projects.ts';
 import {
   createInvitation,
@@ -978,6 +984,51 @@ function invitedConsentPage(
   );
 }
 
+/**
+ * What a worker is *for*, in a few words, read from its routing row.
+ *
+ * `worker_routing` is the row `services/bins/routing.ts` decides on — the
+ * candidate query, the admission hook and the fire router all read it — so it
+ * is the only honest answer to "is this the Factory surface". The alternative
+ * is to read the worker's name, and §27 is explicit that a name is not a
+ * binding: `factory-<grantId>`, `research-<person>` and whatever somebody typed
+ * are all just labels, and a label agrees with whoever typed it rather than
+ * with what the routers will do.
+ *
+ * A worker with **no** routing row is reported as having none rather than as
+ * research, and the distinction is load-bearing rather than pedantic: no worker
+ * without an explicit row may ever be handed repository work, so "nobody has
+ * scoped this" and "this is scoped to research" lead to different next actions.
+ * Unknown reads as unknown, for the reason it does everywhere else here.
+ */
+function surfaceOf(routing: { families: string[]; repositories: string[] } | null): string {
+  // Short, because this is rendered once per option and an option that grows is
+  // the whole defect. What it *means* is said once, in prose under the control,
+  // where there is room for a sentence.
+  if (!routing) return 'no routing scope';
+  if (routing.families.length === 0) return 'routing scope serves nothing';
+  const families = routing.families.join('+').toLowerCase();
+  if (!routing.families.includes('FACTORY')) return families;
+  // A Factory scope is exhaustive by construction, so an empty list is a real
+  // condition an operator has to fix rather than a display gap.
+  const [first, ...rest] = routing.repositories;
+  if (first === undefined) return `${families} — no repository authorized`;
+  return rest.length === 0 ? `${families} — ${first}` : `${families} — ${first} +${rest.length} more`;
+}
+
+/**
+ * A hard bound on one option's text.
+ *
+ * Belt and braces over `surfaceOf`, which is already bounded: the point of the
+ * rewrite is that nothing in an option may grow with the number of rows behind
+ * it, and a limit stated once is easier to keep than a promise repeated at each
+ * call site. It is deliberately generous — long enough that no real worker id
+ * is ever cut, short enough that the popup cannot leave the viewport.
+ */
+function clip(text: string, max = 96): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
 async function consentPage(
   _req: Request,
   params: AuthorizeParams,
@@ -1017,25 +1068,46 @@ async function consentPage(
           return { name: project?.name ?? m.projectId, scopes: m.scopes };
         }),
       );
-      return { worker, projects };
+      // What kind of surface this is, read from the row the routers decide on.
+      // See `surfaceOf`: it is the one dimension that separates two workers
+      // whose project lists look alike, and it is what this screen was missing.
+      const routing = await getWorkerRouting(worker.id);
+      return { worker, projects, routing };
     }),
   );
 
   const options = described
-    .map(
-      ({ worker, projects }) =>
-        // Named by its neutral identity and by what it reaches, which is the
-        // honest basis for choosing one. A worker called after a person reads
-        // as a statement about whose capacity it is, and on *this* screen that
-        // is not a cosmetic problem: this is where somebody decides which
-        // identity a connector will authenticate as, and §27 records what it
-        // costs to choose an existing one by mistake.
-        `<option value="${esc(worker.id)}"${worker.id === heldInvitationFor?.id ? ' selected' : ''}>${esc(
-          workerIdentity(worker),
-        )}${
-          projects.length === 0 ? ' — no project yet' : ` — ${esc(projects.map((p) => p.name).join(', '))}`
-        }</option>`,
-    )
+    .map(({ worker, routing }) => {
+      /*
+       * Identity, then what the worker is *for*, then the id that settles it.
+       *
+       * The projects are deliberately not enumerated here. They were, and the
+       * label grew one project long each time a worker was granted another —
+       * so on this Brain the first option ran past the right edge of the
+       * screen. A native `<select>` popup sizes itself to its longest option
+       * and takes no styling, so the width is not a CSS problem and there is
+       * no rule that could have contained it: **the only thing that bounds
+       * that popup is the text**. Every project is still on the screen, in the
+       * grant list below, where it is in the document flow and can wrap.
+       *
+       * What replaces them is the thing a person actually decides on. This is
+       * where somebody chooses which identity a connector will authenticate
+       * as, and §27 records what picking the wrong one costs: a second
+       * connector name is not a second identity, so a Routine that selects an
+       * existing connector silently inherits its worker and the routing
+       * boundary then has nothing to separate. A list that says only
+       * `worker-10 — Deal Dispatch` cannot be used to avoid that, because a
+       * Factory surface and a research surface are both "Deal Dispatch".
+       *
+       * The id is last rather than first because the closed control shows the
+       * head of the string: the head is what a person reads while choosing,
+       * and the id is what they read when confirming, with the menu open.
+       */
+      const label = clip(`${workerIdentity(worker)} · ${surfaceOf(routing)} · ${worker.id}`);
+      return `<option value="${esc(worker.id)}"${
+        worker.id === heldInvitationFor?.id ? ' selected' : ''
+      }>${esc(label)}</option>`;
+    })
     .join('');
 
   // Named rather than merely preselected, because "why am I being shown a list"
@@ -1046,13 +1118,35 @@ async function consentPage(
        administrator, so you may connect any worker here and the invitation is not used.</dd></div>`
     : '';
 
+  /*
+   * The reference table the bounded option labels point at.
+   *
+   * Every offered worker appears, including one holding no project. It used to
+   * filter those out, which is the same shape this function's opening comment
+   * already refuses one object along: a worker that is on the menu and absent
+   * from the table reads as a worker with nothing written about it, when the
+   * fact is that it reaches nothing — and *reaches nothing* is the single most
+   * useful thing this screen can tell somebody about to approve a connection.
+   *
+   * The id is here rather than only in the option because this is where a
+   * person confirms: an option a native control truncates is not something you
+   * can read an identifier off, and an identifier you cannot read is one you
+   * end up assuming. The routing scope is here for the same reason it is in
+   * the option — it is the dimension the assigner and the fire router both
+   * decide on, and nothing else on this page carries it.
+   */
   const grants = described
-    .filter(({ projects }) => projects.length > 0)
     .map(
-      ({ worker, projects }) =>
-        `<dt>${esc(workerIdentity(worker))}</dt><dd>${projects
-          .map((p) => `${esc(p.name)} — <code>${esc(p.scopes.join(' '))}</code>`)
-          .join('<br>')}</dd>`,
+      ({ worker, projects, routing }) =>
+        `<dt>${esc(workerIdentity(worker))} <code>${esc(worker.id)}</code></dt><dd>${esc(
+          surfaceOf(routing),
+        )}<br>${
+          projects.length === 0
+            ? '<em>No project — this worker can reach nothing in this Brain.</em>'
+            : projects
+                .map((p) => `${esc(p.name)} — <code>${esc(p.scopes.join(' '))}</code>`)
+                .join('<br>')
+        }</dd>`,
     )
     .join('');
 
@@ -1073,6 +1167,12 @@ async function consentPage(
        ${hiddenFields(params)}
        <label for="worker_id">Connect as</label>
        <select id="worker_id" name="worker_id" required>${options}</select>
+       <p class="note">Each worker is listed as <em>name · what it is scoped to · id</em>. The
+         middle field is its routing scope, which is what decides the work it can be handed — a
+         Factory surface names the repository it may change, and a worker with
+         <em>no routing scope</em> is never handed repository work at all. Two workers can hold the
+         same projects and not be the same kind of surface, so the projects below are not the thing
+         to choose on.</p>
        <div class="grant"><dl>${grants || '<dt>No access</dt><dd>None of these workers has a project yet.</dd>'}</dl></div>
        <button type="submit">Approve</button>
      </form>`

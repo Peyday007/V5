@@ -26,6 +26,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { closeDatabase, getDb, initDatabase } from '../server/db/database.ts';
 import { createInvitation } from '../server/repos/invitations.ts';
+import { createProject } from '../server/repos/projects.ts';
+import { setWorkerRouting } from '../server/repos/identity.ts';
 import { generateInvitationToken } from '../server/services/identity/secrets.ts';
 import { MCP_PATHS } from '../server/mcp/endpoint.ts';
 import { CONNECTOR_SCOPES, WORKER_SCOPES } from '../server/domain/types.ts';
@@ -1071,5 +1073,169 @@ describe('the operator console is gone', () => {
     // And nothing was made by asking.
     const workers = await fetch(`${BASE}/api/admin/workers`, { headers: { cookie: adminCookie } });
     expect(await workers.text()).not.toContain('should-not-exist');
+  });
+});
+
+describe('the worker chooser reads as a decision', () => {
+  /*
+   * The defect this pins, in one sentence: **the only thing that bounds a
+   * native `<select>` popup is the text of its options.**
+   *
+   * Each option was `<identity> — <every project, comma-joined>`, so the label
+   * grew one project long each time a worker was granted another. On the
+   * production Brain the first option ran past the right-hand edge of the
+   * screen, and because a native popup sizes itself to its longest option and
+   * takes no styling, there was no CSS rule that could have contained it.
+   *
+   * The second half is worse than the width. This is the screen where somebody
+   * chooses which identity a connector will authenticate as, and §27 records
+   * what picking the wrong one costs: a second connector name is not a second
+   * identity, so a Routine that selects an existing connector silently inherits
+   * its worker and the routing boundary then has nothing left to separate. A
+   * menu that says only `worker-10 — Deal Dispatch` cannot be used to avoid
+   * that, because a Factory surface and a research surface holding the same
+   * membership are *both* "Deal Dispatch". What separates them is the routing
+   * row, and it was on no screen at all.
+   *
+   * So three things are asserted, and the first two would each have passed on
+   * the old code only by accident:
+   *
+   *   1. No option's length grows with the number of rows behind it.
+   *   2. Every option carries the id that settles which row it is.
+   *   3. The routing scope is on the screen, and *absent* reads as absent
+   *      rather than as research — no worker without an explicit row may ever
+   *      be handed repository work, so the two lead to different next actions.
+   *
+   * Nothing is hidden to achieve it: the grant list below still names every
+   * project, where it is in the document flow and can wrap.
+   */
+  const CROWDING = [
+    'Step 8 Acceptance',
+    'Test Packets',
+    'Step 10 acceptance',
+    'Cash Mode 1',
+    'Cash Mode 2',
+    'Cash Mode 3',
+    'Cash Mode 4',
+    'Brain Architecture',
+    'Manufacturing empire',
+  ];
+  const REPOSITORY = 'peyday007/v5';
+  /** The bound in `clip`. Stated here so a change to it fails this on purpose. */
+  const MAX_OPTION = 96;
+
+  let factoryId = '';
+  let factoryLabel = '';
+
+  function optionTexts(html: string): string[] {
+    return [...html.matchAll(/<option\b[^>]*>([\s\S]*?)<\/option>/g)].map((m) =>
+      (m[1] ?? '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'"),
+    );
+  }
+
+  beforeAll(async () => {
+    const created = await api<{ worker: { id: string; label: string } }>('POST', '/api/admin/workers', {
+      cookie: adminCookie,
+      body: { name: 'factory-surface-under-test', displayName: 'Factory surface under test' },
+    });
+    factoryId = created.body.worker.id;
+    factoryLabel = created.body.worker.label;
+
+    // The production shape: one worker, many memberships, scoped to a
+    // repository. Written through the repositories because this Brain has no
+    // HTTP route that creates a project — which is §26 working rather than a
+    // gap, and is why the membership below still goes through the real route.
+    await initDatabase({ dbPath: path.join(dataDir, 'brain.db') });
+    let projectIds: string[] = [];
+    try {
+      projectIds = [];
+      for (const name of CROWDING) projectIds.push((await createProject({ name })).id);
+      await setWorkerRouting({
+        workerId: factoryId,
+        families: ['FACTORY'],
+        repositories: [REPOSITORY],
+        capabilities: ['repository', 'repository-write'],
+        reason: 'the chooser regression',
+        setBy: 'tests/oauth.test.ts',
+      });
+    } finally {
+      await closeDatabase();
+    }
+
+    for (const id of projectIds) {
+      await api('POST', `/api/admin/projects/${id}/members`, {
+        cookie: adminCookie,
+        body: { principalId: factoryId, principalType: 'WORKER', scopes: ['project:read'] },
+      });
+    }
+  }, 30_000);
+
+  it('bounds every option, and never enumerates the projects in one', async () => {
+    const { challenge } = pkce();
+    const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`, {
+      headers: { cookie: adminCookie },
+    });
+    const html = await response.text();
+    const options = optionTexts(html);
+
+    // The crowded worker is on the menu at all, so the assertions below are
+    // about a real option rather than an empty list. §41: a guard that passes
+    // over nothing reads as coverage.
+    expect(options.some((text) => text.startsWith(factoryLabel))).toBe(true);
+
+    for (const text of options) expect(text.length).toBeLessThanOrEqual(MAX_OPTION);
+
+    // On the old code this option was the label plus all nine names — 130-odd
+    // characters, and one longer for every future grant.
+    const mine = options.find((text) => text.startsWith(factoryLabel))!;
+    for (const name of CROWDING) expect(mine).not.toContain(name);
+  });
+
+  it('carries the id that settles which worker it is, and what it is for', async () => {
+    const { challenge } = pkce();
+    const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`, {
+      headers: { cookie: adminCookie },
+    });
+    const html = await response.text();
+    const options = optionTexts(html);
+
+    const mine = options.find((text) => text.startsWith(factoryLabel))!;
+    // The identifier, in full: a truncated one is something a person assumes
+    // rather than reads.
+    expect(mine).toContain(factoryId);
+    // And the dimension that separates this from a research worker holding the
+    // same memberships, which is the whole reason the menu was unusable.
+    expect(mine).toContain('factory');
+    expect(mine).toContain(REPOSITORY);
+
+    // A worker nobody has scoped says so, rather than reading as research.
+    const orphan = options.find((text) => text.startsWith(orphanLabel))!;
+    expect(orphan).toContain('no routing scope');
+    expect(orphan).toContain(orphanWorkerId);
+  });
+
+  it('hides nothing: the grant list still names every project and every worker', async () => {
+    const { challenge } = pkce();
+    const response = await fetch(`${BASE}/oauth/authorize?${authorizeForm(challenge)}`, {
+      headers: { cookie: adminCookie },
+    });
+    const html = await response.text();
+    const grants = html.slice(html.indexOf('<select'));
+
+    for (const name of CROWDING) expect(grants).toContain(name);
+
+    // Including the worker that reaches nothing. It used to be filtered out of
+    // this table, which is the shape `consentPage` already refuses one object
+    // along for disabled workers: a worker on the menu and absent from the
+    // table reads as one nothing is known about, when the fact is that it
+    // reaches nothing — and that is the most useful thing this page can say
+    // about a worker somebody is about to connect.
+    expect(grants).toContain(orphanLabel);
+    expect(grants).toContain('this worker can reach nothing in this Brain');
   });
 });
