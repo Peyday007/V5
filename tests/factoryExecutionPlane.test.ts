@@ -776,6 +776,30 @@ describe('how a campaign is created is derived, never supplied', () => {
     expect(spec.note).toContain('#1');
   });
 
+  it('does not let a second live campaign write onto the branch another continues', async () => {
+    stubForge({
+      pulls: [{ number: 1, headRef: 'factory/campaign/shared', headSha: BASE, baseRef: 'main' }],
+    });
+    const first = await contract({ baseBranch: 'factory/campaign/shared' });
+    const firstSpec = await campaignSpecFor(first);
+    expect(firstSpec.integrationBranch).toBe('factory/campaign/shared');
+    await ensureCampaign({
+      changeRequestId: first.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+      integrationBranch: firstSpec.integrationBranch,
+      pullRequest: firstSpec.pullRequest,
+    });
+    // Somebody else's objective, pinned at the same open request's head.
+    const second = await campaignSpecFor(await contract({ baseBranch: 'factory/campaign/shared' }));
+    expect(second.integrationBranch).toBeNull();
+    expect(second.pullRequest).toBeNull();
+    expect(second.note).toMatch(/already continuing/);
+  });
+
   it('opens a new one when the branch is nobody\'s head', async () => {
     stubForge({ pulls: [] });
     const spec = await campaignSpecFor(await contract());
