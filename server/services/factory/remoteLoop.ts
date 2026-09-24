@@ -2029,10 +2029,19 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
 }
 
 /** Every live remote campaign, one tick each. What a scheduled dispatcher calls. */
-export async function tickAllRemoteCampaigns(): Promise<RemoteTickReport[]> {
+export async function tickAllRemoteCampaigns(
+  /*
+   * `projectIds` narrows the pass to those projects and skips the finished-
+   * campaign outcome pass. A worker's empty check-in derives here inside its
+   * own MCP call, under a client timeout Brain does not choose (§20); it must
+   * not pay for every other person's campaign and their forge calls.
+   */
+  scope: { projectIds?: ReadonlySet<string> } = {},
+): Promise<RemoteTickReport[]> {
   const reports: RemoteTickReport[] = [];
   for (const campaign of await listLiveCampaigns()) {
     if (campaign.executionMode !== 'REMOTE') continue;
+    if (scope.projectIds && !scope.projectIds.has(campaign.projectId)) continue;
     try {
       reports.push(await tickRemoteCampaign(campaign.id));
     } catch (error: unknown) {
@@ -2064,6 +2073,7 @@ export async function tickAllRemoteCampaigns(): Promise<RemoteTickReport[]> {
    * on being shown to its owner as one to merge. Each call is idempotent by its
    * own rows, and a failure is recorded rather than taken down with the pass.
    */
+  if (scope.projectIds) return reports;
   const pending = await listCampaignsPendingOutcome().catch(() => []);
   for (const campaign of pending) {
     if (campaign.executionMode !== 'REMOTE') continue;

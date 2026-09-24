@@ -1860,6 +1860,48 @@ describe('a review Brain refused spends the stage rather than looping it', () =>
   });
 });
 
+describe('an empty check-in derives only the caller’s campaigns', () => {
+  it('ticks no campaign outside the projects it was given, and deriveReadyWork gives its own', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'scoped-derivation',
+      objective: 'A campaign that belongs to one project only.',
+      expectedOutcome: 'Nobody else’s check-in ticks it.',
+      nonGoals: [],
+      acceptanceConditions: [{ id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true }],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({ changeRequestId: changeRequest.id, via: 'PERSON', userId: approverId, authorityId: null });
+    await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    stubForge({});
+    const { tickAllRemoteCampaigns } = await import('../server/services/factory/remoteLoop.ts');
+    expect(await tickAllRemoteCampaigns({ projectIds: new Set(['prj_somebody_else']) })).toEqual([]);
+    const mine = await tickAllRemoteCampaigns({ projectIds: new Set([fixture.project.id]) });
+    expect(mine.map((one) => one.projectId)).toEqual([fixture.project.id]);
+
+    const fs = await import('node:fs');
+    const service = fs.readFileSync(new URL('../server/services/bins/service.ts', import.meta.url), 'utf8');
+    expect(service).toMatch(/tickAllRemoteCampaigns\(\{ projectIds: scoped \}\)/);
+    expect(service).toMatch(/dispatchTick\(\{ projectIds: \[bin\.projectId\] \}\)/);
+  });
+});
+
 describe('a stage that failed its bins to exhaustion has a way back', () => {
   /*
    * `stalledStage` counted every FAILED bin the campaign ever had, so three
