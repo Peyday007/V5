@@ -15,14 +15,17 @@
  * four states of a read — loading, empty, forbidden, error — are four different
  * screens.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { listState } from './present.ts';
 import { useAsync } from './useAsync.ts';
 import { FactoryApi } from '../lib/factoryApi.ts';
 import type {
   FactoryCampaign,
   FactoryChangeRequest,
+  FactoryInvitations,
+  FactoryInvitationView,
   FactoryRelease,
+  IssuedFactoryInvitation,
   OnboardResult,
   RepositoryOnboarding,
   SubmitResponse,
@@ -315,6 +318,19 @@ function Repositories({
               <p className="rs-repo-boundary">
                 This project may change <strong>{repo.boundary.sentence}</strong>.
               </p>
+            ) : null}
+            {repo.readiness !== 'NOT_ONBOARDED' && projectId ? (
+              /*
+               * More Claude accounts for the worker this repository already has.
+               *
+               * Offered in every onboarded state and above all in READY, which
+               * is when a pool is being commissioned — the control that used to
+               * issue a link lived only in the not-ready branch, so the moment
+               * the first account worked there was no way to invite the second.
+               * It asks nothing about the repository: the worker, its routing
+               * and this project's boundary are the ones onboarding wrote.
+               */
+              <FactoryInvites projectId={projectId} grantId={repo.grantId} />
             ) : null}
             {repo.readiness !== 'READY' ? (
               <div className="rs-repo-scope">
@@ -924,6 +940,158 @@ function Unapproved({
         ))}
       </ul>
       {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+    </div>
+  );
+}
+
+
+function inviteStatusText(one: FactoryInvitationView): string {
+  const when = (iso: string | null): string => (iso ? new Date(iso).toLocaleString() : '');
+  switch (one.status) {
+    case 'WAITING':
+      return `Waiting to be used — expires ${when(one.expiresAt)}`;
+    case 'CONNECTED':
+      return `Used to connect a Claude account ${when(one.endedAt)}`;
+    case 'EXPIRED':
+      return `Expired ${when(one.expiresAt)} without being used`;
+    case 'WITHDRAWN':
+      return `Withdrawn ${when(one.endedAt)}`;
+  }
+}
+
+/**
+ * Invite another Claude account to an onboarded factory worker, one member at a
+ * time, and see every link already sent.
+ *
+ * Each link is for one named member and is shown exactly once with a copy
+ * control; the list afterwards says who it was for and whether it has been
+ * used, and never shows a link again. Issuing one never withdraws another.
+ */
+function FactoryInvites({ projectId, grantId }: { projectId: string; grantId: string }): JSX.Element {
+  const [state, setState] = useState<FactoryInvitations | null>(null);
+  const [member, setMember] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<IssuedFactoryInvitation[]>([]);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  async function load(): Promise<void> {
+    try {
+      setState(await FactoryApi.invitations(projectId, grantId));
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'The invitations could not be read.');
+    }
+  }
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, grantId]);
+
+  async function issue(): Promise<void> {
+    if (!member) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      const issued = await FactoryApi.invite(projectId, grantId, member);
+      // Newest first, and kept on screen: re-reading the list below must not
+      // take a link down with it, since it is shown once.
+      setFresh((current) => [issued, ...current]);
+      setMember('');
+      await load();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'That did not work.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function withdraw(invitationId: string): Promise<void> {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await FactoryApi.withdrawInvitation(projectId, grantId, invitationId);
+      await load();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'That did not work.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy(url: string, id: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(id);
+    } catch {
+      setProblem('Copying was refused by this browser. Press and hold the link to copy it instead.');
+    }
+  }
+
+  return (
+    <div className="rs-factory-invites">
+      <h4>Invite another Factory account</h4>
+      <p className="rs-hint">
+        Each link lets one Brain member connect their own Claude account to{' '}
+        <code>{state?.workerName ?? 'this worker'}</code>. It asks nothing about the repository
+        again, changes nothing already connected, and leaves every other link as it is. It only
+        works in a browser signed in to Brain as the member it is for, once, within seven days.
+      </p>
+      {state && !state.mayIssue ? <p className="rs-hint">{state.refusal}</p> : null}
+      {state?.mayIssue ? (
+        <div className="rs-factory-invite-form">
+          <label>
+            <span>Who is this link for?</span>
+            <select
+              value={member}
+              aria-label="Member this link is for"
+              onChange={(event) => setMember(event.target.value)}
+            >
+              <option value="">Choose a member…</option>
+              {state.members.map((one) => (
+                <option key={one.userId} value={one.userId}>
+                  {one.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" disabled={busy || !member} onClick={() => void issue()}>
+            {busy ? 'Issuing…' : 'Issue a link'}
+          </button>
+        </div>
+      ) : null}
+      {problem ? <p className="rs-state rs-state-error">{problem}</p> : null}
+      {fresh.map((one) => (
+        <div key={one.invitation.id} className="rs-repo-issued rs-factory-invite-fresh">
+          <p>
+            Link for <strong>{one.invitation.intendedName}</strong> — shown once, expires{' '}
+            {new Date(one.invitation.expiresAt).toLocaleString()}.
+          </p>
+          <p className="rs-repo-invite">
+            <code>{one.invitationUrl}</code>
+          </p>
+          <button type="button" onClick={() => void copy(one.invitationUrl, one.invitation.id)}>
+            {copied === one.invitation.id ? 'Copied' : 'Copy link'}
+          </button>
+        </div>
+      ))}
+      {state && state.invitations.length > 0 ? (
+        <ul className="rs-factory-invite-list">
+          {state.invitations.map((one) => (
+            <li key={one.id}>
+              <span>
+                <strong>{one.intendedName ?? 'Onboarding link (anyone holding it)'}</strong>
+                {' — '}
+                {inviteStatusText(one)}
+              </span>
+              {one.status === 'WAITING' ? (
+                <button type="button" disabled={busy} onClick={() => void withdraw(one.id)}>
+                  Withdraw
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

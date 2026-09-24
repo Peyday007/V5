@@ -21,7 +21,8 @@
  *   - the invitation is shown once, is selectable rather than a link, and never
  *     reaches the page for a repository nobody onboarded;
  *   - a refusal is shown as a refusal — the card does not pretend it worked;
- *   - a repository that is ready offers no button at all.
+ *   - a repository that is ready offers no onboarding decision again — only
+ *     "Invite another Factory account", which asks nothing about the repository.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -44,6 +45,13 @@ const PROJECT = 'prj_1';
 const GRANT = 'brain-worker-bootstrap';
 const REPOSITORIES = `GET /api/projects/${PROJECT}/factory/repositories`;
 const ONBOARD = `POST /api/projects/${PROJECT}/factory/repositories/${GRANT}/onboard`;
+const INVITATIONS = `GET /api/projects/${PROJECT}/factory/repositories/${GRANT}/invitations`;
+const INVITE = `POST /api/projects/${PROJECT}/factory/repositories/${GRANT}/invitations`;
+
+const MEMBERS = [
+  { userId: 'usr_friend_a', name: 'Friend A' },
+  { userId: 'usr_friend_b', name: 'Friend B' },
+];
 
 /**
  * Annotated `RepositoryOnboarding` on purpose.
@@ -106,6 +114,16 @@ function base(over: Record<string, Reply | (() => Reply)> = {}): void {
     [REPOSITORIES]: { body: { repositories: [grant()] } },
     [`GET /api/projects/${PROJECT}/factory/campaigns`]: { body: { campaigns: [] } },
     [`GET /api/projects/${PROJECT}/factory/change-requests`]: { body: { changeRequests: [] } },
+    [INVITATIONS]: {
+      body: {
+        grantId: GRANT,
+        workerName: `factory-${GRANT}`,
+        mayIssue: true,
+        refusal: null,
+        members: MEMBERS,
+        invitations: [],
+      },
+    },
     ...over,
   };
 }
@@ -238,7 +256,18 @@ describe('the Build card says what is connected and what is missing', () => {
     await mount();
     await waitFor(() => expect(card()).toBeTruthy());
     expect(within(card()).getByText('Ready to execute')).toBeTruthy();
-    expect(within(card()).queryByRole('button')).toBeNull();
+    /*
+     * No onboarding decision is offered again: not the scope question, and not
+     * the re-onboarding button. The one control is inviting another account,
+     * which asks nothing about the repository. This used to assert that there
+     * was no button at all — which was the defect: once the first account
+     * worked, nobody could invite the second.
+     */
+    expect(within(card()).queryByRole('button', { name: /Onboard|Issue a new invitation/ })).toBeNull();
+    expect(within(card()).queryByLabelText(/The whole repository/)).toBeNull();
+    await waitFor(() =>
+      expect(within(card()).getByRole('button', { name: 'Issue a link' })).toBeTruthy(),
+    );
 
     /*
      * Two surfaces on one subscription, and what the card says about them.
@@ -267,6 +296,138 @@ describe('the Build card says what is connected and what is missing', () => {
     // The runtime defect a compiler cannot catch: an array of objects joined
     // into a sentence renders as this, and every type in the chain is correct.
     expect(text).not.toContain('[object Object]');
+  });
+});
+
+const READY = grant({
+  workerId: 'wrk_1',
+  scopesCorrect: true,
+  routedFamilies: ['FACTORY'],
+  routedRepositories: ['Peyday007/brain-worker-bootstrap'],
+  surfaces: [{ routineName: 'Factory Brain A', accountName: 'primary', proven: true }],
+  accountsServing: 1,
+  provenSurfaces: 1,
+  readiness: 'READY',
+  remaining: [],
+  waiting: 0,
+  boundary: { scopeKind: 'WHOLE_REPOSITORY', directories: [], sentence: 'the whole repository' },
+});
+
+function issuedFor(n: number, member: (typeof MEMBERS)[number]): unknown {
+  return {
+    invitation: {
+      id: `inv_${n}`,
+      kind: 'ADDITIONAL',
+      intendedUserId: member.userId,
+      intendedName: member.name,
+      issuedByName: 'Owner',
+      createdAt: '2026-09-24T10:00:00.000Z',
+      expiresAt: '2026-10-01T10:00:00.000Z',
+      status: 'WAITING',
+      endedAt: null,
+    },
+    invitationUrl: `https://brain.test/oauth/invite/brnv_link-${n}`,
+  };
+}
+
+describe('inviting another Factory account to a repository that is already ready', () => {
+  async function chooseMember(name: string): Promise<void> {
+    await waitFor(() => expect(within(card()).getByLabelText('Member this link is for')).toBeTruthy());
+    const select = within(card()).getByLabelText('Member this link is for') as HTMLSelectElement;
+    const value = MEMBERS.find((one) => one.name === name)!.userId;
+    await act(async () => {
+      fireEvent.change(select, { target: { value } });
+    });
+  }
+
+  it('is reachable when READY, and asks only who the link is for', async () => {
+    let n = 0;
+    base({
+      [REPOSITORIES]: { body: { repositories: [READY] } },
+      [INVITE]: () => {
+        n += 1;
+        return { body: issuedFor(n, MEMBERS[n - 1]!) };
+      },
+    });
+    await mount();
+    await waitFor(() => expect(within(card()).getByText('Invite another Factory account')).toBeTruthy());
+    const button = within(card()).getByRole('button', { name: 'Issue a link' }) as HTMLButtonElement;
+    // Nothing is issued until somebody says who it is for.
+    expect(button.disabled).toBe(true);
+
+    await chooseMember('Friend A');
+    await act(async () => {
+      fireEvent.click(within(card()).getByRole('button', { name: 'Issue a link' }));
+    });
+    await waitFor(() => expect(card().textContent).toContain('brnv_link-1'));
+    expect(bodies[INVITE]).toEqual({ intendedUserId: 'usr_friend_a' });
+    // Onboarding was never called, so no scope was asked or sent.
+    expect(calls).not.toContain(ONBOARD);
+
+    // A second link, for somebody else, and the first stays on the screen.
+    await chooseMember('Friend B');
+    await act(async () => {
+      fireEvent.click(within(card()).getByRole('button', { name: 'Issue a link' }));
+    });
+    await waitFor(() => expect(card().textContent).toContain('brnv_link-2'));
+    expect(card().textContent).toContain('brnv_link-1');
+    expect(bodies[INVITE]).toEqual({ intendedUserId: 'usr_friend_b' });
+    expect(within(card()).getAllByRole('button', { name: /Copy link/ })).toHaveLength(2);
+    expect(card().textContent).toMatch(/Link for Friend A — shown once, expires/);
+  });
+
+  it('copies exactly the link it shows', async () => {
+    const written: string[] = [];
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      clipboard: { writeText: async (text: string) => void written.push(text) },
+    });
+    base({
+      [REPOSITORIES]: { body: { repositories: [READY] } },
+      [INVITE]: { body: issuedFor(7, MEMBERS[0]!) },
+    });
+    await mount();
+    await chooseMember('Friend A');
+    await act(async () => {
+      fireEvent.click(within(card()).getByRole('button', { name: 'Issue a link' }));
+    });
+    await waitFor(() => expect(within(card()).getByRole('button', { name: 'Copy link' })).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(within(card()).getByRole('button', { name: 'Copy link' }));
+    });
+    expect(written).toEqual(['https://brain.test/oauth/invite/brnv_link-7']);
+    expect(within(card()).getByRole('button', { name: 'Copied' })).toBeTruthy();
+  });
+
+  it('lists what was sent without ever showing a link again', async () => {
+    base({
+      [REPOSITORIES]: { body: { repositories: [READY] } },
+      [INVITATIONS]: {
+        body: {
+          grantId: GRANT,
+          workerName: `factory-${GRANT}`,
+          mayIssue: true,
+          refusal: null,
+          members: MEMBERS,
+          invitations: [
+            { ...(issuedFor(1, MEMBERS[0]!) as { invitation: object }).invitation },
+            {
+              ...(issuedFor(2, MEMBERS[1]!) as { invitation: object }).invitation,
+              status: 'CONNECTED',
+              endedAt: '2026-09-24T11:00:00.000Z',
+            },
+          ],
+        },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(card().querySelectorAll('.rs-factory-invite-list li')).toHaveLength(2));
+    const rows = [...card().querySelectorAll('.rs-factory-invite-list li')].map((li) => li.textContent ?? '');
+    expect(rows[0]).toMatch(/Friend A — Waiting to be used — expires/);
+    expect(rows[1]).toMatch(/Friend B — Used to connect a Claude account/);
+    expect(card().textContent).not.toContain('brnv_');
+    // Only a waiting link can be withdrawn.
+    expect(within(card()).getAllByRole('button', { name: 'Withdraw' })).toHaveLength(1);
   });
 });
 

@@ -200,9 +200,9 @@ const INVITE_COOKIE = 'brain_invite';
  *
  * A bearer token is ignored here for the same reason it is on the admin path.
  */
-async function invitedApproval(
+async function heldInvitation(
   req: Request,
-): Promise<{ invitation: WorkerInvitation; worker: Worker; approvedByUserId: string } | null> {
+): Promise<{ invitation: WorkerInvitation; worker: Worker } | null> {
   if (req.header('authorization')) return null;
   // The application parses cookies itself rather than mounting a parser, so
   // `req.cookies` is always undefined here — reaching for it silently disables
@@ -219,8 +219,54 @@ async function invitedApproval(
   // An invitation for a worker that has since been disabled or removed connects
   // nothing. The worker's current state decides, not the invitation's.
   if (!worker || worker.disabled) return null;
+  return { invitation, worker };
+}
 
-  return { invitation, worker, approvedByUserId: invitation.createdByUserId };
+/**
+ * Whether this browser is the member a bound invitation was issued for.
+ *
+ * `MATCH` for an unbound invitation, because onboarding's own link is spent by
+ * whoever holds it — that is its documented shape. For a bound one the answer
+ * is read from the browser's own Brain session and nothing else: not a name
+ * typed on the page, not who opened the link first. A browser signed in as
+ * nobody is `SIGN_IN` rather than a mismatch, because the remedy differs.
+ */
+async function memberCheck(
+  req: Request,
+  invitation: WorkerInvitation,
+): Promise<'MATCH' | 'SIGN_IN' | 'WRONG_MEMBER'> {
+  if (invitation.intendedUserId === null) return 'MATCH';
+  const outcome = await authenticateRequest(req);
+  if (!outcome.ok || outcome.principal.type !== 'HUMAN') return 'SIGN_IN';
+  return outcome.principal.id === invitation.intendedUserId ? 'MATCH' : 'WRONG_MEMBER';
+}
+
+const BOUND_SIGN_IN =
+  'This link was issued for one Brain member. Open Brain in this browser, sign in as the ' +
+  'member it was sent to, then come back to Claude and connect again.';
+const BOUND_WRONG_MEMBER =
+  'This link was issued for a different Brain member than the one signed in to this browser. ' +
+  'It has not been used. Sign in as the member it was sent to, or ask for a link of your own.';
+
+async function invitedApproval(
+  req: Request,
+): Promise<{ invitation: WorkerInvitation; worker: Worker; approvedByUserId: string } | null> {
+  const held = await heldInvitation(req);
+  if (!held) return null;
+  if ((await memberCheck(req, held.invitation)) !== 'MATCH') return null;
+  return { ...held, approvedByUserId: held.invitation.createdByUserId };
+}
+
+/**
+ * Why a live invitation in this browser is not approving, when it is bound to
+ * a member this browser is not signed in as — or null when that is not why.
+ */
+async function boundInvitationProblem(req: Request): Promise<string | null> {
+  const held = await heldInvitation(req);
+  if (!held) return null;
+  const check = await memberCheck(req, held.invitation);
+  if (check === 'MATCH') return null;
+  return check === 'SIGN_IN' ? BOUND_SIGN_IN : BOUND_WRONG_MEMBER;
 }
 
 async function approver(req: Request): Promise<Principal | null> {
@@ -396,12 +442,31 @@ export function oauthRouter(): Router {
         result: 'SUCCESS',
       });
 
+      /*
+       * A link issued for one member says so before anything else, because the
+       * consent screen will refuse it in any other browser session. The cookie
+       * is still set, so signing in afterwards in this same browser is enough —
+       * nobody has to open the link twice. The member is not named: whoever
+       * holds this link was told who it is for by the person who sent it.
+       */
+      const check = await memberCheck(req, invitation);
+      const memberStep =
+        check === 'MATCH'
+          ? ''
+          : `<div class="grant">
+             <dt>First</dt>
+             <dd>${esc(check === 'SIGN_IN' ? BOUND_SIGN_IN : BOUND_WRONG_MEMBER)}
+               <br><a href="/" target="_blank" rel="noopener">Open Brain to sign in</a>, then come
+               back here — this browser keeps the link for an hour.</dd>
+           </div>`;
+
       res.type('html').send(
         page(
           'Invitation accepted',
-          card(`<h1>You are ready to connect</h1>
+          card(`<h1>${check === 'MATCH' ? 'You are ready to connect' : 'One step before you connect'}</h1>
            <p class="sub">This browser can now connect <strong>${esc(workerIdentity(worker))}</strong>,
              and nothing else. Leave this tab open and go back to Claude.</p>
+           ${memberStep}
            <div class="grant">
              <dt>Next</dt>
              <dd>In Claude, open <strong>Settings → Connectors</strong>, add a connector pointing at
@@ -478,6 +543,19 @@ export function oauthRouter(): Router {
         return;
       }
 
+      const problem = await boundInvitationProblem(req);
+      if (problem) {
+        await audit({
+          action: 'OAUTH_AUTHORIZE',
+          actor: null,
+          targetId: null,
+          result: 'DENIED',
+          metadata: { reason: problem === BOUND_SIGN_IN ? 'INVITATION_MEMBER_NOT_SIGNED_IN' : 'INVITATION_WRONG_MEMBER' },
+        });
+        errorPage(res, 403, 'Sign in as the member this link is for', problem);
+        return;
+      }
+
       res.type('html').send(signInPage(req, params, client.clientName, null));
     })().catch(answerEscapedFailure(res, 'oauth'));
   });
@@ -528,6 +606,23 @@ export function oauthRouter(): Router {
       const person = await approver(req);
       const invited = person ? null : await invitedApproval(req);
       if (!person && !invited) {
+        // A live invitation bound to a different member — or to a member this
+        // browser is not signed in as — is refused and left unspent.
+        const problem = await boundInvitationProblem(req);
+        if (problem) {
+          await audit({
+            action: 'OAUTH_AUTHORIZE',
+            actor: null,
+            targetId: params.clientId,
+            result: 'DENIED',
+            metadata: {
+              reason: problem === BOUND_SIGN_IN ? 'INVITATION_MEMBER_NOT_SIGNED_IN' : 'INVITATION_WRONG_MEMBER',
+            },
+          });
+          errorPage(res, 403, 'Sign in as the member this link is for', problem);
+          return;
+        }
+
         // Somebody who arrived with an invitation gets told about the
         // invitation, not about administrators. This is the ordinary case of a
         // second click or a back button after connecting, and telling that

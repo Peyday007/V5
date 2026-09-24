@@ -4226,7 +4226,16 @@ export interface WorkerInvitationRow {
   redeemed_at: string | null;
   revoked_at: string | null;
   note: string | null;
+  kind: WorkerInvitationKind;
+  intended_user_id: string | null;
 }
+
+/**
+ * `ROTATING` is onboarding's one link, withdrawn when onboarding runs again.
+ * `ADDITIONAL` is issued beside the others for a pool of accounts, and is only
+ * ever withdrawn on its own. See migration 093.
+ */
+export type WorkerInvitationKind = 'ROTATING' | 'ADDITIONAL';
 
 /** An administrator's approval of one worker, made in advance and sent. */
 export interface WorkerInvitation {
@@ -4239,6 +4248,9 @@ export interface WorkerInvitation {
   redeemedAt: string | null;
   revokedAt: string | null;
   note: string | null;
+  kind: WorkerInvitationKind;
+  /** The member this link was issued for, or null when anybody holding it may spend it. */
+  intendedUserId: string | null;
 }
 
 /**

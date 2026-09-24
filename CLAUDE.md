@@ -3299,6 +3299,27 @@ remote.
   single-use expiring invitation that on its own cannot read anything, call a
   tool or obtain a token — and the invitation *id* is what reaches the audit row.
   Onboarding twice is a repair and a rotation rather than an accumulation.
+- **A rotation is the wrong shape for a pool, and the only door to it vanished
+  the moment it was needed. The correction is recorded rather than quietly
+  applied.** Commissioning a Factory pool is one link per Claude account, sent to
+  several people at once, while the repository is already `READY`. Build
+  rendered its only invitation control inside `readiness !== 'READY'`, so the
+  first working account removed the way to invite the second — and had it been
+  there, onboarding again withdrew every unused link for the worker, so link B
+  killed link A before its recipient opened it. The runbook told the owner to
+  press a button the product no longer drew.
+
+  `issueFactoryInvitation` is the separate path, and what makes it safe is what
+  it does not write: no identity, membership, scope, routing row or boundary, and
+  no other invitation. `worker_invitations.kind` (migration 093 / pg 084) keeps
+  the two apart, so onboarding's rotation withdraws only its own `ROTATING` link
+  and never an `ADDITIONAL` one. Each additional link names the member it was
+  issued for, chosen by the administrator from real accounts; the consent screen
+  spends it only for a browser whose own Brain session is that member, and a
+  wrong or absent session is refused **without spending it** — the member is read
+  from the session, never from a name on the page or who opened it first. The
+  list afterwards is statuses, never a token. `tests/factoryAccountInvitations`
+  drives it over the wire and fails against both defects.
 - **It cannot register the surface, and readiness says which half is missing.**
   Brain that could mint its own execution surfaces is exactly what §22's split
   forbids, so the projection is derived on every read into three answers with

@@ -2067,6 +2067,58 @@ button.rs-card:hover {
   color: var(--ink-soft);
 }
 
+/* Inviting another Factory account, usually from a phone. The link wraps rather
+ * than scrolling the page sideways, and the select is 16px so iOS does not zoom
+ * the page when it is tapped (§46). No width is declared anywhere here. */
+.rs-factory-invites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-2);
+  margin-top: var(--gap-2);
+}
+
+.rs-factory-invite-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--gap-2);
+}
+
+.rs-factory-invite-form label {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 12rem;
+  gap: var(--gap-1);
+}
+
+.rs-factory-invite-form select {
+  font-size: 16px;
+  min-height: 44px;
+}
+
+.rs-factory-invites button {
+  min-height: 44px;
+}
+
+.rs-factory-invite-fresh code {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.rs-factory-invite-list {
+  margin: 0;
+  padding-left: 1.1em;
+  font-size: var(--step--1);
+}
+
+.rs-factory-invite-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-1) var(--gap-2);
+}
+
 /* Work already held up is the reason the steps above are worth doing, so it is
  * the one line in this card that is not soft. */
 .rs-repo-waiting {
