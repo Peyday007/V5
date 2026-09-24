@@ -61,19 +61,36 @@ import type { PuzzleInstance, PuzzleMaster } from '../../domain/types.ts';
 export const DEFECT_CEILING = 0.34;
 
 /**
- * How many attempts the ceiling needs behind it before it can say anything.
+ * How many attempts a rate needs behind it before it is a rate at all.
  *
- * It was four, and a third of four is two. A word search is refused when a
- * prohibited string forms by accident — about one grid in thirty-seven, a
- * property of placing letters at random — so two of the first four is rare and
- * not a defect, and it happens for about one master id in two hundred and fifty.
- * Seeds derive from the master's random id, so the suite met one now and then
- * and so did the release gate: "2 of 4 attempts failed validation" over a
- * healthy generator, two puzzles made. At twelve, a third failing needs five
- * such grids at that rate (about one in a hundred thousand), while a generator
- * that is genuinely broken still stops within the first dozen.
+ * *"A third failing is not luck"* is true of a third of many and false of two
+ * of four. The word search generator fails about 2.8% of the time, measured
+ * over 300 random masters, because a random letter fill occasionally spells a
+ * prohibited word — so two failures in its first four attempts happens by
+ * chance, and stopping there records *"a defect in the generator … rather than
+ * a run of bad luck"* about the one outcome that sentence rules out. It did:
+ * deploy 336's test gate made two puzzles out of twenty-five and stopped.
+ *
+ * Twelve makes the false stop negligible — at 3% per attempt, five failures in
+ * the first twelve is about one run in a hundred thousand — and costs a
+ * genuinely broken generator eight more refused seeds before it stops, which
+ * are recorded beside it like the first four.
  */
 export const DEFECT_MIN_SAMPLE = 12;
+
+/**
+ * Whether a batch's failures say something about the generator rather than
+ * about chance.
+ *
+ * `ceiling` is the most attempts this batch will make. A small batch never
+ * reaches the sample floor, and a generator failing every time would then
+ * never be named — so the rate is judged at whichever comes first, because
+ * at the batch's own ceiling every attempt it was ever going to make is in
+ * the rate.
+ */
+export function isSystematicDefect(invalid: number, attempts: number, ceiling: number): boolean {
+  return attempts >= Math.min(DEFECT_MIN_SAMPLE, ceiling) && invalid / attempts > DEFECT_CEILING;
+}
 
 /** How many puzzles one pass of the tick may make. Bounded, never a quota. */
 export const MAX_INSTANCES_PER_PASS = 25;
@@ -256,10 +273,10 @@ export async function generateBatch(input: {
       });
       /*
        * A systematic defect, caught while there is still something to fix.
-       * The check needs a few attempts behind it before it means anything,
-       * which is what the second clause is for.
+       * The check needs enough attempts behind it before it means anything;
+       * `DEFECT_MIN_SAMPLE` says how many and why.
        */
-      if (attempts >= DEFECT_MIN_SAMPLE && out.invalid.length / attempts > DEFECT_CEILING) {
+      if (isSystematicDefect(out.invalid.length, attempts, ceiling)) {
         out.blocked =
           `${out.invalid.length} of ${attempts} attempts failed validation, which is a defect ` +
           'in the generator or in this master rather than a run of bad luck. The batch stopped ' +

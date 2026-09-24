@@ -1,53 +1,70 @@
+import { randomBytes } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import {
+  DEFECT_CEILING,
+  DEFECT_MIN_SAMPLE,
+  isSystematicDefect,
+  specFor,
+} from '../server/services/puzzle/generate.ts';
+import { formatFor } from '../server/services/puzzle/formats/index.ts';
+import type { PuzzleMaster } from '../server/domain/types.ts';
+
 /**
- * The generator's systematic-defect stop, against a generator whose honest
- * failure rate is not zero.
- *
- * A word search is refused when a prohibited string forms by accident, which
- * happens to about one grid in thirty-seven — a property of placing letters
- * at random, not a defect. The stop used to judge "systematic" after four
- * attempts, so a master whose first four seeds included two such grids (about
- * one master id in two hundred and fifty) was stopped at two puzzles and
- * reported as a broken generator. Seeds are derived from the master's random
- * id, so the suite met one intermittently — and the release gate with it.
- *
- * `pzm_probe_668` is a master id found by search whose fifth attempt is its
- * second such grid — tripping the old stop with two or three made, the shape
- * CI met — so this reproduces the condition every run rather than hoping for
- * it. Measured over 3000 random master ids and 75 attempts each, the twelve-
- * attempt minimum stopped none of them.
+ * Deploy 336's test gate made two word searches out of twenty-five and stopped,
+ * recording "a defect in the generator … rather than a run of bad luck" about a
+ * generator that fails about 3% of the time. It was two unlucky seeds in the
+ * first four. These pin that a rate is judged over a sample large enough to be
+ * one, in both directions.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
-import { freshProject } from './helpers.ts';
-import { getDb } from '../server/db/database.ts';
-import { defineMaster, seedFormat } from '../server/services/puzzle/seed.ts';
-import { generateBatch } from '../server/services/puzzle/generate.ts';
+describe('a batch stops for a defect, never for bad luck', () => {
+  it('does not call two failures in four attempts a defect', () => {
+    expect(isSystematicDefect(2, 4, 75)).toBe(false);
+    expect(isSystematicDefect(2, 5, 75)).toBe(false);
+    expect(isSystematicDefect(3, 8, 75)).toBe(false);
+  });
 
-let projectId = '';
+  it('still names a generator that genuinely fails, once the sample is a sample', () => {
+    expect(isSystematicDefect(DEFECT_MIN_SAMPLE, DEFECT_MIN_SAMPLE, 75)).toBe(true);
+    const over = Math.floor(DEFECT_MIN_SAMPLE * DEFECT_CEILING) + 1;
+    expect(isSystematicDefect(over, DEFECT_MIN_SAMPLE, 75)).toBe(true);
+  });
 
-beforeEach(async () => {
-  projectId = (await freshProject()).project.id;
-});
+  it('judges a small batch at its own ceiling, so a broken generator is never silent', () => {
+    expect(isSystematicDefect(3, 3, 3)).toBe(true);
+    expect(isSystematicDefect(0, 3, 3)).toBe(false);
+  });
 
-describe('the defect stop needs a sample before it can say "systematic"', () => {
-  it('does not stop a healthy generator whose first seeds happened to fail', async () => {
-    await seedFormat({ projectId, actorRef: 'test', name: 'word search', note: 'fixture' });
-    const defined = await defineMaster({
-      projectId,
-      actorRef: 'BRAIN',
-      title: 'Word search — medium',
-      formatName: 'word search',
-      corpusId: 'common-english-v1',
-      difficulty: 'MEDIUM',
-      parameters: {},
-    });
-    if (!('master' in defined)) throw new Error('no master');
-    await getDb().run('UPDATE puzzle_masters SET id = ? WHERE id = ?', ['pzm_probe_668', defined.master.id]);
-
-    const report = await generateBatch({ projectId, masterId: 'pzm_probe_668', count: 25 });
-    // The condition is real: early refusals happened.
-    expect(report.invalid.length).toBeGreaterThanOrEqual(2);
-    // And a healthy generator still finished the batch.
-    expect(report.blocked).toBeNull();
-    expect(report.made).toHaveLength(25);
+  it('a healthy word search generator is not stopped across many masters', () => {
+    const format = formatFor('word search');
+    expect(format?.render).toBeTruthy();
+    let blocked = 0;
+    let invalid = 0;
+    let total = 0;
+    for (let run = 0; run < 200; run += 1) {
+      const master = {
+        id: `pzm_${randomBytes(10).toString('hex')}`,
+        formatKey: 'word search',
+        corpusId: 'common-english-v1',
+        generatorVersion: 1,
+        difficulty: 'MEDIUM',
+        parameters: {},
+      } as unknown as PuzzleMaster;
+      let bad = 0;
+      for (let index = 0; index < 25; index += 1) {
+        total += 1;
+        const verdict = format!.validate(format!.render!(specFor(master, index)));
+        if (verdict.state === 'INVALID') {
+          bad += 1;
+          invalid += 1;
+          if (isSystematicDefect(bad, index + 1, 75)) {
+            blocked += 1;
+            break;
+          }
+        }
+      }
+    }
+    // The measurement this rule rests on, asserted so it cannot drift silently.
+    expect(invalid / total).toBeLessThan(0.1);
+    expect(blocked).toBe(0);
   });
 });
