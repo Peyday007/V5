@@ -3316,15 +3316,18 @@ remote.
   that completed work and has since been quarantined reads both facts and
   counts for nothing as capacity.
 
-  **The same fork was in two more readers, and fixing one would have left the
-  other two disagreeing with it.** `capacityReading` called a surface eligible
-  on being a snapshot candidate, and `fleetSnapshot` puts every Routine with a
-  deployed secret in that list whatever its state — filtering is the router's
-  job — so `/people`'s *eligible now* counted quarantined, draining, cooling
-  and unbound surfaces. And `verify-pool` carried its own copy of the routing
-  rules, calling a surface at its target ineligible where the router calls it
-  waiting. Both read the router's order now, and the pool reads
-  `surfaceEligibility` outright. `tests/factoryReadinessRouting.test.ts` holds
+  **Two sessions fixed this within the same hour, and the reconciliation is
+  recorded rather than merged silently.** The four-account lane landed first
+  with `routingRefusalByRoutine` — `surfaceIneligibility` per Routine, which
+  also moved `capacityReading`, Who and contributed capacity onto the router,
+  and whose `capacity.ts` is the one that ships. For the Build card it is the
+  weaker question: it is asked independently of any bin, so it cannot see this
+  project, this repository, a missing `repository-write`, or a cooldown, and it
+  read `AWAITING_SURFACE` — *connect a surface* — over a surface that exists
+  and is merely refused. So `onboard.ts` keeps the pinned-probe version, which
+  asks `routeBin` itself and therefore inherits every check theirs has,
+  `workerActive` included; `verify-pool`'s private copy of the routing rules
+  reads `surfaceEligibility` too. `tests/factoryReadinessRouting.test.ts` holds
   the card against `routeBin` over a real units bin in every scenario, and was
   run against the unfixed code to watch twelve of its assertions fail.
 
