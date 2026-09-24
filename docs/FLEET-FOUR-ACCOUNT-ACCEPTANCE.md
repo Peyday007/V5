@@ -53,6 +53,28 @@ was loosened.
 
 **No schema change. No workflow, deployment or policy file touched.**
 
+### 1a. The second pass — integration, and the whole Factory path
+
+Integrating onto production `d59a46a` (a clean merge: nothing this lane touched
+had moved) and then walking the whole hosted Factory path for several people at
+once found nine more. Same class, same treatment: reproduced, fixed, regression
+seen to fail on the unfixed code.
+
+| # | Defect | Where | Regression |
+|---|---|---|---|
+| D5 | Five more readers answered "can this surface run work" from a Routine's state column: a goal's blocker told a person the dispatcher *would* route to an ENABLED surface bound to a disabled worker; Who (and Home's capacity line) called it **Healthy** and the project **READY**; a member's contributed capacity counted it **usable**; Build → Repositories read **READY** over a disabled worker, an unavailable account or a missing secret; the cowork executor probe and the self-model's CONNECTED likewise. All now read `routingRefusalByRoutine`, a per-Routine view of `surfaceIneligibility` that also answers for a missing secret. | `goals/model.ts`, `russell/who.ts`, `capacity/contribution.ts`, `factory/onboard.ts`, `executors/cowork.ts`, `selfmodel/observe.ts` | `goalOwnership`, `readLayer`, `claudeConnectionLifecycle`, `factoryOnboarding` |
+| D6 | **Concurrency.** A dispatch tick that lost a fire slot to a concurrent dispatcher kept routing the rest of its burst at the same surface from its stale snapshot and lost every time. Two ticks over eight bins and four idle accounts: the losing tick fired **none** of its five, and one account was never reached. | `dispatch/loop.ts` | `fleetFourAccountAcceptance` — *four accounts at once* (racing ticks, four simultaneous arrivals, one hand-over per bin, no cross-credit, four concurrent completions) |
+| D7 | A reviewer that reported no `session_ref` was admitted on the dispatched session and then refused at ingest for "recording no session", because the lease stored only the reported value. The bin was COMPLETE, which the stage ceiling never counted, so a fresh review bin was **fired every tick** and one more `UNIT_REFUSED` row written per old bin per tick. An implementer omitting it was absent from the set its reviewer must be independent of. | `repos/bins.ts`, `factory/remoteLoop.ts` | `factoryExecutionPlane` — *records the fired session on the lease*; *a review Brain refused spends the stage* |
+| D8 | A worker's empty `brain_check_in` ticked **every** live campaign in the Brain (and the outcome pass, with its forge calls) inside that worker's MCP call; `brain_bin_complete` fired a fleet-wide dispatch. One person's call paid for everybody's under a client timeout Brain does not choose. | `bins/service.ts`, `factory/remoteLoop.ts` | `factoryExecutionPlane` — *an empty check-in derives only the caller's campaigns* |
+| D9 | A second person asking for the same change in their own thread was handed the first person's software request: told it was "already waiting", with the card, the authorization and the pull request in somebody else's (possibly private) thread. Now one card per thread, authorized onto one shared change request and campaign. | `russell/software.ts` | `russellSoftwareJourney` — two tests |
+| D10 | A registered fleet whose deployment secrets were all missing read as "nothing registered" and fired every bin — anyone's — at the environment Routine with no router, scope or fire slot. | `dispatch/loop.ts` | `fleet` — *does not fire the environment trigger when every registered secret is missing* |
+| D11 | Two people's live campaigns could both continue one open pull request's head branch, each moving the other's integration base. A second one now opens its own branch. | `factory/remote.ts` | `factoryExecutionPlane` — *does not let a second live campaign write onto the branch another continues* |
+
+One residual is stated rather than hidden: D11's check runs before the campaign
+row exists, so two approvals in the same instant can both pass it; closing that
+for good needs the repository on the campaign row — a schema change, not made
+here.
+
 ---
 
 ## 2. Software verdict
