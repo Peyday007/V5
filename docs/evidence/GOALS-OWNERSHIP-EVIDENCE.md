@@ -383,6 +383,36 @@ was no `Brain is running.` line when flyctl gave up at about 06:06. That is
 more. `1f99be1` is what removes that wait, and it is what is being deployed
 next.
 
+## Deploy 344: released, and the port opened 14.2 seconds after the cloud answered
+
+Run 35965025952 on `87c5c87`, which carries `1f99be1`. **`release: success`**,
+the first release since 337. The boot log from the new machine:
+
+    06:52:31  The cloud answered. Replacing the error page with the Brain.
+    06:52:45  boot: opening the port 14.2s after the cloud answered
+    06:52:45  Brain is running.
+
+Compare 342 and 343, which were still closed four minutes after the same line.
+No `boot: <step> took Ns` line was printed for anything before the port, which
+fits the remaining pre-listen steps being cheap row updates. **The boot fix is
+proven in production.**
+
+Both hosted verification halves then ended `FAIL could-not-complete`, each on a
+single `UNAVAILABLE` from a mutation deep in the scripted research packet:
+
+- **Before the restart:** `brain_propose_fragments`, 07:10:50 → 07:15:35 (4m45s),
+  reference `req_tjlvRADe5ndT`. Everything before it passed: identity, the queue,
+  idempotency, the MCP gateway, and the goals privacy check.
+- **After the restart:** `brain_submit_synthesis`, 07:45:54 → 07:46:21 (27s),
+  reference `req_RCQDMLeUEG8l`. That half passed further, through proposal,
+  approval, claims, verification and the gate.
+
+The two failures come from two different tools, at two different points in the
+packet, with two different durations, on a day when Supabase has answered 544
+and 429 for hours. Nothing is concluded from that alone: the
+`[mcp] tool call failed` lines carrying the underlying errors were requested
+through the Logs workflow, and the classification below waits for them.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
