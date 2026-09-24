@@ -55,6 +55,25 @@ function sweepStaleRoots(): void {
 
 sweepStaleRoots();
 
+/*
+ * No test may reach a live model, or a credential that is not the test's own.
+ *
+ * The API-key variables are removed rather than trusted to be absent — a
+ * developer's shell routinely has one — and the factory's CLI is pointed at a
+ * refusal (`helpers/no-live-cli.mjs`) so an unplanned spawn fails loudly
+ * instead of running the `claude` on PATH as whoever is signed in there. Both
+ * are inherited by every server a suite boots, because those spawn with
+ * `process.env`. A suite that needs a CLI sets its own stub first.
+ */
+for (const variable of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY', 'BRAIN_PROVIDER']) {
+  delete process.env[variable];
+}
+process.env.BRAIN_FACTORY_CLI ??= path.join(
+  path.dirname(new URL(import.meta.url).pathname),
+  'helpers',
+  'no-live-cli.mjs',
+);
+
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), PREFIX));
 process.env.BRAIN_DATA_DIR = dir;
 process.env.BRAIN_DB_PATH = path.join(dir, 'brain.db');

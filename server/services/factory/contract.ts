@@ -108,6 +108,12 @@ export interface ObjectiveSubmission {
   riskClass?: FactoryRiskClass;
   /** Narrow the factory's reach below what the repository would allow. */
   mutationScope?: string[];
+  /**
+   * The authenticated person asking, for attribution. Supplied by the route
+   * from the principal and never from a request body; absent for a request
+   * Brain compiles for itself.
+   */
+  submittedByUserId?: string | null;
 }
 
 /**
@@ -493,6 +499,7 @@ export async function submitObjective(
     deploymentPolicy: submission.deploymentPolicy ?? 'NONE',
     rollbackRequirement: derived.rollbackRequirement,
     verificationCommands: derived.verificationCommands,
+    submittedByUserId: submission.submittedByUserId ?? null,
   });
 
   await recordFactoryEvent({

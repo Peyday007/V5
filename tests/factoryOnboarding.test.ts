@@ -346,14 +346,19 @@ describe('readiness is derived, and says what is left', () => {
     const worker = (await getWorkerByName(factoryWorkerName(GRANT().id)))!;
     await bindRoutineWorker(routine.id, worker.id);
 
-    // Registered, bound and ENABLED, and its secret is not in this deployment:
-    // the router would not fire it, so this is not READY (§23).
-    const unfired = (await repositoryOnboarding(fixture.project.id))[0]!;
-    expect(unfired.readiness).toBe('AWAITING_SURFACE');
-    expect(unfired.remaining.join(' ')).toMatch(/deployment secret is not present/);
+    /*
+     * Registered, enabled and bound is **not** ready while the trigger token is
+     * not deployed: the dispatcher leaves such a Routine out of routing
+     * entirely. This test used to assert READY here, which was the defect —
+     * the card called a repository executable that nothing would ever fire.
+     */
+    const configured = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(configured.readiness).toBe('NO_USABLE_SURFACE');
+    expect(configured.remaining.join(' ')).toContain('A_SECRET_NAME');
 
-    process.env.A_SECRET_NAME = 'present-for-test';
+    process.env['A_SECRET_NAME'] = 'placeholder-not-a-token';
     const ready = (await repositoryOnboarding(fixture.project.id))[0]!;
+    delete process.env['A_SECRET_NAME'];
     expect(ready.readiness).toBe('READY');
     expect(ready.remaining).toHaveLength(0);
     expect(ready.surfaces.map((one) => one.routineName)).toContain('Factory surface');
@@ -861,6 +866,9 @@ describe('surfaces are counted by account, and proof is not assumed', () => {
         capabilities: [...FACTORY_ROUTING_CAPABILITIES],
       });
       await bindRoutineWorker(routine.id, worker.id);
+      // Deployed, because a surface whose token is not deployed is not routed
+      // and would not be READY — which is a different test's subject.
+      process.env[`SECRET_${label}`] = 'placeholder-not-a-token';
     }
     return { workerId: worker.id, accountName: account.name };
   }
@@ -916,8 +924,10 @@ describe('surfaces are counted by account, and proof is not assumed', () => {
       capabilities: [...FACTORY_ROUTING_CAPABILITIES],
     });
     await bindRoutineWorker(routine.id, worker.id);
+    process.env['SECRET_C'] = 'placeholder-not-a-token';
 
     const repo = (await repositoryOnboarding(fixture.project.id))[0]!;
+    delete process.env['SECRET_C'];
     expect(repo.surfaces).toHaveLength(3);
     // Two subscriptions, whatever they are called.
     expect(repo.accountsServing).toBe(2);

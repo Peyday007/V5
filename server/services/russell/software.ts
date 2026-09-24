@@ -695,6 +695,7 @@ export async function authorizeSoftwareRequest(input: {
       // The factory's key, not the row's: every conversation that asked for
       // this objective in this project joins one change request.
       submissionKey: submissionKeyFor(request.projectId, request.objective),
+      submittedByUserId: input.userId,
     });
 
     /*
