@@ -22,7 +22,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
 import { getDb } from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
-import { createUser, createWorker, grantMembership } from '../server/repos/identity.ts';
+import { createUser, createWorker, grantMembership, setWorkerStatus } from '../server/repos/identity.ts';
 import { createAccount, createRoutine, listRoutines, setRoutineState } from '../server/repos/fleet.ts';
 import {
   assignNextBin,
@@ -496,6 +496,46 @@ describe('a queued bin the dispatcher cannot route is a blocker, not a queue', (
     // Aged from when the surface went out, not from the intent's last re-check.
     const quarantined = (await listRoutines()).find((one) => one.id === routine.id)!;
     expect(view.blockers[0]!.since).toBe(quarantined.updatedAt);
+  });
+
+  it('does not call an ENABLED surface routable when the router would refuse it', async () => {
+    // A disabled worker keeps its memberships and its Routine keeps reading
+    // ENABLED — and the router refuses it (§23). The remedy used to read the
+    // state column and tell a person the dispatcher would route to it.
+    const { goal, bin } = await goalWithWork({ title: 'Worker disabled' });
+    await grantMembership({
+      projectId,
+      principalType: 'WORKER',
+      principalId: workerId,
+      role: null,
+      scopes: ['queue:read', 'queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    const secretName = `GOAL_SURFACE_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    process.env[secretName] = 'present-for-test';
+    try {
+      const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2, 8)}` });
+      await createRoutine({
+        accountId: account.id,
+        routineRef: `trig_${Math.random().toString(36).slice(2, 12)}`,
+        name: 'Research surface D',
+        tokenSecretName: secretName,
+        workerId,
+      });
+      await setWorkerStatus(workerId, 'DISABLED');
+      await ensureDispatchIntent((await getBin(bin.id))!);
+      const intent = (await listDispatchesForBin(bin.id))[0]!;
+      await markDispatchFailed(intent.id, { kind: 'NO_SURFACE_SERVES_THIS_PROJECT', message: 'No enabled Routine…', refundAttempt: true });
+      const view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+      const blocker = view.blockers[0]!;
+      expect(blocker.remedy).not.toMatch(/dispatcher will route to it/);
+      expect(blocker.remedy).toMatch(/Research surface D \(bound worker is disabled or archived\)/);
+      expect(blocker.text).toMatch(/every one is out of routing/);
+    } finally {
+      delete process.env[secretName];
+      await setWorkerStatus(workerId, 'ACTIVE');
+    }
   });
 
   it('calls a full fleet a capacity wait, which resolves by itself', async () => {
