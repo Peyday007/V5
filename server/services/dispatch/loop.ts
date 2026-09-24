@@ -81,6 +81,7 @@ import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator 
 import { markDispatchRoutine } from '../../repos/bins.ts';
 import {
   claimRoutineFireSlot,
+  countRoutines,
   getRoutine,
   recordAccountRefusal,
   recordRoutineFire,
@@ -338,7 +339,18 @@ export async function dispatchTick(
    * unmigrated deployment keeps firing its one Routine until somebody registers
    * it properly.
    */
-  const registryEmpty = snapshot.candidates.length === 0;
+  /*
+   * Empty means *no Routine row at all*, not "no candidate". The snapshot leaves
+   * out every Routine whose secret is not deployed, so a registry whose secrets
+   * were all rotated away read as empty, and every bin — any person's, any
+   * project's — was fired at the environment Routine with no router, no
+   * eligibility, no scope and no fire slot. A registered fleet with nothing
+   * routable waits; it never falls back.
+   */
+  const registryEmpty =
+    snapshot.candidates.length === 0 &&
+    snapshot.missingSecrets.length === 0 &&
+    (await countRoutines()) === 0;
 
   if (registryEmpty && !isFireConfigured()) {
     result.skippedNotConfigured = true;
@@ -497,6 +509,24 @@ export async function dispatchTick(
           retryAfterMs: 5_000,
         });
         result.deferred += 1;
+        /*
+         * And stop routing the rest of this burst against the generation it
+         * just lost. The snapshot is read once per tick, so without this every
+         * later intent in the burst chose the same surface from the same stale
+         * row and lost the same race — measured with two ticks over eight
+         * bins and four idle accounts: the losing tick deferred all five of
+         * its intents and fired none. The winner has just fired this surface,
+         * so it carries one more activation than this snapshot knew about.
+         */
+        const lost = snapshot.candidates.find((c) => c.routine.id === decision.routine.id);
+        const current = lost ? await getRoutine(lost.routine.id) : null;
+        if (lost && current) {
+          lost.routine = { ...lost.routine, fireGeneration: current.fireGeneration, lastFiredAt: current.lastFiredAt };
+          lost.routineInFlight += 1;
+          for (const sibling of snapshot.candidates) {
+            if (sibling.account.id === decision.account.id) sibling.accountInFlight += 1;
+          }
+        }
         continue;
       }
 

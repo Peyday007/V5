@@ -1109,6 +1109,19 @@ describe('a proof is not a certificate', () => {
     expect(report.problems.join(' ')).toContain('archived');
   });
 
+  it('does not let a past proof erase a disabled worker either', async () => {
+    const { read, first } = await provenSurface();
+    const report = judgeOne(read, {
+      ...first,
+      worker: { ...first.worker!, disabled: true },
+    });
+    // Disabling is reversible and archiving is not, and to a proof they are one
+    // fault: nothing can authenticate as this worker now.
+    expect(report.surfaces[0]!.verdict).toBe('FAULT');
+    expect(report.surfaces[0]!.problems.join(' ')).toContain('disabled');
+    expect(report.ok).toBe(false);
+  });
+
   it('does not let a past proof erase a Factory identity that also serves research', async () => {
     const { read, first } = await provenSurface();
     const report = judgeOne(read, {

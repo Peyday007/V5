@@ -173,14 +173,15 @@ describe('an intent the fleet had no room for', () => {
     process.env['BRAIN_ROUTINE_ID'] = 'trig_env_fallback';
     process.env['BRAIN_ROUTINE_TOKEN'] = 'token';
     const binId = await aReadyBin();
-    const account = await createAccount({ provider: 'anthropic', name: 'empty-account' });
-    const routine = await createRoutine({
-      accountId: account.id,
-      routineRef: 'trig_nobody',
-      name: 'V-nobody',
-      tokenSecretName: 'SECRET_THAT_IS_NOT_SET',
-    });
-    void routine;
+    /*
+     * Genuinely no fleet: no Routine row at all, so the environment trigger is
+     * the fallback. This used to register a Routine whose secret was missing
+     * and call that "no fleet" — which is the shape that fired every bin at the
+     * environment Routine with no router in front of it. A registered Routine
+     * with its secret absent now waits for the secret instead (the fleet suite's
+     * "does not fire the environment trigger when every registered secret is
+     * missing").
+     */
 
     for (let round = 0; round < 8; round += 1) {
       await dispatchTick({ burst: 1, projectIds: [projectId] });

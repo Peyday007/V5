@@ -53,7 +53,12 @@ export interface PoolSurfaceInput {
   routine: FleetRoutine;
   account: FleetAccount;
   /** The worker `fleet_routines.worker_id` names, resolved. */
-  worker: { id: string; name: string; archived: boolean } | null;
+  /**
+   * `disabled` beside `archived` because both mean the same thing to a proof:
+   * no session can authenticate as this worker now. Archived is terminal and
+   * disabled is not, which changes the remedy and not the fault.
+   */
+  worker: { id: string; name: string; archived: boolean; disabled?: boolean } | null;
   /** That worker's explicit routing row, or null when it has none. */
   routing: { families: string[]; repositories: string[]; capabilities: string[] } | null;
   /** Whether this deployment actually holds the secret the row names. */
@@ -318,6 +323,11 @@ function judgeSurface(
     standing.push(
       'the bound worker is archived, so no session can authenticate as it however well this ' +
         'surface ran before',
+    );
+  } else if (input.worker?.disabled) {
+    standing.push(
+      'the bound worker is disabled, so no session can authenticate as it however well this ' +
+        'surface ran before — re-enable it, and nothing about the surface has to be redone',
     );
   }
 
@@ -676,7 +686,12 @@ export async function readFactoryPool(input: {
       routine,
       account,
       worker: worker
-        ? { id: worker.id, name: workerIdentity(worker), archived: worker.archived }
+        ? {
+            id: worker.id,
+            name: workerIdentity(worker),
+            archived: worker.archived,
+            disabled: worker.disabled,
+          }
         : null,
       routing: routing
         ? {

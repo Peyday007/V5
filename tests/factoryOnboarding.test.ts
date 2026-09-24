@@ -368,6 +368,7 @@ describe('readiness is derived, and says what is left', () => {
     expect(ready.surfaces[0]!.proven).toBe(false);
     expect(ready.provenSurfaces).toBe(0);
     expect(ready.accountsServing).toBe(1);
+    delete process.env.A_SECRET_NAME;
   });
 });
 
@@ -833,11 +834,14 @@ describe('a duplicate action produces no duplicate execution', () => {
  * `/people` — and did not refuse here.
  */
 describe('surfaces are counted by account, and proof is not assumed', () => {
-  afterEach(() => {
-    delete process.env['SECRET_A'];
-    delete process.env['SECRET_B'];
+  // These surfaces are meant to be routable, and routable includes a secret
+  // this deployment actually holds.
+  beforeEach(() => {
+    for (const name of ['SECRET_A', 'SECRET_B', 'SECRET_C']) process.env[name] = 'present-for-test';
   });
-
+  afterEach(() => {
+    for (const name of ['SECRET_A', 'SECRET_B', 'SECRET_C']) delete process.env[name];
+  });
   /** Two Routines on one account, both enabled, neither ever fired. */
   async function twoOnOneAccount(): Promise<{ workerId: string; accountName: string }> {
     await onboard();

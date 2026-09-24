@@ -315,6 +315,12 @@ gives it the fixed factory scope set, writes an exhaustive routing row naming
 repair and a rotation, so the second press reuses the same worker, revokes the
 lost invitation and issues a fresh one. Nothing accumulates.
 
+**One link per Claude account.** A link is spent when a connection is approved
+with it, so each further account needs a fresh press. The rotation revokes
+*unspent invitations only* — never a connector another account has already
+authorized — so pressing it again for the next person costs the previous one
+nothing.
+
 The link is not a credential. On its own it cannot read anything, call a tool or
 obtain a token; all it does is make one browser able to approve **that one
 worker**.
@@ -697,8 +703,8 @@ Four verdicts, and they mean four different things:
   that either arrives or does not.
 * **FAULT** — a session arrived on this surface under a **different** worker,
   or a fact about the surface *now* contradicts its proof: its bound worker has
-  been archived, or its routing row has been widened to serve research as well
-  as FACTORY. None of those is fixed by probing again — change the Routine's
+  been archived or disabled, or its routing row has been widened to serve
+  research as well as FACTORY. None of those is fixed by probing again — change the Routine's
   connectors in Cowork, or correct the row. `verify-pool --probe` deliberately
   skips a faulted surface rather than spending an activation to re-learn it.
 

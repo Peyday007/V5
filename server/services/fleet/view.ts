@@ -28,7 +28,8 @@ import {
   unansweredFiresByRoutine,
 } from '../../repos/fleet.ts';
 import { getWorker } from '../../repos/identity.ts';
-import { inFlightByRoutine } from '../dispatch/candidates.ts';
+import { fleetSnapshot, inFlightByRoutine } from '../dispatch/candidates.ts';
+import { surfaceIneligibility, type RoutingCandidate } from '../dispatch/router.ts';
 import { lastOutcomeOf } from '../dispatch/pool.ts';
 import { getDb } from '../../db/database.ts';
 import { workloadProfile } from '../dispatch/profiles.ts';
@@ -198,6 +199,17 @@ export function usability(
   routine: FleetRoutine,
   account: FleetAccount | undefined,
   now: string,
+  /**
+   * The dispatcher's own candidate for this Routine, when the caller has read
+   * the snapshot — `null` meaning it is not a candidate because its secret is
+   * not deployed. Without it this answers from the Routine and account rows
+   * alone, which is every question a pure caller can ask; with it the answer
+   * is the router's, so a surface the router will never fire — no deployed
+   * secret, bound to no worker or a disabled one, a worker with no project —
+   * cannot read as usable here. That was the third definition of "usable"
+   * beside the router and the capacity reading, and the one on the Fleet page.
+   */
+  dispatch?: { candidate: RoutingCandidate | null },
 ): { usable: boolean; reason: string | null; recorded: string | null } {
   const recorded = routine.stateReason?.trim() || null;
   if (!account) {
@@ -219,7 +231,40 @@ export function usability(
   if (!routine.tokenSecretName) {
     return { usable: false, reason: 'No deployment secret is recorded for it.', recorded };
   }
-  if (routine.retryAt && routine.retryAt > now) {
+  if (dispatch) {
+    if (dispatch.candidate === null) {
+      return {
+        usable: false,
+        reason: 'Its deployment secret is not present in this deployment, so Brain will not fire it.',
+        recorded,
+      };
+    }
+    const ineligible = surfaceIneligibility(dispatch.candidate);
+    if (ineligible === 'bound to no worker') {
+      return { usable: false, reason: 'It is bound to no worker identity.', recorded };
+    }
+    if (ineligible === 'bound worker is disabled or archived') {
+      return {
+        usable: false,
+        reason: 'The worker identity it is bound to is disabled or archived.',
+        recorded,
+      };
+    }
+    if (ineligible !== null) {
+      return {
+        usable: false,
+        reason: 'The worker identity it is bound to holds no project membership.',
+        recorded,
+      };
+    }
+  }
+  const waitUntil =
+    routine.retryAt && account.retryAt
+      ? routine.retryAt > account.retryAt
+        ? routine.retryAt
+        : account.retryAt
+      : routine.retryAt ?? account.retryAt;
+  if (waitUntil && waitUntil > now) {
     return {
       usable: false,
       reason: 'Waiting out a provider refusal before it is fired again.',
@@ -259,6 +304,9 @@ export async function fleetView(input: {
   ]);
 
   const byAccount = new Map(accounts.map((account) => [account.id, account]));
+  // The router's own candidates, so "usable" here is the router's answer.
+  const snapshot = await fleetSnapshot(new Date(now));
+  const candidateById = new Map(snapshot.candidates.map((one) => [one.routine.id, one]));
   /*
    * Bound workers by name, resolved once. A pool is invisible from a list of
    * Routines unless the binding is on it, and the same worker appears on every
@@ -288,7 +336,9 @@ export async function fleetView(input: {
 
   const surfaces: SurfaceReading[] = routines.map((routine) => {
     const account = byAccount.get(routine.accountId);
-    const { usable, reason, recorded } = usability(routine, account, now);
+    const { usable, reason, recorded } = usability(routine, account, now, {
+      candidate: candidateById.get(routine.id) ?? null,
+    });
     return {
       routineId: routine.id,
       routineRef: input.includeTechnical ? routine.routineRef : null,

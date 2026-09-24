@@ -6,11 +6,12 @@
  * the rest of this codebase uses everywhere a claim happens.
  *
  * **Capture is idempotent by `(project_id, submission_key)`**, and the key is
- * `submissionKeyFor(projectId, objective)` — the factory's own. So the same ask
- * arriving twice, from a redelivered turn, a person repeating themselves, or a
- * second conversation about the same thing, is one row and therefore one card.
- * It cannot see a rewording; the factory's own collision on the same key is what
- * catches that, and neither is sufficient alone.
+ * per conversation (`services/russell/software.ts`). So the same ask arriving
+ * twice in one thread — a redelivered turn, a person repeating themselves — is
+ * one row and one card, and a second conversation asking for the same thing gets
+ * its own card that authorizes into the *same* change request, on the factory's
+ * project-wide key. It cannot see a rewording; the factory's own collision on
+ * that key is what catches that, and neither is sufficient alone.
  *
  * **Authorization is a guarded `UPDATE ... WHERE state = 'PROPOSED'`.** Two
  * clicks, a retried request and two browser tabs produce exactly one winner, and

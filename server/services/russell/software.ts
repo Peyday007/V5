@@ -368,11 +368,18 @@ export interface CaptureSoftwareOutcome {
 /**
  * Write down a software change somebody asked for, so a person can authorize it.
  *
- * The submission key is the factory's own — `submissionKeyFor(projectId,
- * objective)` — so this row and the change request it may eventually produce
- * agree about what "the same ask" means. Two people describing the same change
- * in two threads collide here; two *wordings* of the same change collide at the
- * factory, on the same key, when the second one is authorized.
+ * The row's key is per conversation; the key it is authorized under is the
+ * factory's own, `submissionKeyFor(projectId, objective)`. So the same ask
+ * repeated in one thread is one row, and two people asking for the same change
+ * in two threads each get a card in their own thread — and both cards resolve
+ * to one change request and one campaign when authorized, which is how a result
+ * reaches both of them.
+ *
+ * It used to be one row keyed on the project alone, so the second person was
+ * told their request was "already waiting" and it was — in the first person's
+ * thread, possibly a private one they cannot open, where the card, the
+ * authorization and the pull request all stayed. A row that existed before
+ * this change keeps its project-wide key, which is still exactly the factory's.
  */
 export async function captureSoftwareChange(input: {
   projectId: string;
@@ -457,6 +464,11 @@ export async function captureSoftwareChange(input: {
   return writeRequest({ ...input, projectId });
 }
 
+/** One card per conversation per objective; see `captureSoftwareChange`. */
+function requestKeyFor(projectId: string, conversationId: string, objective: string): string {
+  return submissionKeyFor(projectId, `${conversationId}\n${objective}`);
+}
+
 /** The write both entrances share, so a row can only be made one way. */
 async function writeRequest(input: {
   projectId: string;
@@ -474,7 +486,7 @@ async function writeRequest(input: {
     title: input.title.trim(),
     objective,
     expectedOutcome: input.expectedOutcome.trim(),
-    submissionKey: submissionKeyFor(input.projectId, objective),
+    submissionKey: requestKeyFor(input.projectId, input.conversationId, objective),
   });
   return {
     request: outcome.request,
@@ -680,7 +692,9 @@ export async function authorizeSoftwareRequest(input: {
       baseBranch: input.baseBranch?.trim() || undefined,
       mutationScope: requested,
       acceptanceConditions: input.acceptanceConditions ?? [],
-      submissionKey: request.submissionKey,
+      // The factory's key, not the row's: every conversation that asked for
+      // this objective in this project joins one change request.
+      submissionKey: submissionKeyFor(request.projectId, request.objective),
       submittedByUserId: input.userId,
     });
 
