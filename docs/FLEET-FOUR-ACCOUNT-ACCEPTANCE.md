@@ -57,7 +57,7 @@ was loosened.
 
 Integrating onto production `d59a46a` (a clean merge: nothing this lane touched
 had moved) and then walking the whole hosted Factory path for several people at
-once found nine more. Same class, same treatment: reproduced, fixed, regression
+once found seven more. Same class, same treatment: reproduced, fixed, regression
 seen to fail on the unfixed code.
 
 | # | Defect | Where | Regression |
