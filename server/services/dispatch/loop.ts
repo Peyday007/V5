@@ -81,6 +81,7 @@ import { OPERATOR_RESOLVED_ROUTING_REFUSALS, refusalEndsBurst, waitsForOperator 
 import { markDispatchRoutine } from '../../repos/bins.ts';
 import {
   claimRoutineFireSlot,
+  countRoutines,
   getRoutine,
   recordAccountRefusal,
   recordRoutineFire,
@@ -338,7 +339,18 @@ export async function dispatchTick(
    * unmigrated deployment keeps firing its one Routine until somebody registers
    * it properly.
    */
-  const registryEmpty = snapshot.candidates.length === 0;
+  /*
+   * Empty means *no Routine row at all*, not "no candidate". The snapshot leaves
+   * out every Routine whose secret is not deployed, so a registry whose secrets
+   * were all rotated away read as empty, and every bin — any person's, any
+   * project's — was fired at the environment Routine with no router, no
+   * eligibility, no scope and no fire slot. A registered fleet with nothing
+   * routable waits; it never falls back.
+   */
+  const registryEmpty =
+    snapshot.candidates.length === 0 &&
+    snapshot.missingSecrets.length === 0 &&
+    (await countRoutines()) === 0;
 
   if (registryEmpty && !isFireConfigured()) {
     result.skippedNotConfigured = true;

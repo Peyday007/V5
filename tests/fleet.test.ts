@@ -1279,6 +1279,31 @@ describe('a burst spends the headroom it measured, once', () => {
       delete process.env['BRAIN_ROUTINE_TOKEN'];
     }
   });
+
+  it('does not fire the environment trigger when every registered secret is missing', async () => {
+    // The snapshot leaves out a Routine whose secret is not deployed, and the
+    // fallback used to read that as "nothing registered" — firing every bin at
+    // one fixed Routine with no router, no scope and no fire slot.
+    const account = await createAccount({ name: 'rotated-away' });
+    await createRoutine({
+      accountId: account.id,
+      routineRef: 'trig_registered_but_unset',
+      name: 'Registered surface',
+      tokenSecretName: 'A_SECRET_NOBODY_DEPLOYED',
+    });
+    process.env['BRAIN_ROUTINE_ID'] = 'trig_env';
+    process.env['BRAIN_ROUTINE_TOKEN'] = 'sk-env-not-real';
+    try {
+      await readyBin();
+      const tick = await dispatchTick({ projectIds: [projectId], burst: 1 });
+      expect(tick.fired).toBe(0);
+      expect(fired.some((one) => one.includes('trig_env'))).toBe(false);
+      expect(tick.missingSecrets).toBe(1);
+    } finally {
+      delete process.env['BRAIN_ROUTINE_ID'];
+      delete process.env['BRAIN_ROUTINE_TOKEN'];
+    }
+  });
 });
 
 describe('renaming a surface', () => {

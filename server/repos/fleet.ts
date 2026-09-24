@@ -307,6 +307,12 @@ export async function getRoutineByRef(routineRef: string): Promise<FleetRoutine 
   return row ? mapRoutine(row) : null;
 }
 
+/** How many Routine rows exist at all, in any state. */
+export async function countRoutines(): Promise<number> {
+  const row = await getDb().get<{ n: number }>('SELECT COUNT(*) AS n FROM fleet_routines');
+  return Number(row?.n ?? 0);
+}
+
 export async function listRoutines(options: { accountId?: string } = {}): Promise<FleetRoutine[]> {
   const params: SqlParam[] = [];
   let sql = 'SELECT * FROM fleet_routines';
