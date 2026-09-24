@@ -373,6 +373,16 @@ after the cloud answered the port opened is printed too, so the next slow boot
 names its step rather than leaving a gap between two log lines.
 `tests/bootRetry.test.ts` fails against `45f338c`'s order.
 
+## Deploy 343: the same gap, on another session's tree
+
+Run 35960856346 on `f84d306`: `release: failure`, both halves `skipped`. The
+new machine served the 544/429 error from 06:01:17, the boot retry's second
+attempt held at **06:02:17**, the design kernel seeded at 06:02:24, and there
+was no `Brain is running.` line when flyctl gave up at about 06:06. That is
+342's shape again: the proof took a minute and the port stayed closed for four
+more. `1f99be1` is what removes that wait, and it is what is being deployed
+next.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
