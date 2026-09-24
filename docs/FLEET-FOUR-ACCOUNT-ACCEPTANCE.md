@@ -177,6 +177,40 @@ A*. If that is the owner's Claude account, the owner's row below is done and
 only the three friends remain; if it is not, the owner's row is still owed. Which
 person *Brain Research A* belongs to is a fact only the owner can state.
 
+### Where the four people stand — read from production, 2026-09-24
+
+`admin people foundation` (run 35940369010) and `fleet show` (run 35941567806)
+on the live Brain name the four people, and every line below is a row, not an
+inference:
+
+| Person | Sign-in | Claude connection | Factory surface |
+|---|---|---|---|
+| **Peyton** (Brain administrator) | PIN set — signs in | PROVEN (adopted research surface; that surface now QUARANTINED for no-shows) | **Factory surface 1**, account *Brain Research A*, bound to `factory-brain` — onboarded by `usr_1443…` (Peyton), PROVEN |
+| **Airyn** | **blocked** — holds a passkey and no PIN; the sign-in screen takes only a PIN | not started | none (four legacy research Routines *Airyn 2-A…D* are bound to the shared research worker and QUARANTINED) |
+| **Caleb** | **blocked** — passkey only, same as Airyn | not started | none (four research Routines *Caleb 3-A…D*, ENABLED, bound to an unowned worker) |
+| **Vince** | **blocked** — holds no credential at all | not started | none |
+
+*Brain Research A* is the Fleet account holding the Step 10 trigger
+`trig_01CBLu5o…` and the surface Peyton adopted, and `factory-brain`'s routing
+row says it was onboarded by Peyton — so the rows point to it being Peyton's
+own Claude account. No row can prove whose Claude subscription an account is;
+that is recorded here as strongly indicated, not established.
+
+**What each blocked person needs, in order** (each an existing product path;
+nothing here needs a database step):
+
+1. **Sign-in.** Peyton → People & capacity → *issue a recovery link* for Airyn
+   and for Caleb, and an *enrollment link* for Vince; send each link to its
+   person. Redeeming it ends in setting a PIN.
+2. **Factory connector.** Peyton → Build → Repositories → *Onboard* `brain`
+   again for each friend, and send them the fresh link; they follow the table
+   below from "That person, in their own browser".
+3. **Surface.** Each friend creates `Factory_surface_N` in their own Cowork and
+   hands Peyton the trigger id; the bearer token goes to Peyton out of band and
+   Peyton sets `BRAIN_ROUTINE_TOKEN_FACTORY_N` with `fly secrets set`. The
+   Fleet workflow steps after that (register, bind, `verify-surface --probe`)
+   need no further human action.
+
 ### Once, by the owner
 
 1. **Already done in production** — `brain` is onboarded and its worker
