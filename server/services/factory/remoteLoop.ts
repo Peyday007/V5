@@ -359,6 +359,7 @@ async function ingestReviewBin(
   const review = await readReviewReport(bin.id);
   if (!review.ok) {
     report.notes.push(`The review bin ${bin.id} completed without a usable review.`);
+    await noteReviewRefused(campaign, bin, 'the bin completed without a usable review');
     return false;
   }
   const already = (await listReviews(campaign.id)).some(
@@ -380,14 +381,7 @@ async function ingestReviewBin(
   const lineage = await reviewLineage(campaign.id, reviewer);
   if (!lineage.ok) {
     report.notes.push(lineage.reason ?? 'the reviewer was not independent of the work');
-    await recordFactoryEvent({
-      campaignId: campaign.id,
-      sessionId: reviewer.sessionId,
-      workerId: reviewer.workerId,
-      kind: FACTORY_EVENT_KINDS.unitRefused,
-      evidenceClass: 'MEASURED',
-      detail: { stage: 'REVIEW', binId: bin.id, reason: lineage.reason },
-    });
+    await noteReviewRefused(campaign, bin, lineage.reason ?? 'the reviewer was not independent of the work');
     return false;
   }
 
@@ -658,6 +652,40 @@ const NOT_INGESTED_KIND: Record<'INTEGRATE' | 'DELIVER', string> = {
   INTEGRATE: FACTORY_EVENT_KINDS.integrationNotIngested,
   DELIVER: FACTORY_EVENT_KINDS.deliveryNotIngested,
 };
+
+/**
+ * A completed review bin whose report Brain refused, recorded once per bin.
+ *
+ * A COMPLETE bin is neither live nor FAILED, so without this the review stage
+ * handed out a new bin on every tick for a refusal that would recur — each one
+ * a real activation — and wrote one more `UNIT_REFUSED` row per old bin per
+ * tick. Recorded once, it is also what `stalledStage` counts as a spent bin,
+ * so the stage blocks at its ceiling with the reason instead of looping.
+ */
+async function noteReviewRefused(campaign: FactoryCampaign, bin: Bin, reason: string): Promise<void> {
+  const spent = await refusedReviewBins(campaign.id);
+  if (spent.has(bin.id)) return;
+  const who = await binIdentity(bin);
+  await recordFactoryEvent({
+    campaignId: campaign.id,
+    sessionId: who.sessionId,
+    workerId: who.workerId,
+    kind: FACTORY_EVENT_KINDS.unitRefused,
+    evidenceClass: 'MEASURED',
+    detail: { stage: 'REVIEW', binId: bin.id, reason },
+  });
+}
+
+/** The review bins whose completed report Brain refused. */
+async function refusedReviewBins(campaignId: string): Promise<Set<string>> {
+  const events = await listFactoryEvents(campaignId, { kinds: [FACTORY_EVENT_KINDS.unitRefused], limit: 2000 });
+  const out = new Set<string>();
+  for (const event of events) {
+    const seen = (event.detail ?? {}) as { stage?: unknown; binId?: unknown };
+    if (seen.stage === 'REVIEW' && typeof seen.binId === 'string') out.add(seen.binId);
+  }
+  return out;
+}
 
 async function noteIngestRefused(
   campaign: FactoryCampaign,
@@ -1080,6 +1108,8 @@ export function stalledStage(
   bins: Bin[],
   kind: string,
   since: string | null,
+  /** COMPLETE bins whose report Brain refused, which spend the stage like a failure. */
+  refused: ReadonlySet<string> = new Set(),
 ): { detail: string } | null {
   const mine = bins.filter((bin) => bin.kind === kind);
   const waiting = mine.find((bin) => bin.state === 'NEEDS_HUMAN');
@@ -1092,7 +1122,9 @@ export function stalledStage(
     };
   }
   const failed = mine.filter(
-    (bin) => bin.state === 'FAILED' && (since === null || bin.createdAt > since),
+    (bin) =>
+      (bin.state === 'FAILED' || (bin.state === 'COMPLETE' && refused.has(bin.id))) &&
+      (since === null || bin.createdAt > since),
   ).length;
   if (failed >= MAX_BINS_PER_STAGE) {
     return {
@@ -1702,8 +1734,8 @@ async function runRemoteTick(
       report.notes.push('waiting for a reviewer');
       await stageIsLive(fresh, 'REVIEWING', 'waiting for a reviewer', report);
       return report;
-    } else if (stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt)) {
-      const stall = stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt);
+    } else if (stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt, await refusedReviewBins(fresh.id))) {
+      const stall = stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt, await refusedReviewBins(fresh.id));
       if (stall) return await blockStage(fresh, 'review', stall, report);
     } else if (!alreadyReviewed || latest?.verdict !== 'PASS') {
       const bin = await createReviewBin(fresh, changeRequest, reviewedSha, reviews.length + 1);

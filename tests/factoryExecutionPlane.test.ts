@@ -1837,6 +1837,29 @@ describe('a unit out of attempts stops the campaign before any review', () => {
 
 /* ========================================================================= */
 
+describe('a review Brain refused spends the stage rather than looping it', () => {
+  /*
+   * A review bin whose report ingest refuses is COMPLETE — neither live nor
+   * FAILED — so the stage handed out a fresh review bin on every tick for a
+   * refusal that would recur, each one a real activation. Recorded once per bin,
+   * the refused bins count toward the same ceiling a failure does.
+   */
+  it('counts refused COMPLETE bins toward MAX_BINS_PER_STAGE and nothing else', async () => {
+    const { stalledStage } = await import('../server/services/factory/remoteLoop.ts');
+    const at = '2026-09-24T00:00:00.000Z';
+    const bin = (id: string, state: string) =>
+      ({ id, kind: 'FACTORY_REVIEW', state, createdAt: at }) as unknown as import('../server/domain/types.ts').Bin;
+    const bins = [bin('r1', 'COMPLETE'), bin('r2', 'COMPLETE'), bin('r3', 'COMPLETE')];
+    // Three completed reviews Brain accepted are three rounds, not a stall.
+    expect(stalledStage(bins, 'FACTORY_REVIEW', null)).toBeNull();
+    expect(stalledStage(bins, 'FACTORY_REVIEW', null, new Set(['r1', 'r2']))).toBeNull();
+    const stall = stalledStage(bins, 'FACTORY_REVIEW', null, new Set(['r1', 'r2', 'r3']));
+    expect(stall?.detail).toContain('have failed on this campaign');
+    // A re-authorization after them resets the count, as it does for failures.
+    expect(stalledStage(bins, 'FACTORY_REVIEW', '2026-09-25T00:00:00.000Z', new Set(['r1', 'r2', 'r3']))).toBeNull();
+  });
+});
+
 describe('a stage that failed its bins to exhaustion has a way back', () => {
   /*
    * `stalledStage` counted every FAILED bin the campaign ever had, so three
@@ -2657,6 +2680,33 @@ describe('a reviewer Brain fired is identified by the fire, not by what it says'
       sessionRef: null,
     });
     expect((await admit((await getBin(reviewBinId))!)).ok).toBe(true);
+  });
+
+  it('records the fired session on the lease, so ingest judges the session admission admitted', async () => {
+    /*
+     * Admission falls back to the dispatched session; the lease stored only the
+     * reported one. So a reviewer that reported none was admitted, reviewed,
+     * completed — and was refused at ingest for "recorded no session", on a
+     * COMPLETE bin nothing retries, with a new review bin fired every tick.
+     */
+    const { ensureDispatchIntent, claimDispatchIntent, markDispatchSent, getBin, assignNextBin } =
+      await import('../server/repos/bins.ts');
+    const bin = (await getBin(reviewBinId))!;
+    await ensureDispatchIntent(bin);
+    const intent = await claimDispatchIntent();
+    await markDispatchSent(intent!.id, {
+      routineRef: 'trig_test',
+      sessionRef: 'cse_fired_reviewer',
+      fireEventId: 'cse_fired_reviewer',
+    });
+    const assigned = await assignNextBin({
+      workerId,
+      projectIds: [fixture.project.id],
+      credentialId: 'cred_reviewer_no_session',
+      sessionRef: null,
+    });
+    expect(assigned?.bin.id).toBe(reviewBinId);
+    expect((await getBin(reviewBinId))!.leaseSessionRef).toBe('cse_fired_reviewer');
   });
 
   it('still refuses the session that implemented the work, however it is identified', async () => {

@@ -1693,6 +1693,22 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
       const expires = plusMs(at, leaseMs);
       const nextGeneration = row.lease_generation + 1;
       const takeover = row.state === 'LEASED';
+      /*
+       * The session this lease is recorded as, which every lineage reader takes
+       * as *who did the work*: the factory review floor at ingest, the
+       * implementing-session set it is compared against, and the capability
+       * audit. `session_ref` is optional on `brain_check_in`, and admission
+       * already falls back to the session Brain fired for this bin — so storing
+       * only the reported value let a reviewer be admitted on that fallback and
+       * then refused at ingest for having "recorded no session", with a
+       * COMPLETE bin nothing retries and a fresh review bin fired every tick;
+       * and an implementer that omitted it was absent from the set its reviewer
+       * must be independent of. Brain's own record of the fire is the identity
+       * §24 says a session comes from. With neither, it stays null and every
+       * reader still fails closed.
+       */
+      const leaseSession =
+        input.sessionRef ?? (await dispatchedSessionForBin(row.id, row.lease_generation));
 
       // Everything that decides ownership is in this one statement. There is no
       // read-then-write window for a race to live in, and the generation the
@@ -1722,7 +1738,7 @@ export async function assignNextBin(input: AssignBinInput): Promise<AssignedBin 
           leaseId,
           input.workerId,
           input.credentialId ?? null,
-          bounded(input.sessionRef, 200),
+          bounded(leaseSession, 200),
           at,
           at,
           expires,
