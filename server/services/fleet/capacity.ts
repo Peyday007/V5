@@ -58,6 +58,7 @@ import { fleetSnapshot } from '../dispatch/candidates.ts';
 import { effectiveTarget, listAccounts, sessionsForRoutine } from '../../repos/fleet.ts';
 import { getBin, listDispatchesForBin } from '../../repos/bins.ts';
 import { proveSurface } from '../dispatch/surfaceProof.ts';
+import { surfaceIneligibility } from '../dispatch/router.ts';
 import { nowIso } from '../../repos/util.ts';
 import type { Bin, BinDispatch, FleetAccount, FleetRoutine } from '../../domain/types.ts';
 
@@ -218,6 +219,43 @@ async function provenChain(routine: FleetRoutine): Promise<{
  * they are excluded here by `fleet_accounts.kind` rather than by comparing a
  * name against a prefix, which is what migration 066 is for.
  */
+/**
+ * Why a surface is out of routing, in words, from the same verdict the router
+ * recorded. The recorded reason on the row wins where there is one, because it
+ * is the provider's or the operator's own words for what took it out.
+ */
+function unavailableBecause(
+  routine: FleetRoutine,
+  account: FleetAccount,
+  verdict: string,
+): string {
+  if (routine.workerId === null) {
+    return 'it is registered to no worker identity, so nothing could be handed to it.';
+  }
+  if (account.state !== 'ENABLED') {
+    return (
+      account.stateReason ??
+      `its account is ${account.state.toLowerCase()}, so it is out of routing.`
+    );
+  }
+  if (routine.state !== 'ENABLED') {
+    return (
+      routine.stateReason ??
+      `it is ${routine.state.toLowerCase()}, so it is out of routing.`
+    );
+  }
+  if (verdict === 'bound worker is disabled or archived') {
+    return (
+      'the worker identity it is bound to is disabled or archived, so any session it started ' +
+      'would be refused at sign-in. Brain does not fire it.'
+    );
+  }
+  return (
+    'the worker identity it is bound to holds no project membership, so nothing could be ' +
+    'handed to it. Brain does not fire it.'
+  );
+}
+
 export async function capacityReading(
   options: { includeVerification?: boolean } = {},
 ): Promise<CapacityReading> {
@@ -226,7 +264,15 @@ export async function capacityReading(
   const accounts = await listAccounts();
   const accountById = new Map(accounts.map((account) => [account.id, account]));
 
-  const eligibleRoutineIds = new Set(snapshot.candidates.map((one) => one.routine.id));
+  /*
+   * A routing candidate is only a Routine whose secret is deployed. Whether it
+   * is *eligible* is `surfaceIneligibility`, the same function the router asks
+   * first — so a quarantined surface, a disabled account and a worker that
+   * cannot authenticate are out of this count for exactly the reason they are
+   * out of routing, and a surface's old proof cannot make it read HEALTHY
+   * while Brain would not fire it.
+   */
+  const candidateById = new Map(snapshot.candidates.map((one) => [one.routine.id, one]));
   const missingSecretIds = new Set(snapshot.missingSecrets.map((one) => one.routineId));
 
   const keep = (account: FleetAccount | undefined): boolean =>
@@ -253,7 +299,8 @@ export async function capacityReading(
     const owner = account!;
 
     const secretPresent = !missingSecretIds.has(routine.id);
-    const eligible = eligibleRoutineIds.has(routine.id);
+    const candidate = candidateById.get(routine.id);
+    const ineligible = candidate ? surfaceIneligibility(candidate) : 'not a routing candidate';
     const chain = await provenChain(routine);
 
     let health: SurfaceHealth;
@@ -266,24 +313,19 @@ export async function capacityReading(
       because =
         'its trigger credential is not in this deployment yet, so Brain will not spend a fire ' +
         'finding that out. A Brain administrator sets it and nothing else here has to be redone.';
-    } else if (eligible && chain.proven) {
+    } else if (ineligible !== null) {
+      health = 'UNAVAILABLE';
+      because = unavailableBecause(routine, owner, ineligible);
+    } else if (rateLimited(routine, owner, now)) {
+      health = 'WAITING';
+      because = 'the provider asked Brain to wait before firing this again.';
+    } else if (chain.proven) {
       health = 'HEALTHY';
-    } else if (eligible) {
+    } else {
       health = 'CONFIGURING';
       because =
         'Brain would fire this now, and no session it fired has yet arrived and finished a ' +
         'piece of work here — so it is configured rather than proven.';
-    } else if (rateLimited(routine, owner, now)) {
-      health = 'WAITING';
-      because = 'the provider asked Brain to wait before firing this again.';
-    } else if (routine.workerId === null) {
-      health = 'UNAVAILABLE';
-      because = 'it is registered to no worker identity, so nothing could be handed to it.';
-    } else {
-      health = 'UNAVAILABLE';
-      because =
-        routine.stateReason ??
-        `it is ${routine.state.toLowerCase()} and its account is ${owner.state.toLowerCase()}, so it is out of routing.`;
     }
 
     const reading: SurfaceReading = {

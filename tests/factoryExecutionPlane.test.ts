@@ -776,6 +776,30 @@ describe('how a campaign is created is derived, never supplied', () => {
     expect(spec.note).toContain('#1');
   });
 
+  it('does not let a second live campaign write onto the branch another continues', async () => {
+    stubForge({
+      pulls: [{ number: 1, headRef: 'factory/campaign/shared', headSha: BASE, baseRef: 'main' }],
+    });
+    const first = await contract({ baseBranch: 'factory/campaign/shared' });
+    const firstSpec = await campaignSpecFor(first);
+    expect(firstSpec.integrationBranch).toBe('factory/campaign/shared');
+    await ensureCampaign({
+      changeRequestId: first.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+      integrationBranch: firstSpec.integrationBranch,
+      pullRequest: firstSpec.pullRequest,
+    });
+    // Somebody else's objective, pinned at the same open request's head.
+    const second = await campaignSpecFor(await contract({ baseBranch: 'factory/campaign/shared' }));
+    expect(second.integrationBranch).toBeNull();
+    expect(second.pullRequest).toBeNull();
+    expect(second.note).toMatch(/already continuing/);
+  });
+
   it('opens a new one when the branch is nobody\'s head', async () => {
     stubForge({ pulls: [] });
     const spec = await campaignSpecFor(await contract());
@@ -1837,6 +1861,71 @@ describe('a unit out of attempts stops the campaign before any review', () => {
 
 /* ========================================================================= */
 
+describe('a review Brain refused spends the stage rather than looping it', () => {
+  /*
+   * A review bin whose report ingest refuses is COMPLETE — neither live nor
+   * FAILED — so the stage handed out a fresh review bin on every tick for a
+   * refusal that would recur, each one a real activation. Recorded once per bin,
+   * the refused bins count toward the same ceiling a failure does.
+   */
+  it('counts refused COMPLETE bins toward MAX_BINS_PER_STAGE and nothing else', async () => {
+    const { stalledStage } = await import('../server/services/factory/remoteLoop.ts');
+    const at = '2026-09-24T00:00:00.000Z';
+    const bin = (id: string, state: string) =>
+      ({ id, kind: 'FACTORY_REVIEW', state, createdAt: at }) as unknown as import('../server/domain/types.ts').Bin;
+    const bins = [bin('r1', 'COMPLETE'), bin('r2', 'COMPLETE'), bin('r3', 'COMPLETE')];
+    // Three completed reviews Brain accepted are three rounds, not a stall.
+    expect(stalledStage(bins, 'FACTORY_REVIEW', null)).toBeNull();
+    expect(stalledStage(bins, 'FACTORY_REVIEW', null, new Set(['r1', 'r2']))).toBeNull();
+    const stall = stalledStage(bins, 'FACTORY_REVIEW', null, new Set(['r1', 'r2', 'r3']));
+    expect(stall?.detail).toContain('have failed on this campaign');
+    // A re-authorization after them resets the count, as it does for failures.
+    expect(stalledStage(bins, 'FACTORY_REVIEW', '2026-09-25T00:00:00.000Z', new Set(['r1', 'r2', 'r3']))).toBeNull();
+  });
+});
+
+describe('an empty check-in derives only the caller’s campaigns', () => {
+  it('ticks no campaign outside the projects it was given, and deriveReadyWork gives its own', async () => {
+    const { changeRequest } = await ensureChangeRequest({
+      projectId: fixture.project.id,
+      submissionKey: 'scoped-derivation',
+      objective: 'A campaign that belongs to one project only.',
+      expectedOutcome: 'Nobody else’s check-in ticks it.',
+      nonGoals: [],
+      acceptanceConditions: [{ id: 'A01', statement: 'it works', verification: 'npm test', mandatory: true }],
+      repository: OAKWOOD,
+      repositoryRoot: '',
+      baseBranch: 'main',
+      baseSha: BASE,
+      environment: 'LOCAL',
+      riskClass: 'LOW',
+      mutationScope: ['**'],
+      deploymentPolicy: 'NONE',
+      rollbackRequirement: 'decline',
+      verificationCommands: ['npm test'],
+    });
+    await approveChangeRequest({ changeRequestId: changeRequest.id, via: 'PERSON', userId: approverId, authorityId: null });
+    await ensureCampaign({
+      changeRequestId: changeRequest.id,
+      projectId: fixture.project.id,
+      baseSha: BASE,
+      laneTarget: 1,
+      laneTargetReason: 'test',
+      executionMode: 'REMOTE',
+    });
+    stubForge({});
+    const { tickAllRemoteCampaigns } = await import('../server/services/factory/remoteLoop.ts');
+    expect(await tickAllRemoteCampaigns({ projectIds: new Set(['prj_somebody_else']) })).toEqual([]);
+    const mine = await tickAllRemoteCampaigns({ projectIds: new Set([fixture.project.id]) });
+    expect(mine.map((one) => one.projectId)).toEqual([fixture.project.id]);
+
+    const fs = await import('node:fs');
+    const service = fs.readFileSync(new URL('../server/services/bins/service.ts', import.meta.url), 'utf8');
+    expect(service).toMatch(/tickAllRemoteCampaigns\(\{ projectIds: scoped \}\)/);
+    expect(service).toMatch(/dispatchTick\(\{ projectIds: \[bin\.projectId\] \}\)/);
+  });
+});
+
 describe('a stage that failed its bins to exhaustion has a way back', () => {
   /*
    * `stalledStage` counted every FAILED bin the campaign ever had, so three
@@ -2657,6 +2746,33 @@ describe('a reviewer Brain fired is identified by the fire, not by what it says'
       sessionRef: null,
     });
     expect((await admit((await getBin(reviewBinId))!)).ok).toBe(true);
+  });
+
+  it('records the fired session on the lease, so ingest judges the session admission admitted', async () => {
+    /*
+     * Admission falls back to the dispatched session; the lease stored only the
+     * reported one. So a reviewer that reported none was admitted, reviewed,
+     * completed — and was refused at ingest for "recorded no session", on a
+     * COMPLETE bin nothing retries, with a new review bin fired every tick.
+     */
+    const { ensureDispatchIntent, claimDispatchIntent, markDispatchSent, getBin, assignNextBin } =
+      await import('../server/repos/bins.ts');
+    const bin = (await getBin(reviewBinId))!;
+    await ensureDispatchIntent(bin);
+    const intent = await claimDispatchIntent();
+    await markDispatchSent(intent!.id, {
+      routineRef: 'trig_test',
+      sessionRef: 'cse_fired_reviewer',
+      fireEventId: 'cse_fired_reviewer',
+    });
+    const assigned = await assignNextBin({
+      workerId,
+      projectIds: [fixture.project.id],
+      credentialId: 'cred_reviewer_no_session',
+      sessionRef: null,
+    });
+    expect(assigned?.bin.id).toBe(reviewBinId);
+    expect((await getBin(reviewBinId))!.leaseSessionRef).toBe('cse_fired_reviewer');
   });
 
   it('still refuses the session that implemented the work, however it is identified', async () => {

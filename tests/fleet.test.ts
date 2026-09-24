@@ -147,6 +147,8 @@ function candidate(
     // it: a candidate that served no project would be refused one dimension
     // before the capacity question these tests are actually about.
     servesProjects: [projectId],
+    // The bound worker can authenticate; these fixtures are about capacity.
+    workerActive: true,
     routine: {
       id: 'rtn_1',
       accountId: 'acct_1',
@@ -1186,8 +1188,12 @@ describe('a burst spends the headroom it measured, once', () => {
     });
     const binId = await readyBin();
     await dispatchTick({ projectIds: [projectId], burst: 1 });
-    const first = await createWorker({ name: 'w1', createdByType: 'SYSTEM', createdById: 'test' });
-    await assignNextBin({ workerId: first.id, projectIds: [projectId] });
+    // The first arrival is the worker this Routine is bound to. An unrelated
+    // identity taking the bin is not this Routine's session and is credited
+    // nothing either — `fleetFourAccountAcceptance` pins that — so it could not
+    // stand in for "the fired session arrived" here.
+    const firstId = (await getRoutineByRef('trig_one'))!.workerId!;
+    await assignNextBin({ workerId: firstId, projectIds: [projectId] });
     expect((await getRoutineByRef('trig_one'))!.consecutiveNoShows).toBe(0);
 
     // The first worker dies. The lease lapses; a second worker takes over at a
@@ -1268,6 +1274,31 @@ describe('a burst spends the headroom it measured, once', () => {
       const tick = await dispatchTick({ projectIds: [projectId], burst: 1 });
       expect(tick.fired).toBe(1);
       expect(fired[0]).toContain('trig_env');
+    } finally {
+      delete process.env['BRAIN_ROUTINE_ID'];
+      delete process.env['BRAIN_ROUTINE_TOKEN'];
+    }
+  });
+
+  it('does not fire the environment trigger when every registered secret is missing', async () => {
+    // The snapshot leaves out a Routine whose secret is not deployed, and the
+    // fallback used to read that as "nothing registered" — firing every bin at
+    // one fixed Routine with no router, no scope and no fire slot.
+    const account = await createAccount({ name: 'rotated-away' });
+    await createRoutine({
+      accountId: account.id,
+      routineRef: 'trig_registered_but_unset',
+      name: 'Registered surface',
+      tokenSecretName: 'A_SECRET_NOBODY_DEPLOYED',
+    });
+    process.env['BRAIN_ROUTINE_ID'] = 'trig_env';
+    process.env['BRAIN_ROUTINE_TOKEN'] = 'sk-env-not-real';
+    try {
+      await readyBin();
+      const tick = await dispatchTick({ projectIds: [projectId], burst: 1 });
+      expect(tick.fired).toBe(0);
+      expect(fired.some((one) => one.includes('trig_env'))).toBe(false);
+      expect(tick.missingSecrets).toBe(1);
     } finally {
       delete process.env['BRAIN_ROUTINE_ID'];
       delete process.env['BRAIN_ROUTINE_TOKEN'];

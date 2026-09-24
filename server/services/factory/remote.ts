@@ -64,6 +64,7 @@ import {
   claimUnits,
   factoryNow,
   getChangeRequest,
+  listLiveCampaigns,
   listUnits,
   markImplemented,
   markIntegrated,
@@ -1658,6 +1659,33 @@ export async function campaignSpecFor(
       integrationBranch: null,
       pullRequest: null,
       note: 'The repository is not one this Brain can read, so no pull request was looked up.',
+    };
+  }
+  /*
+   * One live campaign per branch it writes to. Continuing a pull request means
+   * integrating onto its head branch, and two people's campaigns continuing the
+   * same one would each move the other's integration base underneath it — the
+   * drift check notices a foreign push and does not refuse it. So a second
+   * campaign against a branch another live campaign already writes opens its
+   * own branch and its own request instead. Checked before the campaign row
+   * exists, so two approvals in the same instant can still both pass; that
+   * window is the width of one statement, and closing it for good would need
+   * the repository on the campaign row, which is a schema change for later.
+   */
+  const occupied = await Promise.all(
+    (await listLiveCampaigns())
+      .filter((one) => one.integrationBranch === changeRequest.baseBranch && one.changeRequestId !== changeRequest.id)
+      .map(async (one) => (await getChangeRequest(one.changeRequestId))?.repository === changeRequest.repository),
+  );
+  if (occupied.some(Boolean)) {
+    return {
+      executionMode,
+      integrationBranch: null,
+      pullRequest: null,
+      note:
+        `Another live campaign is already continuing the pull request whose head is ` +
+        `${changeRequest.baseBranch}, so this one opens its own branch and request rather than ` +
+        'writing onto that one.',
     };
   }
   const found = await findPullRequestForBranch(repository, changeRequest.baseBranch);

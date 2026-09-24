@@ -889,7 +889,7 @@ export interface SettledConnection {
  * adopted surface's credentials live after a member had taken their connection
  * back. A rule applied by one of three readers is worse than none.
  */
-async function workerFor(
+export async function workerFor(
   connection: CapacityConnection | null,
   workerName: string,
 ): Promise<Awaited<ReturnType<typeof getWorkerByName>>> {

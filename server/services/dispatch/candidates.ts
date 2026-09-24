@@ -15,9 +15,9 @@ import {
   listRoutines,
 } from '../../repos/fleet.ts';
 import { resolveToken } from './fire.ts';
-import type { RoutingCandidate } from './router.ts';
+import { surfaceIneligibility, type RoutingCandidate } from './router.ts';
 import type { FleetAccount, FleetPolicy } from '../../domain/types.ts';
-import { getWorkerRouting, listMembershipsForPrincipal } from '../../repos/identity.ts';
+import { getWorker, getWorkerRouting, listMembershipsForPrincipal } from '../../repos/identity.ts';
 import { derivedFamiliesFrom } from '../bins/routing.ts';
 
 /**
@@ -196,6 +196,9 @@ export async function fleetSnapshot(now = new Date()): Promise<FleetSnapshot> {
       servesProjects: routine.workerId
         ? scopeByWorker.get(routine.workerId)?.projects ?? []
         : [],
+      workerActive: routine.workerId
+        ? scopeByWorker.get(routine.workerId)?.active ?? false
+        : false,
       routineInFlight: perRoutine.get(routine.id) ?? 0,
       accountInFlight: perAccount.get(account.id) ?? 0,
       routineTarget: routinePolicy ? effectiveTarget(routinePolicy, nowIso).target : null,
@@ -226,6 +229,8 @@ interface WorkerRoutingScope {
    * array is a complete answer rather than a missing one.
    */
   projects: string[];
+  /** Can this worker authenticate at all: present, not disabled, not archived. */
+  active: boolean;
 }
 
 /**
@@ -251,6 +256,8 @@ async function routingScopeForWorker(workerId: string): Promise<WorkerRoutingSco
      * Routine from routing on the very next snapshot, with nothing to
      * invalidate and no cache to miss.
      */
+    const worker = await getWorker(workerId);
+    const active = worker !== null && !worker.disabled && !worker.archived;
     const memberships = await listMembershipsForPrincipal('WORKER', workerId);
     const projects = memberships
       .filter((membership) => membership.active)
@@ -262,7 +269,7 @@ async function routingScopeForWorker(workerId: string): Promise<WorkerRoutingSco
     // `worker_routing` has no project column, because the project a worker may
     // serve is its membership and never a routing preference.
     if (explicit) {
-      return { families: explicit.families, repositories: explicit.repositories, projects };
+      return { families: explicit.families, repositories: explicit.repositories, projects, active };
     }
     // The derived default, from the one function that defines it. Its
     // repositories are *unknown* rather than empty — and unreachable, because
@@ -271,6 +278,7 @@ async function routingScopeForWorker(workerId: string): Promise<WorkerRoutingSco
       families: derivedFamiliesFrom(memberships),
       repositories: null,
       projects,
+      active,
     };
   } catch {
     /*
@@ -279,6 +287,31 @@ async function routingScopeForWorker(workerId: string): Promise<WorkerRoutingSco
      * evidence of a membership, and manufacturing one here would be exactly the
      * unknown-as-favourable-assumption invariant 39 forbids.
      */
-    return { families: ['RESEARCH', 'GENERAL'], repositories: null, projects: [] };
+    return { families: ['RESEARCH', 'GENERAL'], repositories: null, projects: [], active: false };
   }
+}
+
+/**
+ * Why the router would refuse each registered Routine, independent of any bin.
+ *
+ * `surfaceIneligibility` answers for a routing candidate; a Routine whose secret
+ * is not deployed never becomes one, and a Routine whose account row is gone is
+ * skipped outright. Readers that describe a surface to a person (Who, goals,
+ * the Fleet page) need an answer for all three, and deriving it here keeps
+ * them asking the router's question rather than reading a state column — the
+ * disagreement §23 records at four readers already.
+ *
+ * `null` means the router would consider it; it says nothing about headroom.
+ */
+export function routingRefusalByRoutine(snapshot: FleetSnapshot, routineIds: readonly string[]): Map<string, string | null> {
+  const candidates = new Map(snapshot.candidates.map((one) => [one.routine.id, one]));
+  const missing = new Set(snapshot.missingSecrets.map((one) => one.routineId));
+  const out = new Map<string, string | null>();
+  for (const id of routineIds) {
+    const candidate = candidates.get(id);
+    if (candidate) out.set(id, surfaceIneligibility(candidate));
+    else if (missing.has(id)) out.set(id, 'its deployment secret is not present');
+    else out.set(id, 'its account is not registered');
+  }
+  return out;
 }
