@@ -32,6 +32,7 @@ import {
   runInRequestContext,
   type RequestContext,
 } from '../services/identity/context.ts';
+import { answerEscapedFailure } from './escape.ts';
 
 /**
  * Reachable with no credentials at all.
@@ -208,7 +209,7 @@ export function requestContext(): RequestHandler {
  */
 export function requireAuthentication(): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
-    void (async (): Promise<void> => {
+    (async (): Promise<void> => {
       const context = contextFromRequest(req);
       if (!context) {
         // The context middleware did not run. That is a wiring mistake, and the
@@ -284,6 +285,6 @@ export function requireAuthentication(): RequestHandler {
       }
 
       next();
-    })();
+    })().catch(answerEscapedFailure(res, 'authentication'));
   };
 }

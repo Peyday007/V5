@@ -69,6 +69,7 @@ import {
 import { requireBrainAdmin } from './helpers.ts';
 import { nowIso } from '../repos/util.ts';
 import { cashReadiness } from '../services/cash/readiness.ts';
+import { answerEscapedFailure } from './escape.ts';
 
 export const passkeyRouter: Router = Router();
 
@@ -150,7 +151,7 @@ passkeyRouter.post(
 
 /** Spend the link, register the device, and sign the person straight in. */
 passkeyRouter.post('/enroll/complete', (req: Request, res: Response) => {
-  void (async (): Promise<void> => {
+  (async (): Promise<void> => {
     try {
       const body = bodyOf(req);
       const rp = rpFor(req);
@@ -195,7 +196,7 @@ passkeyRouter.post('/enroll/complete', (req: Request, res: Response) => {
       // Inside enrollment, an unexpected error does not get to explain itself.
       res.status(404).json({ error: LINK_REFUSED });
     }
-  })();
+  })().catch(answerEscapedFailure(res, 'passkeys'));
 });
 
 /**
@@ -209,7 +210,7 @@ passkeyRouter.post('/enroll/complete', (req: Request, res: Response) => {
  * credential and one ordinary refusal.
  */
 passkeyRouter.post('/enroll/pin', (req: Request, res: Response) => {
-  void (async (): Promise<void> => {
+  (async (): Promise<void> => {
     try {
       const body = bodyOf(req);
       const pin = body['pin'];
@@ -239,7 +240,7 @@ passkeyRouter.post('/enroll/pin', (req: Request, res: Response) => {
       // Inside enrollment, an unexpected error does not get to explain itself.
       res.status(404).json({ error: LINK_REFUSED });
     }
-  })();
+  })().catch(answerEscapedFailure(res, 'passkeys'));
 });
 
 /* ------------------------------------------------------------- signing in */
@@ -250,7 +251,7 @@ passkeyRouter.post(
 );
 
 passkeyRouter.post('/auth/passkey/verify', (req: Request, res: Response) => {
-  void (async (): Promise<void> => {
+  (async (): Promise<void> => {
     try {
       const body = bodyOf(req);
       const outcome = await signInWithPasskey({
@@ -270,7 +271,7 @@ passkeyRouter.post('/auth/passkey/verify', (req: Request, res: Response) => {
     } catch {
       res.status(401).json({ error: SIGN_IN_REFUSED });
     }
-  })();
+  })().catch(answerEscapedFailure(res, 'passkeys'));
 });
 
 /* --------------------------------------------------- your own devices */

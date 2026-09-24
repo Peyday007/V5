@@ -85,4 +85,21 @@ describe('a boot whose cloud proof failed asks again', () => {
     expect(proof).toMatch(/await initStorage\(\)/);
     expect(proof).toMatch(/await initDatabase\(\)/);
   });
+
+  it('opens the port before rebuilding derived state, which asks the store about every document', () => {
+    // 2026-09-24: the database answered at 04:18:56 and the Brain stayed at 503
+    // behind a closed port while this pass waited on a degraded document store.
+    const source = readFileSync(new URL('../server/index.ts', import.meta.url), 'utf8').replace(
+      /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
+      '',
+    );
+    const boot = source.slice(source.indexOf('async function continueBoot'));
+    const listen = boot.indexOf('.listen(PORT');
+    const recompute = boot.indexOf('recomputeProject(');
+    expect(listen).toBeGreaterThan(0);
+    expect(recompute).toBeGreaterThan(0);
+    expect(listen).toBeLessThan(recompute);
+    // And it does not hold the boot: the pass is started, not awaited.
+    expect(boot.slice(listen)).toMatch(/void \(async \(\) => \{\s*for \(const project of await listProjects\(\)\)/);
+  });
 });

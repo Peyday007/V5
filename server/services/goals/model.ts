@@ -61,7 +61,7 @@ import { rankGoals, type PriorityFacts } from './priority.ts';
 import { listDispatchesForBin } from '../../repos/bins.ts';
 import { REFUSAL_WAIT, surfaceIneligibility, type RoutingRefusal } from '../dispatch/router.ts';
 import { listRoutines } from '../../repos/fleet.ts';
-import { fleetSnapshot } from '../dispatch/candidates.ts';
+import { fleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
 import { listMembershipsForProject } from '../../repos/identity.ts';
 
 // ---------------------------------------------------------------------------
@@ -478,6 +478,14 @@ function humanDecision(
  */
 async function surfaceRemedy(
   projectId: string,
+  /*
+   * The fleet snapshot is dozens of statements, and this is asked per blocked
+   * bin per goal on every tick. Read once per assembly and shared, so the
+   * router's answer costs one snapshot a pass rather than one a bin — which is
+   * what it cost in production the first time this asked the router, while the
+   * research fleet was quarantined and many bins were blocked at once.
+   */
+  fleet: () => Promise<FleetSnapshot>,
 ): Promise<{ diagnosis: string | null; remedy: string; since: string | null }> {
   const workers = new Set(
     (await listMembershipsForProject(projectId))
@@ -500,7 +508,7 @@ async function surfaceRemedy(
    * here told a person the dispatcher would route to it (§23: one eligibility
    * definition, `surfaceIneligibility`, asked by every reader).
    */
-  const snapshot = await fleetSnapshot();
+  const snapshot = await fleet();
   const candidateById = new Map(snapshot.candidates.map((one) => [one.routine.id, one]));
   const outOfRouting = (routine: (typeof serving)[number]): string | null => {
     const candidate = candidateById.get(routine.id);
@@ -636,6 +644,16 @@ export async function assembleGoals(options: {
   now?: string;
 }): Promise<GoalsSnapshot> {
   const now = options.now ?? new Date().toISOString();
+  let fleet: Promise<FleetSnapshot> | null = null;
+  const remedies = new Map<string, ReturnType<typeof surfaceRemedy>>();
+  const surfaceRemedyFor = (projectId: string): ReturnType<typeof surfaceRemedy> => {
+    let found = remedies.get(projectId);
+    if (!found) {
+      found = surfaceRemedy(projectId, () => (fleet ??= fleetSnapshot()));
+      remedies.set(projectId, found);
+    }
+    return found;
+  };
   const all = await listWorkstreams({ projectIds: null, includeArchived: true });
   const visible = new Set(
     (options.projectIds === null
@@ -810,7 +828,7 @@ export async function assembleGoals(options: {
       if (bin.dispatch && bin.dispatch.state === 'PENDING' && bin.dispatch.waitsFor === 'OPERATOR' && !bin.workerOnIt) {
         const surface =
           bin.dispatch.refusal === 'NO_SURFACE_SERVES_THIS_PROJECT' && goal.projectId
-            ? await surfaceRemedy(goal.projectId)
+            ? await surfaceRemedyFor(goal.projectId)
             : null;
         const since = surface?.since ?? bin.dispatch.at;
         blockers.push({
