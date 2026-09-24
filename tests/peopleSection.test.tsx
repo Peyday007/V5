@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PeopleAndCapacityView } from '../client/src/russell/People.tsx';
 import { CashSection } from '../client/src/russell/Cash.tsx';
 import type { ConnectionView, PersonRow } from '../client/src/lib/peopleApi.ts';
-import { CONNECTION_SCOPE } from '../server/services/capacity/connection.ts';
+import { CONNECTION_SCOPE } from '../server/domain/connectionScope.ts';
 
 interface Reply {
   status?: number;
