@@ -156,15 +156,20 @@ Claude will show the connector with a **Connect** button. Click it.
 Your browser goes to the Brain:
 
 1. **Sign in** with your ordinary Brain account, if you are not already.
-2. **Connect a worker** — a list of your workers, each showing exactly what it
-   can reach. Choose `<worker>`.
+2. **Connect a worker** — a list of your workers, each read as
+   `name · what it is scoped to · id`. The name is a neutral `worker-NN` that
+   Brain assigned, so choose on the **scope**: it is the routing row the fire
+   router and the assigner decide on, and it is what separates a Factory
+   surface from a research worker holding the same projects. Everything each
+   worker can reach is listed underneath.
 3. **Approve.**
 
 You come back to Claude, connected.
 
-If the list shows a worker with *"no project yet"*, go back to step 2 — a worker
-with no membership can do nothing, and the Brain refuses to connect one rather
-than issuing a token that would puzzle you later.
+If the worker you chose is listed underneath as reaching **nothing in this
+Brain**, go back to step 2 — a worker with no membership can do nothing, and
+the Brain refuses to connect one rather than issuing a token that would puzzle
+you later.
 
 ## 5. Enable it for the session
 

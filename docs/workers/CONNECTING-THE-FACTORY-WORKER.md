@@ -368,17 +368,36 @@ authorizes nothing; see *Why the URLs differ* above.
 and Brain registers Claude automatically; inventing values there breaks the
 connection.
 
-Click **Add**, then **Connect**. In the browser, **approve as
-`Factory · peyday007/v5`** — that is the only thing on this screen that decides
-anything.
+Click **Add**, then **Connect**. In the browser, **approve the worker whose
+scope reads `factory — peyday007/v5`** — that is the only thing on this screen
+that decides anything.
+
+**Identify it by the scope and the id, never by a friendly name.** Every option
+reads `name · what it is scoped to · id`, and the name is a neutral
+`worker-NN` that Brain assigned by creation order — it says nothing about what
+the worker is for. The middle field is the `worker_routing` row, which is what
+the fire router and the assigner actually decide on, so it is the only thing on
+the screen that distinguishes a Factory surface from a research worker holding
+the same projects.
+
+> **An earlier version of this runbook told you to approve
+> `Factory · peyday007/v5` and quoted the invitation line as naming
+> `factory-brain`. Both were false, and neither string has been on that screen
+> since migration 074** — which made the neutral label the only worker
+> identifier any surface prints, on the reasoning that a label that reads like
+> a claim about whose account it is, is worse than no label at all. So the one
+> instruction here that mattered named two strings you could not find, and the
+> only way to follow it was to guess. Corrected here rather than quietly.
 
 You will see one of two screens, and **both are correct**:
 
-- **Signed in to Brain as an administrator** — the chooser, with
-  `Factory · peyday007/v5` already selected and a line above it saying *"This
-  browser holds an invitation for `factory-brain`."* Press **Approve**. Your own
-  administrator authority is what this screen runs on, so the invitation is read
-  only to name and preselect the worker, and it is **not spent** here.
+- **Signed in to Brain as an administrator** — the chooser, with the right
+  worker already selected and a line above it saying *"This browser holds an
+  invitation for `worker-NN`."* It names the **neutral label**, so check the
+  selected option's scope reads `factory — peyday007/v5` rather than trusting
+  the name. Press **Approve**. Your own administrator authority is what this
+  screen runs on, so the invitation is read only to name and preselect the
+  worker, and it is **not spent** here.
 - **Not signed in, invitation open in this browser** — one worker named, no
   list. Press **Approve**. This spends the invitation.
 
@@ -391,11 +410,17 @@ this runbook, and of Build's own instructions, told you a list meant the link
 had been opened in the wrong browser. That was false, and it sent people back to
 re-open a link that was working. Corrected here rather than quietly.
 
-What *is* worth checking on the chooser: that the worker you approve is
-`Factory · peyday007/v5` — `factory-brain` — and not the research worker. (The
-display name is lower-cased because Brain derives it from the normalized
-repository id, not from how the remote is written.) That is the one mistake
-this screen can make, and step 7's probe catches it from rows afterwards.
+What *is* worth checking on the chooser: that the option you approve carries
+the scope `factory — peyday007/v5`, and not a research worker. Two workers can
+hold the same projects and be different kinds of surface, so the project list
+is not the thing to choose on — that is the one mistake this screen can make,
+and it is the mistake §27 is written from: a Routine that selects an existing
+connector silently inherits its worker, and the routing boundary then has
+nothing left to separate.
+
+If you need to be certain which row you approved, the option ends in the
+worker's id and `fleet show` prints `worker=<that id>` against the Routine.
+Step 7's probe settles it from rows afterwards either way.
 
 ---
 
