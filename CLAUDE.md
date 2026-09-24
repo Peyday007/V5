@@ -3362,6 +3362,14 @@ remote.
   from the session, never from a name on the page or who opened it first. The
   list afterwards is statuses, never a token. `tests/factoryAccountInvitations`
   drives it over the wire and fails against both defects.
+
+  **Two sessions closed the first defect in parallel, and one of them kept the
+  second.** `7bf9c41` added a READY-state control whose route revoked the live
+  link before issuing, so it restored the button and kept link B killing link A.
+  It is replaced rather than merged beside this one — two mechanisms for one
+  link are the *two readers of one fact* defect — and what it had that this did
+  not is kept: `mayConnectAccounts` on the repositories read, so a reader who may
+  not issue sees the control disabled with the server's reason (§35).
 - **It cannot register the surface, and readiness says which half is missing.**
   Brain that could mint its own execution surfaces is exactly what §22's split
   forbids, so the projection is derived on every read into three answers with
