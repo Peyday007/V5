@@ -159,7 +159,7 @@ export async function revokeInvitationsForWorker(workerId: string): Promise<numb
  * It must not reach the `ADDITIONAL` links an administrator sent to several
  * people for a pool — each of those belongs to somebody who has not opened it
  * yet, and withdrawing it because a different link was issued is exactly the
- * defect `094_worker_invitation_members.sql` exists to close.
+ * defect `095_worker_invitation_members.sql` exists to close.
  */
 export async function revokeRotatingInvitationsForWorker(workerId: string): Promise<number> {
   const result = await getDb().run(

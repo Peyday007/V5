@@ -629,7 +629,7 @@ export type OnboardRefusal =
  * **rotation** as much as a setup, which is `connectSite`'s reasoning and the same
  * property: there is never more than one live *onboarding* invitation to reason
  * about. The member-bound links `issueFactoryInvitation` issues for a pool are a
- * different kind and are left alone (`094_worker_invitation_members.sql`).
+ * different kind and are left alone (`095_worker_invitation_members.sql`).
  */
 export async function onboardRepository(input: {
   projectId: string;

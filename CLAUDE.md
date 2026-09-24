@@ -3353,7 +3353,7 @@ remote.
 
   `issueFactoryInvitation` is the separate path, and what makes it safe is what
   it does not write: no identity, membership, scope, routing row or boundary, and
-  no other invitation. `worker_invitations.kind` (`094_worker_invitation_members.sql`, pg `085`) keeps
+  no other invitation. `worker_invitations.kind` (`095_worker_invitation_members.sql`, pg `086`) keeps
   the two apart, so onboarding's rotation withdraws only its own `ROTATING` link
   and never an `ADDITIONAL` one. Each additional link names the member it was
   issued for, chosen by the administrator from real accounts; the consent screen
