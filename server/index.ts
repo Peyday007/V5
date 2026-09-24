@@ -806,4 +806,15 @@ async function continueBoot(migrations: MigrationReport): Promise<void> {
   installShutdown(server);
 }
 
+// A rejection nothing caught is one request's failure, not the Brain's. Node 22
+// ends the process on one, and on 2026-09-24 that turned a pool timeout inside
+// one OAuth request into an exit mid-deploy and a reboot into a 544. Every
+// route catches its own now (routes/escape.ts); this is the backstop, and it
+// logs loudly rather than swallowing, because a rejection reaching it is a
+// missing catch somebody should add.
+process.on('unhandledRejection', (reason) => {
+  // eslint-disable-next-line no-console
+  console.error('[brain] an unhandled rejection reached the process; serving on:', reason);
+});
+
 await main();
