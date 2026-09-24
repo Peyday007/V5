@@ -3488,6 +3488,51 @@ remote.
   worse than no remedy**: it teaches a person that the thing in front of them is
   broken when it is working.
 
+- **A bound link was issued to members who could not spend one, and the sign-in
+  it sent them to asked for a credential they had never been given.** A
+  member-bound invitation is refused by `memberCheck` for any browser not signed
+  in as the member it names, which is right — a forwarded link must not connect
+  a stranger's Claude account in a friend's name. What `issueFactoryInvitation`
+  never asked is whether that member *can* sign in. It checked the row exists,
+  is a `PERSON` and is not disabled, and stopped there.
+
+  A PIN is written by exactly two callers: redeeming an enrollment or recovery
+  link, and changing your own while already signed in. So a member who enrolled
+  before the PIN replaced the passkey holds a device the served screen no longer
+  accepts, and a member created as a slot and never enrolled holds nothing —
+  and **neither has any way to reach the second caller, because it needs the
+  session they cannot open.** Production, 2026-09-24: of four accounts,
+  `people foundation` read `BLOCKED SIGN_IN` on three — two *"holds a passkey
+  and no PIN"*, one *"holds no credential of any kind"* — and one of them opened
+  a Factory link and met a six-digit box with nothing to type into it.
+
+  **Brain knew the whole time.** `foundation.ts` names that exact condition, the
+  remedy and who performs it; `people.ts` reads `NEEDS_A_NEW_LINK` rather than
+  `READY` for a device-only member precisely so an administrator is not told a
+  locked-out person needs nothing. The reading existed and the issuing path did
+  not consult it, so the one person who could have fixed it was told the issue
+  succeeded — §24's escalation with no answering transition, created at issue
+  time. It is refused now, against `peopleReading`'s own states rather than a
+  second derivation of the same fact, as a `Record` over the whole union so a
+  member state added later is a compile error until somebody says whether a
+  bound link could be spent. `INVITED` is deliberately allowed: that member
+  holds a live link that ends in a PIN, so refusing would be about the order two
+  links are opened in rather than about capability. The refusal **writes
+  nothing** — no invitation is created and none already issued is withdrawn,
+  which the regression asserts by counting the list either side.
+
+  **Two sentences on the same journey were false and one test was keeping one of
+  them alive.** `signInPage` told an unauthenticated visitor to press *"Sign in
+  with your device"* and said *"This Brain has no sign-in form"*; since the PIN
+  migration the screen **is** a form, it takes a name and six digits, and there
+  is no device button anywhere. `tests/oauth.test.ts` asserted the stale string,
+  which is how it survived the change that made it false — the same shape §41
+  records, where an assertion weak enough to pass either way lets the sentence
+  beside it drift. Both now say what the screen asks for, and the bound-link
+  message names the remedy for somebody who has never signed in. It reads the
+  same for everybody and names no account, so it discloses nothing about whoever
+  the link was bound to.
+
 - **A stage becomes fireable when something makes it fireable, not on the hour.**
   A factory bin's completion advances **its own** campaign and dispatches what
   that created, and the twenty-second remote loop dispatches what it created too.

@@ -486,6 +486,120 @@ describe('who may issue one', () => {
     expect(reading.status).toBe(404);
   });
 
+  /*
+   * A bound link for a member who cannot sign in is a link nobody can spend.
+   *
+   * `memberCheck` refuses a bound invitation for any browser not signed in as
+   * the member it names, and signing in asks for a six-digit PIN that is only
+   * ever set by redeeming an enrollment or recovery link. So issuing one to a
+   * member who holds no credential produced a link that was dead on arrival,
+   * and what that person met was a PIN box with nothing to type into it.
+   *
+   * Production had three such members when this was written. The administrator
+   * — the one person who could have fixed it — was told the issue succeeded.
+   */
+  it('refuses a bound link for a member who cannot sign in, and writes no invitation', async () => {
+    // A real member slot with no credential, whose only link is then withdrawn:
+    // no PIN, no password, no device and nothing outstanding that would give
+    // them one. This is `NOT_INVITED`, which is Vince's row in production.
+    const slot = await call<{ enrollment: { enrollmentId: string; userId: string } }>(
+      'POST',
+      '/api/members',
+      { cookie: adminCookie, body: { displayName: 'Cannot Sign In' } },
+    );
+    expect(slot.status).toBe(200);
+    const revoked = await call('POST', `/api/members/enrollments/${slot.body.enrollment.enrollmentId}/revoke`, {
+      cookie: adminCookie,
+      body: { reason: 'so this member has no way in' },
+    });
+    expect(revoked.status).toBe(200);
+
+    const before = await call<{ invitations: unknown[] }>('GET', invitationsRoute(), { cookie: adminCookie });
+    expect(before.status).toBe(200);
+
+    const refused = await call<{ message: string }>('POST', invitationsRoute(), {
+      cookie: adminCookie,
+      body: { intendedUserId: slot.body.enrollment.userId },
+    });
+    expect(refused.status).toBe(422);
+    // The remedy, and the surface that carries it — not merely that it failed.
+    expect(refused.body.message).toContain('enrollment link');
+    expect(refused.body.message).toContain('People & capacity');
+
+    /*
+     * And nothing was written. The refusal must not cost the worker an
+     * invitation, and it must leave every link already issued exactly where it
+     * was — `issueFactoryInvitation` touches no other invitation by design, and
+     * a guard that revoked one on the way to refusing would be worse than the
+     * defect it closes.
+     */
+    const after = await call<{ invitations: unknown[] }>('GET', invitationsRoute(), { cookie: adminCookie });
+    expect(after.body.invitations.length).toBe(before.body.invitations.length);
+  });
+
+  /*
+   * The whole repaired journey, walked once, for the member it was broken for.
+   *
+   * A member who cannot sign in is refused a bound link (above). This is what
+   * they do next, end to end and through the real routes: an administrator
+   * issues the sign-in link the refusal names, the member redeems it and
+   * chooses a PIN, signs in with that PIN, and only then is the Factory
+   * invitation issued and spent — ending in a bearer that authenticates as the
+   * factory worker.
+   *
+   * It is the journey rather than its parts because every part already passed
+   * while the journey was broken: the refusal, the enrolment and the connect
+   * each had coverage, and what nobody had walked was the order they happen in.
+   */
+  it('an existing member with no PIN: link, PIN, sign in, then a Factory invitation end to end', async () => {
+    const slot = await call<{ enrollment: { enrollmentId: string; userId: string; token: string } }>(
+      'POST',
+      '/api/members',
+      { cookie: adminCookie, body: { displayName: 'Late Joiner' } },
+    );
+    expect(slot.status).toBe(200);
+
+    /*
+     * A slot holder is `INVITED` rather than stuck — they hold a live link that
+     * ends in a PIN — so a bound link for them is deliberately *not* refused.
+     * The refusal is for somebody with no way in at all, which the test above
+     * covers. What this one walks is the order the steps actually happen in.
+     */
+
+    // They redeem the link and choose six digits. This is the only place a PIN
+    // is set for somebody who is not already signed in.
+    const enrolled = await call<{ user: { id: string } }>('POST', '/api/enroll/pin', {
+      body: { token: slot.body.enrollment.token, pin: '471903' },
+    });
+    expect(enrolled.status).toBe(200);
+    expect(enrolled.body.user.id).toBe(slot.body.enrollment.userId);
+
+    // And the PIN is what the served sign-in screen takes.
+    const signedIn = await fetch(`${BASE}/api/auth/pin`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: BASE },
+      body: JSON.stringify({ identity: 'Late Joiner', pin: '471903' }),
+    });
+    expect(signedIn.status).toBe(200);
+    const memberCookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    expect(memberCookie).not.toBe('');
+
+    // Now the bound link issues, because now it can be spent.
+    const issued = await call<{ invitationUrl: string }>('POST', invitationsRoute(), {
+      cookie: adminCookie,
+      body: { intendedUserId: slot.body.enrollment.userId },
+    });
+    expect(issued.status).toBe(200);
+    issuedTokens.push(issued.body.invitationUrl.split('/oauth/invite/')[1]!);
+
+    // And it is spent, in that member's own browser, ending in a real bearer
+    // that speaks for the factory worker.
+    const connected = await connect(issued.body.invitationUrl, memberCookie, factoryWorkerId);
+    expect(connected.bearer).not.toBeNull();
+    const who = await whoami(connected.bearer!);
+    expect(who['principalType']).toBe('WORKER');
+  });
+
   it('refuses a link for somebody who is not a member of this Brain', async () => {
     const refused = await call('POST', invitationsRoute(), {
       cookie: adminCookie,

@@ -241,9 +241,25 @@ async function memberCheck(
   return outcome.principal.id === invitation.intendedUserId ? 'MATCH' : 'WRONG_MEMBER';
 }
 
+/*
+ * The remedy sentence is the second half, and it is there because the first
+ * half alone is an instruction some readers cannot carry out.
+ *
+ * A bound link tells its holder to sign in as the member it names. Signing in
+ * asks for a six-digit PIN, and a PIN is set only by redeeming an enrollment
+ * or recovery link — so a member who enrolled before the PIN replaced the
+ * passkey, or who was never enrolled at all, meets a box they have nothing to
+ * type into and no way to find out why. Production had three such members.
+ *
+ * It names no account and reads the same for everybody, so it discloses
+ * nothing about whoever the link was bound to: it is a fact about how this
+ * Brain issues credentials, offered to whoever is stuck on it.
+ */
 const BOUND_SIGN_IN =
   'This link was issued for one Brain member. Open Brain in this browser, sign in as the ' +
-  'member it was sent to, then come back to Claude and connect again.';
+  'member it was sent to, then come back to Claude and connect again. If signing in asks for ' +
+  'a six-digit PIN you were never given, ask whoever sent you this link for a sign-in link as ' +
+  'well — redeeming it is where you choose that PIN, and it takes a minute.';
 const BOUND_WRONG_MEMBER =
   'This link was issued for a different Brain member than the one signed in to this browser. ' +
   'It has not been used. Sign in as the member it was sent to, or ask for a link of your own.';
@@ -1020,13 +1036,17 @@ function signInPage(
 ): string {
   return page(
     'Sign in to connect a worker',
-    card(`<h1>Sign in with your device</h1>
+    card(`<h1>Sign in to connect a worker</h1>
      <p class="sub">${esc(clientName)} is asking to connect as one of your workers.
        Sign in to choose which one.</p>
      ${error ? `<div class="err">${esc(error)}</div>` : ''}
-     <p>This Brain has no sign-in form. Open it in another tab, press
-       <strong>Sign in with your device</strong>, and come back.</p>
+     <p>Open the Brain in another tab, sign in with your name and six-digit PIN, then come
+       back here and press <strong>Continue</strong>.</p>
      <p><a href="/" target="_blank" rel="noopener">Open the Brain</a></p>
+     <p class="note">If somebody sent you a connector link, open <em>that</em> link in this
+       browser instead: it names the worker you are connecting, and you will not be asked to
+       choose one. If signing in asks for a PIN you were never given, ask whoever invited you
+       for a sign-in link as well — redeeming it is where you choose that PIN.</p>
      <form method="get" action="${OAUTH_BASE}/authorize">
        ${hiddenFields(params)}
        <button type="submit">Continue</button>

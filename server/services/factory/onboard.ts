@@ -90,6 +90,7 @@ import { generateInvitationToken } from '../identity/secrets.ts';
 import { FACTORY_WORKER_SCOPES } from '../../domain/types.ts';
 import type { Bin, Principal, User, WorkerInvitation, WorkerScope } from '../../domain/types.ts';
 import { personName } from '../../domain/personName.ts';
+import { peopleReading, type MemberState } from '../identity/people.ts';
 import type { FactoryScopeKind } from '../../domain/factory.ts';
 import {
   contributedCapacity,
@@ -973,6 +974,41 @@ export async function factoryInvitations(
 }
 
 /**
+ * Why a link bound to a member in each state could not be spent, or null where
+ * it could.
+ *
+ * A `Record` over the whole union rather than a list of the bad ones, so a
+ * member state added later is a compile error until somebody says whether a
+ * bound link would work for it — the same shape `REFUSAL_WAIT` has in the
+ * dispatch router, and for the same reason: two sets that must be total
+ * between them are how a case falls into the permissive branch by default.
+ *
+ * Each sentence names the control that answers it, because the administrator
+ * reading this refusal is already on the page that carries it.
+ */
+const CANNOT_SPEND_A_BOUND_LINK: Record<MemberState, string | null> = {
+  READY: null,
+  // Holds a live link that ends in a PIN, so they have a way in. Refusing here
+  // would be about the order two links are opened in rather than about whether
+  // this person can connect at all.
+  INVITED: null,
+  NEEDS_A_NEW_LINK:
+    'That member holds a passkey and no PIN, and the sign-in screen no longer takes a device — ' +
+    'so they cannot sign in, and a link bound to them cannot be spent. Issue them a recovery ' +
+    'link from People & capacity first; redeeming it ends in them setting a PIN. Nothing ' +
+    'already issued is withdrawn by this refusal.',
+  NOT_INVITED:
+    'That member holds no credential of any kind, so they cannot sign in and a link bound to ' +
+    'them cannot be spent. Issue them an enrollment link from People & capacity first; ' +
+    'redeeming it ends in them setting a PIN. Nothing already issued is withdrawn by this ' +
+    'refusal.',
+  NAME_IS_AMBIGUOUS:
+    'Two live accounts answer to that member’s sign-in name, so the sign-in screen cannot ' +
+    'resolve them and a link bound to them cannot be spent. Rename one of them from People & ' +
+    'capacity first. Nothing already issued is withdrawn by this refusal.',
+};
+
+/**
  * Issue one more link for an already-onboarded factory worker, for one member.
  *
  * This is the commissioning path for a pool: several Claude accounts, one
@@ -1005,6 +1041,36 @@ export async function issueFactoryInvitation(input: {
       reason: 'Choose the Brain member this link is for, from the people who have joined.',
     };
   }
+
+  /*
+   * A member who cannot sign in cannot spend a link bound to them.
+   *
+   * `memberCheck` in `routes/oauth.ts` refuses a bound invitation for any
+   * browser not signed in as the member it names, so the link is dead from the
+   * moment it is written — and what that person meets is a sign-in screen
+   * asking for a six-digit PIN, which is the one thing they do not have. §24's
+   * escalation with no answering transition, created at issue time, and the
+   * administrator who could have fixed it was told the issue succeeded.
+   *
+   * Production had three such members when this was written: two holding a
+   * passkey and no PIN, one holding no credential at all. The sign-in screen
+   * stopped accepting a device when the PIN landed, so a member who enrolled
+   * before that quietly stopped having a way in, and nothing on this path
+   * looked.
+   *
+   * The reading is `peopleReading`'s rather than a second derivation of the
+   * same fact. That module already decides what each state means and names the
+   * remedy, `foundation.ts` reports it, and the People page renders the control
+   * that answers it — a copy here would eventually disagree with the screen the
+   * administrator is looking at while they read this sentence.
+   *
+   * `INVITED` is deliberately allowed: that member holds a live link which ends
+   * in a PIN, so they have a way in and this refusal would be about timing
+   * rather than about capability.
+   */
+  const reading = (await peopleReading(null)).people.find((one) => one.userId === member.id);
+  const cannotSpend = reading ? CANNOT_SPEND_A_BOUND_LINK[reading.state] : null;
+  if (cannotSpend) return { ok: false, reason: cannotSpend };
 
   const token = generateInvitationToken();
   const invitation = await createInvitation({
