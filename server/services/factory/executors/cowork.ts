@@ -64,20 +64,18 @@ export const coworkExecutor: Executor = {
   async probe(): Promise<{ ok: boolean; detail: string }> {
     try {
       const { listRoutines } = await import('../../../repos/fleet.ts');
+      const { fleetSnapshot, routingRefusalByRoutine } = await import('../../dispatch/candidates.ts');
       const routines = await listRoutines();
-      const usable = routines.filter(
-        (routine) =>
-          routine.state === 'ENABLED' &&
-          // The deployment secret named by the row, resolved the same way the
-          // dispatcher resolves it. A Routine whose secret is not present is a
-          // Routine that cannot be fired, and that is not capacity.
-          (process.env[routine.tokenSecretName] ?? '').trim().length > 0,
-      );
+      // The router's own answer (§23): a missing secret, an unavailable
+      // account, a disabled or archived worker and a worker with no project are
+      // all surfaces that cannot be fired, and none of them is capacity.
+      const refusals = routingRefusalByRoutine(await fleetSnapshot(), routines.map((one) => one.id));
+      const usable = routines.filter((routine) => refusals.get(routine.id) === null);
       if (usable.length === 0) {
         return {
           ok: false,
           detail:
-            'No enabled fleet Routine is registered, so there is nowhere for repository work to ' +
+            'No fleet Routine the dispatcher would fire is registered, so there is nowhere for repository work to ' +
             'run. Register one with `npm run fleet -- routine:register`; Brain holds the name of ' +
             'its deployment secret and a digest of the value, never the value.',
         };

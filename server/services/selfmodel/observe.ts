@@ -496,7 +496,10 @@ async function observeFleet(index: TextIndex): Promise<ComponentObservation[]> {
     });
   }
 
-  for (const routine of await listRoutines()) {
+  const allRoutines = await listRoutines();
+  const { fleetSnapshot, routingRefusalByRoutine } = await import('../dispatch/candidates.ts');
+  const refusals = routingRefusalByRoutine(await fleetSnapshot(), allRoutines.map((one) => one.id));
+  for (const routine of allRoutines) {
     /*
      * §23's four-row chain, as one query: Brain fired this Routine, a session
      * arrived and was attributed to the worker the Routine is bound to *from
@@ -542,9 +545,12 @@ async function observeFleet(index: TextIndex): Promise<ComponentObservation[]> {
       readings: {
         DOCUMENTED: documentedReading(index, [routine.name]),
         IN_SOURCE: unknown('a Routine is a row an operator wrote, not a module'),
-        CONNECTED: routine.state === 'ENABLED'
-          ? yes('ENABLED, so the router may select it')
-          : no(`${routine.state}: left out of routing${routine.stateReason ? ` — ${routine.stateReason}` : ''}`),
+        CONNECTED:
+          refusals.get(routine.id) === null
+            ? yes('the router would consider it')
+            : routine.state !== 'ENABLED'
+              ? no(`${routine.state}: left out of routing${routine.stateReason ? ` — ${routine.stateReason}` : ''}`)
+              : no(`left out of routing: ${refusals.get(routine.id)}`),
         DEPLOYED: yes('the row is in this database'),
         OBSERVED_ACTIVE: unknown('see PRODUCTION_PROVEN, which asks the stronger question'),
         EVALUATED: unknown('a Routine is not something a suite can cover'),
