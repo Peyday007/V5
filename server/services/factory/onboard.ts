@@ -788,3 +788,82 @@ export async function onboardRepository(input: {
     },
   };
 }
+
+/**
+ * Another single-use connector invitation for a repository this project has
+ * already onboarded — and nothing else.
+ *
+ * A pool is one worker on several Claude accounts, and each account's
+ * `Factory Brain` connector is approved from that account's owner's browser.
+ * An administrator signed in to Brain sees the chooser and needs no link; a
+ * friend adding the connector in their own browser does. Onboarding issues one,
+ * but pressing Onboard again re-asks the directory question and rewrites the
+ * project's boundary to get a second — a repair wearing the wrong clothes — and
+ * once the repository read READY Build offered neither. So the fourth account
+ * of a four-account pool had no product path at all.
+ *
+ * This touches no membership, no routing row and no boundary. It refuses a
+ * repository this project has not onboarded (nothing to connect), revokes the
+ * live invitation for that worker before issuing, so there is never more than
+ * one, and audits the id rather than the token — `onboardRepository`'s own
+ * rules. The link grants nothing on its own: approving a connector with it
+ * connects `factory-brain`, whose reach was already decided.
+ */
+export async function issueConnectorInvitation(input: {
+  projectId: string;
+  grantId: string;
+  actor: User;
+  origin: string;
+}): Promise<
+  | { ok: true; invitationUrl: string; invitationExpiresAt: string; workerName: string }
+  | { ok: false; reason: string }
+> {
+  const grant = listRepositoryGrants().find((candidate) => candidate.id === input.grantId);
+  if (!grant) {
+    return {
+      ok: false,
+      reason: 'That is not a repository this factory is authorized to work in.',
+    };
+  }
+  const onboarding = await describeGrant(input.projectId, grant, await fleetInputs());
+  if (onboarding.readiness === 'NOT_ONBOARDED' || !onboarding.workerId) {
+    return {
+      ok: false,
+      reason:
+        'This project has not onboarded that repository, so there is no Factory worker to connect ' +
+        'an account to. Onboard it first; that issues the first invitation.',
+    };
+  }
+  const revokedInvitations = await revokeInvitationsForWorker(onboarding.workerId);
+  const token = generateInvitationToken();
+  const invitation = await createInvitation({
+    workerId: onboarding.workerId,
+    tokenPrefix: token.prefix,
+    tokenDigest: token.digest,
+    createdByUserId: input.actor.id,
+    note: `Connecting another Claude account to the factory pool for ${onboarding.repositoryId}.`,
+  });
+  await recordIdentityEvent({
+    actorType: 'HUMAN',
+    actorId: input.actor.id,
+    action: 'ISSUE_WORKER_INVITATION',
+    targetType: 'WORKER',
+    targetId: onboarding.workerId,
+    projectId: input.projectId,
+    result: 'SUCCESS',
+    metadata: {
+      grantId: grant.id,
+      repositoryId: onboarding.repositoryId,
+      invitationId: invitation.id,
+      revokedInvitations,
+      purpose: 'FACTORY_POOL_ACCOUNT',
+    },
+  });
+  return {
+    ok: true,
+    invitationUrl: `${input.origin.replace(/\/+$/, '')}/oauth/invite/${token.plaintext}`,
+    invitationExpiresAt: invitation.expiresAt,
+    workerName: onboarding.workerName,
+  };
+}
+

@@ -257,7 +257,13 @@ describe('the Build card says what is connected and what is missing', () => {
     await mount();
     await waitFor(() => expect(card()).toBeTruthy());
     expect(within(card()).getByText('Ready to execute')).toBeTruthy();
-    expect(within(card()).queryByRole('button')).toBeNull();
+    // Nothing to onboard and no invitation to rotate: the one control a READY
+    // repository offers is growing its pool by another Claude account.
+    expect(
+      within(card())
+        .queryAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Connect another Claude account']);
 
     /*
      * Two surfaces on one subscription, and what the card says about them.
@@ -334,6 +340,45 @@ describe('a configured surface the dispatcher will not fire is not ready', () =>
     // A past proof is shown as history, never as capacity.
     expect(text).toContain('has completed work');
     expect(within(card()).queryByRole('button', { name: /invitation|Onboard/ })).toBeNull();
+  });
+
+  it('offers another Claude account to an administrator, and says why not to anybody else', async () => {
+    const INVITE = `POST /api/projects/${PROJECT}/factory/repositories/${GRANT}/invitation`;
+    base({
+      [REPOSITORIES]: { body: { repositories: [BLOCKED], mayConnectAccounts: true, connectAccountsRefusal: null } },
+      [INVITE]: {
+        body: {
+          invitationUrl: 'https://brain.test/oauth/invite/brnv_another-account',
+          invitationExpiresAt: '2026-09-25T00:00:00.000Z',
+          workerName: 'factory-brain-worker-bootstrap',
+        },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    const button = within(card()).getByRole('button', { name: 'Connect another Claude account' });
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    await waitFor(() => expect(card().textContent).toContain('brnv_another-account'));
+    expect(calls).toContain(INVITE);
+
+    cleanup();
+    base({
+      [REPOSITORIES]: {
+        body: {
+          repositories: [BLOCKED],
+          mayConnectAccounts: false,
+          connectAccountsRefusal: 'Only an administrator of this project can issue a link.',
+        },
+      },
+    });
+    await mount();
+    await waitFor(() => expect(card()).toBeTruthy());
+    const disabled = within(card()).getByRole('button', { name: 'Connect another Claude account' });
+    expect((disabled as HTMLButtonElement).disabled).toBe(true);
+    expect(card().textContent).toContain('Only an administrator of this project');
   });
 
   it('says the same in the repository picker', async () => {

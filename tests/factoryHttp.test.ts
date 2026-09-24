@@ -509,13 +509,33 @@ describe('an invited project member', () => {
     expect(forged.body.changeRequest.submittedByUserId).toBe(member.id);
   });
 
-  it('may not onboard a repository, which is an administrator decision', async () => {
+  it('may not onboard a repository or connect a pool account, which are administrator decisions', async () => {
     const member = await person('invited-member-2@example.invalid', 'MEMBER');
     const result = await call('POST', `/api/projects/${projectId}/factory/repositories/brain/onboard`, {
       cookie: member.cookie,
       body: { scopeKind: 'WHOLE_REPOSITORY' },
     });
     expect(result.status).toBe(404);
+    const invite = await call('POST', `/api/projects/${projectId}/factory/repositories/brain/invitation`, {
+      cookie: member.cookie,
+      body: {},
+    });
+    expect(invite.status).toBe(404);
+    // And the screen is told so, rather than offered a control that cannot succeed.
+    const read = await call<{ mayConnectAccounts: boolean; connectAccountsRefusal: string | null }>(
+      'GET',
+      `/api/projects/${projectId}/factory/repositories`,
+      { cookie: member.cookie },
+    );
+    expect(read.status).toBe(200);
+    expect(read.body.mayConnectAccounts).toBe(false);
+    expect(read.body.connectAccountsRefusal).toMatch(/administrator/);
+    const asAdmin = await call<{ mayConnectAccounts: boolean }>(
+      'GET',
+      `/api/projects/${projectId}/factory/repositories`,
+      { cookie: adminCookie },
+    );
+    expect(asAdmin.body.mayConnectAccounts).toBe(true);
   });
 
   it('as a viewer, can read and cannot submit or approve', async () => {

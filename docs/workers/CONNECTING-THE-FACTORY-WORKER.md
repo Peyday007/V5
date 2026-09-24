@@ -236,10 +236,13 @@ done in that friend's own Claude account**:
 | Registered and bound by | the connection journey | an administrator: `register-account`, `register-routine`, `bind-worker` |
 | Proven by | the page's self-test | `verify-surface --ref trig_… --probe` (pinned) |
 
-**What the friend does and what the owner does.** The friend, signed in to
-Claude in their own account, adds the `Factory Brain` connector (step 3) —
-approving `factory-brain` on Brain's consent screen from an invitation the owner
-issued — and creates the Routine (step 4). The friend sends the owner the
+**What the friend does and what the owner does.** The owner presses **Connect
+another Claude account** on Build → Repositories beside `Peyday007/V5` — it
+issues one single-use link for `factory-brain` and changes nothing else — and
+sends it to the friend. The friend opens that link first, in their own browser,
+then, signed in to Claude in their own account, adds the `Factory Brain`
+connector (step 3), approving `factory-brain`, and creates the Routine
+(step 4). The friend sends the owner the
 Routine's `trig_…` id and, privately, its bearer. The owner sets the deployment
 secret (step 5), registers and binds the surface (step 6) and runs the pinned
 proof (step 7). **Nobody needs access to anybody else's Claude account**, and

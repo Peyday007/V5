@@ -33,7 +33,11 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
     () =>
       projectId
         ? FactoryApi.repositories(projectId)
-        : Promise.resolve({ repositories: [] as RepositoryOnboarding[] }),
+        : Promise.resolve({
+            repositories: [] as RepositoryOnboarding[],
+            mayConnectAccounts: false,
+            connectAccountsRefusal: null as string | null,
+          }),
     [projectId],
   );
   const campaigns = useAsync(
@@ -101,6 +105,11 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
             key={projectId ?? 'none'}
             projectId={projectId}
             repositories={state.items}
+            mayConnectAccounts={repositories.data?.mayConnectAccounts === true}
+            connectAccountsRefusal={
+              repositories.data?.connectAccountsRefusal ??
+              'This control was not offered by the server.'
+            }
             onChanged={repositories.reload}
           />
           <Submit
@@ -153,10 +162,14 @@ export function BuildView({ projectId }: { projectId: string | null }): JSX.Elem
 function Repositories({
   projectId,
   repositories,
+  mayConnectAccounts = false,
+  connectAccountsRefusal = null,
   onChanged,
 }: {
   projectId: string | null;
   repositories: RepositoryOnboarding[];
+  mayConnectAccounts?: boolean;
+  connectAccountsRefusal?: string | null;
   onChanged(): void;
 }): JSX.Element | null {
   const [busy, setBusy] = useState<string | null>(null);
@@ -172,8 +185,28 @@ function Repositories({
    */
   const [scope, setScope] = useState<Record<string, 'WHOLE_REPOSITORY' | 'DIRECTORIES'>>({});
   const [directories, setDirectories] = useState<Record<string, string>>({});
+  /** A connector link for another Claude account, shown once. */
+  const [accountLink, setAccountLink] = useState<{
+    grantId: string;
+    invitationUrl: string;
+    invitationExpiresAt: string;
+    workerName: string;
+  } | null>(null);
 
   if (repositories.length === 0) return null;
+
+  async function inviteAccount(grantId: string): Promise<void> {
+    if (!projectId) return;
+    setBusy(grantId);
+    setProblem(null);
+    try {
+      setAccountLink({ grantId, ...(await FactoryApi.inviteAccount(projectId, grantId)) });
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : 'That did not work.');
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function onboard(grantId: string): Promise<void> {
     if (!projectId) return;
@@ -322,6 +355,51 @@ function Repositories({
               <p className="rs-repo-boundary">
                 This project may change <strong>{repo.boundary.sentence}</strong>.
               </p>
+            ) : null}
+            {repo.readiness !== 'NOT_ONBOARDED' ? (
+              /*
+               * Another Claude account for this repository's pool.
+               *
+               * Offered once the repository is onboarded, whatever its surfaces
+               * are doing, because adding an account is how a pool grows and how
+               * a single dead surface stops being the whole Factory. It changes
+               * nothing but the one live invitation for this worker. Disabled with
+               * the server's reason for somebody who may not issue it, never
+               * removed, so two people reading one project see one page.
+               */
+              <div className="rs-repo-connect-account">
+                <button
+                  type="button"
+                  disabled={busy !== null || !projectId || !mayConnectAccounts}
+                  onClick={() => void inviteAccount(repo.grantId)}
+                >
+                  {busy === repo.grantId ? 'Issuing…' : 'Connect another Claude account'}
+                </button>
+                {!mayConnectAccounts && connectAccountsRefusal ? (
+                  <span className="rs-hint"> {connectAccountsRefusal}</span>
+                ) : null}
+                {accountLink && accountLink.grantId === repo.grantId ? (
+                  <div className="rs-repo-issued">
+                    <p>
+                      One link, shown once, until{' '}
+                      {new Date(accountLink.invitationExpiresAt).toLocaleString()}. The owner of the
+                      Claude account opens it in their own browser first, then adds a connector named
+                      Factory Brain at <code>{`${window.location.origin}${repo.connectorPath}`}</code>{' '}
+                      and approves <code>{accountLink.workerName}</code>. Issuing it withdrew any earlier
+                      link for this worker.
+                    </p>
+                    <p className="rs-repo-invite">
+                      <code>{accountLink.invitationUrl}</code>
+                    </p>
+                    <p className="rs-hint">
+                      This adds that account to this repository's Factory pool only once its Routine is
+                      registered, bound and proven — docs/workers/CONNECTING-THE-FACTORY-WORKER.md, steps 4
+                      to 7. A research connection on People &amp; capacity is a different thing and never
+                      counts here.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             {/*
               * Onboarding is the remedy for exactly two readinesses. A surface

@@ -122,7 +122,14 @@ export const FactoryApi = {
    * had to guess a remote and be refused would be learning the envelope by
    * trial, and the envelope is not a secret — it holds no credential.
    */
-  repositories: (projectId: string): Promise<{ repositories: RepositoryOnboarding[] }> =>
+  repositories: (
+    projectId: string,
+  ): Promise<{
+    repositories: RepositoryOnboarding[];
+    /** Whether this reader may connect another Claude account to a pool here. */
+    mayConnectAccounts?: boolean;
+    connectAccountsRefusal?: string | null;
+  }> =>
     api(`/api/projects/${encodeURIComponent(projectId)}/factory/repositories`),
 
   /**
@@ -152,6 +159,20 @@ export const FactoryApi = {
       `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
         `${encodeURIComponent(grantId)}/onboard`,
       { method: 'POST', body: JSON.stringify(scope) },
+    ),
+
+  /**
+   * Another single-use connector link for a repository already onboarded, so
+   * another Claude account can join its Factory pool. Changes nothing else.
+   */
+  inviteAccount: (
+    projectId: string,
+    grantId: string,
+  ): Promise<{ invitationUrl: string; invitationExpiresAt: string; workerName: string }> =>
+    api(
+      `/api/projects/${encodeURIComponent(projectId)}/factory/repositories/` +
+        `${encodeURIComponent(grantId)}/invitation`,
+      { method: 'POST', body: '{}' },
     ),
 
   changeRequests: (projectId: string): Promise<{ changeRequests: FactoryChangeRequest[] }> =>

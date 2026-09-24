@@ -25,6 +25,7 @@ import { Router } from 'express';
 import type { Principal } from '../domain/types.ts';
 import { FACTORY_DEPLOYMENT_POLICIES } from '../domain/factory.ts';
 import { currentPrincipal } from '../services/identity/context.ts';
+import { decideProjectAccess } from '../services/identity/policy.ts';
 import {
   getCampaign,
   getChangeRequest,
@@ -50,7 +51,11 @@ import { campaignBriefing } from '../services/factory/projections.ts';
 import { throughputReport } from '../services/factory/throughput.ts';
 import { pullRequestFor } from '../services/factory/pullRequest.ts';
 import { approveAndStartCampaign } from '../services/factory/start.ts';
-import { onboardRepository, repositoryOnboarding } from '../services/factory/onboard.ts';
+import {
+  issueConnectorInvitation,
+  onboardRepository,
+  repositoryOnboarding,
+} from '../services/factory/onboard.ts';
 import { getUser } from '../repos/identity.ts';
 import {
   authorizeProject,
@@ -255,7 +260,21 @@ factoryRouter.get(
      * offers a repository it cannot run is the shape §24 keeps finding: a state
      * that says waiting when the honest answer is that somebody has to act.
      */
-    res.json({ repositories: await repositoryOnboarding(projectId) });
+    /*
+     * Whether this reader may connect another Claude account to a repository's
+     * Factory pool — the same `decideProjectAccess` at ADMIN the invitation route
+     * is guarded by. A convenience for the screen, never the control: the route
+     * re-decides. A member sees the control disabled with this reason rather than
+     * not at all, so two people reading one project see one page.
+     */
+    const mayConnectAccounts = decideProjectAccess(currentPrincipal(), projectId, 'ADMIN').allowed;
+    res.json({
+      repositories: await repositoryOnboarding(projectId),
+      mayConnectAccounts,
+      connectAccountsRefusal: mayConnectAccounts
+        ? null
+        : 'Only an administrator of this project can issue a link that connects a Claude account to its Factory pool.',
+    });
   }),
 );
 
@@ -323,6 +342,28 @@ factoryRouter.post(
       return;
     }
     res.json(outcome.result);
+  }),
+);
+
+factoryRouter.post(
+  '/projects/:projectId/factory/repositories/:grantId/invitation',
+  handler(async (req, res) => {
+    const principal = requirePerson();
+    const projectId = pathId(req, 'projectId');
+    await projectForFactory(projectId, 'write');
+    const actor = await getUser(principal.id);
+    if (!actor || actor.disabledAt) throw notFound('No such route.');
+    const outcome = await issueConnectorInvitation({
+      projectId,
+      grantId: pathId(req, 'grantId'),
+      actor,
+      origin: originOf(req),
+    });
+    if (!outcome.ok) {
+      res.status(422).json({ error: 'NOT_ONBOARDED', message: outcome.reason });
+      return;
+    }
+    res.json(outcome);
   }),
 );
 

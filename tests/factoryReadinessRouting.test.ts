@@ -421,3 +421,54 @@ describe('verify-pool reads eligibility from the router too', () => {
     expect(report.surfaces.find((one) => one.routineName === 'Factory valid')!.eligible).toBe(true);
   });
 });
+
+describe('another Claude account can be invited into a READY repository’s pool', () => {
+  it('issues one link for the worker and changes no membership, routing or boundary', async () => {
+    const { issueConnectorInvitation } = await import('../server/services/factory/onboard.ts');
+    const { listInvitationsForWorker } = await import('../server/repos/invitations.ts');
+    const { getWorkerRouting, listMembershipsForPrincipal } = await import('../server/repos/identity.ts');
+    const { getProjectRepository } = await import('../server/repos/factory.ts');
+
+    const refused = await issueConnectorInvitation({
+      projectId: fixture.project.id,
+      grantId: GRANT().id,
+      actor,
+      origin: 'https://brain.example',
+    });
+    expect(refused.ok).toBe(false);
+
+    const workerId = await onboard();
+    await surface(workerId);
+    expect((await repositoryOnboarding(fixture.project.id))[0]!.readiness).toBe('READY');
+
+    const before = {
+      routing: await getWorkerRouting(workerId),
+      memberships: await listMembershipsForPrincipal('WORKER', workerId),
+      boundary: await getProjectRepository(fixture.project.id, GRANT().id),
+    };
+    const first = await issueConnectorInvitation({
+      projectId: fixture.project.id,
+      grantId: GRANT().id,
+      actor,
+      origin: 'https://brain.example',
+    });
+    const second = await issueConnectorInvitation({
+      projectId: fixture.project.id,
+      grantId: GRANT().id,
+      actor,
+      origin: 'https://brain.example',
+    });
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(first.invitationUrl).toMatch(/\/oauth\/invite\//);
+    expect(second.invitationUrl).not.toBe(first.invitationUrl);
+    // One live link at a time, for this worker.
+    const live = (await listInvitationsForWorker(workerId)).filter(
+      (one) => !one.revokedAt && !one.redeemedAt,
+    );
+    expect(live).toHaveLength(1);
+    expect(await getWorkerRouting(workerId)).toEqual(before.routing);
+    expect(await listMembershipsForPrincipal('WORKER', workerId)).toEqual(before.memberships);
+    expect(await getProjectRepository(fixture.project.id, GRANT().id)).toEqual(before.boundary);
+  });
+});
