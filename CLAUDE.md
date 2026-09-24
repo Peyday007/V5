@@ -10704,6 +10704,18 @@ where a proof would do.
   patched one would be a row whose stored hash describes something the
   specification no longer renders, and a repair is a new generator version and
   a new master.
+- **A rate needs a sample behind it before it is a rate, and four attempts was
+  not one.** The ceiling was checked from the fourth attempt, so two unlucky
+  seeds in the first four stopped a healthy generator and recorded *"a defect in
+  the generator … rather than a run of bad luck"* — the one outcome that sentence
+  exists to rule out. Word search fails about 2.8% of the time, measured over
+  300 random masters (a random fill occasionally spells a prohibited word), and
+  seeds derive from the master's generated id, so this happened on roughly one
+  run in a hundred: deploy 336's test gate made two puzzles out of twenty-five
+  and stopped, with nothing released. `DEFECT_MIN_SAMPLE` is twelve, judged at
+  the batch's own ceiling when that comes first so a small batch of a broken
+  generator is still named, and `tests/puzzleDefectCeiling.test.ts` fails
+  against the old floor.
 - **The maturity ladder has three rungs that are unreachable by
   construction.** `GENERATABLE` is read from the format registry, which is a
   directory of implementations somebody can open; `VALIDATABLE` needs an
