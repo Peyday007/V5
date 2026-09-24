@@ -330,6 +330,18 @@ infrastructure, not this commit. Deploy 341 (`caba2b2`, another session's fix
 for stacked Russell ticks holding pool connections) contains `93cd734` and is
 the next attempt to release it.
 
+## Deploy 341: the proof held and the port was still closed
+
+Deploy 341 (`caba2b2`, which contains `93cd734`) also ended with
+`release: failure`, so neither run released anything. This time the boot retry
+got through: at 04:18:56 the machine logged *The cloud answered. Replacing the
+error page with the Brain.* But `continueBoot` recomputed every project,
+asking the store about every document, before it opened the port. Supabase
+Storage was still slow, so the proxy kept reporting no healthy instance until
+flyctl gave up. That is a boot-ordering defect, not this commit's.
+`45f338c` (another session: open the port first, recompute after it) fixes it
+and is in Deploy 342, which also contains `93cd734`.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
