@@ -51,6 +51,7 @@
  * repository that is not in the envelope cannot be onboarded here however the
  * request is spelled.
  */
+import { fleetSnapshot, routingRefusalByRoutine } from '../dispatch/candidates.ts';
 import { FACTORY_MCP_PATH, MCP_PATH } from '../../mcp/endpoint.ts';
 import { REPOSITORY_ENVELOPE_ID, decideRepository, listRepositoryGrants } from './repositoryEnvelope.ts';
 import type { RepositoryGrant } from './repositoryEnvelope.ts';
@@ -341,6 +342,8 @@ async function describeGrant(
   let surfaces: RepositoryOnboarding['surfaces'] = [];
   /** The same list with the account id kept, which only the count needs. */
   let live: (RepositoryOnboarding['surfaces'][number] & { accountId: string })[] = [];
+  /** Why the router refuses each bound surface; `null` for one it would fire. */
+  let refusals = new Map<string, string | null>();
 
   if (worker && !worker.archived) {
     const memberships = await listMembershipsForPrincipal('WORKER', worker.id);
@@ -357,8 +360,9 @@ async function describeGrant(
      * completed chain, and must never be rounded into one.
      */
     const health = new Map(capacity.surfaces.map((one) => [one.routineId, one]));
-    live = routines
-      .filter((routine) => routine.workerId === worker.id && routine.state === 'ENABLED')
+    const bound = routines.filter((routine) => routine.workerId === worker.id && routine.state === 'ENABLED');
+    refusals = routingRefusalByRoutine(await fleetSnapshot(), bound.map((one) => one.id));
+    live = bound
       .map((routine) => ({
         routineName: routine.name,
         // The id, so the count below is on identity rather than on a label.
@@ -396,9 +400,17 @@ async function describeGrant(
      */
     boundaryRow !== null;
 
+  /*
+   * READY means the dispatcher would fire one of these surfaces — the router's
+   * answer (§23), not the Routine's state column. A disabled worker keeps its
+   * memberships and its Routine keeps reading ENABLED; an account can be
+   * unavailable; a secret can be missing. None of those is ready, and a card
+   * reading READY over them tells a person their submission will run.
+   */
+  const routable = [...refusals.values()].filter((one) => one === null).length;
   const readiness: RepositoryReadiness = !registered
     ? 'NOT_ONBOARDED'
-    : surfaces.length === 0
+    : routable === 0
       ? 'AWAITING_SURFACE'
       : 'READY';
 
@@ -408,6 +420,13 @@ async function describeGrant(
   }
   if (registered && surfaces.length === 0) {
     remaining.push(connectorStep(workerName), SURFACE_STEP);
+  }
+  if (registered && surfaces.length > 0 && routable === 0) {
+    const why = [...new Set([...refusals.values()].filter((one): one is string => one !== null))].join('; ');
+    remaining.push(
+      `A surface is registered for this worker and the dispatcher would not fire it (${why}). ` +
+        'A Brain administrator corrects that condition; nothing has to be registered again.',
+    );
   }
 
   return {
