@@ -60,6 +60,21 @@ import type { PuzzleInstance, PuzzleMaster } from '../../domain/types.ts';
  */
 export const DEFECT_CEILING = 0.34;
 
+/**
+ * How many attempts the ceiling needs behind it before it can say anything.
+ *
+ * It was four, and a third of four is two. A word search is refused when a
+ * prohibited string forms by accident — about one grid in thirty-seven, a
+ * property of placing letters at random — so two of the first four is rare and
+ * not a defect, and it happens for about one master id in two hundred and fifty.
+ * Seeds derive from the master's random id, so the suite met one now and then
+ * and so did the release gate: "2 of 4 attempts failed validation" over a
+ * healthy generator, two puzzles made. At twelve, a third failing needs five
+ * such grids at that rate (about one in a hundred thousand), while a generator
+ * that is genuinely broken still stops within the first dozen.
+ */
+export const DEFECT_MIN_SAMPLE = 12;
+
 /** How many puzzles one pass of the tick may make. Bounded, never a quota. */
 export const MAX_INSTANCES_PER_PASS = 25;
 
@@ -244,7 +259,7 @@ export async function generateBatch(input: {
        * The check needs a few attempts behind it before it means anything,
        * which is what the second clause is for.
        */
-      if (attempts >= 4 && out.invalid.length / attempts > DEFECT_CEILING) {
+      if (attempts >= DEFECT_MIN_SAMPLE && out.invalid.length / attempts > DEFECT_CEILING) {
         out.blocked =
           `${out.invalid.length} of ${attempts} attempts failed validation, which is a defect ` +
           'in the generator or in this master rather than a run of bad luck. The batch stopped ' +
