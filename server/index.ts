@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Server } from 'node:http';
+import { retryBoot } from './bootRetry.ts';
 import express from 'express';
 import type { Express, NextFunction, Request, Response } from 'express';
 import {
@@ -272,7 +273,7 @@ function buildApp(gate: AccessGateConfig): Express {
  * could not be delivered, and the one thing Brain must not do about that is
  * quietly serve the local file instead.
  */
-function serveMigrationFailure(error: Error): void {
+function serveMigrationFailure(error: Error): Server {
   const configuration = error instanceof DatabaseConfigurationError;
   const headline = configuration
     ? 'Brain could not start: its persistence configuration is not usable.'
@@ -308,6 +309,7 @@ function serveMigrationFailure(error: Error): void {
     console.error(`[brain] Serving the migration error on http://localhost:${PORT} — nothing else will work.`);
   });
   server.on('error', onListenError);
+  return server;
 }
 
 function onListenError(error: NodeJS.ErrnoException): void {
@@ -469,8 +471,15 @@ function installShutdown(server: Server): void {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
-async function main(): Promise<void> {
-  ensureDataDirs();
+/**
+ * The cloud proof: the bucket answers, then the database answers and migrates.
+ *
+ * One function because boot runs it and so does the retry after a boot where
+ * it failed — two copies of what counts as "the cloud answered" would be the
+ * two-readers defect at the one check §18 rests on. It logs the reason and
+ * throws; it never serves anything.
+ */
+async function proveCloud(): Promise<MigrationReport> {
 
   // The document store opens before the database, because it is the cheaper
   // failure to discover: a bucket that cannot be reached is a boot Brain must
@@ -496,13 +505,11 @@ async function main(): Promise<void> {
         'documents nobody else can open.',
     );
     console.error('');
-    serveMigrationFailure(failure);
-    return;
+    throw failure;
   }
 
-  let migrations: MigrationReport;
   try {
-    migrations = (await initDatabase()).migrations;
+    return (await initDatabase()).migrations;
   } catch (error) {
     const failure = error instanceof Error ? error : new Error(String(error));
     console.error('');
@@ -520,10 +527,42 @@ async function main(): Promise<void> {
     }
     console.error(`  Data root ${DATA_ROOT}`);
     console.error('');
-    serveMigrationFailure(failure);
+    throw failure;
+  }
+}
+
+async function main(): Promise<void> {
+  ensureDataDirs();
+
+  let migrations: MigrationReport;
+  try {
+    migrations = await proveCloud();
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    const failureServer = serveMigrationFailure(failure);
+    // Asked again rather than served for ever: see bootRetry.ts. Every attempt
+    // is the identical proof, and nothing but the error is served until one
+    // holds — which is retrying, not the fallback §18 forbids.
+    retryBoot({
+      attempt: proveCloud,
+      onFailed: (attempt, _error, nextDelayMs) =>
+        console.error(
+          `[brain] Boot proof attempt ${attempt} failed; asking again in ${Math.round(nextDelayMs / 1000)}s.`,
+        ),
+      onRecovered: async (recovered) => {
+        console.log('[brain] The cloud answered. Replacing the error page with the Brain.');
+        // A keep-alive socket would hold close() open, and the port with it.
+        failureServer.closeAllConnections();
+        await new Promise<void>((resolve) => failureServer.close(() => resolve()));
+        await continueBoot(recovered);
+      },
+    });
     return;
   }
+  await continueBoot(migrations);
+}
 
+async function continueBoot(migrations: MigrationReport): Promise<void> {
   // The gate, decided the moment cloud persistence is a proven fact and before
   // any of the work below. A deployment missing its token should cost a failed
   // boot in seconds — which somebody notices — rather than an open Brain.
