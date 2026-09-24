@@ -302,6 +302,18 @@ The fix is in the next commit: every fire-and-forget async body under
 with a throwing database. Against the old code the request hung for 30s and the
 rejection escaped. It also refuses `void (async` anywhere in those directories.
 
+### The outage that ended by itself
+
+`Logs` run 25 shows how the reboot ended. At 02:51:19Z the machine logged *The
+cloud answered. Replacing the error page with the Brain.*. At 02:53:53 it
+logged *Brain is running* (schema 83, migrations up to date). The health check
+was passing at 02:54:21, and `/healthz` answered 200 in 0.34s from outside.
+The outage ran from 02:25:29 to 02:54:21, and it ended with no deploy, no
+restart and nobody pressing anything. The two outages before the boot retry
+(deploys 324 and 334) each lasted until somebody redeployed. Deploy 338
+(another session's `3a3bd1e`) ran during the outage and correctly released
+nothing, because its health check could not pass against the same 544.
+
 ## What is still blocked, and on whom
 
 Cash Mode 1's research cannot run until the Brain connector behind Brain
