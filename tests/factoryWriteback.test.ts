@@ -24,6 +24,8 @@ import {
   FACTORY_CAMPAIGN_OUTCOME,
 } from '../server/services/factory/writeback.ts';
 import { tickAllCampaigns } from '../server/services/factory/loop.ts';
+import { tickAllRemoteCampaigns } from '../server/services/factory/remoteLoop.ts';
+import { getDb } from '../server/db/database.ts';
 import { createWorkstream, linkWorkstream, listAllLiveLinks } from '../server/repos/register.ts';
 import type { FactoryChangeRequest } from '../server/domain/factory.ts';
 
@@ -549,6 +551,47 @@ describe('recordCampaignOutcome attests a finished campaign\'s pull request', ()
     expect(links[0]?.detail.merged).toBe(true);
     expect(links[0]?.detail.attestedBy).toBe('pull-request-merge-observation');
     pending = await listCampaignsPendingOutcome();
+    expect(pending.some((one) => one.id === campaignId)).toBe(false);
+  });
+
+  /*
+   * Production runs the hosted plane, and its tick visited live campaigns only
+   * — so a finished campaign was never offered back to the writeback and the
+   * merge observer above ran for nobody. PR #31 merged on 2026-09-22 and its
+   * goal went on asking its owner to merge it. This drives the tick production
+   * actually runs, not the local one the tests above use.
+   */
+  it('the hosted tick offers a finished remote campaign back, so a merge is observed there too', async () => {
+    await addRealRemote();
+    const campaignId = await completeCampaign({
+      prUrl: 'https://github.com/Peyday007/V5/pull/4214',
+      prRef: '#4214',
+    });
+    await getDb().run(`UPDATE factory_campaigns SET execution_mode = 'REMOTE' WHERE id = ?`, [campaignId]);
+    const first = await recordCampaignOutcome(campaignId);
+    expect(first.recorded).toBe(true);
+
+    const workstreamId = await stream();
+    await linkWorkstream({
+      workstreamId,
+      kind: 'CAMPAIGN',
+      ref: campaignId,
+      relation: 'PURSUES',
+      recordedBy: 'PERSON',
+      recordedByUserId: approverId,
+    });
+
+    const stub = stubForgePull(4214, true);
+    try {
+      await tickAllRemoteCampaigns();
+    } finally {
+      stub.restore();
+    }
+    const links = (await listAllLiveLinks([workstreamId])).filter((link) => link.kind === 'PULL_REQUEST');
+    expect(links).toHaveLength(1);
+    expect(links[0]?.detail.merged).toBe(true);
+    expect(links[0]?.detail.attestedBy).toBe('pull-request-merge-observation');
+    const pending = await listCampaignsPendingOutcome();
     expect(pending.some((one) => one.id === campaignId)).toBe(false);
   });
 });

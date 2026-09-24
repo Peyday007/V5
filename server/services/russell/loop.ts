@@ -2834,6 +2834,7 @@ async function parkResearchedIdea(candidateId: string, refusal: string): Promise
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
+let running = false;
 
 /**
  * Start ticking.
@@ -2845,11 +2846,27 @@ let timer: ReturnType<typeof setInterval> | null = null;
 export function startRussell(owner: string, intervalMs = RUSSELL_TICK_MS): void {
   if (timer) return;
   timer = setInterval(() => {
-    void tick(owner).catch(() => {
-      // Swallowed here and recorded on the row by `tick` itself. A throwing
-      // timer callback would take the process down, and an unattended Brain
-      // that dies on one bad tick is worse than one that skips it.
-    });
+    /*
+     * One tick at a time, as the dispatcher, the factory loop and the connect
+     * loop already do. `claimCycle` refuses another *owner* while the lease is
+     * held and lets the same owner claim again, so this timer started a second
+     * tick every thirty seconds while the first was still running. On a slow
+     * database a tick outlives its interval, ticks stack up in one process, each
+     * holds a pool connection, and the pool fills: production read "10/10
+     * connection(s) in use, 3 caller(s) waiting" on 2026-09-24, and the tick
+     * that could not finish kept being joined by the next.
+     */
+    if (running) return;
+    running = true;
+    void tick(owner)
+      .catch(() => {
+        // Swallowed here and recorded on the row by `tick` itself. A throwing
+        // timer callback would take the process down, and an unattended Brain
+        // that dies on one bad tick is worse than one that skips it.
+      })
+      .finally(() => {
+        running = false;
+      });
   }, intervalMs);
   timer.unref?.();
 }

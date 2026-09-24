@@ -573,7 +573,7 @@ async function deriveReadyWork(projectIds: string[]): Promise<boolean> {
   try {
     const { tickAllRemoteCampaigns } = await import('../factory/remoteLoop.ts');
     const scoped = new Set(projectIds);
-    const reports = await tickAllRemoteCampaigns();
+    const reports = await tickAllRemoteCampaigns({ projectIds: scoped });
     return reports.some((report) => report.created.length > 0 && scoped.has(report.projectId));
   } catch {
     return false;
@@ -936,7 +936,9 @@ async function advanceFactoryAfter(bin: Bin): Promise<void> {
     const report = await tickRemoteCampaign(campaignId);
     if (report.created.length === 0) return;
     const { dispatchTick } = await import('../dispatch/loop.ts');
-    await dispatchTick();
+    // This campaign's project only: one person's completion must not pay for
+    // firing everybody's queue inside their MCP call. The loop fires the rest.
+    await dispatchTick({ projectIds: [bin.projectId] });
   } catch {
     // The loop is the fallback for every one of these, and it runs in twenty
     // seconds. A completion must never fail because an optimisation did.

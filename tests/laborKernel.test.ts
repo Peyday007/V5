@@ -34,7 +34,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
-import { createUser } from '../server/repos/identity.ts';
+import { createUser, createWorker } from '../server/repos/identity.ts';
 import { createAccount, createRoutine } from '../server/repos/fleet.ts';
 import { createOpportunity, transitionOpportunity } from '../server/repos/cashPortfolio.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
@@ -115,7 +115,15 @@ async function healthyFleet(): Promise<void> {
     name: 'A surface',
     tokenSecretName: 'LABOR_TEST_SECRET',
     tokenDigest: 'a'.repeat(64),
-    workerId: `wkr_${Math.random().toString(36).slice(2, 12)}`,
+    // A real worker row: a Routine bound to an id that resolves to no worker is
+    // not a surface anything could authenticate as, and is not counted.
+    workerId: (
+      await createWorker({
+        name: `labor-worker-${Math.random().toString(36).slice(2, 10)}`,
+        createdByType: 'SYSTEM',
+        createdById: 'labor test',
+      })
+    ).id,
   });
 }
 

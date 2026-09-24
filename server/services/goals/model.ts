@@ -58,6 +58,11 @@ import { personName } from '../../domain/personName.ts';
 import { viewOf, type WorkstreamView } from '../register/view.ts';
 import type { LinkReading } from '../register/resolve.ts';
 import { rankGoals, type PriorityFacts } from './priority.ts';
+import { listDispatchesForBin } from '../../repos/bins.ts';
+import { REFUSAL_WAIT, surfaceIneligibility, type RoutingRefusal } from '../dispatch/router.ts';
+import { listRoutines } from '../../repos/fleet.ts';
+import { fleetSnapshot, type FleetSnapshot } from '../dispatch/candidates.ts';
+import { listMembershipsForProject } from '../../repos/identity.ts';
 
 // ---------------------------------------------------------------------------
 // The shape
@@ -65,6 +70,13 @@ import { rankGoals, type PriorityFacts } from './priority.ts';
 
 export interface GoalWork {
   binId: string;
+  /**
+   * What the dispatcher last decided about firing this bin, read from its own
+   * intent row. Null when there is no intent at the bin's generation. A goal
+   * that said "queued" over a bin the dispatcher has been refusing for hours
+   * would be the reassuring pending state §24 corrects — production had one.
+   */
+  dispatch: { state: string; refusal: string | null; waitsFor: 'CAPACITY' | 'OPERATOR' | null; message: string | null; at: string } | null;
   state: string;
   priority: number;
   attempts: string;
@@ -224,7 +236,22 @@ function completion(view: WorkstreamView, links: WorkstreamLink[]): boolean {
       return link?.relation === 'EVIDENCE' && reading.state !== null && DELIVERED.has(reading.state);
     });
   }
-  return pursued.every((reading) => reading.state !== null && DELIVERED.has(reading.state));
+  // A campaign reads PR_READY for ever — its row has no way to learn about the
+  // merge. What learns is the attested PULL_REQUEST link the factory's
+  // writeback writes from the forge's own answer, so a pursued PR_READY
+  // reading is delivered once such a link says merged.
+  const mergeAttested = attestedMerge(view.readings);
+  return pursued.every(
+    (reading) =>
+      reading.state !== null && (DELIVERED.has(reading.state) || (reading.state === 'PR_READY' && mergeAttested)),
+  );
+}
+
+/** Whether a linked pull request is attested merged (or further). */
+function attestedMerge(readings: LinkReading[]): boolean {
+  return readings.some(
+    (reading) => reading.kind === 'PULL_REQUEST' && reading.attested !== undefined && reading.state !== null && DELIVERED.has(reading.state),
+  );
 }
 
 interface Resolved {
@@ -241,7 +268,11 @@ interface Resolved {
  * `orchestration_id`, a candidate's latest mission, a change request's
  * campaign. Nothing is found by matching a title.
  */
-async function resolveWork(links: WorkstreamLink[], projectId: string | null): Promise<Resolved> {
+async function resolveWork(
+  links: WorkstreamLink[],
+  projectId: string | null,
+  merged: boolean,
+): Promise<Resolved> {
   const campaignIds = new Set<string>();
   const orchestrationIds = new Set<string>();
   const binIds = new Set<string>();
@@ -334,7 +365,7 @@ async function resolveWork(links: WorkstreamLink[], projectId: string | null): P
     // Needs You; a goal is read by everybody on its project.
     if (request && request.visibility === 'SHARED' && !seenRequests.has(request.id)) {
       seenRequests.add(request.id);
-      decisions.push(humanDecision(request, [`mission ${mission.id}: ${mission.objective}`]));
+      decisions.push(humanDecision(request, [`mission ${mission.id}: ${clip(mission.objective)}`]));
     }
   }
 
@@ -357,7 +388,9 @@ async function resolveWork(links: WorkstreamLink[], projectId: string | null): P
         since: campaign.updatedAt,
       });
     }
-    if (campaign.state === 'COMPLETE' && campaign.prUrl) {
+    // Asking a person to merge what the forge already says merged would be a
+    // decision that is not theirs any more — the stale-card defect §33 records.
+    if (campaign.state === 'COMPLETE' && campaign.prUrl && !merged) {
       decisions.push({
         id: `pr:${campaign.id}`,
         kind: 'PULL_REQUEST',
@@ -372,10 +405,12 @@ async function resolveWork(links: WorkstreamLink[], projectId: string | null): P
         afterAnswer: 'Brain attests the merge onto this goal when it observes it, and the goal moves on without a new prompt.',
         since: campaign.finishedAt ?? campaign.updatedAt,
       });
+    }
+    if (campaign.state === 'COMPLETE' && campaign.prUrl) {
       evidence.push({
         kind: 'CAMPAIGN',
         ref: campaign.id,
-        what: `a reviewed pull request at ${campaign.prUrl}`,
+        what: `a reviewed pull request at ${campaign.prUrl}${merged ? ', attested merged' : ''}`,
         evidence: `factory_campaigns.pr_url, integration ${campaign.integrationSha ?? 'unrecorded'}`,
       });
     }
@@ -403,6 +438,11 @@ async function resolveWork(links: WorkstreamLink[], projectId: string | null): P
   return { bins, decisions, evidence, obligations };
 }
 
+function clip(text: string, max = 160): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
+}
+
 function humanDecision(
   request: NonNullable<Awaited<ReturnType<typeof getHumanRequest>>>,
   waitingWork: string[],
@@ -417,7 +457,7 @@ function humanDecision(
     question: request.authorityNeeded,
     proposedAction: recommended
       ? `Brain recommends: ${recommended}. Answer it in Needs You.`
-      : 'Answer it in Needs You.',
+      : 'Brain has no recommendation recorded for this one; each answer and what it causes is below. Answer it in Needs You.',
     choices: request.choices.map((one) => ({ key: one.key, label: one.label, consequence: one.consequence })),
     waitingWork,
     afterAnswer:
@@ -426,11 +466,119 @@ function humanDecision(
   };
 }
 
-function workOf(bins: Bin[], now: string): GoalWork[] {
-  return bins
-    .filter((bin) => bin.state === 'DRAFT' || bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'NEEDS_HUMAN')
+/**
+ * Why no surface serves a project, named down to the surfaces that would.
+ *
+ * `NO_SURFACE_SERVES_THIS_PROJECT` is true and too coarse: it sends a reader to
+ * grant a membership when, in production, the membership existed and every
+ * Routine bound to that worker had been quarantined for sessions that never
+ * checked in — a connector that stopped authorizing, whose remedy is in the
+ * Claude account behind it. Routine names and states only, never a trigger ref
+ * or a secret's name: those are operator depth (§34).
+ */
+async function surfaceRemedy(
+  projectId: string,
+  /*
+   * The fleet snapshot is dozens of statements, and this is asked per blocked
+   * bin per goal on every tick. Read once per assembly and shared, so the
+   * router's answer costs one snapshot a pass rather than one a bin — which is
+   * what it cost in production the first time this asked the router, while the
+   * research fleet was quarantined and many bins were blocked at once.
+   */
+  fleet: () => Promise<FleetSnapshot>,
+): Promise<{ diagnosis: string | null; remedy: string; since: string | null }> {
+  const workers = new Set(
+    (await listMembershipsForProject(projectId))
+      .filter((one) => one.principalType === 'WORKER' && one.active)
+      .map((one) => one.principalId),
+  );
+  const serving = (await listRoutines()).filter((one) => one.workerId !== null && workers.has(one.workerId));
+  if (serving.length === 0) {
+    return {
+      diagnosis: null,
+      remedy:
+        'No Routine is bound to any worker that is a member of this project. An operator binds one (npm run fleet -- bind-worker) or grants an existing worker the project (npm run admin -- access grant); the bin fires on the next tick after that.',
+      since: null,
+    };
+  }
+  /*
+   * "Out of routing" is the router's answer, not the Routine's state column. An
+   * ENABLED Routine whose secret is not deployed, whose account is unavailable
+   * or whose bound worker is disabled is never fired, and reading it as enabled
+   * here told a person the dispatcher would route to it (§23: one eligibility
+   * definition, `surfaceIneligibility`, asked by every reader).
+   */
+  const snapshot = await fleet();
+  const candidateById = new Map(snapshot.candidates.map((one) => [one.routine.id, one]));
+  const outOfRouting = (routine: (typeof serving)[number]): string | null => {
+    const candidate = candidateById.get(routine.id);
+    if (!candidate) return routine.state === 'ENABLED' ? 'its deployment secret is not present' : routine.state;
+    const refusal = surfaceIneligibility(candidate);
+    if (refusal === null) return null;
+    return refusal === `routine ${routine.state}` ? routine.state : refusal;
+  };
+  const down = serving.filter((one) => outOfRouting(one) !== null);
+  const reasons = new Map<string, string[]>();
+  for (const routine of down) {
+    const head = outOfRouting(routine) ?? routine.state;
+    const why = `${head}${routine.stateReason && head === routine.state ? `: ${routine.stateReason.replace(/\s+/g, ' ').slice(0, 140)}` : ''}`;
+    const list = reasons.get(why);
+    if (list) list.push(routine.name);
+    else reasons.set(why, [routine.name]);
+  }
+  const listed = [...reasons.entries()].map(([why, names]) => `${names.join(', ')} (${why})`).join('; ');
+  if (down.length < serving.length) {
+    return {
+      diagnosis: null,
+      remedy:
+        'At least one Routine serving this project is eligible for routing, so the dispatcher will route to it as capacity frees; if it does not, read the bin trace (Dispatch diagnose).',
+      since: null,
+    };
+  }
+  /*
+   * The dispatcher's own sentence for this refusal is about a missing
+   * membership, and here the membership exists: printing it beside a remedy
+   * about a quarantine would be two readings of one bin that disagree. And the
+   * dispatch intent is re-stamped every tick, so its timestamp makes a
+   * condition hours old read as minutes old; when the last serving surface
+   * went out of routing is the honest age, and a quarantined Routine is not
+   * fired, so its row is not touched again after that.
+   */
+  const since = down.map((one) => one.updatedAt).sort().at(-1) ?? null;
+  const remedy = `Every Routine that serves this project is out of routing — ${listed}. When the reason is sessions that never checked in, the Brain connector in the Claude account behind those Routines has stopped authorizing: reconnect it there, then lift the quarantine (npm run fleet -- set-state --kind routine --to ENABLED). The bin fires on the next tick after that, with nothing else to press.`;
+  return {
+    diagnosis: `no routable Routine serves this project — ${serving.length} would, and every one is out of routing`,
+    remedy,
+    since,
+  };
+}
+
+async function dispatchOf(bin: Bin): Promise<GoalWork['dispatch']> {
+  if (bin.state !== 'READY' && bin.state !== 'LEASED') return null;
+  const intents = (await listDispatchesForBin(bin.id)).filter((one) => one.leaseGeneration === bin.leaseGeneration);
+  const intent = intents[intents.length - 1];
+  if (!intent) return null;
+  const kind = intent.lastErrorKind;
+  const refusal = kind && kind in REFUSAL_WAIT ? (kind as RoutingRefusal) : null;
+  return {
+    state: intent.state,
+    refusal: kind,
+    waitsFor: refusal ? REFUSAL_WAIT[refusal] : null,
+    message: intent.lastError,
+    at: intent.updatedAt,
+  };
+}
+
+async function workOf(bins: Bin[], now: string): Promise<GoalWork[]> {
+  const live = bins.filter(
+    (bin) => bin.state === 'DRAFT' || bin.state === 'READY' || bin.state === 'LEASED' || bin.state === 'NEEDS_HUMAN',
+  );
+  const dispatches = new Map<string, GoalWork['dispatch']>();
+  for (const bin of live) dispatches.set(bin.id, bin.heldByWorkstreamId ? null : await dispatchOf(bin));
+  return live
     .map((bin) => ({
       binId: bin.id,
+      dispatch: dispatches.get(bin.id) ?? null,
       state: bin.state,
       priority: bin.priority,
       attempts: `${bin.attemptCount}/${bin.maxAttempts}`,
@@ -486,9 +634,26 @@ export interface GoalsSnapshot {
 export async function assembleGoals(options: {
   projectIds: string[] | null;
   includeArchived?: boolean;
+  /**
+   * With `includeArchived`, derive only this archived goal rather than all of
+   * them. An archived goal holds nothing and ranks nowhere, and the hosted
+   * verification archives two more on each side of every deploy, so deriving
+   * every one of them to show one is a cost that grows for ever.
+   */
+  onlyArchivedGoal?: string;
   now?: string;
 }): Promise<GoalsSnapshot> {
   const now = options.now ?? new Date().toISOString();
+  let fleet: Promise<FleetSnapshot> | null = null;
+  const remedies = new Map<string, ReturnType<typeof surfaceRemedy>>();
+  const surfaceRemedyFor = (projectId: string): ReturnType<typeof surfaceRemedy> => {
+    let found = remedies.get(projectId);
+    if (!found) {
+      found = surfaceRemedy(projectId, () => (fleet ??= fleetSnapshot()));
+      remedies.set(projectId, found);
+    }
+    return found;
+  };
   const all = await listWorkstreams({ projectIds: null, includeArchived: true });
   const visible = new Set(
     (options.projectIds === null
@@ -508,25 +673,53 @@ export async function assembleGoals(options: {
   // First pass: what every goal's rows say, over the whole Brain, because a
   // dependency's lifecycle and a priority rank are both facts about goals the
   // caller may not be able to read.
-  const base = new Map<string, { goal: Workstream; view: WorkstreamView; lifecycle: GoalLifecycle; reason: string }>();
+  const base = new Map<
+    string,
+    { goal: Workstream; view: WorkstreamView | null; lifecycle: GoalLifecycle; reason: string; resolved: Resolved }
+  >();
   for (const goal of all) {
     const own = linksBy.get(goal.id) ?? [];
-    const view = await viewOf(goal, own);
     const decided = decidedLifecycle(goal);
+    /*
+     * An archived goal nobody asked to see is present — a dependency's
+     * lifecycle and a hold's owner are read from it — and derived no further.
+     * Its linked work costs statements on every tick, and archived goals are
+     * the one kind this table gains without bound (tests/goalTickCost.test.ts).
+     */
+    const shown =
+      options.includeArchived && (options.onlyArchivedGoal === undefined || options.onlyArchivedGoal === goal.id);
+    if (decided?.lifecycle === 'ARCHIVED' && !shown) {
+      base.set(goal.id, {
+        goal,
+        view: null,
+        lifecycle: 'ARCHIVED',
+        reason: decided.reason,
+        resolved: { bins: [], decisions: [], evidence: [], obligations: [] },
+      });
+      continue;
+    }
+    const view = await viewOf(goal, own);
     const complete = completion(view, own);
     const lifecycle: GoalLifecycle = decided?.lifecycle ?? (complete ? 'COMPLETE' : 'ACTIVE');
     const reason =
       decided?.reason ??
       (complete ? `every piece of work it pursues has delivered (${view.stateEvidence})` : 'being pursued');
-    base.set(goal.id, { goal, view, lifecycle, reason });
+    const resolved = await resolveWork(own, goal.projectId, attestedMerge(view.readings));
+    base.set(goal.id, { goal, view, lifecycle, reason, resolved });
   }
 
   const dependsOn = (id: string) =>
     (linksBy.get(id) ?? []).filter((one) => one.kind === 'WORKSTREAM' && one.relation === 'DEPENDS_ON');
 
   const facts: PriorityFacts[] = [];
-  for (const { goal, lifecycle } of base.values()) {
+  for (const { goal, lifecycle, resolved } of base.values()) {
     if (lifecycle === 'ARCHIVED') continue;
+    // Stopped at a person's decision with nothing else it can run: capacity
+    // given to it would be capacity nothing can use, so it is not workable.
+    const runnable = resolved.bins.some(
+      (bin) => (bin.state === 'READY' || bin.state === 'LEASED') && bin.heldByWorkstreamId === null,
+    );
+    const waitsOnPerson = resolved.decisions.length > 0 && !runnable;
     const unmet = dependsOn(goal.id).some((one) => base.get(one.ref)?.lifecycle !== 'COMPLETE');
     const dependents = [...base.values()].filter(
       (other) =>
@@ -535,7 +728,7 @@ export async function assembleGoals(options: {
     facts.push({
       id: goal.id,
       ownerKey: ownerKeyOf(goal),
-      workable: lifecycle === 'ACTIVE' && !unmet,
+      workable: lifecycle === 'ACTIVE' && !unmet && !waitsOnPerson,
       commitment: goal.commitment,
       dueAt: goal.dueAt,
       purpose: goal.purpose,
@@ -552,12 +745,12 @@ export async function assembleGoals(options: {
 
   const goals: GoalView[] = [];
   const binsByGoal = new Map<string, Bin[]>();
-  for (const { goal, view, lifecycle, reason } of base.values()) {
+  for (const { goal, view, lifecycle, reason, resolved } of base.values()) {
     const own = linksBy.get(goal.id) ?? [];
-    const resolved = await resolveWork(own, goal.projectId);
     binsByGoal.set(goal.id, resolved.bins);
     if (!visible.has(goal.id)) continue;
     if (lifecycle === 'ARCHIVED' && !options.includeArchived) continue;
+    if (!view) continue;
 
     let projectName: string | null = null;
     let authority = { research: 'This goal is Brain-wide; it runs under no project grant.', commercial: null as string | null };
@@ -606,7 +799,7 @@ export async function assembleGoals(options: {
       .filter((other) => visible.has(other.goal.id) && dependsOn(other.goal.id).some((one) => one.ref === goal.id))
       .map((other) => other.goal.id);
 
-    const work = workOf(resolved.bins, now);
+    const work = await workOf(resolved.bins, now);
     const blockers: GoalBlocker[] = [];
     for (const reading of view.readings) {
       if (reading.missing) {
@@ -632,6 +825,35 @@ export async function assembleGoals(options: {
       });
     }
     for (const bin of work) {
+      if (bin.dispatch && bin.dispatch.state === 'PENDING' && bin.dispatch.waitsFor === 'OPERATOR' && !bin.workerOnIt) {
+        const surface =
+          bin.dispatch.refusal === 'NO_SURFACE_SERVES_THIS_PROJECT' && goal.projectId
+            ? await surfaceRemedyFor(goal.projectId)
+            : null;
+        const since = surface?.since ?? bin.dispatch.at;
+        blockers.push({
+          text: surface?.diagnosis
+            ? `bin ${bin.binId} cannot be fired: ${surface.diagnosis}`
+            : `bin ${bin.binId} cannot be fired: ${bin.dispatch.refusal} — ${bin.dispatch.message ?? 'no message recorded'}`,
+          remedy:
+            surface?.remedy ??
+            'Brain defers it and re-checks on every fleet change; an operator makes it routable (the refusal above names how), and it fires on the next tick after that with nothing to press.',
+          by: 'OPERATOR',
+          ref: bin.binId,
+          since,
+          ageHours: ageHours(since, now),
+        });
+      }
+      if (bin.dispatch && bin.dispatch.state === 'ABANDONED') {
+        blockers.push({
+          text: `bin ${bin.binId}: the dispatcher gave up firing it — ${bin.dispatch.message ?? 'no message recorded'}`,
+          remedy: 'Read the bin trace (Dispatch diagnose); an abandoned intent is a surface problem a person must fix.',
+          by: 'OPERATOR',
+          ref: bin.binId,
+          since: bin.dispatch.at,
+          ageHours: ageHours(bin.dispatch.at, now),
+        });
+      }
       if (bin.exhausted && (bin.state === 'READY' || bin.state === 'LEASED')) {
         blockers.push({
           text: `bin ${bin.binId} has spent all ${bin.attempts} of its attempts with work still in it.`,
@@ -831,8 +1053,13 @@ function waitingAndNext(input: {
   }
   const ready = work.find((one) => one.state === 'READY' || one.state === 'LEASED');
   if (ready) {
+    const deferred = ready.dispatch?.waitsFor === 'CAPACITY' ? ` (the fleet is full: ${ready.dispatch.refusal})` : '';
     return {
-      waiting: { kind: 'CAPACITY', detail: `bin ${ready.binId} is queued at priority ${ready.priority}`, since: ready.updatedAt },
+      waiting: {
+        kind: 'CAPACITY',
+        detail: `bin ${ready.binId} is queued at priority ${ready.priority}${deferred}`,
+        since: ready.dispatch?.at ?? ready.updatedAt,
+      },
       next: {
         action: `Brain fires the next free Routine at bin ${ready.binId}.`,
         by: 'BRAIN',

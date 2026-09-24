@@ -76,6 +76,7 @@ goalsRouter.get(
     const snapshot = await assembleGoals({
       projectIds: await readableProjectIds(principal),
       includeArchived: true,
+      onlyArchivedGoal: goal.id,
     });
     const view = snapshot.goals.find((one) => one.id === goal.id);
     if (!view) throw notFound(MISSING);

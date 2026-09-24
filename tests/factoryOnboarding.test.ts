@@ -11,7 +11,7 @@
  * Each test below is one of those joins, and every one of them is checked in both
  * directions: what onboarding makes possible, and what it still refuses.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { freshProject, type TestProject } from './helpers.ts';
 import { createUser, createWorker, getWorkerByName, getWorkerRouting, grantMembership, listMembershipsForPrincipal, setWorkerRouting } from '../server/repos/identity.ts';
 import { listRepositoryGrants } from '../server/services/factory/repositoryEnvelope.ts';
@@ -346,7 +346,19 @@ describe('readiness is derived, and says what is left', () => {
     const worker = (await getWorkerByName(factoryWorkerName(GRANT().id)))!;
     await bindRoutineWorker(routine.id, worker.id);
 
+    /*
+     * Registered, enabled and bound is **not** ready while the trigger token is
+     * not deployed: the dispatcher leaves such a Routine out of routing
+     * entirely. This test used to assert READY here, which was the defect —
+     * the card called a repository executable that nothing would ever fire.
+     */
+    const configured = (await repositoryOnboarding(fixture.project.id))[0]!;
+    expect(configured.readiness).toBe('NO_USABLE_SURFACE');
+    expect(configured.remaining.join(' ')).toContain('A_SECRET_NAME');
+
+    process.env['A_SECRET_NAME'] = 'placeholder-not-a-token';
     const ready = (await repositoryOnboarding(fixture.project.id))[0]!;
+    delete process.env['A_SECRET_NAME'];
     expect(ready.readiness).toBe('READY');
     expect(ready.remaining).toHaveLength(0);
     expect(ready.surfaces.map((one) => one.routineName)).toContain('Factory surface');
@@ -356,6 +368,7 @@ describe('readiness is derived, and says what is left', () => {
     expect(ready.surfaces[0]!.proven).toBe(false);
     expect(ready.provenSurfaces).toBe(0);
     expect(ready.accountsServing).toBe(1);
+    delete process.env.A_SECRET_NAME;
   });
 });
 
@@ -821,6 +834,14 @@ describe('a duplicate action produces no duplicate execution', () => {
  * `/people` — and did not refuse here.
  */
 describe('surfaces are counted by account, and proof is not assumed', () => {
+  // These surfaces are meant to be routable, and routable includes a secret
+  // this deployment actually holds.
+  beforeEach(() => {
+    for (const name of ['SECRET_A', 'SECRET_B', 'SECRET_C']) process.env[name] = 'present-for-test';
+  });
+  afterEach(() => {
+    for (const name of ['SECRET_A', 'SECRET_B', 'SECRET_C']) delete process.env[name];
+  });
   /** Two Routines on one account, both enabled, neither ever fired. */
   async function twoOnOneAccount(): Promise<{ workerId: string; accountName: string }> {
     await onboard();
@@ -845,6 +866,9 @@ describe('surfaces are counted by account, and proof is not assumed', () => {
         capabilities: [...FACTORY_ROUTING_CAPABILITIES],
       });
       await bindRoutineWorker(routine.id, worker.id);
+      // Deployed, because a surface whose token is not deployed is not routed
+      // and would not be READY — which is a different test's subject.
+      process.env[`SECRET_${label}`] = 'placeholder-not-a-token';
     }
     return { workerId: worker.id, accountName: account.name };
   }
@@ -900,8 +924,10 @@ describe('surfaces are counted by account, and proof is not assumed', () => {
       capabilities: [...FACTORY_ROUTING_CAPABILITIES],
     });
     await bindRoutineWorker(routine.id, worker.id);
+    process.env['SECRET_C'] = 'placeholder-not-a-token';
 
     const repo = (await repositoryOnboarding(fixture.project.id))[0]!;
+    delete process.env['SECRET_C'];
     expect(repo.surfaces).toHaveLength(3);
     // Two subscriptions, whatever they are called.
     expect(repo.accountsServing).toBe(2);

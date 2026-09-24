@@ -327,7 +327,30 @@ describe('a model may propose a change and may never execute one', () => {
     expect(outcome.request?.changeRequestId).toBeNull();
   });
 
-  it('is one row however many times the same change is asked for', async () => {
+  it('is one row however many times the same change is asked for in one thread', async () => {
+    const first = await newConversation(fixture.project.id);
+    const ask = {
+      projectId: fixture.project.id,
+      messageId: null,
+      askedText: 'Please change the checkout page so the total updates without a reload.',
+      title: 'Live total on checkout',
+      objective: 'Change the checkout page so the total updates without a reload.',
+      expectedOutcome: 'Changing quantity updates the total in place.',
+    };
+    const a = await captureSoftwareChange({ ...ask, conversationId: first });
+    const again = await captureSoftwareChange({ ...ask, conversationId: first });
+    expect(a.created).toBe(true);
+    expect(again.created).toBe(false);
+    expect(again.request?.id).toBe(a.request?.id);
+    expect(await listSoftwareRequests({ projectId: fixture.project.id })).toHaveLength(1);
+  });
+
+  it('gives a second person asking the same thing their own card, in their own thread', async () => {
+    /*
+     * It used to return the first person's row: the second was told it was
+     * "already waiting", and the card, the authorization and the pull request
+     * all lived in a thread they may not be able to open.
+     */
     const first = await newConversation(fixture.project.id);
     const second = await newConversation(fixture.project.id);
     const ask = {
@@ -340,10 +363,9 @@ describe('a model may propose a change and may never execute one', () => {
     };
     const a = await captureSoftwareChange({ ...ask, conversationId: first });
     const b = await captureSoftwareChange({ ...ask, conversationId: second });
-    expect(a.created).toBe(true);
-    expect(b.created).toBe(false);
-    expect(b.request?.id).toBe(a.request?.id);
-    expect(await listSoftwareRequests({ projectId: fixture.project.id })).toHaveLength(1);
+    expect(a.created && b.created).toBe(true);
+    expect(b.request?.id).not.toBe(a.request?.id);
+    expect(b.request?.conversationId).toBe(second);
   });
 });
 
@@ -741,6 +763,29 @@ describe('the person authorizes, and the campaign reports back', () => {
     });
     expect(first.ok && second.ok).toBe(true);
     if (first.ok && second.ok) expect(second.campaignId).toBe(first.campaignId);
+  });
+
+  it('joins two threads asking for the same change into one campaign, linked to both', async () => {
+    await onboardRepository({
+      projectId: fixture.project.id,
+      grantId: MOUNT().id,
+      scope: { kind: 'DIRECTORIES', directories: ['docs'] },
+      actor,
+      origin: 'https://brain.example',
+    });
+    const mine = await askedFor();
+    const theirs = await askedFor();
+    expect(theirs.requestId).not.toBe(mine.requestId);
+    const conditions = [{ statement: 'The boundary is described.', verification: 'Read the page.' }];
+    const a = await authorizeSoftwareRequest({ requestId: mine.requestId, grantId: MOUNT().id, userId: actor.id, acceptanceConditions: conditions });
+    const b = await authorizeSoftwareRequest({ requestId: theirs.requestId, grantId: MOUNT().id, userId: actor.id, acceptanceConditions: conditions });
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    expect(b.campaignId).toBe(a.campaignId);
+    expect(b.changeRequestId).toBe(a.changeRequestId);
+    expect((await getSoftwareRequest(mine.requestId))?.conversationId).toBe(mine.conversationId);
+    expect((await getSoftwareRequest(theirs.requestId))?.conversationId).toBe(theirs.conversationId);
+    expect((await getSoftwareRequest(theirs.requestId))?.campaignId).toBe(a.campaignId);
   });
 
   it('puts the request back when the submission is refused', async () => {

@@ -66,6 +66,7 @@ import { getAccount, getRoutine } from '../../repos/fleet.ts';
 import { getUser, getWorkerByName, getWorkerRouting } from '../../repos/identity.ts';
 import { listTokensForWorker } from '../../repos/oauth.ts';
 import { resolveToken } from '../dispatch/fire.ts';
+import { fleetSnapshot, routingRefusalByRoutine } from '../dispatch/candidates.ts';
 import { namesFor, settleConnection } from './connection.ts';
 
 export interface ContributedSurface {
@@ -101,6 +102,13 @@ export interface ContributedCapacity {
 
 export async function contributedCapacity(): Promise<ContributedCapacity> {
   const connections = await listConnections();
+  /*
+   * The router's own answer, asked once. Usable capacity is what the dispatcher
+   * would fire, and the dispatcher also refuses an unavailable account, a
+   * disabled or archived worker, and a worker with no project membership —
+   * none of which the checks below read (§23, `surfaceIneligibility`).
+   */
+  const snapshot = await fleetSnapshot();
   const surfaces: ContributedSurface[] = [];
 
   for (let connection of connections) {
@@ -151,6 +159,10 @@ export async function contributedCapacity(): Promise<ContributedCapacity> {
       }
       if (resolveToken(routine.tokenSecretName) === null) {
         return `${routine.tokenSecretName} is not set in this deployment, so a fire would be refused.`;
+      }
+      const refusal = routingRefusalByRoutine(snapshot, [routine.id]).get(routine.id) ?? null;
+      if (refusal !== null) {
+        return `The dispatcher would not fire this surface: ${refusal}.`;
       }
       if (!authorizationLive) {
         return 'The Claude connector holds no live authorization, so a session could not authenticate.';

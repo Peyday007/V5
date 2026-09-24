@@ -210,6 +210,7 @@ function GoalCard({ goal, onChanged }: { goal: GoalView; onChanged: () => void }
                 bin <code>{work.binId}</code>: {work.state.toLowerCase()}, priority {work.priority}, attempts {work.attempts}
                 {work.heldReason ? `, held (${work.heldReason.toLowerCase().replace(/_/g, ' ')})` : ''}
                 {work.workerOnIt ? ', a worker is on it' : ''}
+                {work.dispatch?.refusal ? `, dispatcher: ${work.dispatch.refusal.toLowerCase().replace(/_/g, ' ')}` : ''}
               </li>
             ))}
           </ul>

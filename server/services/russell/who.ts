@@ -48,6 +48,7 @@ import {
 import type { InvitationSummary } from '../identity/invitations.ts';
 import type { FleetState, Principal, ProjectRole } from '../../domain/types.ts';
 import { workerIdentity } from '../identity/authenticate.ts';
+import { fleetSnapshot, routingRefusalByRoutine } from '../dispatch/candidates.ts';
 
 /**
  * How much of the machinery this caller may be told about.
@@ -95,6 +96,8 @@ export interface Surface {
   target: number | null;
   /** Whether a deployment secret is configured. Never the name or the value. */
   configured: boolean;
+  /** Whether the router would consider it at all — `surfaceIneligibility`'s answer. */
+  routable: boolean;
   /** Which worker identity it is bound to, by name. Never a credential. */
   boundWorker: string | null;
   fires: number;
@@ -229,7 +232,11 @@ export async function whoForProject(input: {
     // collaborator learns whether work can run, which is what they need to
     // read a Work screen honestly, and nothing about how many places it could.
     const routines = await listRoutines();
-    const healthy = routines.filter((routine) => routine.state === 'ENABLED').length;
+    // "Work can run" is the router's answer: an ENABLED Routine whose worker
+    // is disabled, whose account is out, or whose secret is not deployed is
+    // never fired (§23, `surfaceIneligibility`).
+    const refusals = routingRefusalByRoutine(await fleetSnapshot(), routines.map((one) => one.id));
+    const healthy = routines.filter((routine) => refusals.get(routine.id) === null).length;
     return {
       depth,
       people,
@@ -258,6 +265,7 @@ export async function whoForProject(input: {
     unansweredFiresByRoutine(),
   ]);
   const accountName = new Map(accounts.map((account) => [account.id, account.name]));
+  const refusals = routingRefusalByRoutine(await fleetSnapshot(), routines.map((one) => one.id));
 
   const surfaces: Surface[] = [];
   for (const routine of routines) {
@@ -268,8 +276,17 @@ export async function whoForProject(input: {
       name: routine.name,
       accountName: accountName.get(routine.accountId) ?? 'an unregistered account',
       state: routine.state,
-      health: plainFleetState(routine.state),
-      reason: routine.stateReason,
+      // A surface the router would refuse is not "Healthy" whatever its
+      // state column says; the refusal is the reason a person is owed.
+      health:
+        routine.state === 'ENABLED' && refusals.get(routine.id)
+          ? 'Not routable'
+          : plainFleetState(routine.state),
+      reason:
+        routine.state === 'ENABLED' && refusals.get(routine.id)
+          ? `Not routable: ${refusals.get(routine.id)}.`
+          : routine.stateReason,
+      routable: refusals.get(routine.id) === null,
       target: effectiveTarget(routinePolicy ?? policy ?? null, now).target,
       // A boolean, deliberately. Whether a secret is configured is operational;
       // its name is a hint about the deployment and its digest is a fact about
@@ -290,7 +307,7 @@ export async function whoForProject(input: {
     });
   }
 
-  const healthy = surfaces.filter((surface) => surface.state === 'ENABLED').length;
+  const healthy = surfaces.filter((surface) => surface.routable).length;
   return {
     depth,
     people,

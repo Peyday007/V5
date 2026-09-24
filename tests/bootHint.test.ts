@@ -113,3 +113,12 @@ describe('a connection that was never handed over is not an unreachable host', (
     expect(hintFor('')).toBe('');
   });
 });
+
+describe('a pooler that timed out checking a credential', () => {
+  it('names the database as slow, not the password or the client count', () => {
+    const hint = hintFor('(EAUTHQUERY) auth_query secret check timed out');
+    expect(hint).toMatch(/database itself/);
+    expect(hint).toMatch(/not a wrong password/);
+    expect(hint).not.toMatch(/every connection it may hand out is taken/);
+  });
+});

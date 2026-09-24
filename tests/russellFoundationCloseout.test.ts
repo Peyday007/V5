@@ -541,6 +541,14 @@ describe('an already-registered surface can be recorded as somebody’s', () => 
     expect(again.ok).toBe(true);
     if (again.ok) expect(again.alreadyAdopted).toBe(true);
 
+    // The account foundation reads the adopted worker, as the connection page
+    // does. By derived name alone it said "no worker identity exists" about a
+    // connection production showed passing one line above (§44).
+    const { foundationReading } = await import('../server/services/identity/foundation.ts');
+    const mine = (await foundationReading()).accounts.find((one) => one.userId === owner.id)!;
+    const attribution = mine.findings.find((one) => one.dimension === 'WORKER_ATTRIBUTION')!;
+    expect(attribution.because).not.toMatch(/No worker identity named/);
+
     // And a surface belongs to one person.
     const other = await createUser({
       email: 'member-adopt@example.com',

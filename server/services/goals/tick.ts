@@ -38,7 +38,7 @@
  */
 import type { Bin } from '../../domain/types.ts';
 import { binPriorityForRank, type HoldReason } from '../../domain/goals.ts';
-import { recordWorkstreamEvent } from '../../repos/register.ts';
+import { getWorkstream, recordWorkstreamEvent } from '../../repos/register.ts';
 import {
   allHeldBins,
   holdBinForGoal,
@@ -71,7 +71,10 @@ function holdReasonFor(goal: GoalView): HoldReason | null {
 }
 
 export async function advanceGoals(options?: { now?: string }): Promise<GoalTickReport> {
-  const snapshot = await assembleGoals({ projectIds: null, includeArchived: true, now: options?.now });
+  // Archived goals are not derived here: they hold nothing and rank nowhere,
+  // and there are more of them after every deploy. A hold one left behind is
+  // released below, and its owner read directly (tests/goalTickCost.test.ts).
+  const snapshot = await assembleGoals({ projectIds: null, includeArchived: false, now: options?.now });
   const report: GoalTickReport = { goals: snapshot.goals.length, held: [], released: [], reprioritized: [], moved: [] };
   const byId = new Map(snapshot.goals.map((goal) => [goal.id, goal]));
 
@@ -114,15 +117,18 @@ export async function advanceGoals(options?: { now?: string }): Promise<GoalTick
     }
     if (await releaseGoalHold(bin.id, holder)) {
       const goal = byId.get(holder);
-      const why = !goal
-        ? 'the goal holding it is gone'
-        : goal.lifecycle === 'ACTIVE'
+      const archived = goal ? null : await getWorkstream(holder);
+      const why = goal
+        ? goal.lifecycle === 'ACTIVE'
           ? bin.heldReason === 'WAITING_ON_DEPENDENCY'
             ? 'every goal it depended on has completed'
             : 'the goal was resumed'
-          : `the goal is ${goal.lifecycle.toLowerCase()}`;
+          : `the goal is ${goal.lifecycle.toLowerCase()}`
+        : archived?.archivedAt
+          ? 'the goal is archived'
+          : 'the goal holding it is gone';
       report.released.push({ binId: bin.id, goalId: holder, why });
-      if (goal) {
+      if (goal || archived) {
         await recordWorkstreamEvent({
           workstreamId: holder,
           kind: 'GOAL_WORK_RELEASED',

@@ -216,3 +216,30 @@ describe('a pooler that cannot get this client a connection says so too', () => 
     expect(describePoolerRefusal({ message: 42 })).toBeNull();
   });
 });
+
+/**
+ * The third thing the pooler says, and the only one that is about the
+ * database rather than about clients.
+ *
+ * Production, 2026-09-23 22:17:51Z, a one-client goals read against a Brain
+ * serving `/healthz` in 0.2s: `(EAUTHQUERY) auth_query secret check timed
+ * out`. The pooler verifies a credential by querying the database, and that
+ * query did not come back in time — so the database behind it was slow, and
+ * the read printed no diagnosis at all because neither branch above matched.
+ */
+describe('a pooler that could not check a credential says the database is slow', () => {
+  const production = () => new Error('(EAUTHQUERY) auth_query secret check timed out\n');
+
+  it('recognises it, carries its words, and names the database rather than the password', () => {
+    const said = describePoolerRefusal(production()) ?? '';
+    expect(said).toContain('EAUTHQUERY');
+    expect(said).toMatch(/database itself/);
+    expect(said).toMatch(/not a wrong password/);
+  });
+
+  it('does not send a reader to count clients or raise the ceiling', () => {
+    const said = describePoolerRefusal(production()) ?? '';
+    expect(said).not.toMatch(/fewer concurrent clients/);
+    expect(said).toMatch(/BRAIN_DATABASE_POOL_SIZE changes nothing/);
+  });
+});

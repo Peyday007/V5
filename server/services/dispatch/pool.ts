@@ -53,7 +53,12 @@ export interface PoolSurfaceInput {
   routine: FleetRoutine;
   account: FleetAccount;
   /** The worker `fleet_routines.worker_id` names, resolved. */
-  worker: { id: string; name: string; archived: boolean } | null;
+  /**
+   * `disabled` beside `archived` because both mean the same thing to a proof:
+   * no session can authenticate as this worker now. Archived is terminal and
+   * disabled is not, which changes the remedy and not the fault.
+   */
+  worker: { id: string; name: string; archived: boolean; disabled?: boolean } | null;
   /** That worker's explicit routing row, or null when it has none. */
   routing: { families: string[]; repositories: string[]; capabilities: string[] } | null;
   /** Whether this deployment actually holds the secret the row names. */
@@ -90,6 +95,20 @@ export interface PoolSurfaceInput {
   unansweredFires: number;
   bins: ReadonlyMap<string, Bin | null>;
   dispatches: ReadonlyMap<string, readonly BinDispatch[]>;
+  /**
+   * The router's own answer about this surface, for this repository's work in
+   * the projects its worker serves — `surfaceEligibility`, over the same
+   * `fleetSnapshot` the dispatch tick reads.
+   *
+   * `readFactoryPool` always supplies it, and when it is present it is the
+   * whole of eligibility: this module used to carry its own copy of the
+   * routing rules, which reported a surface at its target as ineligible where
+   * the router calls it waiting, and a surface whose worker was a member of
+   * *some* project as eligible whether or not that was the project the work
+   * was in. Optional only so the pure judgement can still be exercised over a
+   * hand-built snapshot; the fallback below is that and nothing else.
+   */
+  routerSays?: { dispatch: 'ELIGIBLE' | 'WAITING' | 'UNUSABLE'; reason: string };
 }
 
 /**
@@ -305,6 +324,11 @@ function judgeSurface(
       'the bound worker is archived, so no session can authenticate as it however well this ' +
         'surface ran before',
     );
+  } else if (input.worker?.disabled) {
+    standing.push(
+      'the bound worker is disabled, so no session can authenticate as it however well this ' +
+        'surface ran before — re-enable it, and nothing about the surface has to be redone',
+    );
   }
 
   // Eligibility, in the same order and from the same rows the fire router uses,
@@ -346,6 +370,12 @@ function judgeSurface(
     input.routineTarget ?? input.accountTarget ?? null;
   const used = Math.max(input.routineInFlight, input.accountInFlight);
   if (limit !== null && used >= limit) ineligible.push(`at target ${used}/${limit}`);
+  if (input.routerSays) {
+    // The router is the one reader. Its answer replaces the local copy above
+    // rather than being merged with it, so the two can never disagree here.
+    ineligible.length = 0;
+    if (input.routerSays.dispatch !== 'ELIGIBLE') ineligible.push(input.routerSays.reason);
+  }
   const retryAt = laterOf(input.routine.retryAt, input.account.retryAt);
   const cooldownUntil = retryAt !== null && retryAt > now ? retryAt : null;
 
@@ -563,8 +593,11 @@ export async function readFactoryPool(input: {
     unansweredFiresByRoutine,
   } = await import('../../repos/fleet.ts');
   const { getBin, listDispatchesForBin } = await import('../../repos/bins.ts');
-  const { inFlightByRoutine } = await import('./candidates.ts');
+  const { inFlightByRoutine, fleetSnapshot } = await import('./candidates.ts');
   const { resolveToken } = await import('./fire.ts');
+  const { bestEligibility, repositoryProbeWork, surfaceEligibility } = await import(
+    './surfaceEligibility.ts'
+  );
 
   const expectedWorker = await getWorkerByName(input.workerName);
   if (!expectedWorker) {
@@ -576,11 +609,12 @@ export async function readFactoryPool(input: {
 
   const now = input.now ?? new Date();
   const nowIso = now.toISOString();
-  const [accounts, routines, perRoutine, unanswered] = await Promise.all([
+  const [accounts, routines, perRoutine, unanswered, snapshot] = await Promise.all([
     listAccounts(),
     listRoutines(),
     inFlightByRoutine(now.getTime()),
     unansweredFiresByRoutine(),
+    fleetSnapshot(now),
   ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
 
@@ -621,6 +655,22 @@ export async function readFactoryPool(input: {
       currentPolicy('ACCOUNT', account.id),
     ]);
 
+    const liveProjects = memberships.filter((membership) => membership.active).map((m) => m.projectId);
+    const routerAnswer = bestEligibility(
+      liveProjects.map((projectId) =>
+        surfaceEligibility({
+          routine,
+          work: repositoryProbeWork({
+            projectId,
+            remote: `https://github.com/${input.repository}`,
+            requiredCapabilities: ['repository', 'repository-write'],
+          }),
+          snapshot,
+          now: nowIso,
+        }),
+      ),
+    );
+
     const sessions = await sessionsForRoutine(routine.id, 20);
     const unansweredFires = unanswered.get(routine.id) ?? 0;
     const bins = new Map<string, Bin | null>();
@@ -636,7 +686,12 @@ export async function readFactoryPool(input: {
       routine,
       account,
       worker: worker
-        ? { id: worker.id, name: workerIdentity(worker), archived: worker.archived }
+        ? {
+            id: worker.id,
+            name: workerIdentity(worker),
+            archived: worker.archived,
+            disabled: worker.disabled,
+          }
         : null,
       routing: routing
         ? {
@@ -655,6 +710,13 @@ export async function readFactoryPool(input: {
       unansweredFires,
       bins,
       dispatches,
+      routerSays: routerAnswer
+        ? { dispatch: routerAnswer.dispatch, reason: routerAnswer.reason }
+        : {
+            dispatch: 'UNUSABLE',
+            reason:
+              'its worker holds no live project membership, so the router would hand it nothing',
+          },
     });
   }
 

@@ -493,6 +493,38 @@ worth having if it is honest about which it is doing.
 - Having the environment variables set is not the same fact as the database
   answering. Boot runs a real query and a real bucket listing, and only then may
   anything say cloud mode is active.
+- **Stopping the boot is not stopping for ever, and for a while it was.** The
+  process served the error and nothing asked again, and Fly does not restart a
+  machine for failing a health check — so a Supabase timeout at the instant of
+  a deploy (319, 324, 334, each `544 DatabaseTimeout`) left production at `503`
+  until somebody deployed again, with the database answering within the hour.
+  `server/bootRetry.ts` re-runs the identical proof, `proveCloud`, on a doubling
+  wait capped at five minutes, serves nothing but the error until it holds, and
+  then replaces the error page with the Brain on the same port. That is asking
+  the real thing again, which §18 never forbade; falling back is what it
+  forbids, and nothing here serves anything the proof did not establish.
+  **Its first production reading was deploy 337**: the machine rebooted into a
+  bucket answering 544, and the log shows attempts 1 to 4 at 30, 60, 120 and
+  240 seconds with the error served throughout.
+- **A proof that holds is not a port that opens.** Deploys 341 and 342 both
+  passed the cloud proof and then held the port closed while the boot
+  re-derived work from rows: first the recompute, then (in 342, after the
+  recompute had moved) every pending packet, every dispatchable bin and every
+  launch. Each of these is slow on a degraded database, and none is needed to
+  answer a request. So everything that re-derives runs after `listen`, in its
+  original order, each step timed and caught. Before `listen` there is now only
+  what a request depends on: the seed, a half-read document marked as such,
+  and the account a person signs in with.
+- **A slow query is one request failing, and for a while it was the process.**
+  Express 4 does not await a handler, so fourteen route bodies ran as
+  `void (async …)()` with nowhere for a rejection to go, and Node 22 exits on
+  an unhandled rejection. Deploy 337, 02:25:29Z: the pool timed out inside
+  `POST /oauth/token`, and the Brain exited with code 1 mid-verification. Every
+  such body now ends in `.catch(answerEscapedFailure(res, …))`
+  (`routes/escape.ts`: `503`, nothing named). A logging `unhandledRejection`
+  backstop keeps the process serving if one is missed.
+  `tests/escapedRouteFailure.test.ts` refuses `void (async` under
+  `server/routes` and `server/mcp`.
 - Secrets are server-side. The connection string and the service-role key appear
   in the Postgres connection and one `Authorization` header, and nowhere else —
   not in a log line, not in an API response, not in the frontend bundle. A
@@ -1525,6 +1557,73 @@ and no fire has been routed across four accounts. The four surfaces above carry
 not a pool. The engine passing its tests says nothing about whether the fleet
 behaves this way, which is the separation Step 3 drew and which this does not
 get to waive.
+
+**The acceptance pass against four *distinct* identities found the lane's own
+defect class four more times — correct machinery, a false sentence about it.**
+The lane tested one worker on several accounts; the four people this fleet is
+for each hold their own connector, and that shape is where these live.
+`docs/FLEET-FOUR-ACCOUNT-ACCEPTANCE.md` is the record.
+
+- **"Eligible" had four definitions.** The router asked account, Routine and
+  project; `capacityReading` asked only *is it a routing candidate* — which is
+  *its secret is deployed* — so a QUARANTINED surface with an old proof read
+  **HEALTHY**, and a disabled account, a disabled worker and an archived one all
+  counted as capacity Brain would never fire; the Fleet page's `usable` never
+  asked about the secret, the worker or the project at all; and
+  `separationCapacity` counted a quarantined *account* toward the three account
+  separation needs. `surfaceIneligibility` in `router.ts` is now the one
+  bin-independent answer, asked by the router first and by both readings.
+- **A disabled worker was routable.** Archiving revokes memberships, so the
+  project check already refused it; disabling is reversible and keeps them, so a
+  Routine bound to a disabled worker was fired — a session certain to be refused
+  at sign-in, an activation each time — until three unanswered fires
+  quarantined it. And `verify-pool` let a past proof stand over it, the §2.1
+  defect for the one worker state it had not named.
+- **An arrival was credited to whichever Routine the bin was fired at, whoever
+  arrived.** With one worker that was the known imprecision; with four it is the
+  ordinary case — a session that finished its own bin is handed the next one,
+  fired at somebody else's Routine — and `creditDispatchArrival` wrote the
+  arriving credential into `worker_sessions` under the **other person's
+  account**, first observation winning for ever, which is the lineage every
+  audit tier is computed from. An identity other than the bound one is credited
+  only when it is provably the fired session (its provider session matches the
+  dispatch row), which keeps the one case the surface proof exists for; and in a
+  pooled worker a sibling reporting a *different* provider session is not
+  credited either. Unknown stays uncredited, because an attribution that cannot
+  be established reads as absent.
+
+**Walking the whole hosted Factory path for several people at once found seven
+more, and the first is the same sentence at six more readers.** A goal's
+blocker, Who and Home's capacity line, a member's contributed capacity, the
+Build card's READY, the cowork executor probe and the self-model each answered
+*can this surface run work* from a Routine's state column; they now read
+`routingRefusalByRoutine` in `candidates.ts`, which is `surfaceIneligibility`
+plus the two refusals only a Routine row can have — a missing secret, an
+unregistered account. **One predicate, and a reader that re-derives it is the
+defect.** The other six, each reproduced and each regression seen to fail:
+
+- **A tick that lost a fire slot kept losing it.** The snapshot is read once, so
+  every later intent in the burst chose the same surface from the same stale
+  row: two ticks over eight bins and four idle accounts, and the losing tick
+  fired none of its five. The lost surface is re-read and counted as carrying
+  the winner's activation.
+- **A review lease stored only the session the worker reported**, while
+  admission fell back to the one Brain fired — so a reviewer that omitted
+  `session_ref` was admitted, did the work, and was refused at ingest; the
+  COMPLETE bin was never counted, and a fresh review bin was fired every tick.
+  The lease records the resolved session, and a refused review spends the
+  stage like a failure.
+- **An empty check-in ticked every campaign in the Brain** inside one worker's
+  MCP call, and a completion fired the whole fleet's queue. Both are scoped to
+  the caller's project; the loop does the rest.
+- **Two people asking for one change shared one card**, in the first person's
+  thread. One card per thread now, authorized onto one change request.
+- **A registered fleet with every secret missing fell back to the environment
+  Routine**, firing any bin with no router at all. Empty means no Routine row.
+- **Two live campaigns could continue one pull request's branch.** A second
+  opens its own.
+
+`docs/FLEET-FOUR-ACCOUNT-ACCEPTANCE.md` §1a is the record.
 
 ## 24. Russell is a way in, not a second brain.
 
@@ -3250,6 +3349,54 @@ remote.
   counts, from rows, **how much work is already waiting on this repository**,
   which is the one thing that makes a setup task worth doing today: the work
   resumes by itself and nothing has to be submitted again.
+- **`READY` meant "an enabled Routine is bound", and the dispatcher meant
+  something else. The correction is recorded rather than quietly applied.**
+  Build read *Ready to execute* over a Routine whose trigger token was not
+  deployed, one declaring no `repository-write`, and one whose account was
+  quarantined — the dispatcher refuses every one, so a person could submit an
+  objective against a repository nothing would ever fire for. §24's *waiting
+  nobody can resolve*, wearing the one green label on the page. The remedy is
+  not a better copy of the routing rules in Build, because a copy is the
+  *two readers of one fact* defect this file records more than any other:
+  `services/dispatch/surfaceEligibility.ts` pins a `FACTORY_UNITS`-shaped
+  probe to each surface and asks `routeBin` itself, over the same
+  `fleetSnapshot` the tick reads, and the admission half asks
+  `decideBinRouting` over the worker's own rows. So there are five answers now
+  — `NOT_ONBOARDED`, `AWAITING_SURFACE`, `NO_USABLE_SURFACE`,
+  `WAITING_FOR_CAPACITY`, `READY` — and the middle two are apart because their
+  remedies are opposite: a missing secret is an operator's write, and a
+  cooldown or a reached target resolves by itself and must never send somebody
+  to re-register a surface that works (§23: *a refusal is not misconduct*).
+  **Proof is reported beside readiness and never instead of it** — a surface
+  that completed work and has since been quarantined reads both facts and
+  counts for nothing as capacity.
+
+  **Two sessions fixed this within the same hour, and the reconciliation is
+  recorded rather than merged silently.** The four-account lane landed first
+  with `routingRefusalByRoutine` — `surfaceIneligibility` per Routine, which
+  also moved `capacityReading`, Who and contributed capacity onto the router,
+  and whose `capacity.ts` is the one that ships. For the Build card it is the
+  weaker question: it is asked independently of any bin, so it cannot see this
+  project, this repository, a missing `repository-write`, or a cooldown, and it
+  read `AWAITING_SURFACE` — *connect a surface* — over a surface that exists
+  and is merely refused. So `onboard.ts` keeps the pinned-probe version, which
+  asks `routeBin` itself and therefore inherits every check theirs has,
+  `workerActive` included; `verify-pool`'s private copy of the routing rules
+  reads `surfaceEligibility` too. `tests/factoryReadinessRouting.test.ts` holds
+  the card against `routeBin` over a real units bin in every scenario, and was
+  run against the unfixed code to watch twelve of its assertions fail.
+
+  **And "Your Claude connection" is research capacity, which the page now
+  says.** It creates a member's personal `research-…` worker, and nothing
+  about it — routing, the card, the pool — counts it as a Factory account; a
+  Factory surface is a second connector, Routine, secret, registration and
+  pinned proof in that member's own Claude account. Submitting is separate
+  again: a project `MEMBER` can submit, approve and follow a Factory request,
+  and `factory_change_requests.submitted_by_user_id` (`093_change_request_submitter.sql`,
+  pg `084_change_request_submitter.sql`) records who asked, from the
+  authenticated principal and never from a field — the change request had
+  recorded its approver and not its author, so in a shared project nobody's
+  request was readable as theirs.
 - **A rendered card is not a passing service test.** Pressing the button reloads
   the list, the reload counted as loading, and loading unmounted the section —
   taking the invitation *shown once* down with it. Every server test passed: the
@@ -10649,6 +10796,18 @@ where a proof would do.
   patched one would be a row whose stored hash describes something the
   specification no longer renders, and a repair is a new generator version and
   a new master.
+- **A rate needs a sample behind it before it is a rate, and four attempts was
+  not one.** The ceiling was checked from the fourth attempt, so two unlucky
+  seeds in the first four stopped a healthy generator and recorded *"a defect in
+  the generator … rather than a run of bad luck"* — the one outcome that sentence
+  exists to rule out. Word search fails about 2.8% of the time, measured over
+  300 random masters (a random fill occasionally spells a prohibited word), and
+  seeds derive from the master's generated id, so this happened on roughly one
+  run in a hundred: deploy 336's test gate made two puzzles out of twenty-five
+  and stopped, with nothing released. `DEFECT_MIN_SAMPLE` is twelve, judged at
+  the batch's own ceiling when that comes first so a small batch of a broken
+  generator is still named, and `tests/puzzleDefectCeiling.test.ts` fails
+  against the old floor.
 - **The maturity ladder has three rungs that are unreachable by
   construction.** `GENERATABLE` is read from the format registry, which is a
   directory of implementations somebody can open; `VALIDATABLE` needs an
@@ -11448,6 +11607,29 @@ repair, and the shape is the register's (§43) carried one level up.
   described**, and a dependency that would close a cycle is refused, because
   two goals each waiting on the other would hold each other's work for ever.
 
+- **A finished campaign was offered back by one of two ticks, so a merged PR
+  asked to be merged.** `listCampaignsPendingOutcome` names the campaigns whose
+  outcome still needs attesting or a merge observing, and only the local
+  `tickAllCampaigns` read it; production runs `tickAllRemoteCampaigns`, which
+  visited live campaigns only. PR #31 merged on 2026-09-22 and its goal put
+  *"Read and merge PR #31"* in Needs You until the hosted tick read the same
+  list — observed at 20:04:09Z seconds after the release carrying it. A rule
+  applied by one of two runners, for the fourth time in this file.
+- **A blocker's sentence must agree with its remedy and its age.** The
+  dispatcher's refusal text named a missing membership beside a remedy about
+  quarantined Routines, aged `0h` because the intent is re-stamped every tick.
+  Where every serving Routine is out of routing the goal says so, aged from the
+  latest time one went out.
+- **The release gate's privacy check was vacuous twice, and then acted on a
+  real person's goal.** It first skipped the foreign comparison while printing
+  PASS (the verification administrator could see no foreign goal); then it
+  compared against a live production goal, POSTing a refused pause at it, while
+  its positive half read *0 goals* — which a route refusing everyone also
+  prints. The harness now files both goals itself, proves the member reads and
+  opens its own, is refused the other byte-identically to an absent id, and
+  archives both. **A gate must never depend on a refusal holding in order not
+  to change a person's work.** `tests/goalsHttp.test.ts` reads the harness.
+
 `npm run goals` and the `Goals` workflow are the terminal and production doors;
 `file --from <row>` files real recorded work with that row's own words as the
 intent and composes nothing.
@@ -11530,6 +11712,7 @@ server/
   index.ts              boot: migrate -> seed -> recompute -> serve
   env.ts                every path the app uses
   config.ts             which database and which store, validated; no silent fallback
+  bootRetry.ts          a boot whose cloud proof failed asks again, and falls back to nothing
   db/
     types.ts            the async Database interface both backends implement
     driver.ts           SQLite driver abstraction (node:sqlite, or better-sqlite3 if installed)
@@ -11937,6 +12120,7 @@ server/
     oauth.ts            the authorization server: discovery, consent, tokens (Step 8)
     pages.ts            shared chrome for the server-rendered pages
     guard.ts            request context, authentication, deny-by-default
+    escape.ts           what a request answers when an error escapes its handler
     auth.ts             sign in, sign out, change a password
     admin.ts            people, workers, credentials, membership, the identity audit
     access.ts           the optional shared-token outer layer (not the security model)

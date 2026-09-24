@@ -27,7 +27,10 @@ import type { GoalCommitment, PriorityCriterion } from '../../domain/goals.ts';
 export interface PriorityFacts {
   id: string;
   ownerKey: string;
-  /** Active, not paused, not cancelled, not complete, not waiting on another goal. */
+  /**
+   * Active, not paused, cancelled or complete, not waiting on another goal, and
+   * not stopped at a person's decision with nothing else it can run.
+   */
   workable: boolean;
   commitment: GoalCommitment;
   dueAt: string | null;
@@ -99,7 +102,7 @@ export function explainAgainst(
 ): string {
   switch (criterion) {
     case 'WORKABLE':
-      return 'it can be worked now, and the other is paused, cancelled, finished or waiting on another goal';
+      return 'it can be worked now, and the other is paused, cancelled, finished, or waiting on another goal or on a person';
     case 'COMMITMENT':
       return winner.commitment === 'CUSTOMER'
         ? 'it is owed to a customer and the other is not'

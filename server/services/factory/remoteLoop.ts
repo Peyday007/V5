@@ -59,7 +59,7 @@ import { listDispatchesForBin } from '../../repos/bins.ts';
 import { FACTORY_EVENT_KINDS } from './metrics.ts';
 import { installPlan, validatePlan } from './planner.ts';
 import { gatingFindings, queueRepairs, reconcileRepairs } from './repair.ts';
-import { recordCampaignOutcome } from './writeback.ts';
+import { listCampaignsPendingOutcome, recordCampaignOutcome } from './writeback.ts';
 import {
   acceptIntegration,
   integrationBranchDrift,
@@ -359,6 +359,7 @@ async function ingestReviewBin(
   const review = await readReviewReport(bin.id);
   if (!review.ok) {
     report.notes.push(`The review bin ${bin.id} completed without a usable review.`);
+    await noteReviewRefused(campaign, bin, 'the bin completed without a usable review');
     return false;
   }
   const already = (await listReviews(campaign.id)).some(
@@ -380,14 +381,7 @@ async function ingestReviewBin(
   const lineage = await reviewLineage(campaign.id, reviewer);
   if (!lineage.ok) {
     report.notes.push(lineage.reason ?? 'the reviewer was not independent of the work');
-    await recordFactoryEvent({
-      campaignId: campaign.id,
-      sessionId: reviewer.sessionId,
-      workerId: reviewer.workerId,
-      kind: FACTORY_EVENT_KINDS.unitRefused,
-      evidenceClass: 'MEASURED',
-      detail: { stage: 'REVIEW', binId: bin.id, reason: lineage.reason },
-    });
+    await noteReviewRefused(campaign, bin, lineage.reason ?? 'the reviewer was not independent of the work');
     return false;
   }
 
@@ -658,6 +652,40 @@ const NOT_INGESTED_KIND: Record<'INTEGRATE' | 'DELIVER', string> = {
   INTEGRATE: FACTORY_EVENT_KINDS.integrationNotIngested,
   DELIVER: FACTORY_EVENT_KINDS.deliveryNotIngested,
 };
+
+/**
+ * A completed review bin whose report Brain refused, recorded once per bin.
+ *
+ * A COMPLETE bin is neither live nor FAILED, so without this the review stage
+ * handed out a new bin on every tick for a refusal that would recur — each one
+ * a real activation — and wrote one more `UNIT_REFUSED` row per old bin per
+ * tick. Recorded once, it is also what `stalledStage` counts as a spent bin,
+ * so the stage blocks at its ceiling with the reason instead of looping.
+ */
+async function noteReviewRefused(campaign: FactoryCampaign, bin: Bin, reason: string): Promise<void> {
+  const spent = await refusedReviewBins(campaign.id);
+  if (spent.has(bin.id)) return;
+  const who = await binIdentity(bin);
+  await recordFactoryEvent({
+    campaignId: campaign.id,
+    sessionId: who.sessionId,
+    workerId: who.workerId,
+    kind: FACTORY_EVENT_KINDS.unitRefused,
+    evidenceClass: 'MEASURED',
+    detail: { stage: 'REVIEW', binId: bin.id, reason },
+  });
+}
+
+/** The review bins whose completed report Brain refused. */
+async function refusedReviewBins(campaignId: string): Promise<Set<string>> {
+  const events = await listFactoryEvents(campaignId, { kinds: [FACTORY_EVENT_KINDS.unitRefused], limit: 2000 });
+  const out = new Set<string>();
+  for (const event of events) {
+    const seen = (event.detail ?? {}) as { stage?: unknown; binId?: unknown };
+    if (seen.stage === 'REVIEW' && typeof seen.binId === 'string') out.add(seen.binId);
+  }
+  return out;
+}
 
 async function noteIngestRefused(
   campaign: FactoryCampaign,
@@ -1080,6 +1108,8 @@ export function stalledStage(
   bins: Bin[],
   kind: string,
   since: string | null,
+  /** COMPLETE bins whose report Brain refused, which spend the stage like a failure. */
+  refused: ReadonlySet<string> = new Set(),
 ): { detail: string } | null {
   const mine = bins.filter((bin) => bin.kind === kind);
   const waiting = mine.find((bin) => bin.state === 'NEEDS_HUMAN');
@@ -1092,7 +1122,9 @@ export function stalledStage(
     };
   }
   const failed = mine.filter(
-    (bin) => bin.state === 'FAILED' && (since === null || bin.createdAt > since),
+    (bin) =>
+      (bin.state === 'FAILED' || (bin.state === 'COMPLETE' && refused.has(bin.id))) &&
+      (since === null || bin.createdAt > since),
   ).length;
   if (failed >= MAX_BINS_PER_STAGE) {
     return {
@@ -1702,8 +1734,8 @@ async function runRemoteTick(
       report.notes.push('waiting for a reviewer');
       await stageIsLive(fresh, 'REVIEWING', 'waiting for a reviewer', report);
       return report;
-    } else if (stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt)) {
-      const stall = stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt);
+    } else if (stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt, await refusedReviewBins(fresh.id))) {
+      const stall = stalledStage(liveBins, 'FACTORY_REVIEW', reauthorizedAt, await refusedReviewBins(fresh.id));
       if (stall) return await blockStage(fresh, 'review', stall, report);
     } else if (!alreadyReviewed || latest?.verdict !== 'PASS') {
       const bin = await createReviewBin(fresh, changeRequest, reviewedSha, reviews.length + 1);
@@ -1961,7 +1993,11 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
     return held;
   }
   const keep = setInterval(() => {
-    void extendCampaignTick(campaignId, owner, claim.generation);
+    void extendCampaignTick(campaignId, owner, claim.generation).catch((error: unknown) => {
+      // A missed beat is harmless — the lease is guarded on owner and generation —
+      // and an escaped rejection is how Node exits (§18). Deploy 344 did both.
+      console.error(`[factory] campaign tick heartbeat failed for ${campaignId}; the tick carries on:`, error);
+    });
   }, TICK_HEARTBEAT_MS);
   try {
     const report = await runRemoteTick(campaign, changeRequest);
@@ -1997,10 +2033,19 @@ export async function tickRemoteCampaign(campaignId: string): Promise<RemoteTick
 }
 
 /** Every live remote campaign, one tick each. What a scheduled dispatcher calls. */
-export async function tickAllRemoteCampaigns(): Promise<RemoteTickReport[]> {
+export async function tickAllRemoteCampaigns(
+  /*
+   * `projectIds` narrows the pass to those projects and skips the finished-
+   * campaign outcome pass. A worker's empty check-in derives here inside its
+   * own MCP call, under a client timeout Brain does not choose (§20); it must
+   * not pay for every other person's campaign and their forge calls.
+   */
+  scope: { projectIds?: ReadonlySet<string> } = {},
+): Promise<RemoteTickReport[]> {
   const reports: RemoteTickReport[] = [];
   for (const campaign of await listLiveCampaigns()) {
     if (campaign.executionMode !== 'REMOTE') continue;
+    if (scope.projectIds && !scope.projectIds.has(campaign.projectId)) continue;
     try {
       reports.push(await tickRemoteCampaign(campaign.id));
     } catch (error: unknown) {
@@ -2018,6 +2063,29 @@ export async function tickAllRemoteCampaigns(): Promise<RemoteTickReport[]> {
        * second failure, so it is best-effort.
        */
       await recordTickFailure(campaign.id, message).catch(() => undefined);
+    }
+  }
+
+  /*
+   * A finished campaign is not live, so the loop above never reaches it again
+   * — and it is exactly the campaign whose writeback still has work to do: a
+   * workstream filed against it after it finished has no PULL_REQUEST
+   * attestation, and a pull request somebody merged afterwards has nobody
+   * asking the forge. `listCampaignsPendingOutcome` already says which ones,
+   * and the local `tickAllCampaigns` has always read it; this plane did not, so
+   * in production the merge observer ran for nobody and a merged request went
+   * on being shown to its owner as one to merge. Each call is idempotent by its
+   * own rows, and a failure is recorded rather than taken down with the pass.
+   */
+  if (scope.projectIds) return reports;
+  const pending = await listCampaignsPendingOutcome().catch(() => []);
+  for (const campaign of pending) {
+    if (campaign.executionMode !== 'REMOTE') continue;
+    try {
+      await recordCampaignOutcome(campaign.id);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      await recordTickFailure(campaign.id, `the outcome writeback threw: ${message}`).catch(() => undefined);
     }
   }
   return reports;

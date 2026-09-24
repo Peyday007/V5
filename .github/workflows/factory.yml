@@ -151,7 +151,7 @@ jobs:
 
           echo "factory $args"
           set +e
-          flyctl ssh console --app "$app" -C "sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
+          flyctl ssh console --app "$app" -C "env BRAIN_DATABASE_POOL_SIZE=1 sh /app/scripts/factory.sh $args" 2>&1 | tee factory.txt
           set -e
 
           # The verdict comes from a line the script printed, not from an exit

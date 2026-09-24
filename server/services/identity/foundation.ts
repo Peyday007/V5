@@ -73,9 +73,9 @@ import type { User } from '../../domain/types.ts';
 import { listUsers } from '../../repos/identity.ts';
 import { countLivePasskeys } from '../../repos/passkeys.ts';
 import { connectionForUser } from '../../repos/capacityConnections.ts';
-import { getWorker, getWorkerByName } from '../../repos/identity.ts';
+import { getWorker } from '../../repos/identity.ts';
 import { getRoutine, listRoutines } from '../../repos/fleet.ts';
-import { namesFor } from '../capacity/connection.ts';
+import { namesFor, workerFor } from '../capacity/connection.ts';
 import { contributedCapacity } from '../capacity/contribution.ts';
 import { ambiguousSignInNames, signInName } from '../../domain/signInName.ts';
 import { recoveryRetiresEverything } from './recoveryContract.ts';
@@ -325,7 +325,13 @@ async function findingsFor(
 ): Promise<FoundationFinding[]> {
   const names = namesFor(user);
   const connection = await connectionForUser(user.id);
-  const worker = await getWorkerByName(names.workerName);
+  /*
+   * The worker the connection names, then the derived name — the same lookup
+   * the connection page, the administrator's list and contributed capacity
+   * use (`workerFor`). By name alone, an adopted surface (§47) read "no worker
+   * identity exists" beside a CLAUDE_CONNECTION that had just passed.
+   */
+  const worker = await workerFor(connection, names.workerName);
   const routine = connection?.routineId ? await getRoutine(connection.routineId) : null;
   const surface = capacity.surfaces.find((one) => one.userId === user.id) ?? null;
 

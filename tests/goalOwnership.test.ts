@@ -20,13 +20,17 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
+import { getDb } from '../server/db/database.ts';
 import { createProject } from '../server/repos/projects.ts';
-import { createUser, createWorker } from '../server/repos/identity.ts';
+import { createUser, createWorker, grantMembership, setWorkerStatus } from '../server/repos/identity.ts';
+import { createAccount, createRoutine, listRoutines, setRoutineState } from '../server/repos/fleet.ts';
 import {
   assignNextBin,
   countDispatches,
   createBin,
   ensureDispatchIntent,
+  listDispatchesForBin,
+  markDispatchFailed,
   supersedeStaleIntents,
   getBin,
   listDispatchableBins,
@@ -369,5 +373,179 @@ describe('one operation’s goals stay in that operation', () => {
     // The dependency is reported as unreadable, never described.
     expect(view.dependencies[0]).toEqual({ goalId: theirs.goal.id, title: null, lifecycle: null, met: null });
     expect(JSON.stringify(snapshot.goals)).not.toContain('Theirs');
+  });
+});
+
+describe('what production found on its first reading', () => {
+  it('counts a ready pull request as delivered once its merge is attested, and stops asking for the merge', async () => {
+    const goal = await createWorkstream({
+      projectId,
+      title: 'A shipped change',
+      intent: 'The change the pull request carries.',
+      purpose: 'CAPABILITY',
+      createdByUserId: ownerId,
+    });
+    const at = new Date().toISOString();
+    await linkWorkstream({
+      workstreamId: goal.id,
+      kind: 'PULL_REQUEST',
+      ref: 'https://example.test/pull/31',
+      relation: 'PURSUES',
+      detail: { attestedBy: 'factory-campaign', attestedAt: at, merged: false },
+      recordedBy: 'BRAIN',
+    });
+    let view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(view.lifecycle).toBe('ACTIVE');
+
+    await linkWorkstream({
+      workstreamId: goal.id,
+      kind: 'PULL_REQUEST',
+      ref: 'https://example.test/pull/31',
+      relation: 'EVIDENCE',
+      detail: { attestedBy: 'pull-request-merge-observation', attestedAt: at, merged: true },
+      recordedBy: 'BRAIN',
+    });
+    view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(view.lifecycle).toBe('COMPLETE');
+    expect(view.decisions).toEqual([]);
+    expect(view.next.by).toBe('NOBODY');
+  });
+
+  it('gives no capacity to a goal stopped at a person with nothing else it can run', async () => {
+    const running = await goalWithWork({ title: 'Running', purpose: 'LONG_TERM' });
+    const stopped = await goalWithWork({ title: 'Stopped', purpose: 'REVENUE_DIRECT' });
+    await askHuman({
+      projectId,
+      missionId: stopped.mission.id,
+      authorityNeeded: 'Whether to file short.',
+      whyNotRussell: 'A person decides.',
+      choices: [{ key: 'STOP', label: 'Stop', consequence: 'Nothing more is researched.' }],
+      resumeKey: `stopped-${stopped.mission.id}`,
+    });
+    // Its only bin is parked for the person, which is what production held.
+    await getDb().run(`UPDATE bins SET state = 'NEEDS_HUMAN' WHERE id = ?`, [stopped.bin.id]);
+
+    const views = (await assembleGoals({ projectIds: [projectId] })).goals;
+    const runningView = views.find((one) => one.id === running.goal.id)!;
+    const stoppedView = views.find((one) => one.id === stopped.goal.id)!;
+    expect(runningView.priority?.rank).toBe(0);
+    expect(runningView.priority?.aboveNext?.criterion).toBe('WORKABLE');
+    expect(stoppedView.waiting.kind).toBe('PERSON');
+    expect(stoppedView.decisions[0]?.proposedAction).toMatch(/no recommendation recorded/);
+  });
+});
+
+describe('a queued bin the dispatcher cannot route is a blocker, not a queue', () => {
+  it('reads the refusal off the intent and names who clears it', async () => {
+    const { goal, bin } = await goalWithWork({ title: 'Unroutable' });
+    await ensureDispatchIntent((await getBin(bin.id))!);
+    const intent = (await listDispatchesForBin(bin.id))[0]!;
+    await markDispatchFailed(intent.id, {
+      kind: 'NO_SURFACE_SERVES_THIS_PROJECT',
+      message: "No enabled Routine is bound to a worker holding a live membership on this bin's project.",
+      refundAttempt: true,
+    });
+    const view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(view.work[0]?.dispatch?.waitsFor).toBe('OPERATOR');
+    expect(view.waiting.kind).toBe('OPERATOR');
+    expect(view.waiting.detail).toMatch(/NO_SURFACE_SERVES_THIS_PROJECT/);
+    expect(view.next.by).toBe('OPERATOR');
+    expect(view.blockers[0]?.remedy).toMatch(/fires on the next tick/);
+  });
+
+  it('names the quarantined surfaces that would serve the project, and what brings them back', async () => {
+    const { goal, bin } = await goalWithWork({ title: 'Surfaces are down' });
+    await grantMembership({
+      projectId,
+      principalType: 'WORKER',
+      principalId: workerId,
+      role: null,
+      scopes: ['queue:read', 'queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2, 8)}` });
+    const routine = await createRoutine({
+      accountId: account.id,
+      routineRef: `trig_${Math.random().toString(36).slice(2, 12)}`,
+      name: 'Research surface A',
+      tokenSecretName: 'SOME_SECRET',
+      workerId,
+    });
+    await setRoutineState({
+      routineId: routine.id,
+      from: 'ENABLED',
+      to: 'QUARANTINED',
+      reason: '3 consecutive fired sessions never checked in.',
+    });
+    await ensureDispatchIntent((await getBin(bin.id))!);
+    const intent = (await listDispatchesForBin(bin.id))[0]!;
+    await markDispatchFailed(intent.id, { kind: 'NO_SURFACE_SERVES_THIS_PROJECT', message: 'No enabled Routine…', refundAttempt: true });
+    const view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    const remedy = view.blockers[0]!.remedy;
+    expect(remedy).toMatch(/Research surface A \(QUARANTINED: 3 consecutive fired sessions never checked in\.\)/);
+    expect(remedy).toMatch(/reconnect it there/);
+    expect(remedy).not.toMatch(/trig_/);
+    expect(remedy).not.toMatch(/SOME_SECRET/);
+    // The dispatcher's own sentence is about a missing membership, and the
+    // membership is right there: the blocker must say what is actually true,
+    // and must not argue with the remedy printed beneath it.
+    const text = view.blockers[0]!.text;
+    expect(text).toMatch(/every one is out of routing/);
+    expect(text).not.toMatch(/access grant|live membership/);
+    // Aged from when the surface went out, not from the intent's last re-check.
+    const quarantined = (await listRoutines()).find((one) => one.id === routine.id)!;
+    expect(view.blockers[0]!.since).toBe(quarantined.updatedAt);
+  });
+
+  it('does not call an ENABLED surface routable when the router would refuse it', async () => {
+    // A disabled worker keeps its memberships and its Routine keeps reading
+    // ENABLED — and the router refuses it (§23). The remedy used to read the
+    // state column and tell a person the dispatcher would route to it.
+    const { goal, bin } = await goalWithWork({ title: 'Worker disabled' });
+    await grantMembership({
+      projectId,
+      principalType: 'WORKER',
+      principalId: workerId,
+      role: null,
+      scopes: ['queue:read', 'queue:claim'],
+      grantedByType: 'SYSTEM',
+      grantedById: 'test',
+    });
+    const secretName = `GOAL_SURFACE_${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    process.env[secretName] = 'present-for-test';
+    try {
+      const account = await createAccount({ name: `acct-${Math.random().toString(36).slice(2, 8)}` });
+      await createRoutine({
+        accountId: account.id,
+        routineRef: `trig_${Math.random().toString(36).slice(2, 12)}`,
+        name: 'Research surface D',
+        tokenSecretName: secretName,
+        workerId,
+      });
+      await setWorkerStatus(workerId, 'DISABLED');
+      await ensureDispatchIntent((await getBin(bin.id))!);
+      const intent = (await listDispatchesForBin(bin.id))[0]!;
+      await markDispatchFailed(intent.id, { kind: 'NO_SURFACE_SERVES_THIS_PROJECT', message: 'No enabled Routine…', refundAttempt: true });
+      const view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+      const blocker = view.blockers[0]!;
+      expect(blocker.remedy).not.toMatch(/dispatcher will route to it/);
+      expect(blocker.remedy).toMatch(/Research surface D \(bound worker is disabled or archived\)/);
+      expect(blocker.text).toMatch(/every one is out of routing/);
+    } finally {
+      delete process.env[secretName];
+      await setWorkerStatus(workerId, 'ACTIVE');
+    }
+  });
+
+  it('calls a full fleet a capacity wait, which resolves by itself', async () => {
+    const { goal, bin } = await goalWithWork({ title: 'Waiting for room' });
+    await ensureDispatchIntent((await getBin(bin.id))!);
+    const intent = (await listDispatchesForBin(bin.id))[0]!;
+    await markDispatchFailed(intent.id, { kind: 'ACCOUNT_TARGETS_REACHED', message: 'Every capable surface is at its target.', refundAttempt: true });
+    const view = (await assembleGoals({ projectIds: [projectId] })).goals.find((one) => one.id === goal.id)!;
+    expect(view.waiting.kind).toBe('CAPACITY');
+    expect(view.waiting.detail).toMatch(/fleet is full/);
+    expect(view.blockers).toEqual([]);
   });
 });

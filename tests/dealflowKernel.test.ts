@@ -578,6 +578,21 @@ describe('every operator wrapper is readable beside a running app', () => {
     expect(missing).toEqual([]);
   });
 
+  it('and that ceiling is one, because every one of them is sequential', () => {
+    // Presence alone let `factory.sh` default to two for weeks beside a rule
+    // saying one, and on 2026-09-23 its reads failed four times running on a
+    // pooler timeout while the one-client goals read beside it succeeded.
+    const wrongCeiling = wrappers
+      .filter((name) => !EXEMPT.has(name))
+      .filter(
+        (name) =>
+          !readFileSync(`scripts/${name}`, 'utf8').includes(
+            'export BRAIN_DATABASE_POOL_SIZE="${BRAIN_DATABASE_POOL_SIZE:-1}"',
+          ),
+      );
+    expect(wrongCeiling).toEqual([]);
+  });
+
   it('leaves the harness that fans out to set its own, in its own file', () => {
     // Asserted as an absence *and* as a presence: the exemption is only honest
     // while the thing it exempts really does declare a ceiling somewhere.
